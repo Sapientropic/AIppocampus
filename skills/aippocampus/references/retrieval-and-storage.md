@@ -196,13 +196,16 @@ resolved generation path, it creates a short-lived `.reader-pins/*.json` file
 beside the pointer for the duration of the query so storage GC can distinguish
 active readers from expired old generations.
 
-Default retrieval is local hybrid search:
+Default retrieval is local lexical-structural hybrid search:
 
-- SQLite FTS5 trigram search for Chinese, mixed prose, and fuzzy literal clues.
+- SQLite FTS5 trigram search plus LIKE fallback for Chinese, mixed prose, and
+  fuzzy literal clues.
 - Anchor matching for durable titles, keywords, and preserved phrases.
 - RAG-lite chunks for neighborhood recall before returning to source lines.
 - Phase-aware scoring that boosts user messages and `final_answer`, while
   keeping commentary as lower-priority process evidence.
+- Structure and time sidecars for source-joined ranking hints when callers
+  provide those cues.
 - Diversity ranking so later recaps do not crowd out original turns.
 
 The retrieval rank weights that affect user-visible recall behavior live in
@@ -213,6 +216,18 @@ graph score-fusion blends. Keep those values as reviewable ranking policy. Do
 not mix prompt-evidence truth gates or model judgement into that module merely
 because they also have numbers; source refs and stable source ids remain the
 truth boundary.
+
+The score-fusion module can blend optional vector or concept-graph signals when
+another source-joined consumer supplies them, but dense vector retrieval is not
+part of the default local search path. Semantic triggers, cognitive-map routes,
+and graph neighbors are navigation hints that still require source reopen before
+exact claims.
+
+Chinese and mixed-language recall is measured by the public-safe CJK local
+fixture in
+`docs/evidence/benchmarks/cjk-local-recall-fixture-report.md`. That fixture can
+compare current trigram/LIKE/RAG-lite behavior with measured-only query sidecar
+candidates, but it does not claim broad Chinese semantic search quality.
 
 Segmented merge weights are calibrated by the public-safe #375 fixture runner
 `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` and documented in
@@ -266,8 +281,13 @@ For hundred-MB or GB threads, use segments:
   only old generation directories whose active pins are gone, TTL has elapsed,
   and current/LKG pointer protection still passes.
 
-Segment-local ids collide by design. Treat `(segment_id, id, line)` as the hit
-key.
+Segment-local ids collide by design. Segmented merge first dedupes hits by
+stable source join identity when a hit exposes `stable_source_id`, `source_id`,
+`thread_key` + `message_id`, source refs, or a scalar `source_ref`; old or
+partial shard rows without a stable source key keep `(segment_id, id, line)` as
+the segment-local fallback hit key. The merge diagnostics report
+`source_key_dedupe_count` so overlap suppression is visible without reopening
+SQLite shards after fanout.
 
 ## Global Registry
 

@@ -27,6 +27,7 @@ from aippocampus_runtime.recall.rollout_search import (
     resolve_anchor_path,
     search_index_literal,
 )
+from aippocampus_runtime.recall.score_fusion import source_join_key
 from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY, SegmentMergePolicy
 from aippocampus_runtime.recall.segment_metadata import (
     annotate_rag_chunk,
@@ -234,24 +235,66 @@ def segment_sort_key(
     )
 
 
-def merge_topk(
+def segment_source_join_key(result: dict) -> str:
+    """Return stable source identity when a segment hit exposes one.
+
+    Segment-local SQLite ids collide and overlapped shards can surface the same
+    clean-source row under different segment ids. Prefer the shared
+    score-fusion source join semantics; use scalar `source_ref` only as an
+    already-projected stable ref. Hits without a source key keep the legacy
+    segment-local fallback path.
+    """
+
+    key = source_join_key(result)
+    if key:
+        return f"source_join:{key}"
+    source_ref = str(result.get("source_ref") or "").strip()
+    if source_ref:
+        return f"source_ref:{source_ref}"
+    return ""
+
+
+def _dedupe_pool_by_source_key(pool: list[dict]) -> tuple[list[dict], int]:
+    deduped: list[dict] = []
+    seen: set[str] = set()
+    dedupe_count = 0
+    for item in pool:
+        key = segment_source_join_key(item)
+        if key and key in seen:
+            dedupe_count += 1
+            continue
+        deduped.append(item)
+        if key:
+            seen.add(key)
+    return deduped, dedupe_count
+
+
+def merge_topk_with_diagnostics(
     results: list[dict],
     limit: int,
     policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
-) -> list[dict]:
-    """Merge per-shard hits without letting one dense recap shard dominate.
-
-    Segment-local SQLite row ids collide, so this intentionally avoids
-    retrieval.diversify_results, whose duplicate guard assumes one monolithic
-    index. The merge keeps high-score hits first, then applies light penalties
-    for same-segment and near-line repeats so early source evidence and later
-    summaries can both surface. The optional policy argument is for deterministic
-    calibration/sensitivity tests; the CLI path uses the default named policy.
-    """
+) -> tuple[list[dict], dict[str, int]]:
+    """Merge hits and report compact source-key dedupe diagnostics."""
 
     if not results:
-        return []
+        return (
+            [],
+            {
+                "input_candidate_count": 0,
+                "candidate_count_after_source_key_dedupe": 0,
+                "source_key_dedupe_count": 0,
+            },
+        )
     pool = sorted(results, key=lambda item: segment_sort_key(item, policy))
+    pool, source_key_dedupe_count = _dedupe_pool_by_source_key(pool)
+    diagnostics = {
+        "input_candidate_count": len(results),
+        "candidate_count_after_source_key_dedupe": len(pool),
+        "source_key_dedupe_count": source_key_dedupe_count,
+    }
+    if not pool:
+        return [], diagnostics
+
     selected: list[dict] = []
     seen: set[tuple[str, int, int]] = set()
 
@@ -323,7 +366,26 @@ def merge_topk(
         add(best)
         if best is None:
             break
-    return selected[:limit]
+    return selected[:limit], diagnostics
+
+
+def merge_topk(
+    results: list[dict],
+    limit: int,
+    policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
+) -> list[dict]:
+    """Merge per-shard hits without letting one dense recap shard dominate.
+
+    Segment-local SQLite row ids collide, so this intentionally avoids
+    retrieval.diversify_results, whose duplicate guard assumes one monolithic
+    index. The merge keeps high-score hits first, then applies light penalties
+    for same-segment and near-line repeats so early source evidence and later
+    summaries can both surface. The optional policy argument is for deterministic
+    calibration/sensitivity tests; the CLI path uses the default named policy.
+    """
+
+    selected, _ = merge_topk_with_diagnostics(results, limit, policy=policy)
+    return selected
 
 
 def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
@@ -366,6 +428,11 @@ def unavailable_segments_payload(
             "segment_count": 0,
             "rag_context": [],
             "matches": [],
+            "merge_diagnostics": {
+                "input_candidate_count": 0,
+                "candidate_count_after_source_key_dedupe": 0,
+                "source_key_dedupe_count": 0,
+            },
             "segment_errors": [],
             "fanout": _empty_fanout(options),
             "turn_boundary_diagnostics": empty_turn_boundary_diagnostics(),
@@ -464,7 +531,10 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
 
         fanout["searched_segment_count"] = searched_segment_count
         fanout["missing_index_count"] = missing_index_count
-        results = merge_topk(raw_results, options.max_results)
+        results, merge_diagnostics = merge_topk_with_diagnostics(
+            raw_results,
+            options.max_results,
+        )
         rag_context.sort(
             key=lambda item: (
                 -float(item.get("score") or 0.0),
@@ -486,6 +556,7 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
             "graph_neighbors": query_payload["graph_neighbors"],
             "rag_context": rag_context,
             "matches": results,
+            "merge_diagnostics": merge_diagnostics,
             "segment_errors": segment_errors,
             "fanout": fanout,
             "turn_boundary_diagnostics": boundary_diagnostics,

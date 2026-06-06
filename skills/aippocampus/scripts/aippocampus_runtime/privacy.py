@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 LOCAL_PATH_REDACTION = "<local-path-redacted>"
+SENSITIVE_VALUE_REDACTION = "<sensitive-value-redacted>"
 PRIVATE_PATH_KEYS = {
     "anchor_file",
     "anchors",
@@ -42,6 +43,43 @@ PUBLIC_NON_PATH_KEYS = {
     "source_reopen_path",
 }
 
+SENSITIVE_EXACT_KEYS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer",
+    "client_secret",
+    "credential",
+    "credentials",
+    "password",
+    "passwd",
+    "private_key",
+    "refresh_token",
+    "secret",
+    "secret_access_key",
+    "token",
+}
+
+SENSITIVE_KEY_SUFFIXES = (
+    "_access_token",
+    "_api_key",
+    "_auth_token",
+    "_client_secret",
+    "_password",
+    "_private_key",
+    "_refresh_token",
+    "_secret_access_key",
+    "_secret_key",
+)
+
+SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(api[_-]?key|token|access[_-]?token|auth[_-]?token|refresh[_-]?token|"
+    r"client[_-]?secret|secret|password|passwd|authorization)\b\s*[:=]\s*"
+    r"([^\s,;\"']+)"
+)
+BEARER_VALUE_RE = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")
+OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9._-]{8,}\b")
+
 
 def redact_private_paths(value):
     """Return a public projection that keeps identity but removes local locators."""
@@ -60,6 +98,31 @@ def redact_private_paths(value):
     return value
 
 
+def redact_sensitive_values(value):
+    """Return a public projection that removes credential-shaped values.
+
+    This intentionally does not treat every field containing "token" as secret:
+    public diagnostics often need token counts or env-var names. Redact exact
+    auth-bearing keys and assignment-shaped strings at the final public-output
+    boundary instead of weakening useful observability fields upstream.
+    """
+
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if _is_sensitive_value_key(key_text) and item not in (None, "", False):
+                redacted[key] = SENSITIVE_VALUE_REDACTION
+            else:
+                redacted[key] = redact_sensitive_values(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_values(item) for item in value]
+    if isinstance(value, str):
+        return _redact_sensitive_text(value)
+    return value
+
+
 def _is_private_path_key(key: str, value=None) -> bool:
     normalized = key.casefold()
     if normalized in PUBLIC_NON_PATH_KEYS:
@@ -72,6 +135,23 @@ def _is_private_path_key(key: str, value=None) -> bool:
         or normalized.endswith("_dir")
         or normalized.endswith("_file")
     )
+
+
+def _is_sensitive_value_key(key: str) -> bool:
+    normalized = key.casefold().replace("-", "_")
+    return normalized in SENSITIVE_EXACT_KEYS or any(
+        normalized.endswith(suffix) for suffix in SENSITIVE_KEY_SUFFIXES
+    )
+
+
+def _redact_sensitive_text(value: str) -> str:
+    text = str(value)
+    text = SENSITIVE_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}={SENSITIVE_VALUE_REDACTION}",
+        text,
+    )
+    text = BEARER_VALUE_RE.sub(f"Bearer {SENSITIVE_VALUE_REDACTION}", text)
+    return OPENAI_KEY_RE.sub(SENSITIVE_VALUE_REDACTION, text)
 
 
 def _looks_like_path(value: str) -> bool:

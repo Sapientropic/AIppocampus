@@ -17,6 +17,7 @@ import json
 import random
 import re
 import sqlite3
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +33,11 @@ from aippocampus_runtime.core import (
     is_injected_instruction_text,
     now_utc,
 )
+from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import (
     fts_query,
     message_select_columns,
+    normalize_term,
     search_hybrid_index,
     split_query_terms,
     sqlite_has_table,
@@ -50,6 +53,7 @@ DEFAULT_TOP_K = 10
 DEFAULT_CANDIDATE_LIMIT = 120
 MIN_QUERY_CHARS = 6
 MIN_TEXT_CHARS = 36
+CJK_FIXTURE_TOP_K = 5
 
 STOP_TERMS = {
     "about",
@@ -82,6 +86,21 @@ STRUCTURAL_NOISE_PREFIXES = (
     "System trigger. This message stays backstage",
     "This message stays backstage and is not visible",
 )
+
+CJK_QUERY_SIDE_CAR_STOP = {
+    "上次",
+    "之前",
+    "那个",
+    "这个",
+    "记忆",
+    "召回",
+    "继续",
+    "说过",
+    "说的",
+    "我们",
+    "一下",
+    "不要",
+}
 
 
 def sha1_text(value: str) -> str:
@@ -140,6 +159,24 @@ class EvalCase:
                 }
             )
         return payload
+
+
+@dataclass(frozen=True)
+class PublicCjkFixtureCase:
+    case_id: str
+    case_type: str
+    query: str
+    expected_message_id: str | None
+    expected_line_start: int | None
+    expected_line_end: int | None
+
+    def is_positive(self) -> bool:
+        return bool(self.expected_message_id)
+
+    def expected_lines(self) -> tuple[int, int] | None:
+        if self.expected_line_start is None or self.expected_line_end is None:
+            return None
+        return self.expected_line_start, self.expected_line_end
 
 
 def looks_sensitive(text: str) -> bool:
@@ -309,6 +346,366 @@ def case_variants_from_message(
         if variant:
             variants.append(variant)
     return variants
+
+
+def public_cjk_fixture_messages() -> list[dict[str, Any]]:
+    rows = [
+        (
+            "cjk-exact",
+            10,
+            "user",
+            "",
+            "湖蓝色灯塔提醒我把 AIppocampus 路线写进清单。",
+        ),
+        (
+            "cjk-short-cue",
+            20,
+            "assistant",
+            "final_answer",
+            "短词锚点在这条中文消息里指向源头恢复路线。",
+        ),
+        (
+            "cjk-mixed-code",
+            30,
+            "user",
+            "",
+            "中文加代码：TypeScript 的 useReducer 卡在状态机分支。",
+        ),
+        (
+            "cjk-deictic",
+            40,
+            "assistant",
+            "final_answer",
+            "未干的地图要保留源头气味，后续再接续。",
+        ),
+        (
+            "cjk-paraphrase",
+            50,
+            "assistant",
+            "final_answer",
+            "轻量分词边车只作为候选评估，不默认开启。",
+        ),
+    ]
+    return [
+        {
+            "message_id": message_id,
+            "turn_id": f"turn-{line}",
+            "line": line,
+            "timestamp": None,
+            "role": role,
+            "kind": "message",
+            "phase": phase,
+            "turn_index": index,
+            "is_final": phase == "final_answer",
+            "sha1": sha1_text(text),
+            "text": text,
+        }
+        for index, (message_id, line, role, phase, text) in enumerate(rows, start=1)
+    ]
+
+
+def public_cjk_fixture_cases() -> list[PublicCjkFixtureCase]:
+    return [
+        PublicCjkFixtureCase(
+            case_id="exact-chinese-phrase",
+            case_type="exact_phrase",
+            query="湖蓝色灯塔",
+            expected_message_id="cjk-exact",
+            expected_line_start=10,
+            expected_line_end=10,
+        ),
+        PublicCjkFixtureCase(
+            case_id="short-two-character-cue",
+            case_type="short_cjk_cue",
+            query="锚点",
+            expected_message_id="cjk-short-cue",
+            expected_line_start=20,
+            expected_line_end=20,
+        ),
+        PublicCjkFixtureCase(
+            case_id="mixed-chinese-code-cue",
+            case_type="mixed_cjk_code",
+            query="之前那个 useReducer 状态机",
+            expected_message_id="cjk-mixed-code",
+            expected_line_start=30,
+            expected_line_end=30,
+        ),
+        PublicCjkFixtureCase(
+            case_id="deictic-specific-cue",
+            case_type="deictic_specific_cue",
+            query="上次那个未干的地图",
+            expected_message_id="cjk-deictic",
+            expected_line_start=40,
+            expected_line_end=40,
+        ),
+        PublicCjkFixtureCase(
+            case_id="mild-paraphrase-cue",
+            case_type="mild_paraphrase",
+            query="中文 tokenizer 候选 默认 开关",
+            expected_message_id="cjk-paraphrase",
+            expected_line_start=50,
+            expected_line_end=50,
+        ),
+        PublicCjkFixtureCase(
+            case_id="generic-deictic-negative",
+            case_type="negative_generic_cue",
+            query="之前 那个 记忆",
+            expected_message_id=None,
+            expected_line_start=None,
+            expected_line_end=None,
+        ),
+    ]
+
+
+def candidate_cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
+    """Benchmark-only CJK query sidecar candidate.
+
+    This deliberately stays outside the default retrieval path. The fixture uses
+    it to measure whether shorter CJK query chunks would help before promoting
+    any tokenizer or sidecar behavior to production.
+    """
+
+    terms: list[str] = []
+    for chunk in re.findall(r"[\u3400-\u9fff]{2,}", query):
+        normalized = chunk
+        for stop in CJK_QUERY_SIDE_CAR_STOP:
+            normalized = normalized.replace(stop, " ")
+        for part in re.split(r"[\s的了和与、，。；：！？,.!?/|+]+", normalized):
+            part = normalize_term(part)
+            if len(part) < 2:
+                continue
+            terms.append(part)
+            for n in (2, 3, 4):
+                if len(part) < n:
+                    continue
+                terms.extend(part[i : i + n] for i in range(0, len(part) - n + 1))
+    return unique_preserve(terms, limit=limit)
+
+
+def _public_cjk_mode_result(
+    hits: list[dict[str, Any]],
+    case: PublicCjkFixtureCase,
+    *,
+    top_k: int,
+) -> dict[str, Any]:
+    expected = case.expected_lines()
+    rank = expected_rank(hits, expected) if expected else None
+    return {
+        "rank": rank,
+        "hit_top_k": bool(rank and rank <= top_k),
+        "negative_false_positive": bool(not case.is_positive() and hits),
+        "top_lines": [int(hit["line"]) for hit in hits[:top_k] if hit.get("line") is not None],
+    }
+
+
+def evaluate_public_cjk_case(
+    case: PublicCjkFixtureCase,
+    sqlite_path: Path,
+    *,
+    top_k: int = CJK_FIXTURE_TOP_K,
+    candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
+) -> dict[str, Any]:
+    query_terms = split_query_terms([case.query])
+    sidecar_terms = candidate_cjk_query_sidecar_terms(case.query)
+    fts_hits, warnings = search_fts5_only(
+        sqlite_path,
+        query_terms,
+        limit=max(top_k, candidate_limit),
+        candidate_limit=candidate_limit,
+    )
+    hybrid_no_rag_hits = search_hybrid_index(
+        sqlite_path,
+        query_terms,
+        query_terms,
+        [],
+        limit=max(top_k, candidate_limit),
+        candidate_limit=candidate_limit,
+        snippet_chars=1,
+        context_radius=0,
+        use_rag_chunks=False,
+    )
+    production_hits = search_hybrid_index(
+        sqlite_path,
+        query_terms,
+        query_terms,
+        [],
+        limit=max(top_k, candidate_limit),
+        candidate_limit=candidate_limit,
+        snippet_chars=1,
+        context_radius=0,
+        use_rag_chunks=True,
+    )
+    candidate_sidecar_hits = search_hybrid_index(
+        sqlite_path,
+        query_terms,
+        unique_preserve(query_terms + sidecar_terms, limit=36),
+        [],
+        limit=max(top_k, candidate_limit),
+        candidate_limit=candidate_limit,
+        snippet_chars=1,
+        context_radius=0,
+        use_rag_chunks=True,
+    )
+    return {
+        "case_id": case.case_id,
+        "case_type": case.case_type,
+        "expected_positive": case.is_positive(),
+        "query_terms": query_terms,
+        "candidate_cjk_sidecar_terms": sidecar_terms,
+        "expected": {
+            "message_id": case.expected_message_id,
+            "line_start": case.expected_line_start,
+            "line_end": case.expected_line_end,
+        },
+        "fts5_trigram": {
+            **_public_cjk_mode_result(fts_hits, case, top_k=top_k),
+            "warnings": warnings,
+        },
+        "hybrid_without_rag_chunks": _public_cjk_mode_result(
+            hybrid_no_rag_hits,
+            case,
+            top_k=top_k,
+        ),
+        "production_hybrid": _public_cjk_mode_result(
+            production_hits,
+            case,
+            top_k=top_k,
+        ),
+        "candidate_cjk_sidecar": _public_cjk_mode_result(
+            candidate_sidecar_hits,
+            case,
+            top_k=top_k,
+        ),
+    }
+
+
+def summarize_public_cjk_fixture(results: list[dict[str, Any]], *, top_k: int) -> dict[str, Any]:
+    modes = (
+        "fts5_trigram",
+        "hybrid_without_rag_chunks",
+        "production_hybrid",
+        "candidate_cjk_sidecar",
+    )
+    positives = [case for case in results if case["expected_positive"]]
+    negatives = [case for case in results if not case["expected_positive"]]
+    metrics: dict[str, Any] = {
+        "case_count": len(results),
+        "positive_case_count": len(positives),
+        "negative_case_count": len(negatives),
+        "by_case_type": {},
+    }
+    for mode in modes:
+        hits = sum(1 for case in positives if case[mode]["hit_top_k"])
+        false_positives = sum(1 for case in negatives if case[mode]["negative_false_positive"])
+        metrics[mode] = {
+            f"positive_hit_top{top_k}": hits,
+            f"positive_miss_top{top_k}": len(positives) - hits,
+            f"positive_hit_rate_top{top_k}": round(hits / len(positives), 4)
+            if positives
+            else 0.0,
+            "negative_false_positive_count": false_positives,
+        }
+    for case_type in sorted({str(case["case_type"]) for case in results}):
+        subset = [case for case in results if case["case_type"] == case_type]
+        metrics["by_case_type"][case_type] = {
+            "case_count": len(subset),
+            "positive_case_count": sum(1 for case in subset if case["expected_positive"]),
+            "negative_case_count": sum(1 for case in subset if not case["expected_positive"]),
+            f"production_hybrid_hit_top{top_k}": sum(
+                1 for case in subset if case["production_hybrid"]["hit_top_k"]
+            ),
+            "production_hybrid_negative_false_positive_count": sum(
+                1
+                for case in subset
+                if case["production_hybrid"]["negative_false_positive"]
+            ),
+        }
+    return metrics
+
+
+def run_public_cjk_recall_fixture(
+    *,
+    top_k: int = CJK_FIXTURE_TOP_K,
+    candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        sqlite_path = root / "source_index.sqlite"
+        make_sqlite(
+            sqlite_path,
+            public_cjk_fixture_messages(),
+            anchors=[],
+            turns=[],
+            publish_lock=False,
+        )
+        results = [
+            evaluate_public_cjk_case(
+                case,
+                sqlite_path,
+                top_k=top_k,
+                candidate_limit=candidate_limit,
+            )
+            for case in public_cjk_fixture_cases()
+        ]
+
+    metrics = summarize_public_cjk_fixture(results, top_k=top_k)
+    production = metrics["production_hybrid"]
+    ok = (
+        production[f"positive_hit_top{top_k}"] == metrics["positive_case_count"]
+        and production["negative_false_positive_count"] == 0
+    )
+    return {
+        "schema_version": 1,
+        "kind": "aippocampus_public_cjk_local_recall_fixture",
+        "generated_at": now_utc(),
+        "status": "fixture_passed" if ok else "fixture_diagnostic",
+        "ok": ok,
+        "config": {
+            "top_k": top_k,
+            "candidate_limit": candidate_limit,
+        },
+        "comparison_modes": {
+            "fts5_trigram": {
+                "default_component": True,
+                "description": "SQLite FTS5 trigram over split query terms.",
+            },
+            "hybrid_without_rag_chunks": {
+                "default_component": True,
+                "description": "Current lexical FTS plus LIKE fallback without RAG-lite chunks.",
+            },
+            "production_hybrid": {
+                "default_component": True,
+                "description": "Current lexical-structural local retrieval with RAG-lite enabled.",
+            },
+            "candidate_cjk_sidecar": {
+                "default_component": False,
+                "measured_only": True,
+                "description": "Benchmark-only lightweight CJK query chunks; not default behavior.",
+            },
+        },
+        "privacy_boundary": {
+            "source_text": "public_synthetic_fixture",
+            "raw_private_text_emitted": False,
+            "external_vector_db_required": False,
+            "embedding_model_required": False,
+        },
+        "metrics": metrics,
+        "cases": results,
+        "can_claim": [
+            "public_fixture_covers_exact_short_mixed_deictic_paraphrase_and_negative_cjk_cases",
+            "production_hybrid_fixture_hit_behavior_is_measured_for_this_case_pack",
+            "candidate_cjk_sidecar_is_measured_without_becoming_default",
+        ],
+        "cannot_claim": [
+            "broad_chinese_recall_quality",
+            "semantic_chinese_search_from_trigram_alone",
+            "no_dense_vector_default_claim",
+            "private_history_cjk_quality",
+            "heavy_tokenizer_or_embedding_requirement",
+        ],
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
 
 
 def build_eval_cases(
@@ -662,25 +1059,61 @@ def print_human_summary(payload: dict[str, Any]) -> None:
         print(f"error: {payload.get('error')}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--public-cjk-fixture",
+        action="store_true",
+        help="Run the checked-in public CJK local-recall fixture instead of registry sampling.",
+    )
     parser.add_argument("--registry", type=Path, default=None)
     parser.add_argument("--cases", type=int, default=DEFAULT_CASES)
     parser.add_argument("--min-cases", type=int, default=50)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--top-k", type=int, default=None)
     parser.add_argument("--candidate-limit", type=int, default=DEFAULT_CANDIDATE_LIMIT)
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--no-production-compare", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path, default=None)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
+    if args.public_cjk_fixture:
+        top_k = args.top_k if args.top_k is not None else CJK_FIXTURE_TOP_K
+        payload = run_public_cjk_recall_fixture(
+            top_k=top_k,
+            candidate_limit=args.candidate_limit,
+        )
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            metrics = payload["metrics"]
+            production = metrics["production_hybrid"]
+            print("AIppocampus public CJK local recall fixture")
+            print(f"- status: {payload.get('status')}")
+            print(
+                f"- production hybrid top-{top_k}: "
+                f"{production[f'positive_hit_top{top_k}']} / "
+                f"{metrics['positive_case_count']} positive hits"
+            )
+            print(
+                "- negative false positives: "
+                f"{production['negative_false_positive_count']}"
+            )
+        return 0 if payload.get("ok") else 1
+
+    top_k = args.top_k if args.top_k is not None else DEFAULT_TOP_K
     payload = run_benchmark(
         registry_path=args.registry,
         sample_size=args.cases,
         seed=args.seed,
-        top_k=args.top_k,
+        top_k=top_k,
         candidate_limit=args.candidate_limit,
         min_cases=args.min_cases,
         include_private_text=args.include_private_text,

@@ -26,7 +26,7 @@ from aippocampus_runtime.recall.scoring_policy import (  # noqa: E402
     SEGMENT_MERGE_POLICY,
     SegmentMergePolicy,
 )
-from aippocampus_runtime.recall.segment_search import merge_topk  # noqa: E402
+from aippocampus_runtime.recall.segment_search import merge_topk_with_diagnostics  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_FIXTURE = (
@@ -36,6 +36,7 @@ REQUIRED_PATTERNS = {
     "cross_segment_diversity",
     "adjacent_turn_pairing",
     "duplicate_nearby_recap_suppression",
+    "stable_source_join_dedupe",
     "stale_superseded_currentness",
 }
 ALTERNATE_POLICIES = {
@@ -101,7 +102,11 @@ def validate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
 
 def evaluate_case(case: dict[str, Any], policy: SegmentMergePolicy) -> dict[str, Any]:
     top_k = int(case.get("top_k") or 3)
-    selected = merge_topk(_case_results(case), top_k, policy=policy)
+    selected, merge_diagnostics = merge_topk_with_diagnostics(
+        _case_results(case),
+        top_k,
+        policy=policy,
+    )
     selected_refs = _selected_source_refs(selected)
     selected_segments = [str(item.get("segment_id") or "") for item in selected]
     expect = case.get("expect") or {}
@@ -146,6 +151,7 @@ def evaluate_case(case: dict[str, Any], policy: SegmentMergePolicy) -> dict[str,
         "adjacent_pair_ok": adjacent_pair_ok,
         "group_violations": group_violations,
         "stale_superseded_false_promotion": stale_false_promotion,
+        "source_key_dedupe_count": merge_diagnostics["source_key_dedupe_count"],
     }
 
 
@@ -166,6 +172,7 @@ def summarize_case_results(case_results: list[dict[str, Any]]) -> dict[str, Any]
         case for case in case_results if case["pattern"] == "duplicate_nearby_recap_suppression"
     ]
     duplicate_pass = sum(1 for case in duplicate_cases if not case["group_violations"])
+    source_key_dedupe_count = sum(case["source_key_dedupe_count"] for case in case_results)
     return {
         "case_count": case_count,
         "passed_case_count": passed_case_count,
@@ -182,6 +189,10 @@ def summarize_case_results(case_results: list[dict[str, Any]]) -> dict[str, Any]
         )
         if duplicate_cases
         else 0.0,
+        "source_key_dedupe_case_count": sum(
+            1 for case in case_results if case["source_key_dedupe_count"] > 0
+        ),
+        "source_key_dedupe_count": source_key_dedupe_count,
         "stale_superseded_false_promotion_count": stale_false_promotions,
     }
 
