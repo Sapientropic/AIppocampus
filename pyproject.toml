@@ -174,6 +174,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_labels.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_source_review_core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_suppressed_recovery.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/source_texture.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/associations.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map.py",

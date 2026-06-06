@@ -132,12 +132,28 @@ class AippocampusHealthTests(unittest.TestCase):
             "source_rollout_size": rollout.stat().st_size,
             "message_count": visibility.expected_clean_source_message_count,
             "turn_count": visibility.expected_clean_source_turn_count,
+            "source_texture_count": 1,
+            "source_texture_policy": {
+                "boundary": "source texture rows are rebuildable interpretation inputs, not source truth.",
+            },
         }
         if clean_upgrade_contract:
             clean_manifest["upgrade_contract"] = {"source_backed": True}
         (clean / "manifest.json").write_text(json.dumps(clean_manifest), encoding="utf-8")
         (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
         (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+        (clean / "source-texture.jsonl").write_text(
+            json.dumps(
+                {
+                    "texture_id": "tex_1",
+                    "signal_kind": "self_correction_signal",
+                    "truth_boundary": "texture_signal_not_source_fact",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         graphify = root / "graphify-corpus"
         graphify.mkdir()
         (graphify / "corpus_manifest.json").write_text(
@@ -307,6 +323,27 @@ class AippocampusHealthTests(unittest.TestCase):
             trajectory["preemptive_action_reasons"]["build_index"],
             ["rag_cache_missing"],
         )
+
+    def test_health_reports_source_texture_as_rebuildable_interpretation_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
+
+        texture = payload["clean_source"]["source_texture"]
+        self.assertTrue(texture["exists"])
+        self.assertEqual(texture["row_count"], 1)
+        self.assertTrue(texture["rebuildable"])
+        self.assertFalse(texture["canonical_source"])
+        self.assertEqual(texture["truth_boundary"], "texture_signal_not_source_fact")
+        self.assertEqual(texture["consumer_boundary"], "interpretation_input_only")
+        self.assertNotIn("build_clean_source", [item["id"] for item in payload["recommended_actions"]])
 
     def test_health_reports_oversized_logs_without_log_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

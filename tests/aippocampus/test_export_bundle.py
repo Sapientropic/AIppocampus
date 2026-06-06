@@ -149,7 +149,11 @@ class ExportBundleTests(unittest.TestCase):
             bundle_manifest = (bundle_root / "bundle_manifest.json").read_text(encoding="utf-8")
             self.assertIn('"redaction_profile": "public-export"', bundle_manifest)
             self.assertIn('"raw_rollout_included": false', bundle_manifest)
+            self.assertIn('"source_texture_policy"', bundle_manifest)
+            self.assertIn('"projection": "omitted"', bundle_manifest)
+            self.assertIn('"reason": "private_interpretation_sidecar"', bundle_manifest)
             self.assertFalse((bundle_root / "rollout.jsonl").exists())
+            self.assertFalse((bundle_root / "source-texture.jsonl").exists())
 
     def test_public_export_profile_rejects_raw_rollout_inclusion(self) -> None:
         args = Namespace(

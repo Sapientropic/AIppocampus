@@ -90,6 +90,18 @@ class SyncBundleTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+        (self.clean_source / "source-texture.jsonl").write_text(
+            json.dumps(
+                {
+                    "texture_id": "tex_1",
+                    "signal_kind": "tool_failure_texture",
+                    "truth_boundary": "texture_signal_not_source_fact",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         (self.clean_source / "semantic-scope-labels.jsonl").write_text(
             json.dumps(
                 {
@@ -136,15 +148,21 @@ class SyncBundleTests(unittest.TestCase):
         self.assertNotIn("registry/threads/session-test/clean-source/messages.jsonl", relative_paths)
         self.assertNotIn("registry/threads/session-test/clean-source/turns.jsonl", relative_paths)
         self.assertNotIn("registry/threads/session-test/clean-source/events.jsonl", relative_paths)
+        self.assertNotIn(
+            "registry/threads/session-test/clean-source/source-texture.jsonl", relative_paths
+        )
         self.assertIn("registry/threads/session-test/index/manifest.json", relative_paths)
         self.assertIn("clean-source-chunks/manifest.json", relative_paths)
         self.assertEqual(delta["kind"], "content_addressed_clean_source_chunks")
         self.assertEqual(delta["generated_cache_export"], "explicit_only")
-        self.assertEqual(delta["file_count"], 4)
-        self.assertEqual(delta["chunk_count"], 4)
+        self.assertEqual(delta["file_count"], 5)
+        self.assertEqual(delta["chunk_count"], 5)
         logical_paths = {item["path"] for item in delta["files"]}
         self.assertIn("registry/threads/session-test/clean-source/messages.jsonl", logical_paths)
         self.assertIn("registry/threads/session-test/clean-source/events.jsonl", logical_paths)
+        self.assertIn(
+            "registry/threads/session-test/clean-source/source-texture.jsonl", logical_paths
+        )
         for item in delta["files"]:
             self.assertTrue(item["chunks"], item)
             for chunk in item["chunks"]:
@@ -162,6 +180,10 @@ class SyncBundleTests(unittest.TestCase):
         self.assertEqual(
             portable_paths["clean_source_events_jsonl"],
             "registry/threads/session-test/clean-source/events.jsonl",
+        )
+        self.assertEqual(
+            portable_paths["clean_source_texture_jsonl"],
+            "registry/threads/session-test/clean-source/source-texture.jsonl",
         )
         self.assertIsNone(portable_paths["workspace"])
         self.assertIsNone(portable_paths["rollout"])
@@ -329,6 +351,16 @@ class SyncBundleTests(unittest.TestCase):
                 / "session-test"
                 / "clean-source"
                 / "turns.jsonl"
+            ).resolve(),
+        )
+        self.assertEqual(
+            Path(paths["clean_source_texture_jsonl"]).resolve(),
+            (
+                target_registry
+                / "threads"
+                / "session-test"
+                / "clean-source"
+                / "source-texture.jsonl"
             ).resolve(),
         )
         self.assertEqual(

@@ -28,6 +28,7 @@ from aippocampus_runtime.core import (
 from aippocampus_runtime.recall.route_notes import extract_route_note_candidates_for_source
 from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
 from aippocampus_runtime.source.redaction_profiles import write_clean_source_redaction_profiles
+from aippocampus_runtime.source.source_texture import materialize_source_texture_sidecar
 from conversation_sources import ConversationProvider, create_conversation_provider
 from conversation_sources.normalized import stable_source_ref
 
@@ -498,6 +499,10 @@ def build_clean_source(
         for item in clean_route_notes:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
+    source_texture = materialize_source_texture_sidecar(
+        clean_messages, clean_events, clean_route_notes, out, meta.get("id"), profile_summary
+    )
+
     stat = source_path.stat()
     source_sha256 = file_sha256(source_path) if hash_source else None
     source_artifact = {
@@ -546,11 +551,13 @@ def build_clean_source(
             "diagnostic_only_count",
             0,
         ),
+        "source_texture_count": source_texture["row_count"],
         "outputs": {
             "messages_jsonl": str(messages_path),
             "turns_jsonl": str(turns_path),
             "events_jsonl": str(events_path),
             "route_notes_jsonl": str(route_notes_path),
+            "source_texture_jsonl": source_texture["path"],
             "redaction_profiles": profile_outputs,
         },
         "redaction_profiles": profile_summary,
@@ -618,6 +625,7 @@ def build_clean_source(
             "join_keys": ["source_id", "thread_key", "turn_index", "line", "message_id", "event_id"],
             "boundary": "route notes are bounded navigation rows joined to adjacent evidence; they do not reintroduce routine commentary into clean source and cannot support claims without source reopen.",
         },
+        "source_texture_policy": source_texture["policy"],
         "event_lane_policy": {
             "status": "enabled_for_codex_rollouts",
             "default_file": "events.jsonl",

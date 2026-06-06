@@ -161,6 +161,10 @@ marker. A correction may be both a technical fact and an interaction pattern.
 AIppocampus should not force one canonical interpretation too early. It should
 store scoped, source-backed hypotheses with confidence, counter-evidence, and
 expiry rules.
+Process texture sidecars belong in this weather layer: they may help later
+Dream, Journey, or correction work notice self-correction, stuckness, or a
+rejected route, but they do not become source and still have to reopen the
+underlying refs before making claims.
 
 ### 3. Dream work must be output-separated
 

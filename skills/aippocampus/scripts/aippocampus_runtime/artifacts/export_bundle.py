@@ -149,6 +149,19 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
     bundle_manifest["bundle_schema_version"] = 1
     bundle_manifest["raw_rollout_included"] = not args.no_raw
     bundle_manifest["redaction_profile"] = redaction_profile
+    bundle_manifest["source_texture_policy"] = (
+        {
+            "projection": "omitted",
+            "reason": "private_interpretation_sidecar",
+            "canonical_source_replaced": False,
+        }
+        if redaction_profile == "public-export"
+        else {
+            "projection": "not_included_in_portable_index_bundle",
+            "reason": "clean_source_sidecar_not_index_artifact",
+            "canonical_source_replaced": False,
+        }
+    )
     bundle_manifest["bundle_files"] = {
         "handoff": "handoff.md",
         "anchors": "thread-anchors.md" if anchors.exists() else None,

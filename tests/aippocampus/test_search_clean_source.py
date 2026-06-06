@@ -91,6 +91,30 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["scope_labels"], ["technical_work"])
         self.assertIn("AIppocampus 是清洗后的原文记忆库", result["matches"][0]["snippet"])
 
+    def test_search_does_not_search_source_texture_by_default(self) -> None:
+        (self.source / "source-texture.jsonl").write_text(
+            json.dumps(
+                {
+                    "texture_id": "tex_1",
+                    "signal_kind": "tool_failure_texture",
+                    "signal_detail": "verification_failure",
+                    "signal_labels": ["texture_only_probe"],
+                    "truth_boundary": "texture_signal_not_source_fact",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = search.search_clean_source(self.cwd, ["texture_only_probe"], limit=5)
+
+        self.assertEqual(result["matches"], [])
+        self.assertEqual(
+            Path(result["source"]).resolve(),
+            (self.source / "messages.jsonl").resolve(),
+        )
+
     def test_human_search_output_leads_with_source_backed_snippet_receipt(self) -> None:
         stdout = io.StringIO()
         with (

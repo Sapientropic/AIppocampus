@@ -48,6 +48,9 @@ profile says otherwise. `public-export` bundle/index paths must use projected
 text and exclude raw rollout. `--no-raw` and `public-export` serve different
 purposes: `--no-raw` prevents raw transcript inclusion, while the redaction
 profile controls the text stored in generated index/report artifacts.
+Private interpretation sidecars such as `source-texture.jsonl` are omitted from
+`public-export` projections by default; future public projections need their
+own allowlist and must preserve source-ref reopen boundaries.
 
 Do not fix a public export leak by destructively rewriting canonical
 `messages.jsonl`. Generate a projection instead, then keep public artifacts
