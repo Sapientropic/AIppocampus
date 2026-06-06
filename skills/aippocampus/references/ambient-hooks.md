@@ -862,9 +862,14 @@ fixed work.
 
 Installed events:
 
-- `SessionStart`: refresh the global registry at most once per hour when an
-  index already exists; optionally ask the scheduler whether background work is
-  due.
+- `SessionStart`: refresh the global registry at most once per hour by default
+  when an index already exists; optionally ask the scheduler whether background
+  work is due. The effective cooldown may shrink toward recent session cadence,
+  bounded by the default and a minimum floor, but it must not grow beyond the
+  old one-hour default. If health exposes concrete `health_trajectory`
+  preemptive actions such as `build_index` or `build_clean_source`, SessionStart
+  may run those cheap repairs before first prompt-time recall; old-but-current
+  artifacts remain diagnostics only and must not rebuild by age alone.
 - `Stop`: normally at most once per 15 minutes per workspace, run health;
   refresh stale clean source, main index, existing segment indexes, registry
   rows, and scheduler state. A latest-visible-turn freshness gap is narrower
@@ -879,6 +884,11 @@ Installed events:
   must fail open and cannot block normal health-driven maintenance.
 - `PostCompact`: report the latest emergency snapshot in sanitized diagnostics
   and refresh after compaction unless a compact pass just ran.
+
+Lifecycle JSON exposes effective cooldown, preemptive action ids, reason codes,
+and taken/skipped preemptive outcomes. These diagnostics are for route decisions
+only: keep them to ids, counts, and reason codes rather than raw prompts,
+snippets, thread ids, or local source paths.
 
 The emergency snapshot lives under the current thread's global private registry
 store, not project docs or `.aippocampus` by default. It drops raw envelopes,

@@ -33,6 +33,7 @@ from aippocampus_runtime.core import (
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
+from aippocampus_runtime.health_trajectory import attach_health_trajectory
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
@@ -485,10 +486,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     checkpoint_delta = current_message_count - captured_count
     checkpoint_due = captured_count == 0 or checkpoint_delta >= options.checkpoint_messages
 
-    deep_graph_recommended = (
-        current_message_count >= options.deep_graph_messages
-        or rollout_stat.st_size >= options.deep_graph_bytes
-    )
+    deep_graph_recommended = current_message_count >= options.deep_graph_messages or rollout_stat.st_size >= options.deep_graph_bytes
 
     actions = []
     if index_stale:
@@ -683,6 +681,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "logs": logs,
         "recommended_actions": actions,
     }
+    attach_health_trajectory(result)
 
     return result
 

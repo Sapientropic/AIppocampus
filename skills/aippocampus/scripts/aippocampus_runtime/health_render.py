@@ -17,6 +17,7 @@ def render_health_text(result: dict[str, Any]) -> None:
     storage = result.get("storage") or {}
     question_stats = result.get("question_stats") or {}
     logs = result.get("logs") or {}
+    trajectory = result.get("health_trajectory") or {}
     actions = result["recommended_actions"]
 
     print(f"thread memory health: {status}")
@@ -55,6 +56,11 @@ def render_health_text(result: dict[str, Any]) -> None:
             print(f"logs: {logs.get('oversized_count', 0)} oversized artifact(s)")
         else:
             print("logs: within retention budget")
+    if trajectory.get("preemptive_actions"):
+        print(
+            "preemptive freshness: "
+            + ", ".join(str(item) for item in trajectory.get("preemptive_actions") or [])
+        )
     if question_stats.get("available"):
         print(
             "question health: "
