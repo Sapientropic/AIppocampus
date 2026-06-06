@@ -44,11 +44,15 @@ PR tightly.
 | Evidence and quality gates | #163, #378, #742 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, continuous-memory-vs-fresh-context comparison, and official AMemGym comparability without live judges. |
 | Reliability / infrastructure | #311, #784 | Keep open, but cut the next PR tightly. #311 owns live correction capture and private real-history adjudication. #784 now has the explicit provider-key bridge plan/apply/undo surface for Codex hooks; keep it open for real OS credential-store adapter quality and cross-platform smoke evidence rather than broad credential-discovery churn. |
 | Maintainer-reopened navigation/activation owners | #248, #309 | Keep open because the latest issue comments explicitly ask for sliced execution. Cut each into one concrete fixture/report path before changing runtime defaults: question prefilter/adoption or source-joined retrieval funnel. |
+| Presence-first continuity posture | #791, #792, #793, #794, #795, #796, #797, #799, #801, #803 | Keep open as focused slices, not one broad rewrite. #790 is the installable `SKILL.md` continuity-entrypoint slice and should leave this queue when its closing PR lands. Do not implement runtime renderer/gate, repo-root entrypoint, website, or docs-IA work while closing the `SKILL.md` surface. |
 | Closed or moved out of the foreground | #701, #703, #250, #312, #397, #574, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
 | Completed / superseded issues | #158, #164, #279, #299, #310, #313, #376, #463, #575, #582, #637, #639, #643, #707, #743, #747 | Closed after checking implementation evidence, child owners, or canonical docs. #310 now has the first live Journey instantiation and foreground hint timing replay fixture; #313 now has the first no-leakage thread-story packet diagnostic; #376 now has the explicit long-thread segment build/search soak; #575 now has the first deterministic cognitive-load sidecar slice. Future live calibration should start from a fresh narrow issue rather than reopening the broad concept. |
 
 Current open queue after the pass and 2026-06-06 reopen/addition comments:
-#163, #201, #248, #281, #309, #311, #378, #742, #752, #784, and #786.
+#163, #201, #248, #281, #309, #311, #378, #742, #752, #784, #786, plus
+the presence-first cluster under #791: #792, #793, #794, #795, #796, #797,
+#799, #801, and #803. #790 belongs to that cluster but is the current
+`SKILL.md` slice being closed by this work.
 This is the active issue foreground;
 everything else should stay in docs, evidence, Discussion, or Long Garden until
 it has a small next action.
