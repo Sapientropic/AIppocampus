@@ -88,6 +88,48 @@ DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_CATALOG_LIM
 DEFAULT_MAX_PROMPT_RELEVANT_CATALOG_ITEMS = 8
 DEFAULT_MAX_TRIGGER_ITEMS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TRIGGER_LIMIT", "0"))
 DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS = 8
+GENERIC_TRIGGER_PROMPT_TERMS = frozenset(
+    {
+        "backed",
+        "candidate",
+        "candidates",
+        "claim",
+        "claims",
+        "context",
+        "contexts",
+        "cue",
+        "cues",
+        "decision",
+        "decisions",
+        "evidence",
+        "issue",
+        "issues",
+        "memory",
+        "memories",
+        "project",
+        "projects",
+        "recall",
+        "ref",
+        "refs",
+        "route",
+        "routes",
+        "source",
+        "sources",
+        "thread",
+        "threads",
+        "上下文",
+        "候选",
+        "决策",
+        "引用",
+        "源",
+        "线索",
+        "记忆",
+        "证据",
+        "路线",
+        "问题",
+        "项目",
+    }
+)
 DEFAULT_WORKERS = ("gate", "alias", "scope")
 WORKER_ALIASES = {
     "all": DEFAULT_WORKERS,
@@ -358,6 +400,8 @@ def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> i
         normalized = str(term or "").strip().casefold()
         if len(normalized) < 2:
             continue
+        if is_generic_trigger_prompt_term(normalized):
+            continue
         if normalized in blob:
             score += trigger_term_weight(normalized)
             continue
@@ -367,6 +411,14 @@ def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> i
                 score += trigger_term_weight(value_low)
                 break
     return score
+
+
+def is_generic_trigger_prompt_term(term: str) -> bool:
+    # Reviewed triggers are allowed to provide a local route when a prompt has a
+    # real topic overlap or source-ref bridge. Generic recall vocabulary such as
+    # "source refs" or "issue" is too common in project maintenance prompts; if
+    # it scores here it can promote unrelated sidecar scent into the foreground.
+    return str(term or "").strip().casefold() in GENERIC_TRIGGER_PROMPT_TERMS
 
 
 def trigger_term_weight(term: str) -> int:

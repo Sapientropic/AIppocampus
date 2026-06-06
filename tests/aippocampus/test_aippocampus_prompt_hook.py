@@ -2205,6 +2205,68 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["candidates"][0]["semantic_trigger_source"])
         self.assertIn("最近让我很烦", result["query_terms"])
 
+    def test_reviewed_semantic_trigger_ignores_generic_source_ref_issue_prompt_terms(self) -> None:
+        registry_path = self.root / "generic-spillover-semantic-trigger-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:detached-alias",
+                            "title": "Garden planning notebook",
+                            "project_label": "Home planning",
+                            "anchor_titles": [],
+                            "keywords": ["balcony planting"],
+                            "summary": "A sparse row for unrelated household planning notes.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        triggers_path = self.root / "generic_spillover_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "Source ref issue route",
+                    "aliases": ["detached alias"],
+                    "confidence": 0.9,
+                    "when_to_use": (
+                        "Use when the user asks about source refs, candidate issues, "
+                        "or route context."
+                    ),
+                    "source_refs": [{"thread_key": "session:detached-alias", "message_id": "m1"}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("generic trigger prompt terms should not require live semantic spend")
+
+        result = hook.assess_prompt(
+            "候选 source refs 的中间层和过度保守这个问题，是不是已经有 issue 了？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_triggers_path=triggers_path,
+            semantic_gate_fn=fail_semantic_gate,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertIsNone(result["semantic_gate"])
+        self.assertFalse(result["candidates"])
+        self.assertIsNone(hook.context_for_hook(result))
+
     def test_reviewed_semantic_trigger_does_not_turn_plain_code_task_into_recall(self) -> None:
         registry_path = self.root / "code-surface-semantic-trigger-registry" / "threads.json"
         registry_path.parent.mkdir()
