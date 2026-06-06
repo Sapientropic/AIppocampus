@@ -200,7 +200,12 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
 
 
 SCENT_THRESHOLD_DEBUG_REASONS = {"same_thread_decision_continuation", "semantic_reuse_hit"}
-SCENT_THRESHOLD_RISK_BOUNDARIES = {"normal", "current_repo_fact", "privacy_sensitive"}
+SCENT_THRESHOLD_RISK_BOUNDARIES = {
+    "normal",
+    "personal_continuity",
+    "current_repo_fact",
+    "privacy_sensitive",
+}
 DREAM_DELIVERY_PREFILTER_REASONS = {
     "baseline_match",
     "budget_zero",

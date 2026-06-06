@@ -27,10 +27,11 @@ class FreshThreadDemoTests(unittest.TestCase):
                 "stress_cue",
                 "website_cue",
                 "gift_cue",
+                "personal_family_gift_continuity",
                 "fresh_coding_cue",
                 "negative_broad_stress",
                 "negative_irrelevant_website",
-                "negative_sensitive_gift",
+                "negative_hard_risk_secret",
                 "negative_project_fact_bleed",
                 "multi_turn_threshold_cue",
                 "negative_wrong_recall_correction",
@@ -52,8 +53,8 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertTrue(report["claim_boundary"]["synthetic_task_context_fixtures"])
         self.assertFalse(report["claim_boundary"]["semantic_classification_quality_proof"])
         self.assertIn("#285", report["claim_boundary"]["issue"])
-        self.assertEqual(report["metrics"]["flow_count"], 10)
-        self.assertEqual(report["metrics"]["positive_flow_count"], 5)
+        self.assertEqual(report["metrics"]["flow_count"], 11)
+        self.assertEqual(report["metrics"]["positive_flow_count"], 6)
         self.assertEqual(report["metrics"]["negative_control_count"], 5)
         self.assertGreaterEqual(report["metrics"]["synthetic_task_context_fixture_turn_count"], 1)
         self.assertEqual(report["metrics"]["max_turn_depth"], 3)
@@ -82,6 +83,11 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertTrue(any(turn["agent_action"] == "source_reopen" for turn in gift_turns))
         self.assertTrue(any(turn["requires_source_reopen"] for turn in gift_turns))
 
+        personal_gift_turns = flows["personal_family_gift_continuity"]["arms"]["active_recall"]["turns"]
+        self.assertEqual(personal_gift_turns[0]["agent_action"], "active_recall")
+        self.assertEqual(personal_gift_turns[0]["reason"], "scent_could_change_answer_plan_or_action")
+        self.assertTrue(personal_gift_turns[0]["should_call_active_recall"])
+
         threshold_turns = flows["multi_turn_threshold_cue"]["arms"]["active_recall"]["turns"]
         self.assertEqual([turn["agent_action"] for turn in threshold_turns], [
             "ask_light_question",
@@ -109,11 +115,19 @@ class FreshThreadDemoTests(unittest.TestCase):
                     {
                         "stay_generic",
                         "ask_normal_scoping_question",
-                        "suppress_sensitive_detail",
+                        "hard_risk_detail_blocked_or_redacted",
                         "read_current_repo_first",
                         "wrong_recall_rejected_and_suppressed",
                     },
                 )
+                if flow["flow_id"] == "negative_hard_risk_secret":
+                    self.assertTrue(
+                        all(
+                            turn["reason"] == "hard_risk_prompt_blocked"
+                            or turn["reason"] == "suppressed_or_superseded_packet"
+                            for turn in active["turns"]
+                        )
+                    )
                 if flow["flow_id"] == "negative_project_fact_bleed":
                     self.assertTrue(
                         all(

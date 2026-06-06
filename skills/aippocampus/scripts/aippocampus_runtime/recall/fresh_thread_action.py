@@ -52,7 +52,9 @@ DEFAULT_WHEN_NOT_TO_USE = [
 TASK_CONTEXT_FLAG_PROVENANCE = {
     "memory_may_change_answer": "foreground_agent_or_reviewed_sidecar_judgement",
     "specific_memory_claim": "foreground_agent_or_reviewed_sidecar_judgement",
-    "broad_or_sensitive_prompt": "foreground_agent_or_reviewed_sidecar_judgement",
+    "low_specificity_prompt": "foreground_agent_or_reviewed_sidecar_judgement",
+    "hard_risk_prompt": "foreground_agent_or_reviewed_sidecar_judgement",
+    "broad_or_sensitive_prompt": "legacy_low_specificity_prompt_alias",
     "allow_gentle_hypothesis": "foreground_agent_judgement",
     "user_confirmed_memory_theme": "fresh_thread_activation_or_foreground_user_anchor",
     "route_suppressed_by_activation": "fresh_thread_activation_state",
@@ -263,7 +265,7 @@ def _base_result(
             "source_refs_allowed_only_after_reopen": source_refs_allowed,
         },
         "privacy_boundary": {
-            "rule": _privacy_rule(action),
+            "rule": _privacy_rule(action, reason),
             "lock_boundary": "active_recall_locks_are_route_handles_not_facts",
             "prompt_text_serialized": False,
             "raw_snippets_serialized": False,
@@ -280,13 +282,15 @@ def _base_result(
     return result
 
 
-def _privacy_rule(action: str) -> str:
+def _privacy_rule(action: str, reason: str) -> str:
+    if reason == "hard_risk_prompt_blocked":
+        return "Hard-risk route blocked or redacted; do not use memory material for answer content."
     if action == IGNORE:
         return "Suppressed, stale, or non-actionable scent must not steer answer or tone."
     if action == USE_SILENTLY:
         return "Internal resonance only; do not mention a memory theme without user anchor or source."
     if action == ASK_LIGHT_QUESTION:
-        return "Ask for an anchor instead of exposing private or low-confidence history."
+        return "Ask for an anchor instead of asserting unreopened or low-confidence history."
     if action == MENTION_SOFT_HYPOTHESIS:
         return "Name only a soft hypothesis; reopen source before specific claims."
     if action == ACTIVE_RECALL:
@@ -306,7 +310,8 @@ def fresh_thread_action_from_packet(
 
     `task_context` carries explicit upstream flags such as
     `memory_may_change_answer`, `specific_memory_claim`,
-    `broad_or_sensitive_prompt`, `allow_gentle_hypothesis`, and
+    `low_specificity_prompt`, `hard_risk_prompt`,
+    `allow_gentle_hypothesis`, and
     `user_confirmed_memory_theme`. Those flags come from foreground agent
     judgement, activation state, reviewed sidecars, active recall locks, or
     deterministic repo/source checks. This keeps semantic judgement out of this
@@ -340,7 +345,10 @@ def fresh_thread_action_from_packet(
     specific_memory_claim = _context_flag(context, "specific_memory_claim")
     memory_may_change_answer = _context_flag(context, "memory_may_change_answer")
     user_confirmed_theme = _context_flag(context, "user_confirmed_memory_theme")
-    broad_or_sensitive_prompt = _context_flag(context, "broad_or_sensitive_prompt")
+    low_specificity_prompt = _context_flag(context, "low_specificity_prompt") or _context_flag(
+        context, "broad_or_sensitive_prompt"
+    )
+    hard_risk_prompt = _context_flag(context, "hard_risk_prompt")
     allow_gentle_hypothesis = _context_flag(context, "allow_gentle_hypothesis")
     route_suppressed_by_activation = _context_flag(context, "route_suppressed_by_activation")
     prior_scent_without_new_anchor = _context_flag(context, "prior_scent_without_new_anchor")
@@ -362,6 +370,16 @@ def fresh_thread_action_from_packet(
         return _base_result(
             action=IGNORE,
             reason="activation_state_suppressed_route",
+            packet=packet,
+            context=context,
+            active_recall_lock=active_recall_lock,
+            specific_memory_claim=False,
+        )
+
+    if hard_risk_prompt:
+        return _base_result(
+            action=IGNORE,
+            reason="hard_risk_prompt_blocked",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,
@@ -438,10 +456,10 @@ def fresh_thread_action_from_packet(
             specific_memory_claim=specific_memory_claim,
         )
 
-    if confidence == "low" and broad_or_sensitive_prompt:
+    if confidence == "low" and low_specificity_prompt:
         return _base_result(
             action=USE_SILENTLY,
-            reason="weak_broad_scent_kept_internal",
+            reason="weak_low_specificity_scent_kept_internal",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,
@@ -573,10 +591,10 @@ EXAMPLE_ACTION_DECISIONS = [
     },
     {
         "case_type": "negative_control",
-        "scenario": "low_specificity_sensitive_first_turn_stays_internal",
+        "scenario": "low_specificity_first_turn_stays_internal",
         "decision": fresh_thread_action_from_packet(
             _LOW_BROAD_PACKET,
-            task_context={"broad_or_sensitive_prompt": True},
+            task_context={"low_specificity_prompt": True},
         ),
     },
     {

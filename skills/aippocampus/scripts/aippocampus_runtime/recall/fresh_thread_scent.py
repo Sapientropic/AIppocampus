@@ -33,13 +33,13 @@ SOURCE_REOPEN_FAILURE_REASON_CODES = [
 
 BASE_WHEN_NOT_TO_USE = [
     "Do not present this packet as source-backed fact.",
-    "Do not expose private details or source ids unless grounding is needed.",
+    "Do not assert unreopened source details or source ids as answer content.",
     "Do not personalize a broad prompt after the local task has moved on.",
 ]
 
 SUPPRESSED_WHEN_NOT_TO_USE = [
     "Do not use suppressed packets for answer content, tone steering, or memory claims.",
-    "Do not reopen source unless the user gives a clearer, low-risk memory intent.",
+    "Do not reopen source when the route is secret/property-risk, stale, or explicitly suppressed.",
 ]
 
 
@@ -209,7 +209,7 @@ def _advisory_action(support_level: str, confidence: str) -> str:
 
 def _route_reason(support_level: str, advisory_action: str) -> str:
     if support_level == "suppressed":
-        return "privacy_or_staleness_boundary"
+        return "hard_risk_or_staleness_boundary"
     if support_level == "source_required":
         return "candidate_source_refs_may_matter_before_specific_claim"
     if advisory_action == "active_recall":

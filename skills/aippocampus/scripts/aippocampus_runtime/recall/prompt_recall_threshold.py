@@ -2,8 +2,10 @@
 """Context-aware scent-threshold policy for prompt-time recall.
 
 This module only changes routing sensitivity for `scent`. It must not upgrade
-old memory into evidence or turn broad sensitive prompts into personalized
-recall; clean-source reopen remains the evidence boundary.
+old memory into evidence, and clean-source reopen remains the evidence
+boundary. Same-user personal continuity is allowed to participate in routing;
+hard privacy boundaries are reserved for secrets, unsafe exposure, and current
+source/current-checkout facts.
 """
 
 from __future__ import annotations
@@ -27,8 +29,8 @@ ACTIVE_LOCK_ROI_SUPPRESS_DELTA = 0.5
 MIN_SCENT_THRESHOLD = 3.5
 MAX_SCENT_THRESHOLD_DELTA = 1.0
 
-# Safety-only blockers: these phrases can prevent threshold lowering, but they
-# must not become recall activation cues or evidence for any personal claim.
+# Same-user continuity cues: these can shape routing and topic-signal reuse, but
+# they must not become evidence for personal claims without clean-source reopen.
 _BROAD_PERSONAL_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in [
@@ -73,10 +75,12 @@ def scent_threshold_policy(
     fresh_thread = not bool(str(thread_id or "").strip())
     if live_fact:
         risk_boundary = "current_repo_fact"
-    elif prompt_is_secret_surface(prompt) or (fresh_thread and broad_fresh_personal_prompt(prompt)):
+    elif prompt_is_secret_surface(prompt):
         risk_boundary = "privacy_sensitive"
+    elif fresh_thread and broad_fresh_personal_prompt(prompt):
+        risk_boundary = "personal_continuity"
 
-    if risk_boundary == "normal":
+    if risk_boundary in {"normal", "personal_continuity"}:
         if thread_id and topic_epoch and is_decision_continuation(prompt):
             effective += SAME_THREAD_CONTINUATION_DELTA
             adjustments.append(
