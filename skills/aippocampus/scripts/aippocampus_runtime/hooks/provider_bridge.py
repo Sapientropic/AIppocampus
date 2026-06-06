@@ -115,7 +115,10 @@ def _windows_credential_manager_secret(source: dict[str, Any]) -> str | None:
         ]
 
     credential_ptr = ctypes.POINTER(CREDENTIALW)()
-    advapi32 = ctypes.windll.advapi32
+    windll = getattr(ctypes, "windll", None)
+    if windll is None:
+        return None
+    advapi32 = windll.advapi32
     read = advapi32.CredReadW
     read.argtypes = [
         ctypes.c_wchar_p,
