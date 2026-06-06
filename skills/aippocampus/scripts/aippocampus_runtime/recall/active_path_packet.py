@@ -444,12 +444,16 @@ def _trim_paths(paths: list[dict[str, Any]], max_paths: int) -> list[dict[str, A
 
 def _metrics(paths: list[dict[str, Any]], candidate_count: int) -> dict[str, Any]:
     route_counts = {route: 0 for route in sorted(ROUTES)}
+    action_grammar_counts: dict[str, int] = {}
     for path in paths:
         route_counts[str(path.get("route") or "scent")] = route_counts.get(str(path.get("route")), 0) + 1
+        grammar = str(path.get("action_grammar") or "direction_only")
+        action_grammar_counts[grammar] = action_grammar_counts.get(grammar, 0) + 1
     return {
         "candidate_count": candidate_count,
         "selected_count": len(paths),
         "route_counts": route_counts,
+        "action_grammar_counts": action_grammar_counts,
         "reopenable_path_count": sum(
             1 for path in paths if _reopenable_ref_count(list(path.get("source_refs") or [])) > 0
         ),

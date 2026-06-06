@@ -55,8 +55,8 @@ high-risk claims.
 Cards may include `provenance_class`, `cached_origin`,
 `authority_state`, `source_reopen_required`,
 `reopen_required_before_claim`, `reopen_recommended_for_exact_quote`,
-`reopenable_ref_count`, `trust_level`, `trust_contract`, and per-card
-`cache_status`.
+`reopenable_ref_count`, `trust_level`, `action_grammar`,
+`trust_contract`, and per-card `cache_status`.
 The allowed provenance classes are small and non-secret:
 `deterministic_cue`, `warm_scout_proposal`, `cached_warm_card`,
 `cognitive_map_route`, `working_memory_source`, `working_memory_model`, and
@@ -69,14 +69,22 @@ The packet trust taxonomy is owned by
 `aippocampus_runtime.recall.authority`. Keep it small and reuse existing
 packet fields instead of adding a second scoring layer:
 
-| `trust_level` | Agent use |
-|---|---|
-| `ignore` | Do not use for answer content; report/defer only if the boundary matters. |
-| `semantic_hint` | Model/cognitive wayfinding only; it cannot support factual claims. |
-| `scent` | Weak navigation; decide whether further recall is worth it. |
-| `source_required` | Use the packet's reopen plan or source refs to reopen clean source; do not answer from the packet itself. |
-| `bounded_evidence` | Use within the card/context's declared scope; reopen/deepen for exact quotes, wider context, conflicts, sensitive or high-risk claims. |
-| `raw_source_reopened` | Raw/local source is open to the host; still apply scope and redaction. |
+| `trust_level` | `action_grammar` | Agent use |
+|---|---|---|
+| `ignore` | `ignore_or_blocked` | Do not use for answer content; report/defer only if the boundary matters. |
+| `semantic_hint` | `direction_only` | Model/cognitive wayfinding only; it cannot support factual claims. |
+| `scent` | `direction_only` | Weak navigation; decide whether further recall is worth it. |
+| `source_required` | `reopenable_route` | Use the packet's reopen plan or source refs to reopen clean source; do not answer from the packet itself. |
+| `bounded_evidence` | `bounded_evidence` | Use within the card/context's declared scope; reopen/deepen for exact quotes, wider context, conflicts, sensitive or high-risk claims. |
+| `raw_source_reopened` | `source_open` | Raw/local source is open to the host; exact wording may be used only within scope and redaction boundaries. |
+
+`action_grammar` is a projection from `trust_level` plus the packet's concrete
+state, not a second taxonomy or score. For example, a `source_required` packet
+with a ready reopen plan is `reopenable_route`; the same tier with a blocked
+plan is `ignore_or_blocked` so the foreground agent does not invent a broad
+manual search. `bounded_evidence` may change the answer within its declared
+scope, but it is still not `source_open` and must not be used for exact quotes
+unless raw source text has actually been reopened.
 
 `ambient_recall` also carries a `fresh_thread_packet` projected by
 `fresh_thread_scent.py`. This is the #282 contract that bridges the #281
@@ -84,7 +92,8 @@ fresh-thread product goal with #277-style active recall locks. The packet fields
 `support_level` (`silent_scent | soft_hypothesis | source_required |
 suppressed`), coarse `confidence`, `sensitivity`, `freshness`, `route_reason`,
 source-id-only `candidate_refs`, canonical `advisory_action`, compatibility
-`suggested_action`, `when_not_to_use`, and a `source_boundary` block. When
+`suggested_action`, `action_grammar`, `trust_level`, `trust_contract`,
+`when_not_to_use`, and a `source_boundary` block. When
 `support_level=source_required`, the packet also carries an ids-only
 `reopen_plan` with `kind`, `status`, `recommended_tool`, compact tool
 `arguments`, candidate/reopenable counts, `reason_codes`,

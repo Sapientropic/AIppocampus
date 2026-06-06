@@ -12,6 +12,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall import ambient_cards as cards  # noqa: E402
 from aippocampus_runtime.recall import authority  # noqa: E402
+from aippocampus_runtime.recall import prompt_context_render  # noqa: E402
 
 
 class AmbientRecallCardTests(unittest.TestCase):
@@ -34,8 +35,82 @@ class AmbientRecallCardTests(unittest.TestCase):
         )
 
         self.assertEqual(projected["trust_level"], "semantic_hint")
+        self.assertEqual(projected["action_grammar"], "direction_only")
+        self.assertEqual(projected["trust_contract"]["action_grammar"], "direction_only")
         self.assertFalse(projected["trust_contract"]["agent_may_answer_within_scope"])
         self.assertFalse(projected["trust_contract"]["treat_as_fact"])
+
+    def test_action_grammar_maps_trust_levels_without_new_scoring_layer(self) -> None:
+        projected_rows = authority.trust_taxonomy()
+
+        self.assertEqual(
+            [row["trust_level"] for row in projected_rows],
+            [
+                "ignore",
+                "semantic_hint",
+                "scent",
+                "source_required",
+                "bounded_evidence",
+                "raw_source_reopened",
+            ],
+        )
+        self.assertEqual(
+            [row["action_grammar"] for row in projected_rows],
+            [
+                "ignore_or_blocked",
+                "direction_only",
+                "direction_only",
+                "reopenable_route",
+                "bounded_evidence",
+                "source_open",
+            ],
+        )
+
+        blocked_reopen = authority.with_trust_fields(
+            {
+                "support_level": "source_required",
+                "reopen_plan": {
+                    "status": "blocked",
+                    "manual_query_invention_expected": False,
+                },
+            }
+        )
+        self.assertEqual(blocked_reopen["trust_level"], "source_required")
+        self.assertEqual(blocked_reopen["action_grammar"], "ignore_or_blocked")
+        self.assertTrue(blocked_reopen["trust_contract"]["agent_should_ignore"])
+        self.assertFalse(blocked_reopen["trust_contract"]["agent_should_reopen_source"])
+
+        orphan_reopen = authority.with_trust_fields({"support_level": "source_required"})
+        self.assertEqual(orphan_reopen["trust_level"], "source_required")
+        self.assertEqual(orphan_reopen["action_grammar"], "ignore_or_blocked")
+        self.assertTrue(orphan_reopen["trust_contract"]["agent_should_ignore"])
+
+    def test_source_open_enables_exact_quote_only_when_raw_source_reopened(self) -> None:
+        bounded = authority.with_trust_fields(
+            {
+                "support_level": "evidence",
+                "provenance_class": "source_backed_reopen",
+                "source_boundary": {"clean_source_reopened": True},
+            }
+        )
+        raw_source = authority.with_trust_fields(
+            {
+                "support_level": "evidence",
+                "evidence_level": "raw_source",
+                "source_boundary": {"raw_source_reopened": True},
+            }
+        )
+
+        self.assertEqual(bounded["action_grammar"], "bounded_evidence")
+        self.assertTrue(bounded["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(bounded["trust_contract"]["agent_may_quote_exact_wording"])
+        self.assertTrue(bounded["trust_contract"]["reopen_recommended_for_exact_quote"])
+
+        self.assertEqual(raw_source["trust_level"], "raw_source_reopened")
+        self.assertEqual(raw_source["action_grammar"], "source_open")
+        self.assertTrue(raw_source["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertTrue(raw_source["trust_contract"]["agent_may_quote_exact_wording"])
+        self.assertFalse(raw_source["trust_contract"]["reopen_recommended_for_exact_quote"])
 
     def test_evidence_decision_becomes_source_backed_card(self) -> None:
         result = {
@@ -77,7 +152,10 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertFalse(payload["cards"][0]["source_reopen_required"])
         self.assertEqual(payload["cards"][0]["authority_state"], "bounded_evidence_ready")
         self.assertEqual(payload["cards"][0]["trust_level"], "bounded_evidence")
+        self.assertEqual(payload["cards"][0]["action_grammar"], "bounded_evidence")
+        self.assertEqual(payload["cards"][0]["trust_contract"]["action_grammar"], "bounded_evidence")
         self.assertTrue(payload["cards"][0]["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(payload["cards"][0]["trust_contract"]["agent_may_quote_exact_wording"])
         self.assertFalse(payload["cards"][0]["trust_contract"]["manual_query_invention_expected"])
         self.assertTrue(payload["cards"][0]["reopen_recommended_for_exact_quote"])
         self.assertEqual(payload["cards"][0]["reopenable_ref_count"], 1)
@@ -184,6 +262,8 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(card["provenance_class"], "cognitive_map_route")
         self.assertEqual(card["support_level"], "scent")
         self.assertEqual(card["trust_level"], "semantic_hint")
+        self.assertEqual(card["action_grammar"], "direction_only")
+        self.assertEqual(card["trust_contract"]["action_grammar"], "direction_only")
         self.assertFalse(card["trust_contract"]["agent_may_answer_within_scope"])
         self.assertTrue(card["trust_contract"]["manual_query_invention_expected"])
         self.assertTrue(card["source_reopen_required"])
@@ -311,6 +391,7 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertFalse(evidence_context["cards"][0]["source_reopen_required"])
         self.assertEqual(evidence_context["cards"][0]["authority_state"], "bounded_evidence_ready")
         self.assertEqual(evidence_context["cards"][0]["trust_level"], "bounded_evidence")
+        self.assertEqual(evidence_context["cards"][0]["action_grammar"], "bounded_evidence")
         self.assertTrue(
             evidence_context["cards"][0]["trust_contract"]["agent_may_answer_within_scope"]
         )
@@ -320,6 +401,53 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertFalse(evidence_context["source_boundary"]["raw_prompt_text_serialized"])
         self.assertNotIn("raw prompt", serialized_context)
         self.assertNotIn("source_window", evidence_context)
+
+    def test_prompt_debug_summary_counts_action_grammar(self) -> None:
+        bounded_card = authority.with_authority_fields(
+            {
+                "support_level": "evidence",
+                "provenance_class": "source_backed_reopen",
+                "source_boundary": {"clean_source_reopened": True},
+            }
+        )
+        semantic_card = authority.with_trust_fields(
+            {
+                "support_level": "scent",
+                "provenance_class": "cognitive_map_route",
+            }
+        )
+
+        summary = prompt_context_render.ambient_debug_summary(
+            {
+                "ambient_recall": {
+                    "mode": "test",
+                    "confidence": "high",
+                    "cards": [bounded_card, semantic_card],
+                }
+            }
+        )
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary["trust_level_counts"]["bounded_evidence"], 1)
+        self.assertEqual(summary["trust_level_counts"]["semantic_hint"], 1)
+        self.assertEqual(summary["action_grammar_counts"]["bounded_evidence"], 1)
+        self.assertEqual(summary["action_grammar_counts"]["direction_only"], 1)
+
+        context = prompt_context_render.context_for_hook(
+            {
+                "decision": "scent",
+                "ambient_recall": {
+                    "mode": "test",
+                    "confidence": "high",
+                    "cards": [bounded_card, semantic_card],
+                },
+            }
+        )
+        self.assertIsNotNone(context)
+        assert context is not None
+        self.assertIn("/bounded_evidence/bounded_evidence", context)
+        self.assertIn("/semantic_hint/direction_only", context)
 
     def test_bounded_evidence_context_accepts_get_turn_context_shape(self) -> None:
         evidence_context = cards.bounded_evidence_context_from_source_reopen(
