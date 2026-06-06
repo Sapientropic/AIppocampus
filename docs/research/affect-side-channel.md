@@ -1,6 +1,6 @@
 # Thread Intuition Layer: From Symbols to 感而遂通
 
-Status: research memo, validated prototype direction; not a runtime contract.
+Status: research memo, validated prototype direction, plus first no-leakage diagnostic packet.
 Origin: user observation + experimental validation, 2026-05-27.
 Related: [compact-activation-signals.md](compact-activation-signals.md).
 
@@ -23,6 +23,21 @@ Pro, we discovered:
    direction.
 4. The optimal architecture is **two-layer**: hexagram arc (intuition, always
    on, ~5 tokens) + full clean source recall (knowledge, on demand).
+
+## Implementation Boundary
+
+The first #313 executable slice lives in
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/thread_story.py`.
+It is a no-write diagnostic helper that builds a source-backed thread-story
+activation packet, keeps raw story text and symbolic channels private, and
+returns negative controls for contradictory arcs, unsupported persona claims,
+and multi-channel interference.
+
+This helper does not install a subconscious extractor, does not promote
+hexagram or five-tone markers into default recall/AAR hooks, and does not let a
+thread-story packet answer factual memory questions by itself. The packet is
+navigation material only; exact claims still require source reopen or
+equivalent evidence.
 
 ## The Journey (For Context)
 
@@ -194,6 +209,11 @@ This does NOT replace clean source recall. It precedes it and colors it.
    or does multi-channel still cause interference even with don't-decode?
 6. How do thread stories interact with AIppocampus's existing question tracking
    and frontier marker systems?
+
+Current diagnostic coverage: #313 now has a deterministic packet fixture and
+negative controls for contradictions, persona-claim suppression, and
+multi-channel interference. The automation, model-family, coexistence-count,
+and live foreground-quality questions remain open research/evaluation work.
 
 ## Related Work
 
