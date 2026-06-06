@@ -88,8 +88,24 @@ class BuildIndexTests(unittest.TestCase):
             con = sqlite3.connect(sqlite_path)
             try:
                 self.assertEqual(
-                    con.execute("SELECT COUNT(*) FROM messages WHERE sha1 = ?", ("same-text",)).fetchone()[0],
+                    con.execute(
+                        "SELECT COUNT(*) FROM messages WHERE sha1 = ?",
+                        ("same-text",),
+                    ).fetchone()[0],
                     2,
+                )
+                source_refs = [
+                    row[0]
+                    for row in con.execute(
+                        "SELECT source_ref FROM message_features ORDER BY message_id"
+                    ).fetchall()
+                ]
+                self.assertEqual(
+                    source_refs,
+                    [
+                        "message_sha1:same-text#message_id:1",
+                        "message_sha1:same-text#message_id:2",
+                    ],
                 )
                 indexes = {
                     row[1]

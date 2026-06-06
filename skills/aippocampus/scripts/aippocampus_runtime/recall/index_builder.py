@@ -89,7 +89,13 @@ def message_feature_row(
     message_timestamp = message.get("timestamp")
     active_timestamp = message_timestamp or last_active_at or source_updated_at or source_created_at
     sha1 = str(message.get("sha1") or "")
-    source_ref = f"message_sha1:{sha1[:16]}" if sha1 else f"message_id:{message_id}"
+    # Repeated short turns can legitimately share a text hash, so keep the
+    # hash as a navigation cue but include the SQLite row id for a stable handle.
+    source_ref = (
+        f"message_sha1:{sha1[:16]}#message_id:{message_id}"
+        if sha1
+        else f"message_id:{message_id}"
+    )
     metadata = {
         "feature_version": 1,
         "source_projection": "deterministic_message_features",
