@@ -11,8 +11,10 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall import ambient_cards as cards  # noqa: E402
-from aippocampus_runtime.recall import authority  # noqa: E402
-from aippocampus_runtime.recall import prompt_context_render  # noqa: E402
+from aippocampus_runtime.recall import (
+    authority,  # noqa: E402
+    prompt_context_render,  # noqa: E402
+)
 
 
 class AmbientRecallCardTests(unittest.TestCase):
