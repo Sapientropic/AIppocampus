@@ -200,6 +200,76 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_OVERCLAIM_CASE", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_issue_797_presence_first_fixture_matrix_checks_behavior_not_fields(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        matrix = report["presence_first_fixture_matrix"]
+        readout = report["issue_readouts"]["github_797"]
+        encoded = json.dumps(matrix, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(matrix["measured"])
+        self.assertEqual(matrix["mode"], "deterministic_fixture")
+        self.assertEqual(matrix["family_count"], 6)
+        self.assertTrue(matrix["public_safe"])
+        self.assertTrue(matrix["checks_behavior_not_just_fields"])
+        self.assertTrue(matrix["old_everything_is_scent_baseline_fails"])
+        self.assertGreaterEqual(matrix["old_posture_failure_count"], 1)
+        self.assertEqual(matrix["privacy"]["raw_source_window_serialized"], False)
+        self.assertEqual(matrix["privacy"]["local_paths_serialized"], False)
+
+        cases = matrix["cases_by_family"]
+        self.assertEqual(
+            set(cases),
+            {
+                "memory_atmosphere",
+                "working_continuity_brief",
+                "bounded_evidence",
+                "source_open",
+                "source_court",
+                "first_use_ten_minute_path",
+            },
+        )
+
+        atmosphere = cases["memory_atmosphere"]
+        self.assertEqual(atmosphere["agent_behavior"], "quietly_orients_without_claim")
+        self.assertTrue(atmosphere["current_posture_pass"])
+        self.assertFalse(atmosphere["makes_factual_claim"])
+
+        continuity = cases["working_continuity_brief"]
+        self.assertEqual(continuity["agent_behavior"], "uses_reopenable_route_without_manual_grep")
+        self.assertEqual(continuity["manual_query_invention_count"], 0)
+        self.assertTrue(continuity["next_action_changed"])
+
+        bounded = cases["bounded_evidence"]
+        self.assertEqual(bounded["agent_behavior"], "answers_within_scope")
+        self.assertTrue(bounded["answer_changed_by_memory"])
+        self.assertFalse(bounded["manual_query_required"])
+
+        source_open = cases["source_open"]
+        self.assertEqual(source_open["agent_behavior"], "uses_scoped_exact_wording")
+        self.assertTrue(source_open["exact_wording_allowed"])
+        self.assertFalse(source_open["requires_reopen_for_exact_wording"])
+
+        source_court = cases["source_court"]
+        self.assertEqual(source_court["agent_behavior"], "escalates_or_abstains")
+        self.assertEqual(source_court["manual_query_invention_count"], 0)
+        self.assertTrue(source_court["blocked_route_does_not_shape_answer"])
+        self.assertTrue(source_court["requires_reopen_or_abstain"])
+
+        first_use = cases["first_use_ten_minute_path"]
+        self.assertEqual(first_use["agent_behavior"], "explains_recovered_continuity")
+        self.assertTrue(first_use["feels_like_found_prior_context"])
+        self.assertFalse(first_use["feels_like_governance_console"])
+
+        self.assertTrue(readout["presence_fixture_matrix_measured"])
+        self.assertTrue(readout["all_fixture_families_present"])
+        self.assertTrue(readout["behavior_assertions_present"])
+        self.assertTrue(readout["old_posture_failure_measured"])
+        self.assertTrue(readout["source_court_escalation_measured"])
+        self.assertTrue(readout["closeout_eligible"])
+        self.assertIn("presence_first_fixture_matrix", report["metric_notes"])
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn("C:\\", encoded)
+
     def test_cli_smoke_emits_json_report(self) -> None:
         proc = subprocess.run(
             [sys.executable, str(SMOKE), "--json"],
