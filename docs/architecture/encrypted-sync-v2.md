@@ -112,6 +112,21 @@ trusted identities plus all recovery identities still means encrypted sync data
 is unrecoverable, and a missing or corrupt vault id must be restored or
 explicitly re-enrolled rather than silently treated as the same vault.
 
+As of 2026-06-06, encrypted sync has the first deterministic head-graph
+consistency slice for local folders. Push records `head_graph`, `head_id`,
+`parent_heads`, per-device `logical_counter`, and a named
+`trusted_recipient_can_author_bundle` sender-trust boundary in the inner
+manifest. Pull fast-forwards single-parent descendants, rejects older accepted
+heads as `stale_manifest`, and preserves sibling or non-parent incoming heads
+as `divergent_head` reports under `.sync-conflicts/encrypted-heads/`. The
+divergent-head report includes accepted and incoming head summaries plus a
+provenance quarantine plan that isolates activation, dream, semantic-trigger,
+and strategy-like rows from the conflicting head without vault-wide demotion
+or source-backed clean-source deletion. This is manual-review protection and
+deterministic local evidence only; it still cannot claim manifest signing,
+sender authentication, automatic multi-writer merge, live-provider concurrency
+quality, or encrypted conflict resolution UX.
+
 ## Provider Metadata Evidence
 
 The dated #104 Cloudflare R2-compatible re-smoke in
@@ -152,8 +167,10 @@ operational cost.
 Split implementation only after this contract is accepted. Suggested child
 issues:
 
-- Implement head graph and `divergent_head` preservation for encrypted sync.
-- Add provenance-scoped quarantine for activation rows from conflicting heads.
+- Extend the implemented head-graph slice into manual/adjudicated divergent-head
+  resolution UX and provider multi-writer smokes.
+- Broaden provenance-scoped quarantine only with source-backed conflict rules;
+  do not turn the current targeted quarantine into vault-wide demotion.
 - Add revocation status wording and re-encryption-required diagnostics.
 - Add the key-provider abstraction with `file`, `macos-keychain`,
   `windows-credential-manager`, and `linux-secret-service` providers.
@@ -175,7 +192,7 @@ Can claim after this note lands:
 
 Cannot claim from this note alone:
 
-- v2 runtime behavior is implemented.
+- full v2 runtime behavior is implemented.
 - historical ciphertext access is revoked.
 - sender authentication exists.
 - Keychain or Credential Manager integration works.

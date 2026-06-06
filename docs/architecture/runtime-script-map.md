@@ -113,7 +113,7 @@ behavior behind a stable contract.
 | `aippocampus_runtime/model/client.py`, `aippocampus_runtime/model/routing.py`, `aippocampus_runtime/model/multimodal_routing.py`, `aippocampus_runtime/model/multimodal_answer_gate.py` | Optional external-model client, route metadata, multimodal routing, and answer-time source-reopen gates. | Runtime internal |
 | `aippocampus_runtime/sync/bundle.py`, `aippocampus_runtime/sync/contract.py` | Local-folder bundle sync and shared manifest/privacy contract. | Public entrypoint |
 | `aippocampus_runtime/sync/object_storage/cli.py`, `aippocampus_runtime/sync/object_storage/client.py`, `aippocampus_runtime/sync/object_storage/providers.py` | HTTP/S3/R2/GCS-compatible object transport over the same bundle semantics. | Public entrypoint |
-| `aippocampus_runtime/sync/encrypted/bundle.py`, `aippocampus_runtime/sync/encrypted/admin.py`, `aippocampus_runtime/sync/encrypted/keys.py`, `aippocampus_runtime/sync/encrypted/key_providers.py`, `aippocampus_runtime/sync/encrypted/recovery_diagnostics.py`, `aippocampus_runtime/sync/encrypted/migration.py`, `aippocampus_runtime/sync/encrypted/migration_recipients.py`, `aippocampus_runtime/sync/encrypted/migration_recovery.py`, `aippocampus_runtime/sync/encrypted/object_storage.py` | Age-backed encrypted sync overlay, key-provider/recovery diagnostics, and plaintext migration helpers. | Public entrypoint |
+| `aippocampus_runtime/sync/encrypted/bundle.py`, `aippocampus_runtime/sync/encrypted/head_graph.py`, `aippocampus_runtime/sync/encrypted/admin.py`, `aippocampus_runtime/sync/encrypted/keys.py`, `aippocampus_runtime/sync/encrypted/key_providers.py`, `aippocampus_runtime/sync/encrypted/recovery_diagnostics.py`, `aippocampus_runtime/sync/encrypted/migration.py`, `aippocampus_runtime/sync/encrypted/migration_recipients.py`, `aippocampus_runtime/sync/encrypted/migration_recovery.py`, `aippocampus_runtime/sync/encrypted/object_storage.py` | Age-backed encrypted sync overlay, key-provider/recovery diagnostics, and plaintext migration helpers. | Public entrypoint |
 | `aippocampus_runtime/vault/sync.py` | Human-readable vault projection. | Public entrypoint |
 | `aippocampus_runtime/warm_ambient/cli.py`, `aippocampus_runtime/warm_ambient/config.py`, `aippocampus_runtime/warm_ambient/prewarm_planner.py`, `aippocampus_runtime/warm_ambient/recall.py`, `aippocampus_runtime/warm_ambient/scheduler.py`, `aippocampus_runtime/warm_ambient/prompting.py`, `aippocampus_runtime/warm_ambient/scout_profiles.py`, `aippocampus_runtime/warm_ambient/scout_attribution.py`, `aippocampus_runtime/warm_ambient/source_validation.py`, `aippocampus_runtime/warm_ambient/diagnostics.py` | Warm ambient recall, no-write prewarm planning, config, detached scheduling, scout taxonomy, attribution, and source validation. | Runtime internal |
 
@@ -127,8 +127,10 @@ The local-folder route writes the bundle directly. The object-storage route is
 only a PUT/GET adapter over the same bundle. The encrypted route wraps a
 temporary plaintext bundle with `age`, refuses mixed plaintext/encrypted roots
 or object prefixes, and imports through the same repair/pull semantics after
-decryption. Vault sync is a projection surface, not a third transport
-implementation.
+decryption. It also records age-only head graph diagnostics and preserves
+divergent encrypted heads under `.sync-conflicts/encrypted-heads/` for manual
+review; that surface is not sender authentication or automatic multi-writer
+merge. Vault sync is a projection surface, not a third transport implementation.
 
 Sync code must preserve raw-rollout opt-in, path traversal checks, conflict
 preservation, and encrypted-sync requirements. If a future refactor touches
