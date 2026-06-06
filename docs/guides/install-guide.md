@@ -182,7 +182,9 @@ memory data, raw rollouts, generated indexes, sync bundles, or package caches.
 It also does not read, print, or store API-key values. If `update status`
 reports the LLM surface as missing, set the reported environment variable
 (`DEEPSEEK_API_KEY` by default, or the configured OpenAI-compatible key env)
-in the process that launches Codex, then rerun status.
+in the process that launches Codex, then rerun status. When the key already
+exists in a private source but Codex hooks cannot inherit it, use the explicit
+provider-key bridge below instead of editing `hooks.json` by hand.
 
 ## Standalone Binary Status
 
@@ -416,12 +418,31 @@ aippocampus doctor provider --discover-credential-sources --credential-dotenv /p
 ```
 
 Discovery is opt-in. It does not recursively scan the filesystem, read the
-current directory's `.env` by default, or inspect OS credential stores without a
-future explicit adapter. The report redacts secret values and omits local paths
-unless the operator asks for them. Add `--validate-credentials` only when you
-want a lightweight provider probe; validation is skipped for non-HTTPS routes
-except loopback HTTP. This diagnostic does not install a hook wrapper or bridge
-credentials into Codex Desktop by itself.
+current directory's `.env` by default, or inspect OS credential stores. The
+report redacts secret values and omits local paths unless the operator asks for
+them. Add `--validate-credentials` only when you want a lightweight provider
+probe; validation is skipped for non-HTTPS routes except loopback HTTP. This
+diagnostic does not install a hook wrapper or bridge credentials into Codex
+Desktop by itself.
+
+To bridge a private key source into future Codex hook processes, use the
+separate onboarding surface:
+
+```sh
+aippocampus onboard provider-key --plan --target codex-hooks --source explicit-dotenv --credential-dotenv /path/to/.env --json
+aippocampus onboard provider-key --apply --target codex-hooks --source explicit-dotenv --credential-dotenv /path/to/.env --json
+aippocampus onboard provider-key --undo --target codex-hooks --json
+```
+
+The bridge writes an AIppocampus-owned local wrapper and manifest, then installs
+Codex hook commands that call the wrapper. It does not put the key value in
+`hooks.json`, the manifest, or public JSON. OS credential-store sources are also
+explicit adapters: `macos-keychain`, `windows-credential-manager`, and
+`linux-secret-service` require their locator flags and do not run during
+ordinary provider doctor checks. After apply, restart Codex or the hook host and
+rerun `aippocampus doctor provider --json`; apply can only prepare
+future/restarted hook processes, not prove an already-running Desktop hook saw
+the key.
 
 Package modules remain available when the facade is not installed:
 

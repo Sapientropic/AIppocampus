@@ -454,6 +454,38 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertIn("aippocampus_runtime.hooks.lifecycle", data)
             self.assertTrue(payload["applied_surfaces"][0]["ok"])
 
+    def test_update_status_treats_provider_bridge_wrapper_as_current_hooks(self) -> None:
+        from aippocampus_runtime.ops import provider_key_bridge
+
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            dotenv = root / "provider.env"
+            write_minimal_repo(repo)
+            dotenv.write_text("DEEPSEEK_API_KEY=sk-update-provider-bridge-secret\n", encoding="utf-8")
+            provider_key_bridge.apply_provider_key_bridge(
+                target="codex-hooks",
+                source="explicit-dotenv",
+                provider_env_var="DEEPSEEK_API_KEY",
+                credential_dotenv=dotenv,
+                codex_home_path=codex_home,
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["surfaces"]["hooks"]["status"], "current")
+        self.assertTrue(payload["surfaces"]["hooks"]["provider_key_bridge_installed"])
+        self.assertNotIn("sk-update-provider-bridge-secret", json.dumps(payload, ensure_ascii=False))
+
     def test_plugin_apply_rebuilds_staged_package_without_hook_or_cache_side_effects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)

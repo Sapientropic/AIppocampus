@@ -48,6 +48,10 @@ OLD_HOOK_SCRIPT_NAMES = (
     "ambient_recall_hook.py",
     "memory_maintenance_hook.py",
 )
+PROVIDER_KEY_BRIDGE_MARKERS = (
+    "aippocampus_provider_bridge_hook.py",
+    "aippocampus_runtime.hooks.provider_bridge",
+)
 OLD_MCP_SCRIPT_NAMES = ("aippocampus_mcp_server.py",)
 CURRENT_MCP_MARKERS = ("aippocampus_runtime.mcp.server", "aippocampus mcp")
 
@@ -378,6 +382,11 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
     path = hooks_json or install_prompt.hooks_json_path(codex_home_path)
     data = install_prompt.load_hooks(path)
     rows = _hook_rows(data)
+    provider_key_bridge_rows = [
+        {"event": row["event"], "handler_index": row["handler_index"]}
+        for row in rows
+        if any(marker in row["command"] for marker in PROVIDER_KEY_BRIDGE_MARKERS)
+    ]
     stale_commands = [
         {
             "event": row["event"],
@@ -391,13 +400,20 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
     ]
     prompt_current = any(
         row["event"] == "UserPromptSubmit"
-        and "aippocampus_runtime.hooks.prompt" in row["command"]
+        and (
+            "aippocampus_runtime.hooks.prompt" in row["command"]
+            or any(marker in row["command"] for marker in PROVIDER_KEY_BRIDGE_MARKERS)
+        )
         for row in rows
     )
     lifecycle_current_events = {
         row["event"]
         for row in rows
-        if row["event"] in HOOK_EVENTS and "aippocampus_runtime.hooks.lifecycle" in row["command"]
+        if row["event"] in HOOK_EVENTS
+        and (
+            "aippocampus_runtime.hooks.lifecycle" in row["command"]
+            or any(marker in row["command"] for marker in PROVIDER_KEY_BRIDGE_MARKERS)
+        )
     }
     lifecycle_current = set(lifecycle_current_events) == set(HOOK_EVENTS)
     prompt_any = prompt_current or any(
@@ -433,6 +449,8 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "prompt_installed": prompt_current,
         "lifecycle_installed": lifecycle_current,
         "lifecycle_events": sorted(lifecycle_current_events),
+        "provider_key_bridge_installed": bool(provider_key_bridge_rows),
+        "provider_key_bridge_handlers": provider_key_bridge_rows,
         "stale_flat_script_commands": stale_commands,
         "recommended_actions": [
             "aippocampus update apply --surface hooks",
@@ -444,6 +462,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "safety_notes": [
             "hook apply rewrites only AIppocampus-owned Codex hook handlers and preserves other hooks",
             "old flat-script hook commands are replaced by module entrypoints",
+            "provider-key bridge wrappers are explicit onboarding artifacts and do not store key values in hooks.json",
         ],
     }
 

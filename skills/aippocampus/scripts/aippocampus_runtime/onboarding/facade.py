@@ -11,6 +11,7 @@ from typing import Sequence
 from aippocampus_runtime.core import aippocampus_registry_resolution, codex_home
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.onboarding import codex as onboard_codex
+from aippocampus_runtime.ops import provider_key_bridge
 from conversation_sources import create_conversation_provider, normalize_provider_name
 
 
@@ -189,6 +190,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("  claude-code  Onboard local Claude Code JSONL transcripts.")
         print("  generic-jsonl Onboard validated AIppocampus generic JSONL imports.")
         print()
+        print("Provider key bridge:")
+        print("  provider-key  Plan/apply/undo an explicit provider key bridge for Codex hooks.")
+        print()
         print("Run with --provider codex --help for the current Codex onboarding options.")
         return 0
 
@@ -204,6 +208,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(render_status_text(report))
         return 0
+
+    if remaining and remaining[0] == "provider-key":
+        provider_key_args = remaining[1:]
+        if known.json_output and "--json" not in provider_key_args:
+            provider_key_args.append("--json")
+        return provider_key_bridge.main(provider_key_args)
 
     provider = str(known.provider or "auto").strip().replace("_", "-").casefold()
     resolved = normalize_provider_name(provider)

@@ -26,7 +26,9 @@ process and a child process. If you run
 `aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json`,
 AIppocampus reads only that specified file and reports redacted candidate
 metadata; it does not scan the repository, print the secret, or install a
-credential bridge.
+credential bridge. Bridge installation is a separate explicit action through
+`aippocampus onboard provider-key --apply`, which writes only local wrapper /
+manifest glue and never stores the key value in public output or `hooks.json`.
 
 Use `AIPPOCAMPUS_HOME` or `AIPPOCAMPUS_REGISTRY_DIR` for non-Codex storage.
 `CODEX_HOME` remains a compatibility fallback for Codex installs, not the
