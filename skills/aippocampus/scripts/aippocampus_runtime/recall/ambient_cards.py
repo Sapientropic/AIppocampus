@@ -17,6 +17,7 @@ from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working
 from aippocampus_runtime.recall.authority import with_authority_fields, with_trust_fields
 from aippocampus_runtime.recall.fresh_thread_scent import fresh_thread_scent_packet_from_decision
 from aippocampus_runtime.recall.nudge_policy import safe_nudge_topic
+from aippocampus_runtime.recall.query_profile import classify_query_profile
 
 CARD_SCHEMA_VERSION = 1
 MAX_CARDS = 3
@@ -198,8 +199,10 @@ def _rank_cards_for_brief(
     promote scent/candidate material into evidence or serialize prompt text.
     """
 
+    profile = classify_query_profile(prompt)
     prompt_tokens = _brief_tokens(prompt)
     prompt_issue_refs = {match.group(0).casefold() for match in ISSUE_REF_RE.finditer(prompt or "")}
+    cards, composer_diagnostics = _apply_foreground_composer(cards, profile)
     if not prompt_tokens and not prompt_issue_refs:
         return cards, {
             "sort_applied": False,
@@ -207,6 +210,9 @@ def _rank_cards_for_brief(
             "broad_context_intrusion_count": 0,
             "partial_issue_ref_broad_context_count": 0,
             "same_thread_recentness_mismatch_count": 0,
+            "foreground_card_count": len(cards),
+            **_query_profile_diagnostics(profile),
+            **composer_diagnostics,
         }
 
     prompt_has_recent_issue_cue = bool(RECENT_ISSUE_PROMPT_RE.search(prompt or ""))
@@ -294,6 +300,48 @@ def _rank_cards_for_brief(
         "broad_context_intrusion_count": broad_context_intrusion_count,
         "partial_issue_ref_broad_context_count": partial_issue_ref_broad_context_count,
         "same_thread_recentness_mismatch_count": same_thread_recentness_mismatch_count,
+        "foreground_card_count": len(ranked),
+        **_query_profile_diagnostics(profile),
+        **composer_diagnostics,
+    }
+
+
+def _query_profile_diagnostics(profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "foreground_route_profile": profile.get("profile") or "normal_recall",
+        "foreground_lane": profile.get("lane") or "source_text",
+        "generic_prompt_term_count": int(profile.get("generic_prompt_term_count") or 0),
+        "specific_prompt_term_count": int(profile.get("specific_prompt_term_count") or 0),
+    }
+
+
+def _apply_foreground_composer(
+    cards: list[dict[str, Any]],
+    profile: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if profile.get("composer") != "suppress_generic_scent":
+        return cards, {
+            "alias_spillover_suppressed_count": 0,
+            "cross_project_generic_scent_suppressed_count": 0,
+            "composer_backstage_count": 0,
+            "foreground_suppression_reasons": [],
+        }
+    kept: list[dict[str, Any]] = []
+    backstage_count = 0
+    for card in cards:
+        support = str(card.get("support_level") or "")
+        # Source-backed cards and high-action guidance remain foregroundable;
+        # the generic meta profile only backstages weak scent/candidate cards.
+        if support == EVIDENCE or _action_priority(card) >= 3:
+            kept.append(card)
+        else:
+            backstage_count += 1
+    reasons = ["generic_meta_terms_only"] if backstage_count else []
+    return kept, {
+        "alias_spillover_suppressed_count": backstage_count,
+        "cross_project_generic_scent_suppressed_count": backstage_count,
+        "composer_backstage_count": backstage_count,
+        "foreground_suppression_reasons": reasons,
     }
 
 

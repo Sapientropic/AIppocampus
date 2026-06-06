@@ -2266,6 +2266,15 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIsNone(result["semantic_gate"])
         self.assertFalse(result["candidates"])
         self.assertIsNone(hook.context_for_hook(result))
+        public = hook.public_hook_debug_payload(result)
+        delivery = public["route_delivery_diagnostic"]
+        self.assertEqual(delivery["foreground_route_profile"], "generic_recall_meta")
+        self.assertGreater(delivery["generic_prompt_term_count"], 0)
+        self.assertEqual(
+            delivery["semantic_trigger_generic_term_suppressed_count"],
+            delivery["generic_prompt_term_count"],
+        )
+        self.assertIn("generic_meta_terms_only", delivery["foreground_suppression_reasons"])
 
     def test_reviewed_semantic_trigger_does_not_turn_plain_code_task_into_recall(self) -> None:
         registry_path = self.root / "code-surface-semantic-trigger-registry" / "threads.json"

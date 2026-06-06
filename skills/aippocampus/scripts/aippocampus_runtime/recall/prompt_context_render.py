@@ -7,21 +7,13 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_payload
 from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
+from aippocampus_runtime.recall.prompt_context_diagnostics import (
+    brief_precision_debug_summary,
+    route_delivery_debug_summary,
+)
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
-ROUTE_DELIVERY_FOREGROUND_PROFILES = {"ambient_hot_path", "explicit_recall"}
-ROUTE_DELIVERY_REUSE_SOURCES = {
-    "none",
-    "exact_semantic_cache",
-    "semantic_cue_cache",
-    "semantic_disabled_by_operator",
-    "semantic_unavailable_missing_auth",
-    "semantic_provider_timeout",
-    "cold_semantic_attempted",
-    "cold_semantic_shadowed",
-}
-ROUTE_DELIVERY_BRIDGE_DIAGNOSTICS = {"semantic_evidence_without_source_bridge"}
 
 
 def _is_dream_hypothesis_item(item: Any) -> bool:
@@ -78,51 +70,6 @@ def _limit_dream_cards(cards: Any, *, allow_dream: bool, max_dream_hypotheses: i
             continue
         kept.append(card)
     return kept, kept_dreams, removed_dreams
-
-
-def route_delivery_debug_summary(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, dict):
-        return None
-
-    def controlled(value: Any, allowed: set[str]) -> str | None:
-        text = str(value or "")
-        return text if text in allowed else None
-
-    def count(value: Any) -> int:
-        try:
-            return max(0, int(value))
-        except (TypeError, ValueError):
-            return 0
-
-    summary = {
-        "foreground_profile": controlled(
-            raw.get("foreground_profile"), ROUTE_DELIVERY_FOREGROUND_PROFILES
-        )
-        or "ambient_hot_path",
-        "semantic_bridge_diagnostic": controlled(
-            raw.get("semantic_bridge_diagnostic"), ROUTE_DELIVERY_BRIDGE_DIAGNOSTICS
-        ),
-        "semantic_gate_cache_hit_but_no_source_bridge": bool(
-            raw.get("semantic_gate_cache_hit_but_no_source_bridge")
-        ),
-        "semantic_reuse_source": controlled(
-            raw.get("semantic_reuse_source"), ROUTE_DELIVERY_REUSE_SOURCES
-        )
-        or "none",
-        "semantic_waited": bool(raw.get("semantic_waited")),
-        "cold_semantic_shadowed": bool(raw.get("cold_semantic_shadowed")),
-        "background_scheduled": bool(raw.get("background_scheduled")),
-        "hot_path_candidates_after_merge": count(
-            raw.get("hot_path_candidates_after_merge")
-        ),
-        "final_candidate_count": count(raw.get("final_candidate_count")),
-        "evidence_count": count(raw.get("evidence_count")),
-        "semantic_source_reopen_route": bool(raw.get("semantic_source_reopen_route")),
-        "semantic_source_reopen_candidate_count": count(
-            raw.get("semantic_source_reopen_candidate_count")
-        ),
-    }
-    return {key: value for key, value in summary.items() if value is not None}
 
 
 def apply_dream_delivery_boundary(
@@ -232,19 +179,7 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
             "card_count": cache_status.get("card_count"),
             "write_status": cache_status.get("write_status"),
         },
-        "brief_precision": {
-            "sort_applied": bool(brief_precision.get("sort_applied")),
-            "prompt_issue_ref_count": int(brief_precision.get("prompt_issue_ref_count") or 0),
-            "broad_context_intrusion_count": int(
-                brief_precision.get("broad_context_intrusion_count") or 0
-            ),
-            "partial_issue_ref_broad_context_count": int(
-                brief_precision.get("partial_issue_ref_broad_context_count") or 0
-            ),
-            "same_thread_recentness_mismatch_count": int(
-                brief_precision.get("same_thread_recentness_mismatch_count") or 0
-            ),
-        },
+        "brief_precision": brief_precision_debug_summary(brief_precision),
         "warm_background": {
             "status": warm_background.get("status"),
             "spawned": warm_background.get("spawned"),
