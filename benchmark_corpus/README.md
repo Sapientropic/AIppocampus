@@ -479,6 +479,13 @@ personalization, scent-as-evidence, and local write/read/utilization overlay
 metrics. These reports do not claim an official AMemGym score, official-runner
 compatibility, Native/RAG/AWI/AWE parity, or model/provider cost.
 
+The official-runner bridge is documented in
+`docs/evidence/benchmarks/amemgym.md`. It can call an ignored local upstream
+AMemGym checkout and summarize complete or partial `overall`, `upperbound`, and
+`random` outputs without committing raw rows or model responses. Partial output
+progress is execution evidence only; do not quote an official `Overall`, `UB`,
+or normalized `Memory` score until the full fixed arm is complete.
+
 Run the optional semantic second-stage line reranker over the same source
 boundary:
 
