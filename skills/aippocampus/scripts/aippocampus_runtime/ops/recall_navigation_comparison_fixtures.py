@@ -10,6 +10,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.ops.issue_route_quality import (
+    fixture_same_thread_issue_comment_route_quality,
+)
 from aippocampus_runtime.ops.presence_first_matrix_fixtures import (
     fixture_presence_first_matrix,
 )
@@ -557,4 +560,7 @@ def fixture_recall_navigation_comparison() -> dict[str, Any]:
             },
             foreground_lift=foreground_lift,
             presence_first_fixture_matrix=fixture_presence_first_matrix(),
+            same_thread_issue_comment_route_quality=(
+                fixture_same_thread_issue_comment_route_quality()
+            ),
         )

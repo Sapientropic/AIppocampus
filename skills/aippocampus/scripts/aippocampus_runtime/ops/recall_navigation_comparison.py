@@ -20,6 +20,7 @@ from typing import Any
 
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
+from aippocampus_runtime.ops import issue_route_quality
 from aippocampus_runtime.recall.authority import trust_taxonomy
 
 COMPARISON_KIND = "aippocampus_recall_navigation_comparison"
@@ -455,6 +456,7 @@ def _issue_readouts(
     foreground_lift: Mapping[str, Any] | None = None,
     candidate_funnel: Mapping[str, Any] | None = None,
     presence_first_fixture_matrix: Mapping[str, Any] | None = None,
+    same_thread_issue_comment_route_quality: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     arms = _as_dict(aggregate.get("arms"))
     progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
@@ -526,6 +528,9 @@ def _issue_readouts(
         presence_matrix.get("public_safe")
         and not presence_privacy.get("raw_source_window_serialized")
         and not presence_privacy.get("local_paths_serialized")
+    )
+    same_thread_readout = issue_route_quality.same_thread_issue_comment_readout(
+        same_thread_issue_comment_route_quality
     )
     return {
         "github_201": {
@@ -630,11 +635,7 @@ def _issue_readouts(
             "bounded_evidence_card_count": bounded_evidence_card_count,
             "foreground_manual_query_invention_count": foreground_manual_query_count,
             "live_semantic_reopen_quality": "not_measured",
-            "same_thread_issue_comment_route_quality": (
-                "fixture_measured_action_route"
-                if action_grammar_fixture_measured
-                else "not_measured"
-            ),
+            **same_thread_readout,
             "closeout_eligible": False,
         },
         "github_797": {
@@ -667,6 +668,7 @@ def build_recall_navigation_comparison(
     after_context_by_case_id: Mapping[str, Callable[[], None]] | None = None,
     foreground_lift: Mapping[str, Any] | None = None,
     presence_first_fixture_matrix: Mapping[str, Any] | None = None,
+    same_thread_issue_comment_route_quality: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     cwd_path = Path(cwd or os.getcwd()).resolve()
     clean_path = Path(clean_source_dir or cwd_path / ".aippocampus" / "clean-source").resolve()
@@ -701,6 +703,9 @@ def build_recall_navigation_comparison(
     aggregate = _aggregate(rows)
     candidate_funnel = _vague_cue_candidate_funnel(rows)
     presence_matrix = dict(presence_first_fixture_matrix or {"measured": False})
+    same_thread_quality = dict(
+        same_thread_issue_comment_route_quality or {"measured": False}
+    )
     report = {
         "schema_version": COMPARISON_SCHEMA_VERSION,
         "kind": COMPARISON_KIND,
@@ -712,11 +717,13 @@ def build_recall_navigation_comparison(
         "foreground_lift": dict(foreground_lift or {"measured": False}),
         "vague_cue_candidate_funnel": candidate_funnel,
         "presence_first_fixture_matrix": presence_matrix,
+        "same_thread_issue_comment_route_quality": same_thread_quality,
         "issue_readouts": _issue_readouts(
             aggregate,
             foreground_lift,
             candidate_funnel,
             presence_matrix,
+            same_thread_quality,
         ),
         "metric_notes": {
             "manual_query_invention_count": (
@@ -776,6 +783,12 @@ def build_recall_navigation_comparison(
                 "the first-use ten-minute path. It checks agent-usable behavior and "
                 "the old everything-is-scent baseline, not live product quality."
             ),
+            "same_thread_issue_comment_route_quality": (
+                "Public-safe #786/#791 smoke over recent GitHub issue/comment "
+                "continuity. It measures whether the packet can expose issue number, "
+                "topic, parent relation, comment context, and source-reopenable refs "
+                "without serializing raw comment text or promoting metadata to evidence."
+            ),
         },
         "comparison_boundary": {
             "deterministic_proxy_only": True,
@@ -795,6 +808,9 @@ def build_recall_navigation_comparison(
             "temp_fixture_writes_only": True,
             "presence_first_fixture_matrix_public_safe": bool(
                 presence_matrix.get("public_safe")
+            ),
+            "same_thread_issue_comment_route_quality_public_safe": bool(
+                same_thread_quality.get("measured")
             ),
         },
         "privacy": {
