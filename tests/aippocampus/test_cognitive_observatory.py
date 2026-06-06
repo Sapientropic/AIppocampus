@@ -125,6 +125,22 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertNotIn(str(REPO_ROOT), encoded)
         self.assertIn("complete_cognitive_observatory_ui_exists", report["cannot_claim"])
 
+    def test_observatory_static_html_is_public_safe_and_read_only(self) -> None:
+        report = cognitive_observatory.fixture_cognitive_observatory_readout()
+        html = cognitive_observatory.render_html(report)
+
+        self.assertIn("<!doctype html>", html.casefold())
+        self.assertIn("Cognitive Observatory", html)
+        self.assertIn("route_readiness", html)
+        self.assertIn("navigation_only", html)
+        self.assertIn("not a control plane", html)
+        self.assertIn("source reopen", html.casefold())
+        self.assertNotIn("<script", html.casefold())
+        self.assertNotIn("SECRET_TOKEN", html)
+        self.assertNotIn("this field must never be serialized", html)
+        self.assertNotIn("private\\thread", html)
+        self.assertNotIn(str(REPO_ROOT), html)
+
     def test_observatory_keeps_pruning_as_activation_eligibility_not_truth(self) -> None:
         report = cognitive_observatory.fixture_cognitive_observatory_readout()
         authority = report["activation_authority"]
@@ -150,6 +166,16 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_cognitive_observatory_readout")
         self.assertTrue(payload["contract"]["read_only_report"])
         self.assertTrue(payload["route_readiness"]["navigation_only"])
+
+    def test_cli_facade_exposes_observatory_fixture_html(self) -> None:
+        result = facade.run_command(["observatory", "--fixture", "--html"], capture_output=True)
+
+        self.assertTrue(result.ok, result.stderr)
+        self.assertIn("<!doctype html>", result.stdout.casefold())
+        self.assertIn("Cognitive Observatory", result.stdout)
+        self.assertIn("navigation_only", result.stdout)
+        self.assertNotIn("SECRET_TOKEN", result.stdout)
+        self.assertNotIn("<script", result.stdout.casefold())
 
 
 if __name__ == "__main__":
