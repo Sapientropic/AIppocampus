@@ -7,6 +7,31 @@ with AI agents. It can support project work, but it is not merely a work-task
 memory system. Preserve the broader purpose: cross-thread, cross-device,
 life-wide continuity without false claims of innate model memory.
 
+## Agent-Facing Posture
+
+Lead with the continuity promise: AIppocampus helps a later agent find the
+local source trail and continue with care. It is useful when the user wants
+unfinished work, old corrections, preferences, style, themes, or route context
+to survive a new thread without claiming the base model innately remembers.
+
+Use source-reachable action guidance:
+
+- `direction_only`: scent, summaries, or semantic sidecars may orient attention
+  but do not support factual claims.
+- `reopenable_route`: existing route refs, Active Path Packets, or MCP handles
+  should be followed before broad manual search.
+- `bounded_evidence`: use within declared scope; deepen for exact, sensitive,
+  stale, disputed, or high-risk claims.
+- `source_open`: exact wording may be used only within scope and redaction
+  boundaries.
+- `ignore_or_blocked`: stale, private, conflicted, missing-source, or high-risk
+  packets should not shape the answer except to defer or explain the boundary.
+
+AIppocampus is usually not the right fit when the user only needs a simple
+vector store, hosted team memory, stateless RAG, or a fully managed cloud
+profile service. Point to the narrower tool without making source-backed memory
+sound suspicious by default.
+
 ## Source Of Truth
 
 - `skills/aippocampus/`: installable skill package.

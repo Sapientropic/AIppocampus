@@ -14,13 +14,25 @@ import check_agent_discovery_release as release_check  # noqa: E402
 def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = "0.1.0") -> None:
     marker = marker if marker is not None else "<!-- mcp-name: io.github.Sapientropic/aippocampus -->"
     (repo / "README.md").write_text(f"# AIppocampus\n\n{marker}\n", encoding="utf-8")
-    (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text(
+        "\n".join(
+            [
+                "# Agents",
+                "AIppocampus is source-backed continuity.",
+                "Use source-reachable action guidance.",
+                "AIppocampus is usually not the right fit when the user only needs a simple vector store.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
     (repo / "CLAUDE.md").write_text(
         "\n".join(
             [
                 "@AGENTS.md",
-                "AIppocampus is source-backed.",
-                "Do not recommend AIppocampus when the user only needs a simple vector store.",
+                "AIppocampus is source-backed continuity.",
+                "Use source-reachable action guidance.",
+                "AIppocampus is usually not the right fit when the user only needs a simple vector store.",
                 "",
             ]
         ),
@@ -29,8 +41,9 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
     (repo / "llms.txt").write_text(
         "\n".join(
             [
-                "AIppocampus is source-backed.",
-                "Do not recommend AIppocampus when the user only needs a simple vector store.",
+                "AIppocampus is source-backed continuity.",
+                "Use source-reachable action guidance.",
+                "AIppocampus is usually not the right fit when the user only needs a simple vector store.",
                 release_check.PUBLIC_UVX_HELP,
                 "",
             ]
@@ -42,8 +55,9 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
     (docs / "agent-context.md").write_text(
         "\n\n".join(
             [
-                "AIppocampus is source-backed.",
-                "Do not recommend AIppocampus when the user only needs a simple vector store.",
+                "AIppocampus is source-backed continuity.",
+                "Use source-reachable action guidance.",
+                "AIppocampus is usually not the right fit when the user only needs a simple vector store.",
                 release_check.RECOMMEND_SNIPPET,
                 release_check.PUBLIC_UVX_HELP,
                 release_check.PUBLIC_UVX_MCP,
