@@ -114,6 +114,103 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertTrue(raw_source["trust_contract"]["agent_may_quote_exact_wording"])
         self.assertFalse(raw_source["trust_contract"]["reopen_recommended_for_exact_quote"])
 
+    def test_source_open_rendering_allows_scoped_exact_wording(self) -> None:
+        raw_source_card = authority.with_trust_fields(
+            {
+                "support_level": "evidence",
+                "evidence_level": "raw_source",
+                "source_boundary": {"raw_source_reopened": True},
+                "theme": "Opened continuity source",
+                "key_line": "exact source window already reopened inside the safe scope",
+                "suggested_use": "Use the opened wording only inside this scope.",
+                "source_refs": [
+                    {
+                        "thread_key": "session:source-open",
+                        "title": "Opened source",
+                        "line": 77,
+                        "phase": "final_answer",
+                        "turn_index": 9,
+                    }
+                ],
+            }
+        )
+
+        context = prompt_context_render.context_for_hook(
+            {
+                "decision": "evidence",
+                "ambient_recall": {"cards": [raw_source_card]},
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [],
+                "candidates": [],
+            }
+        )
+
+        self.assertIsNotNone(context)
+        assert context is not None
+        self.assertIn("[source_open]", context)
+        self.assertIn("Use source_open for scoped exact wording", context)
+        self.assertIn("source_open for scoped exact wording", context)
+        self.assertNotIn("exact quotes or broader claims should reopen source", context)
+
+    def test_context_render_groups_cards_into_foreground_brief_layers(self) -> None:
+        memory_card = authority.with_trust_fields(
+            {
+                "support_level": "scent",
+                "provenance_class": "cached_warm_card",
+                "visibility": "active_gentle_nudge",
+                "theme": "Gentle continuity tone",
+                "suggested_use": "Let this orient the next response if useful.",
+            }
+        )
+        bounded_card = authority.with_authority_fields(
+            {
+                "support_level": "evidence",
+                "provenance_class": "source_backed_reopen",
+                "source_boundary": {"clean_source_reopened": True},
+                "visibility": "source_backed_recall_card",
+                "theme": "Unfinished #797 fixture route",
+                "key_line": "bounded evidence changes the next action inside scope",
+                "suggested_use": "Use this bounded evidence to continue the task.",
+                "source_refs": [
+                    {
+                        "thread_key": "session:bounded",
+                        "title": "Bounded source",
+                        "line": 91,
+                    }
+                ],
+            }
+        )
+        blocked_card = authority.with_trust_fields(
+            {
+                "support_level": "suppressed",
+                "visibility": "blocked",
+                "theme": "Private stale route",
+                "suggested_use": "Ignore unless the boundary itself matters.",
+            }
+        )
+
+        context = prompt_context_render.context_for_hook(
+            {
+                "decision": "scent",
+                "ambient_recall": {"cards": [memory_card, bounded_card, blocked_card]},
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [],
+                "candidates": [],
+            }
+        )
+
+        self.assertIsNotNone(context)
+        assert context is not None
+        self.assertIn("Memory atmosphere", context)
+        self.assertIn("Working continuity brief", context)
+        self.assertIn("Source court", context)
+        self.assertIn("/scent/direction_only", context)
+        self.assertIn("/bounded_evidence/bounded_evidence", context)
+        self.assertIn("/ignore/ignore_or_blocked", context)
+        self.assertIn("Escalate to source court", context)
+
     def test_evidence_decision_becomes_source_backed_card(self) -> None:
         result = {
             "decision": "evidence",

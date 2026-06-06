@@ -515,17 +515,21 @@ def build_active_path_packet(
             "cloud_calls": False,
             "external_model_calls": False,
         },
+        # Packet-level boundaries describe how to read the packet as a whole;
+        # each path still owns the decisive source-reopen / bounded-evidence rule.
         "source_boundary": {
             "navigation_not_truth": True,
             "clean_source_is_authority": True,
-            "source_reopen_required_before_claim": True,
+            "path_level_source_boundary_is_authoritative": True,
+            "source_reopen_required_before_claim": False,
+            "non_evidence_paths_require_source_reopen_before_claim": True,
             "scent_is_not_evidence": True,
             "stale_or_suppressed_paths_are_boundaries": True,
         },
         "trust_taxonomy": trust_taxonomy(),
         "cannot_claim": [
             "active_path_packet_proves_memory_fact",
-            "source_reopen_required_before_claim",
+            "non_evidence_path_claim_requires_source_reopen",
             "scent_path_is_evidence",
             "stale_path_is_current_fact",
             "desktop_bootstrap_consumes_packet",

@@ -416,7 +416,7 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
         "semantic_bridge_diagnostic"
     ):
         return []
-    lines = ["Semantic recall route (not evidence; search clean source before facts):"]
+    lines = ["Semantic recall route (direction_only; reopen clean source before facts):"]
     parts: list[str] = []
     if aliases:
         parts.append("aliases: " + ", ".join(aliases))
@@ -425,8 +425,34 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
     if parts:
         lines.append("- " + " | ".join(parts))
     if result.get("semantic_bridge_diagnostic"):
-        lines.append("- Local evidence bridge did not pass; keep this as navigation only.")
+        lines.append("- Local evidence bridge did not pass; keep this as route material only.")
     return lines
+
+
+def _ambient_brief_layer(action: str) -> str:
+    """Map action grammar to the three foreground brief layers from #791.
+
+    This is only a rendering grouping. It must not promote a card's authority:
+    trust_level/action_grammar remain the source of truth for what the agent can
+    do with the material.
+    """
+
+    if action in {"bounded_evidence", "source_open", "reopenable_route"}:
+        return "working_continuity_brief"
+    if action == "ignore_or_blocked":
+        return "source_court"
+    return "memory_atmosphere"
+
+
+def _ambient_brief_layer_heading(layer: str) -> str:
+    if layer == "working_continuity_brief":
+        return (
+            "Working continuity brief "
+            "(reopenable routes, bounded evidence, and source-open material):"
+        )
+    if layer == "source_court":
+        return "Source court (blocked, exact, sensitive, stale, conflict, or high-risk routes):"
+    return "Memory atmosphere (direction_only orientation; no factual claim support):"
 
 
 def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -440,6 +466,19 @@ def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
         if isinstance(card, dict)
         and str(card.get("action_grammar") or "") in {"bounded_evidence", "source_open"}
     ]
+
+
+def _evidence_boundary_line(evidence_cards: list[dict[str, Any]]) -> str:
+    actions = {str(card.get("action_grammar") or "") for card in evidence_cards}
+    if "source_open" in actions:
+        return (
+            "Do not paste long source windows verbatim. Use source_open for scoped exact wording "
+            "within redaction boundaries; reopen or deepen for wider context, conflicts, sensitive "
+            "or high-risk claims."
+        )
+    return (
+        "Do not paste snippets verbatim; exact quotes or broader claims should reopen source."
+    )
 
 
 def _evidence_card_line(card: dict[str, Any]) -> str:
@@ -475,11 +514,9 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                     f"- {item.get('title')} line {item.get('line')}{phase}{turn}: "
                     f"{compact_text(str(item.get('snippet') or ''), 240)}"
                 )
-        lines.append("Do not paste snippets verbatim; exact quotes or broader claims should reopen source.")
+        lines.append(_evidence_boundary_line(evidence_cards))
     else:
-        lines.append(
-            "Ambient recall scent (aippocampus). Possible related old-thread memory, not evidence:"
-        )
+        lines.append("Ambient recall scent (aippocampus direction_only). Related prior context:")
         for item in result.get("candidates") or []:
             anchors = ", ".join(item.get("anchors") or [])
             terms = ", ".join(item.get("matched_terms") or item.get("keywords") or [])
@@ -487,10 +524,10 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             lines.append(f"- {item.get('title')}: {anchors}{tail}")
         lines.extend(semantic_route_hint_lines(result))
         lines.append(
-            "Use only if it helps; do not mention recalled content as fact unless backed by retrieved evidence."
+            "Use only if it helps; do not mention recalled content as fact unless backed by bounded_evidence, source_open, or reopened source."
         )
     if result.get("working_memory"):
-        lines.append("Soft working memory candidates (source-backed staging, not formal truth):")
+        lines.append("Soft working memory candidates (working continuity; source-backed staging):")
         for item in result.get("working_memory") or []:
             terms = ", ".join(item.get("matched_terms") or [])
             refs = item.get("source_refs") or []
@@ -522,10 +559,10 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                     "  Ask the user only if this would change the current action or sources conflict."
                 )
         lines.append(
-            "For source-backed working memory, search clean source before presenting exact claims as facts."
+            "For working-memory exact claims, reopen clean source; bounded_evidence can guide action within its declared scope."
         )
     if result.get("cognitive_map"):
-        lines.append("Cognitive map routes (DeepSeek subconscious navigation hints, not evidence):")
+        lines.append("Cognitive map routes (DeepSeek subconscious direction_only wayfinding):")
         for item in result.get("cognitive_map") or []:
             cues = ", ".join(item.get("matched_cues") or item.get("route_cues") or [])
             landmarks = ", ".join(item.get("landmark_labels") or [])
@@ -533,11 +570,18 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 f"- {landmarks or item.get('title')}: cues {cues}; "
                 f"threads {', '.join(item.get('thread_keys') or [])}"
             )
-        lines.append("Treat these as wayfinding only; verify exact claims against clean source.")
+        lines.append("Treat these as wayfinding only; verify exact or source-sensitive claims against clean source.")
     ambient = result.get("ambient_recall") or {}
     ambient_cards = ambient.get("cards") or []
     if ambient_cards:
-        lines.append("Ambient recall private context (card/cache first; not user text):")
+        lines.append(
+            "Ambient recall private context (agent guidance; source use follows action grammar):"
+        )
+        layered_cards: dict[str, list[str]] = {
+            "memory_atmosphere": [],
+            "working_continuity_brief": [],
+            "source_court": [],
+        }
         for card in ambient_cards[:3]:
             support = str(card.get("support_level") or "scent")
             trust = str(card.get("trust_level") or support)
@@ -570,13 +614,20 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             evidence_line = ""
             if support == "evidence" and card.get("key_line"):
                 evidence_line = f" Evidence: {compact_text(str(card.get('key_line') or ''), 180)}"
-            lines.append(
+            layered_cards[_ambient_brief_layer(action)].append(
                 f"- {provenance_note} {visibility}/{support}/{trust}/{action}: {theme}."
                 f"{source_note}{evidence_line} Use: {suggested_use}"
             )
+        for layer in ("memory_atmosphere", "working_continuity_brief", "source_court"):
+            rows = layered_cards[layer]
+            if not rows:
+                continue
+            lines.append(_ambient_brief_layer_heading(layer))
+            lines.extend(rows)
         lines.append(
             "Use bounded_evidence within scope, source_open for scoped exact wording, "
-            "reopenable_route by reopening source, and direction_only only as attention."
+            "reopenable_route by reopening source, and direction_only only as attention. "
+            "Escalate to source court for exact quotes, wider context, conflicts, stale/sensitive/high-risk claims, or ignore_or_blocked routes."
         )
     if result.get("reasons"):
         lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))

@@ -13,6 +13,7 @@ sys.path.insert(0, str(SCRIPTS))
 from aippocampus_runtime.cli import facade  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
+from aippocampus_runtime.recall import why_reason_codes as reason_codes  # noqa: E402
 from aippocampus_runtime.recall import why_surfaces as surfaces  # noqa: E402
 
 
@@ -163,6 +164,10 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("source_reopen_required", report["reason_codes"])
         self.assertTrue(report["details"]["bounded_evidence_ready"])
         self.assertFalse(report["details"]["source_reopen_required"])
+        self.assertEqual(
+            reason_codes.next_safe_action(report["reason_codes"]),
+            "use_bounded_evidence_when_relevant",
+        )
 
     def test_cli_facade_exposes_why_not_recall_json_without_raw_cue(self) -> None:
         result = facade.run_command(

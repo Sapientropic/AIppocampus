@@ -1,4 +1,4 @@
 interface:
   display_name: "AIppocampus"
   short_description: "Orient early with source-backed Codex conversation continuity"
-  default_prompt: "Use $aippocampus early for nontrivial, fresh-thread, handoff, correction-sensitive, preference-sensitive, or life-wide work where prior source could change the next move. Prefer cheap orientation and progressive recall before broad manual search; reopen source before memory-backed claims."
+  default_prompt: "Use $aippocampus early for nontrivial, fresh-thread, handoff, correction-sensitive, preference-sensitive, or life-wide work where prior source could change the next move. Read layered briefs as memory atmosphere, working continuity, and source court; prefer cheap orientation and progressive recall before broad manual search; reopen source before exact, sensitive, stale, conflicting, or high-risk claims."

@@ -2873,7 +2873,8 @@ class AmbientRecallHookTests(unittest.TestCase):
         context = payload["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Semantic recall route", context)
         self.assertIn("missing clean-source topic", context)
-        self.assertIn("not evidence", context)
+        self.assertIn("direction_only", context)
+        self.assertIn("reopen clean source", context)
 
     def test_vague_cross_project_semantic_evidence_stays_scent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:
