@@ -284,6 +284,7 @@ pasting raw JSON into multiple docs.
 | Route-readiness Cognitive Observatory smoke | `tools/aippocampus/smoke/smoke_route_readiness_observatory.py` | `docs/architecture/cognitive-runtime-architecture.md`, `docs/guides/public-api.md`, #574, #576 |
 | Dream real-history structural and user-visible eval | `skills/aippocampus/scripts/dream_real_history_eval.py` | `docs/evidence/dream/dream-real-history-model-backed-eval-2026-05-31.md`, `docs/research/dream-task-design.md`, #163 |
 | Synthetic GB-scale capacity smoke | `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py` | `docs/architecture/gb-scale-roadmap.md` |
+| Long-thread segment build/search soak | `tools/aippocampus/smoke/smoke_long_thread_segment_soak.py`, `tests/aippocampus/test_long_thread_segment_soak.py` | `docs/architecture/gb-scale-roadmap.md`, #376 |
 | Synthetic question-tracking scale smoke | `tools/aippocampus/smoke/smoke_question_tracking_scale.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/architecture/gb-scale-roadmap.md` |
 | Source-backed repo familiarity smoke | `tools/aippocampus/smoke/smoke_repo_familiarity.py` | `docs/architecture/source-backed-familiarity-map.md` |
 | Repo familiarity foreground experiment smoke | `tools/aippocampus/smoke/smoke_repo_familiarity_foreground_experiment.py` | `docs/architecture/source-backed-familiarity-map.md`, #250 |
