@@ -9,6 +9,7 @@ phrasing, while only evidence cards carry source-backed snippets.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
@@ -43,6 +44,9 @@ DEFAULT_AVOID = [
     "Do not present scent or candidate cards as source-backed fact.",
     "Do not expose source ids unless the user asks or grounding is needed.",
 ]
+
+ISSUE_REF_RE = re.compile(r"#\d+\b")
+BRIEF_TOKEN_RE = re.compile(r"#[0-9]+\b|[a-zA-Z][a-zA-Z0-9_-]{2,}")
 
 
 def _stable_id(parts: list[Any]) -> str:
@@ -86,6 +90,128 @@ def _clean_source_ref(ref: dict[str, Any], *, fallback_thread: str = "", fallbac
         "message_id": ref.get("message_id"),
     }
     return {key: value for key, value in clean.items() if value not in {None, ""}}
+
+
+def _brief_tokens(text: str) -> set[str]:
+    return {match.group(0).casefold() for match in BRIEF_TOKEN_RE.finditer(text or "")}
+
+
+def _card_brief_text(card: dict[str, Any]) -> str:
+    refs = card.get("source_refs") or []
+    ref_text = " ".join(
+        str(ref.get("title") or ref.get("thread_key") or "")
+        for ref in refs
+        if isinstance(ref, dict)
+    )
+    return " ".join(
+        str(value or "")
+        for value in [
+            card.get("theme"),
+            card.get("key_line"),
+            card.get("suggested_use"),
+            " ".join(str(term or "") for term in card.get("matched_terms") or []),
+            ref_text,
+        ]
+    )
+
+
+def _card_recency_hint(card: dict[str, Any]) -> tuple[int, int]:
+    best_turn = -1
+    best_line = -1
+    for ref in card.get("source_refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        try:
+            best_turn = max(best_turn, int(ref.get("turn_index") or -1))
+        except (TypeError, ValueError):
+            pass
+        try:
+            best_line = max(best_line, int(ref.get("line") or -1))
+        except (TypeError, ValueError):
+            pass
+    return best_turn, best_line
+
+
+def _action_priority(card: dict[str, Any]) -> int:
+    action = str(card.get("action_grammar") or "")
+    if action == "source_open":
+        return 5
+    if action == "bounded_evidence":
+        return 4
+    if action == "reopenable_route":
+        return 3
+    if action == "direction_only":
+        return 1
+    return 0
+
+
+def _rank_cards_for_brief(
+    cards: list[dict[str, Any]],
+    *,
+    prompt: str = "",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Prefer precise current-brief evidence before generic source-backed clutter.
+
+    Bounded evidence is allowed to influence the foreground agent, so its
+    ordering matters more than ordinary scent ordering. Keep the signal local:
+    issue refs, prompt-token overlap, and source recency only decide which
+    already-authorized card gets the scarce foreground slot. They must not
+    promote scent/candidate material into evidence or serialize prompt text.
+    """
+
+    prompt_tokens = _brief_tokens(prompt)
+    prompt_issue_refs = {match.group(0).casefold() for match in ISSUE_REF_RE.finditer(prompt or "")}
+    if not prompt_tokens and not prompt_issue_refs:
+        return cards, {
+            "sort_applied": False,
+            "prompt_issue_ref_count": 0,
+            "broad_context_intrusion_count": 0,
+        }
+
+    broad_context_intrusion_count = 0
+    decorated: list[tuple[tuple[int, int, int, int, int, int], int, dict[str, Any]]] = []
+    for index, card in enumerate(cards):
+        brief_text = _card_brief_text(card)
+        card_tokens = _brief_tokens(brief_text)
+        card_issue_refs = {match.group(0).casefold() for match in ISSUE_REF_RE.finditer(brief_text)}
+        issue_overlap = len(prompt_issue_refs & card_issue_refs)
+        token_overlap = len(prompt_tokens & card_tokens)
+        extra_issue_refs = max(0, len(card_issue_refs) - issue_overlap)
+        if prompt_issue_refs and extra_issue_refs >= 3:
+            broad_context_intrusion_count += 1
+        issue_precision = issue_overlap * 10 - extra_issue_refs * 4
+        turn_hint, line_hint = _card_recency_hint(card)
+        if prompt_issue_refs:
+            rank_key = (
+                issue_precision,
+                token_overlap,
+                _action_priority(card),
+                -extra_issue_refs,
+                turn_hint,
+                line_hint,
+            )
+        else:
+            rank_key = (
+                _action_priority(card),
+                token_overlap,
+                -extra_issue_refs,
+                turn_hint,
+                line_hint,
+                0,
+            )
+        decorated.append(
+            (
+                rank_key,
+                -index,
+                card,
+            )
+        )
+    ranked = [card for _, _, card in sorted(decorated, reverse=True)]
+    return ranked, {
+        "sort_applied": True,
+        "prompt_issue_ref_count": len(prompt_issue_refs),
+        "broad_context_intrusion_count": broad_context_intrusion_count,
+    }
 
 
 def _reopenable_ref_count(card: dict[str, Any]) -> int:
@@ -451,6 +577,7 @@ def ambient_recall_from_decision(
     cache_status: dict[str, Any] | None = None,
     cached_cards_first: bool = False,
     max_cards: int = MAX_CARDS,
+    prompt: str = "",
 ) -> dict[str, Any]:
     decision = str(result.get("decision") or "skip")
     deep_archival = bool(result.get("deep_archival_requested"))
@@ -477,6 +604,7 @@ def ambient_recall_from_decision(
             if isinstance(card, dict)
         )
 
+    cards, brief_precision = _rank_cards_for_brief(cards, prompt=prompt)
     cards = _dedupe_cards(cards, limit=max(0, max_cards))
     mode = _mode_for_cards(decision, cards)
     return {
@@ -489,6 +617,7 @@ def ambient_recall_from_decision(
         "avoid": list(DEFAULT_AVOID),
         "latency_ms": result.get("elapsed_ms"),
         "cache_status": effective_cache_status,
+        "brief_precision": brief_precision,
         "late_update_policy": "warm_scouts_deferred",
         "late_warm_handoff": {
             "default_path": "next_turn_thread_cache",
