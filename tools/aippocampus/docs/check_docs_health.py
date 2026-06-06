@@ -16,6 +16,7 @@ import _paths
 
 _paths.ensure_paths()
 
+from architecture_index_guard import ARCHITECTURE_INDEX_ROLES, architecture_index_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
@@ -1308,6 +1309,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(dependency_contract_issues(repo_root))
     issues.extend(safe_environment_issues(repo_root))
     issues.extend(host_hook_boundary_issues(repo_root))
+    issues.extend(architecture_index_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

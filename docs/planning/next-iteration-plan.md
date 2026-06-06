@@ -29,33 +29,30 @@ smaller.
 
 ### Open Issue Cleanup Review
 
-As of the 2026-06-06 cleanup pass, the active open-issue queue is intentionally
-small. The pass reviewed issue bodies and comments before remote closure; do
-not reopen broad parent issues just to preserve a good idea. Preserve those in
-Discussion or `docs/research/seeds/` until they can become a fixture, doc, CLI,
-runtime slice, or verified cleanup in roughly 1-2 weeks.
-When a later owner comment explicitly reopens an issue for sliced execution,
-that comment wins over older cleanup text: keep the issue open and cut the next
-PR tightly.
+As of the 2026-06-06 issue-cleanup implementation pass, every open issue body
+and comment should be treated as a hypothesis until checked against code,
+docs, and evidence. Recent owner comments explicitly reopened several broad
+parents for sliced execution; those comments override older cleanup rows that
+called the same issues complete or moved out of the foreground.
 
-| Layer | Reviewed issues | Current disposition |
+Open issues remain an execution queue, not an idea vault. Close an issue only
+when the branch supplies the evidence its latest comments require, or when the
+work is deliberately moved to a canonical roadmap/research surface with a clear
+reason that it should no longer be an open executable item.
+
+| Layer | Current issues | Current disposition |
 |---|---|---|
-| Core default / product usability | #201, #281, #752, #786 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, keep no-key installs from silently losing background cognition, or keep source-backed packets from being flattened into ordinary scent. #786 now has the shared trust taxonomy plus action-grammar projection and fixture-backed readout; keep it open until same-thread issue/comment route quality and live semantic reopen quality are proven rather than only fixture-measured. #752's staging-only queue and source-joined result materializer exist; the broader issue stays open until host-agent execution and real fallback-output quality are proven. |
-| Evidence and quality gates | #163, #378, #742 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, continuous-memory-vs-fresh-context comparison, and official AMemGym comparability without live judges. |
-| Reliability / infrastructure | #311, #784 | Keep open, but cut the next PR tightly. #311 owns live correction capture and private real-history adjudication. #784 now has the explicit provider-key bridge plan/apply/undo surface for Codex hooks; keep it open for real OS credential-store adapter quality and cross-platform smoke evidence rather than broad credential-discovery churn. |
-| Maintainer-reopened navigation/activation owners | #248, #309 | Keep open because the latest issue comments explicitly ask for sliced execution. Cut each into one concrete fixture/report path before changing runtime defaults: question prefilter/adoption or source-joined retrieval funnel. |
-| Presence-first continuity posture | #791, #792, #793, #794, #795, #796, #797, #799, #801, #803 | Keep open as focused slices, not one broad rewrite. #790 is the installable `SKILL.md` continuity-entrypoint slice and should leave this queue when its closing PR lands. Do not implement runtime renderer/gate, repo-root entrypoint, website, or docs-IA work while closing the `SKILL.md` surface. |
-| Closed or moved out of the foreground | #701, #703, #250, #312, #397, #574, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
-| Completed / superseded issues | #158, #164, #279, #299, #310, #313, #376, #463, #575, #582, #637, #639, #643, #707, #743, #747 | Closed after checking implementation evidence, child owners, or canonical docs. #310 now has the first live Journey instantiation and foreground hint timing replay fixture; #313 now has the first no-leakage thread-story packet diagnostic; #376 now has the explicit long-thread segment build/search soak; #575 now has the first deterministic cognitive-load sidecar slice. Future live calibration should start from a fresh narrow issue rather than reopening the broad concept. |
+| Public entry and docs IA | #801, #803 | Close together when the public site leads with the fastest useful setup path, magic moments are first-class, `docs/architecture/` has a role index, docs health guards that index, and responsive site QA passes. |
+| Architecture lifecycle policy | #810, #811 | Close with small current-contract docs plus deterministic no-write readouts: edge capture vs async consolidation state flow, and topology anchor weights as lifecycle/navigation pressure rather than source truth. |
+| Core route actionability | #201, #786, #791 | Keep open until high-confidence local/semantic routes become actionable reopen routes or bounded evidence without forcing the foreground agent into broad manual grep. #791 should not close while #786 still lacks live route-quality proof. |
+| Fresh-thread and question continuity | #248, #281 | Keep open as product-quality owners. Existing fixtures are substrate; closing needs source-ref rejoin, fallback, answer-quality, and fresh-thread usefulness evidence. |
+| Cognitive runtime evidence | #163, #310, #311, #575, #576, #663, #752 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, live correction capture, load calibration, Observatory coverage, Episode/Arc source reopen, and no-key host-agent fallback. |
+| Benchmark and retrieval proof | #309, #378, #742 | Keep open as falsifiable evidence owners. Do not close with architecture prose; #742 needs official AMemGym outputs, #378 needs continuous-memory comparison evidence, and #309 needs measured source-joined retrieval/rerank/vector/filter behavior. |
+| Provider credential onboarding | #784 | Keep open for real cross-platform credential-store smoke and quality evidence. The plan/apply/undo bridge exists but does not prove OS credential-store readiness. |
 
-Current open queue after the pass and 2026-06-06 reopen/addition comments:
-#163, #201, #248, #281, #309, #311, #378, #742, #752, #784, #786, plus
-the presence-first cluster under #791: #792, #793, #794, #795, #796, #797,
-#799, #801, and #803. #790 belongs to that cluster but is the current
-`SKILL.md` slice being closed by this work.
-This is the active issue foreground;
-everything else should stay in docs, evidence, Discussion, or Long Garden until
-it has a small next action.
+Current open queue at this pass: #163, #201, #248, #281, #309, #310, #311,
+#313, #378, #574, #575, #576, #663, #742, #752, #784, #786, #791, #801, #803,
+#810, and #811.
 
 ## Current Baseline To Preserve
 

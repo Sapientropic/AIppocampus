@@ -64,27 +64,24 @@ It pairs with the root [`llms.txt`](../llms.txt), [`AGENTS.md`](../AGENTS.md),
 
 ### Architecture
 
-`architecture/` holds system design, runtime boundaries, and implementation
-maps.
+`architecture/` holds system design, runtime boundaries, implementation maps,
+inventories, and active design tracks. Start with
+[`architecture/README.md`](architecture/README.md), which classifies each file
+by role so current contracts, maps, inventories, and research notes do not look
+equally authoritative before you open them.
 
-- [`architecture-overview.md`](architecture/architecture-overview.md) - public map of runtime layers, boundaries, and claim-bounded metaphors.
-- [`product-profiles.md`](architecture/product-profiles.md) - personal default, power-user optional, and enterprise-governed profile boundaries.
-- [`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md) - layered runtime architecture and cognitive-map direction.
-- [`runtime-script-map.md`](architecture/runtime-script-map.md) - maintainer map for high-risk runtime scripts, recall flow, entrypoints, callers, and tests.
-- [`schema-field-profiles.md`](architecture/schema-field-profiles.md) - field-budget, profile, sidecar, and projection discipline for keeping minimal/runtime/high-risk/diagnostic surfaces separate.
-- [`clean-source-redaction-profiles.md`](architecture/clean-source-redaction-profiles.md) - optional clean-source redaction profiles and the source-fidelity boundary for #591.
-- [`path-identity.md`](architecture/path-identity.md) - identity key, display path, and privacy-safe public path boundary for #404/#589 style platform path regressions.
-- [`rust-deterministic-core.md`](architecture/rust-deterministic-core.md) - contract-replay gate for future Rust infrastructure slices without rewriting cognitive layers.
-- [`project-planning-automation.md`](architecture/project-planning-automation.md) - boundary between issue intake triage and recurring roadmap drift audits.
-- [`provider-entrypoint-inventory.md`](architecture/provider-entrypoint-inventory.md) - classified inventory of remaining Codex-specific and provider-aware runtime entrypoints.
-- [`legacy-alias-inventory.md`](architecture/legacy-alias-inventory.md) - canonical inventory and sunset policy for legacy env/path aliases before the public API freeze.
-- [`architecture-debt-register.md`](architecture/architecture-debt-register.md) - lightweight large runtime/test/benchmark/tool debt register and guard budgets.
-- [`gb-scale-roadmap.md`](architecture/gb-scale-roadmap.md) - long-thread indexing, segmenting, retention, vector-index, and scale planning.
-- [`encrypted-sync-v1.md`](architecture/encrypted-sync-v1.md) - end-to-end encrypted multi-device sync design contract.
-- [`encrypted-sync-v2.md`](architecture/encrypted-sync-v2.md) - v2 recovery, conflict, revocation, key-provider, plaintext/debug, and manifest-hardening decision track.
-- [`question-tracking-subconscious.md`](architecture/question-tracking-subconscious.md) - question extraction, tracking, and theme-emergence designs.
-- [`wukong-mining-notes.md`](architecture/wukong-mining-notes.md) - scoring-fusion and mining notes for long-memory retrieval.
-- [`browser-extension-design.md`](architecture/browser-extension-design.md) - browser extension concept and platform research leads.
+Most readers should begin with
+[`architecture-overview.md`](architecture/architecture-overview.md),
+[`product-profiles.md`](architecture/product-profiles.md), and
+[`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md).
+Maintainers should use [`runtime-script-map.md`](architecture/runtime-script-map.md)
+and the inventories linked from the folder index, especially
+[`legacy-alias-inventory.md`](architecture/legacy-alias-inventory.md) before
+touching legacy environment or path aliases.
+Keep [`path-identity.md`](architecture/path-identity.md) and
+[`clean-source-redaction-profiles.md`](architecture/clean-source-redaction-profiles.md)
+directly reachable here because they anchor broader regression families across
+runtime path identity and clean-source redaction behavior.
 
 ### Guides
 
