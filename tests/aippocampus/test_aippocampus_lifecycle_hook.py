@@ -39,6 +39,7 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         rollout_last_message_line: int = 20,
         clean_expected_message_count: int = 8,
         clean_expected_turn_count: int = 4,
+        health_trajectory: dict | None = None,
     ) -> dict:
         action_ids = action_ids or []
         return {
@@ -65,6 +66,12 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
             "recommended_actions": [
                 {"id": action_id, "severity": "suggestion"} for action_id in action_ids
             ],
+            "health_trajectory": health_trajectory
+            or {
+                "preemptive_actions": [],
+                "preemptive_reason_codes": [],
+                "preemptive_action_reasons": {},
+            },
         }
 
     def test_user_prompt_submit_never_schedules_maintenance(self) -> None:
@@ -105,6 +112,96 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         )
 
         self.assertEqual(actions, [])
+
+    def test_sessionstart_consumes_preemptive_refresh_actions(self) -> None:
+        actions = hook.decide_actions(
+            "SessionStart",
+            self.health(
+                [],
+                health_trajectory={
+                    "preemptive_actions": ["build_index", "build_clean_source"],
+                    "preemptive_reason_codes": ["rag_cache_missing"],
+                    "preemptive_action_reasons": {
+                        "build_index": ["rag_cache_missing"],
+                        "build_clean_source": ["latest_visible_gap"],
+                    },
+                },
+            ),
+            {},
+            now_ts=self.now,
+        )
+
+        self.assertEqual(
+            actions,
+            [
+                "build_index",
+                "build_clean_source",
+                "register",
+                "build_associations",
+                "subconscious_maybe_start",
+            ],
+        )
+
+    def test_sessionstart_does_not_rebuild_for_age_only_trajectory(self) -> None:
+        actions = hook.decide_actions(
+            "SessionStart",
+            self.health(
+                [],
+                health_trajectory={
+                    "index_age_hours": 96,
+                    "clean_source_age_hours": 96,
+                    "expected_degradation": "low",
+                    "preemptive_actions": [],
+                    "preemptive_reason_codes": [],
+                    "preemptive_action_reasons": {},
+                },
+            ),
+            {},
+            now_ts=self.now,
+        )
+
+        self.assertEqual(actions, ["register", "build_associations", "subconscious_maybe_start"])
+
+    def test_sessionstart_cadence_cooldown_shortens_without_extending_default(self) -> None:
+        dense_actions = hook.decide_actions(
+            "SessionStart",
+            self.health([]),
+            {
+                "last_session_ts": self.now - 700,
+                "last_session_interval_seconds": 600,
+            },
+            now_ts=self.now,
+        )
+        rare_actions = hook.decide_actions(
+            "SessionStart",
+            self.health([]),
+            {
+                "last_session_ts": self.now - 1800,
+                "last_session_interval_seconds": 7200,
+            },
+            now_ts=self.now,
+        )
+
+        self.assertEqual(
+            dense_actions,
+            ["register", "build_associations", "subconscious_maybe_start"],
+        )
+        self.assertEqual(rare_actions, [])
+
+    def test_sessionstart_state_tracks_recent_interval_without_text(self) -> None:
+        workspace_state = {"last_session_ts": self.now - 900}
+
+        hook.update_workspace_state(
+            workspace_state,
+            "SessionStart",
+            [],
+            now_ts=self.now,
+        )
+
+        self.assertEqual(workspace_state["last_session_interval_seconds"], 900)
+        self.assertIn("last_session_interval_at", workspace_state)
+        self.assertNotIn("prompt", workspace_state)
+        self.assertNotIn("thread_id", workspace_state)
 
     def test_stop_latest_turn_gap_bypasses_cooldown_once_per_visible_marker(self) -> None:
         actions = hook.decide_actions(
@@ -310,6 +407,76 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         self.assertTrue(result["freshness"]["latest_visible_gap"])
         self.assertEqual(result["skipped_actions"][0]["reason"], "foreground_budget")
         self.assertNotIn("last_latest_turn_refresh_marker", workspace_state)
+
+    def test_run_maintenance_reports_sessionstart_preemptive_diagnostics(self) -> None:
+        state_file = self.cwd / "state.json"
+        original_run_health = hook.run_health
+
+        def fake_run_health(cwd: Path) -> dict:
+            del cwd
+            return self.health(
+                [],
+                health_trajectory={
+                    "preemptive_actions": ["build_index"],
+                    "preemptive_reason_codes": ["rag_cache_missing"],
+                    "preemptive_action_reasons": {"build_index": ["rag_cache_missing"]},
+                },
+            )
+
+        try:
+            hook.run_health = fake_run_health
+            result = hook.run_maintenance(
+                "SessionStart",
+                self.cwd,
+                state_file=state_file,
+                dry_run=True,
+                now_ts=self.now,
+            )
+        finally:
+            hook.run_health = original_run_health
+
+        decision = result["lifecycle_decision"]
+        self.assertEqual(decision["effective_cooldown_seconds"], hook.SESSION_COOLDOWN_SECONDS)
+        self.assertEqual(decision["preemptive_actions"], ["build_index"])
+        self.assertEqual(decision["preemptive_reason_codes"], ["rag_cache_missing"])
+        self.assertFalse(decision["cooldown_active"])
+
+    def test_run_maintenance_reports_sessionstart_preemptive_cooldown_skip(self) -> None:
+        state_file = self.cwd / "state.json"
+        state = hook.load_state(state_file)
+        state["workspaces"][hook.state_key(self.cwd)] = {"last_session_ts": self.now - 60}
+        hook.save_state(state, state_file)
+        original_run_health = hook.run_health
+
+        def fake_run_health(cwd: Path) -> dict:
+            del cwd
+            return self.health(
+                [],
+                health_trajectory={
+                    "preemptive_actions": ["build_index"],
+                    "preemptive_reason_codes": ["latest_visible_gap"],
+                    "preemptive_action_reasons": {"build_index": ["latest_visible_gap"]},
+                },
+            )
+
+        try:
+            hook.run_health = fake_run_health
+            result = hook.run_maintenance(
+                "SessionStart",
+                self.cwd,
+                state_file=state_file,
+                dry_run=True,
+                now_ts=self.now,
+            )
+        finally:
+            hook.run_health = original_run_health
+
+        decision = result["lifecycle_decision"]
+        self.assertTrue(decision["cooldown_active"])
+        self.assertEqual(
+            decision["preemptive_action_skipped"],
+            [{"id": "build_index", "reason": "cooldown"}],
+        )
 
     def test_precompact_runs_emergency_snapshot_before_health(self) -> None:
         calls: list[str] = []

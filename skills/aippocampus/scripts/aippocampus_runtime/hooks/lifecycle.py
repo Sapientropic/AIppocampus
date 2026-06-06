@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.hooks import lifecycle_preemptive as preemptive
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.source import emergency_snapshot
 
@@ -158,6 +159,39 @@ def cooldown_active(state: dict[str, Any], field: str, now_ts: float, cooldown: 
     return last > 0 and now_ts - last < cooldown
 
 
+def lifecycle_decision_diagnostic(
+    event: str,
+    health: dict[str, Any],
+    workspace_state: dict[str, Any],
+    *,
+    now_ts: float,
+) -> dict[str, Any]:
+    if event == "SessionStart":
+        cooldown = preemptive.effective_session_cooldown_seconds(
+            workspace_state,
+            SESSION_COOLDOWN_SECONDS,
+        )
+        active = cooldown_active(workspace_state, "last_session_ts", now_ts, cooldown)
+    elif event == "Stop":
+        cooldown = STOP_COOLDOWN_SECONDS
+        latest_due = latest_turn_refresh_due(health, workspace_state)
+        active = cooldown_active(workspace_state, "last_stop_ts", now_ts, cooldown) and not latest_due
+    elif event in {"PreCompact", "PostCompact"}:
+        cooldown = COMPACT_COOLDOWN_SECONDS
+        active = event == "PostCompact" and cooldown_active(
+            workspace_state, "last_compact_ts", now_ts, cooldown
+        )
+    else:
+        cooldown = 0
+        active = False
+    return {
+        "event": event,
+        "effective_cooldown_seconds": cooldown,
+        "cooldown_active": active,
+        **preemptive.preemptive_decision_fields(health),
+    }
+
+
 def decide_actions(
     event: str,
     health: dict[str, Any],
@@ -173,13 +207,22 @@ def decide_actions(
     actions: list[str] = []
 
     if event == "SessionStart":
-        if cooldown_active(workspace_state, "last_session_ts", now_ts, SESSION_COOLDOWN_SECONDS):
+        if cooldown_active(
+            workspace_state,
+            "last_session_ts",
+            now_ts,
+            preemptive.effective_session_cooldown_seconds(
+                workspace_state,
+                SESSION_COOLDOWN_SECONDS,
+            ),
+        ):
             return []
-        if (health.get("index") or {}).get("exists"):
+        actions.extend(preemptive.preemptive_action_ids(health))
+        if actions or (health.get("index") or {}).get("exists"):
             actions.append("register")
             actions.append("build_associations")
             actions.append("subconscious_maybe_start")
-        return actions
+        return unique_actions(actions)
 
     if event == "Stop":
         latest_due = latest_turn_refresh_due(health, workspace_state)
@@ -434,6 +477,13 @@ def update_workspace_state(
     workspace_state["last_event_ts"] = now_ts
     workspace_state["last_event_at"] = now_utc()
     if event == "SessionStart":
+        previous_session_ts = float(workspace_state.get("last_session_ts") or 0.0)
+        if previous_session_ts > 0 and now_ts > previous_session_ts:
+            workspace_state["last_session_interval_seconds"] = round(
+                now_ts - previous_session_ts,
+                3,
+            )
+            workspace_state["last_session_interval_at"] = now_utc()
         workspace_state["last_session_ts"] = now_ts
     elif event == "Stop":
         workspace_state["last_stop_ts"] = now_ts
@@ -528,6 +578,12 @@ def run_maintenance(
             "emergency_snapshot": emergency_snapshot_diagnostic,
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
         }
+    lifecycle_decision = lifecycle_decision_diagnostic(
+        event,
+        health,
+        workspace_state,
+        now_ts=now_ts,
+    )
     actions = decide_actions(event, health, workspace_state, now_ts=now_ts)
     results: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
@@ -563,6 +619,13 @@ def run_maintenance(
             workspace_state["last_error"] = "; ".join(str(item.get("error")) for item in errors[:3])
             workspace_state["last_error_at"] = now_utc()
         save_state(state, state_file)
+    preemptive.record_preemptive_outcome(
+        lifecycle_decision,
+        scheduled_actions=actions,
+        completed_actions=completed_actions,
+        skipped_actions=skipped_actions,
+        dry_run=dry_run,
+    )
 
     return {
         "event": event,
@@ -572,6 +635,7 @@ def run_maintenance(
         "dry_run": dry_run,
         "health_status": health.get("status"),
         "freshness": health.get("freshness"),
+        "lifecycle_decision": lifecycle_decision,
         "results": results,
         "errors": errors,
         "skipped_actions": skipped_actions,

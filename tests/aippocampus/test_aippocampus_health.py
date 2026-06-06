@@ -94,6 +94,65 @@ class AippocampusHealthTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_current_artifacts(
+        self,
+        root: Path,
+        workspace: Path,
+        rollout: Path,
+        *,
+        index_created_at: str = "2026-06-01T00:00:00Z",
+        clean_created_at: str = "2026-06-01T00:00:00Z",
+        rag_enabled: bool = True,
+        clean_schema: int = 2,
+        clean_upgrade_contract: bool = True,
+    ) -> dict[str, Path]:
+        anchors = workspace / "thread-anchors.md"
+        anchors.write_text("# Anchors\n", encoding="utf-8")
+        visibility = health.rollout_visibility_stats(rollout)
+        current_message_count, last_line = health.count_messages(rollout)
+        index_dir = root / "index"
+        index_dir.mkdir()
+        manifest = {
+            "created_at": index_created_at,
+            "message_count": current_message_count,
+            "source_rollout_size": rollout.stat().st_size,
+            "last_message_line": last_line,
+            "anchor_sha256": health.file_sha256(anchors),
+        }
+        if rag_enabled:
+            manifest["rag"] = {"enabled": True, "chunk_count": 1}
+        (index_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+        (index_dir / "source_index.sqlite").write_bytes(b"index")
+        clean = root / "clean-source"
+        clean.mkdir()
+        clean_manifest = {
+            "created_at": clean_created_at,
+            "schema_version": clean_schema,
+            "source_rollout_size": rollout.stat().st_size,
+            "message_count": visibility.expected_clean_source_message_count,
+            "turn_count": visibility.expected_clean_source_turn_count,
+        }
+        if clean_upgrade_contract:
+            clean_manifest["upgrade_contract"] = {"source_backed": True}
+        (clean / "manifest.json").write_text(json.dumps(clean_manifest), encoding="utf-8")
+        (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+        (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+        graphify = root / "graphify-corpus"
+        graphify.mkdir()
+        (graphify / "corpus_manifest.json").write_text(
+            json.dumps({"source_index_manifest_sha256": health.file_sha256(index_dir / "manifest.json")}),
+            encoding="utf-8",
+        )
+        return {
+            "anchors": anchors,
+            "index_dir": index_dir,
+            "clean_source_dir": clean,
+            "graphify_corpus": graphify,
+            "segments_dir": root / "segments",
+            "checkpoint_state": root / "checkpoint_state.json",
+        }
+
     def test_health_flags_single_latest_turn_gap_before_bulk_stale_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -191,6 +250,62 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertIn("build_clean_source", action_ids)
         self.assertTrue(
             any("latest visible" in item["reason"] for item in payload["recommended_actions"])
+        )
+
+    def test_health_trajectory_reports_age_without_age_only_preemptive_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(
+                root,
+                workspace,
+                rollout,
+                index_created_at="2026-06-01T00:00:00Z",
+                clean_created_at="2026-06-01T00:00:00Z",
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
+
+        trajectory = payload["health_trajectory"]
+        self.assertGreater(trajectory["index_age_hours"], 0)
+        self.assertGreater(trajectory["clean_source_age_hours"], 0)
+        self.assertEqual(trajectory["expected_degradation"], "low")
+        self.assertEqual(trajectory["preemptive_actions"], [])
+        self.assertNotIn("age_only", trajectory["preemptive_reason_codes"])
+
+    def test_health_trajectory_emits_preemptive_actions_for_concrete_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(
+                root,
+                workspace,
+                rollout,
+                rag_enabled=False,
+                clean_schema=1,
+                clean_upgrade_contract=False,
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
+
+        trajectory = payload["health_trajectory"]
+        self.assertEqual(
+            trajectory["preemptive_actions"],
+            ["build_index", "build_clean_source"],
+        )
+        self.assertIn("rag_cache_missing", trajectory["preemptive_reason_codes"])
+        self.assertIn("clean_source_schema_drift", trajectory["preemptive_reason_codes"])
+        self.assertEqual(
+            trajectory["preemptive_action_reasons"]["build_index"],
+            ["rag_cache_missing"],
         )
 
     def test_health_reports_oversized_logs_without_log_contents(self) -> None:

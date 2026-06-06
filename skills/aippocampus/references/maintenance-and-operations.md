@@ -12,6 +12,10 @@ Health checks include:
 
 - rollout growth beyond stale-message or stale-byte thresholds
 - advisory stale age, unindexed ratio, and activity-class diagnostics
+- a path-free `health_trajectory` block with artifact age, expected degradation,
+  and preemptive reason codes for concrete gaps such as latest-visible deltas,
+  missing generated artifacts, schema drift, RAG cache gaps, or generation
+  fallback
 - clean-source freshness
 - anchor changes since the last index
 - missing or stale segment indexes for large rollouts
@@ -44,6 +48,12 @@ hashed thread refs by risk. It reads registry and generated manifests only, not
 raw or clean-source message bodies. Default output must not expose private
 thread titles, raw snippets, or absolute local paths; `--include-paths` is a
 local maintainer diagnostic switch.
+
+`health_trajectory` must not convert age alone into rebuild pressure. A quiet,
+unchanged index may report `index_age_hours` and `clean_source_age_hours` with
+`expected_degradation=low` while leaving `preemptive_actions` empty. Lifecycle
+hooks may consume preemptive actions only when the reason codes point to a
+concrete freshness or generated-artifact gap that existing builders can repair.
 
 Generated artifact writers must coordinate through same-directory leases instead
 of relying on users to run commands serially. `aippocampus_runtime.recall.index_builder` holds
