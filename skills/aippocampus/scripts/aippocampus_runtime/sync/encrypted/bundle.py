@@ -24,6 +24,16 @@ from aippocampus_runtime.sync.encrypted.crypto import (
     resolve_age_binary,
     validate_recipients,
 )
+from aippocampus_runtime.sync.encrypted.head_graph import (
+    HEAD_GRAPH_SCHEMA_VERSION,
+    build_head_graph,
+    head_id_from_state,
+    head_summary_from_manifest,
+    heads_share_parent,
+    preserve_divergent_heads,
+    quarantine_plan_for_conflicting_head,
+    sender_trust_boundary,
+)
 
 ENCRYPTED_SYNC_SCHEMA_VERSION = 1
 ENCRYPTED_SYNC_DIR_NAME = "encrypted-sync"
@@ -84,12 +94,35 @@ def load_encrypted_state(registry_dir: Path, vault_id_hash: str) -> dict[str, An
 
 
 def save_encrypted_state(registry_dir: Path, inner_manifest: dict[str, Any]) -> None:
+    vault_id_hash = str(inner_manifest.get("vault_id_hash") or "")
+    previous_state = load_encrypted_state(registry_dir, vault_id_hash)
+    summary = head_summary_from_manifest(inner_manifest)
+    known_heads = previous_state.get("known_heads")
+    if not isinstance(known_heads, dict):
+        known_heads = {}
+    head_id = str(summary.get("head_id") or "")
+    if head_id:
+        known_heads[head_id] = summary
+    counters = previous_state.get("device_counters")
+    if not isinstance(counters, dict):
+        counters = {}
+    device_id = str(summary.get("device_id") or summary.get("source_device_id") or "local-device")
+    logical_counter = int(summary.get("logical_counter") or 0)
+    counters[device_id] = max(int(counters.get(device_id) or 0), logical_counter)
     state = {
         "vault_id_hash": inner_manifest.get("vault_id_hash"),
         "manifest_hash": inner_manifest.get("manifest_hash"),
         "manifest_revision": inner_manifest.get("manifest_revision"),
         "key_epoch": inner_manifest.get("key_epoch"),
         "parent_manifest_hash": inner_manifest.get("parent_manifest_hash"),
+        "head_graph_schema_version": HEAD_GRAPH_SCHEMA_VERSION,
+        "head_id": head_id or inner_manifest.get("manifest_hash"),
+        "parent_heads": summary.get("parent_heads") or [],
+        "source_device_id": summary.get("source_device_id"),
+        "accepted_head": summary,
+        "known_heads": known_heads,
+        "device_counters": counters,
+        "sender_trust": inner_manifest.get("sender_trust") or sender_trust_boundary(),
         "updated_at": now_utc(),
     }
     sync_bundle.save_json(
@@ -178,6 +211,12 @@ def build_encrypted_inner_manifest(
     parent_hash = previous_state.get("manifest_hash")
     recipient_set_hash = sha256_bytes("\n".join(sorted(recipients)).encode("utf-8"))
     device_metadata = encrypted_sync_keys.device_sync_metadata(registry_root, recipients)
+    source_device_id = str(device_metadata["source_device_id"] or "local-device")
+    head_graph = build_head_graph(
+        previous_state=previous_state,
+        source_device_id=source_device_id,
+        parent_manifest_hash=str(parent_hash) if parent_hash else None,
+    )
     objects: list[dict[str, Any]] = []
 
     for item in plain_manifest.get("files") or []:
@@ -207,7 +246,7 @@ def build_encrypted_inner_manifest(
         "schema_version": ENCRYPTED_SYNC_SCHEMA_VERSION,
         "encrypted_schema_version": ENCRYPTED_SYNC_SCHEMA_VERSION,
         "vault_id_hash": vault_id_hash,
-        "source_device_id": device_metadata["source_device_id"],
+        "source_device_id": source_device_id,
         "source_device_name": device_metadata.get("source_device_name"),
         "manifest_revision": revision,
         "key_epoch": device_metadata["key_epoch"],
@@ -220,6 +259,11 @@ def build_encrypted_inner_manifest(
         "sync_manifest": plain_manifest,
         "objects": objects,
         "raw_rollout_included": bool(plain_manifest.get("raw_rollout_included")),
+        "head_graph": head_graph,
+        "head_id": head_graph["head_id"],
+        "parent_heads": head_graph["parent_heads"],
+        "logical_counter": head_graph["logical_counter"],
+        "sender_trust": sender_trust_boundary(),
     }
     manifest_hash = hash_json(inner_manifest_hash_payload(inner_without_hash))
     for record in objects:
@@ -532,6 +576,7 @@ def repair_encrypted_sync_bundle(
             "raw_rollout_included": bool(materialized["inner_manifest"].get("raw_rollout_included")),
             "manifest_hash": materialized["inner_manifest"].get("manifest_hash"),
             "manifest_revision": materialized["inner_manifest"].get("manifest_revision"),
+            "head": head_summary_from_manifest(materialized["inner_manifest"]),
             "inner_manifest": materialized["inner_manifest"],
             "checked": materialized.get("checked", 0),
             "issues": plain_repair.get("issues", []),
@@ -564,6 +609,7 @@ def status_encrypted_sync_bundle(
         "raw_rollout_included": repair.get("raw_rollout_included", "unknown"),
         "manifest_hash": repair.get("manifest_hash"),
         "manifest_revision": repair.get("manifest_revision"),
+        "head": repair.get("head"),
         "issues": repair.get("issues", []),
     }
 
@@ -577,21 +623,63 @@ def replay_issue_for(target_registry: Path, inner_manifest: dict[str, Any]) -> d
     current_hash = current.get("manifest_hash")
     if incoming_hash == current_hash:
         return None
+    incoming_head_id = str(inner_manifest.get("head_id") or incoming_hash or "")
+    current_head_id = head_id_from_state(current)
+    incoming_parent_heads = [
+        str(value) for value in inner_manifest.get("parent_heads") or [] if str(value or "").strip()
+    ]
+    if current_head_id and current_head_id in incoming_parent_heads:
+        return None
     incoming_revision = int(inner_manifest.get("manifest_revision") or 0)
     current_revision = int(current.get("manifest_revision") or 0)
+    if heads_share_parent(current, inner_manifest):
+        quarantine = quarantine_plan_for_conflicting_head(inner_manifest)
+        preserved = preserve_divergent_heads(
+            target_registry,
+            current_state=current,
+            incoming_manifest=inner_manifest,
+            quarantine=quarantine,
+        )
+        return issue(
+            "divergent_head",
+            "incoming encrypted sync head is a concurrent child of an accepted head and requires manual or adjudicated resolution",
+            incoming_revision=incoming_revision,
+            current_revision=current_revision,
+            incoming_head_id=incoming_head_id,
+            accepted_head_id=current_head_id,
+            auto_accept_allowed=False,
+            sender_trust=inner_manifest.get("sender_trust") or sender_trust_boundary(),
+            provenance_quarantine=quarantine,
+            **preserved,
+        )
     if incoming_revision <= current_revision:
         return issue(
             "stale_manifest",
             "incoming encrypted sync manifest is older than the accepted local head",
             incoming_revision=incoming_revision,
             current_revision=current_revision,
+            incoming_head_id=incoming_head_id,
+            accepted_head_id=current_head_id,
         )
     if inner_manifest.get("parent_manifest_hash") != current_hash:
+        quarantine = quarantine_plan_for_conflicting_head(inner_manifest)
+        preserved = preserve_divergent_heads(
+            target_registry,
+            current_state=current,
+            incoming_manifest=inner_manifest,
+            quarantine=quarantine,
+        )
         return issue(
             "divergent_head",
             "incoming encrypted sync manifest does not descend from the accepted local head",
             incoming_revision=incoming_revision,
             current_revision=current_revision,
+            incoming_head_id=incoming_head_id,
+            accepted_head_id=current_head_id,
+            auto_accept_allowed=False,
+            sender_trust=inner_manifest.get("sender_trust") or sender_trust_boundary(),
+            provenance_quarantine=quarantine,
+            **preserved,
         )
     return None
 
@@ -634,13 +722,17 @@ def pull_encrypted_sync_bundle(
             }
         replay_issue = replay_issue_for(target_registry, materialized["inner_manifest"])
         if replay_issue:
-            return {
+            result = {
                 "ok": False,
                 "encrypted": True,
                 "sync_dir": str(sync_root),
                 "target_registry_dir": str(target_registry),
+                "head": head_summary_from_manifest(materialized["inner_manifest"]),
                 "issues": [replay_issue],
             }
+            if "provenance_quarantine" in replay_issue:
+                result["provenance_quarantine"] = replay_issue["provenance_quarantine"]
+            return result
         pull = sync_bundle.pull_sync_bundle(plain_root, target_registry)
         if pull.get("ok"):
             save_encrypted_state(target_registry, materialized["inner_manifest"])
@@ -651,6 +743,7 @@ def pull_encrypted_sync_bundle(
             "target_registry_dir": str(target_registry),
             "manifest_hash": materialized["inner_manifest"].get("manifest_hash"),
             "manifest_revision": materialized["inner_manifest"].get("manifest_revision"),
+            "head": head_summary_from_manifest(materialized["inner_manifest"]),
             "raw_rollout_included": bool(materialized["inner_manifest"].get("raw_rollout_included")),
             "pull": pull,
             "issues": pull.get("path_repair", {}).get("issues", []) if not pull.get("ok") else [],

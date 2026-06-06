@@ -102,6 +102,18 @@ class EncryptedSyncBundleTests(unittest.TestCase):
         self.wrong_identity.write_text("wrong identity\n", encoding="utf-8")
         self.recipient = "age1testrecipient0000000000000000000000000000000000000000000"
 
+    def set_local_sync_device(self, device_id: str, device_name: str) -> None:
+        data = encrypted_sync_keys.load_device_keys(self.registry)
+        data["local_device"] = {
+            "device_id": device_id,
+            "device_name": device_name,
+            "recipient": self.recipient,
+            "identity_available": True,
+            "identity_location": "local_registry_state",
+            "updated_at": "2026-06-06T00:00:00Z",
+        }
+        encrypted_sync_keys.save_device_keys(self.registry, data)
+
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
@@ -868,6 +880,167 @@ raise SystemExit(0)
 
         self.assertFalse(replay["ok"])
         self.assertEqual(replay["issues"][0]["code"], "stale_manifest")
+
+    def test_encrypted_manifest_records_head_graph_and_sender_trust_boundary(self) -> None:
+        self.set_local_sync_device("device-a", "Device A")
+
+        push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.sync_dir,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            self.sync_dir,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+
+        self.assertTrue(push["ok"], push)
+        inner = repair["inner_manifest"]
+        self.assertEqual(inner["source_device_id"], "device-a")
+        self.assertEqual(inner["head_graph"]["device_id"], "device-a")
+        self.assertEqual(inner["head_graph"]["logical_counter"], 1)
+        self.assertEqual(inner["head_graph"]["parent_heads"], [])
+        self.assertEqual(inner["head_id"], inner["head_graph"]["head_id"])
+        self.assertEqual(inner["parent_heads"], [])
+        self.assertEqual(inner["sender_trust"]["model"], "trusted_recipient_can_author_bundle")
+        self.assertFalse(inner["sender_trust"]["sender_authenticated"])
+        self.assertFalse(inner["sender_trust"]["manifest_signing_enabled"])
+        self.assertFalse(inner["sender_trust"]["auto_accept_multi_writer"])
+
+    def test_encrypted_pull_preserves_divergent_heads_and_quarantines_conflicting_provenance(
+        self,
+    ) -> None:
+        self.set_local_sync_device("device-a", "Device A")
+        parent_sync = self.root / "parent-sync"
+        child_a_sync = self.root / "child-a-sync"
+        child_b_sync = self.root / "child-b-sync"
+        target_registry = self.root / "divergent-target"
+
+        parent_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            parent_sync,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        parent_repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            parent_sync,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        parent_inner = parent_repair["inner_manifest"]
+        state_file = encrypted_sync_bundle.encrypted_state_file(
+            self.registry,
+            parent_inner["vault_id_hash"],
+        )
+        parent_state_snapshot = state_file.read_text(encoding="utf-8")
+        self.assertTrue(parent_push["ok"], parent_push)
+
+        (self.clean_source / "messages.jsonl").write_text(
+            json.dumps({"message_id": "msg_a", "text": "device A child"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+        child_a_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            child_a_sync,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        child_a_pull = encrypted_sync_bundle.pull_encrypted_sync_bundle(
+            child_a_sync,
+            self.root / "child-a-target",
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        child_a_repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            child_a_sync,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        self.assertTrue(child_a_push["ok"], child_a_push)
+        self.assertTrue(child_a_pull["ok"], child_a_pull)
+        encrypted_sync_bundle.save_encrypted_state(
+            target_registry,
+            child_a_repair["inner_manifest"],
+        )
+        target_messages_path = (
+            target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"
+        )
+        target_messages_path.parent.mkdir(parents=True)
+        target_messages_path.write_text(
+            json.dumps({"message_id": "msg_a", "text": "device A child"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        state_file.write_text(parent_state_snapshot, encoding="utf-8")
+        self.set_local_sync_device("device-b", "Device B")
+        (self.clean_source / "messages.jsonl").write_text(
+            json.dumps({"message_id": "msg_b", "text": "device B child"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+        child_b_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            child_b_sync,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        child_b_repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            child_b_sync,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        divergent_pull = encrypted_sync_bundle.pull_encrypted_sync_bundle(
+            child_b_sync,
+            target_registry,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+
+        self.assertTrue(child_b_push["ok"], child_b_push)
+        self.assertFalse(divergent_pull["ok"], divergent_pull)
+        issue = divergent_pull["issues"][0]
+        self.assertEqual(issue["code"], "divergent_head")
+        self.assertFalse(issue["auto_accept_allowed"])
+        self.assertEqual(
+            issue["sender_trust"]["model"],
+            "trusted_recipient_can_author_bundle",
+        )
+        self.assertFalse(issue["sender_trust"]["sender_authenticated"])
+        self.assertIn("conflict_dir", issue)
+        self.assertTrue(Path(issue["conflict_dir"]).is_dir())
+        conflict_files = {path.name for path in Path(issue["conflict_dir"]).glob("*.json")}
+        self.assertIn("accepted-head.json", conflict_files)
+        self.assertIn("incoming-head.json", conflict_files)
+        self.assertIn("divergent-heads.json", conflict_files)
+        self.assertEqual(
+            issue["accepted_head"]["head_id"],
+            child_a_repair["inner_manifest"]["head_id"],
+        )
+        self.assertEqual(
+            issue["incoming_head"]["head_id"],
+            child_b_repair["inner_manifest"]["head_id"],
+        )
+
+        quarantine = divergent_pull["provenance_quarantine"]
+        self.assertEqual(quarantine["status"], "quarantined_conflicting_head")
+        self.assertFalse(quarantine["vault_wide_demote"])
+        self.assertTrue(quarantine["source_backed_paths_preserved"])
+        self.assertIn("registry/semantic_triggers.jsonl", quarantine["quarantined_logical_paths"])
+        self.assertIn("registry/working_memory.jsonl", quarantine["quarantined_logical_paths"])
+        self.assertIn("registry/cognitive_map.json", quarantine["quarantined_logical_paths"])
+        self.assertNotIn(
+            "registry/threads/session-test/clean-source/messages.jsonl",
+            quarantine["quarantined_logical_paths"],
+        )
+        target_messages = (
+            target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"
+        ).read_text(encoding="utf-8")
+        self.assertIn("device A child", target_messages)
+        self.assertNotIn("device B child", target_messages)
 
     def test_encrypted_raw_rollout_round_trip_requires_explicit_include_raw(self) -> None:
         encrypted_sync_bundle.push_encrypted_sync_bundle(
