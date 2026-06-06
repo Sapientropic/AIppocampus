@@ -89,14 +89,20 @@ Mandatory event families:
 Each report classifies a family as:
 
 - `covered`: at least one event row has the required source-backed facts.
+- `weak_covered`: an event row exists and has required facts, but one or more
+  values are placeholder-like, malformed, private-looking, implausible, or too
+  weak for a strong operation claim.
 - `partial`: a row exists, but required facts are missing.
 - `missing`: no event row for that family exists in the clean-source build.
 
 Safe recall may use `covered` facts with their `source_ref`, `event_id`,
-`turn_index`, `call_ref`, and hash joins. `partial` and `missing` families must
-stay visible as gaps. Semantic summaries, assistant narration, and benchmark
-gold labels must not be upgraded into operation facts unless they join back to
-a source-backed event row or curated sidecar event.
+`turn_index`, `call_ref`, and hash joins. `weak_covered`, `partial`, and
+`missing` families must stay visible as gaps. Weak-covered rows can route
+review or source reopen, but they do not support strong operation claims until
+the weak value is replaced by usable source-backed evidence. Semantic
+summaries, assistant narration, and benchmark gold labels must not be upgraded
+into operation facts unless they join back to a source-backed event row or
+curated sidecar event.
 
 Run the diagnostic from an installed package or the script root:
 

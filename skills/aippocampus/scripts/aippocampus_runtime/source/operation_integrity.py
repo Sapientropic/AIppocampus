@@ -97,6 +97,18 @@ SECRET_SHAPED_RE = re.compile(
 )
 SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:/#@+-]+$")
 HEX_64_RE = re.compile(r"^[a-fA-F0-9]{64}$")
+PLACEHOLDER_VALUES = {
+    "unknown",
+    "none",
+    "null",
+    "missing",
+    "n/a",
+    "na",
+    "undefined",
+    "todo",
+    "placeholder",
+}
+MAX_PLAUSIBLE_EXIT_STATUS = 2_147_483_647
 
 
 def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -125,6 +137,22 @@ def _read_manifest(path: Path) -> dict[str, Any]:
 def _looks_private(value: object) -> bool:
     text = str(value or "")
     return bool(ABSOLUTE_PATH_RE.search(text) or SECRET_SHAPED_RE.search(text))
+
+
+def _is_placeholder(value: object) -> bool:
+    text = str(value or "").strip().casefold()
+    if not text:
+        return True
+    return text in PLACEHOLDER_VALUES or text.startswith(("unknown_", "missing_", "placeholder_"))
+
+
+def _source_ref_looks_source_like(value: str) -> bool:
+    text = value.casefold()
+    return (
+        ":" in value
+        or "#l" in text
+        or text.startswith(("src_", "source_", "clean_", "raw_", "turn_", "codex_"))
+    )
 
 
 def _safe_scalar(value: object) -> str | int | bool | None:
@@ -169,6 +197,13 @@ def _int_or_none(value: object) -> int | None:
 
 def _source_join_present(row: dict[str, Any]) -> bool:
     return any(row.get(key) for key in ("source_ref", "source_line", "raw_start_line", "event_id"))
+
+
+def _source_join_keys_present(fact: dict[str, Any]) -> bool:
+    return any(
+        fact.get(key)
+        for key in ("source_ref", "source_line", "raw_start_line", "raw_end_line", "turn_index", "source_id")
+    )
 
 
 def _safe_source_ref(row: dict[str, Any]) -> str | None:
@@ -239,7 +274,16 @@ def _target_class(row: dict[str, Any]) -> str:
 def _join_keys(row: dict[str, Any]) -> list[str]:
     keys = [
         key
-        for key in ("source_id", "source_ref", "event_id", "turn_index", "call_ref")
+        for key in (
+            "source_id",
+            "source_ref",
+            "source_line",
+            "raw_start_line",
+            "raw_end_line",
+            "turn_index",
+            "event_id",
+            "call_ref",
+        )
         if row.get(key)
     ]
     return keys
@@ -251,6 +295,8 @@ def _base_fact(row: dict[str, Any]) -> dict[str, Any]:
         "source_id": _safe_scalar(row.get("source_id")),
         "source_ref": _safe_source_ref(row),
         "source_line": _int_or_none(row.get("source_line")),
+        "raw_start_line": _int_or_none(row.get("raw_start_line")),
+        "raw_end_line": _int_or_none(row.get("raw_end_line")),
         "turn_index": _int_or_none(row.get("turn_index")),
         "timestamp": _safe_scalar(row.get("timestamp")),
         "status": _status(row),
@@ -327,7 +373,7 @@ def _missing_required_fact_names(spec: OperationFamilySpec, fact: dict[str, Any]
     missing: list[str] = []
     for field in spec.required_facts:
         if field == "source_join":
-            if not any(fact.get(key) for key in ("source_ref", "source_line", "event_id")):
+            if not _source_join_keys_present(fact):
                 missing.append(field)
             continue
         if field == "path_identity":
@@ -345,6 +391,62 @@ def _missing_required_fact_names(spec: OperationFamilySpec, fact: dict[str, Any]
         if not has_fact(field):
             missing.append(field)
     return missing
+
+
+def _validation_issue(
+    *,
+    code: str,
+    field: str,
+    fact: dict[str, Any],
+) -> dict[str, Any]:
+    event_id = fact.get("event_id")
+    safe_event_id = event_id if isinstance(event_id, str) and not _is_placeholder(event_id) else "unknown"
+    return {"code": code, "field": field, "event_id": safe_event_id}
+
+
+def _weak_validation_reasons(
+    spec: OperationFamilySpec,
+    row: dict[str, Any],
+    fact: dict[str, Any],
+) -> list[dict[str, Any]]:
+    reasons: list[dict[str, Any]] = []
+    raw_event_id = row.get("event_id") or row.get("id")
+    if _is_placeholder(raw_event_id):
+        reasons.append(_validation_issue(code="placeholder_value", field="event_id", fact=fact))
+
+    if "source_ref" in row:
+        raw_source_ref = row.get("source_ref")
+        safe_source_ref = fact.get("source_ref")
+        if _looks_private(raw_source_ref):
+            reasons.append(_validation_issue(code="private_source_ref", field="source_ref", fact=fact))
+        elif not isinstance(safe_source_ref, str):
+            reasons.append(_validation_issue(code="malformed_source_ref", field="source_ref", fact=fact))
+        elif not _source_ref_looks_source_like(safe_source_ref):
+            reasons.append(_validation_issue(code="weak_source_ref_shape", field="source_ref", fact=fact))
+
+    if spec.family == "test_check_command_result":
+        raw_exit = row.get("exit_status") if row.get("exit_status") is not None else row.get("exit_code")
+        if raw_exit is not None:
+            exit_status = _int_or_none(raw_exit)
+            if exit_status is None:
+                reasons.append(_validation_issue(code="malformed_exit_status", field="exit_status", fact=fact))
+            elif exit_status < 0 or exit_status > MAX_PLAUSIBLE_EXIT_STATUS:
+                reasons.append(_validation_issue(code="implausible_exit_status", field="exit_status", fact=fact))
+
+    for field in ("reopened_source_ref", "plan_change_ref", "expiry_or_supersession"):
+        if field not in spec.required_facts and field not in row:
+            continue
+        raw_value = row.get(field)
+        if raw_value in (None, "", []):
+            continue
+        if _is_placeholder(raw_value):
+            reasons.append(_validation_issue(code="placeholder_value", field=field, fact=fact))
+        elif _looks_private(raw_value):
+            reasons.append(_validation_issue(code="private_value", field=field, fact=fact))
+        elif not SAFE_TOKEN_RE.match(str(raw_value)):
+            reasons.append(_validation_issue(code="malformed_value", field=field, fact=fact))
+
+    return reasons
 
 
 def _privacy_issue_for_event(row: dict[str, Any]) -> dict[str, Any] | None:
@@ -411,6 +513,18 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
     for spec in MANDATORY_FAMILIES:
         rows = rows_by_family[spec.family]
         facts = [_fact_for_event(row, spec.family) for row in rows]
+        weak_fields_by_event: list[dict[str, Any]] = []
+        for row, fact in zip(rows, facts, strict=True):
+            reasons = _weak_validation_reasons(spec, row, fact)
+            if not reasons:
+                continue
+            fact["validation_reasons"] = reasons
+            weak_fields_by_event.append(
+                {
+                    "event_id": fact.get("event_id") or "unknown",
+                    "validation_reasons": reasons,
+                }
+            )
         missing_fields_by_event = [
             {
                 "event_id": fact.get("event_id") or "unknown",
@@ -442,6 +556,16 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
                 "downstream_rule": "Use captured facts as source-backed evidence, but keep missing fields explicit.",
             }
             gaps.append(gap)
+        elif weak_fields_by_event:
+            status = "weak_covered"
+            gap = {
+                "family": spec.family,
+                "gap_kind": "weak_required_facts",
+                "events": weak_fields_by_event,
+                "ordinary_recall_allowed": True,
+                "downstream_rule": "Use these rows as navigation or candidate evidence only; reopen source or raw audit material before strong operation claims.",
+            }
+            gaps.append(gap)
         else:
             status = "covered"
 
@@ -458,6 +582,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
         )
 
     covered_count = sum(1 for item in family_reports if item["status"] == "covered")
+    weak_covered_count = sum(1 for item in family_reports if item["status"] == "weak_covered")
     partial_count = sum(1 for item in family_reports if item["status"] == "partial")
     missing_count = sum(1 for item in family_reports if item["status"] == "missing")
     manifest_policy = manifest.get("event_lane_policy") if isinstance(manifest, dict) else {}
@@ -467,7 +592,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
     return {
         "ok": True,
         "contract_version": CONTRACT_VERSION,
-        "contract_complete": missing_count == 0 and partial_count == 0 and not privacy_issues,
+        "contract_complete": missing_count == 0 and partial_count == 0 and weak_covered_count == 0 and not privacy_issues,
         "ordinary_recall_allowed": True,
         "inputs": {
             "manifest_json": "manifest.json" if (root / "manifest.json").exists() else None,
@@ -483,6 +608,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
         "event_count": len(events),
         "coverage_summary": {
             "covered_family_count": covered_count,
+            "weak_covered_family_count": weak_covered_count,
             "partial_family_count": partial_count,
             "missing_family_count": missing_count,
             "gap_count": len(gaps),
@@ -521,6 +647,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "families: "
             f"{summary['covered_family_count']} covered, "
+            f"{summary['weak_covered_family_count']} weak-covered, "
             f"{summary['partial_family_count']} partial, "
             f"{summary['missing_family_count']} missing"
         )
