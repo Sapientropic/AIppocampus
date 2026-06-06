@@ -138,7 +138,7 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertTrue(readout_786["semantic_only_scent_not_factual_evidence"])
         self.assertEqual(
             readout_786["same_thread_issue_comment_route_quality"],
-            "fixture_measured_action_route",
+            "public_fixture_precise_route",
         )
         self.assertEqual(readout_786["bounded_evidence_card_count"], 1)
         self.assertEqual(readout_786["foreground_manual_query_invention_count"], 0)
@@ -269,6 +269,48 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertIn("presence_first_fixture_matrix", report["metric_notes"])
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("C:\\", encoded)
+
+    def test_issue_786_same_thread_issue_comment_route_quality_smoke(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        self.assertIn("same_thread_issue_comment_route_quality", report)
+        route_quality = report["same_thread_issue_comment_route_quality"]
+        readout = report["issue_readouts"]["github_786"]
+        encoded = json.dumps(route_quality, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(route_quality["measured"])
+        self.assertEqual(route_quality["mode"], "public_fixture")
+        self.assertEqual(route_quality["agent_behavior"], "uses_precise_current_thread_route")
+        self.assertEqual(route_quality["route"]["issue_number"], 786)
+        self.assertEqual(route_quality["route"]["parent_issue_number"], 791)
+        self.assertEqual(route_quality["route"]["action_grammar"], "reopenable_route")
+        self.assertEqual(route_quality["route"]["manual_query_invention_count"], 0)
+        self.assertTrue(route_quality["route"]["source_refs_available"])
+        self.assertTrue(route_quality["precision"]["issue_number_and_topic_present"])
+        self.assertTrue(route_quality["precision"]["parent_relation_present"])
+        self.assertTrue(route_quality["precision"]["comment_context_present"])
+        self.assertTrue(route_quality["precision"]["broad_topic_scent_only_fails"])
+        self.assertFalse(route_quality["source_boundary"]["promoted_to_evidence"])
+        self.assertTrue(route_quality["source_boundary"]["source_reopen_required"])
+        self.assertFalse(route_quality["privacy"]["raw_comment_body_serialized"])
+        self.assertFalse(route_quality["privacy"]["local_paths_serialized"])
+
+        self.assertTrue(readout["same_thread_issue_comment_route_quality_measured"])
+        self.assertEqual(
+            readout["same_thread_issue_comment_route_quality"],
+            "public_fixture_precise_route",
+        )
+        self.assertEqual(readout["same_thread_issue_comment_manual_query_count"], 0)
+        self.assertEqual(readout["live_semantic_reopen_quality"], "not_measured")
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertIn("same_thread_issue_comment_route_quality", report["metric_notes"])
+        self.assertTrue(
+            report["comparison_boundary"][
+                "cannot_claim_live_same_thread_issue_comment_route_quality"
+            ]
+        )
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn("C:\\", encoded)
+        self.assertNotIn(str(REPO_ROOT), encoded)
 
     def test_cli_smoke_emits_json_report(self) -> None:
         proc = subprocess.run(
