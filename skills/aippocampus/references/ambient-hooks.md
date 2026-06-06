@@ -457,6 +457,19 @@ quiet. High-association families such as `nudge_writer`, `cross_domain_bridge`,
 candidates, but foreground-visible use requires resolved privacy guard, clear
 evidence guard, and at least one source ref. Scout outputs remain route,
 candidate, or guard signals; source-backed claims still require source reopen.
+
+Magic-preserving activation is a no-write calibration layer over these existing
+guards, not a second scheduler or truth score. Use
+`aippocampus_runtime.warm_ambient.activation_policy` when an operator needs to
+explain whether a turn should stay in `cold_sleep`, use `cheap_sense`, reserve a
+bounded Tier 2 `exploratory_wake`, or run a diagnostic-only `full_sweep`.
+`exploratory_wake` is the budgeted source of warmth for high-uncertainty,
+multilingual, cross-thread, life-wide, source-gap, deterministic-false-skip, or
+manual-search-rescue pressure; it is not a budgeting failure. The policy reuses
+spend-doctor warning codes, route-readiness/prewarm counters, and scheduler
+tiers, and reports only public-safe reason codes. The goal is best
+source-backed continuity per unit spend, not the lowest possible spend.
+
 Privacy guard results distinguish action from sensitivity. Secret-like content,
 unprovided background material, professional secrets, unsafe external
 projection, and genuinely cross-domain sensitive use can still block or defer a
