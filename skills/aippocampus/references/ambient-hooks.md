@@ -86,6 +86,32 @@ manual search. `bounded_evidence` may change the answer within its declared
 scope, but it is still not `source_open` and must not be used for exact quotes
 unless raw source text has actually been reopened.
 
+Foreground brief rendering uses three layers without creating a parallel
+memory contract:
+
+- `memory_atmosphere`: quiet orientation from `direction_only` cards such as
+  scent, semantic hints, cognitive-map routes, and safe cached resonance. The
+  renderer may use `theme`, `resonance`, `suggested_use`, `matched_terms`, and
+  optional source refs to shape attention, but it cannot support factual
+  claims.
+- `working_continuity_brief`: action material from `reopenable_route`,
+  `bounded_evidence`, and `source_open` cards. Required fields are the existing
+  `card_id`, `theme`, `trust_level`, `action_grammar`, `trust_contract`, and
+  source refs when available. Bounded evidence can change the answer or next
+  action within scope; source-open material is reserved for scoped exact
+  wording.
+- `source_court`: the escalation path for exact wording, sensitive or high-risk
+  claims, conflicts, stale/currentness questions, broad-context intrusions, and
+  user disputes. It uses existing `reopen_plan`, `failure_reason_codes`,
+  `source_refs`, `source_boundary`, and `ignore_or_blocked` fields; if source
+  cannot be reopened, the agent should defer or report the boundary instead of
+  broadening into manual search.
+
+The default renderer may sort already-authorized cards for brief precision
+(for example, recent issue-specific bounded evidence before older broad issue
+summaries). That sorting is not a trust promotion path: it never turns scent or
+semantic output into evidence, and it must not serialize raw prompt text.
+
 `ambient_recall` also carries a `fresh_thread_packet` projected by
 `fresh_thread_scent.py`. This is the #282 contract that bridges the #281
 fresh-thread product goal with #277-style active recall locks. The packet fields are:

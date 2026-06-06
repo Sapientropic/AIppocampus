@@ -210,6 +210,10 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
             reopen_recommended_for_exact_quote_count += 1
     raw_cache_status = ambient.get("cache_status")
     cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
+    raw_brief_precision = ambient.get("brief_precision")
+    brief_precision: dict[str, Any] = (
+        raw_brief_precision if isinstance(raw_brief_precision, dict) else {}
+    )
     raw_warm_background = ambient.get("warm_background")
     warm_background: dict[str, Any] = (
         raw_warm_background if isinstance(raw_warm_background, dict) else {}
@@ -223,6 +227,13 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
             "topic_epoch": cache_status.get("topic_epoch"),
             "card_count": cache_status.get("card_count"),
             "write_status": cache_status.get("write_status"),
+        },
+        "brief_precision": {
+            "sort_applied": bool(brief_precision.get("sort_applied")),
+            "prompt_issue_ref_count": int(brief_precision.get("prompt_issue_ref_count") or 0),
+            "broad_context_intrusion_count": int(
+                brief_precision.get("broad_context_intrusion_count") or 0
+            ),
         },
         "warm_background": {
             "status": warm_background.get("status"),
@@ -418,6 +429,31 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
+    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
+    cards = ambient.get("cards") if isinstance(ambient, dict) else []
+    if not isinstance(cards, list):
+        return []
+    return [
+        card
+        for card in cards
+        if isinstance(card, dict)
+        and str(card.get("action_grammar") or "") in {"bounded_evidence", "source_open"}
+    ]
+
+
+def _evidence_card_line(card: dict[str, Any]) -> str:
+    refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
+    ref = refs[0] if refs else {}
+    line = f" line {ref.get('line')}" if ref.get("line") is not None else ""
+    phase = f", {ref.get('phase')}" if ref.get("phase") else ""
+    turn = f", turn {ref.get('turn_index')}" if ref.get("turn_index") is not None else ""
+    action = str(card.get("action_grammar") or "bounded_evidence")
+    title = card.get("theme") or ref.get("title") or ref.get("thread_key") or "source-backed context"
+    key_line = compact_text(str(card.get("key_line") or ""), 240)
+    return f"- [{action}] {title}{line}{phase}{turn}: {key_line}"
+
+
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
     decision = result.get("decision")
     if decision == "skip":
@@ -427,13 +463,18 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         lines.append(
             "Ambient recall evidence (aippocampus). Use bounded source-backed evidence when relevant; reopen only for disputed exact wording or wider context:"
         )
-        for item in result.get("evidence") or []:
-            phase = f", {item.get('phase')}" if item.get("phase") else ""
-            turn = f", turn {item.get('turn_index')}" if item.get("turn_index") is not None else ""
-            lines.append(
-                f"- {item.get('title')} line {item.get('line')}{phase}{turn}: "
-                f"{compact_text(str(item.get('snippet') or ''), 240)}"
-            )
+        evidence_cards = _bounded_evidence_cards(result)
+        if evidence_cards:
+            for card in evidence_cards[:3]:
+                lines.append(_evidence_card_line(card))
+        else:
+            for item in result.get("evidence") or []:
+                phase = f", {item.get('phase')}" if item.get("phase") else ""
+                turn = f", turn {item.get('turn_index')}" if item.get("turn_index") is not None else ""
+                lines.append(
+                    f"- {item.get('title')} line {item.get('line')}{phase}{turn}: "
+                    f"{compact_text(str(item.get('snippet') or ''), 240)}"
+                )
         lines.append("Do not paste snippets verbatim; exact quotes or broader claims should reopen source.")
     else:
         lines.append(

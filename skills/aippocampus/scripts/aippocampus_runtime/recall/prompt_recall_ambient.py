@@ -58,7 +58,7 @@ def attach_ambient_recall(
     warm_quorum: int | None,
 ) -> dict[str, Any]:
     if not use_thread_cache or not thread_id:
-        result["ambient_recall"] = ambient_recall_from_decision(result)
+        result["ambient_recall"] = ambient_recall_from_decision(result, prompt=prompt)
         return result
     epoch = topic_epoch or topic_epoch_from_terms(
         [str(term) for term in result.get("query_terms") or []]
@@ -112,6 +112,7 @@ def attach_ambient_recall(
             cached_cards=cached.get("cards") or [],
             cache_status=cache_status,
             cached_cards_first=True,
+            prompt=prompt,
         )
         if policy_file:
             policy_events = load_policy_events(policy_file)
@@ -231,6 +232,7 @@ def attach_ambient_recall(
                 "error_type": type(exc).__name__,
                 "message": str(exc)[:160],
             },
+            prompt=prompt,
         )
     return result
 

@@ -164,6 +164,81 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(payload["cards"][0]["source_refs"][0]["line"], 12)
         self.assertIn("innate memory", " ".join(payload["avoid"]))
 
+    def test_bounded_evidence_brief_prefers_specific_issue_context(self) -> None:
+        result = {
+            "decision": "evidence",
+            "confidence": "high",
+            "elapsed_ms": 8.0,
+            "evidence": [
+                {
+                    "thread_key": "session:issue-summary",
+                    "title": "Broad open issue summary",
+                    "line": 40,
+                    "turn_index": 5,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "Created executable slices #792 #793 #794 #795 #796 #797, "
+                        "plus related context #786 and #201."
+                    ),
+                },
+                {
+                    "thread_key": "session:recent-786",
+                    "title": "Current #786 trust grammar follow-up",
+                    "line": 180,
+                    "turn_index": 42,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "#786 needs bounded evidence to stay usable instead of being "
+                        "flattened into ordinary scent."
+                    ),
+                },
+                {
+                    "thread_key": "session:recent-201",
+                    "title": "Current #201 manual grep follow-up",
+                    "line": 190,
+                    "turn_index": 43,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "#201 remains the product risk: the hook should reduce manual "
+                        "grep by giving an actionable source route."
+                    ),
+                },
+            ],
+            "working_memory": [],
+            "cognitive_map": [],
+            "candidates": [],
+        }
+
+        payload = cards.ambient_recall_from_decision(
+            result,
+            max_cards=2,
+            prompt="What changed between the issue we just opened about #786 and #201?",
+        )
+
+        themes = [card["theme"] for card in payload["cards"]]
+        self.assertEqual(len(themes), 2)
+        self.assertTrue(any("#786" in theme for theme in themes))
+        self.assertTrue(any("#201" in theme for theme in themes))
+        self.assertFalse(any("Broad open issue summary" in theme for theme in themes))
+        self.assertEqual(payload["cards"][0]["action_grammar"], "bounded_evidence")
+        self.assertTrue(payload["brief_precision"]["sort_applied"])
+        self.assertEqual(payload["brief_precision"]["prompt_issue_ref_count"], 2)
+        self.assertGreaterEqual(payload["brief_precision"]["broad_context_intrusion_count"], 1)
+
+        result["ambient_recall"] = payload
+        context = prompt_context_render.context_for_hook(result)
+        self.assertIsNotNone(context)
+        assert context is not None
+        self.assertIn("[bounded_evidence]", context)
+        self.assertIn("#786", context)
+        self.assertIn("#201", context)
+        self.assertNotIn("Broad open issue summary", context)
+        summary = prompt_context_render.ambient_debug_summary(result)
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary["brief_precision"]["prompt_issue_ref_count"], 2)
+        self.assertGreaterEqual(summary["brief_precision"]["broad_context_intrusion_count"], 1)
+
     def test_deep_archival_request_requires_source_backed_evidence(self) -> None:
         result = {
             "decision": "evidence",
