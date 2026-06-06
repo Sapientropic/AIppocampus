@@ -26,15 +26,20 @@ from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 CACHE_SCHEMA_VERSION = 1
 RESIDUE_SCHEMA_VERSION = 1
+SIGNAL_ACCUMULATOR_SCHEMA_VERSION = 1
 DEFAULT_CACHE_NAME = "ambient_thread_cache.json"
 DEFAULT_RESIDUE_NAME = "ambient_residue.jsonl"
+DEFAULT_SIGNAL_ACCUMULATOR_NAME = "ambient_signal_accumulator.json"
 DEFAULT_TTL_SECONDS = 6 * 60 * 60
 DEFAULT_MAX_ENTRIES = 128
 DEFAULT_MAX_CARDS = 8
 DEFAULT_RESIDUE_REVIEW_AFTER_SECONDS = 7 * 24 * 60 * 60
+DEFAULT_MAX_SIGNAL_ENTRIES = 128
 
 RELATED_STRONG_PREFIXES = ("src_", "cand_", "sem_", "scope_", "topic_", "card_")
 RELATED_WEAK_PREFIXES = ("alias_",)
+POSITIVE_SIGNAL_OUTCOMES = {"weak_signal", "source_backed_hit", "candidate_backed_hit"}
+NEGATIVE_SIGNAL_OUTCOMES = {"wrong_route", "stale_route", "ignored_route", "negative_roi"}
 
 
 def default_ambient_cache_path(
@@ -53,6 +58,20 @@ def default_ambient_residue_path(
         return registry_path.resolve().parent / DEFAULT_RESIDUE_NAME
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / DEFAULT_RESIDUE_NAME
+
+
+def default_signal_accumulator_path(
+    registry_path: Path | None = None,
+    registry_dir: Path | None = None,
+) -> Path:
+    if registry_path:
+        return registry_path.resolve().parent / DEFAULT_SIGNAL_ACCUMULATOR_NAME
+    json_path, _ = registry_paths(registry_dir)
+    return json_path.resolve().parent / DEFAULT_SIGNAL_ACCUMULATOR_NAME
+
+
+def signal_accumulator_path_for_cache(cache_path: Path | str) -> Path:
+    return Path(cache_path).resolve().with_name(DEFAULT_SIGNAL_ACCUMULATOR_NAME)
 
 
 def _fingerprint(value: str, *, prefix: str) -> str:
@@ -82,6 +101,19 @@ def topic_epoch_from_terms(terms: list[str], *, limit: int = 8) -> str:
     return _fingerprint("\n".join(stable_terms), prefix="epoch")
 
 
+def topic_signal_fingerprint(terms: list[str], *, limit: int = 8) -> str:
+    cleaned: list[str] = []
+    for term in terms:
+        text = compact_text(str(term or "").strip(), 80)
+        if len(text) < 2:
+            continue
+        cleaned.append(text.casefold())
+    stable_terms = sorted(unique_preserve(cleaned, limit=limit))
+    if not stable_terms:
+        return "sig_empty"
+    return _fingerprint("\n".join(stable_terms), prefix="sig")
+
+
 def _load_cache(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
@@ -103,6 +135,185 @@ def _write_cache(path: Path, data: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     tmp.replace(path)
+
+
+def _load_signal_accumulator(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {
+            "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
+            "updated_at": None,
+            "entries": {},
+        }
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {
+            "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
+            "updated_at": None,
+            "entries": {},
+        }
+    if not isinstance(data, dict):
+        return {
+            "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
+            "updated_at": None,
+            "entries": {},
+        }
+    entries = data.get("entries")
+    if not isinstance(entries, dict):
+        data["entries"] = {}
+    data["schema_version"] = SIGNAL_ACCUMULATOR_SCHEMA_VERSION
+    return data
+
+
+def _write_signal_accumulator(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    tmp.replace(path)
+
+
+def _signal_key(
+    *,
+    thread_id: str,
+    workspace: str,
+    topic_epoch: str,
+    topic_fingerprint: str,
+) -> str:
+    workspace_key = cache_workspace_identity(workspace)
+    return _fingerprint(
+        f"{thread_id}\n{workspace_key}\n{topic_epoch}\n{topic_fingerprint}",
+        prefix="sigkey",
+    )
+
+
+def _compact_reason_codes(values: list[str] | None) -> list[str]:
+    return unique_preserve(
+        [
+            compact_text(str(value or "").strip().casefold(), 80)
+            for value in values or []
+            if str(value or "").strip()
+        ],
+        limit=8,
+    )
+
+
+def read_topic_signal_state(
+    path: Path | str,
+    *,
+    thread_id: str,
+    workspace: str,
+    topic_epoch: str,
+    terms: list[str],
+) -> dict[str, Any]:
+    topic_fingerprint = topic_signal_fingerprint(terms)
+    key = _signal_key(
+        thread_id=thread_id,
+        workspace=workspace,
+        topic_epoch=topic_epoch,
+        topic_fingerprint=topic_fingerprint,
+    )
+    data = _load_signal_accumulator(Path(path))
+    entry = data.get("entries", {}).get(key)
+    if not isinstance(entry, dict):
+        return {
+            "status": "miss",
+            "topic_epoch": topic_epoch,
+            "topic_fingerprint": topic_fingerprint,
+            "weak_signal_count": 0,
+            "positive_strength": 0.0,
+            "negative_strength": 0.0,
+            "reason_codes": [],
+        }
+    return {
+        "status": "hit",
+        "topic_epoch": topic_epoch,
+        "topic_fingerprint": topic_fingerprint,
+        "weak_signal_count": int(entry.get("weak_signal_count") or 0),
+        "positive_strength": float(entry.get("positive_strength") or 0.0),
+        "negative_strength": float(entry.get("negative_strength") or 0.0),
+        "reason_codes": _compact_reason_codes(entry.get("reason_codes") or []),
+        "updated_at": entry.get("updated_at"),
+    }
+
+
+def record_topic_signal(
+    path: Path | str,
+    *,
+    thread_id: str,
+    workspace: str,
+    topic_epoch: str,
+    terms: list[str],
+    outcome: str,
+    reason_codes: list[str] | None = None,
+    max_entries: int = DEFAULT_MAX_SIGNAL_ENTRIES,
+) -> dict[str, Any]:
+    topic_fingerprint = topic_signal_fingerprint(terms)
+    if topic_fingerprint == "sig_empty":
+        return {"status": "empty", "topic_epoch": topic_epoch, "topic_fingerprint": topic_fingerprint}
+    target = Path(path)
+    data = _load_signal_accumulator(target)
+    entries: dict[str, Any] = dict(data.get("entries") or {})
+    key = _signal_key(
+        thread_id=thread_id,
+        workspace=workspace,
+        topic_epoch=topic_epoch,
+        topic_fingerprint=topic_fingerprint,
+    )
+    raw_prior = entries.get(key)
+    prior: dict[str, Any] = raw_prior if isinstance(raw_prior, dict) else {}
+    clean_outcome = compact_text(str(outcome or "").strip().casefold(), 80)
+    positive_delta = 0.0
+    negative_delta = 0.0
+    weak_delta = 0
+    if clean_outcome in POSITIVE_SIGNAL_OUTCOMES:
+        positive_delta = 1.0 if clean_outcome == "weak_signal" else 1.5
+        weak_delta = 1 if clean_outcome == "weak_signal" else 0
+    elif clean_outcome in NEGATIVE_SIGNAL_OUTCOMES:
+        negative_delta = 1.5 if clean_outcome in {"wrong_route", "stale_route"} else 1.0
+    else:
+        return {
+            "status": "ignored_unknown_outcome",
+            "topic_epoch": topic_epoch,
+            "topic_fingerprint": topic_fingerprint,
+        }
+    updated = {
+        "updated_at": now_utc(),
+        "updated_unix": time.time(),
+        "thread_fingerprint": _fingerprint(thread_id, prefix="thread"),
+        "workspace_fingerprint": workspace_fingerprint(workspace),
+        "topic_epoch": topic_epoch,
+        "topic_fingerprint": topic_fingerprint,
+        "weak_signal_count": int(prior.get("weak_signal_count") or 0) + weak_delta,
+        "positive_strength": round(float(prior.get("positive_strength") or 0.0) + positive_delta, 3),
+        "negative_strength": round(float(prior.get("negative_strength") or 0.0) + negative_delta, 3),
+        "reason_codes": _compact_reason_codes(
+            [*(prior.get("reason_codes") or []), clean_outcome, *(reason_codes or [])]
+        ),
+    }
+    entries[key] = updated
+    if len(entries) > max_entries:
+        entries = dict(
+            sorted(
+                entries.items(),
+                key=lambda item: float((item[1] or {}).get("updated_unix") or 0.0),
+                reverse=True,
+            )[:max_entries]
+        )
+    data = {
+        "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
+        "updated_at": now_utc(),
+        "entries": entries,
+    }
+    _write_signal_accumulator(target, data)
+    return {
+        "status": "written",
+        "topic_epoch": topic_epoch,
+        "topic_fingerprint": topic_fingerprint,
+        "weak_signal_count": updated["weak_signal_count"],
+        "positive_strength": updated["positive_strength"],
+        "negative_strength": updated["negative_strength"],
+        "reason_codes": updated["reason_codes"],
+    }
 
 
 def _append_jsonl(path: Path, row: dict[str, Any]) -> None:

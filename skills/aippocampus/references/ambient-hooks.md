@@ -689,6 +689,17 @@ prompt text or turn a low-risk scent into evidence. This connects the #201
 vague-recall pain and the #281 fresh-thread goal without dumping more memory
 into every prompt.
 
+The same policy may read the ambient signal accumulator and active-lock ROI
+summary from the ambient-cache directory. The accumulator is keyed by
+`thread_id + workspace + topic_epoch + topic_fingerprint`, stores only hashes,
+aggregate strengths, weak-signal counts, and compact reason codes, and exists
+only to let several weak same-topic turns become a small positive routing cue.
+Active-lock ROI is aggregate tuning evidence: repeated source-backed reopens may
+slightly lower the scent threshold, while repeated wrong or stale routes may
+raise it for default prompts. Negative ROI must not suppress explicit recall or
+source-evidence requests, and neither accumulator nor ROI counters can promote a
+route into evidence without clean-source reopen.
+
 Foreground Python callers should use `run_semantic_gate_for_prompt` or pass
 `foreground=True` with both `deadline_seconds` and a per-worker `timeout` no
 larger than that deadline. Missing or looser foreground budgets fail open with a

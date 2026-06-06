@@ -9,13 +9,17 @@ from typing import Any
 from aippocampus_runtime.recall.active_recall_lock import (
     DEFAULT_LOCK_NAME,
     start_or_update_recall_lock,
+    summarize_lock_roi,
 )
 from aippocampus_runtime.recall.ambient_cache import (
     default_ambient_cache_path,
     read_latest_thread_cache,
     read_related_thread_cache,
     read_thread_cache,
+    read_topic_signal_state,
+    record_topic_signal,
     related_signal_fingerprints,
+    signal_accumulator_path_for_cache,
     topic_epoch_from_terms,
     write_thread_cache,
 )
@@ -37,8 +41,120 @@ __all__ = [
     "attach_ambient_recall",
     "cached_cards_for_policy",
     "current_thread_key_from_hook_thread_id",
+    "prompt_topic_signal_context",
+    "record_prompt_topic_signal",
     "warm_prompt_trace",
 ]
+
+
+def _ambient_cache_file(
+    *,
+    ambient_cache_path: Path | str | None,
+    registry_path: Path,
+) -> Path:
+    return (
+        Path(ambient_cache_path).resolve()
+        if ambient_cache_path
+        else default_ambient_cache_path(registry_path)
+    )
+
+
+def _active_lock_roi_summary(cache_file: Path) -> dict[str, Any]:
+    lock_path = cache_file.resolve().parent / DEFAULT_LOCK_NAME
+    if not lock_path.exists():
+        return {}
+    try:
+        return summarize_lock_roi(lock_path)
+    except Exception:
+        return {}
+
+
+def prompt_topic_signal_context(
+    *,
+    ambient_cache_path: Path | str | None,
+    registry_path: Path,
+    thread_id: str | None,
+    workspace: str,
+    topic_epoch: str | None,
+    terms: list[str],
+) -> dict[str, Any]:
+    """Return public-safe threshold context for same-topic route tuning.
+
+    The accumulator is a thread-local routing aid, not a memory surface. It uses
+    the same ambient-cache directory and stores only fingerprints and aggregate
+    counters, so foreground threshold tuning can learn from repeated weak turns
+    without persisting raw prompts or workspace paths.
+    """
+
+    epoch = topic_epoch or topic_epoch_from_terms([str(term) for term in terms])
+    if not thread_id:
+        return {
+            "topic_epoch": epoch,
+            "signal_path": None,
+            "topic_signal_state": None,
+            "route_roi_summary": {},
+        }
+    cache_file = _ambient_cache_file(
+        ambient_cache_path=ambient_cache_path,
+        registry_path=registry_path,
+    )
+    signal_path = signal_accumulator_path_for_cache(cache_file)
+    return {
+        "topic_epoch": epoch,
+        "signal_path": signal_path,
+        "topic_signal_state": read_topic_signal_state(
+            signal_path,
+            thread_id=thread_id,
+            workspace=workspace,
+            topic_epoch=epoch,
+            terms=terms,
+        ),
+        "route_roi_summary": _active_lock_roi_summary(cache_file),
+    }
+
+
+def record_prompt_topic_signal(
+    *,
+    signal_path: Path | str | None,
+    thread_id: str | None,
+    workspace: str,
+    topic_epoch: str,
+    terms: list[str],
+    decision: str,
+    evidence: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    suppressed: bool,
+    threshold_policy: dict[str, Any],
+    reasons: list[str],
+) -> dict[str, Any] | None:
+    if not signal_path or not thread_id or not terms:
+        return None
+    if str((threshold_policy or {}).get("risk_boundary") or "") != "normal":
+        return None
+    outcome = ""
+    if decision == "evidence" and evidence:
+        outcome = "source_backed_hit"
+    elif decision == "scent" and candidates:
+        outcome = "candidate_backed_hit"
+    elif decision == "skip" and not suppressed:
+        outcome = "weak_signal"
+    elif suppressed:
+        outcome = "ignored_route"
+    if not outcome:
+        return None
+    try:
+        return record_topic_signal(
+            signal_path,
+            thread_id=thread_id,
+            workspace=workspace,
+            topic_epoch=topic_epoch,
+            terms=terms,
+            outcome=outcome,
+            reason_codes=reasons,
+        )
+    except Exception as exc:
+        return {"status": "error", "error_type": type(exc).__name__}
+
 
 def attach_ambient_recall(
     result: dict[str, Any],
@@ -63,10 +179,9 @@ def attach_ambient_recall(
     epoch = topic_epoch or topic_epoch_from_terms(
         [str(term) for term in result.get("query_terms") or []]
     )
-    cache_file = (
-        Path(ambient_cache_path).resolve()
-        if ambient_cache_path
-        else default_ambient_cache_path(registry_path)
+    cache_file = _ambient_cache_file(
+        ambient_cache_path=ambient_cache_path,
+        registry_path=registry_path,
     )
     policy_file = Path(ambient_policy_path).resolve() if ambient_policy_path else None
     related_fingerprints = related_signal_fingerprints(
@@ -322,10 +437,9 @@ def cached_cards_for_policy(
 ) -> list[dict[str, Any]]:
     if not thread_id:
         return []
-    cache_file = (
-        Path(ambient_cache_path).resolve()
-        if ambient_cache_path
-        else default_ambient_cache_path(registry_path)
+    cache_file = _ambient_cache_file(
+        ambient_cache_path=ambient_cache_path,
+        registry_path=registry_path,
     )
     try:
         cached = read_latest_thread_cache(cache_file, thread_id=thread_id, workspace=workspace)

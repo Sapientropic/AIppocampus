@@ -126,7 +126,10 @@ semantic-result reuse can make a weak scent measurable, while broad fresh
 personal prompts, secret surfaces, and current-repo factual prompts stay at the
 base threshold. The output is safe reason-code telemetry for the agent/operator;
 it is not a new memory surface and it cannot upgrade a scent into source-backed
-evidence.
+evidence. The runtime reference now also allows a hash-only same-topic signal
+accumulator and aggregate active-lock ROI to nudge this threshold across turns;
+`skills/aippocampus/references/ambient-hooks.md` owns the detailed privacy and
+evidence boundary.
 
 ## Thread Ambient Cache
 
