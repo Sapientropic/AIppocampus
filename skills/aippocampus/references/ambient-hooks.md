@@ -42,6 +42,15 @@ background work was scheduled. It must not include raw prompts, query aliases,
 candidate ids, source snippets, local paths, or thread ids. These fields explain
 route delivery gaps; they do not promote scent or semantic output into evidence.
 
+Prompt decisions may also include `dream_delivery_prefilter`, a no-raw-prompt
+diagnostic for foreground Dream delivery gating. It may report only controlled
+reason/task-mode labels and counts such as the effective Dream limit and how
+many Dream rows were prefiltered before working-memory matching. It must not
+emit raw prompts, candidate keys, source snippets, local paths, or thread ids.
+This prefilter saves hook budget in clearly ineligible task modes while leaving
+positive reflection, life-wide, journey/frontier, and explicit Dream routes
+eligible when the delivery policy and assignment arm allow them.
+
 Prompt decisions may also include a private `ambient_recall` block built by
 `aippocampus_runtime.recall.ambient_cards`. This block normalizes existing hook signals into
 compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,

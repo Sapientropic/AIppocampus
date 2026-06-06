@@ -525,6 +525,7 @@ def _prompt_result(
         "evidence": evidence[:search_budget],
         "working_memory": strip_for_hook(working_memory_matches[:3]),
         "ambient_policy": context.ambient_policy_diagnostics,
+        "dream_delivery_prefilter": context.dream_delivery_prefilter,
         "semantic_gate": strip_semantic_gate(semantic_result),
         "semantic_gate_reuse": semantic_gate_reuse,
         "scent_threshold_policy": threshold_policy,
@@ -558,7 +559,7 @@ def assess_prompt(
     topic_epoch: str | None = None, use_thread_cache: bool = True,
     warm_background: bool | None = None, warm_job_dir: Path | str | None = None,
     warm_max_workers: int | None = None, warm_timeout: float | None = None, warm_quorum: int | None = None,
-    dream_hypothesis_limit: int | None = None,
+    dream_hypothesis_limit: int | None = None, dream_delivery_prefilter_reason: str | None = None, dream_delivery_task_mode: str | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     context = build_recall_decision_context(
@@ -567,13 +568,12 @@ def assess_prompt(
         concept_graph_path=concept_graph_path, working_memory_path=working_memory_path,
         semantic_triggers_path=semantic_triggers_path, semantic_cues_path=semantic_cues_path,
         ambient_policy_path=ambient_policy_path,
-        use_cognitive_map=use_cognitive_map,
+        use_cognitive_map=use_cognitive_map, dream_hypothesis_limit=dream_hypothesis_limit,
+        dream_delivery_prefilter_reason=dream_delivery_prefilter_reason, dream_delivery_task_mode=dream_delivery_task_mode,
     )
     prompt = context.prompt
     cwd_path = context.cwd_path
     path = context.registry_path
-    concept_file = context.concept_graph_path
-    ambient_policy_file = context.ambient_policy_path
     if context.is_noise:
         return _noise_prompt_result(context, start)
     policy_result = _maybe_policy_update_result(
@@ -644,7 +644,7 @@ def assess_prompt(
         registry=registry,
         registry_path=path,
         cwd_path=cwd_path,
-        concept_file=concept_file,
+        concept_file=context.concept_graph_path,
         seed_terms=seed_terms,
         cognitive_map_matches=cognitive_map_matches,
         association_matches=association_matches,
@@ -788,7 +788,7 @@ def assess_prompt(
     )
     return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
-        ambient_cache_path=ambient_cache_path, ambient_policy_path=ambient_policy_file,
+        ambient_cache_path=ambient_cache_path, ambient_policy_path=context.ambient_policy_path,
         topic_epoch=topic_epoch, use_thread_cache=use_thread_cache,
         warm_background=warm_background, warm_job_dir=warm_job_dir,
         warm_max_workers=warm_max_workers, warm_timeout=warm_timeout,
