@@ -24,6 +24,10 @@ Current code implements the source-backed P1-P3 Journey core in
 - P3: deterministic `current_frontier` generation from the latest waypoints.
   The frontier is marked as a navigation candidate, not source truth; exact
   claims still require the attached clean-source refs.
+- Source-texture consumption: projected texture signals may enrich new waypoint
+  `labels` and `frontier_hint` at the input boundary. They do not rewrite
+  existing append-only waypoints or directly change Journey state; a live
+  continuation still arrives as a new source-backed waypoint.
 - Validation: `tests/aippocampus/test_journey_tracking.py` covers creation,
   state transitions, expiry/dormancy, append-only waypoint behavior,
   feedback actions, source-ref preservation, and a replay fixture smoke where

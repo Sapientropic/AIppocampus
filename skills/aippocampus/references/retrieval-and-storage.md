@@ -388,6 +388,15 @@ raw audit when clean source is insufficient. Public/export projections omit
 this private sidecar unless a future explicit redacted texture projection is
 implemented with the same source-ref reopen boundary.
 
+Consumers should go through
+`aippocampus_runtime.source.texture_consumption`, which projects only
+`texture_id`, signal kind/detail/labels, safe source/event refs, truth boundary,
+and a consumer-specific `suggested_use`. Dream, Journey, and correction may let
+these projected signals change background worker eligibility, waypoint labels /
+frontier hints, or outcome reconstruction evidence. Foreground recall remains
+quiet by default; texture rows are not ordinary search hits and do not support
+facts without source reopen.
+
 ## MCP Access Layer
 
 `aippocampus_runtime/mcp/server` is the local MCP surface for agent clients

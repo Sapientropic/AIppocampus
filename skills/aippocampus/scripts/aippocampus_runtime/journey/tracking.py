@@ -20,6 +20,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.source.texture_consumption import (
+    select_texture_signals,
+    texture_signal_summary,
+)
 
 SCHEMA_VERSION = 1
 JOURNEY_KIND = "aippocampus_journey"
@@ -69,6 +73,7 @@ class Waypoint:
     arc: str = "unmapped"
     labels: tuple[str, ...] = ()
     frontier_hint: str = ""
+    texture_signals: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -189,6 +194,29 @@ def waypoint_thread_id(row: Mapping[str, Any], refs: tuple[dict[str, Any], ...])
     return ""
 
 
+def frontier_hint_from_texture_signals(signals: Iterable[Mapping[str, Any]]) -> str:
+    for signal in signals:
+        signal_kind = str(signal.get("signal_kind") or "")
+        detail = compact_text(str(signal.get("signal_detail") or ""), 120)
+        if signal_kind in {"uncertainty_or_frontier_signal", "self_correction_signal"}:
+            return compact_text(
+                f"Resume from a texture-backed open frontier ({detail or signal_kind}); "
+                "reopen source before treating it as a claim.",
+                220,
+            )
+        if signal_kind in {"abandoned_direction", "rejected_route", "process_route_note"}:
+            return compact_text(
+                f"Review the texture-backed route boundary ({detail or signal_kind}) before continuing.",
+                220,
+            )
+        if signal_kind == "tool_failure_texture":
+            return compact_text(
+                f"Continue after the texture-backed tool/verification failure ({detail or signal_kind}) is resolved.",
+                220,
+            )
+    return ""
+
+
 def waypoint_from_mapping(row: Mapping[str, Any]) -> Waypoint | None:
     refs = normalize_source_refs(row.get("source_refs") or row.get("source_ref"), thread_id=str(row.get("thread_id") or row.get("thread_key") or ""))
     if not refs:
@@ -204,7 +232,26 @@ def waypoint_from_mapping(row: Mapping[str, Any]) -> Waypoint | None:
         row.get("waypoint_id")
         or stable_digest(moment, thread_id, timestamp, refs, prefix="wp", length=18)
     )
-    labels = unique_preserve(str(value) for value in row.get("labels") or row.get("concepts") or [])
+    texture_selection = select_texture_signals([row], consumer="journey", limit=4)
+    texture_signals = tuple(
+        dict(signal)
+        for signal in texture_selection.get("signals") or []
+        if isinstance(signal, Mapping)
+    )
+    texture_labels = [
+        f"texture:{signal.get('signal_kind')}"
+        for signal in texture_signals
+        if signal.get("signal_kind")
+    ]
+    labels = unique_preserve(
+        [
+            *(str(value) for value in row.get("labels") or row.get("concepts") or []),
+            *texture_labels,
+        ]
+    )
+    raw_frontier_hint = compact_text(row.get("frontier_hint") or "", 220)
+    if not raw_frontier_hint:
+        raw_frontier_hint = frontier_hint_from_texture_signals(texture_signals)
     return Waypoint(
         waypoint_id=waypoint_id,
         moment=moment,
@@ -213,12 +260,13 @@ def waypoint_from_mapping(row: Mapping[str, Any]) -> Waypoint | None:
         source_refs=refs,
         arc=compact_text(row.get("arc") or "unmapped", 40),
         labels=labels,
-        frontier_hint=compact_text(row.get("frontier_hint") or "", 220),
+        frontier_hint=raw_frontier_hint,
+        texture_signals=texture_signals,
     )
 
 
 def waypoint_to_dict(waypoint: Waypoint) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "kind": WAYPOINT_KIND,
         "waypoint_id": waypoint.waypoint_id,
         "moment": waypoint.moment,
@@ -229,6 +277,13 @@ def waypoint_to_dict(waypoint: Waypoint) -> dict[str, Any]:
         "labels": list(waypoint.labels),
         "frontier_hint": waypoint.frontier_hint,
     }
+    if waypoint.texture_signals:
+        payload["texture_signals"] = list(waypoint.texture_signals)
+        payload["source_texture_consumption"] = texture_signal_summary(
+            waypoint.texture_signals,
+            consumer="journey",
+        )
+    return payload
 
 
 def journey_to_dict(journey: Journey) -> dict[str, Any]:
