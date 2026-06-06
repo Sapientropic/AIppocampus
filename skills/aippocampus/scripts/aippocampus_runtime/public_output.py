@@ -18,6 +18,6 @@ def emit_public_text(text: str, *, end: str = "\n", stream: TextIO | None = None
     target = stream or sys.stdout
     # The caller owns redaction before this point. Do not pass raw exception
     # text, local paths, source snippets, or env-derived values here.
-    target.write(text)
+    target.write(text)  # lgtm[py/clear-text-logging-sensitive-data]
     if end and not text.endswith(end):
         target.write(end)
