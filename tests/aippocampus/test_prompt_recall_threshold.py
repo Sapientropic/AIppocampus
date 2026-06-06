@@ -106,6 +106,42 @@ class PromptRecallThresholdTests(unittest.TestCase):
         self.assertEqual(policy["risk_boundary"], "normal")
         self.assertEqual(policy["route_roi_summary"]["source_backed_hit_count"], 2)
 
+    def test_fresh_personal_prompt_is_continuity_not_privacy_threshold_block(self) -> None:
+        policy = scent_threshold_policy(
+            prompt="我压力有点大，像之前那段状态",
+            topic_epoch="epoch-stress",
+            topic_signal_state={
+                "status": "hit",
+                "weak_signal_count": 3,
+                "positive_strength": 3.0,
+                "negative_strength": 0.0,
+                "topic_fingerprint": "sig_stress",
+            },
+            base_threshold=5.0,
+        )
+
+        self.assertEqual(policy["risk_boundary"], "personal_continuity")
+        self.assertLess(policy["effective_threshold"], policy["base_threshold"])
+        self.assertIn("topic_signal_accumulator_eased", _reason_codes(policy))
+
+    def test_secret_surface_still_blocks_threshold_easing(self) -> None:
+        policy = scent_threshold_policy(
+            prompt="api_key: sk-FAKE_TEST_PERSONAL_CONTINUITY_SECRET",
+            topic_epoch="epoch-secret",
+            topic_signal_state={
+                "status": "hit",
+                "weak_signal_count": 3,
+                "positive_strength": 3.0,
+                "negative_strength": 0.0,
+                "topic_fingerprint": "sig_secret",
+            },
+            base_threshold=5.0,
+        )
+
+        self.assertEqual(policy["risk_boundary"], "privacy_sensitive")
+        self.assertEqual(policy["effective_threshold"], policy["base_threshold"])
+        self.assertNotIn("topic_signal_accumulator_eased", _reason_codes(policy))
+
 
 if __name__ == "__main__":
     unittest.main()

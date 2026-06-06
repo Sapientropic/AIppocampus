@@ -3212,6 +3212,42 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["evidence"])
         self.assertIn("raw history", result["evidence"][0]["snippet"])
 
+    def test_explicit_personal_pressure_recall_uses_source_evidence_boundary(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:pressure-prior-wording",
+            [
+                {
+                    "source_line": 97,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "之前压力那段的结论：开源发布前先收窄验收口径，"
+                        "保留一个可执行的下一步，不要把所有焦虑都变成待办。"
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:pressure-prior-wording",
+            title="压力那段怎么说",
+            keywords=["压力", "开源发布", "验收口径"],
+            summary="之前压力那段说要收窄验收口径并保留可执行下一步。",
+            messages_path=messages,
+        )
+
+        result = hook.assess_prompt(
+            "我之前压力那段到底怎么说的？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=2,
+            use_semantic_gate=False,
+        )
+
+        self.assertEqual(result["scent_threshold_policy"]["risk_boundary"], "personal_continuity")
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+        self.assertIn("开源发布前先收窄验收口径", result["evidence"][0]["snippet"])
+
     def test_scent_only_topic_can_be_explicitly_retrieved(self) -> None:
         messages = self._write_clean_thread_rows(
             "session:scent-boundary",
@@ -3927,7 +3963,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertNotIn(prompt, raw)
         self.assertNotIn(str(self.workspace).replace("\\", "/"), raw.replace("\\", "/"))
 
-    def test_broad_fresh_personal_prompt_does_not_lower_scent_threshold(self) -> None:
+    def test_broad_fresh_personal_prompt_uses_continuity_boundary(self) -> None:
         registry_path = self.root / "fresh-personal-registry" / "threads.json"
         registry_path.parent.mkdir()
         registry_path.write_text(
@@ -3960,7 +3996,7 @@ class AmbientRecallHookTests(unittest.TestCase):
             result["scent_threshold_policy"]["effective_threshold"],
             result["scent_threshold_policy"]["base_threshold"],
         )
-        self.assertEqual(result["scent_threshold_policy"]["risk_boundary"], "privacy_sensitive")
+        self.assertEqual(result["scent_threshold_policy"]["risk_boundary"], "personal_continuity")
 
     def test_dream_hypothesis_working_memory_renders_uncertainty_boundary(self) -> None:
         registry_path = self.root / "dream-registry" / "threads.json"

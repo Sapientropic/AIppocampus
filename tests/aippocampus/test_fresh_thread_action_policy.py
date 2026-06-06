@@ -35,7 +35,7 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
 
         action = fresh_thread_action_from_packet(
             payload["fresh_thread_packet"],
-            task_context={"broad_or_sensitive_prompt": True},
+            task_context={"low_specificity_prompt": True},
         )
 
         self.assertEqual(action["agent_action"], "use_silently")
@@ -43,6 +43,27 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
         self.assertFalse(action["requires_source_reopen"])
         self.assertEqual(action["allowed_surface"], "internal_only")
         self.assertEqual(action["candidate_refs"], [])
+
+    def test_hard_risk_prompt_blocks_route_even_when_packet_is_soft(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "sensitivity": "safe",
+                "candidates": [{"source_id": "clean:billing", "thread_key": "session:billing"}],
+            }
+        )
+
+        action = fresh_thread_action_from_packet(
+            packet,
+            task_context={"memory_may_change_answer": True, "hard_risk_prompt": True},
+        )
+
+        self.assertEqual(action["agent_action"], "ignore")
+        self.assertEqual(action["reason"], "hard_risk_prompt_blocked")
+        self.assertFalse(action["should_call_active_recall"])
+        self.assertEqual(action["candidate_refs"], [])
+        self.assertIn("Hard-risk", action["privacy_boundary"]["rule"])
 
     def test_suppressed_packets_do_not_steer_answer_or_lock_usage(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(

@@ -96,8 +96,8 @@ def fresh_thread_demo_flows() -> tuple[DemoFlow, ...]:
                         source_id="clean:demo:stress-pressure",
                     ),
                     topic_epoch="stress",
-                    hook_task_context={"broad_or_sensitive_prompt": True},
-                    active_task_context={"broad_or_sensitive_prompt": True},
+                    hook_task_context={"low_specificity_prompt": True},
+                    active_task_context={"low_specificity_prompt": True},
                     expected_note="First turn keeps a weak emotional scent internal.",
                 ),
                 DemoTurn(
@@ -169,7 +169,7 @@ def fresh_thread_demo_flows() -> tuple[DemoFlow, ...]:
                         source_id="clean:demo:gift-low-sensitive",
                     ),
                     topic_epoch="gift",
-                    hook_task_context={"broad_or_sensitive_prompt": True},
+                    hook_task_context={"low_specificity_prompt": True},
                     active_task_context={"memory_may_change_answer": True},
                     active_recall_lock={"state": "pending", "lock_id": "lock_demo_gift"},
                     expected_note="A cautious route may be probed, but not exposed as a family fact.",
@@ -313,8 +313,8 @@ def fresh_thread_demo_flows() -> tuple[DemoFlow, ...]:
                         source_id="clean:demo:stress-pressure",
                     ),
                     topic_epoch="negative-stress",
-                    hook_task_context={"broad_or_sensitive_prompt": True},
-                    active_task_context={"broad_or_sensitive_prompt": True},
+                    hook_task_context={"low_specificity_prompt": True},
+                    active_task_context={"low_specificity_prompt": True},
                     expected_note="Weak scent remains internal; support the user normally.",
                 ),
             ),
@@ -343,32 +343,82 @@ def fresh_thread_demo_flows() -> tuple[DemoFlow, ...]:
             ),
         ),
         DemoFlow(
-            flow_id="negative_sensitive_gift",
-            title="Sensitive gift detail is suppressed",
-            kind="negative_control",
+            flow_id="personal_family_gift_continuity",
+            title="Personal family gift can use same-user continuity",
+            kind="positive_demo",
             cue_family="gift",
-            demo_goal="Show that sensitive family detail remains unavailable to answer content.",
-            proof_boundary="Negative demo control: suppressed packets steer nothing.",
+            demo_goal=(
+                "Show that ordinary personal/family gift context can use a relevant "
+                "same-user route without turning the route into unsupported facts."
+            ),
+            proof_boundary=(
+                "Demo proof: same-user route handle can affect planning; specific "
+                "family claims still require source reopen."
+            ),
             expected_outcomes={
-                "no_memory": "suppress_sensitive_detail",
-                "hook_only": "suppress_sensitive_detail",
-                "active_recall": "suppress_sensitive_detail",
+                "no_memory": "generic_gift_questions",
+                "hook_only": "light_source_safe_continuity_question",
+                "active_recall": "same_user_family_preference_route_can_change_next_step",
             },
             turns=(
                 DemoTurn(
-                    turn_id="sensitive_gift",
+                    turn_id="personal_family_gift",
                     public_prompt="帮我挑一个很私人的家庭礼物。",
                     upstream_decision=_decision(
-                        confidence="high",
-                        sensitivity="suppress",
-                        freshness="unknown",
-                        source_id="clean:demo:sensitive-family",
+                        confidence="medium",
+                        sensitivity="caution",
+                        source_id="clean:demo:family-gift-continuity",
+                    ),
+                    topic_epoch="gift-continuity",
+                    hook_task_context={"low_specificity_prompt": True},
+                    active_task_context={"memory_may_change_answer": True},
+                    active_recall_lock={
+                        "state": "ready",
+                        "lock_id": "lock_demo_family_gift",
+                        "reopenable_ref_count": 1,
+                    },
+                    expected_note=(
+                        "Personal/family context is not a hard privacy block; use the "
+                        "route only as navigation until source is reopened."
+                    ),
+                ),
+            ),
+            coverage_tags=("personal_continuity_boundary",),
+        ),
+        DemoFlow(
+            flow_id="negative_hard_risk_secret",
+            title="Credential or payment-like gift route stays blocked",
+            kind="negative_control",
+            cue_family="security",
+            demo_goal="Show that concrete property-risk material remains unavailable to answer content.",
+            proof_boundary="Negative demo control: hard-risk routes steer nothing unless safely redacted.",
+            expected_outcomes={
+                "no_memory": "hard_risk_detail_blocked_or_redacted",
+                "hook_only": "hard_risk_detail_blocked_or_redacted",
+                "active_recall": "hard_risk_detail_blocked_or_redacted",
+            },
+            turns=(
+                DemoTurn(
+                    turn_id="hard_risk_gift_payment",
+                    public_prompt="帮我用之前那个 API key 处理礼物支付。",
+                    upstream_decision=_decision(
+                        confidence="medium",
+                        sensitivity="safe",
+                        source_id="clean:demo:gift-hard-risk",
                     ),
                     activation_event="suppressed",
-                    topic_epoch="negative-gift",
-                    active_recall_lock={"state": "ready", "lock_id": "lock_demo_sensitive"},
-                    active_task_context={"memory_may_change_answer": True},
-                    expected_note="Suppression wins even if a route handle exists.",
+                    topic_epoch="negative-hard-risk",
+                    hook_task_context={"hard_risk_prompt": True},
+                    active_task_context={
+                        "memory_may_change_answer": True,
+                        "hard_risk_prompt": True,
+                    },
+                    active_recall_lock={
+                        "state": "ready",
+                        "lock_id": "lock_demo_hard_risk",
+                        "reopenable_ref_count": 1,
+                    },
+                    expected_note="Hard-risk material remains blocked even if a route handle exists.",
                 ),
             ),
         ),

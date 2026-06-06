@@ -329,24 +329,7 @@ TERM_WRAPPERS_RE = re.compile(
     r"(还记得|记得|之前|前面|刚才|上次|找回|想起来|想起|那句|这句|那个|这个|那篇|这篇|原话|原文|吗|嘛|呢|吧|还能|能不能)"
 )
 
-GENERIC_EVIDENCE_TERMS = {
-    "之前",
-    "前面",
-    "刚才",
-    "上次",
-    "找回",
-    "那句",
-    "这句",
-    "还能找回",
-    "能不能还是",
-    "还是",
-    "而我",
-    "还是我",
-    "这个",
-    "那个",
-    "记得",
-    "还记得",
-}
+GENERIC_EVIDENCE_TERMS = frozenset("之前 前面 刚才 上次 找回 那句 这句 还能找回 能不能还是 还是 而我 还是我 这个 那个 记得 还记得".split())
 
 CJK_CONTENT_MARKERS = {
     "重写",
@@ -362,6 +345,8 @@ CJK_CONTENT_MARKERS = {
     "本地底座",
     "本地核心",
 }
+
+CJK_SHORT_EVIDENCE_TERMS = frozenset("压力 焦虑 难受 崩溃 害怕 孤独 家人 家庭 妈妈 爸爸 伴侣 礼物 关系 偏好".split())
 
 GENERIC_ASSOCIATION_TERMS = {
     "当前线程",
@@ -515,17 +500,25 @@ def expand_query_terms(prompt: str) -> list[str]:
     return unique_preserve(expanded, limit=24)
 
 
+def _evidence_min_len(term: str) -> int:
+    if term in CJK_SHORT_EVIDENCE_TERMS:
+        return 2
+    return 3
+
+
 def evidence_content_terms(query_terms: list[str]) -> list[str]:
     terms: list[str] = []
     for term in query_terms:
         low = term.casefold().strip()
-        if low in GENERIC_EVIDENCE_TERMS or len(low) < 3:
+        min_len = _evidence_min_len(term)
+        if low in GENERIC_EVIDENCE_TERMS or len(low) < min_len:
             continue
         cleaned = TERM_WRAPPERS_RE.sub(" ", term)
         cleaned = re.sub(r"[，。；：！？,.!?/|+]+", " ", cleaned)
         for part in cleaned.split():
             part = part.strip()
-            if len(part) >= 3 and part.casefold() not in GENERIC_EVIDENCE_TERMS:
+            part_min_len = _evidence_min_len(part)
+            if len(part) >= part_min_len and part.casefold() not in GENERIC_EVIDENCE_TERMS:
                 terms.append(part)
         if len(term) <= 40:
             terms.append(term)

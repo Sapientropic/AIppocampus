@@ -172,8 +172,9 @@ Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈�
 "我想建个网站", and a fresh coding workspace with no `AGENTS.md` may produce
 `soft_hypothesis` or `silent_scent` packets, depending on confidence and
 candidate refs. They must not become first-turn private-history dumps. Specific
-memory-backed claims require `source_reopen`; broad, sensitive, stale, or
-superseded cues should stay `silent_scent` or `suppressed`.
+memory-backed claims require `source_reopen`; low-specificity cues can stay
+`silent_scent` / `use_silently`, while hard-risk, stale, or superseded routes
+should become `suppressed` or otherwise blocked.
 
 Over-personalization is primarily an agent tact and action-policy boundary:
 the packet should hard-gate source authority, secrets, genuine risk, and
@@ -192,14 +193,16 @@ would change the answer, plan, or action. This layer must not parse the raw
 prompt with a static semantic word list. Subconscious/semantic judgement enters
 as packet fields, reviewed sidecars, active recall locks, or explicit agent
 context such as `memory_may_change_answer`, `specific_memory_claim`,
-`broad_or_sensitive_prompt`, and `user_confirmed_memory_theme`.
+`low_specificity_prompt`, `hard_risk_prompt`, and
+`user_confirmed_memory_theme`.
 
 `task_context` is not a hidden prompt parser. Each flag belongs to one of these
 provenance buckets:
 
 - foreground agent or reviewed-sidecar judgement:
   `memory_may_change_answer`, `specific_memory_claim`,
-  `broad_or_sensitive_prompt`, and `allow_gentle_hypothesis`;
+  `low_specificity_prompt`, `hard_risk_prompt`, and
+  `allow_gentle_hypothesis`;
 - activation state: `user_confirmed_memory_theme`,
   `route_suppressed_by_activation`, `prior_scent_without_new_anchor`,
   `activation_state`, `activation_update`, `activation_invalidation`, and
@@ -224,14 +227,14 @@ Action policy examples:
 - Positive: a `source_required` packet with no reopenable source ref should
   preserve `requires_source_reopen=true` but choose `ignore` with a blocked
   reopen plan, not invent a manual query.
-- Negative control: a low-confidence, broad, or sensitive first-turn scent can
+- Negative control: a low-confidence or low-specificity first-turn scent can
   stay `use_silently`; support the user or ask normally without exposing an old
-  private theme.
+  unreopened source detail.
 - Negative control: `silent_scent` or no candidate refs should `ignore`; a
   generic creative or coding prompt should not become memory lookup by default.
-- Negative control: `suppressed`, superseded, or high-risk packets should
+- Negative control: `suppressed`, superseded, or hard-risk packets should
   `ignore` and must not steer answer content, tone, or source reopening unless
-  the user supplies a clearer low-risk memory intent.
+  the route is safely redacted or reopened through an explicit source-safe path.
 
 #394 progressive MCP navigation can consume hook material without treating the
 hook card as the whole memory surface. Ambient cards or future action-time
@@ -690,13 +693,16 @@ foreground-recall policy to the top-level package owners.
 diagnostic. It is a routing policy, not a source or evidence policy. A same
 thread continuation with a stable topic epoch may lower the effective
 `scent` threshold a little, and exact semantic-result reuse may lower it even
-less. Broad fresh personal prompts, secret surfaces, and current-repo factual
-prompts must not receive that lowering. The private hook result and public-safe
-debug payload may expose `base_threshold`, `effective_threshold`, compact
-`adjustments` reason codes, and `risk_boundary`; they must not include raw
-prompt text or turn a low-risk scent into evidence. This connects the #201
-vague-recall pain and the #281 fresh-thread goal without dumping more memory
-into every prompt.
+less. Broad fresh personal prompts are classified as `personal_continuity`,
+not `privacy_sensitive`: they may participate in ordinary routing and
+same-topic signal accumulation when candidate refs exist, but still need source
+reopen before exact or specific claims. Secret surfaces and current-repo factual
+prompts remain hard boundaries and must not receive threshold lowering. The
+private hook result and public-safe debug payload may expose `base_threshold`,
+`effective_threshold`, compact `adjustments` reason codes, and `risk_boundary`;
+they must not include raw prompt text or turn a route scent into evidence. This
+connects the #201 vague-recall pain and the #281/#856 fresh-thread goal without
+dumping more memory into every prompt.
 
 The same policy may read the ambient signal accumulator and active-lock ROI
 summary from the ambient-cache directory. The accumulator is keyed by

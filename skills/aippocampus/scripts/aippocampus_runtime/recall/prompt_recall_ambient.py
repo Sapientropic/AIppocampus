@@ -129,7 +129,8 @@ def record_prompt_topic_signal(
 ) -> dict[str, Any] | None:
     if not signal_path or not thread_id or not terms:
         return None
-    if str((threshold_policy or {}).get("risk_boundary") or "") != "normal":
+    risk_boundary = str((threshold_policy or {}).get("risk_boundary") or "")
+    if risk_boundary not in {"normal", "personal_continuity"}:
         return None
     outcome = ""
     if decision == "evidence" and evidence:
