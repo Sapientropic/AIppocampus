@@ -234,9 +234,11 @@ class BuildCleanSourceTests(unittest.TestCase):
         messages_path = Path(result["outputs"]["messages_jsonl"])
         turns_path = Path(result["outputs"]["turns_jsonl"])
         events_path = Path(result["outputs"]["events_jsonl"])
+        route_notes_path = Path(result["outputs"]["route_notes_jsonl"])
         self.assertTrue(messages_path.exists())
         self.assertTrue(turns_path.exists())
         self.assertTrue(events_path.exists())
+        self.assertTrue(route_notes_path.exists())
         self.assertIn("aippocampus-registry", str(messages_path))
         self.assertFalse((self.cwd / ".aippocampus").exists())
 
@@ -258,6 +260,18 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(events[0]["event_kind"], "tool_call_observed")
         self.assertEqual(events[0]["behavior_backed"], True)
         self.assertIn("observation_sha256", events[0])
+        route_notes_text = route_notes_path.read_text(encoding="utf-8")
+        route_notes = [json.loads(line) for line in route_notes_text.splitlines()]
+        self.assertEqual(result["route_note_count"], 1)
+        self.assertEqual(route_notes[0]["note_type"], "intent_before_tool")
+        self.assertEqual(route_notes[0]["output_authority"], "navigation_only")
+        self.assertTrue(route_notes[0]["source_reopen_required_before_claim"])
+        self.assertTrue(route_notes[0]["joined_evidence_refs"])
+        self.assertNotIn("我先查一下旧线程", route_notes_text)
+        self.assertNotIn("very large tool output", route_notes_text)
+        self.assertTrue(
+            result["route_note_lane_policy"]["commentary_is_process_evidence_not_source_truth"]
+        )
 
         first = messages[0]
         self.assertTrue(first["source_id"].startswith("src_"))
