@@ -4,6 +4,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -204,6 +206,43 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(
             metrics["fts5"]["miss_categories_top_k"]["expected_line_absent_from_sqlite"], 1
         )
+
+    def test_public_cjk_fixture_reports_quality_buckets_and_boundaries(self) -> None:
+        payload = benchmark.run_public_cjk_recall_fixture(top_k=5)
+
+        self.assertEqual(payload["kind"], "aippocampus_public_cjk_local_recall_fixture")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(
+            set(payload["metrics"]["by_case_type"]),
+            {
+                "exact_phrase",
+                "short_cjk_cue",
+                "mixed_cjk_code",
+                "deictic_specific_cue",
+                "mild_paraphrase",
+                "negative_generic_cue",
+            },
+        )
+        self.assertEqual(payload["metrics"]["positive_case_count"], 5)
+        self.assertEqual(payload["metrics"]["negative_case_count"], 1)
+        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 5)
+        self.assertEqual(payload["metrics"]["production_hybrid"]["negative_false_positive_count"], 0)
+        self.assertEqual(payload["privacy_boundary"]["source_text"], "public_synthetic_fixture")
+        self.assertIn("no_dense_vector_default_claim", payload["cannot_claim"])
+        self.assertTrue(payload["comparison_modes"]["candidate_cjk_sidecar"]["measured_only"])
+
+    def test_public_cjk_fixture_cli_outputs_json_without_private_registry(self) -> None:
+        stdout = StringIO()
+
+        with redirect_stdout(stdout):
+            code = benchmark.main(["--public-cjk-fixture", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_public_cjk_local_recall_fixture")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["privacy_boundary"]["source_text"], "public_synthetic_fixture")
+        self.assertNotIn("registry", payload)
 
 
 if __name__ == "__main__":

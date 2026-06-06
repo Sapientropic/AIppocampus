@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Retrieval score fusion policy for text, vector, and concept-graph signals.
+"""Optional retrieval score fusion policy for source-joined ranking signals.
 
-Scores are ranking hints only. The source join key remains the boundary: vector
-or graph proximity can improve ordering after a candidate points back to stable
-clean-source evidence, but a high score never becomes source truth.
+Default local recall is lexical-structural search, not dense vector retrieval.
+Scores here are ranking hints only. The source join key remains the boundary:
+optional vector or graph proximity can improve ordering after a candidate points
+back to stable clean-source evidence, but a high score never becomes source
+truth.
 """
 
 from __future__ import annotations

@@ -137,6 +137,51 @@
       }
     },
     {
+      "case_id": "stable-source-join-dedupe",
+      "pattern": "stable_source_join_dedupe",
+      "query_family": "overlapping_segment_source_identity",
+      "top_k": 2,
+      "results": [
+        {
+          "segment_id": "seg-overlap-new",
+          "id": 40,
+          "line": 500,
+          "role": "assistant",
+          "score": 92.0,
+          "stable_source_id": "clean:stable-source:target",
+          "source_ref": "source:stable-dedupe:target",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT stable winner"
+        },
+        {
+          "segment_id": "seg-overlap-old",
+          "id": 12,
+          "line": 502,
+          "role": "assistant",
+          "score": 91.0,
+          "stable_source_id": "clean:stable-source:target",
+          "source_ref": "source:stable-dedupe:duplicate",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT stable duplicate"
+        },
+        {
+          "segment_id": "seg-support",
+          "id": 41,
+          "line": 820,
+          "role": "assistant",
+          "score": 80.0,
+          "stable_source_id": "clean:stable-source:support",
+          "source_ref": "source:stable-dedupe:support",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT stable support"
+        }
+      ],
+      "expect": {
+        "target_source_refs": [
+          "source:stable-dedupe:target",
+          "source:stable-dedupe:support"
+        ],
+        "min_unique_segments": 2
+      }
+    },
+    {
       "case_id": "stale-superseded-currentness",
       "pattern": "stale_superseded_currentness",
       "query_family": "superseded_answer",

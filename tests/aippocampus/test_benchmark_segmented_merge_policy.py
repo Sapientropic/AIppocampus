@@ -20,11 +20,13 @@ class SegmentedMergePolicyBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_segmented_merge_policy_benchmark")
         self.assertEqual(payload["status"], "policy_acceptance_passed")
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["metrics"]["case_count"], 4)
-        self.assertEqual(payload["metrics"]["passed_case_count"], 4)
+        self.assertEqual(payload["metrics"]["case_count"], 5)
+        self.assertEqual(payload["metrics"]["passed_case_count"], 5)
         self.assertEqual(payload["metrics"]["target_hit_rate"], 1.0)
         self.assertEqual(payload["metrics"]["source_diversity_pass_rate"], 1.0)
         self.assertEqual(payload["metrics"]["adjacent_turn_pairing_success_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["source_key_dedupe_case_count"], 1)
+        self.assertEqual(payload["metrics"]["source_key_dedupe_count"], 1)
         self.assertEqual(payload["metrics"]["stale_superseded_false_promotion_count"], 0)
         self.assertIn("real_user_recall_quality", payload["cannot_claim"])
         self.assertIn("private_history_segment_merge_quality", payload["cannot_claim"])
@@ -37,6 +39,7 @@ class SegmentedMergePolicyBenchmarkTests(unittest.TestCase):
                 "cross_segment_diversity",
                 "adjacent_turn_pairing",
                 "duplicate_nearby_recap_suppression",
+                "stable_source_join_dedupe",
                 "stale_superseded_currentness",
             },
         )
