@@ -165,6 +165,34 @@ clean-source-only retrieval, or a prepared semantic-worker arm. Do not quote a
 semantic-worker result unless `aippocampus_agent_state.semantic_worker_state`
 is `prepared`.
 
+Live official Native attempt on 2026-06-06:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider openrouter --arm official_native_full_history --run overall,upperbound,random --reset --output benchmark_corpus\reports\amemgym-official-summary.json --json
+```
+
+The local upstream checkout was at
+`AGI-Eval-Official/amemgym@ffcd18857a3e2b2c61f00730ebdec676e27d3e87`,
+matching `origin/main` at fetch time. The run used the bridge's OpenRouter
+provider adapter with credentials redacted from reports. It was stopped after
+roughly two hours because the official `upperbound` subprocess was still
+running; the residual AMemGym subprocess tree was terminated so it would not
+continue provider calls in the background.
+
+The resulting summary is intentionally a partial-output report, not a score:
+`overall` had 6 of 20 user items with `overall_metrics.json`, `upperbound` had
+38 of 882 choice evaluations in `utilization_results.json` and no
+`utilization_metrics.json`, and `random` was complete at `0.23076190476190475`.
+The bridge records this as `partial_official_outputs` with
+`official_amemgym_score=not_claimed`; normalized `Memory` remains missing until
+the full fixed arm has complete `Overall`, `UB`, and `Random` outputs.
+
+This attempt proves the local official entrypoints, uv environment, provider
+wiring, and redacted summary path are real. It does not satisfy #742's full
+score acceptance criteria. The next useful engineering step is resumable /
+bounded official execution support or a cheaper documented fixed subset for
+debugging, while keeping the full public `v1.base` score boundary unclaimed.
+
 The Codex Desktop AMemGym-style benchmark lives at
 `benchmarks/aippocampus/benchmark_codex_desktop_amemgym.py`. It does not invoke
 the official AMemGym runner and does not implement `BaseAgent`; it reuses the
@@ -268,6 +296,8 @@ Can claim now:
 Cannot claim now:
 
 - AIppocampus has a full official AMemGym `v1.base` score.
+- The 2026-06-06 partial official Native attempt is not a score; it is only
+  execution/progress evidence.
 - AIppocampus clean-source-only official adapter results are full
   semantic-worker AIppocampus results.
 - AIppocampus semantic-sidecar official adapter results are claimable when

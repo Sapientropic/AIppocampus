@@ -547,6 +547,87 @@ def resolve_overall_agent_dir(
     return None
 
 
+def count_leaf_slots(value: Any) -> int:
+    if isinstance(value, list):
+        return sum(count_leaf_slots(item) for item in value)
+    return 1
+
+
+def count_non_null_leaves(value: Any) -> int:
+    if isinstance(value, list):
+        return sum(count_non_null_leaves(item) for item in value)
+    return 0 if value is None else 1
+
+
+def overall_progress(
+    root: Path,
+    item_ids: list[str],
+    *,
+    agent_name: str | None = None,
+) -> dict[str, Any]:
+    if agent_name:
+        agent_dir = root / agent_name
+    elif root.exists() and any((root / item_id).exists() for item_id in item_ids):
+        agent_dir = root
+    else:
+        candidates = sorted(path for path in root.iterdir() if path.is_dir()) if root.exists() else []
+        agent_dir = max(
+            candidates,
+            key=lambda path: sum((path / item_id / "overall_metrics.json").exists() for item_id in item_ids),
+            default=None,
+        )
+    completed_items = 0
+    result_files = 0
+    completed_score_leaves = 0
+    expected_score_leaves = 0
+    if agent_dir and agent_dir.exists():
+        for item_id in item_ids:
+            item_dir = agent_dir / item_id
+            if (item_dir / "overall_metrics.json").exists():
+                completed_items += 1
+            results_path = item_dir / "overall_results.json"
+            if not results_path.exists():
+                continue
+            result_files += 1
+            try:
+                results = read_json(results_path)
+            except Exception:
+                continue
+            completed_score_leaves += count_non_null_leaves(results)
+            expected_score_leaves += count_leaf_slots(results)
+    status = "complete" if completed_items == len(item_ids) and item_ids else "partial" if completed_items or result_files else "missing"
+    return {
+        "status": status,
+        "expected_item_count": len(item_ids),
+        "completed_item_count": completed_items,
+        "result_file_count": result_files,
+        "completed_score_leaf_count": completed_score_leaves,
+        "expected_score_leaf_count": expected_score_leaves,
+    }
+
+
+def upperbound_progress(root: Path) -> dict[str, Any]:
+    metrics_paths = sorted(root.rglob("utilization_metrics.json")) if root.exists() else []
+    result_paths = sorted(root.rglob("utilization_results.json")) if root.exists() else []
+    completed_leaves = 0
+    expected_leaves = 0
+    for path in result_paths:
+        try:
+            results = read_json(path)
+        except Exception:
+            continue
+        completed_leaves += count_non_null_leaves(results)
+        expected_leaves += count_leaf_slots(results)
+    status = "complete" if metrics_paths else "partial" if completed_leaves or result_paths else "missing"
+    return {
+        "status": status,
+        "metrics_file_count": len(metrics_paths),
+        "result_file_count": len(result_paths),
+        "completed_choice_eval_count": completed_leaves,
+        "expected_choice_eval_count": expected_leaves,
+    }
+
+
 @dataclass
 class ScoreFiles:
     overall_agent_dir: Path | None
@@ -700,14 +781,28 @@ def score_summary(
         item_ids=ids,
         overall_agent_name=overall_agent_name,
     )
+    overall_output_status = "found" if files.overall_agent_dir else "missing"
+    upperbound_output_status = "found" if files.upperbound_metrics_path else "missing"
+    overall_progress_payload = overall_progress(
+        Path(overall_output_dir),
+        ids,
+        agent_name=overall_agent_name,
+    )
+    upperbound_progress_payload = upperbound_progress(Path(upperbound_output_dir))
+    if overall_output_status == "missing" and overall_progress_payload["status"] == "partial":
+        overall_output_status = "partial"
+    if upperbound_output_status == "missing" and upperbound_progress_payload["status"] == "partial":
+        upperbound_output_status = "partial"
     outputs = {
         "overall": {
-            "status": "found" if files.overall_agent_dir else "missing",
+            "status": overall_output_status,
             "label": safe_path_label(files.overall_agent_dir) if files.overall_agent_dir else None,
+            "progress": overall_progress_payload,
         },
         "upperbound": {
-            "status": "found" if files.upperbound_metrics_path else "missing",
+            "status": upperbound_output_status,
             "label": safe_path_label(files.upperbound_metrics_path) if files.upperbound_metrics_path else None,
+            "progress": upperbound_progress_payload,
         },
         "random": {
             "status": "found" if files.random_metrics_path else "missing",
@@ -1129,13 +1224,17 @@ def build_official_bridge_report(
 
     missing_outputs = list(score_payload["missing_outputs"])
     all_scores_present = not missing_outputs and "official_normalized_memory_score" in score_payload["metrics"]
+    has_partial_outputs = any(
+        isinstance(payload, dict) and payload.get("status") == "partial"
+        for payload in (score_payload.get("outputs") or {}).values()
+    )
     if upstream["status"] != "ready":
         status = "upstream_missing"
     elif not adapter_ready:
         status = "adapter_overlay_missing"
     elif all_scores_present:
         status = "official_score_summary"
-    elif run_results:
+    elif run_results or has_partial_outputs:
         status = "partial_official_outputs"
     else:
         status = "runner_plan_ready_missing_outputs"
@@ -1149,7 +1248,9 @@ def build_official_bridge_report(
         cannot_claim.append("official_random_missing")
     if missing_outputs:
         cannot_claim.append("official_normalized_memory_score_missing")
-    if not run_results and not all_scores_present:
+    if has_partial_outputs and not all_scores_present:
+        cannot_claim.append("full_local_official_runner_execution")
+    elif not run_results and not all_scores_present:
         cannot_claim.append("local_official_runner_execution")
     if arm != OFFICIAL_NATIVE_ARM and not adapter_ready:
         cannot_claim.append("official_aippocampus_agent_adapter_execution")

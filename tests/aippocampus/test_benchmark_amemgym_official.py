@@ -117,6 +117,51 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
             any(note.startswith("overall_below_random") for note in payload["score_interpretation"]["notes"])
         )
 
+    def test_partial_official_outputs_report_progress_without_claiming_scores(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            env_data = root / "data.json"
+            self._write_env_data(env_data)
+            agent_config = upstream / "configs" / "agent" / "native.json"
+            output_root = root / "partial"
+            item_dir = output_root / "overall" / "native-gpt-4.1-mini" / "user-a"
+            item_dir.mkdir(parents=True)
+            (item_dir / "overall_metrics.json").write_text(
+                json.dumps({"accuracy": [[0.5, 0.5]]}),
+                encoding="utf-8",
+            )
+            (item_dir / "overall_results.json").write_text(
+                json.dumps([[{"scores": {"accuracy": 0.5}}, None]]),
+                encoding="utf-8",
+            )
+            upper_dir = output_root / "upperbound" / "openai" / "gpt-4.1-mini"
+            upper_dir.mkdir(parents=True)
+            (upper_dir / "utilization_results.json").write_text(
+                json.dumps([[[{"scores": {"accuracy": 1.0}}, None]]]),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.build_official_bridge_report(
+                upstream_root=upstream,
+                env_data_path=env_data,
+                agent_config_path=agent_config,
+                overall_output_dir=output_root / "overall",
+                upperbound_output_dir=output_root / "upperbound",
+                random_output_file=output_root / "missing-random.json",
+            )
+
+        self.assertEqual(payload["status"], "partial_official_outputs")
+        self.assertEqual(payload["official_outputs"]["overall"]["status"], "partial")
+        self.assertEqual(payload["official_outputs"]["upperbound"]["status"], "partial")
+        self.assertEqual(payload["official_outputs"]["overall"]["progress"]["completed_item_count"], 1)
+        self.assertEqual(payload["official_outputs"]["overall"]["progress"]["expected_item_count"], 2)
+        self.assertEqual(payload["official_outputs"]["overall"]["progress"]["completed_score_leaf_count"], 1)
+        self.assertEqual(payload["official_outputs"]["upperbound"]["progress"]["completed_choice_eval_count"], 1)
+        self.assertEqual(payload["claim_boundary"]["official_amemgym_score"], "not_claimed")
+        self.assertIn("official_normalized_memory_score_missing", payload["cannot_claim"])
+        self.assertIn("full_local_official_runner_execution", payload["cannot_claim"])
+
     def test_run_surface_uses_python_module_from_local_upstream_without_emitting_secret_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
