@@ -167,6 +167,28 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertNotIn(secret, json.dumps(summary, ensure_ascii=False))
         self.assertNotIn(str(dotenv), json.dumps(summary, ensure_ascii=False))
 
+    def test_hook_bridge_windows_credential_source_fail_opens_off_windows(self) -> None:
+        if sys.platform == "win32":
+            self.skipTest("Windows Credential Manager lookup needs a host credential fixture.")
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "bridge.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "provider_env_var": "DEEPSEEK_API_KEY",
+                        "source": {
+                            "kind": "windows-credential-manager",
+                            "target_name": "AIppocampus/Test",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            update = hook_provider_bridge.environment_update_from_manifest(manifest)
+
+        self.assertEqual(update, {})
+
     def test_cli_onboard_provider_key_apply_is_redacted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
