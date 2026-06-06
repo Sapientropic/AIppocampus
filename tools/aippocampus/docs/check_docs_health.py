@@ -16,7 +16,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from architecture_index_guard import ARCHITECTURE_INDEX_ROLES, architecture_index_issues
+import architecture_index_guard
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
@@ -24,6 +24,9 @@ from product_profile_guard import (
 )
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
+
+ARCHITECTURE_INDEX_ROLES = architecture_index_guard.ARCHITECTURE_INDEX_ROLES
+architecture_index_issues = architecture_index_guard.architecture_index_issues
 
 MAX_SKILL_LINES = 220
 MAX_SKILL_WORDS = 2600

@@ -106,7 +106,7 @@ def topology_anchor_report(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             ),
             "bridge_reopen_helpful_count": sum(
                 1
-                for row, node in zip(row_list, nodes)
+                for row, node in zip(row_list, nodes, strict=True)
                 if bool(row.get("observed_reopen_helpful")) and node["protected_by_topology"]
             ),
             "noisy_hub_suppression_count": sum(

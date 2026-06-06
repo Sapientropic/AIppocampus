@@ -22,12 +22,11 @@ from aippocampus_runtime.config.registry import (  # noqa: E402
 from aippocampus_runtime.contracts import (  # noqa: E402
     PUBLIC_CONTRACT_SUBPACKAGES,
     PUBLIC_RUNTIME_ENVELOPE_FIELDS,
-    PUBLIC_RUNTIME_SURFACE_CLASSES,
     PUBLIC_RUNTIME_STATUSES,
+    PUBLIC_RUNTIME_SURFACE_CLASSES,
     RUNTIME_FAILURE_FAMILIES,
     public_envelope,
 )
-
 
 ENV_PATTERN = re.compile(r"\bAIPPOCAMPUS_[A-Z0-9_]+\b")
 
