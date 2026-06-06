@@ -89,7 +89,13 @@ def message_feature_row(
     message_timestamp = message.get("timestamp")
     active_timestamp = message_timestamp or last_active_at or source_updated_at or source_created_at
     sha1 = str(message.get("sha1") or "")
-    source_ref = f"message_sha1:{sha1[:16]}" if sha1 else f"message_id:{message_id}"
+    # Repeated short turns can legitimately share a text hash, so keep the
+    # hash as a navigation cue but include the SQLite row id for a stable handle.
+    source_ref = (
+        f"message_sha1:{sha1[:16]}#message_id:{message_id}"
+        if sha1
+        else f"message_id:{message_id}"
+    )
     metadata = {
         "feature_version": 1,
         "source_projection": "deterministic_message_features",
@@ -145,7 +151,7 @@ def make_sqlite(
             "CREATE TABLE messages ("
             "id INTEGER PRIMARY KEY, line INTEGER, timestamp TEXT, role TEXT, "
             "kind TEXT, phase TEXT, turn_index INTEGER, is_final INTEGER, "
-            "sha1 TEXT UNIQUE, text TEXT)"
+            "sha1 TEXT, text TEXT)"
         )
         con.executemany(
             "INSERT INTO messages "
@@ -167,6 +173,7 @@ def make_sqlite(
                 for idx, m in enumerate(messages, start=1)
             ],
         )
+        con.execute("CREATE INDEX idx_messages_sha1 ON messages(sha1)")
         con.execute(
             "CREATE TABLE message_features ("
             "message_id INTEGER PRIMARY KEY REFERENCES messages(id), "

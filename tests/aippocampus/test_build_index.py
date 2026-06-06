@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -70,6 +71,50 @@ def write_legacy_sqlite(path: Path, text: str) -> None:
 
 
 class BuildIndexTests(unittest.TestCase):
+    def test_make_sqlite_allows_duplicate_message_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_path = Path(tmp) / "source_index.sqlite"
+            first = message(sha1="same-text", text="continue")
+            second = {**message(sha1="same-text", text="continue"), "line": 2, "turn_index": 2}
+
+            build_index.make_sqlite(
+                sqlite_path,
+                [first, second],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+
+            con = sqlite3.connect(sqlite_path)
+            try:
+                self.assertEqual(
+                    con.execute(
+                        "SELECT COUNT(*) FROM messages WHERE sha1 = ?",
+                        ("same-text",),
+                    ).fetchone()[0],
+                    2,
+                )
+                source_refs = [
+                    row[0]
+                    for row in con.execute(
+                        "SELECT source_ref FROM message_features ORDER BY message_id"
+                    ).fetchall()
+                ]
+                self.assertEqual(
+                    source_refs,
+                    [
+                        "message_sha1:same-text#message_id:1",
+                        "message_sha1:same-text#message_id:2",
+                    ],
+                )
+                indexes = {
+                    row[1]
+                    for row in con.execute("PRAGMA index_list(messages)").fetchall()
+                }
+                self.assertIn("idx_messages_sha1", indexes)
+            finally:
+                con.close()
+
     def test_rebuild_succeeds_while_reader_holds_existing_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             sqlite_path = Path(tmp) / "source_index.sqlite"
@@ -354,7 +399,7 @@ class BuildIndexTests(unittest.TestCase):
                 observed_pins.append(json.loads(pins[0].read_text(encoding="utf-8")))
                 return []
 
-            with unittest.mock.patch.object(
+            with mock.patch.object(
                 search_rollout,
                 "search_hybrid_index",
                 side_effect=fake_search,

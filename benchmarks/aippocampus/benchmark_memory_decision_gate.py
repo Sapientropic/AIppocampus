@@ -1597,6 +1597,13 @@ def grade_case(case: GateCase, result: dict[str, Any], *, semantic_gate_called: 
     actual = normalize_actual_decision(result.get("decision"))
     expected_actual = EXPECTED_TO_ACTUAL[case.expected]
     evidence = result.get("evidence") or []
+    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
+    fresh_packet = (
+        ambient.get("fresh_thread_packet") if isinstance(ambient.get("fresh_thread_packet"), dict) else {}
+    )
+    reopen_plan = (
+        fresh_packet.get("reopen_plan") if isinstance(fresh_packet.get("reopen_plan"), dict) else {}
+    )
     evidence_source_match = None
     unexpected_evidence_source_count = 0
     if case.expected_evidence_thread_key:
@@ -1623,6 +1630,14 @@ def grade_case(case: GateCase, result: dict[str, Any], *, semantic_gate_called: 
         "working_memory_count": len(result.get("working_memory") or []),
         "semantic_gate_called": semantic_gate_called,
         "semantic_gate_available": bool((result.get("semantic_gate") or {}).get("available")),
+        "fresh_thread_support_level": fresh_packet.get("support_level"),
+        "fresh_thread_action_grammar": fresh_packet.get("action_grammar"),
+        "source_required_reopen_plan_ready": bool(
+            fresh_packet.get("support_level") == "source_required"
+            and fresh_packet.get("action_grammar") == "reopenable_route"
+            and reopen_plan.get("status") == "ready"
+        ),
+        "source_reopen_manual_query_expected": reopen_plan.get("manual_query_invention_expected"),
         "over_escalation": case.expected == "should_scent" and actual == "evidence",
         "evidence_false_positive": case.expected != "should_evidence" and actual == "evidence",
     }

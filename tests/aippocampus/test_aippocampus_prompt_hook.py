@@ -2958,6 +2958,12 @@ class AmbientRecallHookTests(unittest.TestCase):
 
         self.assertEqual(result["decision"], "scent")
         self.assertFalse(result["evidence"])
+        self.assertTrue(result["semantic_source_reopen_route"])
+        packet = result["ambient_recall"]["fresh_thread_packet"]
+        self.assertEqual(packet["support_level"], "source_required")
+        self.assertEqual(packet["action_grammar"], "reopenable_route")
+        self.assertEqual(packet["reopen_plan"]["status"], "ready")
+        self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
 
     def test_exact_wording_topic_continuation_stays_scent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:

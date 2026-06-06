@@ -168,6 +168,38 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
         self.assertNotIn("raw summary", json.dumps(packet, ensure_ascii=False))
 
+    def test_semantic_evidence_candidate_gets_thread_level_reopen_plan(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "semantic_source_reopen_route": True,
+                "candidates": [
+                    {
+                        "thread_key": "session:semantic-route",
+                        "title": "Semantic route source thread",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(packet["support_level"], "source_required")
+        self.assertEqual(packet["trust_level"], "source_required")
+        self.assertEqual(packet["action_grammar"], "reopenable_route")
+        self.assertEqual(packet["advisory_action"], "source_reopen")
+        self.assertEqual(packet["candidate_refs"], [{"thread_key": "session:semantic-route"}])
+        self.assertEqual(packet["reopenable_ref_count"], 1)
+        self.assertEqual(packet["reopen_plan"]["status"], "ready")
+        self.assertEqual(
+            packet["reopen_plan"]["recommended_tool"],
+            "reopen_registry_thread_source_index",
+        )
+        self.assertEqual(
+            packet["reopen_plan"]["arguments"],
+            {"thread_key": "session:semantic-route"},
+        )
+        self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
+
     def test_suppressed_packet_tells_agent_to_ignore(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(
             {
