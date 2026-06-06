@@ -106,6 +106,59 @@ class JourneyTrackingTests(unittest.TestCase):
         self.assertEqual(updated.status, "traveling")
         self.assertIn("new boundary", updated.current_frontier)
 
+    def test_texture_signal_enriches_waypoint_labels_and_frontier(self) -> None:
+        item = self.make_journey()
+
+        updated = journey.append_waypoint(
+            item,
+            {
+                "moment": "A later continuation hit the same uncertain route boundary.",
+                "thread_id": "session:journey-texture",
+                "timestamp": "2026-06-02T00:00:00Z",
+                "source_refs": [
+                    {"thread_key": "session:journey-texture", "message_id": "msg-texture"}
+                ],
+                "texture_signals": [
+                    {
+                        "kind": "aippocampus_source_texture",
+                        "texture_id": "tex_journey_frontier",
+                        "signal_kind": "uncertainty_or_frontier_signal",
+                        "signal_detail": "deferred_frontier",
+                        "signal_labels": [
+                            "visible_frontier",
+                            r"E:\private\journey.txt",
+                            "Bearer SECRET_TEXTURE_TOKEN",
+                        ],
+                        "truth_boundary": "texture_signal_not_source_fact",
+                        "source_refs": [
+                            {
+                                "thread_key": "session:journey-texture",
+                                "message_id": "msg-texture",
+                            }
+                        ],
+                        "event_refs": [
+                            {
+                                "event_id": "evt-texture",
+                                "status": "failed",
+                                "stderr": "raw stderr should not survive",
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+        payload = journey.journey_to_dict(updated)
+        latest = payload["waypoints"][-1]
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertIn("texture-backed open frontier", updated.current_frontier)
+        self.assertIn("texture:uncertainty_or_frontier_signal", latest["labels"])
+        self.assertEqual(latest["source_texture_consumption"]["selected_count"], 1)
+        self.assertEqual(latest["texture_signals"][0]["truth_boundary"], "texture_signal_not_source_fact")
+        self.assertNotIn("raw stderr", encoded)
+        self.assertNotIn("SECRET_TEXTURE_TOKEN", encoded)
+        self.assertNotIn(r"E:\private\journey.txt", encoded)
+
     def test_feedback_actions_confirm_correct_merge_abandon_and_revive(self) -> None:
         item = self.make_journey()
         confirmed = journey.apply_feedback(

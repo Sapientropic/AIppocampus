@@ -19,6 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.source.texture_consumption import (
+    select_texture_signals,
+    texture_signal_summary,
+)
 
 SCHEMA_VERSION = 1
 PACK_KIND = "aippocampus_dream_input_pack"
@@ -62,6 +66,7 @@ class DreamSeed:
     themes: tuple[str, ...] = ()
     concepts: tuple[str, ...] = ()
     negative_contexts: tuple[str, ...] = ()
+    texture_signals: tuple[dict[str, Any], ...] = ()
 
 
 def stable_digest(*parts: object, prefix: str, length: int = 16) -> str:
@@ -508,6 +513,36 @@ def agency_or_coding_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     )
 
 
+def texture_seed_from_signal(signal: Mapping[str, Any]) -> DreamSeed | None:
+    refs = normalize_source_refs(signal.get("source_refs"))
+    if not refs:
+        return None
+    signal_kind = compact_text(str(signal.get("signal_kind") or "source_texture"), 80)
+    signal_detail = compact_text(str(signal.get("signal_detail") or ""), 120)
+    labels = unique_preserve([signal_kind, signal_detail, *string_values(signal.get("signal_labels"))], limit=10)
+    suggested_use = compact_text(str(signal.get("suggested_use") or "dream_seed"), 80)
+    return DreamSeed(
+        seed_id=str(signal.get("texture_id") or row_id(signal, prefix="texture")),
+        seed_kind="source_texture",
+        title=compact_text(f"Source texture: {signal_kind}", 160),
+        summary=compact_text(
+            f"{signal_kind} ({signal_detail or suggested_use}) routes Dream work; reopen source before claims.",
+            360,
+        ),
+        source_refs=refs,
+        source_finding_ids=(str(signal.get("texture_id") or row_id(signal, prefix="texture")),),
+        questions=(),
+        frontiers=tuple(labels if signal_kind in {"uncertainty_or_frontier_signal", "abandoned_direction"} else ()),
+        themes=tuple(labels),
+        concepts=tuple(labels),
+        negative_contexts=(
+            "source texture is routing material, not evidence for user facts",
+            "reopen clean source before any factual claim",
+        ),
+        texture_signals=(dict(signal),),
+    )
+
+
 def seed_from_row(row: Mapping[str, Any]) -> DreamSeed | None:
     return (
         question_link_seed(row)
@@ -543,11 +578,22 @@ def audit_status(refs: list[dict[str, Any]], *, min_source_threads: int) -> dict
     }
 
 
-def eligible_dream_functions(*, refs: list[dict[str, Any]], min_source_threads: int) -> list[str]:
+def eligible_dream_functions(
+    *,
+    refs: list[dict[str, Any]],
+    min_source_threads: int,
+    texture_signals: Iterable[Mapping[str, Any]] = (),
+) -> list[str]:
     thread_count = len({source_ref_thread(ref) for ref in refs if source_ref_thread(ref)})
     if not refs or thread_count < min_source_threads:
         return []
-    return ["compensatory", "amplification"]
+    functions = ["compensatory", "amplification"]
+    signal_kinds = {str(signal.get("signal_kind") or "") for signal in texture_signals}
+    if signal_kinds & {"uncertainty_or_frontier_signal", "process_route_note"}:
+        functions.append("prospective")
+    if signal_kinds & {"abandoned_direction", "rejected_route", "affect_marker", "self_correction_signal"}:
+        functions.append("active_imagination")
+    return unique_preserve(functions, limit=4)
 
 
 def source_contributions(seeds: Iterable[DreamSeed]) -> list[dict[str, Any]]:
@@ -563,11 +609,18 @@ def source_contributions(seeds: Iterable[DreamSeed]) -> list[dict[str, Any]]:
                 "source_ref_count": len(seed.source_refs),
                 "source_thread_count": thread_count,
                 "source_ref_fingerprint_count": len(seed.source_ref_fingerprints),
-                "readiness_role": "clean_anchor" if seed.source_refs else "weak_context",
+                "readiness_role": (
+                    "texture_route_anchor"
+                    if seed.seed_kind == "source_texture"
+                    else "clean_anchor"
+                    if seed.source_refs
+                    else "weak_context"
+                ),
                 "question_count": len(seed.questions),
                 "frontier_count": len(seed.frontiers),
                 "theme_count": len(seed.themes),
                 "concept_count": len(seed.concepts),
+                "texture_signal_count": len(seed.texture_signals),
             }
         )
     return contributions
@@ -580,11 +633,25 @@ def build_dream_input_pack(
     min_source_threads: int = 2,
     max_source_refs: int = 24,
 ) -> dict[str, Any]:
-    seeds = [seed for seed in (seed_from_row(row) for row in rows) if seed is not None]
+    row_list = list(rows)
+    texture_selection = select_texture_signals(row_list, consumer="dream", limit=12)
+    texture_signals = [
+        signal for signal in texture_selection.get("signals") or [] if isinstance(signal, Mapping)
+    ]
+    seeds = [seed for seed in (seed_from_row(row) for row in row_list) if seed is not None]
+    seeds.extend(
+        seed
+        for seed in (texture_seed_from_signal(signal) for signal in texture_signals)
+        if seed is not None
+    )
     clean_seeds = [seed for seed in seeds if seed.source_refs]
     refs = merge_refs(clean_seeds, limit=max_source_refs)
     audit = audit_status(refs, min_source_threads=min_source_threads)
-    functions = eligible_dream_functions(refs=refs, min_source_threads=min_source_threads)
+    functions = eligible_dream_functions(
+        refs=refs,
+        min_source_threads=min_source_threads,
+        texture_signals=texture_signals,
+    )
     weak_handles = unique_preserve(
         [handle for seed in seeds for handle in seed.source_ref_fingerprints],
         limit=32,
@@ -612,6 +679,11 @@ def build_dream_input_pack(
         max_chars=160,
     )
     contributions = source_contributions(seeds)
+    texture_summary = texture_signal_summary(
+        texture_signals,
+        consumer="dream",
+        suppression_reasons=(texture_selection.get("diagnostics") or {}).get("suppression_reasons") or {},
+    )
     pack_seed = {
         "objective": compact_text(objective, 240),
         "source_seed_ids": seed_ids,
@@ -619,6 +691,7 @@ def build_dream_input_pack(
         "source_contributions": contributions,
         "source_refs": refs,
         "weak_source_handles": weak_handles,
+        "texture_signals": texture_signals,
         "questions": questions,
         "frontiers": frontiers,
         "themes": themes,
@@ -644,6 +717,8 @@ def build_dream_input_pack(
         "source_ref_audit": audit,
         "source_ref_fingerprints": weak_handles,
         "weak_source_handle_count": len(weak_handles),
+        "texture_signals": texture_signals,
+        "source_texture_consumption": texture_summary,
         "questions": questions,
         "frontiers": frontiers,
         "themes": themes,

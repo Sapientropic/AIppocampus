@@ -136,6 +136,34 @@ def correction_row() -> dict[str, object]:
     }
 
 
+def texture_row(
+    signal_kind: str,
+    *,
+    texture_id: str,
+    detail: str,
+    thread_key: str,
+) -> dict[str, object]:
+    return {
+        "kind": "aippocampus_source_texture",
+        "texture_id": texture_id,
+        "signal_kind": signal_kind,
+        "signal_detail": detail,
+        "signal_labels": [detail, r"E:\private\tool.txt", "Bearer SECRET_TEXTURE_TOKEN"],
+        "truth_boundary": "texture_signal_not_source_fact",
+        "output_authority": "interpretation_input_only",
+        "navigation_only": True,
+        "source_refs": [source_ref(thread_key, f"msg-{texture_id}", 120)],
+        "event_refs": [
+            {
+                "event_id": f"event-{texture_id}",
+                "status": "failed",
+                "command_class": "test",
+                "stdout": "raw stdout should never be copied",
+            }
+        ],
+    }
+
+
 def reflection_feedback_row() -> dict[str, object]:
     return {
         "kind": "aippocampus_reflection_adjustment",
@@ -221,6 +249,45 @@ class DreamInputPackTests(unittest.TestCase):
             all(item["readiness_role"] == "clean_anchor" for item in pack["source_contributions"])
         )
         self.assertGreaterEqual(pack["source_ref_audit"]["source_thread_count"], 6)
+
+    def test_source_texture_changes_eligible_dream_functions_without_payload_leakage(self) -> None:
+        base_rows = [question_link_row(), journey_row()]
+        clean_pack = input_pack.build_dream_input_pack(base_rows)
+        textured_pack = input_pack.build_dream_input_pack(
+            [
+                *base_rows,
+                texture_row(
+                    "uncertainty_or_frontier_signal",
+                    texture_id="tex_frontier",
+                    detail="deferred_frontier",
+                    thread_key="session:tex-frontier",
+                ),
+                texture_row(
+                    "abandoned_direction",
+                    texture_id="tex_abandoned",
+                    detail="visible_abandoned_direction",
+                    thread_key="session:tex-abandoned",
+                ),
+            ]
+        )
+
+        self.assertNotIn("prospective", clean_pack["eligible_dream_functions"])
+        self.assertNotIn("active_imagination", clean_pack["eligible_dream_functions"])
+        self.assertIn("prospective", textured_pack["eligible_dream_functions"])
+        self.assertIn("active_imagination", textured_pack["eligible_dream_functions"])
+        self.assertIn("source_texture", textured_pack["source_seed_kinds"])
+        self.assertEqual(textured_pack["source_texture_consumption"]["selected_count"], 2)
+        self.assertEqual(
+            textured_pack["source_texture_consumption"]["signal_kinds"][
+                "uncertainty_or_frontier_signal"
+            ],
+            1,
+        )
+        encoded = json.dumps(textured_pack, ensure_ascii=False)
+        self.assertNotIn("raw stdout", encoded)
+        self.assertNotIn("SECRET_TEXTURE_TOKEN", encoded)
+        self.assertNotIn(r"E:\private\tool.txt", encoded)
+        self.assertIn("texture_signal_not_source_fact", encoded)
 
     def test_pack_rejects_single_thread_clean_refs(self) -> None:
         row = {

@@ -126,6 +126,46 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(payload["dream_working_memory_rows"], [])
         self.assertTrue(payload["no_write"])
 
+    def test_worker_payload_includes_sanitized_texture_signals(self) -> None:
+        pack = {
+            **ready_pack(),
+            "texture_signals": [
+                {
+                    "kind": "aippocampus_texture_signal",
+                    "texture_id": "tex_worker",
+                    "signal_kind": "tool_failure_texture",
+                    "signal_detail": "verification_failure",
+                    "signal_labels": [
+                        "tool_failure",
+                        r"E:\private\tool.txt",
+                        "Bearer SECRET_TEXTURE_TOKEN",
+                    ],
+                    "suggested_use": "compensatory_dream_seed",
+                    "texture_boundary": "texture_signal_not_source_fact",
+                    "truth_boundary": "texture_signal_not_source_fact",
+                    "source_refs": [source_ref("session:tex", "msg-texture", 88)],
+                    "event_refs": [
+                        {"event_id": "event-tex", "status": "failed", "stdout": "raw stdout"}
+                    ],
+                }
+            ],
+            "source_texture_consumption": {
+                "consumer": "dream",
+                "selected_count": 1,
+                "signal_kinds": {"tool_failure_texture": 1},
+            },
+        }
+
+        messages = dream_worker.build_worker_messages(pack, dream_function="compensatory")
+        encoded = messages[1]["content"]
+
+        self.assertIn("texture_signals", encoded)
+        self.assertIn("tool_failure_texture", encoded)
+        self.assertIn("texture_signal_not_source_fact", encoded)
+        self.assertNotIn("raw stdout", encoded)
+        self.assertNotIn("SECRET_TEXTURE_TOKEN", encoded)
+        self.assertNotIn(r"E:\private\tool.txt", encoded)
+
     def test_model_worker_requires_llm_activation_cues_before_accepting_candidate(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {

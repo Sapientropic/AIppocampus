@@ -151,6 +151,62 @@ class CorrectionReconsolidationTests(unittest.TestCase):
         self.assertNotIn(FAKE_TEST_BEARER_TOKEN, encoded)
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
 
+    def test_texture_evidence_enriches_outcome_reconstruction_without_raw_payloads(self) -> None:
+        activation = corr.build_activation_event(
+            event_id="act_texture",
+            thread_id="session:correction-test",
+            workspace="AIppocampus",
+            topic_epoch="epoch-1",
+            correction_surface="The rejected route should stay visible as a correction boundary.",
+            source_refs=[source_ref(30)],
+            target_type="route",
+            provisional_importance="active_task",
+        )
+        outcome = corr.build_outcome_event(
+            event_id="out_texture",
+            activation_event_id="act_texture",
+            thread_id="session:correction-test",
+            workspace="AIppocampus",
+            topic_epoch="epoch-1",
+            outcome_summary="The later outcome still needs adjudication.",
+            source_refs=[source_ref(31)],
+            adoption_signal="unclear",
+            texture_evidence=[
+                {
+                    "kind": "aippocampus_source_texture",
+                    "texture_id": "tex_tool_failure",
+                    "signal_kind": "tool_failure_texture",
+                    "signal_detail": "verification_failure",
+                    "signal_labels": [
+                        "tool_failure",
+                        fake_test_windows_path("texture.txt"),
+                        f"Bearer {FAKE_TEST_BEARER_TOKEN}",
+                    ],
+                    "truth_boundary": "texture_signal_not_source_fact",
+                    "source_refs": [source_ref(32)],
+                    "event_refs": [
+                        {
+                            "event_id": "evt-texture",
+                            "status": "failed",
+                            "command_class": "test",
+                            "stdout": "raw stdout should not be stored",
+                        }
+                    ],
+                }
+            ],
+        )
+        candidate = corr.build_adjudication_candidate(activation, outcome)
+        encoded = json.dumps({"outcome": outcome, "candidate": candidate}, ensure_ascii=False)
+
+        self.assertEqual(outcome["source_texture_consumption"]["selected_count"], 1)
+        self.assertEqual(candidate["adjudication_status"], "uncertain")
+        self.assertEqual(candidate["evidence"]["texture_evidence_count"], 1)
+        self.assertEqual(candidate["evidence"]["texture_signal_kinds"], ["tool_failure_texture"])
+        self.assertIn("msg-32", {ref.get("message_id") for ref in candidate["source_refs"]})
+        self.assertNotIn("raw stdout", encoded)
+        self.assertNotIn(FAKE_TEST_BEARER_TOKEN, encoded)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
+
     def test_append_events_is_append_only(self) -> None:
         activation = activation_for("valid_adopted")
         outcome = outcome_for("valid_adopted")

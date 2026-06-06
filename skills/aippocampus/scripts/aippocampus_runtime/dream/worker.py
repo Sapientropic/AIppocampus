@@ -32,6 +32,10 @@ from aippocampus_runtime.model.client import (
     cache_metrics_from_response,
     chat_json,
 )
+from aippocampus_runtime.source.texture_consumption import (
+    select_texture_signals,
+    texture_signal_summary,
+)
 
 SCHEMA_VERSION = 1
 WORKER_KIND = "aippocampus_dream_worker_run"
@@ -190,9 +194,25 @@ def source_refs_by_id(pack: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def safe_texture_payload(pack: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    selection = select_texture_signals(pack.get("texture_signals") or [], consumer="dream", limit=12)
+    signals = [
+        dict(signal)
+        for signal in selection.get("signals") or []
+        if isinstance(signal, Mapping)
+    ]
+    summary = texture_signal_summary(
+        signals,
+        consumer="dream",
+        suppression_reasons=(selection.get("diagnostics") or {}).get("suppression_reasons") or {},
+    )
+    return signals, summary
+
+
 def safe_pack_payload(pack: Mapping[str, Any]) -> dict[str, Any]:
     audit_value = pack.get("source_ref_audit")
     audit: Mapping[str, Any] = audit_value if isinstance(audit_value, Mapping) else {}
+    texture_signals, texture_summary = safe_texture_payload(pack)
     payload = {
         "pack_id": pack.get("pack_id"),
         "pack_kind": pack.get("pack_kind"),
@@ -207,6 +227,8 @@ def safe_pack_payload(pack: Mapping[str, Any]) -> dict[str, Any]:
         "source_seed_ids": pack.get("source_seed_ids") or [],
         "source_seed_kinds": pack.get("source_seed_kinds") or [],
         "source_contributions": pack.get("source_contributions") or [],
+        "texture_signals": texture_signals,
+        "source_texture_consumption": texture_summary,
         "source_ref_audit": {
             "status": audit.get("status"),
             "source_ref_count": audit.get("source_ref_count"),

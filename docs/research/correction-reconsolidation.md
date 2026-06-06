@@ -176,12 +176,19 @@ candidate hypotheses; they are not formal memory.
 - linked `activation_event_id`
 - model final claim or closeout source ref
 - changed-file/test/doc/tool evidence when available
+- sanitized `texture_evidence` for source-texture rows such as tool failure or
+  rejected-route/process-route signals
 - whether the agent appears to have adopted, ignored, or contradicted the
   correction
 - any explicit user confirmation or follow-up correction
 
 These rows are raw continuity evidence. They should not be inserted directly
 into formal memory.
+
+Texture evidence is an outcome reconstruction hint. It may add safe source/event
+refs, signal kinds, and counts to an adjudication candidate, but it must not
+store raw command output or upgrade an `uncertain` correction into `valid_*`
+without explicit adjudication hints or reopened source-backed evidence.
 
 ## Semantic Adjudication
 

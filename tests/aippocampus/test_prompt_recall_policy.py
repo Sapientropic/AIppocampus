@@ -10,6 +10,7 @@ SCRIPTS = ROOT / "skills" / "aippocampus" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.recall import prompt_context_render as render  # noqa: E402
 from aippocampus_runtime.recall import prompt_recall_ambiguity as ambiguity  # noqa: E402
 from aippocampus_runtime.recall import prompt_recall_core as core  # noqa: E402
 from aippocampus_runtime.recall import prompt_recall_evidence as evidence  # noqa: E402
@@ -116,6 +117,37 @@ class PromptRecallPolicyTests(unittest.TestCase):
             evidence._evidence_hit_quality(process_noise),
             900.0 - PROMPT_EVIDENCE_POLICY.process_noise_penalty,
         )
+
+    def test_source_texture_stays_quiet_in_default_foreground_rendering(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 4.0,
+            "confidence": "low",
+            "query_terms": ["texture-only-probe"],
+            "candidates": [{"title": "Clean-source route", "anchors": ["source-backed anchor"]}],
+            "texture_signals": [
+                {
+                    "kind": "aippocampus_texture_signal",
+                    "texture_id": "tex_prompt",
+                    "signal_kind": "tool_failure_texture",
+                    "signal_detail": "texture_only_probe",
+                    "signal_labels": ["texture_only_probe"],
+                    "truth_boundary": "texture_signal_not_source_fact",
+                    "source_refs": [{"thread_key": "session:tex", "message_id": "msg-tex"}],
+                    "event_refs": [{"event_id": "evt-tex", "status": "failed"}],
+                }
+            ],
+        }
+
+        context = render.context_for_hook(result)
+        public = render.public_hook_debug_payload(result)
+        encoded = f"{context}\n{public}"
+
+        self.assertIn("Clean-source route", context or "")
+        self.assertNotIn("texture_only_probe", encoded)
+        self.assertNotIn("msg-tex", encoded)
+        self.assertNotIn("evt-tex", encoded)
+        self.assertNotIn("texture_signal_not_source_fact", encoded)
 
 
 if __name__ == "__main__":

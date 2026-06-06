@@ -272,6 +272,8 @@ navigation artifacts:
 - `aippocampus_ambient_residue` rows from `ambient_thread_cache.py`
 - `concept_edge` rows from subconscious concept extraction
 - source-backed `theme_candidate` rows from warm/ambient recall scouts
+- projected `source-texture` signals from
+  `aippocampus_runtime.source.texture_consumption`
 - correction activation/outcome/adjudication rows from
   `correction_reconsolidation.py`
 - reflection feedback/adjustment rows from `aippocampus_runtime.reflection.space`
@@ -284,10 +286,13 @@ Theme candidates with only fingerprints follow the same weak-context rule.
 Weak handles can enrich a pack, but they cannot make a clean source pack by
 themselves. Each seed is also summarized in `source_contributions` so later
 workers can explain which inputs supplied clean anchors and which supplied weak
-context. The ready pack may advertise
-`eligible_dream_functions=["compensatory", "amplification"]`; this only means
-the source substrate is fit for those background workers, not that amplification
-output quality has been proven.
+context. Source texture is a routing seed, not clean source: frontier texture
+can open `prospective`, and abandoned/self-correction/affect texture can open
+`active_imagination`, but the worker still receives only sanitized signal refs
+and must reopen source before claims. The ready pack may advertise
+`eligible_dream_functions=["compensatory", "amplification"]` plus texture-gated
+functions; this only means the source substrate is fit for those background
+workers, not that output quality has been proven.
 
 The pack stays out of foreground hooks and formal memory:
 

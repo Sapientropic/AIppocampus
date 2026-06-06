@@ -26,6 +26,11 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.texture_consumption import (
+    select_texture_signals,
+    texture_signal_source_refs,
+    texture_signal_summary,
+)
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-correction-reconsolidation-v1"
@@ -329,6 +334,7 @@ def build_outcome_event(
     changed_files: Sequence[Any] | None = None,
     verification_evidence: Sequence[Any] | None = None,
     tool_evidence: Sequence[Any] | None = None,
+    texture_evidence: Sequence[Mapping[str, Any]] | None = None,
     follow_up_source_refs: Sequence[Mapping[str, Any]] | None = None,
     adjudication_hint: str | None = None,
     superseded_by_activation_event_id: str | None = None,
@@ -346,6 +352,17 @@ def build_outcome_event(
     final_refs = sanitize_source_refs(final_claim_source_refs or [], policies=policies)
     follow_up_refs = sanitize_source_refs(follow_up_source_refs or [], policies=policies)
     summary = _sanitize_text(outcome_summary, max_chars=520, policies=policies)
+    texture_selection = select_texture_signals(texture_evidence or [], consumer="correction", limit=12)
+    texture_signals = [
+        dict(signal)
+        for signal in texture_selection.get("signals") or []
+        if isinstance(signal, Mapping)
+    ]
+    texture_summary = texture_signal_summary(
+        texture_signals,
+        consumer="correction",
+        suppression_reasons=(texture_selection.get("diagnostics") or {}).get("suppression_reasons") or {},
+    )
     thread = _sanitize_text(thread_id, max_chars=140, policies=policies)
     epoch = _sanitize_text(topic_epoch, max_chars=100, policies=policies)
     activation_id = _sanitize_text(activation_event_id, max_chars=120, policies=policies)
@@ -380,6 +397,8 @@ def build_outcome_event(
             policies=policies,
             default_kind="tool_result",
         ),
+        "texture_evidence": texture_signals,
+        "source_texture_consumption": texture_summary,
         "follow_up_source_refs": follow_up_refs,
         "status": "staging",
         "source": "deterministic_correction_reconsolidation",
@@ -480,6 +499,7 @@ def build_adjudication_candidate(
         outcome_refs,
         outcome.get("final_claim_source_refs") or [] if outcome else [],
         outcome.get("follow_up_source_refs") or [] if outcome else [],
+        texture_signal_source_refs(outcome.get("texture_evidence") or []) if outcome else [],
     )
     activation_id = str(activation.get("event_id") or "")
     outcome_id = str(outcome.get("event_id") or "") if outcome else ""
@@ -523,6 +543,17 @@ def build_adjudication_candidate(
             if outcome
             else 0,
             "tool_evidence_count": len(outcome.get("tool_evidence") or []) if outcome else 0,
+            "texture_evidence_count": len(outcome.get("texture_evidence") or []) if outcome else 0,
+            "texture_signal_kinds": unique_preserve(
+                [
+                    str(item.get("signal_kind") or "")
+                    for item in outcome.get("texture_evidence") or []
+                    if isinstance(item, Mapping)
+                ],
+                limit=8,
+            )
+            if outcome
+            else [],
         },
         "artifact_boundary": {
             "detached_adjudication": True,
