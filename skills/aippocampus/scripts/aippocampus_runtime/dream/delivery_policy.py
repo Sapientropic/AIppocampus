@@ -11,6 +11,8 @@ import argparse
 import os
 from typing import Any, Mapping
 
+from aippocampus_runtime.dream.delivery_eligibility import classify_dream_delivery_task
+
 
 def add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dream-shadow-ab", action="store_true")
@@ -72,6 +74,7 @@ def prepare_dream_delivery(
     args: argparse.Namespace,
 ) -> dict[str, Any]:
     mode = requested_dream_delivery_mode(args)
+    task = classify_dream_delivery_task(prompt)
     if mode == "off":
         return {
             "mode": mode,
@@ -79,6 +82,18 @@ def prepare_dream_delivery(
             "allow_dream": False,
             "dream_hypothesis_limit": 0,
             "reason": "delivery_disabled",
+            "prefilter_reason": "user_disabled",
+            "task_mode": task["task_mode"],
+        }
+    if not task["eligible"]:
+        return {
+            "mode": mode,
+            "event": None,
+            "allow_dream": False,
+            "dream_hypothesis_limit": 0,
+            "reason": task["reason"],
+            "prefilter_reason": task["reason"],
+            "task_mode": task["task_mode"],
         }
 
     from aippocampus_runtime.dream.live_shadow_ab import (  # noqa: PLC0415
@@ -95,10 +110,26 @@ def prepare_dream_delivery(
     )
     event = record_prompt_shadow_from_hook_args(prompt=prompt, hook_input=hook_input, args=args)
     allow_dream = mode == DELIVERY_DELIVERED and event.get("delivered_arm") == "dream"
+    prefilter_reason = _prefilter_reason_from_event(event, allow_dream=allow_dream)
     return {
         "mode": mode,
         "event": event,
         "allow_dream": allow_dream,
         "dream_hypothesis_limit": 1 if allow_dream else 0,
         "reason": str(event.get("delivery_decision") or mode),
+        "prefilter_reason": prefilter_reason,
+        "task_mode": task["task_mode"],
     }
+
+
+def _prefilter_reason_from_event(event: Mapping[str, Any], *, allow_dream: bool) -> str:
+    if allow_dream:
+        return "eligible_task_mode"
+    block_reasons = {str(reason) for reason in event.get("delivery_block_reasons") or []}
+    if "dream_miss" in block_reasons:
+        return "eligible_but_no_candidate"
+    if "recall_reminder_prompt" in block_reasons:
+        return "recall_reminder_prompt"
+    if "baseline_match" in block_reasons:
+        return "baseline_match"
+    return "budget_zero"

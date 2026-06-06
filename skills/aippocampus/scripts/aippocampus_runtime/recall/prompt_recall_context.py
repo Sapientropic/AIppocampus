@@ -83,6 +83,7 @@ class RecallDecisionContext:
     working_memory_matches: list[dict[str, Any]]
     ambient_policy_events: list[dict[str, Any]]
     ambient_policy_diagnostics: dict[str, Any]
+    dream_delivery_prefilter: dict[str, Any]
     pre_explicit: list[str]
     pre_associative: list[str]
     pre_important: list[str]
@@ -182,6 +183,9 @@ def build_recall_decision_context(
     semantic_cues_path: Path | str | None = None,
     ambient_policy_path: Path | str | None = None,
     use_cognitive_map: bool = True,
+    dream_hypothesis_limit: int | None = None,
+    dream_delivery_prefilter_reason: str | None = None,
+    dream_delivery_task_mode: str | None = None,
 ) -> RecallDecisionContext:
     prompt = str(prompt or "").strip()
     (
@@ -223,6 +227,12 @@ def build_recall_decision_context(
         "frontier_not_requested": 0,
         "policy_event_count": 0,
     }
+    dream_delivery_prefilter: dict[str, Any] = _dream_delivery_prefilter_diagnostics(
+        [],
+        dream_hypothesis_limit=dream_hypothesis_limit,
+        reason=dream_delivery_prefilter_reason,
+        task_mode=dream_delivery_task_mode,
+    )
     pre_explicit: list[str] = []
     pre_associative: list[str] = []
     pre_important: list[str] = []
@@ -244,7 +254,12 @@ def build_recall_decision_context(
         working_memory_all_rows = (
             load_working_memory(working_memory_file) if working_memory_file.exists() else []
         )
-        working_memory_rows = working_memory_all_rows
+        working_memory_rows, dream_delivery_prefilter = _prefilter_dream_rows_for_delivery(
+            working_memory_all_rows,
+            dream_hypothesis_limit=dream_hypothesis_limit,
+            reason=dream_delivery_prefilter_reason,
+            task_mode=dream_delivery_task_mode,
+        )
         ambient_policy_events = load_policy_events(ambient_policy_file)
         if working_memory_rows and ambient_policy_events:
             policy_result = apply_working_memory_policy(
@@ -331,8 +346,58 @@ def build_recall_decision_context(
         working_memory_matches=working_memory_matches,
         ambient_policy_events=ambient_policy_events,
         ambient_policy_diagnostics=ambient_policy_diagnostics,
+        dream_delivery_prefilter=dream_delivery_prefilter,
         pre_explicit=pre_explicit,
         pre_associative=pre_associative,
         pre_important=pre_important,
         semantic_trigger_matches=semantic_trigger_matches,
     )
+
+
+def _effective_dream_limit(limit: int | None) -> int | None:
+    if limit is None:
+        return None
+    return max(0, int(limit))
+
+
+def _dream_delivery_prefilter_diagnostics(
+    rows: list[dict[str, Any]],
+    *,
+    dream_hypothesis_limit: int | None,
+    reason: str | None,
+    task_mode: str | None,
+) -> dict[str, Any]:
+    effective_limit = _effective_dream_limit(dream_hypothesis_limit)
+    dream_count = sum(1 for row in rows if row.get("candidate_type") == "dream_hypothesis")
+    prefiltered = dream_count if effective_limit == 0 else 0
+    return {
+        "reason": reason
+        or ("budget_zero" if effective_limit == 0 else "eligible_task_mode"),
+        "task_mode": task_mode or "unknown",
+        "effective_limit": effective_limit,
+        "candidate_dream_count": dream_count,
+        "prefiltered_dream_count": prefiltered,
+    }
+
+
+def _prefilter_dream_rows_for_delivery(
+    rows: list[dict[str, Any]],
+    *,
+    dream_hypothesis_limit: int | None,
+    reason: str | None,
+    task_mode: str | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    diagnostics = _dream_delivery_prefilter_diagnostics(
+        rows,
+        dream_hypothesis_limit=dream_hypothesis_limit,
+        reason=reason,
+        task_mode=task_mode,
+    )
+    # Keep this gate narrow: a zero limit means the delivery policy already
+    # knows foreground Dream is disabled, so matching dream rows would only
+    # spend hook budget. Positive limits still let ranking see all dream rows.
+    if diagnostics["effective_limit"] != 0:
+        return rows, diagnostics
+    return [
+        row for row in rows if row.get("candidate_type") != "dream_hypothesis"
+    ], diagnostics

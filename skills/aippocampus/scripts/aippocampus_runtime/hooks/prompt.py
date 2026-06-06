@@ -185,7 +185,11 @@ def main(argv: list[str] | None = None) -> int:
             warm_max_workers=args.warm_max_workers,
             warm_timeout=args.warm_timeout,
             warm_quorum=args.warm_quorum,
-            dream_hypothesis_limit=dream_delivery["dream_hypothesis_limit"],
+            dream_hypothesis_limit=dream_delivery.get("dream_hypothesis_limit", 0),
+            dream_delivery_prefilter_reason=str(
+                dream_delivery.get("prefilter_reason") or "budget_zero"
+            ),
+            dream_delivery_task_mode=str(dream_delivery.get("task_mode") or "unknown"),
         )
         result = runtime["apply_dream_delivery_boundary"](
             result,

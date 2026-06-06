@@ -199,11 +199,20 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-SCENT_THRESHOLD_DEBUG_REASONS = {
-    "same_thread_decision_continuation",
-    "semantic_reuse_hit",
-}
+SCENT_THRESHOLD_DEBUG_REASONS = {"same_thread_decision_continuation", "semantic_reuse_hit"}
 SCENT_THRESHOLD_RISK_BOUNDARIES = {"normal", "current_repo_fact", "privacy_sensitive"}
+DREAM_DELIVERY_PREFILTER_REASONS = {
+    "baseline_match",
+    "budget_zero",
+    "eligible_but_no_candidate",
+    "eligible_task_mode",
+    "ineligible_task_mode",
+    "recall_reminder_prompt",
+    "user_disabled",
+}
+DREAM_DELIVERY_TASK_MODES = {
+    "ambient_candidate", "coding_current_repo", "explicit_dream", "life_wide_reflection", "unknown"
+}
 
 
 def _debug_float(value: Any) -> float | None:
@@ -236,6 +245,24 @@ def scent_threshold_debug_summary(policy: Any) -> dict[str, Any] | None:
     }
 
 
+def dream_delivery_prefilter_debug_summary(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    reason = str(raw.get("reason") or "")
+    if reason not in DREAM_DELIVERY_PREFILTER_REASONS:
+        reason = "budget_zero"
+    task_mode = str(raw.get("task_mode") or "")
+    if task_mode not in DREAM_DELIVERY_TASK_MODES:
+        task_mode = "unknown"
+    return {
+        "reason": reason,
+        "task_mode": task_mode,
+        "effective_limit": raw.get("effective_limit"),
+        "candidate_dream_count": int(raw.get("candidate_dream_count") or 0),
+        "prefiltered_dream_count": int(raw.get("prefiltered_dream_count") or 0),
+    }
+
+
 def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     """Project hook debug JSON without leaking prompt-derived credential text.
 
@@ -258,6 +285,9 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
         "working_memory": [],
         "working_memory_count": len(result.get("working_memory") or []),
         "ambient_recall": ambient_debug_summary(result),
+        "dream_delivery_prefilter": dream_delivery_prefilter_debug_summary(
+            result.get("dream_delivery_prefilter")
+        ),
         "scent_threshold_policy": scent_threshold_debug_summary(
             result.get("scent_threshold_policy")
         ),
