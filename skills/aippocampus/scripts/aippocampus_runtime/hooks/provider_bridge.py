@@ -115,7 +115,7 @@ def _windows_credential_manager_secret(source: dict[str, Any]) -> str | None:
         ]
 
     credential_ptr = ctypes.POINTER(CREDENTIALW)()
-    advapi32 = ctypes.windll.advapi32  # type: ignore[attr-defined]
+    advapi32 = ctypes.windll.advapi32
     read = advapi32.CredReadW
     read.argtypes = [
         ctypes.c_wchar_p,
@@ -141,7 +141,8 @@ def _windows_credential_manager_secret(source: dict[str, Any]) -> str | None:
 
 def environment_update_from_manifest(manifest_path: str | Path) -> dict[str, str]:
     manifest = _load_json(Path(manifest_path))
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    raw_source = manifest.get("source")
+    source: dict[str, Any] = raw_source if isinstance(raw_source, dict) else {}
     env_var = str(manifest.get("provider_env_var") or source.get("env_var") or "").strip()
     if not env_var:
         return {}
