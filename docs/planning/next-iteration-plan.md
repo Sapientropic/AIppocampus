@@ -44,6 +44,7 @@ reason that it should no longer be an open executable item.
 |---|---|---|
 | Public entry and docs IA | #801, #803 | Close together when the public site leads with the fastest useful setup path, magic moments are first-class, `docs/architecture/` has a role index, docs health guards that index, and responsive site QA passes. |
 | Architecture lifecycle policy | #810, #811 | Close with small current-contract docs plus deterministic no-write readouts: edge capture vs async consolidation state flow, and topology anchor weights as lifecycle/navigation pressure rather than source truth. |
+| Runtime contract and config registry | #817 | Close with a thin shared runtime-envelope/failure taxonomy contract, a code-level `AIPPOCAMPUS_*` config registry, no-write `doctor config` report, and deterministic drift/redaction tests. Do not rewrite internal helpers around a generic schema. |
 | Core route actionability | #201, #786, #791 | Keep open until high-confidence local/semantic routes become actionable reopen routes or bounded evidence without forcing the foreground agent into broad manual grep. #791 should not close while #786 still lacks live route-quality proof. |
 | Fresh-thread and question continuity | #248, #281 | Keep open as product-quality owners. Existing fixtures are substrate; closing needs source-ref rejoin, fallback, answer-quality, and fresh-thread usefulness evidence. |
 | Cognitive runtime evidence | #163, #310, #311, #575, #576, #663, #752 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, live correction capture, load calibration, Observatory coverage, Episode/Arc source reopen, and no-key host-agent fallback. |
@@ -52,7 +53,7 @@ reason that it should no longer be an open executable item.
 
 Current open queue at this pass: #163, #201, #248, #281, #309, #310, #311,
 #313, #378, #574, #575, #576, #663, #742, #752, #784, #786, #791, #801, #803,
-#810, and #811.
+#810, #811, and #817.
 
 ## Current Baseline To Preserve
 

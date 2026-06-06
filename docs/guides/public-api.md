@@ -513,11 +513,13 @@ summary, label, or model-organized output when they need evidence.
 ## Environment Variables
 
 Public environment variables use the `AIPPOCAMPUS_*` prefix. This section is
-the canonical public matrix for environment configuration; install docs may
-show examples and the safe [`.env.example`](../../.env.example) template may
-point here, but they should not mirror this whole list. "Public" means
-documented and stable enough to configure. It does not mean the variable value
-is safe to publish.
+the human-facing public matrix for environment configuration; the code-level
+registry and no-write report live in
+`aippocampus_runtime.config.registry` and `aippocampus doctor config --json`.
+Install docs may show examples and the safe [`.env.example`](../../.env.example)
+template may point here, but they should not mirror this whole list. "Public"
+means documented and stable enough to configure. It does not mean the variable
+value is safe to publish.
 
 Legacy env/path names that remain accepted for migration are classified in the
 [legacy alias inventory](../architecture/legacy-alias-inventory.md). New setup
@@ -555,6 +557,11 @@ Common installs should stay small:
   encryption settings when raw/private data is included.
 - External-model and background-job variables are optional. Do not set them just
   to use clean-source search, MCP, import/export, or local sync.
+- `aippocampus doctor config --json` reports registered `AIPPOCAMPUS_*`
+  configuration names, owners, stability buckets, defaults, sensitivity, and
+  presence-only effective state. It is no-write and never prints values, local
+  paths, provider endpoints, account IDs, buckets, raw prompts, source snippets,
+  registry rows, rollout paths, or hook/debug payloads.
 - `aippocampus doctor provider --json` checks whether the selected model
   route's API-key environment variable is visible to the current process and a
   child process. This is a presence-only check: it does not read or validate the

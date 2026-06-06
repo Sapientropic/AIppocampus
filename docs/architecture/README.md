@@ -39,6 +39,7 @@ Roles:
 | [project-planning-automation.md](project-planning-automation.md) | implementation map | GitHub issue triage and roadmap drift audit boundary. |
 | [provider-entrypoint-inventory.md](provider-entrypoint-inventory.md) | inventory | Provider-aware and Codex-specific entrypoint ownership. |
 | [question-tracking-subconscious.md](question-tracking-subconscious.md) | active design | Question extraction, tracking, and theme-emergence design. |
+| [runtime-envelope-and-failure-taxonomy.md](runtime-envelope-and-failure-taxonomy.md) | current contract | Public runtime envelope, failure families, and config registry boundary. |
 | [runtime-script-map.md](runtime-script-map.md) | implementation map | High-risk runtime entrypoints, recall flow, callers, and tests. |
 | [rust-deterministic-core.md](rust-deterministic-core.md) | active design | Future Rust deterministic-core migration gate. |
 | [schema-field-profiles.md](schema-field-profiles.md) | current contract | Field-budget and projection discipline for runtime surfaces. |

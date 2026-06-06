@@ -304,6 +304,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("", file=target)
     print("Advanced/operator diagnostics:", file=target)
     print("  doctor provider     Check live-provider env visibility", file=target)
+    print("  doctor config       Report registered env config without values", file=target)
     print("  doctor spend        Report local model spend/yield diagnostics", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
