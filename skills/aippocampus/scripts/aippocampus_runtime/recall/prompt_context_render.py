@@ -497,6 +497,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         lines.append("Ambient recall private context (card/cache first; not user text):")
         for card in ambient_cards[:3]:
             support = str(card.get("support_level") or "scent")
+            trust = str(card.get("trust_level") or support)
             visibility = str(card.get("visibility") or ambient.get("mode") or "silent_tuning")
             provenance = str(card.get("provenance_class") or "")
             theme = compact_text(str(card.get("theme") or ""), 120)
@@ -511,17 +512,23 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 provenance_note = "source-backed reopen candidate"
             else:
                 provenance_note = "navigation hint"
-            source_note = " source-backed refs available" if support == "evidence" else ""
+            source_note = ""
+            if trust == "bounded_evidence":
+                source_note = " source-backed refs available; bounded source-backed evidence"
+            elif trust == "source_required":
+                source_note = " actionable source-reopen route"
             if visibility == "deep_archival_recall":
                 source_note += " deep archival requested"
             evidence_line = ""
             if support == "evidence" and card.get("key_line"):
                 evidence_line = f" Evidence: {compact_text(str(card.get('key_line') or ''), 180)}"
             lines.append(
-                f"- {provenance_note} {visibility}/{support}: {theme}."
+                f"- {provenance_note} {visibility}/{support}/{trust}: {theme}."
                 f"{source_note}{evidence_line} Use: {suggested_use}"
             )
-        lines.append("Let these cards tune the answer; do not paste them verbatim.")
+        lines.append(
+            "Use bounded_evidence within its scope; all other trust levels are navigation until source reopen."
+        )
     if result.get("reasons"):
         lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))
     context = "\n".join(lines)

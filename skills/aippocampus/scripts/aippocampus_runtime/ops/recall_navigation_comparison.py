@@ -20,6 +20,7 @@ from typing import Any
 
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
+from aippocampus_runtime.recall.authority import trust_taxonomy
 
 COMPARISON_KIND = "aippocampus_recall_navigation_comparison"
 COMPARISON_SCHEMA_VERSION = 3
@@ -466,6 +467,12 @@ def _issue_readouts(
         if bounded_evidence_measured
         else 0
     )
+    foreground_manual_query_count = (
+        int(foreground_reopen.get("manual_query_invention_count") or 0)
+        if foreground_reopen_measured
+        else None
+    )
+    taxonomy_documented = len(trust_taxonomy()) >= 6
     funnel = _as_dict(candidate_funnel)
     funnel_measured = bool(funnel.get("measured"))
     funnel_metrics = _as_dict(funnel.get("metrics"))
@@ -495,9 +502,7 @@ def _issue_readouts(
                 foreground_reopen.get("source_reopen_follow_through")
             ),
             "foreground_manual_query_invention_count": (
-                int(foreground_reopen.get("manual_query_invention_count") or 0)
-                if foreground_reopen_measured
-                else None
+                foreground_manual_query_count
             ),
             "foreground_bounded_evidence_context_measured": bounded_evidence_measured,
             "foreground_bounded_evidence_card_count": bounded_evidence_card_count,
@@ -553,13 +558,28 @@ def _issue_readouts(
                 foreground_reopen.get("fresh_thread_packet_contains_raw_source_text")
             ),
             "foreground_manual_query_invention_count": (
-                int(foreground_reopen.get("manual_query_invention_count") or 0)
-                if foreground_reopen_measured
-                else None
+                foreground_manual_query_count
             ),
             "live_source_reopen_quality": "not_measured",
             "closeout_eligible": False,
-        }
+        },
+        "github_786": {
+            "trust_taxonomy_documented": taxonomy_documented,
+            "bounded_evidence_changes_answer_without_manual_query": bool(
+                bounded_evidence_measured
+                and foreground_reopen.get("source_reopen_follow_through")
+                and foreground_manual_query_count == 0
+            ),
+            "semantic_only_scent_not_factual_evidence": bool(
+                foreground_measured
+                and _as_dict(foreground.get("first_turn")).get("evidence_count") == 0
+            ),
+            "bounded_evidence_card_count": bounded_evidence_card_count,
+            "foreground_manual_query_invention_count": foreground_manual_query_count,
+            "live_semantic_reopen_quality": "not_measured",
+            "same_thread_issue_comment_route_quality": "not_measured",
+            "closeout_eligible": False,
+        },
     }
 
 
@@ -649,6 +669,12 @@ def build_recall_navigation_comparison(
                 "Fixture-backed #707 check that source reopen can produce a separate "
                 "bounded source-backed context/card while the fresh-thread packet remains "
                 "ids-only navigation."
+            ),
+            "graded_packet_trust_taxonomy": (
+                "Fixture-backed #786 readout over the shared trust taxonomy: semantic "
+                "hints stay navigation, source_required routes reopen source without "
+                "manual query invention, and bounded evidence may be used within its "
+                "declared scope."
             ),
             "vague_cue_candidate_funnel": (
                 "Fixture-backed #201/#281/#309/#248 readout over a source-joined "

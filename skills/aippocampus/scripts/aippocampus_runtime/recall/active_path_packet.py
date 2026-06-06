@@ -16,6 +16,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.question.source_refs import source_ref_key
+from aippocampus_runtime.recall.authority import trust_taxonomy, with_trust_fields
 
 PACKET_KIND = "aippocampus_active_path_packet"
 PACKET_SCHEMA_VERSION = 1
@@ -135,6 +136,8 @@ def _source_boundary(
         "source_reopen_required_before_claim": source_reopen_required,
         "unsafe_to_use_as_current_fact": unsafe_current,
         "bounded_evidence_only": route == "evidence",
+        "bounded_evidence_usable_within_scope": route == "evidence",
+        "clean_source_reopened": route == "evidence",
     }
 
 
@@ -155,7 +158,7 @@ def _path(
     clean_route = _bucket(route, ROUTES, "scent")
     clean_currentness = _currentness(currentness)
     clean_title = _safe_text(title, 120) or "Active path"
-    return {
+    path = {
         "path_id": _stable_id(origin, clean_route, clean_title, source_refs),
         "title": clean_title,
         "why_lit": _safe_text(why_lit, 220)
@@ -174,6 +177,9 @@ def _path(
         "reason_codes": list(dict.fromkeys(reason_codes)),
         "origin": origin,
     }
+    if clean_route == "evidence":
+        path["support_level"] = "evidence"
+    return with_trust_fields(path)
 
 
 def _ambient_paths(ambient_recall: Mapping[str, Any] | None) -> list[dict[str, Any]]:
@@ -512,6 +518,7 @@ def build_active_path_packet(
             "scent_is_not_evidence": True,
             "stale_or_suppressed_paths_are_boundaries": True,
         },
+        "trust_taxonomy": trust_taxonomy(),
         "cannot_claim": [
             "active_path_packet_proves_memory_fact",
             "source_reopen_required_before_claim",
