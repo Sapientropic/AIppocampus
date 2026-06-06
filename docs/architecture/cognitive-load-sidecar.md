@@ -1,0 +1,115 @@
+# Cognitive-Load Sidecar
+
+Status: first deterministic sidecar implemented for #575. Live hook capture,
+private real-history calibration, and host-timing quality remain future work.
+
+## Purpose
+
+The cognitive-load sidecar gives recall routing a bounded way to notice source
+regions that cost the collaboration real effort: corrections, failed commands,
+red tests, rollbacks, rejected-route retries, source conflicts, explicit
+pitfall markers, repeated source reopen, human intervention, downstream turns
+affected, or high-risk actions that had to be repaired.
+
+This is routing metadata, not memory truth. It can ask a later agent to reopen
+source earlier or use a more cautious warning tone. It must not claim the user
+felt stressed, infer personality, or make a stale source current again.
+
+## Owner
+
+`aippocampus_runtime/recall/cognitive_load_sidecar.py` owns the reusable
+deterministic sidecar:
+
+- `build_cognitive_load_sidecar(events, now=...)` consumes observable behavior
+  events and emits source-ref-keyed load hints.
+- `apply_cognitive_load_boosts(candidates, sidecar)` blends a candidate's
+  semantic score, source authority, and bounded load boost into an explainable
+  ranking row.
+
+The E2E50 scaffold can still accept optional `cognitive_load` rows through
+`aippocampus_runtime/coding/sequence_packets.py`, but that path is a benchmark
+read model. It is not the recall-sidecar owner and should not grow live recall
+ranking behavior.
+
+## Source Keys
+
+Sidecar entries are keyed by `sha256:` hashes of stable source-ref fields such
+as `source_id`, `thread_id`, `turn_id`, `message_id`, and source line. Raw local
+paths, raw notes, prompt snippets, and stress narratives are deliberately
+excluded from the public projection.
+
+If an upstream behavior event already carries a stable `source_ref_hash`, the
+sidecar preserves it. This lets a future private pipeline pre-hash source refs
+without exposing path-like material to reports.
+
+## Weighting Contract
+
+Each known signal has a small additive weight. The final load boost is capped at
+`0.16`, decays with a 30-day half-life from the latest event timestamp, and is
+zeroed when the source is superseded or explicitly invalidated.
+
+Candidate ranking remains separable:
+
+- `semantic_score`: text or retrieval relevance.
+- `source_authority`: currentness / source trust, with a small authority boost.
+- `cognitive_load_boost`: caution-routing metadata only.
+
+The load boost is blocked when candidate `source_status` is `refuted`,
+`superseded`, `untrusted`, or `forbidden`, or when `source_authority` is below
+`0.5`. This protects the source-as-world rule: load can increase caution, but
+it cannot override source truth.
+
+## Projection Boundary
+
+Model-visible and public-safe rows must use the boundary string
+`routing_caution_not_affect_or_personality_truth`.
+
+Allowed projection:
+
+- source-ref hash key
+- load bucket
+- reason codes
+- bounded score breakdown
+- source-reopen or refresh advisory
+- count/rate metrics
+
+Forbidden projection:
+
+- local absolute paths
+- raw stress summaries
+- raw private snippets
+- emotion or personality claims
+- claims that load weight proves semantic relevance or source truth
+
+The sidecar always carries `cannot_claim` entries for these forbidden
+interpretations so reports do not silently promote "hard-won" into "true."
+
+## Metrics
+
+The first deterministic payload tracks the metric names required by #575:
+
+- `high_load_source_reopen_rate`
+- `pitfall_repetition_rate_after_high_load_signal`
+- `load_weight_false_positive_rate`
+- `load_weight_decay_coverage`
+- `caution_hint_useful_rate`
+- `overpersonalization_from_load_signal_count`
+
+Rates that need reviewer or outcome data return `null` until corresponding
+event fields are present. That unknown state is intentional; it avoids claiming
+calibration before private reviewed cases exist.
+
+## Current Verification
+
+`tests/aippocampus/test_cognitive_load_sidecar.py` covers the first slice:
+
+- a high-load debugging source can outrank a stronger ordinary keyword match
+  without hiding the score components;
+- weak, untrusted, or superseded sources receive no load boost and ask for
+  source refresh instead;
+- public projection omits raw paths, raw notes, and emotion/personality claims;
+- caps, decay, invalidation, source authority, and metric slots remain visible.
+
+Future work should only wire this into a live hook or broader host policy after
+reviewed real-history calibration shows that the boost reduces repeated
+pitfalls without raising over-personalization or annoyance risk.
