@@ -362,6 +362,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/vault/utils.py",
     "skills/aippocampus/scripts/aippocampus_runtime/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/activation_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/config.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/prewarm_planner.py",

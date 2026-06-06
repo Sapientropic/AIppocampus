@@ -322,6 +322,12 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   silent because of stale freshness, expired TTL, privacy blocks, missing
   source refs, or low ROI. These reports are no-write and navigation-only; do
   not feed them directly into foreground answers or treat them as evidence.
+  `aippocampus_runtime.warm_ambient.activation_policy` may consume those
+  public-safe counters plus spend-doctor warning codes to explain
+  `cold_sleep`/`cheap_sense`/bounded `exploratory_wake`/diagnostic
+  `full_sweep` choices. That activation report is also no-write and
+  navigation-only; it preserves Scout output as candidate routing until source
+  is reopened.
 - `aippocampus_runtime.dream.real_history_eval` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,
