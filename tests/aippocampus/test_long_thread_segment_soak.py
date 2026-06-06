@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = ROOT / "skills" / "aippocampus" / "scripts"
+SMOKE = ROOT / "tools" / "aippocampus" / "smoke"
+for _path in (SCRIPTS, SMOKE):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+import smoke_long_thread_segment_soak as soak  # noqa: E402
+
+
+class LongThreadSegmentSoakTests(unittest.TestCase):
+    def test_soak_builds_real_segments_and_reports_quality_without_private_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = soak.run_long_thread_segment_soak(
+                workspace=Path(tmp) / "workspace",
+                turn_count=96,
+                segment_max_messages=32,
+                query_limit=4,
+                fanout_budget=2,
+                include_monolithic=True,
+            )
+
+        self.assertTrue(payload["ok"], json.dumps(payload, indent=2))
+        self.assertEqual(payload["kind"], "aippocampus_long_thread_segment_soak")
+        self.assertEqual(payload["status"], "passed")
+        self.assertGreaterEqual(payload["capacity_metrics"]["segment_count"], 4)
+        self.assertGreater(payload["capacity_metrics"]["rollout_bytes"], 0)
+        self.assertGreater(payload["timing_ms"]["segment_build_wall"], 0)
+        self.assertIn("full_fanout", payload["query_modes"])
+        self.assertIn("budgeted_fanout", payload["query_modes"])
+        self.assertIn("monolithic", payload["query_modes"])
+        self.assertEqual(payload["quality_metrics"]["query_count"], 4)
+        self.assertEqual(payload["quality_metrics"]["full_fanout_hit_rate"], 1.0)
+        self.assertEqual(payload["quality_metrics"]["monolithic_hit_rate"], 1.0)
+        self.assertGreaterEqual(payload["quality_metrics"]["budgeted_fanout_hit_rate"], 0.25)
+        self.assertGreaterEqual(payload["quality_metrics"]["full_vs_monolithic_agreement_rate"], 0.75)
+        self.assertTrue(payload["quality_metrics"]["quality_gate_ok"])
+        self.assertFalse(payload["privacy_boundary"]["reads_private_registry"])
+        self.assertFalse(payload["privacy_boundary"]["emits_private_text"])
+        self.assertFalse(payload["privacy_boundary"]["emits_absolute_paths"])
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn(str(Path(tmp)), encoded)
+        self.assertIn("public_safe_generated_rollout", payload["data_boundary"]["input_shape"])
+        self.assertIn("real_file_fixture_not_gb_claim", payload["cannot_claim"])
+
+    def test_budgeted_fanout_exposes_skipped_segments_instead_of_claiming_full_quality(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = soak.run_long_thread_segment_soak(
+                workspace=Path(tmp) / "workspace",
+                turn_count=120,
+                segment_max_messages=30,
+                query_limit=5,
+                fanout_budget=1,
+                include_monolithic=False,
+            )
+
+        self.assertTrue(payload["ok"], json.dumps(payload, indent=2))
+        self.assertGreater(payload["capacity_metrics"]["segment_count"], 4)
+        budgeted = payload["query_modes"]["budgeted_fanout"]
+        skipped = [row["fanout"]["skipped_segment_count"] for row in budgeted["queries"]]
+        self.assertTrue(any(count > 0 for count in skipped))
+        self.assertLess(
+            payload["quality_metrics"]["budgeted_fanout_hit_rate"],
+            payload["quality_metrics"]["full_fanout_hit_rate"],
+        )
+        self.assertIn("budgeted_fanout_is_not_full_quality_claim", payload["cannot_claim"])
+
+
+if __name__ == "__main__":
+    unittest.main()

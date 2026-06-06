@@ -102,6 +102,15 @@ Completed foundation:
   can finish inside a bounded overshoot instead of being cut purely by
   byte/message thresholds. Search payloads also identify adjacent segment ids
   for cross-boundary partial turns while keeping text stitching as later work.
+- `tools/aippocampus/smoke/smoke_long_thread_segment_soak.py` is the #376
+  executable long-lived single-thread soak. It generates public-safe
+  rollout-shaped data, builds real segment SQLite shards, runs full-fanout and
+  budgeted-fanout segment search, optionally compares a monolithic index, and
+  reports capacity, timing, retrieval hit-rate, fanout, and simulated-vs-real
+  file boundaries. This is the first real-file contract smoke for the product
+  premise that long threads can be a success path, not just an optimization
+  burden; it remains a small generated fixture and not a GB/private-history
+  performance claim.
 - `aippocampus storage gc --dry-run` starts the storage governance bridge: it
   reports protected source bytes, reclaimable rebuildable/review bytes, and
   candidate safety preconditions from capacity data plus existing retention JSON
@@ -210,7 +219,9 @@ Completed foundation:
      `search_segments.py`; report-only capacity planning and actual SQLite
      query planning are intentionally tracked as separate layers. Synthetic
      multi-GB threshold smoke is implemented in
-     `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
+     `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; the
+     long-lived single-thread segment build/search soak is implemented in
+     `tools/aippocampus/smoke/smoke_long_thread_segment_soak.py`; segmented
      index rebuilds now have a single-writer lease and last-known-good recovery.
      Main indexes now have generation pointer publishing for Windows
      locked-file fallback while preserving `source_index.sqlite`
@@ -243,7 +254,13 @@ Completed foundation:
    report for the current default weights. Continue tuning with real recall
    failures, but keep before/after evidence in
    [`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`](../evidence/benchmarks/segmented-merge-policy-fixture-report.md).
-5. Add optional compressed raw archive and retention policy. Done:
+5. Add long-lived single-thread build/search soak. Done:
+   `tools/aippocampus/smoke/smoke_long_thread_segment_soak.py` writes a
+   public-safe generated rollout, builds real segment shards, compares
+   full-fanout, budgeted-fanout, and monolithic search where requested, and
+   reports capacity/timing/retrieval-quality metrics with explicit
+   simulated-vs-real-file boundaries.
+6. Add optional compressed raw archive and retention policy. Done:
    `cold_archive.py` plus `retention_report.py`; cleanup remains manual and
    evidence-first. A first governance bridge now lives behind `aippocampus
    storage gc`: dry-run covers capacity plus existing retention evidence, and
@@ -251,7 +268,7 @@ Completed foundation:
    SQLite cache with deterministic source/archive, lease, active-thread,
    pointer, and manifest checks. Segment/Graphify/cache-family expansion remains
    later work.
-6. Add vector index via Protocol interface. Done for the first local slice:
+7. Add vector index via Protocol interface. Done for the first local slice:
    `aippocampus_runtime.question.vector_index` defines `QuestionVectorIndex`
    and `LocalQuestionVectorIndex` with add / search / remove / write / load
    behavior. It is intentionally package-owner only, non-default, and
@@ -269,7 +286,7 @@ Completed foundation:
    `smoke_question_tracking_scale.py` smoke reports quadratic pair-scan growth,
    sidecar coverage, adoption decision, and privacy boundaries without reading
    private registry content.
-7. Add source chunking, delta sync, and registry query planning. Done for the
+8. Add source chunking, delta sync, and registry query planning. Done for the
    first executable slice: local-folder/object-storage sync now moves
    clean-source JSONL through content-addressed chunks, capacity reports now
    include report-only planned fanout under a budget, and `search_segments.py`
