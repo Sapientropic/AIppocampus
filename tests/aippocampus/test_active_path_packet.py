@@ -11,9 +11,151 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall.active_path_packet import build_active_path_packet  # noqa: E402
+from aippocampus_runtime.recall.route_notes import extract_route_note_candidates  # noqa: E402
 
 
 class ActivePathPacketTests(unittest.TestCase):
+    def test_route_notes_feed_packet_without_promoting_commentary_to_truth(self) -> None:
+        messages = [
+            {
+                "role": "user",
+                "phase": "",
+                "turn_index": 1,
+                "message_id": "msg-user-1",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 10,
+                "text": "Please continue the migration.",
+            },
+            {
+                "role": "assistant",
+                "phase": "commentary",
+                "turn_index": 1,
+                "message_id": "msg-commentary-reject",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 11,
+                "text": (
+                    "The direct shell command failed; reject that route before rerunning "
+                    "E:\\Users\\Private\\secret.txt with api_key=sk-test-secret."
+                ),
+            },
+            {
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "turn_index": 1,
+                "message_id": "msg-final-1",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 14,
+                "text": "Use the source-reopen route instead of the failed shell route.",
+            },
+            {
+                "role": "user",
+                "phase": "",
+                "turn_index": 2,
+                "message_id": "msg-user-2",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 20,
+                "text": "What remains unresolved?",
+            },
+            {
+                "role": "assistant",
+                "phase": "commentary",
+                "turn_index": 2,
+                "message_id": "msg-commentary-open",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 21,
+                "text": "Open question: whether the route note should point at tool or final evidence.",
+            },
+            {
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "turn_index": 2,
+                "message_id": "msg-final-2",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 25,
+                "text": "The remaining question is the tool/final evidence join.",
+            },
+            {
+                "role": "assistant",
+                "phase": "commentary",
+                "turn_index": 3,
+                "message_id": "msg-commentary-floating",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 31,
+                "text": "Handoff hint without adjacent evidence should not become a route note.",
+            },
+        ]
+        events = [
+            {
+                "event_id": "evt-failed-shell",
+                "turn_index": 1,
+                "event_kind": "tool_call_observed",
+                "hard_event_kind": "tool_call_failed",
+                "status": "failed",
+                "command_class": "test",
+                "command_family": "python_unittest",
+                "target_class": "focused_test_path",
+                "failure_family": "assertion_failure",
+                "source_id": "clean:route-notes",
+                "thread_key": "session:route-notes",
+                "source_line": 13,
+                "path_fingerprints": ["sha256:1234567890abcdef"],
+                "text": "raw stdout blob and E:\\Users\\Private\\secret.txt must stay private",
+            }
+        ]
+
+        notes = extract_route_note_candidates(messages, events=events)
+        packet = build_active_path_packet(route_notes=notes)
+
+        self.assertEqual(notes["kind"], "aippocampus_route_note_candidates")
+        self.assertTrue(notes["no_write"])
+        self.assertTrue(notes["contract"]["commentary_is_process_evidence_not_source_truth"])
+        self.assertEqual(notes["metrics"]["candidate_count"], 2)
+        self.assertEqual(notes["metrics"]["diagnostic_only_count"], 1)
+        self.assertGreaterEqual(notes["metrics"]["joined_tool_evidence_count"], 1)
+        self.assertEqual(
+            set(notes["taxonomy"]),
+            {
+                "intent_before_tool",
+                "decision_breadcrumb",
+                "rejected_route",
+                "open_question",
+                "handoff_hint",
+                "source_to_action_link",
+            },
+        )
+
+        note_types = {row["note_type"] for row in notes["rows"]}
+        self.assertIn("rejected_route", note_types)
+        self.assertIn("open_question", note_types)
+        for row in notes["rows"]:
+            self.assertEqual(row["output_authority"], "navigation_only")
+            self.assertTrue(row["source_reopen_required_before_claim"])
+            self.assertTrue(row["source_refs"])
+            self.assertTrue(row["joined_evidence_refs"])
+            self.assertIn("route_note", row["reason_codes"])
+
+        route_note_paths = [path for path in packet["paths"] if path["origin"] == "route_note"]
+        self.assertGreaterEqual(len(route_note_paths), 2)
+        self.assertTrue(all(path["route"] == "reopen" for path in route_note_paths))
+        self.assertTrue(all(path["source_boundary"]["source_reopen_required"] for path in route_note_paths))
+
+        serialized = json.dumps({"notes": notes, "packet": packet}, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("direct shell command", serialized)
+        self.assertNotIn("raw stdout", serialized)
+        self.assertNotIn("E:\\", serialized)
+        self.assertNotIn("Private", serialized)
+        self.assertNotIn("sk-test-secret", serialized)
+        self.assertNotIn("api_key", serialized)
+
     def test_packet_selects_compact_source_reopenable_paths(self) -> None:
         local_path = "E:" + "\\private\\launch-notes.md"
         packet = build_active_path_packet(

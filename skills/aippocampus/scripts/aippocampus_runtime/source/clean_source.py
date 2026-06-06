@@ -25,6 +25,7 @@ from aippocampus_runtime.core import (
     now_utc,
     resolve_artifact_path,
 )
+from aippocampus_runtime.recall.route_notes import extract_route_note_candidates_for_source
 from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
 from aippocampus_runtime.source.redaction_profiles import write_clean_source_redaction_profiles
 from conversation_sources import ConversationProvider, create_conversation_provider
@@ -458,6 +459,17 @@ def build_clean_source(
         item["clean_ordinal"] = ordinal
         item["source_session_id"] = meta.get("id")
 
+    route_note_report = extract_route_note_candidates_for_source(
+        messages,
+        events=clean_events,
+        source_id=source_id,
+        source_thread_key=source_thread_key,
+    )
+    clean_route_notes = list(route_note_report.get("rows") or [])
+    for ordinal, item in enumerate(clean_route_notes):
+        item["clean_ordinal"] = ordinal
+        item["source_session_id"] = meta.get("id")
+
     messages_path = out / "messages.jsonl"
     with messages_path.open("w", encoding="utf-8", newline="\n") as f:
         for item in clean_messages:
@@ -479,6 +491,11 @@ def build_clean_source(
     events_path = out / "events.jsonl"
     with events_path.open("w", encoding="utf-8", newline="\n") as f:
         for item in clean_events:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    route_notes_path = out / "route-notes.jsonl"
+    with route_notes_path.open("w", encoding="utf-8", newline="\n") as f:
+        for item in clean_route_notes:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     stat = source_path.stat()
@@ -524,10 +541,16 @@ def build_clean_source(
         "message_count": len(clean_messages),
         "turn_count": len(clean_turns),
         "event_count": len(clean_events),
+        "route_note_count": len(clean_route_notes),
+        "route_note_diagnostic_count": route_note_report.get("metrics", {}).get(
+            "diagnostic_only_count",
+            0,
+        ),
         "outputs": {
             "messages_jsonl": str(messages_path),
             "turns_jsonl": str(turns_path),
             "events_jsonl": str(events_path),
+            "route_notes_jsonl": str(route_notes_path),
             "redaction_profiles": profile_outputs,
         },
         "redaction_profiles": profile_summary,
@@ -571,6 +594,7 @@ def build_clean_source(
                 "assistant final_answer",
                 "last assistant commentary only when no final_answer exists",
                 "structured tool/test behavior events in events.jsonl",
+                "source-joined route-note candidates in route-notes.jsonl",
             ],
             "drops": [
                 "tool payload text from messages.jsonl",
@@ -581,6 +605,18 @@ def build_clean_source(
                 "routine commentary when final_answer exists",
             ],
             "rewrites_text": False,
+        },
+        "route_note_lane_policy": {
+            "status": "enabled_for_codex_and_visible_provider_messages",
+            "default_file": "route-notes.jsonl",
+            "purpose": "navigation-only process route notes for Active Path Packets",
+            "taxonomy": route_note_report.get("taxonomy", []),
+            "commentary_is_process_evidence_not_source_truth": True,
+            "raw_commentary_policy": "not_serialized",
+            "source_join_required": True,
+            "diagnostic_only_without_adjacent_evidence": True,
+            "join_keys": ["source_id", "thread_key", "turn_index", "line", "message_id", "event_id"],
+            "boundary": "route notes are bounded navigation rows joined to adjacent evidence; they do not reintroduce routine commentary into clean source and cannot support claims without source reopen.",
         },
         "event_lane_policy": {
             "status": "enabled_for_codex_rollouts",

@@ -343,6 +343,26 @@ support levels instead of adding a separate score layer. If a prompt only looks
 related through broad words such as browser/search/local/permission, the correct
 behavior is `skip`, not personalized query expansion.
 
+## Route Note Lane
+
+`route-notes.jsonl` is a generated sidecar beside clean source for Codex-style
+process commentary and action-summary material. It is not part of
+`messages.jsonl`, and it must not reintroduce routine commentary into ordinary
+clean-source search. A route note may become Active Path Packet input only when
+it is joined to adjacent source, final-answer, or structured tool/test evidence.
+
+The taxonomy is deliberately small: `intent_before_tool`,
+`decision_breadcrumb`, `rejected_route`, `open_question`, `handoff_hint`, and
+`source_to_action_link`. Rows serialize bounded reason codes, note kind,
+source/event refs, counts, and hashes. They do not serialize raw commentary,
+commands, stdout, local paths, secrets, or private transcript text. A note
+without adjacent evidence stays diagnostic-only or is ignored.
+
+Route notes are process evidence for navigation. They can explain why an agent
+should reopen a source or avoid a rejected route, but they never override user
+turns, final answers, tool output, or reopened clean source. Specific
+memory-backed claims still require source reopen.
+
 ## MCP Access Layer
 
 `aippocampus_runtime/mcp/server` is the local MCP surface for agent clients

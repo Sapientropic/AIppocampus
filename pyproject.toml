@@ -295,6 +295,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/query_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/search_decision_adapter.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/route_notes.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/rollout_search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/scoring_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py",

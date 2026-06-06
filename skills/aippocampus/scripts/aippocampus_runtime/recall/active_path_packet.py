@@ -351,7 +351,7 @@ def _route_readiness_rows(route_readiness: Any) -> list[Mapping[str, Any]]:
     return [row for row in rows if isinstance(row, Mapping)]
 
 
-def _route_readiness_paths(route_readiness: Any) -> list[dict[str, Any]]:
+def _route_readiness_paths(route_readiness: Any, *, origin: str = "route_readiness") -> list[dict[str, Any]]:
     paths: list[dict[str, Any]] = []
     for row in _route_readiness_rows(route_readiness):
         refs = _refs(row.get("source_refs"))
@@ -368,7 +368,8 @@ def _route_readiness_paths(route_readiness: Any) -> list[dict[str, Any]]:
             *(row.get("reason_codes") or []),
             *(row.get("suppression_reasons") or []),
         ]
-        reason_codes = ["route_readiness", *(str(value) for value in reason_values if value)]
+        row_origin = str(row.get("origin") or origin)
+        reason_codes = [row_origin, *(str(value) for value in reason_values if value)]
         next_action = "ignore" if route == "ignore" else _next_reopen_action(refs)
         paths.append(
             _path(
@@ -376,7 +377,8 @@ def _route_readiness_paths(route_readiness: Any) -> list[dict[str, Any]]:
                 why_lit=(
                     "Route readiness row is stale/suppressed; keep it visible only as a boundary."
                     if route == "ignore"
-                    else "Route readiness says this handle may be worth reopening, not that it is a fact."
+                    else row.get("why_lit")
+                    or "Route readiness says this handle may be worth reopening, not that it is a fact."
                 ),
                 route=route,
                 currentness=currentness,
@@ -385,7 +387,7 @@ def _route_readiness_paths(route_readiness: Any) -> list[dict[str, Any]]:
                 next_action=next_action,
                 reason_codes=reason_codes,
                 source_reopen_required=route == "reopen",
-                origin="route_readiness",
+                origin=row_origin,
                 visibility="blocked" if route == "ignore" else "foreground",
             )
         )
@@ -470,6 +472,7 @@ def build_active_path_packet(
     recall_context: Mapping[str, Any] | None = None,
     active_locks: Iterable[Mapping[str, Any]] | None = None,
     route_readiness: Any = None,
+    route_notes: Any = None,
     max_paths: int = DEFAULT_MAX_PATHS,
 ) -> dict[str, Any]:
     """Select a few existing source-backed navigation paths for the foreground.
@@ -485,6 +488,7 @@ def build_active_path_packet(
         *_recall_context_paths(recall_context),
         *_active_lock_paths(active_locks),
         *_route_readiness_paths(route_readiness),
+        *_route_readiness_paths(route_notes, origin="route_note"),
     ]
     selected = _trim_paths(candidates, max(max_paths, MIN_MAX_PATHS))
     return {
