@@ -599,9 +599,12 @@ reflection topology only when it changes the current answer. It should stay
 silent when the relevant source is already visible, the hypothesis is expired,
 or annoyance risk is high. Any strong user-facing claim must reopen source
 first; rendered previews must say "Dream hypothesis, not source fact" and keep
-uncertainty/source-reopen wording. Sensitive personal interpretations,
-relationship-continuity stories, durable profile/preference claims, and
-overconfident dream language are parked before working-memory projection.
+uncertainty/source-reopen wording. Profile-as-fact, diagnosis, hidden-state,
+trauma-like, credential/property-risk, and direct user-facing interpretations
+are parked before working-memory projection. Ordinary source-adjudicated
+preference or relationship continuity is not parked solely for those words, and
+model confidence is ranking/review/freshness input rather than a sensitivity
+blocker by itself.
 As of the #299 trust-horizon slice, accepted projected rows also carry a
 `trust_horizon` capsule plus top-level aliases for `validated_at`,
 `validated_by`, `source_fingerprint`, `review_after`, `expires_at`,

@@ -255,9 +255,28 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "allowed")
 
-    def test_sensitive_dream_hypothesis_is_parked_before_working_memory_projection(self) -> None:
+    def test_preference_relationship_and_high_confidence_are_not_sensitive_by_themselves(self) -> None:
+        continuity = adjudicated_finding(
+            title="Preference and relationship continuity",
+            summary=(
+                "A source-backed preference and relationship-context hypothesis "
+                "may help quiet route selection without becoming a profile fact."
+            ),
+            confidence=0.94,
+        )
+
+        adjudicated = wm.background_adjudicate_dream_finding(continuity)
+        rows = wm.adjudicated_dream_findings_to_working_memory([adjudicated])
+
+        self.assertEqual(adjudicated["adjudication_result"]["status"], "accepted")
+        self.assertNotIn("sensitive_use_gate", adjudicated["adjudication_result"]["failed_checks"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "allowed")
+        self.assertEqual(rows[0]["foreground_use"]["default_action"], "quiet_substrate")
+
+    def test_profile_or_secret_dream_hypothesis_is_parked_before_working_memory_projection(self) -> None:
         sensitive = adjudicated_finding(
-            title="Durable personality preference",
+            title="Durable personality diagnosis",
             summary="The user's personality means they secretly prefer this route.",
             confidence=0.72,
         )

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.subconscious.candidate_router import (
     USE_WITH_SOURCE,
     ask_policy_for,
@@ -52,30 +53,6 @@ LOW_SIGNAL_TERMS = {
     "work",
     "project",
 }
-SENSITIVE_DREAM_TERMS = {
-    "diagnosis",
-    "identity",
-    "mental health",
-    "personality",
-    "preference",
-    "prefers",
-    "profile",
-    "relationship",
-    "secretly",
-    "trauma",
-    "人格",
-    "关系",
-    "创伤",
-    "偏好",
-    "诊断",
-}
-HIGH_CONFIDENCE_DREAM_THRESHOLD = 0.88
-SENSITIVE_BOUNDARY_COPY = (
-    "not as a user-profile fact",
-    "not as user-profile fact",
-    "not a user-profile fact",
-    "do not treat this as a user-profile fact",
-)
 DEFAULT_TRUST_HORIZON_INVALIDATION_TRIGGERS = (
     "source_fingerprint_changed",
     "contradiction_visible",
@@ -234,22 +211,12 @@ def safe_float(value: Any, default: float = 0.0) -> float:
 
 
 def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:
-    text = " ".join(
-        [
-            str(finding.get("title") or ""),
-            str(finding.get("summary") or ""),
-            str(finding.get("recommendation") or ""),
-            " ".join(string_values(finding.get("counter_evidence"))),
-        ]
-    ).casefold()
-    # Dream candidates often carry negative safety copy such as "not as a
-    # user-profile fact". That phrase should protect against profile claims,
-    # not become the reason a harmless hypothesis is parked.
-    for phrase in SENSITIVE_BOUNDARY_COPY:
-        text = text.replace(phrase, " ")
-    if any(term in text for term in SENSITIVE_DREAM_TERMS):
-        return True
-    return safe_float(finding.get("confidence"), 0.0) > HIGH_CONFIDENCE_DREAM_THRESHOLD
+    return dream_text_hard_risk(
+        finding.get("title"),
+        finding.get("summary"),
+        finding.get("recommendation"),
+        finding.get("counter_evidence"),
+    )
 
 
 def project_label_from_refs(refs: Iterable[Mapping[str, Any]]) -> str | None:

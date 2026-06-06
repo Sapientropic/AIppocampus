@@ -92,6 +92,36 @@ class DreamPrecisionPolicyTests(unittest.TestCase):
         self.assertNotIn('"confidence"', encoded)
         self.assertEqual(payload["ignored_model_self_rating"]["input_model_confidence"], 0.99)
 
+    def test_retention_policy_allows_source_backed_preference_continuity(self) -> None:
+        finding = dream_finding(
+            title="Source-backed preference continuity",
+            summary=(
+                "A user preference and relationship context can be retained as "
+                "quiet route material without becoming a profile claim."
+            ),
+            confidence=0.99,
+        )
+
+        payload = policy.retention_policy_for_probe(finding, now="2026-05-30T00:00:00Z")
+
+        self.assertTrue(payload["hard_gate"]["passed"])
+        self.assertNotIn("sensitive_profile_claim_parked", payload["hard_gate"]["failures"])
+        self.assertNotEqual(payload["decision"], "park_for_review")
+        self.assertEqual(payload["ignored_model_self_rating"]["input_model_confidence"], 0.99)
+
+    def test_retention_policy_still_parks_profile_or_secret_claims(self) -> None:
+        finding = dream_finding(
+            title="Personality diagnosis",
+            summary="The user's personality secretly proves the preferred route.",
+            confidence=0.7,
+        )
+
+        payload = policy.retention_policy_for_probe(finding, now="2026-05-30T00:00:00Z")
+
+        self.assertFalse(payload["hard_gate"]["passed"])
+        self.assertIn("sensitive_profile_claim_parked", payload["hard_gate"]["failures"])
+        self.assertEqual(payload["decision"], "park_for_review")
+
     def test_structural_divergence_outranks_model_self_rating(self) -> None:
         same_voice_high_rating = [
             {

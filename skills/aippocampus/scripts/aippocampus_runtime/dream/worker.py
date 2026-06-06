@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_payload
+from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.dream.worker_contract import (
     PROMPT_ORDER,
     stable_worker_contract,
@@ -68,21 +69,6 @@ CANDIDATE_KINDS_BY_FUNCTION = {
         "bridge_concept",
         "question_not_yet_asked",
     },
-}
-
-ACTIVE_IMAGINATION_RISK_TERMS = {
-    "diagnosis",
-    "mental health",
-    "personality",
-    "preference",
-    "prefers",
-    "profile",
-    "secretly",
-    "trauma",
-    "人格",
-    "创伤",
-    "偏好",
-    "诊断",
 }
 
 ModelCall = Callable[[list[dict[str, str]], ChatClientConfig], dict[str, Any]]
@@ -329,8 +315,7 @@ def bridge_claims_from_candidate(
 
 
 def has_active_imagination_sensitive_risk(*parts: object) -> bool:
-    text = " ".join(str(part or "") for part in parts).casefold()
-    return any(term in text for term in ACTIVE_IMAGINATION_RISK_TERMS)
+    return dream_text_hard_risk(*parts)
 
 
 def finding_from_candidate(
