@@ -348,6 +348,41 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertNotEqual(first, different)
         self.assertTrue(first.startswith("epoch_"))
 
+    def test_topic_signal_accumulator_keeps_hashes_without_raw_prompt_text(self) -> None:
+        signal_path = self.root / "ambient-signal-accumulator.json"
+        raw_prompt = "候选 source refs 的中间层和过度保守这个问题"
+        terms = [raw_prompt, "AIppocampus recall"]
+
+        for _ in range(3):
+            written = cache.record_topic_signal(
+                signal_path,
+                thread_id="thread-a",
+                workspace="E:/private/workspace",
+                topic_epoch="epoch-signal",
+                terms=terms,
+                outcome="weak_signal",
+                reason_codes=["below_threshold"],
+            )
+
+        state = cache.read_topic_signal_state(
+            signal_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-signal",
+            terms=terms,
+        )
+        raw = signal_path.read_text(encoding="utf-8")
+
+        self.assertEqual(written["status"], "written")
+        self.assertEqual(state["status"], "hit")
+        self.assertEqual(state["weak_signal_count"], 3)
+        self.assertEqual(state["positive_strength"], 3.0)
+        self.assertEqual(state["negative_strength"], 0.0)
+        self.assertTrue(state["topic_fingerprint"].startswith("sig_"))
+        self.assertNotIn(raw_prompt, raw)
+        self.assertNotIn("private/workspace", raw.replace("\\", "/"))
+        self.assertNotIn("thread-a", raw)
+
     def test_optional_residue_export_writes_dream_seed_without_raw_prompt_or_workspace(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"
         residue_path = self.root / "ambient-residue.jsonl"

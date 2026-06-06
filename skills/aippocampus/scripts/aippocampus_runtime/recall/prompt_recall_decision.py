@@ -14,28 +14,21 @@ from typing import Any, Callable
 
 from aippocampus_runtime.navigation.concept_graph import expand_concepts
 from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
-from aippocampus_runtime.recall.living_cue_cache import (
-    default_living_cues_path,
-    load_living_cue_entries,
-)
 from aippocampus_runtime.recall.prompt_cues import (
     CONCEPT_EXPANSION_MAX_TERMS,
     concept_expansion_terms,
     current_checkout_live_fact_intent,
-    expand_query_terms,
     natural_evidence_intent,
     negative_evidence_intent,
     semantic_gate_can_request_evidence,
     semantic_gate_can_request_source_reopen,
     semantic_gate_can_warm_cue_cache,
-    semantic_gate_is_memory_cue,
-    semantic_gate_terms,
     source_evidence_intent,
-    working_memory_terms,
 )
 from aippocampus_runtime.recall.prompt_recall_ambient import (
     attach_ambient_recall,
     cached_cards_for_policy,
+    record_prompt_topic_signal,
 )
 from aippocampus_runtime.recall.prompt_recall_budget import (
     PROBE_MIN_REMAINING_MS,
@@ -49,12 +42,10 @@ from aippocampus_runtime.recall.prompt_recall_core import (
     candidate_summary,
     cognitive_map_terms,
     default_project_timeline_path,
-    fallback_search_candidates,
     load_project_timeline,
     merge_association_candidates,
     merge_cognitive_map_candidates,
     merge_timeline_candidates,
-    rerank_candidates_with_probe,
     score_candidates,
     should_suppress,
     sort_candidates,
@@ -64,9 +55,7 @@ from aippocampus_runtime.recall.prompt_recall_evidence import (
     strip_semantic_gate,
 )
 from aippocampus_runtime.recall.prompt_recall_hot_path import (
-    candidate_indexes_from_registry,
     merge_hot_path_candidates,
-    run_hot_path_funnel,
 )
 from aippocampus_runtime.recall.prompt_recall_projection import (
     ambiguous_evidence_request as resolve_ambiguous_evidence_request,
@@ -80,8 +69,10 @@ from aippocampus_runtime.recall.prompt_recall_projection import (
 from aippocampus_runtime.recall.prompt_recall_projection import (
     semantic_bridge_diagnostic as resolve_semantic_bridge_diagnostic,
 )
-from aippocampus_runtime.recall.prompt_recall_semantic import run_semantic_gate_for_context
-from aippocampus_runtime.recall.prompt_recall_threshold import scent_threshold_policy
+from aippocampus_runtime.recall.prompt_recall_route_context import (
+    candidate_memory_context,
+    prepare_route_context,
+)
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
 from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
@@ -98,20 +89,6 @@ def _deep_archival_requested(prompt: str) -> bool:
         "exact wording", "original wording", "verbatim", "quote", "dispute",
     )
     return any(cue in text for cue in cues)
-
-
-def _association_seed_terms(association_matches: list[dict[str, Any]]) -> list[str]:
-    association_terms: list[str] = []
-    for match in association_matches:
-        association_terms.append(str(match.get("term") or ""))
-        association_terms.extend(str(value) for value in match.get("matched_terms") or [])
-        if match.get("status") == "verified":
-            association_terms.extend(str(value) for value in match.get("related_terms") or [])
-    return association_terms
-
-
-def _semantic_trigger_seed_terms(matches: list[dict[str, Any]]) -> list[str]:
-    return semantic_trigger_terms(matches, limit=24)
 
 
 def _decision_reasons(
@@ -328,57 +305,6 @@ def _candidate_matches_for_prompt(
     return candidates, query_terms, concept_expansions
 
 
-def _should_skip_default_semantic_gate_for_hot_path(
-    *,
-    hot_path_funnel: dict[str, Any],
-    semantic_gate_mode: str | None,
-    semantic_gate_fn: Callable[..., dict[str, Any]] | None,
-    natural_evidence: list[str],
-    source_evidence: list[str],
-) -> bool:
-    """Skip only the default cold semantic path when a local route already exists."""
-
-    return (
-        hot_path_funnel.get("decision") == "scent"
-        and str(semantic_gate_mode or "").casefold() != "on"
-        and semantic_gate_fn is None
-        and not natural_evidence
-        and not source_evidence
-    )
-
-
-def _living_cue_entries_for_hot_path(
-    *,
-    registry_path: Path,
-    living_cues_path: Path | str | None,
-) -> list[dict[str, Any]]:
-    living_cues_file = (
-        Path(living_cues_path).resolve()
-        if living_cues_path
-        else default_living_cues_path(registry_path.parent)
-    )
-    return load_living_cue_entries(living_cues_file) if living_cues_file.exists() else []
-
-
-def _run_local_hot_path(
-    *,
-    prompt: str,
-    registry: dict[str, Any],
-    registry_path: Path,
-    local_seed_terms: list[str],
-    living_cues_path: Path | str | None,
-) -> dict[str, Any]:
-    return run_hot_path_funnel(
-        prompt=prompt,
-        query_terms=local_seed_terms,
-        candidate_indexes=candidate_indexes_from_registry(registry),
-        living_cue_entries=_living_cue_entries_for_hot_path(
-            registry_path=registry_path,
-            living_cues_path=living_cues_path,
-        ),
-    )
-
-
 def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     return {
@@ -560,22 +486,67 @@ def _semantic_source_reopen_route_ready(
     )
 
 
-def assess_prompt(
-    prompt: str,
+def _prompt_result(
     *,
-    cwd: Path | str,
-    registry_path: Path | str | None = None,
-    registry_dir: Path | str | None = None,
-    associations_path: Path | str | None = None,
-    cognitive_map_path: Path | str | None = None,
-    concept_graph_path: Path | str | None = None,
-    working_memory_path: Path | str | None = None,
-    semantic_triggers_path: Path | str | None = None,
-    semantic_cues_path: Path | str | None = None,
-    ambient_policy_path: Path | str | None = None,
-    semantic_cache_path: Path | str | None = None,
-    living_cues_path: Path | str | None = None,
-    semantic_gate_mode: str | None = None,
+    decision: str,
+    top_score: float,
+    working_score: float,
+    context: Any,
+    query_terms: list[str],
+    cognitive_map_matches: list[dict[str, Any]],
+    concept_expansions: list[dict[str, Any]],
+    reasons: list[str],
+    candidates: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+    search_budget: int,
+    working_memory_matches: list[dict[str, Any]],
+    semantic_result: dict[str, Any] | None,
+    semantic_gate_reuse: dict[str, Any],
+    threshold_policy: dict[str, Any],
+    topic_signal_write: dict[str, Any] | None,
+    semantic_bridge_diagnostic: str | None,
+    semantic_source_reopen_route: bool,
+    semantic_cue_cache: dict[str, Any] | None,
+    hot_path_funnel: dict[str, Any],
+    start: float,
+    deep_archival_requested: bool,
+    route_delivery_state: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "decision": decision,
+        "score": round(max(top_score, working_score), 3),
+        "confidence": "high" if decision == "evidence" else "medium" if decision == "scent" else "low",
+        **context.hook_path_fields(),
+        "query_terms": query_terms[:16],
+        "cognitive_map": cognitive_map_matches[:4],
+        "concept_expansions": concept_expansions[:8],
+        "reasons": reasons or ["no ambient recall cue"],
+        "candidates": strip_private_fields(candidates[:3]),
+        "evidence": evidence[:search_budget],
+        "working_memory": strip_for_hook(working_memory_matches[:3]),
+        "ambient_policy": context.ambient_policy_diagnostics,
+        "semantic_gate": strip_semantic_gate(semantic_result),
+        "semantic_gate_reuse": semantic_gate_reuse,
+        "scent_threshold_policy": threshold_policy,
+        "topic_signal_accumulator": topic_signal_write,
+        "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
+        "semantic_source_reopen_route": semantic_source_reopen_route,
+        "semantic_cue_cache": semantic_cue_cache,
+        "hot_path_funnel": hot_path_funnel,
+        "route_delivery_diagnostic": resolve_route_delivery_diagnostic(state=route_delivery_state),
+        "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
+        "deep_archival_requested": deep_archival_requested,
+    }
+
+
+def assess_prompt(
+    prompt: str, *, cwd: Path | str,
+    registry_path: Path | str | None = None, registry_dir: Path | str | None = None,
+    associations_path: Path | str | None = None, cognitive_map_path: Path | str | None = None,
+    concept_graph_path: Path | str | None = None, working_memory_path: Path | str | None = None,
+    semantic_triggers_path: Path | str | None = None, semantic_cues_path: Path | str | None = None,
+    ambient_policy_path: Path | str | None = None, semantic_cache_path: Path | str | None = None,
+    living_cues_path: Path | str | None = None, semantic_gate_mode: str | None = None,
     semantic_timeout: float = PROMPT_HOOK_SEMANTIC_TIMEOUT,
     use_semantic_gate: bool = True,
     semantic_gate_fn: Callable[..., dict[str, Any]] | None = None,
@@ -591,16 +562,10 @@ def assess_prompt(
 ) -> dict[str, Any]:
     start = time.perf_counter()
     context = build_recall_decision_context(
-        prompt,
-        cwd=cwd,
-        registry_path=registry_path,
-        registry_dir=registry_dir,
-        associations_path=associations_path,
-        cognitive_map_path=cognitive_map_path,
-        concept_graph_path=concept_graph_path,
-        working_memory_path=working_memory_path,
-        semantic_triggers_path=semantic_triggers_path,
-        semantic_cues_path=semantic_cues_path,
+        prompt, cwd=cwd, registry_path=registry_path, registry_dir=registry_dir,
+        associations_path=associations_path, cognitive_map_path=cognitive_map_path,
+        concept_graph_path=concept_graph_path, working_memory_path=working_memory_path,
+        semantic_triggers_path=semantic_triggers_path, semantic_cues_path=semantic_cues_path,
         ambient_policy_path=ambient_policy_path,
         use_cognitive_map=use_cognitive_map,
     )
@@ -633,43 +598,43 @@ def assess_prompt(
     source_evidence = source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
     current_checkout_live_fact = current_checkout_live_fact_intent(prompt)
-    local_seed_terms = unique_preserve(
-        (expand_query_terms(prompt) if prompt else [])
-        + cognitive_map_terms(cognitive_map_matches)
-        + _association_seed_terms(association_matches)
-        + _semantic_trigger_seed_terms(context.semantic_trigger_matches)
-        + working_memory_terms(working_memory_matches),
-        limit=36,
-    )
-    hot_path_funnel = _run_local_hot_path(
-        prompt=prompt, registry=registry, registry_path=path,
-        local_seed_terms=local_seed_terms, living_cues_path=living_cues_path,
-    )
-    effective_use_semantic_gate = use_semantic_gate
-    if _should_skip_default_semantic_gate_for_hot_path(
-        hot_path_funnel=hot_path_funnel,
+    route_context = prepare_route_context(
+        prompt=prompt,
+        context=context,
+        registry=registry,
+        registry_path=path,
+        cwd_path=cwd_path,
+        cognitive_map_matches=cognitive_map_matches,
+        cognitive_map_terms=cognitive_map_terms(cognitive_map_matches),
+        association_matches=association_matches,
+        working_memory_matches=working_memory_matches,
+        living_cues_path=living_cues_path,
+        use_semantic_gate=use_semantic_gate,
         semantic_gate_mode=semantic_gate_mode,
         semantic_gate_fn=semantic_gate_fn,
+        semantic_cache_path=semantic_cache_path,
+        semantic_timeout=semantic_timeout,
         natural_evidence=natural_evidence,
         source_evidence=source_evidence,
-    ):
-        effective_use_semantic_gate = False
-    semantic_result, semantic_gate_reuse = run_semantic_gate_for_context(
-        prompt=prompt, context=context, semantic_cache_path=semantic_cache_path,
-        semantic_gate_mode=semantic_gate_mode, semantic_timeout=semantic_timeout,
-        semantic_gate_fn=semantic_gate_fn, use_semantic_gate=effective_use_semantic_gate,
-        start=start, max_elapsed_ms=max_elapsed_ms,
+        current_checkout_live_fact=current_checkout_live_fact,
+        pre_explicit=pre_explicit,
+        ambient_cache_path=ambient_cache_path,
+        thread_id=thread_id,
+        topic_epoch=topic_epoch,
+        start=start,
+        max_elapsed_ms=max_elapsed_ms,
     )
-    threshold_policy = scent_threshold_policy(prompt=prompt, thread_id=thread_id, topic_epoch=topic_epoch, semantic_gate_reuse=semantic_gate_reuse, current_checkout_live_fact=current_checkout_live_fact)
-    seed_terms = unique_preserve(
-        (expand_query_terms(prompt) if prompt else [])
-        + cognitive_map_terms(cognitive_map_matches)
-        + _association_seed_terms(association_matches)
-        + _semantic_trigger_seed_terms(context.semantic_trigger_matches)
-        + working_memory_terms(working_memory_matches)
-        + semantic_gate_terms(semantic_result),
-        limit=36,
-    )
+    local_seed_terms = route_context["local_seed_terms"]
+    hot_path_funnel = route_context["hot_path_funnel"]
+    effective_use_semantic_gate = bool(route_context["effective_use_semantic_gate"])
+    semantic_result = route_context["semantic_result"]
+    semantic_gate_reuse = route_context["semantic_gate_reuse"]
+    topic_signal_context = route_context["topic_signal_context"]
+    signal_epoch = str(topic_signal_context.get("topic_epoch") or "")
+    threshold_policy = route_context["threshold_policy"]
+    threshold_adjustment_reasons = route_context["threshold_adjustment_reasons"]
+    threshold_memory_cue = bool(route_context["threshold_memory_cue"])
+    seed_terms = route_context["seed_terms"]
     explicit = pre_explicit
     associative = pre_associative
     important = pre_important
@@ -690,35 +655,29 @@ def assess_prompt(
         start=start,
         max_elapsed_ms=max_elapsed_ms,
     )
-    semantic_memory_cue = semantic_gate_is_memory_cue(semantic_result)
-    if not candidates and (
-        explicit or associative or natural_evidence or source_evidence or semantic_memory_cue
-    ):
-        # Metadata can miss memorable wording that only exists inside the
-        # SQLite message index. When the user explicitly asks to recover prior
-        # speech, or when the semantic gate found a high-confidence route with
-        # query aliases, try a tiny recent-thread fallback before staying
-        # silent. This keeps semantic/subconscious routing useful without
-        # expanding static cue lists.
-        candidates = fallback_search_candidates(registry, query_terms)
-    timeline_memory_cue = any(item.get("life_wide_timeline_source") for item in candidates)
-    hot_path_memory_cue = any(item.get("hot_path_source") for item in candidates)
-    positive_evidence_intent = bool((natural_evidence or source_evidence) and not negative_evidence)
-    has_memory_cue = bool(
-        explicit
-        or associative
-        or important
-        or association_matches
-        or cognitive_map_matches
-        or concept_expansions
-        or working_memory_matches
-        or semantic_memory_cue
-        or timeline_memory_cue
-        or hot_path_memory_cue
-        or positive_evidence_intent
+    memory_context = candidate_memory_context(
+        registry=registry,
+        query_terms=query_terms,
+        candidates=candidates,
+        explicit=explicit,
+        associative=associative,
+        important=important,
+        association_matches=association_matches,
+        cognitive_map_matches=cognitive_map_matches,
+        concept_expansions=concept_expansions,
+        working_memory_matches=working_memory_matches,
+        semantic_result=semantic_result,
+        natural_evidence=natural_evidence,
+        source_evidence=source_evidence,
+        negative_evidence=negative_evidence,
+        threshold_memory_cue=threshold_memory_cue,
+        start=start,
+        max_elapsed_ms=max_elapsed_ms,
     )
-    if candidates and has_memory_cue and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS):
-        candidates = rerank_candidates_with_probe(candidates, query_terms)
+    candidates = memory_context["candidates"]
+    semantic_memory_cue = bool(memory_context["semantic_memory_cue"])
+    positive_evidence_intent = bool(memory_context["positive_evidence_intent"])
+    has_memory_cue = bool(memory_context["has_memory_cue"])
     suppressed = should_suppress(
         prompt,
         explicit,
@@ -747,6 +706,8 @@ def assess_prompt(
     )
     if current_checkout_live_fact:
         reasons.append("current checkout required: read current repo first")
+    if threshold_memory_cue:
+        reasons.append("same-topic recall signal crossed routing threshold")
     ambiguous_evidence_request = resolve_ambiguous_evidence_request(
         prompt=prompt,
         candidates=candidates,
@@ -787,29 +748,49 @@ def assess_prompt(
         prompt=prompt, semantic_result=semantic_result, semantic_cues_path=semantic_cues_path,
         registry_path=path, evidence=evidence, candidates=candidates, suppressed=suppressed,
     )
-    result = {
-        "decision": decision,
-        "score": round(max(top_score, working_score), 3),
-        "confidence": "high" if decision == "evidence" else "medium" if decision == "scent" else "low",
-        **context.hook_path_fields(),
-        "query_terms": query_terms[:16],
-        "cognitive_map": cognitive_map_matches[:4],
-        "concept_expansions": concept_expansions[:8],
-        "reasons": reasons or ["no ambient recall cue"],
-        "candidates": strip_private_fields(candidates[:3]),
-        "evidence": evidence[:search_budget],
-        "working_memory": strip_for_hook(working_memory_matches[:3]),
-        "ambient_policy": context.ambient_policy_diagnostics,
-        "semantic_gate": strip_semantic_gate(semantic_result),
-        "semantic_gate_reuse": semantic_gate_reuse,
-        "scent_threshold_policy": threshold_policy,
-        "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
-        "semantic_source_reopen_route": semantic_source_reopen_route,
-        "semantic_cue_cache": semantic_cue_cache, "hot_path_funnel": hot_path_funnel,
-        "route_delivery_diagnostic": resolve_route_delivery_diagnostic(state=locals()), "elapsed_ms": round((time.perf_counter() - start) * 1000, 2), "deep_archival_requested": _deep_archival_requested(prompt),
-    }
+    topic_signal_write = record_prompt_topic_signal(
+        signal_path=topic_signal_context.get("signal_path"),
+        thread_id=thread_id,
+        workspace=str(cwd_path),
+        topic_epoch=signal_epoch,
+        terms=local_seed_terms,
+        decision=decision,
+        evidence=evidence,
+        candidates=candidates,
+        suppressed=suppressed,
+        threshold_policy=threshold_policy,
+        reasons=[*threshold_adjustment_reasons, *reasons],
+    )
+    result = _prompt_result(
+        decision=decision,
+        top_score=top_score,
+        working_score=working_score,
+        context=context,
+        query_terms=query_terms,
+        cognitive_map_matches=cognitive_map_matches,
+        concept_expansions=concept_expansions,
+        reasons=reasons,
+        candidates=candidates,
+        evidence=evidence,
+        search_budget=search_budget,
+        working_memory_matches=working_memory_matches,
+        semantic_result=semantic_result,
+        semantic_gate_reuse=semantic_gate_reuse,
+        threshold_policy=threshold_policy,
+        topic_signal_write=topic_signal_write,
+        semantic_bridge_diagnostic=semantic_bridge_diagnostic,
+        semantic_source_reopen_route=semantic_source_reopen_route,
+        semantic_cue_cache=semantic_cue_cache,
+        hot_path_funnel=hot_path_funnel,
+        start=start,
+        deep_archival_requested=_deep_archival_requested(prompt),
+        route_delivery_state=locals(),
+    )
     return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
-        ambient_cache_path=ambient_cache_path, ambient_policy_path=ambient_policy_file, topic_epoch=topic_epoch, use_thread_cache=use_thread_cache, warm_background=warm_background, warm_job_dir=warm_job_dir,
-        warm_max_workers=warm_max_workers, warm_timeout=warm_timeout, warm_quorum=warm_quorum,
+        ambient_cache_path=ambient_cache_path, ambient_policy_path=ambient_policy_file,
+        topic_epoch=topic_epoch, use_thread_cache=use_thread_cache,
+        warm_background=warm_background, warm_job_dir=warm_job_dir,
+        warm_max_workers=warm_max_workers, warm_timeout=warm_timeout,
+        warm_quorum=warm_quorum,
     )

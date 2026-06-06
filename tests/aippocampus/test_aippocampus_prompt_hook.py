@@ -3841,6 +3841,83 @@ class AmbientRecallHookTests(unittest.TestCase):
             "same_thread_decision_continuation",
         )
 
+    def test_topic_signal_accumulator_can_surface_later_weak_route(self) -> None:
+        registry_path = self.root / "topic-signal-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:topic-signal",
+                            "title": "Quiet support",
+                            "summary": "qa",
+                            "keywords": ["qa"],
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cache_path = self.root / "topic-signal-cache.json"
+        prompt = "qa 现在怎么看"
+
+        baseline = hook.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=registry_path,
+            thread_id="thread-123",
+            topic_epoch="epoch-signal",
+            ambient_cache_path=cache_path,
+            use_thread_cache=False,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+        signal_path = thread_cache.signal_accumulator_path_for_cache(cache_path)
+        for _ in range(2):
+            thread_cache.record_topic_signal(
+                signal_path,
+                thread_id="thread-123",
+                workspace=str(self.workspace),
+                topic_epoch="epoch-signal",
+                terms=recall_cues.expand_query_terms(prompt),
+                outcome="weak_signal",
+                reason_codes=["below_threshold"],
+            )
+
+        later = hook.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=registry_path,
+            thread_id="thread-123",
+            topic_epoch="epoch-signal",
+            ambient_cache_path=cache_path,
+            use_thread_cache=False,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+        raw = signal_path.read_text(encoding="utf-8")
+
+        self.assertEqual(baseline["decision"], "skip")
+        self.assertEqual(later["decision"], "scent")
+        self.assertIn(
+            "topic_signal_accumulator_eased",
+            {
+                item["reason"]
+                for item in later["scent_threshold_policy"]["adjustments"]
+            },
+        )
+        self.assertIn("same-topic recall signal crossed routing threshold", later["reasons"])
+        self.assertGreaterEqual(
+            later["scent_threshold_policy"]["topic_signal_accumulator"]["weak_signal_count"],
+            3,
+        )
+        self.assertNotIn(prompt, raw)
+        self.assertNotIn(str(self.workspace).replace("\\", "/"), raw.replace("\\", "/"))
+
     def test_broad_fresh_personal_prompt_does_not_lower_scent_threshold(self) -> None:
         registry_path = self.root / "fresh-personal-registry" / "threads.json"
         registry_path.parent.mkdir()

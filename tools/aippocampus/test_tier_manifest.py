@@ -156,6 +156,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_prompt_hot_path_funnel",
         "test_prompt_recall_decision_boundaries",
         "test_prompt_recall_policy",
+        "test_prompt_recall_threshold",
         "test_provider_doctor",
         "test_provider_key_bridge",
         "test_question_confirmation_live",
