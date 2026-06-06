@@ -34,19 +34,23 @@ small. The pass reviewed issue bodies and comments before remote closure; do
 not reopen broad parent issues just to preserve a good idea. Preserve those in
 Discussion or `docs/research/seeds/` until they can become a fixture, doc, CLI,
 runtime slice, or verified cleanup in roughly 1-2 weeks.
+When a later owner comment explicitly reopens an issue for sliced execution,
+that comment wins over older cleanup text: keep the issue open and cut the next
+PR tightly.
 
 | Layer | Reviewed issues | Current disposition |
 |---|---|---|
 | Core default / product usability | #201, #281, #752 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, or keep no-key installs from silently losing background cognition. #752's first staging-only fallback slice is tracked separately; the broader issue stays open until host-agent execution/materialization is real. |
-| Evidence and quality gates | #163, #279, #742 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, silent-constraint survival, and official AMemGym comparability without live judges. |
-| Reliability / infrastructure | #311, #376, #637 | Keep open, but cut the next PR tightly. These own live correction capture, long-thread segment soak, and encrypted sync multi-writer trust/provenance behavior. |
-| Closed or moved out of the foreground | #701, #703, #248, #250, #309, #310, #312, #313, #397, #574, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
-| Completed / superseded issues | #158, #164, #299, #378, #463, #575, #582, #639, #643, #707, #743, #747 | Closed after checking implementation evidence, child owners, or canonical docs. #575 now has the first deterministic cognitive-load sidecar slice; future live calibration should start from a fresh narrow issue rather than reopening the broad concept. |
+| Evidence and quality gates | #163, #378, #742 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, continuous-memory-vs-fresh-context comparison, and official AMemGym comparability without live judges. |
+| Reliability / infrastructure | #311, #376 | Keep open, but cut the next PR tightly. These own live correction capture and long-thread segment soak. |
+| Maintainer-reopened navigation/activation owners | #248, #309, #310, #313 | Keep open because the latest issue comments explicitly ask for sliced execution. Cut each into one concrete fixture/report path before changing runtime defaults: question prefilter/adoption, source-joined retrieval funnel, Journey instantiation/timing, or no-leakage portrait/story packets. |
+| Closed or moved out of the foreground | #701, #703, #250, #312, #397, #574, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
+| Completed / superseded issues | #158, #164, #279, #299, #463, #575, #582, #637, #639, #643, #707, #743, #747 | Closed after checking implementation evidence, child owners, or canonical docs. #575 now has the first deterministic cognitive-load sidecar slice; future live calibration should start from a fresh narrow issue rather than reopening the broad concept. |
 
-Current open queue after the pass: #163, #201, #279, #281, #311, #376, #637,
-#742, and #752. This is the active issue foreground; everything else
-should stay in docs, evidence, Discussion, or Long Garden until it has a small
-next action.
+Current open queue after the pass: #163, #201, #248, #281, #309, #310, #311,
+#313, #376, #378, #742, and #752. This is the active issue foreground;
+everything else should stay in docs, evidence, Discussion, or Long Garden until
+it has a small next action.
 
 ## Current Baseline To Preserve
 
