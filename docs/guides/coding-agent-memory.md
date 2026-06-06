@@ -65,6 +65,12 @@ ambient cards, Active Path Packets, active locks, `recall_context`,
 `recall_deepen`, `get_turn_context`, or clean-source search before broad manual
 search. Deepen only when a candidate route can change the work.
 
+When a hook or MCP response already renders a layered brief, treat
+`memory_atmosphere` as orientation, `working_continuity_brief` as action
+continuity, and `source_court` as the escalation lane for exact, sensitive,
+stale, conflicting, or high-risk claims. The detailed runtime contract remains
+in `skills/aippocampus/references/ambient-hooks.md`.
+
 Use explicit source reopen before quoting old wording, asserting an operation
 fact, blocking a change, or turning a memory-backed clue into a public claim.
 Keep MCP tool-list checks for host wiring; MCP/progressive recall itself is the

@@ -26,6 +26,12 @@ existing source handles, `bounded_evidence` within declared scope, `source_open`
 for already opened source, and `ignore_or_blocked` when privacy, staleness,
 conflict, missing source, or high risk blocks safe use.
 
+When a foreground brief is already layered, read `memory_atmosphere` as
+orientation, let `working_continuity_brief` guide the next action, and reserve
+`source_court` for exact wording, sensitive facts, stale/conflicting claims, and
+high-risk escalation. The detailed contract lives in
+[`skills/aippocampus/references/ambient-hooks.md`](../skills/aippocampus/references/ambient-hooks.md).
+
 For quick product-shaped evidence, read
 [`docs/evidence/magic-moments.md`](evidence/magic-moments.md). It shows real
 second-user continuity moments before the benchmark machinery, while preserving

@@ -278,7 +278,13 @@ class ActivePathPacketTests(unittest.TestCase):
         self.assertGreaterEqual(packet["metrics"]["reopenable_path_count"], 2)
         self.assertGreaterEqual(packet["metrics"]["stale_or_superseded_path_count"], 1)
         self.assertTrue(packet["source_boundary"]["navigation_not_truth"])
-        self.assertIn("source_reopen_required_before_claim", packet["cannot_claim"])
+        self.assertTrue(packet["source_boundary"]["path_level_source_boundary_is_authoritative"])
+        self.assertFalse(packet["source_boundary"]["source_reopen_required_before_claim"])
+        self.assertTrue(
+            packet["source_boundary"]["non_evidence_paths_require_source_reopen_before_claim"]
+        )
+        self.assertIn("non_evidence_path_claim_requires_source_reopen", packet["cannot_claim"])
+        self.assertNotIn("source_reopen_required_before_claim", packet["cannot_claim"])
 
         routes = {path["route"] for path in packet["paths"]}
         self.assertIn("evidence", routes)
