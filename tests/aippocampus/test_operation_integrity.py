@@ -126,6 +126,93 @@ class OperationIntegrityTests(unittest.TestCase):
         self.assertNotIn("stderr", serialized)
         self.assertNotIn(str(self.clean_source), serialized)
 
+    def test_placeholder_event_id_becomes_weak_covered(self) -> None:
+        self.write_events(
+            {
+                "event_id": "unknown",
+                "source_ref": "codex:session:demo#L31",
+                "source_line": 31,
+                "critical_operation_family": "explicit_user_constraint",
+                "constraint_kind": "do_not_touch_generated_files",
+                "scope": "active_task",
+                "expiry_or_supersession": "until_next_user_override",
+                "status": "active",
+            }
+        )
+
+        report = diagnose_clean_source(self.clean_source)
+        family = self.family(report, "explicit_user_constraint")
+
+        self.assertEqual(family["status"], "weak_covered")
+        self.assertFalse(report["contract_complete"])
+        self.assertTrue(report["ordinary_recall_allowed"])
+        self.assertEqual(report["coverage_summary"]["weak_covered_family_count"], 1)
+        self.assertIn(
+            {"code": "placeholder_value", "field": "event_id", "event_id": "unknown"},
+            family["facts"][0]["validation_reasons"],
+        )
+
+    def test_private_source_ref_becomes_weak_covered_without_leaking_value(self) -> None:
+        self.write_events(
+            {
+                "event_id": "evt_private_source_ref",
+                "source_ref": "C:\\Users\\Administrator\\secret\\thread.jsonl",
+                "source_line": 34,
+                "critical_operation_family": "test_check_command_result",
+                "command_family": "python_unittest",
+                "target_class": "focused_test_path",
+                "exit_code": 0,
+                "failure_family": "none",
+                "status": "succeeded",
+            }
+        )
+
+        report = diagnose_clean_source(self.clean_source)
+        family = self.family(report, "test_check_command_result")
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(family["status"], "weak_covered")
+        self.assertIn(
+            {
+                "code": "private_source_ref",
+                "field": "source_ref",
+                "event_id": "evt_private_source_ref",
+            },
+            family["facts"][0]["validation_reasons"],
+        )
+        self.assertEqual(report["privacy"]["issues"][0]["field"], "source_ref")
+        self.assertNotIn("Administrator", serialized)
+        self.assertNotIn("thread.jsonl", serialized)
+
+    def test_implausible_exit_status_becomes_weak_covered(self) -> None:
+        self.write_events(
+            {
+                "event_id": "evt_implausible_exit",
+                "source_ref": "codex:session:demo#L36",
+                "source_line": 36,
+                "critical_operation_family": "test_check_command_result",
+                "command_family": "python_unittest",
+                "target_class": "focused_test_path",
+                "exit_code": 9_999_999_999,
+                "failure_family": "nonzero_exit",
+                "status": "failed",
+            }
+        )
+
+        report = diagnose_clean_source(self.clean_source)
+        family = self.family(report, "test_check_command_result")
+
+        self.assertEqual(family["status"], "weak_covered")
+        self.assertEqual(family["facts"][0]["exit_status"], 9_999_999_999)
+        self.assertIn(
+            {
+                "code": "implausible_exit_status",
+                "field": "exit_status",
+                "event_id": "evt_implausible_exit",
+            },
+            family["facts"][0]["validation_reasons"],
+        )
+
     def test_explicit_file_edit_requires_safe_path_identity(self) -> None:
         self.write_events(
             {
