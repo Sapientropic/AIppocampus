@@ -467,6 +467,9 @@ The model-backed worker is bounded by design:
 
 - prompt order is always `stable_dream_worker_contract`, then
   `source_pack_payload`, then `variable_run_directive`
+- the stable contract includes a `worker_stance` block: the worker faces the
+  future foreground agent from the same selected source body, without claiming
+  model identity continuity or source-truth authority
 - DeepSeek-flavored configs must use `cache_contract="deepseek_prefix_v1"`
 - DeepSeek-flavored configs use the shared thinking-mode contract:
   `thinking="enabled"` and `reasoning_effort="high"` by default, with
@@ -492,6 +495,10 @@ The model-backed worker is bounded by design:
   `why_this_is_not_fact` and `counter_evidence`, require two independent source
   anchors, and park sensitive/profile-style interpretations even when
   source-backed
+- accepted candidates may carry `foreground_affordance`, `source_body_shape`,
+  `agent_position`, `atmosphere_tags`, `waking_path`, and
+  `what_not_to_overclaim`, but these are navigation/atmosphere fields and do
+  not upgrade the finding beyond `dream_synthesized_candidate_not_fact`
 - public summaries report aggregate counts, provider usage, and cache metrics
   without source refs, message ids, thread ids, or private text
 
@@ -770,6 +777,13 @@ are `dream_synthesized`, `dream_function="compensatory"`,
 `voice_id="opposite_hexagram_voice"`, `foreground_eligible=false`, and carry
 source refs plus counter-evidence. The voice boundary says it speaks from
 unresolved journey structure, not from or about the user's persona.
+
+The same module can also emit `kind="hexagram_atmosphere_arc"` rows from
+source-backed upper/lower trigram waypoints even when the one-sidedness gate is
+closed. These chronicle rows are `direction_only` / `memory_atmosphere`; they
+preserve source refs and hexagram direction for explicit later recall, but they
+are not probes, predictions, profile claims, source facts, or hard
+instructions.
 
 ### Three Ways To Wake
 

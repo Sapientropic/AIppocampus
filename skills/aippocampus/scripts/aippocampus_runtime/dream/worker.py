@@ -403,6 +403,18 @@ def finding_from_candidate(
             "human_review_required": sensitive_risk,
         }
 
+    stance_fields = {
+        "foreground_affordance": compact_text(str(candidate.get("foreground_affordance") or ""), 260),
+        "source_body_shape": compact_text(str(candidate.get("source_body_shape") or ""), 260),
+        "agent_position": compact_text(str(candidate.get("agent_position") or ""), 200),
+        "atmosphere_tags": string_list(candidate.get("atmosphere_tags"), limit=6, max_chars=80),
+        "waking_path": compact_text(str(candidate.get("waking_path") or ""), 80),
+        "what_not_to_overclaim": compact_text(
+            str(candidate.get("what_not_to_overclaim") or ""),
+            260,
+        ),
+    }
+
     source_ref_audit_status = "model_candidate_source_ref_validated" if not failures else "failed"
     pack_id = str(pack.get("pack_id") or "")
     finding = {
@@ -437,6 +449,11 @@ def finding_from_candidate(
         "bridge_claims": bridge_claims,
         "downstream_use": ["working_memory", "reflection_space"],
         "truth_boundary": "dream_synthesized_candidate_not_fact",
+        "stance_boundary": {
+            "source_body_stance_is_navigation_only": True,
+            "not_same_persistent_model_self": True,
+            "source_reopen_required_for_exact_claims": True,
+        },
         "worker_validation": {
             "status": "failed" if failures else "passed",
             "failed_checks": failures,
@@ -450,6 +467,7 @@ def finding_from_candidate(
         finding.update(prospective_fields)
     if active_imagination_fields:
         finding.update(active_imagination_fields)
+    finding.update({key: value for key, value in stance_fields.items() if value})
     return {key: value for key, value in finding.items() if value is not None}, None
 
 
