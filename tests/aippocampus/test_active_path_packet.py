@@ -244,6 +244,17 @@ class ActivePathPacketTests(unittest.TestCase):
 
         self.assertEqual(packet["kind"], "aippocampus_active_path_packet")
         self.assertEqual(packet["schema_version"], 1)
+        self.assertEqual(
+            [entry["trust_level"] for entry in packet["trust_taxonomy"]],
+            [
+                "ignore",
+                "semantic_hint",
+                "scent",
+                "source_required",
+                "bounded_evidence",
+                "raw_source_reopened",
+            ],
+        )
         self.assertGreaterEqual(packet["path_count"], 4)
         self.assertLessEqual(packet["path_count"], 7)
         self.assertTrue(packet["privacy"]["local_first"])
@@ -261,16 +272,22 @@ class ActivePathPacketTests(unittest.TestCase):
         self.assertIn("ignore", routes)
 
         evidence_path = next(path for path in packet["paths"] if path["route"] == "evidence")
+        self.assertEqual(evidence_path["trust_level"], "bounded_evidence")
         self.assertEqual(evidence_path["next_action"], "use_bounded_evidence")
+        self.assertTrue(evidence_path["trust_contract"]["agent_may_answer_within_scope"])
         self.assertFalse(evidence_path["source_boundary"]["source_reopen_required"])
+        self.assertTrue(evidence_path["source_boundary"]["bounded_evidence_usable_within_scope"])
         self.assertEqual(evidence_path["source_refs"][0]["message_id"], "msg-1")
 
         reopen_path = next(path for path in packet["paths"] if path["route"] == "reopen")
+        self.assertEqual(reopen_path["trust_level"], "source_required")
         self.assertIn(reopen_path["next_action"], {"get_turn_context", "source_reopen"})
+        self.assertFalse(reopen_path["trust_contract"]["manual_query_invention_expected"])
         self.assertTrue(reopen_path["source_boundary"]["source_reopen_required"])
         self.assertTrue(reopen_path["source_refs"])
 
         ignored_path = next(path for path in packet["paths"] if path["route"] == "ignore")
+        self.assertEqual(ignored_path["trust_level"], "ignore")
         self.assertEqual(ignored_path["currentness"], "superseded")
         self.assertTrue(ignored_path["source_boundary"]["unsafe_to_use_as_current_fact"])
         self.assertEqual(ignored_path["next_action"], "ignore")

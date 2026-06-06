@@ -11,6 +11,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall import ambient_cards as cards  # noqa: E402
+from aippocampus_runtime.recall import authority  # noqa: E402
 
 
 class AmbientRecallCardTests(unittest.TestCase):
@@ -20,6 +21,21 @@ class AmbientRecallCardTests(unittest.TestCase):
             cards._stable_id(["scent", "ambient", "route"]),
             "arc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18],
         )
+
+    def test_route_evidence_alone_does_not_promote_semantic_hint_to_bounded_evidence(
+        self,
+    ) -> None:
+        projected = authority.with_trust_fields(
+            {
+                "route": "evidence",
+                "support_level": "scent",
+                "provenance_class": "cognitive_map_route",
+            }
+        )
+
+        self.assertEqual(projected["trust_level"], "semantic_hint")
+        self.assertFalse(projected["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(projected["trust_contract"]["treat_as_fact"])
 
     def test_evidence_decision_becomes_source_backed_card(self) -> None:
         result = {
@@ -60,6 +76,9 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(payload["cards"][0]["provenance_class"], "source_backed_reopen")
         self.assertFalse(payload["cards"][0]["source_reopen_required"])
         self.assertEqual(payload["cards"][0]["authority_state"], "bounded_evidence_ready")
+        self.assertEqual(payload["cards"][0]["trust_level"], "bounded_evidence")
+        self.assertTrue(payload["cards"][0]["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(payload["cards"][0]["trust_contract"]["manual_query_invention_expected"])
         self.assertTrue(payload["cards"][0]["reopen_recommended_for_exact_quote"])
         self.assertEqual(payload["cards"][0]["reopenable_ref_count"], 1)
         self.assertEqual(payload["cards"][0]["source_refs"][0]["line"], 12)
@@ -164,6 +183,9 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertEqual(card["provenance_class"], "cognitive_map_route")
         self.assertEqual(card["support_level"], "scent")
+        self.assertEqual(card["trust_level"], "semantic_hint")
+        self.assertFalse(card["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertTrue(card["trust_contract"]["manual_query_invention_expected"])
         self.assertTrue(card["source_reopen_required"])
         self.assertEqual(card["reopenable_ref_count"], 0)
         self.assertEqual(card["source_refs"], [])
@@ -288,6 +310,10 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(evidence_context["cards"][0]["provenance_class"], "source_backed_reopen")
         self.assertFalse(evidence_context["cards"][0]["source_reopen_required"])
         self.assertEqual(evidence_context["cards"][0]["authority_state"], "bounded_evidence_ready")
+        self.assertEqual(evidence_context["cards"][0]["trust_level"], "bounded_evidence")
+        self.assertTrue(
+            evidence_context["cards"][0]["trust_contract"]["agent_may_answer_within_scope"]
+        )
         self.assertIn("source-backed bounded wording", evidence_context["cards"][0]["key_line"])
         self.assertTrue(evidence_context["source_boundary"]["separate_from_fresh_thread_packet"])
         self.assertTrue(evidence_context["source_boundary"]["fresh_thread_packet_remains_navigation_only"])

@@ -24,8 +24,8 @@ here; update the relevant reference doc, script help, or tests instead.
   routine commentary removed. It is original wording, not summary memory.
 - Recall is conclusion-first by default. User turns and `final_answer` messages
   outrank commentary; tool/debug provenance belongs to audit routes.
-- Ambient hook output is a hint, not proof. A `scent` can tell the model old
-  memory may exist; only clean-source, SQLite, or raw-rollout hits are evidence.
+- Ambient hook output is graded: semantic hints and `scent` are navigation,
+  `source_required` reopens source, and bounded evidence is usable within scope.
 - DeepSeek-compatible semantic gates and subconscious jobs may organize queries,
   candidate associations, and cognitive-map routes, but local source remains
   the authority.

@@ -13,7 +13,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
-from aippocampus_runtime.recall.authority import with_authority_fields
+from aippocampus_runtime.recall.authority import with_authority_fields, with_trust_fields
 from aippocampus_runtime.recall.fresh_thread_scent import fresh_thread_scent_packet_from_decision
 from aippocampus_runtime.recall.nudge_policy import safe_nudge_topic
 
@@ -127,7 +127,7 @@ def with_card_provenance(
             }.items()
             if value not in {None, ""}
         }
-    return clean
+    return with_trust_fields(clean)
 
 
 def cached_card_with_provenance(

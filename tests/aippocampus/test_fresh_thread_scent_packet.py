@@ -55,6 +55,8 @@ class FreshThreadScentPacketTests(unittest.TestCase):
                 "reopenable_ref_count",
                 "advisory_action",
                 "suggested_action",
+                "trust_level",
+                "trust_contract",
                 "when_not_to_use",
                 "source_boundary",
             },
@@ -92,6 +94,9 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
         self.assertEqual(payload["support_level"], "source_required")
+        self.assertEqual(payload["trust_level"], "source_required")
+        self.assertFalse(payload["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(payload["trust_contract"]["manual_query_invention_expected"])
         self.assertEqual(payload["advisory_action"], "source_reopen")
         self.assertEqual(payload["suggested_action"], "source_reopen")
         self.assertEqual(
@@ -141,6 +146,8 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         )
 
         self.assertEqual(packet["support_level"], "source_required")
+        self.assertEqual(packet["trust_level"], "source_required")
+        self.assertFalse(packet["trust_contract"]["agent_may_answer_within_scope"])
         self.assertEqual(packet["candidate_ref_count"], 1)
         self.assertEqual(packet["reopenable_ref_count"], 0)
         self.assertEqual(packet["reopen_plan"]["status"], "blocked")

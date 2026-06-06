@@ -130,8 +130,16 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertFalse(readout_707["fresh_thread_packet_contains_raw_source_text"])
         self.assertEqual(readout_707["foreground_manual_query_invention_count"], 0)
         self.assertFalse(readout_707["closeout_eligible"])
+        readout_786 = report["issue_readouts"]["github_786"]
+        self.assertTrue(readout_786["trust_taxonomy_documented"])
+        self.assertTrue(readout_786["bounded_evidence_changes_answer_without_manual_query"])
+        self.assertTrue(readout_786["semantic_only_scent_not_factual_evidence"])
+        self.assertEqual(readout_786["bounded_evidence_card_count"], 1)
+        self.assertEqual(readout_786["foreground_manual_query_invention_count"], 0)
+        self.assertFalse(readout_786["closeout_eligible"])
         self.assertIn("foreground_source_reopen_after_packet", report["metric_notes"])
         self.assertIn("bounded_evidence_context_after_packet", report["metric_notes"])
+        self.assertIn("graded_packet_trust_taxonomy", report["metric_notes"])
         self.assertTrue(report["comparison_boundary"]["cannot_claim_live_default_foreground_lift"])
         self.assertFalse(readout["closeout_eligible"])
 

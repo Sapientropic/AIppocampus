@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime.question.source_refs import source_ref_key
+from aippocampus_runtime.recall.authority import with_trust_fields
 
 SUPPORT_LEVELS = {"silent_scent", "soft_hypothesis", "source_required", "suppressed"}
 CONFIDENCE_BUCKETS = {"low", "medium", "high"}
@@ -268,7 +269,7 @@ def fresh_thread_scent_packet_from_decision(result: dict[str, Any]) -> dict[str,
     )
     if reopen_plan is not None:
         packet["reopen_plan"] = reopen_plan
-    return packet
+    return with_trust_fields(packet)
 
 
 EXAMPLE_PACKETS = [
