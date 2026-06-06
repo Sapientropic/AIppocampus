@@ -145,7 +145,7 @@ def make_sqlite(
             "CREATE TABLE messages ("
             "id INTEGER PRIMARY KEY, line INTEGER, timestamp TEXT, role TEXT, "
             "kind TEXT, phase TEXT, turn_index INTEGER, is_final INTEGER, "
-            "sha1 TEXT UNIQUE, text TEXT)"
+            "sha1 TEXT, text TEXT)"
         )
         con.executemany(
             "INSERT INTO messages "
@@ -167,6 +167,7 @@ def make_sqlite(
                 for idx, m in enumerate(messages, start=1)
             ],
         )
+        con.execute("CREATE INDEX idx_messages_sha1 ON messages(sha1)")
         con.execute(
             "CREATE TABLE message_features ("
             "message_id INTEGER PRIMARY KEY REFERENCES messages(id), "
