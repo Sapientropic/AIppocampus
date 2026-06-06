@@ -10,6 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.operation_integrity_conflicts import (
+    SUPPLEMENTAL_SUPERSESSION_FIELDS,
+    conflict_gap_events,
+    detect_conflicts,
+)
+
 CONTRACT_VERSION = "aippocampus-critical-operation-integrity-v1"
 
 
@@ -298,6 +304,7 @@ def _base_fact(row: dict[str, Any]) -> dict[str, Any]:
         "raw_start_line": _int_or_none(row.get("raw_start_line")),
         "raw_end_line": _int_or_none(row.get("raw_end_line")),
         "turn_index": _int_or_none(row.get("turn_index")),
+        "call_ref": _safe_scalar(row.get("call_ref")),
         "timestamp": _safe_scalar(row.get("timestamp")),
         "status": _status(row),
         "behavior_backed": bool(row.get("behavior_backed")),
@@ -327,6 +334,10 @@ def _test_fact(row: dict[str, Any]) -> dict[str, Any]:
             "generated_file": row.get("generated_file") if isinstance(row.get("generated_file"), bool) else None,
         }
     )
+    for key in SUPPLEMENTAL_SUPERSESSION_FIELDS:
+        value = _safe_scalar(row.get(key))
+        if value not in (None, "", []):
+            fact[key] = value
     return {key: value for key, value in fact.items() if value not in (None, "", [])}
 
 
@@ -348,6 +359,10 @@ def _explicit_fact(row: dict[str, Any], family: str) -> dict[str, Any]:
         "expiry_or_supersession",
         "generated_file_reason",
     ):
+        value = _safe_scalar(row.get(key))
+        if value not in (None, "", []):
+            fact[key] = value
+    for key in SUPPLEMENTAL_SUPERSESSION_FIELDS:
         value = _safe_scalar(row.get(key))
         if value not in (None, "", []):
             fact[key] = value
@@ -510,6 +525,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
 
     family_reports: list[dict[str, Any]] = []
     gaps: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
     for spec in MANDATORY_FAMILIES:
         rows = rows_by_family[spec.family]
         facts = [_fact_for_event(row, spec.family) for row in rows]
@@ -535,6 +551,8 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
         missing_fields_by_event = [
             item for item in missing_fields_by_event if item["missing_required_facts"]
         ]
+        family_conflicts = detect_conflicts(spec.family, facts, manifest)
+        conflicts.extend(family_conflicts)
 
         if not rows:
             status = "missing"
@@ -568,6 +586,18 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
             gaps.append(gap)
         else:
             status = "covered"
+        if family_conflicts:
+            if status == "covered":
+                status = "weak_covered"
+            gaps.append(
+                {
+                    "family": spec.family,
+                    "gap_kind": "conflicting_facts",
+                    "events": conflict_gap_events(family_conflicts),
+                    "ordinary_recall_allowed": True,
+                    "downstream_rule": "Use conflicted rows as route material only; reopen source or raw audit material before strong operation claims.",
+                }
+            )
 
         family_reports.append(
             {
@@ -577,6 +607,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
                 "current_source": spec.current_source,
                 "required_facts": list(spec.required_facts),
                 "event_count": len(rows),
+                "conflict_count": len(family_conflicts),
                 "facts": facts,
             }
         )
@@ -589,10 +620,18 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
     if not isinstance(manifest_policy, dict):
         manifest_policy = {}
 
+    conflict_count = len(conflicts)
+
     return {
         "ok": True,
         "contract_version": CONTRACT_VERSION,
-        "contract_complete": missing_count == 0 and partial_count == 0 and weak_covered_count == 0 and not privacy_issues,
+        "contract_complete": (
+            missing_count == 0
+            and partial_count == 0
+            and weak_covered_count == 0
+            and conflict_count == 0
+            and not privacy_issues
+        ),
         "ordinary_recall_allowed": True,
         "inputs": {
             "manifest_json": "manifest.json" if (root / "manifest.json").exists() else None,
@@ -612,10 +651,12 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
             "partial_family_count": partial_count,
             "missing_family_count": missing_count,
             "gap_count": len(gaps),
+            "conflict_count": conflict_count,
             "privacy_issue_count": len(privacy_issues),
         },
         "families": family_reports,
         "gaps": gaps,
+        "conflicts": conflicts,
         "privacy": {
             "raw_payload_policy": "hash_only",
             "issues": privacy_issues,
@@ -649,7 +690,8 @@ def main(argv: list[str] | None = None) -> int:
             f"{summary['covered_family_count']} covered, "
             f"{summary['weak_covered_family_count']} weak-covered, "
             f"{summary['partial_family_count']} partial, "
-            f"{summary['missing_family_count']} missing"
+            f"{summary['missing_family_count']} missing, "
+            f"{summary['conflict_count']} conflicts"
         )
         for gap in report["gaps"]:
             print(f"gap: {gap['family']}: {gap['gap_kind']}")

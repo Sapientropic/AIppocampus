@@ -104,6 +104,18 @@ summaries, assistant narration, and benchmark gold labels must not be upgraded
 into operation facts unless they join back to a source-backed event row or
 curated sidecar event.
 
+The diagnostic also reports compact `conflicts` and
+`coverage_summary.conflict_count` when projected privacy-safe fact rows
+contradict each other, such as incompatible statuses for the same `event_id` or
+`call_ref`, conflicting test/check results for the same compact target
+identity, incompatible active/superseded user constraints, or malformed /
+out-of-session timestamps when a manifest time range is available. Conflicted
+families are not clean `covered` evidence; they remain usable as route material
+for review, but strong operation claims must reopen source or raw audit
+material first. Conflict diagnostics must not serialize raw commands, raw
+outputs, full tool arguments, local absolute paths, file contents, or
+secret-shaped strings.
+
 Run the diagnostic from an installed package or the script root:
 
 ```powershell
