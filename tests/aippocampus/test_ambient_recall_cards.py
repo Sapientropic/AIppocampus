@@ -336,6 +336,95 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(summary["brief_precision"]["prompt_issue_ref_count"], 2)
         self.assertGreaterEqual(summary["brief_precision"]["broad_context_intrusion_count"], 1)
 
+    def test_bounded_evidence_brief_counts_partial_issue_ref_old_summary_intrusion(self) -> None:
+        result = {
+            "decision": "evidence",
+            "confidence": "high",
+            "elapsed_ms": 8.0,
+            "evidence": [
+                {
+                    "thread_key": "session:old-issue-summary",
+                    "title": "Broad open issue summary",
+                    "line": 40,
+                    "turn_index": 5,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "Open issue summary for #786 with older roadmap cleanup context "
+                        "and broad public-readiness notes."
+                    ),
+                },
+                {
+                    "thread_key": "session:recent-786",
+                    "title": "Just opened #786 trust semantics issue",
+                    "line": 220,
+                    "turn_index": 95,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "#786 defines graded trust semantics for ambient source-backed "
+                        "packets after the real hook action grammar work."
+                    ),
+                },
+                {
+                    "thread_key": "session:recent-201",
+                    "title": "Recent #201 manual grep risk",
+                    "line": 240,
+                    "turn_index": 96,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "#201 remains the product risk where vague recall feels like "
+                        "manual grep when the hook emits only scent."
+                    ),
+                },
+                {
+                    "thread_key": "session:recent-hook-dry-run",
+                    "title": "Recent real-hook dry-run precision note",
+                    "line": 260,
+                    "turn_index": 97,
+                    "phase": "final_answer",
+                    "snippet": (
+                        "The installed hook admitted one old broad bounded-evidence item "
+                        "into a specific recent issue-continuity prompt."
+                    ),
+                },
+            ],
+            "working_memory": [],
+            "cognitive_map": [],
+            "candidates": [],
+        }
+
+        payload = cards.ambient_recall_from_decision(
+            result,
+            max_cards=3,
+            prompt="What is the difference between the issue just opened for #786 and #201?",
+        )
+
+        themes = [card["theme"] for card in payload["cards"]]
+        self.assertEqual(len(themes), 3)
+        self.assertTrue(any("#786" in theme for theme in themes))
+        self.assertTrue(any("#201" in theme for theme in themes))
+        self.assertFalse(any("Broad open issue summary" in theme for theme in themes))
+        self.assertGreaterEqual(
+            payload["brief_precision"]["partial_issue_ref_broad_context_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            payload["brief_precision"]["same_thread_recentness_mismatch_count"],
+            1,
+        )
+
+        result["ambient_recall"] = payload
+        summary = prompt_context_render.ambient_debug_summary(result)
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertGreaterEqual(
+            summary["brief_precision"]["partial_issue_ref_broad_context_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            summary["brief_precision"]["same_thread_recentness_mismatch_count"],
+            1,
+        )
+
     def test_deep_archival_request_requires_source_backed_evidence(self) -> None:
         result = {
             "decision": "evidence",

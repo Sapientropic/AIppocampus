@@ -111,6 +111,13 @@ The default renderer may sort already-authorized cards for brief precision
 (for example, recent issue-specific bounded evidence before older broad issue
 summaries). That sorting is not a trust promotion path: it never turns scent or
 semantic output into evidence, and it must not serialize raw prompt text.
+For recent multi-issue continuity prompts such as "#A vs #B" or "just opened",
+the precision report also counts `partial_issue_ref_broad_context_count` and
+`same_thread_recentness_mismatch_count` when an old generic issue-summary card
+only matches part of the explicit issue-ref set while recent cards already cover
+the requested refs. Those counters are public-safe diagnostics for foreground
+brief relevance; they do not make old source-backed evidence false or delete it
+from the underlying source trail.
 
 `ambient_recall` also carries a `fresh_thread_packet` projected by
 `fresh_thread_scent.py`. This is the #282 contract that bridges the #281
