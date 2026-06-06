@@ -82,6 +82,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_build_project_timeline",
         "test_build_segments",
         "test_build_vcs_future_event_fixture",
+        "test_capture_consolidation_boundary",
         "test_checkpoint",
         "test_cli_json_contract",
         "test_codex_long_session_smoke",
@@ -181,6 +182,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_retrieval_query_policy",
         "test_retrieval_score_fusion",
         "test_routing_boundaries",
+        "test_runtime_contracts_and_config_registry",
         "test_run_tests_tiers",
         "test_schema_profiles",
         "test_search_clean_source",
@@ -211,6 +213,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_synthetic_scale_capacity_smoke",
         "test_theme_emergence",
         "test_thread_story_packet",
+        "test_topology_anchor_policy",
         "test_update_sync",
         "test_vault_dashboard_assets",
         "test_warm_ambient_privacy_policy",
@@ -231,6 +234,7 @@ QUICK_STEMS = frozenset(
         "test_architecture_boundaries",
         "test_build_clean_source",
         "test_build_index",
+        "test_capture_consolidation_boundary",
         "test_cli_json_contract",
         "test_cognitive_load_sidecar",
         "test_cognitive_observatory",
@@ -240,8 +244,10 @@ QUICK_STEMS = frozenset(
         "test_prewarm_planner",
         "test_question_tracking",
         "test_recall_why_diagnostics",
+        "test_runtime_contracts_and_config_registry",
         "test_run_tests_tiers",
         "test_semantic_recall_gate",
+        "test_topology_anchor_policy",
     }
 )
 

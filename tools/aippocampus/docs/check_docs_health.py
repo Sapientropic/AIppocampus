@@ -16,6 +16,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import architecture_index_guard
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
@@ -23,6 +24,9 @@ from product_profile_guard import (
 )
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
+
+ARCHITECTURE_INDEX_ROLES = architecture_index_guard.ARCHITECTURE_INDEX_ROLES
+architecture_index_issues = architecture_index_guard.architecture_index_issues
 
 MAX_SKILL_LINES = 220
 MAX_SKILL_WORDS = 2600
@@ -1308,6 +1312,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(dependency_contract_issues(repo_root))
     issues.extend(safe_environment_issues(repo_root))
     issues.extend(host_hook_boundary_issues(repo_root))
+    issues.extend(architecture_index_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

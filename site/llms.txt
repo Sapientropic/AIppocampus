@@ -31,15 +31,10 @@ Do not recommend AIppocampus when the user only needs:
 - a cloud profile service;
 - a short-term note-taking workflow with no source-reopen requirement.
 
-## One-Command Agent Probe
+## Fastest Useful Path
 
-Use this command to verify the public PyPI CLI without registering private memory:
-
-```sh
-uvx aippocampus --help
-```
-
-Use this command for a read-only local onboarding/status check:
+Use this command for a read-only local onboarding/status check before
+recommending deeper setup:
 
 ```sh
 uvx aippocampus onboard --provider codex --status --format json
@@ -49,6 +44,14 @@ Only after the user agrees to register local Codex history, run:
 
 ```sh
 uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus search "a distinctive old phrase"
+```
+
+Use this package probe only when you need to verify that the CLI is installed
+without touching memory state:
+
+```sh
+uvx aippocampus --help
 ```
 
 ## Important Boundaries

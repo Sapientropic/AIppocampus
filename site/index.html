@@ -144,7 +144,7 @@
       }
 
       .hero-content {
-        width: min(760px, calc(100% - 40px));
+        width: min(1060px, calc(100% - 40px));
         margin: auto auto 8vh clamp(20px, 5vw, 76px);
         color: #fff6e8;
       }
@@ -169,7 +169,7 @@
 
       h1 {
         margin: 0;
-        max-width: 10ch;
+        max-width: 100%;
         font-size: clamp(4.3rem, 12.6vw, 10rem);
         line-height: 0.86;
       }
@@ -506,7 +506,7 @@
         <div class="nav-links">
           <a href="/evidence/">Evidence</a>
           <a href="https://github.com/Sapientropic/AIppocampus">GitHub</a>
-          <a href="https://github.com/Sapientropic/AIppocampus/wiki">Wiki</a>
+          <a href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/public-api.md#ten-minute-public-path">Setup</a>
           <a href="/llms.txt">For agents</a>
         </div>
       </nav>
@@ -519,8 +519,8 @@
         </p>
         <p class="quote-line">Source is the ground. Summaries are weather.</p>
         <div class="actions">
-          <a class="button primary" href="https://github.com/Sapientropic/AIppocampus">Read the repo</a>
-          <a class="button" href="https://github.com/Sapientropic/AIppocampus/wiki">Open the wiki</a>
+          <a class="button primary" href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/public-api.md#ten-minute-public-path">Get to first recall</a>
+          <a class="button" href="/evidence/">See magic moments</a>
         </div>
       </section>
     </header>
@@ -577,28 +577,29 @@
       <section class="band deep path-band">
         <div class="section-grid path-section">
           <div class="path-copy">
-            <h2>Start where you are.</h2>
+            <h2>Get a source receipt first.</h2>
             <p class="section-copy">
-              A short path for humans, and a clean first probe for agents.
+              Check local readiness, register history only after consent, then search
+              for one source-backed snippet.
             </p>
           </div>
           <div class="links">
             <div class="link-list">
-              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/README.md">
-                README
-                <span>The practical project entrypoint.</span>
+              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/public-api.md#ten-minute-public-path">
+                10-minute path
+                <span>The smallest dependable path from package check to source-backed search.</span>
               </a>
-              <a href="https://github.com/Sapientropic/AIppocampus/wiki">
-                Wiki
-                <span>A friendly path through install, privacy, and reading routes.</span>
+              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/install-guide.md#first-recall-path">
+                First recall path
+                <span>Install, consented onboarding, search, and optional hook setup.</span>
               </a>
               <a href="/evidence/">
-                Evidence & reports
-                <span>Official evidence, community reports, demos, and known gaps.</span>
+                Magic moments
+                <span>Live-use examples that show the value before the benchmark wall.</span>
               </a>
-              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/install-guide.md">
-                Install guide
-                <span>Local setup and first checks.</span>
+              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/README.md">
+                README
+                <span>The practical project entrypoint when you want the full map.</span>
               </a>
               <a href="https://github.com/Sapientropic/AIppocampus/discussions">
                 Discussions
@@ -606,11 +607,15 @@
               </a>
             </div>
             <div class="agent-box">
-              <strong>Agent probe</strong>
+              <strong>Agent first-use path</strong>
               <p class="section-copy">
-                Agents should inspect the public CLI before recommending deeper setup.
+                Probe without registering private history, then ask for consent before
+                source import or hook setup.
               </p>
-              <pre><code>uvx aippocampus --help</code></pre>
+              <pre><code>uvx aippocampus onboard --provider codex --status
+# after consent:
+uvx aippocampus onboard --provider codex --all
+uvx aippocampus search "a distinctive old phrase"</code></pre>
             </div>
           </div>
         </div>

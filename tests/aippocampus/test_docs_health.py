@@ -112,6 +112,52 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
+    def test_architecture_index_covers_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.architecture_index_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_architecture_index_reports_missing_doc_and_bad_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            architecture = repo / "docs" / "architecture"
+            architecture.mkdir(parents=True)
+            (architecture / "contract.md").write_text("# Contract\n", encoding="utf-8")
+            (architecture / "missing-from-index.md").write_text("# Missing\n", encoding="utf-8")
+            (architecture / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# Architecture Index",
+                        "",
+                        "| File | Role | Use |",
+                        "| --- | --- | --- |",
+                        "| [contract.md](contract.md) | vague | bad role |",
+                        "| [gone.md](gone.md) | current contract | stale pointer |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.architecture_index_issues(repo)
+
+        self.assertIn(
+            "architecture index has unsupported role for contract.md: vague; "
+            "use one of "
+            + str(sorted(docs_health.ARCHITECTURE_INDEX_ROLES)),
+            issues,
+        )
+        self.assertIn(
+            "architecture index missing docs/architecture/missing-from-index.md",
+            issues,
+        )
+        self.assertIn(
+            "architecture index references missing file: docs/architecture/gone.md",
+            issues,
+        )
+
     def test_llm_call_contract_covers_current_script_configs(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)

@@ -289,6 +289,19 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_config_text(report: dict[str, Any]) -> str:
+    data = _as_dict(report.get("data"))
+    lines = [
+        "AIppocampus config doctor",
+        f"- Status: {report.get('status')}",
+        f"- Registered knobs: {len(data.get('knobs') or [])}",
+        f"- Unknown AIPPOCAMPUS_* env vars: {data.get('unknown_count', 0)}",
+        "- Privacy: values are not printed; configured values are presence-only",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def public_json_text(report: dict[str, Any]) -> str:
     """Serialize the provider doctor public report.
 
@@ -326,6 +339,11 @@ def main(argv: list[str] | None = None) -> int:
     spend_parser.add_argument("--warning-effective-tokens", type=int, default=None)
     spend_parser.add_argument("--warning-min-foreground-value-rate", type=float, default=None)
     spend_parser.add_argument("--json", action="store_true", dest="json_output")
+    config_parser = subparsers.add_parser(
+        "config",
+        help="Report registered AIPPOCAMPUS_* configuration without printing values.",
+    )
+    config_parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
     if args.command == "spend":
@@ -345,6 +363,16 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(spend_doctor.render_text(report))
+        return 0
+
+    if args.command == "config":
+        from aippocampus_runtime.config import registry as config_registry  # noqa: PLC0415
+
+        report = config_registry.config_report()
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(render_config_text(report))
         return 0
 
     report = build_provider_doctor_report(
