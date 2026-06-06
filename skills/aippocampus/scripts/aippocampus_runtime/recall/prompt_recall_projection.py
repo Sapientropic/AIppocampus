@@ -10,6 +10,7 @@ from aippocampus_runtime.recall.prompt_cues import (
     is_decision_continuation,
     negative_evidence_intent,
     semantic_gate_can_request_evidence,
+    semantic_gate_can_request_source_reopen,
 )
 from aippocampus_runtime.recall.prompt_recall_ambiguity import (
     explicit_evidence_request_is_ambiguous,
@@ -112,9 +113,14 @@ def semantic_bridge_diagnostic(
     prompt: str,
     semantic_result: dict[str, Any] | None,
     evidence: list[dict[str, Any]],
+    source_reopen_route_ready: bool = False,
     reasons: list[str],
 ) -> str | None:
-    if not semantic_gate_can_request_evidence(prompt, semantic_result) or evidence:
+    if (
+        not semantic_gate_can_request_source_reopen(prompt, semantic_result)
+        or evidence
+        or source_reopen_route_ready
+    ):
         return None
     reasons.append("semantic evidence did not bridge to source-backed evidence")
     return "semantic_evidence_without_source_bridge"
@@ -202,6 +208,8 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
     semantic_cache_bridge_gap = bool(
         semantic_bridge == "semantic_evidence_without_source_bridge" and cache_hit
     )
+    semantic_source_reopen_route = bool(state.get("semantic_source_reopen_route"))
+    semantic_source_candidate_count = len(candidates) if semantic_source_reopen_route else 0
     foreground_profile = "explicit_recall" if semantic_mode == "on" else "ambient_hot_path"
     return {
         "foreground_profile": foreground_profile,
@@ -220,6 +228,8 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "final_candidate_count": len(candidates),
         "evidence_count": len(evidence),
+        "semantic_source_reopen_route": semantic_source_reopen_route,
+        "semantic_source_reopen_candidate_count": semantic_source_candidate_count,
     }
 
 

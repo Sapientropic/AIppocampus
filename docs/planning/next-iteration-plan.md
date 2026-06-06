@@ -42,18 +42,14 @@ reason that it should no longer be an open executable item.
 
 | Layer | Current issues | Current disposition |
 |---|---|---|
-| Public entry and docs IA | #801, #803 | Close together when the public site leads with the fastest useful setup path, magic moments are first-class, `docs/architecture/` has a role index, docs health guards that index, and responsive site QA passes. |
-| Architecture lifecycle policy | #810, #811 | Close with small current-contract docs plus deterministic no-write readouts: edge capture vs async consolidation state flow, and topology anchor weights as lifecycle/navigation pressure rather than source truth. |
-| Runtime contract and config registry | #817 | Close with a thin shared runtime-envelope/failure taxonomy contract, a code-level `AIPPOCAMPUS_*` config registry, no-write `doctor config` report, and deterministic drift/redaction tests. Do not rewrite internal helpers around a generic schema. |
-| Core route actionability | #201, #786, #791 | Keep open until high-confidence local/semantic routes become actionable reopen routes or bounded evidence without forcing the foreground agent into broad manual grep. #791 should not close while #786 still lacks live route-quality proof. |
+| Core route actionability | #201 | Keep open for broad default first/second foreground-turn lift, answer-quality evidence, live registry quality, and real user-session behavior. #786 and #791 close when the semantic reopen branch lands: same-thread issue/comment routing is already measured, and live semantic `evidence -> scent` now carries `source_required` / `reopenable_route` with zero plain-scent collapse in the public 8-case smoke. |
 | Fresh-thread and question continuity | #248, #281 | Keep open as product-quality owners. Existing fixtures are substrate; closing needs source-ref rejoin, fallback, answer-quality, and fresh-thread usefulness evidence. |
-| Cognitive runtime evidence | #163, #310, #311, #575, #576, #663, #752 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, live correction capture, load calibration, Observatory coverage, Episode/Arc source reopen, and no-key host-agent fallback. |
+| Cognitive runtime evidence | #163, #310, #311, #313, #574, #575, #576, #663, #752 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, live correction capture, thread-story / cognitive-portrait leakage controls, anticipatory prewarm ROI, load calibration, Observatory coverage, Episode/Arc source reopen, and no-key host-agent fallback. |
 | Benchmark and retrieval proof | #309, #378, #742 | Keep open as falsifiable evidence owners. Do not close with architecture prose; #742 needs official AMemGym outputs, #378 needs continuous-memory comparison evidence, and #309 needs measured source-joined retrieval/rerank/vector/filter behavior. |
 | Provider credential onboarding | #784 | Keep open for real cross-platform credential-store smoke and quality evidence. The plan/apply/undo bridge exists but does not prove OS credential-store readiness. |
 
 Current open queue at this pass: #163, #201, #248, #281, #309, #310, #311,
-#313, #378, #574, #575, #576, #663, #742, #752, #784, #786, #791, #801, #803,
-#810, #811, and #817.
+#313, #378, #574, #575, #576, #663, #742, #752, and #784.
 
 ## Current Baseline To Preserve
 

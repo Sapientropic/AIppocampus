@@ -20,7 +20,10 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.recall import prompt_cues  # noqa: E402
+from aippocampus_runtime.recall import (  # noqa: E402
+    prompt_context_render,
+    prompt_cues,
+)
 from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
 
 
@@ -486,6 +489,54 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertEqual(diagnostic["final_candidate_count"], 0)
         self.assertFalse(diagnostic["cold_semantic_shadowed"])
         self.assertNotIn("private bridge alias", json.dumps(diagnostic, ensure_ascii=False))
+
+    def test_semantic_evidence_with_local_candidate_becomes_source_required_route(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+
+        def semantic_evidence_with_local_route(*args, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.93,
+                "intent": "source_recall",
+                "query_aliases": ["NeonMemory consent gate"],
+                "reasons": ["semantic route found local source candidate"],
+            }
+
+        result = decision.assess_prompt(
+            "还记得那段设计边界吗？",
+            cwd=self.workspace,
+            registry_path=clean_registry,
+            semantic_gate_fn=semantic_evidence_with_local_route,
+            search_budget=0,
+            max_elapsed_ms=4300,
+        )
+
+        packet = result["ambient_recall"]["fresh_thread_packet"]
+        diagnostic = result["route_delivery_diagnostic"]
+        context = prompt_context_render.context_for_hook(result)
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["evidence"], [])
+        self.assertTrue(result["semantic_source_reopen_route"])
+        self.assertIsNone(result["semantic_bridge_diagnostic"])
+        self.assertEqual(packet["support_level"], "source_required")
+        self.assertEqual(packet["action_grammar"], "reopenable_route")
+        self.assertEqual(packet["reopen_plan"]["status"], "ready")
+        self.assertEqual(
+            packet["reopen_plan"]["recommended_tool"],
+            "reopen_registry_thread_source_index",
+        )
+        self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
+        self.assertTrue(diagnostic["semantic_source_reopen_route"])
+        self.assertEqual(diagnostic["semantic_source_reopen_candidate_count"], 1)
+        self.assertEqual(
+            packet["reopen_plan"]["arguments"],
+            {"thread_key": "session:projection"},
+        )
+        self.assertIn("Source-required recall route", context)
+        self.assertIn("reopen_registry_thread_source_index", context)
+        self.assertNotIn("keep the consent gate beside mutation flow", context)
 
     def test_route_delivery_diagnostic_distinguishes_semantic_public_labels(self) -> None:
         projection = self._projection_module()

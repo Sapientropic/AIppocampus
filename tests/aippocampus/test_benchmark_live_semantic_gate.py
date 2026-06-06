@@ -105,6 +105,11 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["semantic_decision_counts"], {})
         self.assertEqual(payload["metrics"]["semantic_availability_reason_counts"], {})
         self.assertEqual(payload["metrics"]["semantic_usage"]["total_tokens"], 0)
+        self.assertFalse(
+            payload["issue_readouts"]["github_786"][
+                "live_semantic_reopen_quality_measured"
+            ]
+        )
         self.assertEqual(
             payload["metrics"]["continuation_language_metrics"]["zh"]["total_cases"],
             0,
@@ -192,6 +197,81 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertGreater(evidence_cases[0]["evidence_count"], 0)
         self.assertNotIn("How do I debug", json.dumps(payload))
         self.assertNotIn("list.sort", json.dumps(payload))
+
+    def test_live_eval_counts_semantic_evidence_to_source_required_route(self) -> None:
+        def fake_live_semantic(prompt: str, **kwargs) -> dict:
+            continuation = "能接着" in prompt or "continue" in prompt.casefold()
+            wants_evidence = "原始建议" in prompt
+            return {
+                "kind": "aippocampus_semantic_recall_gate",
+                "available": True,
+                "decision": "evidence" if continuation or wants_evidence else "skip",
+                "confidence": 0.93,
+                "intent": (
+                    "continuation"
+                    if continuation
+                    else "source_recall"
+                    if wants_evidence
+                    else "none"
+                ),
+                "query_aliases": ["list.sort", "dict.get"] if continuation or wants_evidence else [],
+                "memory_scope": ["registered_threads"] if continuation or wants_evidence else [],
+                "negative_contexts": [],
+                "anti_personalization_risk": "low",
+                "reasons": ["fake live semantic source route"],
+                "workers": [{"worker": "gate", "decision": "evidence"}],
+                "errors": [],
+                "usage": {},
+                "cache": {},
+                "cached": False,
+                "elapsed_ms": 42.0,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "sharegpt"
+            self._write_corpus(corpus)
+            payload = live_benchmark.run_live_semantic_eval(
+                sharegpt_corpus_dir=corpus,
+                sharegpt_conversations=1,
+                min_cases=4,
+                semantic_gate_fn=fake_live_semantic,
+                case_workers=1,
+            )
+
+        continuation_cases = [
+            row
+            for row in payload["cases"]
+            if "live_semantic" in row["case_type"] and row["expected"] == "should_scent"
+        ]
+        self.assertEqual(len(continuation_cases), 2)
+        self.assertTrue(all(row["actual"] == "scent" for row in continuation_cases))
+        self.assertTrue(
+            all(row["source_required_reopen_plan_ready"] for row in continuation_cases)
+        )
+        self.assertEqual(payload["metrics"]["semantic_evidence_guarded_to_scent_count"], 2)
+        self.assertEqual(
+            payload["metrics"]["semantic_evidence_to_source_required_route_count"], 2
+        )
+        self.assertEqual(
+            payload["metrics"]["semantic_evidence_guarded_to_plain_scent_count"], 0
+        )
+        readout = payload["issue_readouts"]["github_786"]
+        self.assertTrue(readout["live_semantic_reopen_quality_measured"])
+        self.assertEqual(readout["live_semantic_reopen_quality"], "source_required_reopen_route")
+        self.assertEqual(readout["semantic_evidence_guarded_to_plain_scent_count"], 0)
+        self.assertTrue(readout["live_semantic_reopen_closeout_eligible"])
+        self.assertEqual(
+            payload["metrics"]["continuation_language_metrics"]["zh"][
+                "semantic_evidence_to_source_required_route_count"
+            ],
+            1,
+        )
+        self.assertEqual(
+            payload["metrics"]["continuation_language_metrics"]["en"][
+                "semantic_evidence_guarded_to_plain_scent_count"
+            ],
+            0,
+        )
 
     def test_live_eval_fails_quality_gate_when_live_semantic_never_available(self) -> None:
         def unavailable_semantic(prompt: str, **kwargs) -> dict:

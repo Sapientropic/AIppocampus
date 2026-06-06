@@ -26,6 +26,7 @@ from aippocampus_runtime.recall.prompt_cues import (
     natural_evidence_intent,
     negative_evidence_intent,
     semantic_gate_can_request_evidence,
+    semantic_gate_can_request_source_reopen,
     semantic_gate_can_warm_cue_cache,
     semantic_gate_is_memory_cue,
     semantic_gate_terms,
@@ -540,6 +541,25 @@ def _record_semantic_cue_hits(
         }
 
 
+def _semantic_source_reopen_route_ready(
+    prompt: str,
+    decision: str,
+    candidates: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+    suppressed: bool,
+    ambiguous_evidence_request: bool,
+    semantic_result: dict[str, Any] | None,
+) -> bool:
+    return bool(
+        decision == "scent"
+        and candidates
+        and not evidence
+        and not suppressed
+        and not ambiguous_evidence_request
+        and semantic_gate_can_request_source_reopen(prompt, semantic_result)
+    )
+
+
 def assess_prompt(
     prompt: str,
     *,
@@ -749,20 +769,18 @@ def assess_prompt(
         association_matches=association_matches, start=start, max_elapsed_ms=max_elapsed_ms,
         reasons=reasons,
     )
-    if (
-        decision == "skip"
-        and not suppressed
-        and semantic_gate_can_request_evidence(prompt, semantic_result)
-    ):
-        # A semantic evidence decision without a local source bridge is still a
-        # route hint. Surface it as scent so the foreground agent can continue
-        # with clean-source search, but do not promote it to evidence.
+    if decision == "skip" and not suppressed and semantic_gate_can_request_evidence(prompt, semantic_result):
+        # Semantic evidence without local source stays a route hint, not evidence.
         decision = "scent"
 
+    semantic_source_reopen_route = _semantic_source_reopen_route_ready(
+        prompt, decision, candidates, evidence, suppressed, ambiguous_evidence_request, semantic_result
+    )
     semantic_bridge_diagnostic = resolve_semantic_bridge_diagnostic(
         prompt=prompt,
         semantic_result=semantic_result,
         evidence=evidence,
+        source_reopen_route_ready=semantic_source_reopen_route,
         reasons=reasons,
     )
     semantic_cue_cache = _record_semantic_cue_hits(
@@ -786,6 +804,7 @@ def assess_prompt(
         "semantic_gate_reuse": semantic_gate_reuse,
         "scent_threshold_policy": threshold_policy,
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
+        "semantic_source_reopen_route": semantic_source_reopen_route,
         "semantic_cue_cache": semantic_cue_cache, "hot_path_funnel": hot_path_funnel,
         "route_delivery_diagnostic": resolve_route_delivery_diagnostic(state=locals()), "elapsed_ms": round((time.perf_counter() - start) * 1000, 2), "deep_archival_requested": _deep_archival_requested(prompt),
     }

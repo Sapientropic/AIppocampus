@@ -117,6 +117,10 @@ def route_delivery_debug_summary(raw: Any) -> dict[str, Any] | None:
         ),
         "final_candidate_count": count(raw.get("final_candidate_count")),
         "evidence_count": count(raw.get("evidence_count")),
+        "semantic_source_reopen_route": bool(raw.get("semantic_source_reopen_route")),
+        "semantic_source_reopen_candidate_count": count(
+            raw.get("semantic_source_reopen_candidate_count")
+        ),
     }
     return {key: value for key, value in summary.items() if value is not None}
 
@@ -404,6 +408,7 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
     semantic_gate = result.get("semantic_gate")
     if not isinstance(semantic_gate, dict) or not semantic_gate.get("available"):
         return []
+    source_required_route = _fresh_packet_source_required(result)
     aliases = [
         str(value)
         for value in sanitize_external_model_payload(
@@ -422,7 +427,12 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
         "semantic_bridge_diagnostic"
     ):
         return []
-    lines = ["Semantic recall route (direction_only; reopen clean source before facts):"]
+    route_label = (
+        "source_required/reopenable_route"
+        if source_required_route
+        else "direction_only"
+    )
+    lines = [f"Semantic recall route ({route_label}; reopen clean source before facts):"]
     parts: list[str] = []
     if aliases:
         parts.append("aliases: " + ", ".join(aliases))
@@ -433,6 +443,44 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
     if result.get("semantic_bridge_diagnostic"):
         lines.append("- Local evidence bridge did not pass; keep this as route material only.")
     return lines
+
+
+def _fresh_packet(result: dict[str, Any]) -> dict[str, Any]:
+    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
+    packet = ambient.get("fresh_thread_packet") if isinstance(ambient, dict) else {}
+    return packet if isinstance(packet, dict) else {}
+
+
+def _fresh_packet_source_required(result: dict[str, Any]) -> bool:
+    packet = _fresh_packet(result)
+    return bool(
+        packet.get("support_level") == "source_required"
+        and packet.get("action_grammar") == "reopenable_route"
+    )
+
+
+def fresh_packet_reopen_lines(result: dict[str, Any]) -> list[str]:
+    packet = _fresh_packet(result)
+    if not (
+        packet.get("support_level") == "source_required"
+        and packet.get("action_grammar") == "reopenable_route"
+    ):
+        return []
+    plan = packet.get("reopen_plan") if isinstance(packet.get("reopen_plan"), dict) else {}
+    if plan.get("status") != "ready":
+        return []
+    arguments = plan.get("arguments") if isinstance(plan.get("arguments"), dict) else {}
+    argument_text = ", ".join(f"{key}={value}" for key, value in arguments.items())
+    if not argument_text:
+        argument_text = "primary_ref"
+    return [
+        "Source-required recall route (reopenable_route; not evidence yet):",
+        (
+            f"- Use {plan.get('recommended_tool') or 'source_ref_reopen'} with "
+            f"{argument_text}; candidate refs {plan.get('candidate_ref_count', 0)}, "
+            "manual query invention expected: false."
+        ),
+    ]
 
 
 def _ambient_brief_layer(action: str) -> str:
@@ -522,12 +570,18 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 )
         lines.append(_evidence_boundary_line(evidence_cards))
     else:
-        lines.append("Ambient recall scent (aippocampus direction_only). Related prior context:")
+        if _fresh_packet_source_required(result):
+            lines.append(
+                "Ambient recall route (aippocampus source_required). Reopen source before facts:"
+            )
+        else:
+            lines.append("Ambient recall scent (aippocampus direction_only). Related prior context:")
         for item in result.get("candidates") or []:
             anchors = ", ".join(item.get("anchors") or [])
             terms = ", ".join(item.get("matched_terms") or item.get("keywords") or [])
             tail = f" | terms: {terms}" if terms else ""
             lines.append(f"- {item.get('title')}: {anchors}{tail}")
+        lines.extend(fresh_packet_reopen_lines(result))
         lines.extend(semantic_route_hint_lines(result))
         lines.append(
             "Use only if it helps; do not mention recalled content as fact unless backed by bounded_evidence, source_open, or reopened source."

@@ -108,7 +108,7 @@ def _is_reopenable_ref(ref: dict[str, Any]) -> bool:
     if not isinstance(ref, dict):
         return False
     thread_key, message_id, turn_anchor, line = source_ref_key(ref)
-    return bool(thread_key and (message_id or turn_anchor or line))
+    return bool(thread_key and (message_id or turn_anchor or line or ref.get("thread_key")))
 
 
 def _reopenable_ref_count(refs: list[dict[str, Any]]) -> int:
@@ -138,6 +138,8 @@ def _recommended_reopen_tool(ref: dict[str, Any] | None) -> str:
         return "source_ref_reopen"
     if any(key in ref for key in ("message_id", "turn_id", "turn_index")):
         return "get_turn_context"
+    if ref.get("thread_key") and not any(key in ref for key in ("line", "source_id")):
+        return "reopen_registry_thread_source_index"
     return "source_ref_reopen"
 
 
@@ -189,6 +191,8 @@ def _support_level(
     if decision == "skip" and not candidate_refs and not result.get("working_memory"):
         return "silent_scent"
     if result.get("evidence"):
+        return "source_required"
+    if result.get("semantic_source_reopen_route") and candidate_refs:
         return "source_required"
     if result.get("candidates") or result.get("working_memory") or result.get("cognitive_map"):
         return "soft_hypothesis"

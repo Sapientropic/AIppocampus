@@ -88,6 +88,14 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
         for row in called
         if row.get("semantic_decision") == "evidence" and row.get("actual") == "scent"
     )
+    source_required_routes = sum(
+        1
+        for row in called
+        if row.get("semantic_decision") == "evidence"
+        and row.get("actual") == "scent"
+        and row.get("source_required_reopen_plan_ready")
+    )
+    plain_scent = guarded_to_scent - source_required_routes
     evidence_allowed = sum(
         1
         for row in called
@@ -115,6 +123,8 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
         },
         "semantic_latency_ms": latency_summary(latencies),
         "semantic_evidence_guarded_to_scent_count": guarded_to_scent,
+        "semantic_evidence_to_source_required_route_count": source_required_routes,
+        "semantic_evidence_guarded_to_plain_scent_count": plain_scent,
         "semantic_evidence_allowed_count": evidence_allowed,
         "continuation_language_metrics": continuation_language_metrics(called),
     }
@@ -172,6 +182,13 @@ def continuation_language_metrics(rows: list[dict[str, Any]]) -> dict[str, dict[
             for row in lang_rows
             if row.get("semantic_decision") == "evidence" and row.get("actual") == "scent"
         )
+        source_required_routes = sum(
+            1
+            for row in lang_rows
+            if row.get("semantic_decision") == "evidence"
+            and row.get("actual") == "scent"
+            and row.get("source_required_reopen_plan_ready")
+        )
         metrics[language] = {
             "total_cases": len(lang_rows),
             "correct_count": correct,
@@ -186,6 +203,10 @@ def continuation_language_metrics(rows: list[dict[str, Any]]) -> dict[str, dict[
             "actual_counts": count_values(lang_rows, "actual"),
             "semantic_decision_counts": count_values(lang_rows, "semantic_decision"),
             "semantic_evidence_guarded_to_scent_count": guarded_to_scent,
+            "semantic_evidence_to_source_required_route_count": source_required_routes,
+            "semantic_evidence_guarded_to_plain_scent_count": (
+                guarded_to_scent - source_required_routes
+            ),
             "semantic_confidence_avg": round(
                 sum(float(row.get("semantic_confidence") or 0.0) for row in lang_rows)
                 / len(lang_rows),
@@ -356,6 +377,16 @@ def unavailable_payload(*, reason: str, started: float, config: dict[str, Any]) 
             "continuation_language_metrics": continuation_language_metrics([]),
         },
         "cases": [],
+        "issue_readouts": issue_readouts_for_metrics(
+            {
+                "semantic_model_call_count": 0,
+                "semantic_evidence_guarded_to_scent_count": 0,
+                "semantic_evidence_to_source_required_route_count": 0,
+                "semantic_evidence_guarded_to_plain_scent_count": 0,
+                "evidence_false_positive_count": 0,
+            },
+            quality_gate_ok=False,
+        ),
         "skip_reason": reason,
         "privacy_boundary": privacy_boundary(case_ids_are_hashed=True),
         "cannot_claim": ["live_semantic_model_quality"],
@@ -389,6 +420,40 @@ def status_for_metrics(metrics: dict[str, Any], *, min_cases: int, min_surface_r
     if int(metrics.get("evidence_false_positive_count") or 0) > 0:
         return "insufficient_live_semantic_precision"
     return "sufficient"
+
+
+def issue_readouts_for_metrics(metrics: dict[str, Any], *, quality_gate_ok: bool) -> dict[str, Any]:
+    guarded_to_scent = int(metrics.get("semantic_evidence_guarded_to_scent_count") or 0)
+    source_required_routes = int(
+        metrics.get("semantic_evidence_to_source_required_route_count") or 0
+    )
+    plain_scent = int(metrics.get("semantic_evidence_guarded_to_plain_scent_count") or 0)
+    measured = bool(
+        quality_gate_ok
+        and int(metrics.get("semantic_model_call_count") or 0) > 0
+        and guarded_to_scent > 0
+    )
+    live_quality = "not_measured"
+    if measured:
+        live_quality = (
+            "source_required_reopen_route"
+            if source_required_routes == guarded_to_scent and plain_scent == 0
+            else "plain_scent_remains"
+        )
+    return {
+        "github_786": {
+            "live_semantic_reopen_quality_measured": measured,
+            "live_semantic_reopen_quality": live_quality,
+            "semantic_evidence_guarded_to_scent_count": guarded_to_scent,
+            "semantic_evidence_to_source_required_route_count": source_required_routes,
+            "semantic_evidence_guarded_to_plain_scent_count": plain_scent,
+            "live_semantic_reopen_closeout_eligible": bool(
+                measured
+                and live_quality == "source_required_reopen_route"
+                and int(metrics.get("evidence_false_positive_count") or 0) == 0
+            ),
+        }
+    }
 
 
 def resolve_case_workers(*, sharegpt_conversations: int, case_workers: int) -> int:
@@ -499,6 +564,9 @@ def run_live_semantic_eval(
         "config": config,
         "metrics": metrics,
         "cases": results,
+        "issue_readouts": issue_readouts_for_metrics(
+            metrics, quality_gate_ok=quality_gate_ok
+        ),
         "privacy_boundary": privacy_boundary(case_ids_are_hashed=True),
         "cannot_claim": cannot_claim,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),

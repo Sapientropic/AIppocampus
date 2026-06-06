@@ -730,6 +730,25 @@ def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | Non
     return bool(result.get("query_aliases") or result.get("memory_scope"))
 
 
+def semantic_gate_can_request_source_reopen(prompt: str, result: dict[str, Any] | None) -> bool:
+    if semantic_gate_can_request_evidence(prompt, result):
+        return True
+    if not result or not result.get("available") or result.get("decision") != "evidence":
+        return False
+    if negative_evidence_intent(prompt) or current_checkout_live_fact_intent(prompt):
+        return False
+    if float(result.get("confidence") or 0.0) < 0.82:
+        return False
+    risk = str(result.get("anti_personalization_risk") or "").strip().casefold()
+    intent = str(result.get("intent") or "").strip().casefold()
+    # Live semantic workers often label vague "continue that old thread" prompts
+    # as `continuation`: source truth still blocks factual evidence, but a
+    # paid/high-confidence route should give the foreground agent a reopen plan
+    # instead of collapsing back to ordinary scent/manual grep.
+    has_route_surface = bool(result.get("query_aliases") or result.get("memory_scope"))
+    return bool(risk != "high" and intent == "continuation" and has_route_surface)
+
+
 def has_non_cjk_non_latin_letters(prompt: str) -> bool:
     for ch in prompt:
         code = ord(ch)
