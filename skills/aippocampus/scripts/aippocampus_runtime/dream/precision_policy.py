@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 
 SCHEMA_VERSION = 1
 POLICY_VERSION = "dream_precision_policy_v1"
@@ -60,22 +61,6 @@ LOW_SIGNAL_TERMS = {
     "summary",
     "thread",
 }
-SENSITIVE_TERMS = {
-    "diagnosis",
-    "mental health",
-    "personality",
-    "preference",
-    "prefers",
-    "profile",
-    "secretly",
-    "trauma",
-    "人格",
-    "创伤",
-    "偏好",
-    "诊断",
-}
-
-
 def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, value))
 
@@ -206,14 +191,7 @@ def source_anchor_component(probe: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def sensitive_probe(probe: Mapping[str, Any]) -> bool:
-    text = " ".join(
-        [
-            str(probe.get("title") or ""),
-            str(probe.get("summary") or ""),
-            " ".join(string_values(probe.get("counter_evidence"))),
-        ]
-    ).casefold()
-    return any(term in text for term in SENSITIVE_TERMS)
+    return dream_text_hard_risk(probe.get("title"), probe.get("summary"), probe.get("counter_evidence"))
 
 
 def hard_gate_failures(probe: Mapping[str, Any]) -> list[str]:

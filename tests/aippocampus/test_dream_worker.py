@@ -369,6 +369,66 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(payload["adjudicated_findings"][0]["adjudication_result"]["status"], "accepted")
         self.assertEqual(payload["dream_working_memory_rows"], [])
 
+    def test_active_imagination_accepts_source_backed_preference_relationship_bridge(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "bridge_concept",
+                                            "title": "Preference and relationship route context",
+                                            "summary": (
+                                                "The source pack suggests a preference and relationship-context "
+                                                "bridge that should stay a hypothesis."
+                                            ),
+                                            "why_this_is_not_fact": (
+                                                "This is only route context over cited source handles, "
+                                                "not a user profile fact."
+                                            ),
+                                            "counter_evidence": ["the user may revise the preference later"],
+                                            "activation_cues": [
+                                                "preference route context",
+                                                "relationship route context",
+                                            ],
+                                            "confidence": 0.62,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The bridge cites both source anchors.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="active_imagination",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=True,
+        )
+
+        finding = payload["findings"][0]
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(finding["worker_validation"]["status"], "passed")
+        self.assertFalse(finding["human_review_required"])
+        self.assertNotIn(
+            "sensitive_or_profile_claim_requires_human_review",
+            finding["worker_validation"]["failed_checks"],
+        )
+
     def test_active_imagination_parks_unsourced_single_source_claimless_and_sensitive_outputs(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {
