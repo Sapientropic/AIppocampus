@@ -40,7 +40,7 @@ PR tightly.
 
 | Layer | Reviewed issues | Current disposition |
 |---|---|---|
-| Core default / product usability | #201, #281, #752 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, or keep no-key installs from silently losing background cognition. #752's first staging-only fallback slice is tracked separately; the broader issue stays open until host-agent execution/materialization is real. |
+| Core default / product usability | #201, #281, #752 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, or keep no-key installs from silently losing background cognition. #752's staging-only queue and source-joined result materializer exist; the broader issue stays open until host-agent execution and real fallback-output quality are proven. |
 | Evidence and quality gates | #163, #378, #742 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, continuous-memory-vs-fresh-context comparison, and official AMemGym comparability without live judges. |
 | Reliability / infrastructure | #311 | Keep open, but cut the next PR tightly. This owns live correction capture and private real-history adjudication. |
 | Maintainer-reopened navigation/activation owners | #248, #309 | Keep open because the latest issue comments explicitly ask for sliced execution. Cut each into one concrete fixture/report path before changing runtime defaults: question prefilter/adoption or source-joined retrieval funnel. |
