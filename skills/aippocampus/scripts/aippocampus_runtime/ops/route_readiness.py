@@ -14,7 +14,7 @@ import time
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.privacy import redact_private_paths
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.privacy_taxonomy import (
     privacy_action_is_local_route,
     privacy_boundary_reason_bucket,
@@ -308,38 +308,37 @@ def route_readiness_report(
             metrics["candidate_count"],
         ),
     }
-    return redact_private_paths(
-        {
-            "kind": ROUTE_READINESS_KIND,
-            "schema_version": ROUTE_READINESS_SCHEMA_VERSION,
-            "no_write": True,
-            "navigation_only": True,
-            "rows": rows,
-            "suppression_counts": dict(sorted(suppression_counts.items())),
-            "reason_counts": dict(sorted(reason_counts.items())),
-            "metrics": metrics,
-            "active_lock_roi": roi,
-            "contract": {
-                "no_write_report_only": True,
-                "clean_source_mutation_allowed": False,
-                "owner_surface_mutation_allowed": False,
-                "foreground_hook_mutation_allowed": False,
-                "route_readiness_is_not_source_truth": True,
-                "source_reopen_required_before_claim": True,
-            },
-            "privacy_boundary": {
-                "raw_prompt_serialized": False,
-                "raw_source_text_serialized": False,
-                "local_paths_serialized": False,
-                "secret_values_serialized": False,
-            },
-            "cannot_claim": [
-                "prewarm_route_is_source_backed_evidence",
-                "route_readiness_proves_memory_quality",
-                "suppressed_row_deletes_clean_source",
-            ],
-        }
-    )
+    report = {
+        "kind": ROUTE_READINESS_KIND,
+        "schema_version": ROUTE_READINESS_SCHEMA_VERSION,
+        "no_write": True,
+        "navigation_only": True,
+        "rows": rows,
+        "suppression_counts": dict(sorted(suppression_counts.items())),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "metrics": metrics,
+        "active_lock_roi": roi,
+        "contract": {
+            "no_write_report_only": True,
+            "clean_source_mutation_allowed": False,
+            "owner_surface_mutation_allowed": False,
+            "foreground_hook_mutation_allowed": False,
+            "route_readiness_is_not_source_truth": True,
+            "source_reopen_required_before_claim": True,
+        },
+        "privacy_boundary": {
+            "raw_prompt_serialized": False,
+            "raw_source_text_serialized": False,
+            "local_paths_serialized": False,
+            "sensitive_values_serialized": False,
+        },
+        "cannot_claim": [
+            "prewarm_route_is_source_backed_evidence",
+            "route_readiness_proves_memory_quality",
+            "suppressed_row_deletes_clean_source",
+        ],
+    }
+    return redact_sensitive_values(redact_private_paths(report))
 
 
 def fixture_route_readiness_report() -> dict[str, Any]:
@@ -387,7 +386,7 @@ def fixture_route_readiness_report() -> dict[str, Any]:
             "source_refs": [{"source_id": "clean:weak", "message_id": "m3"}],
         },
         {
-            "route_id": "sk-secret-route-label",
+            "route_id": "sensitive-label-redaction-route",
             "surface_kind": "prewarm_candidate",
             "freshness": "current",
             "created_unix": fixed_now - 30,
