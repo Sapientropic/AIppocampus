@@ -150,6 +150,8 @@ def _action_priority(card: dict[str, Any]) -> int:
         return 4
     if action == "reopenable_route":
         return 3
+    if action == "direction_with_ref":
+        return 2
     if action == "direction_only":
         return 1
     return 0

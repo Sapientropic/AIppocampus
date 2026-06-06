@@ -19,12 +19,14 @@ HIGH_RISK_REOPEN_REQUIRED = "high_risk_reopen_required"
 TRUST_IGNORE = "ignore"
 TRUST_SEMANTIC_HINT = "semantic_hint"
 TRUST_SCENT = "scent"
+TRUST_CANDIDATE_BACKED = "candidate_backed"
 TRUST_SOURCE_REQUIRED = "source_required"
 TRUST_BOUNDED_EVIDENCE = "bounded_evidence"
 TRUST_RAW_SOURCE_REOPENED = "raw_source_reopened"
 
 ACTION_IGNORE_OR_BLOCKED = "ignore_or_blocked"
 ACTION_DIRECTION_ONLY = "direction_only"
+ACTION_DIRECTION_WITH_REF = "direction_with_ref"
 ACTION_REOPENABLE_ROUTE = "reopenable_route"
 ACTION_BOUNDED_EVIDENCE = "bounded_evidence"
 ACTION_SOURCE_OPEN = "source_open"
@@ -49,6 +51,12 @@ TRUST_TAXONOMY: tuple[dict[str, Any], ...] = (
         "summary": "A weak association that may decide whether further recall is worth it.",
     },
     {
+        "trust_level": TRUST_CANDIDATE_BACKED,
+        "action_grammar": ACTION_DIRECTION_WITH_REF,
+        "allowed_use": "shape_direction_with_refs",
+        "summary": "A source-ref-backed candidate may shape direction, depth, or route choice.",
+    },
+    {
         "trust_level": TRUST_SOURCE_REQUIRED,
         "action_grammar": ACTION_REOPENABLE_ROUTE,
         "allowed_use": "reopen_source",
@@ -71,6 +79,22 @@ TRUST_TAXONOMY: tuple[dict[str, Any], ...] = (
 
 def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _has_route_refs(surface: Mapping[str, Any]) -> bool:
+    return bool(surface.get("source_refs") or surface.get("candidate_refs"))
+
+
+def _has_candidate_conflict(surface: Mapping[str, Any]) -> bool:
+    boundary = _mapping(surface.get("source_boundary"))
+    status = str(surface.get("conflict_status") or boundary.get("conflict_status") or "").casefold()
+    return bool(surface.get("conflict_flags")) or status in {
+        "conflict",
+        "conflicted",
+        "source_conflict",
+        "uncleared",
+        "unreviewed",
+    }
 
 
 def is_bounded_evidence(surface: Mapping[str, Any]) -> bool:
@@ -130,6 +154,18 @@ def trust_level(surface: Mapping[str, Any]) -> str:
         HIGH_RISK_REOPEN_REQUIRED,
     }:
         return TRUST_SOURCE_REQUIRED
+    if (
+        _has_route_refs(surface)
+        and (support == "candidate" or authority == CANDIDATE_WITH_REFS)
+        and _has_candidate_conflict(surface)
+    ):
+        return TRUST_IGNORE
+    if (
+        _has_route_refs(surface)
+        and (support == "candidate" or authority == CANDIDATE_WITH_REFS)
+        and bool(surface.get("source_reopen_required", True))
+    ):
+        return TRUST_CANDIDATE_BACKED
     if provenance in {
         "cognitive_map_route",
         "working_memory_model",
@@ -167,12 +203,17 @@ def action_grammar_for_level(
         or visibility == "blocked"
         or currentness in {"stale", "superseded"}
         or plan_status == "blocked"
+        or (clean_level == TRUST_CANDIDATE_BACKED and _has_candidate_conflict(surface_map))
     ):
         return ACTION_IGNORE_OR_BLOCKED
     if clean_level == TRUST_RAW_SOURCE_REOPENED:
         return ACTION_SOURCE_OPEN
     if clean_level == TRUST_BOUNDED_EVIDENCE:
         return ACTION_BOUNDED_EVIDENCE
+    if clean_level == TRUST_CANDIDATE_BACKED:
+        if not surface_map or _has_route_refs(surface_map):
+            return ACTION_DIRECTION_WITH_REF
+        return ACTION_DIRECTION_ONLY
     if clean_level == TRUST_SOURCE_REQUIRED:
         if not surface_map:
             return ACTION_REOPENABLE_ROUTE
@@ -238,6 +279,20 @@ def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = Non
             "manual_query_invention_expected": bool(
                 False if should_ignore else plan.get("manual_query_invention_expected", False)
             ),
+            "treat_as_fact": False,
+        }
+    if clean_level == TRUST_CANDIDATE_BACKED:
+        refs_available = bool(_has_route_refs(surface_map)) if surface_map else True
+        return {
+            "action_grammar": grammar,
+            "allowed_use": "shape_direction_with_refs",
+            "agent_may_answer_within_scope": False,
+            "agent_may_quote_exact_wording": may_quote,
+            "agent_should_ignore": should_ignore,
+            "agent_should_reopen_source": False,
+            "source_reopen_required_before_claim": True,
+            "reopen_recommended_for_exact_quote": True,
+            "manual_query_invention_expected": not refs_available,
             "treat_as_fact": False,
         }
     if clean_level == TRUST_BOUNDED_EVIDENCE:
@@ -307,6 +362,7 @@ def with_authority_fields(surface: Mapping[str, Any]) -> dict[str, Any]:
     state = authority_state(clean)
     clean["authority_state"] = state
     clean["reopen_required_before_claim"] = state in {
+        CANDIDATE_WITH_REFS,
         REOPEN_REQUIRED_BEFORE_CLAIM,
         HIGH_RISK_REOPEN_REQUIRED,
     }

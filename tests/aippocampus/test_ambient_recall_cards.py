@@ -51,6 +51,7 @@ class AmbientRecallCardTests(unittest.TestCase):
                 "ignore",
                 "semantic_hint",
                 "scent",
+                "candidate_backed",
                 "source_required",
                 "bounded_evidence",
                 "raw_source_reopened",
@@ -62,6 +63,7 @@ class AmbientRecallCardTests(unittest.TestCase):
                 "ignore_or_blocked",
                 "direction_only",
                 "direction_only",
+                "direction_with_ref",
                 "reopenable_route",
                 "bounded_evidence",
                 "source_open",
@@ -86,6 +88,18 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(orphan_reopen["trust_level"], "source_required")
         self.assertEqual(orphan_reopen["action_grammar"], "ignore_or_blocked")
         self.assertTrue(orphan_reopen["trust_contract"]["agent_should_ignore"])
+
+        conflicted_candidate = authority.with_trust_fields(
+            {
+                "support_level": "candidate",
+                "source_refs": [{"thread_key": "session:conflicted", "message_id": "m1"}],
+                "source_reopen_required": True,
+                "conflict_flags": ["source_conflict_uncleared"],
+            }
+        )
+        self.assertEqual(conflicted_candidate["trust_level"], "ignore")
+        self.assertEqual(conflicted_candidate["action_grammar"], "ignore_or_blocked")
+        self.assertTrue(conflicted_candidate["trust_contract"]["agent_should_ignore"])
 
     def test_source_open_enables_exact_quote_only_when_raw_source_reopened(self) -> None:
         bounded = authority.with_trust_fields(
@@ -163,20 +177,17 @@ class AmbientRecallCardTests(unittest.TestCase):
                 "suggested_use": "Let this orient the next response if useful.",
             }
         )
-        bounded_card = authority.with_authority_fields(
+        candidate_card = authority.with_trust_fields(
             {
-                "support_level": "evidence",
-                "provenance_class": "source_backed_reopen",
-                "source_boundary": {"clean_source_reopened": True},
-                "visibility": "source_backed_recall_card",
-                "theme": "Unfinished #797 fixture route",
-                "key_line": "bounded evidence changes the next action inside scope",
-                "suggested_use": "Use this bounded evidence to continue the task.",
+                "support_level": "candidate",
+                "visibility": "active_gentle_nudge",
+                "theme": "Candidate-backed route",
+                "suggested_use": "Use the route direction if it helps, but reopen source before claims.",
+                "source_reopen_required": True,
                 "source_refs": [
                     {
-                        "thread_key": "session:bounded",
-                        "title": "Bounded source",
-                        "line": 91,
+                        "thread_key": "session:candidate",
+                        "message_id": "msg-candidate",
                     }
                 ],
             }
@@ -193,7 +204,7 @@ class AmbientRecallCardTests(unittest.TestCase):
         context = prompt_context_render.context_for_hook(
             {
                 "decision": "scent",
-                "ambient_recall": {"cards": [memory_card, bounded_card, blocked_card]},
+                "ambient_recall": {"cards": [memory_card, candidate_card, blocked_card]},
                 "evidence": [],
                 "working_memory": [],
                 "cognitive_map": [],
@@ -205,10 +216,68 @@ class AmbientRecallCardTests(unittest.TestCase):
         assert context is not None
         self.assertIn("Memory atmosphere", context)
         self.assertIn("Working continuity brief", context)
+        self.assertIn("candidate-backed direction", context)
         self.assertIn("Source court", context)
         self.assertIn("/scent/direction_only", context)
-        self.assertIn("/bounded_evidence/bounded_evidence", context)
+        self.assertIn("/candidate/candidate_backed/direction_with_ref", context)
         self.assertIn("/ignore/ignore_or_blocked", context)
+
+    def test_candidate_backed_working_memory_card_is_direction_with_ref_not_evidence(
+        self,
+    ) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "elapsed_ms": 6.0,
+                "evidence": [],
+                "working_memory": [
+                    {
+                        "title": "Route-shaped continuity candidate",
+                        "route": "confirm_when_relevant",
+                        "confidence": "medium",
+                        "summary": "Prior source refs can steer route choice without proving a claim.",
+                        "source_refs": [
+                            {
+                                "thread_key": "session:candidate",
+                                "message_id": "msg-candidate",
+                                "line": 24,
+                            }
+                        ],
+                    }
+                ],
+                "cognitive_map": [],
+                "candidates": [],
+            }
+        )
+
+        card = payload["cards"][0]
+        self.assertEqual(card["support_level"], "candidate")
+        self.assertEqual(card["trust_level"], "candidate_backed")
+        self.assertEqual(card["action_grammar"], "direction_with_ref")
+        self.assertFalse(card["trust_contract"]["treat_as_fact"])
+        self.assertFalse(card["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(card["trust_contract"]["agent_should_reopen_source"])
+        self.assertTrue(card["trust_contract"]["source_reopen_required_before_claim"])
+        self.assertFalse(card["trust_contract"]["manual_query_invention_expected"])
+
+        context = prompt_context_render.context_for_hook(
+            {
+                "decision": "scent",
+                "ambient_recall": payload,
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [],
+                "candidates": [],
+            }
+        )
+
+        self.assertIsNotNone(context)
+        assert context is not None
+        self.assertIn("Ambient recall candidate-backed direction", context)
+        self.assertIn("direction_with_ref", context)
+        self.assertIn("route guidance only, not evidence", context)
+        self.assertNotIn("[bounded_evidence]", context)
         self.assertIn("Escalate to source court", context)
 
     def test_evidence_decision_becomes_source_backed_card(self) -> None:

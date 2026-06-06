@@ -250,6 +250,7 @@ class ActivePathPacketTests(unittest.TestCase):
                 "ignore",
                 "semantic_hint",
                 "scent",
+                "candidate_backed",
                 "source_required",
                 "bounded_evidence",
                 "raw_source_reopened",
@@ -261,6 +262,7 @@ class ActivePathPacketTests(unittest.TestCase):
                 "ignore_or_blocked",
                 "direction_only",
                 "direction_only",
+                "direction_with_ref",
                 "reopenable_route",
                 "bounded_evidence",
                 "source_open",
@@ -329,6 +331,109 @@ class ActivePathPacketTests(unittest.TestCase):
         self.assertNotIn("launch-notes", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("private", serialized.casefold())
+
+    def test_candidate_backed_path_shapes_direction_without_becoming_evidence(self) -> None:
+        packet = build_active_path_packet(
+            ambient_recall={
+                "kind": "aippocampus_ambient_recall",
+                "confidence": "medium",
+                "cards": [
+                    {
+                        "card_id": "candidate-backed-card",
+                        "theme": "Candidate-backed design route",
+                        "support_level": "candidate",
+                        "visibility": "active_gentle_nudge",
+                        "suggested_use": "Let this steer route choice; reopen source before claims.",
+                        "source_reopen_required": True,
+                        "source_refs": [
+                            {
+                                "thread_key": "session:candidate",
+                                "message_id": "msg-candidate",
+                            }
+                        ],
+                    },
+                    {
+                        "card_id": "candidate-without-ref",
+                        "theme": "Unbacked candidate scent",
+                        "support_level": "candidate",
+                        "visibility": "active_gentle_nudge",
+                        "suggested_use": "Only a weak scent.",
+                        "source_refs": [],
+                    },
+                    {
+                        "card_id": "blocked-candidate-card",
+                        "theme": "Blocked candidate route",
+                        "support_level": "candidate",
+                        "visibility": "blocked",
+                        "currentness": "stale",
+                        "suggested_use": "Do not use except as a boundary.",
+                        "source_reopen_required": True,
+                        "source_refs": [
+                            {
+                                "thread_key": "session:blocked",
+                                "message_id": "msg-blocked",
+                            }
+                        ],
+                    },
+                    {
+                        "card_id": "conflicted-candidate-card",
+                        "theme": "Conflicted candidate route",
+                        "support_level": "candidate",
+                        "visibility": "active_gentle_nudge",
+                        "conflict_flags": ["source_conflict_uncleared"],
+                        "suggested_use": "Do not use until the conflict is cleared.",
+                        "source_reopen_required": True,
+                        "source_refs": [
+                            {
+                                "thread_key": "session:conflicted",
+                                "message_id": "msg-conflicted",
+                            }
+                        ],
+                    },
+                ],
+            }
+        )
+
+        candidate_path = next(
+            path for path in packet["paths"] if path["title"] == "Candidate-backed design route"
+        )
+        self.assertEqual(candidate_path["route"], "scent")
+        self.assertEqual(candidate_path["trust_level"], "candidate_backed")
+        self.assertEqual(candidate_path["action_grammar"], "direction_with_ref")
+        self.assertEqual(candidate_path["next_action"], "use_ref_backed_direction")
+        self.assertFalse(candidate_path["trust_contract"]["treat_as_fact"])
+        self.assertFalse(candidate_path["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(candidate_path["trust_contract"]["agent_should_reopen_source"])
+        self.assertTrue(candidate_path["trust_contract"]["source_reopen_required_before_claim"])
+        self.assertFalse(candidate_path["trust_contract"]["manual_query_invention_expected"])
+        self.assertTrue(candidate_path["source_refs"])
+        self.assertTrue(
+            candidate_path["source_boundary"]["source_reopen_required_before_claim"]
+        )
+        self.assertFalse(candidate_path["source_boundary"]["bounded_evidence_usable_within_scope"])
+
+        unbacked_path = next(
+            path for path in packet["paths"] if path["title"] == "Unbacked candidate scent"
+        )
+        self.assertEqual(unbacked_path["trust_level"], "scent")
+        self.assertEqual(unbacked_path["action_grammar"], "direction_only")
+
+        blocked_path = next(
+            path for path in packet["paths"] if path["title"] == "Blocked candidate route"
+        )
+        self.assertEqual(blocked_path["trust_level"], "ignore")
+        self.assertEqual(blocked_path["action_grammar"], "ignore_or_blocked")
+        self.assertTrue(blocked_path["source_boundary"]["unsafe_to_use_as_current_fact"])
+        self.assertFalse(blocked_path["trust_contract"]["treat_as_fact"])
+
+        conflicted_path = next(
+            path for path in packet["paths"] if path["title"] == "Conflicted candidate route"
+        )
+        self.assertEqual(conflicted_path["route"], "ignore")
+        self.assertEqual(conflicted_path["trust_level"], "ignore")
+        self.assertEqual(conflicted_path["action_grammar"], "ignore_or_blocked")
+        self.assertIn("candidate_conflicted", conflicted_path["reason_codes"])
+        self.assertFalse(conflicted_path["trust_contract"]["treat_as_fact"])
 
 
 if __name__ == "__main__":

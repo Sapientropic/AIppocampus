@@ -493,7 +493,7 @@ def _ambient_brief_layer(action: str) -> str:
     do with the material.
     """
 
-    if action in {"bounded_evidence", "source_open", "reopenable_route"}:
+    if action in {"bounded_evidence", "source_open", "reopenable_route", "direction_with_ref"}:
         return "working_continuity_brief"
     if action == "ignore_or_blocked":
         return "source_court"
@@ -504,7 +504,7 @@ def _ambient_brief_layer_heading(layer: str) -> str:
     if layer == "working_continuity_brief":
         return (
             "Working continuity brief "
-            "(reopenable routes, bounded evidence, and source-open material):"
+            "(candidate-backed direction, reopenable routes, bounded evidence, and source-open material):"
         )
     if layer == "source_court":
         return "Source court (blocked, exact, sensitive, stale, conflict, or high-risk routes):"
@@ -522,6 +522,17 @@ def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
         if isinstance(card, dict)
         and str(card.get("action_grammar") or "") in {"bounded_evidence", "source_open"}
     ]
+
+
+def _has_direction_with_ref_card(result: dict[str, Any]) -> bool:
+    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
+    cards = ambient.get("cards") if isinstance(ambient, dict) else []
+    if not isinstance(cards, list):
+        return False
+    return any(
+        isinstance(card, dict) and str(card.get("action_grammar") or "") == "direction_with_ref"
+        for card in cards
+    )
 
 
 def _evidence_boundary_line(evidence_cards: list[dict[str, Any]]) -> str:
@@ -575,6 +586,10 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         if _fresh_packet_source_required(result):
             lines.append(
                 "Ambient recall route (aippocampus source_required). Reopen source before facts:"
+            )
+        elif _has_direction_with_ref_card(result):
+            lines.append(
+                "Ambient recall candidate-backed direction (aippocampus direction_with_ref). Use refs as route context, not fact:"
             )
         else:
             lines.append("Ambient recall scent (aippocampus direction_only). Related prior context:")
@@ -669,6 +684,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 source_note = " raw source open; exact wording still scope/redaction-bound"
             elif action == "reopenable_route":
                 source_note = " actionable source-reopen route"
+            elif action == "direction_with_ref":
+                source_note = " candidate-backed refs available; route guidance only, not evidence"
             elif action == "ignore_or_blocked":
                 source_note = " blocked or unsafe to use"
             if visibility == "deep_archival_recall":
@@ -688,7 +705,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             lines.extend(rows)
         lines.append(
             "Use bounded_evidence within scope, source_open for scoped exact wording, "
-            "reopenable_route by reopening source, and direction_only only as attention. "
+            "reopenable_route by reopening source, direction_with_ref as candidate-backed direction, "
+            "and direction_only only as attention. "
             "Escalate to source court for exact quotes, wider context, conflicts, stale/sensitive/high-risk claims, or ignore_or_blocked routes."
         )
     if result.get("reasons"):
