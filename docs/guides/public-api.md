@@ -569,9 +569,17 @@ Common installs should stay small:
   current process environment. It reads only user-specified `.env` files and the
   current process env, reports public candidate shape and optional validation
   status, omits local paths by default, and never prints secret values. It does
-  not change runtime behavior, install hook wrappers, or bridge secrets into a
-  GUI/Hook environment. `--validate-credentials` may probe the selected route's
-  models endpoint, but only over HTTPS or loopback HTTP.
+  not change runtime behavior or install hook wrappers. `--validate-credentials`
+  may probe the selected route's models endpoint, but only over HTTPS or
+  loopback HTTP.
+- `aippocampus onboard provider-key --plan|--apply|--undo --target codex-hooks`
+  is the explicit provider-key bridge surface. Apply writes only a local
+  AIppocampus-owned hook wrapper plus manifest and updates Codex hook commands
+  to call that wrapper; secret values are never written to public JSON,
+  `hooks.json`, or the manifest. Supported source names are `explicit-dotenv`,
+  `macos-keychain`, `windows-credential-manager`, and `linux-secret-service`;
+  each requires explicit locator flags and is outside normal provider doctor
+  discovery. This prepares future/restarted Codex hook processes only.
 - `aippocampus health --json`, `aippocampus doctor provider --json`, and
   `aippocampus onboard --status --json` expose path-free `legacy_aliases`
   diagnostics for compatibility fallbacks. New setup examples should still use
