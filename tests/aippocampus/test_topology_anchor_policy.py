@@ -54,6 +54,46 @@ class TopologyAnchorPolicyTests(unittest.TestCase):
         self.assertEqual(report["nodes"][0]["classification"], "blocked")
         self.assertFalse(report["nodes"][0]["protected_by_topology"])
 
+    def test_local_privacy_route_handle_does_not_block_topology_bridge(self) -> None:
+        report = topology_anchor_report(
+            [
+                {
+                    "node_id": "same-user-relationship-bridge",
+                    "source_refs": [{"source_id": "clean:relationship"}],
+                    "cluster_ids": ["life", "project"],
+                    "bridge_score": 0.9,
+                    "privacy_blocked": True,
+                    "privacy_action": "private_route",
+                }
+            ]
+        )
+
+        node = report["nodes"][0]
+        self.assertEqual(node["classification"], "review_before_archive")
+        self.assertTrue(node["protected_by_topology"])
+        self.assertIn("local_route_handle_only", node["reasons"])
+        self.assertNotIn("privacy_blocked", node["reasons"])
+
+    def test_external_payload_reason_still_blocks_topology_bridge(self) -> None:
+        report = topology_anchor_report(
+            [
+                {
+                    "node_id": "mixed-privacy-bridge",
+                    "source_refs": [{"source_id": "clean:relationship"}],
+                    "cluster_ids": ["life", "project"],
+                    "bridge_score": 0.9,
+                    "privacy_action": "private_route",
+                    "privacy_reason_codes": ["external_payload"],
+                }
+            ]
+        )
+
+        node = report["nodes"][0]
+        self.assertEqual(node["classification"], "blocked")
+        self.assertFalse(node["protected_by_topology"])
+        self.assertIn("external_payload_blocked", node["reasons"])
+        self.assertNotIn("local_route_handle_only", node["reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()

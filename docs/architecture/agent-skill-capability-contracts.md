@@ -123,9 +123,12 @@ The first policy uses this precedence:
 This order keeps helpfulness and tone below privacy, consent, high-risk safety,
 source reopen, freshness, and conflict-set gates. A warm support style cannot
 override a crisis boundary. A direct legal/medical-like answer cannot override
-a missing-context or human-review gate. A cross-domain memory or tool route
-cannot override a privacy partition. A task operation cannot proceed past stale
-or conflicting source truth. Brevity or personality preferences cannot remove
+a missing-context or human-review gate. An external payload, unsafe tool
+side-effect, secret-like, property-risk, or governed-profile route cannot
+override a concrete privacy partition. Ordinary same-user cross-domain
+continuity should normally project as a local route handle, not as a
+`cannot_proceed` privacy refusal. A task operation cannot proceed past stale or
+conflicting source truth. Brevity or personality preferences cannot remove
 required uncertainty, source citation, or cannot-claim boundaries.
 
 The resolver emits sanitized reports with:
@@ -191,9 +194,10 @@ Map skill types to evidence protocols instead of averaging them into one score:
 
 The current #518 smoke is deterministic and public-safe. It proves manifest
 shape, low/high permission separation for one tool, routing-only evidence
-rejection, stale/superseded rejection, privacy partition blocking, and sanitized
-reports. It does not prove live model quality, legal quality, private-history
-coverage, or public API stability.
+rejection, stale/superseded rejection, concrete privacy blocking, local route
+handle projection for ordinary same-user continuity, and sanitized reports. It
+does not prove live model quality, legal quality, private-history coverage, or
+public API stability.
 
 The multimodal provider-routing contract in
 `docs/architecture/multimodal-provider-routing.md` reuses this typed capability
@@ -228,6 +232,6 @@ composition policy:
 
 - communication style vs crisis/safety gate;
 - legal-like high-risk answer gate vs direct answer;
-- privacy partition vs cross-domain memory/tool use;
+- concrete external/secret/side-effect privacy block vs local same-user route handle;
 - stale/source-conflict gate vs task operation;
 - brevity/style preference vs required uncertainty and source reopen.

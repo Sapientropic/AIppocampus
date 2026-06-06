@@ -15,6 +15,11 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from aippocampus_runtime.privacy import redact_private_paths
+from aippocampus_runtime.privacy_taxonomy import (
+    privacy_action_is_local_route,
+    privacy_boundary_reason_bucket,
+    public_codes,
+)
 from aippocampus_runtime.recall.active_recall_lock_lifecycle import (
     nonnegative_int,
 )
@@ -119,6 +124,14 @@ def _freshness(row: Mapping[str, Any]) -> str:
 
 
 def _privacy_state(row: Mapping[str, Any]) -> str:
+    bucket = privacy_boundary_reason_bucket(
+        privacy_action=row.get("privacy_action"),
+        reason_codes=row.get("privacy_reason_codes"),
+    )
+    if bucket and bucket != "local_route_handle_only":
+        return bucket
+    if privacy_action_is_local_route(row.get("privacy_action")):
+        return "local_route_handle"
     if row.get("privacy_blocked") or row.get("blocked_by_privacy"):
         return "blocked"
     text = str(row.get("privacy_state") or row.get("privacy") or "allowed").strip().casefold()
@@ -153,6 +166,11 @@ def normalize_route_candidate(
     output_authority = str(row.get("output_authority") or "navigation_only").strip()
 
     reason_codes: list[str] = []
+    privacy_bucket = privacy_boundary_reason_bucket(
+        privacy_action=row.get("privacy_action"),
+        reason_codes=row.get("privacy_reason_codes"),
+        blocked=privacy_state in BLOCKED_PRIVACY_STATES,
+    )
     if output_authority != "navigation_only" or row.get("navigation_only") is False:
         reason_codes.append("output_authority_not_navigation_only")
     if not refs:
@@ -161,13 +179,16 @@ def normalize_route_candidate(
         reason_codes.append("stale_or_unknown_freshness")
     if ttl_remaining <= 0:
         reason_codes.append("ttl_expired")
-    if privacy_state in BLOCKED_PRIVACY_STATES:
-        reason_codes.append("privacy_blocked")
+    if privacy_bucket == "local_route_handle_only":
+        reason_codes.append("local_route_handle_only")
+    elif privacy_bucket:
+        reason_codes.append(privacy_bucket)
     if score < min_roi_score:
         reason_codes.append("low_expected_value")
 
-    ready = not reason_codes
-    suppression_reason = "" if ready else reason_codes[0]
+    blocking_codes = [code for code in reason_codes if code != "local_route_handle_only"]
+    ready = not blocking_codes
+    suppression_reason = "" if ready else blocking_codes[0]
     route_id = row.get("route_id") or row.get("lock_id") or row.get("candidate_id")
     return {
         "route_id_hash": _sha(route_id or row, prefix="route"),
@@ -185,6 +206,8 @@ def normalize_route_candidate(
         "roi_score": score,
         "reason_codes": reason_codes or ["ready_for_source_reopen"],
         "suppression_reason": suppression_reason,
+        "privacy_action": str(row.get("privacy_action") or ""),
+        "privacy_reason_codes": public_codes(row.get("privacy_reason_codes")),
     }
 
 
@@ -253,7 +276,18 @@ def route_readiness_report(
         "source_ref_ready_count": sum(1 for row in ready_rows if row["source_ref_count"] > 0),
         "stale_suppression_count": reason_counts.get("stale_or_unknown_freshness", 0),
         "ttl_suppression_count": reason_counts.get("ttl_expired", 0),
-        "privacy_suppression_count": reason_counts.get("privacy_blocked", 0),
+        "privacy_suppression_count": sum(
+            reason_counts.get(code, 0)
+            for code in (
+                "privacy_blocked",
+                "external_payload_blocked",
+                "secret_or_property_risk_blocked",
+            )
+        ),
+        "external_payload_suppression_count": reason_counts.get("external_payload_blocked", 0),
+        "secret_or_property_risk_suppression_count": reason_counts.get(
+            "secret_or_property_risk_blocked", 0
+        ),
         "low_value_suppression_count": reason_counts.get("low_expected_value", 0),
         "no_source_refs_suppression_count": reason_counts.get("no_source_refs", 0),
         "output_authority_suppression_count": reason_counts.get(
