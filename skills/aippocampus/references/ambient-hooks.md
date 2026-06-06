@@ -74,6 +74,7 @@ packet fields instead of adding a second scoring layer:
 | `ignore` | `ignore_or_blocked` | Do not use for answer content; report/defer only if the boundary matters. |
 | `semantic_hint` | `direction_only` | Model/cognitive wayfinding only; it cannot support factual claims. |
 | `scent` | `direction_only` | Weak navigation; decide whether further recall is worth it. |
+| `candidate_backed` | `direction_with_ref` | Source-ref-backed candidate direction; it may shape route, depth, or question choice, but cannot support factual claims. |
 | `source_required` | `reopenable_route` | Use the packet's reopen plan or source refs to reopen clean source; do not answer from the packet itself. |
 | `bounded_evidence` | `bounded_evidence` | Use within the card/context's declared scope; reopen/deepen for exact quotes, wider context, conflicts, sensitive or high-risk claims. |
 | `raw_source_reopened` | `source_open` | Raw/local source is open to the host; exact wording may be used only within scope and redaction boundaries. |
@@ -95,11 +96,13 @@ memory contract:
   optional source refs to shape attention, but it cannot support factual
   claims.
 - `working_continuity_brief`: action material from `reopenable_route`,
-  `bounded_evidence`, and `source_open` cards. Required fields are the existing
-  `card_id`, `theme`, `trust_level`, `action_grammar`, `trust_contract`, and
-  source refs when available. Bounded evidence can change the answer or next
-  action within scope; source-open material is reserved for scoped exact
-  wording.
+  `direction_with_ref`, `bounded_evidence`, and `source_open` cards. Required
+  fields are the existing `card_id`, `theme`, `trust_level`, `action_grammar`,
+  `trust_contract`, and source refs when available. `direction_with_ref` may
+  shape route, depth, or question choice without forcing source reopen; it still
+  cannot support exact wording or factual claims. Bounded evidence can change
+  the answer or next action within scope; source-open material is reserved for
+  scoped exact wording.
 - `source_court`: the escalation path for exact wording, sensitive or high-risk
   claims, conflicts, stale/currentness questions, broad-context intrusions, and
   user disputes. It uses existing `reopen_plan`, `failure_reason_codes`,

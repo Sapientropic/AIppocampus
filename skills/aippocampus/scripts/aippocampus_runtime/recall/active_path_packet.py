@@ -36,6 +36,7 @@ STALE_MARKERS = {
     "unknown_stale",
 }
 IGNORE_STATUSES = {"blocked", "expired", "failed", "suppressed"}
+CONFLICT_STATUSES = {"conflict", "conflicted", "source_conflict", "uncleared", "unreviewed"}
 
 
 def _stable_id(*parts: Any) -> str:
@@ -87,6 +88,11 @@ def _next_reopen_action(refs: list[dict[str, Any]], recommended_tool: Any = None
     if any(any(key in ref for key in ("message_id", "turn_id", "turn_index")) for ref in refs):
         return "get_turn_context"
     return "source_reopen"
+
+
+def _ambient_card_conflicted(card: Mapping[str, Any]) -> bool:
+    status = str(card.get("conflict_status") or "").casefold()
+    return bool(card.get("conflict_flags")) or status in CONFLICT_STATUSES
 
 
 def _confidence(*values: Any) -> str:
@@ -154,6 +160,7 @@ def _path(
     source_reopen_required: bool,
     origin: str,
     visibility: str = "foreground",
+    support_level: str | None = None,
 ) -> dict[str, Any]:
     clean_route = _bucket(route, ROUTES, "scent")
     clean_currentness = _currentness(currentness)
@@ -177,7 +184,9 @@ def _path(
         "reason_codes": list(dict.fromkeys(reason_codes)),
         "origin": origin,
     }
-    if clean_route == "evidence":
+    if support_level:
+        path["support_level"] = str(support_level)
+    elif clean_route == "evidence":
         path["support_level"] = "evidence"
     return with_trust_fields(path)
 
@@ -192,15 +201,28 @@ def _ambient_paths(ambient_recall: Mapping[str, Any] | None) -> list[dict[str, A
         refs = _refs(card.get("source_refs"))
         support = str(card.get("support_level") or "").casefold()
         reopen_required = bool(card.get("source_reopen_required", support != "evidence"))
-        if support == "evidence":
+        if _ambient_card_conflicted(card):
+            route = "ignore"
+            next_action = "ignore"
+            reason_codes = [
+                "ambient_card",
+                "candidate_conflicted" if support == "candidate" else "conflicted_route",
+            ]
+            reopen_required = False
+        elif support == "evidence":
             route = "evidence"
             next_action = "use_bounded_evidence"
             reason_codes = ["ambient_card", "bounded_evidence_ready"]
             reopen_required = False
         elif refs:
-            route = "reopen"
-            next_action = _next_reopen_action(refs)
-            reason_codes = ["ambient_card", "candidate_source_ref_reopenable"]
+            if support == "candidate":
+                route = "scent"
+                next_action = "use_ref_backed_direction"
+                reason_codes = ["ambient_card", "candidate_backed_direction"]
+            else:
+                route = "reopen"
+                next_action = _next_reopen_action(refs)
+                reason_codes = ["ambient_card", "candidate_source_ref_reopenable"]
         else:
             route = "scent"
             next_action = "use_as_scent"
@@ -217,6 +239,7 @@ def _ambient_paths(ambient_recall: Mapping[str, Any] | None) -> list[dict[str, A
                 reason_codes=reason_codes,
                 source_reopen_required=reopen_required,
                 origin="ambient_card",
+                support_level=support or None,
             )
         )
     packet = ambient_recall.get("fresh_thread_packet")

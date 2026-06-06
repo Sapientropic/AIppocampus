@@ -70,6 +70,7 @@ second scoring layer and should not force rigid behavior.
 | Grammar | How To Use It |
 |---|---|
 | `direction_only` | Background, scent, or semantic wayfinding. It may shape attention, but it cannot support factual claims. |
+| `direction_with_ref` | Source-ref-backed candidate direction. It may shape route, depth, or question choice; reopen source before factual claims. |
 | `reopenable_route` | Use the packet's route refs, lock id, or reopen plan before broad manual search. Do not answer from the packet itself. |
 | `bounded_evidence` | Usable within the packet's declared scope. Reopen or deepen for exact quotes, wider context, conflicts, sensitive facts, or high-risk claims. |
 | `source_open` | Source is already open to the host; exact wording may be used only within scope and redaction boundaries. |
