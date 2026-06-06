@@ -22,6 +22,7 @@ from aippocampus_runtime.recall.prompt_recall_budget import (
 )
 from aippocampus_runtime.recall.prompt_recall_core import EVIDENCE_LITE_MIN_PROBE_SCORE
 from aippocampus_runtime.recall.prompt_recall_evidence import collect_evidence
+from aippocampus_runtime.recall.query_profile import classify_query_profile
 
 
 def source_intent_evidence(
@@ -178,6 +179,7 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
     turning model-only semantic output into source-backed evidence.
     """
 
+    query_profile = classify_query_profile(str(state.get("prompt") or ""))
     semantic_result = _dict_value(state.get("semantic_result"))
     semantic_gate_reuse = _dict_value(state.get("semantic_gate_reuse"))
     hot_path_funnel = _dict_value(state.get("hot_path_funnel"))
@@ -213,6 +215,20 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
     foreground_profile = "explicit_recall" if semantic_mode == "on" else "ambient_hot_path"
     return {
         "foreground_profile": foreground_profile,
+        "foreground_route_profile": query_profile.get("profile") or "normal_recall",
+        "foreground_lane": query_profile.get("lane") or "source_text",
+        "generic_prompt_term_count": int(query_profile.get("generic_prompt_term_count") or 0),
+        "specific_prompt_term_count": int(query_profile.get("specific_prompt_term_count") or 0),
+        "semantic_trigger_generic_term_suppressed_count": (
+            int(query_profile.get("generic_prompt_term_count") or 0)
+            if query_profile.get("composer") == "suppress_generic_scent"
+            else 0
+        ),
+        "foreground_suppression_reasons": (
+            ["generic_meta_terms_only"]
+            if query_profile.get("composer") == "suppress_generic_scent"
+            else []
+        ),
         "decision": _controlled_text(
             state.get("decision"), {"skip", "scent", "evidence"}, default="skip"
         ),
