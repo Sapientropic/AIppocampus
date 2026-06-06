@@ -112,6 +112,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_dream_working_memory_compaction",
         "test_e2e50_seed_candidates",
         "test_encrypted_sync_bundle",
+        "test_emergency_snapshot",
         "test_export_bundle",
         "test_fresh_thread_action_policy",
         "test_fresh_thread_activation_state",

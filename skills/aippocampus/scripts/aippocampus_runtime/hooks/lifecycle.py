@@ -24,6 +24,7 @@ from typing import Any
 
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.ops import log_retention
+from aippocampus_runtime.source import emergency_snapshot
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 STATE_SCHEMA_VERSION = 1
@@ -43,6 +44,20 @@ DETACHED_ACTION_COOLDOWN_SECONDS = {
     "subconscious_maybe_start": 60,
 }
 SUPPORTED_EVENTS = {"SessionStart", "Stop", "PreCompact", "PostCompact"}
+EMERGENCY_SNAPSHOT_DIAGNOSTIC_KEYS = {
+    "ok",
+    "status",
+    "snapshot_id",
+    "schema_version",
+    "created_at",
+    "message_count",
+    "turn_count",
+    "text_bytes",
+    "artifact",
+    "line_span",
+    "source",
+    "error_type",
+}
 
 
 def state_path(path: Path | None = None) -> Path:
@@ -266,6 +281,30 @@ def run_health(cwd: Path) -> dict[str, Any]:
     )
 
 
+def sanitize_emergency_snapshot_diagnostic(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return {key: value[key] for key in EMERGENCY_SNAPSHOT_DIAGNOSTIC_KEYS if key in value}
+
+
+def emergency_snapshot_failure_diagnostic(exc: Exception) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "status": "snapshot_error",
+        "schema_version": emergency_snapshot.EMERGENCY_SNAPSHOT_SCHEMA_VERSION,
+        "error_type": type(exc).__name__,
+    }
+
+
+def run_emergency_thread_snapshot(cwd: Path) -> dict[str, Any]:
+    result = emergency_snapshot.create_emergency_snapshot(cwd)
+    return emergency_snapshot.public_snapshot_diagnostic(result)
+
+
+def latest_emergency_thread_snapshot(cwd: Path) -> dict[str, Any]:
+    return emergency_snapshot.latest_emergency_snapshot_diagnostic(cwd)
+
+
 def maintenance_log_path(name: str) -> Path:
     return aippocampus_registry_dir() / "logs" / name
 
@@ -452,6 +491,22 @@ def run_maintenance(
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
         }
 
+    emergency_snapshot_diagnostic: dict[str, Any] | None = None
+    if event == "PreCompact" and not dry_run:
+        try:
+            emergency_snapshot_diagnostic = sanitize_emergency_snapshot_diagnostic(
+                run_emergency_thread_snapshot(cwd)
+            )
+        except Exception as exc:
+            emergency_snapshot_diagnostic = emergency_snapshot_failure_diagnostic(exc)
+    elif event == "PostCompact":
+        try:
+            emergency_snapshot_diagnostic = sanitize_emergency_snapshot_diagnostic(
+                latest_emergency_thread_snapshot(cwd)
+            )
+        except Exception as exc:
+            emergency_snapshot_diagnostic = emergency_snapshot_failure_diagnostic(exc)
+
     try:
         health = run_health(cwd)
     except Exception as exc:
@@ -470,6 +525,7 @@ def run_maintenance(
             "results": [],
             "skipped": "health_error",
             "error": str(exc),
+            "emergency_snapshot": emergency_snapshot_diagnostic,
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
         }
     actions = decide_actions(event, health, workspace_state, now_ts=now_ts)
@@ -520,6 +576,7 @@ def run_maintenance(
         "errors": errors,
         "skipped_actions": skipped_actions,
         "skipped": None if actions else "no_actions",
+        "emergency_snapshot": emergency_snapshot_diagnostic,
         "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
     }
 

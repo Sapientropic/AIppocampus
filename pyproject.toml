@@ -162,6 +162,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/source/anchors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/behavior_events.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/clean_source.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/emergency_snapshot.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/latest_reply.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/locate_rollout.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/multimodal_manifest.py",
