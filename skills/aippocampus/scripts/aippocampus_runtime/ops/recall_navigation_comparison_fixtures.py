@@ -10,6 +10,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.ops.presence_first_matrix_fixtures import (
+    fixture_presence_first_matrix,
+)
 from aippocampus_runtime.ops.recall_navigation_comparison import (
     build_recall_navigation_comparison,
 )
@@ -553,4 +556,5 @@ def fixture_recall_navigation_comparison() -> dict[str, Any]:
                 "stale_handle_fast_reject": lambda: _append_fixture_mutation(clean)
             },
             foreground_lift=foreground_lift,
+            presence_first_fixture_matrix=fixture_presence_first_matrix(),
         )

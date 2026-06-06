@@ -454,6 +454,7 @@ def _issue_readouts(
     aggregate: Mapping[str, Any],
     foreground_lift: Mapping[str, Any] | None = None,
     candidate_funnel: Mapping[str, Any] | None = None,
+    presence_first_fixture_matrix: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     arms = _as_dict(aggregate.get("arms"))
     progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
@@ -491,6 +492,41 @@ def _issue_readouts(
     funnel = _as_dict(candidate_funnel)
     funnel_measured = bool(funnel.get("measured"))
     funnel_metrics = _as_dict(funnel.get("metrics"))
+    presence_matrix = _as_dict(presence_first_fixture_matrix)
+    presence_cases = _as_dict(presence_matrix.get("cases_by_family"))
+    required_presence_families = {
+        "memory_atmosphere",
+        "working_continuity_brief",
+        "bounded_evidence",
+        "source_open",
+        "source_court",
+        "first_use_ten_minute_path",
+    }
+    presence_all_families_present = set(presence_cases) == required_presence_families
+    presence_behavior_assertions = bool(
+        presence_matrix.get("checks_behavior_not_just_fields")
+        and all(
+            bool(_as_dict(case).get("agent_behavior"))
+            and bool(_as_dict(case).get("current_posture_pass"))
+            for case in presence_cases.values()
+        )
+    )
+    source_court_case = _as_dict(presence_cases.get("source_court"))
+    presence_source_court_measured = bool(
+        source_court_case.get("blocked_route_does_not_shape_answer")
+        and source_court_case.get("requires_reopen_or_abstain")
+        and int(source_court_case.get("manual_query_invention_count") or 0) == 0
+    )
+    presence_old_posture_failure = bool(
+        presence_matrix.get("old_everything_is_scent_baseline_fails")
+        and int(presence_matrix.get("old_posture_failure_count") or 0) >= 1
+    )
+    presence_privacy = _as_dict(presence_matrix.get("privacy"))
+    presence_public_safe = bool(
+        presence_matrix.get("public_safe")
+        and not presence_privacy.get("raw_source_window_serialized")
+        and not presence_privacy.get("local_paths_serialized")
+    )
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -601,6 +637,23 @@ def _issue_readouts(
             ),
             "closeout_eligible": False,
         },
+        "github_797": {
+            "presence_fixture_matrix_measured": bool(presence_matrix.get("measured")),
+            "all_fixture_families_present": presence_all_families_present,
+            "behavior_assertions_present": presence_behavior_assertions,
+            "old_posture_failure_measured": presence_old_posture_failure,
+            "source_court_escalation_measured": presence_source_court_measured,
+            "public_safe": presence_public_safe,
+            "live_product_quality": "not_measured",
+            "closeout_eligible": bool(
+                presence_matrix.get("measured")
+                and presence_all_families_present
+                and presence_behavior_assertions
+                and presence_old_posture_failure
+                and presence_source_court_measured
+                and presence_public_safe
+            ),
+        },
     }
 
 
@@ -613,6 +666,7 @@ def build_recall_navigation_comparison(
     max_deepen_matches: int = 5,
     after_context_by_case_id: Mapping[str, Callable[[], None]] | None = None,
     foreground_lift: Mapping[str, Any] | None = None,
+    presence_first_fixture_matrix: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     cwd_path = Path(cwd or os.getcwd()).resolve()
     clean_path = Path(clean_source_dir or cwd_path / ".aippocampus" / "clean-source").resolve()
@@ -646,6 +700,7 @@ def build_recall_navigation_comparison(
         )
     aggregate = _aggregate(rows)
     candidate_funnel = _vague_cue_candidate_funnel(rows)
+    presence_matrix = dict(presence_first_fixture_matrix or {"measured": False})
     report = {
         "schema_version": COMPARISON_SCHEMA_VERSION,
         "kind": COMPARISON_KIND,
@@ -656,7 +711,13 @@ def build_recall_navigation_comparison(
         "aggregate": aggregate,
         "foreground_lift": dict(foreground_lift or {"measured": False}),
         "vague_cue_candidate_funnel": candidate_funnel,
-        "issue_readouts": _issue_readouts(aggregate, foreground_lift, candidate_funnel),
+        "presence_first_fixture_matrix": presence_matrix,
+        "issue_readouts": _issue_readouts(
+            aggregate,
+            foreground_lift,
+            candidate_funnel,
+            presence_matrix,
+        ),
         "metric_notes": {
             "manual_query_invention_count": (
                 "Fixture-supplied direct-search query attempts before the first useful source; "
@@ -709,6 +770,12 @@ def build_recall_navigation_comparison(
                 "navigation routes only; they cannot become evidence without source "
                 "reopen and do not enable default vector/question prefiltering."
             ),
+            "presence_first_fixture_matrix": (
+                "Fixture-backed #797 behavior matrix over memory atmosphere, working "
+                "continuity brief, bounded evidence, source_open, source court, and "
+                "the first-use ten-minute path. It checks agent-usable behavior and "
+                "the old everything-is-scent baseline, not live product quality."
+            ),
         },
         "comparison_boundary": {
             "deterministic_proxy_only": True,
@@ -726,6 +793,9 @@ def build_recall_navigation_comparison(
             "no_write": True,
             "no_repo_write": True,
             "temp_fixture_writes_only": True,
+            "presence_first_fixture_matrix_public_safe": bool(
+                presence_matrix.get("public_safe")
+            ),
         },
         "privacy": {
             "raw_cues_serialized": False,

@@ -248,6 +248,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/graphify_corpus.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/log_retention.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/maintenance.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/presence_first_matrix_fixtures.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_credentials.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_doctor.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_key_bridge.py",
