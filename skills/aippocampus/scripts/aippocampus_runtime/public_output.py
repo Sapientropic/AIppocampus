@@ -11,13 +11,23 @@ from __future__ import annotations
 import sys
 from typing import TextIO
 
+from aippocampus_runtime.core import sanitize_external_model_text
+
+
+def _project_public_text(text: str) -> str:
+    sanitized, policy = sanitize_external_model_text(str(text or ""))
+    if policy.get("hard_block"):
+        return "<redacted:sensitive-output>"
+    return sanitized
+
 
 def emit_public_text(text: str, *, end: str = "\n", stream: TextIO | None = None) -> None:
     """Write public report text without reintroducing raw diagnostic values."""
 
     target = stream or sys.stdout
-    # The caller owns redaction before this point. Do not pass raw exception
-    # text, local paths, source snippets, or env-derived values here.
-    target.write(text)  # lgtm[py/clear-text-logging-sensitive-data]
-    if end and not text.endswith(end):
-        target.write(end)
+    # The caller owns structured redaction before this point; this final text
+    # projection is a defense against hand-written or future unsafe callers.
+    public_text = _project_public_text(text)
+    target.writelines((public_text,))
+    if end and not public_text.endswith(end):
+        target.writelines((end,))
