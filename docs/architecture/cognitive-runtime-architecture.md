@@ -404,9 +404,11 @@ low-value rows stay silent. `aippocampus_runtime.ops.cognitive_observatory`
 then aggregates that report with activation authority, recall diagnostics, and
 sleep-cycle public summaries so operators can inspect route readiness without
 writing clean source, owner caches, durable memory, or foreground hook state.
-It can render the same sanitized readout as JSON, text, or static no-script
-HTML for local inspection. These rows can justify reopening source, but they
-cannot support factual claims by themselves.
+It also emits `control_authority_audit`, which counts attempted activation or
+mutation requests as blocked diagnostics rather than granting any control
+authority. It can render the same sanitized readout as JSON, text, or static
+no-script HTML for local inspection. These rows can justify reopening source,
+but they cannot support factual claims by themselves.
 
 ## Anti-Patterns
 
