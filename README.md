@@ -195,6 +195,8 @@ continuity resumed.
 - Evidence and field reports:
   [public evidence surface](https://www.aippocampus.com/evidence/) and
   [community field-report boundary](docs/evidence/community-field-reports.md).
+- Website source:
+  [`Sapientropic/aippocampus.com`](https://github.com/Sapientropic/aippocampus.com).
 - Agent-readable context: [docs/agent-context.md](docs/agent-context.md) and
   [llms.txt](llms.txt).
 - Runtime shape and metaphor boundaries:
