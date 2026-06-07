@@ -95,7 +95,7 @@ jobs:
 
       - name: Publish package to PyPI
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_pypi) }}
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
 
       - name: Install MCP publisher
         run: |

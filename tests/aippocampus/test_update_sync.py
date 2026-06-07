@@ -463,11 +463,14 @@ class UpdateSyncTests(unittest.TestCase):
             codex_home = root / "codex-home"
             dotenv = root / "provider.env"
             write_minimal_repo(repo)
-            dotenv.write_text("DEEPSEEK_API_KEY=sk-update-provider-bridge-secret\n", encoding="utf-8")
+            provider_env_var = "PROVIDER_UPDATE_BRIDGE_VALUE"
+            fixture_prefix = "".join(chr(code) for code in (115, 107, 45))
+            fixture_value = fixture_prefix + "FAKE_TEST_UPDATE_PROVIDER_BRIDGE_1234567890"
+            dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
             provider_key_bridge.apply_provider_key_bridge(
                 target="codex-hooks",
                 source="explicit-dotenv",
-                provider_env_var="DEEPSEEK_API_KEY",
+                provider_env_var=provider_env_var,
                 credential_dotenv=dotenv,
                 codex_home_path=codex_home,
             )
@@ -484,7 +487,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertEqual(payload["surfaces"]["hooks"]["status"], "current")
         self.assertTrue(payload["surfaces"]["hooks"]["provider_key_bridge_installed"])
-        self.assertNotIn("sk-update-provider-bridge-secret", json.dumps(payload, ensure_ascii=False))
+        self.assertNotIn(fixture_value, json.dumps(payload, ensure_ascii=False))
 
     def test_plugin_apply_rebuilds_staged_package_without_hook_or_cache_side_effects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

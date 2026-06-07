@@ -101,7 +101,7 @@ def _write_manifest(root: Path, *, source: str, locator: dict[str, Any]) -> Path
         keychain_service=locator.get("service"),
         keychain_account=locator.get("account"),
         credential_target=locator.get("target_name"),
-        secret_attributes=locator.get("attributes"),
+        selector_attributes=locator.get("attributes"),
     )
     provider_key_bridge.write_bridge_manifest(manifest_path, manifest)
     return manifest_path
