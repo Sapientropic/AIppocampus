@@ -127,6 +127,17 @@ The generated local agent config is written under `.tmp/amemgym-official/` and
 uses `openai/gpt-4.1-mini` by default so OpenRouter receives a supported model
 id. Raw official output directories stay ignored.
 
+To verify the official-output and normalized-score plumbing without live model
+cost, use the local deterministic protocol provider. It patches AMemGym's
+`call_llm` in the official subprocess via an ignored `sitecustomize.py`, returns
+a fixed JSON choice, and disables the upstream upper-bound sleep. This is
+useful for proving full `v1.base` runner compatibility; it is not an LLM memory
+quality score:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider local-scripted --run overall,upperbound,random --reset --overall-output-dir .tmp\amemgym-official\v1.base-local-scripted\overall --upperbound-output-dir .tmp\amemgym-official\v1.base-local-scripted\upperbound --random-output-file .tmp\amemgym-official\v1.base-local-scripted\random_metrics.json --output benchmark_corpus\reports\amemgym-official-local-scripted-2026-06-07.json --json
+```
+
 Tiny local slices may be useful while debugging provider wiring, path handling,
 or output discovery, but they are not evidence numbers and must not be promoted
 into public reports. Use the full public `v1.base` fixed arm before recording
@@ -192,6 +203,42 @@ wiring, and redacted summary path are real. It does not satisfy #742's full
 score acceptance criteria. The next useful engineering step is resumable /
 bounded official execution support or a cheaper documented fixed subset for
 debugging, while keeping the full public `v1.base` score boundary unclaimed.
+
+Official-compatible local-scripted protocol run on 2026-06-07:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider local-scripted --run overall,upperbound,random --reset --overall-output-dir .tmp\amemgym-official\v1.base-local-scripted\overall --upperbound-output-dir .tmp\amemgym-official\v1.base-local-scripted\upperbound --random-output-file .tmp\amemgym-official\v1.base-local-scripted\random_metrics.json --output benchmark_corpus\reports\amemgym-official-local-scripted-2026-06-07.json --json
+```
+
+The local upstream checkout was still
+`AGI-Eval-Official/amemgym@ffcd18857a3e2b2c61f00730ebdec676e27d3e87`. The run
+called upstream `amemgym.eval.overall`, `amemgym.eval.upperbound`, and
+`amemgym.eval.random` against the full public `v1.base` data. All official
+output surfaces were complete: 20 of 20 overall items, 2200 of 2200 overall
+score leaves, 882 of 882 upper-bound choice evaluations, and the random matrix.
+
+The public-safe summary reported:
+
+| Score | Value |
+| --- | ---: |
+| Overall | 0.25681818181818183 |
+| UB | 0.25681818181818183 |
+| Random | 0.23076190476190475 |
+| normalized Memory | 1.0 |
+
+Cost/latency boundary: no provider credentials or live model calls were used.
+The subprocess elapsed times were roughly 13.9s for `overall`, 0.6s for
+`upperbound`, 0.6s for `random`, and 15.3s for the full bridge report.
+
+This satisfies the official-output compatibility slice: the bridge can run the
+official entrypoints to completion, discover official output files, and compute
+the normalized Memory formula on full public `v1.base`. It is deliberately not
+a live-model AMemGym score. `local-scripted` always returns the same JSON choice,
+so `Overall` and `UB` match by construction and normalized `Memory=1.0` is a
+protocol artifact, not evidence that a model or AIppocampus remembered
+anything. The report therefore keeps
+`real_llm_memory_quality_or_provider_model_score_from_local_scripted_provider`
+and `leaderboard_parity_or_sota` in `cannot_claim`.
 
 The Codex Desktop AMemGym-style benchmark lives at
 `benchmarks/aippocampus/benchmark_codex_desktop_amemgym.py`. It does not invoke
@@ -278,6 +325,9 @@ Can claim now:
   `amemgym.eval.random` modules from an ignored local checkout and summarize
   official output files into `Overall`, `UB`, `Random`, and normalized
   `Memory`.
+- The same bridge has one full public `v1.base` protocol run for the
+  deterministic `local-scripted` provider, proving complete official output
+  discovery and normalized-score calculation without live provider calls.
 - The official bridge can register AIppocampus `BaseAgent` arms through an
   ignored Pythonpath overlay, keep upstream eval modules unchanged, and report
   whether the arm is Native full-history, clean-source-only retrieval, or a
@@ -296,6 +346,8 @@ Can claim now:
 Cannot claim now:
 
 - AIppocampus has a full official AMemGym `v1.base` score.
+- The 2026-06-07 `local-scripted` protocol values are a real LLM/provider
+  memory score, a Native baseline, or AIppocampus product quality evidence.
 - The 2026-06-06 partial official Native attempt is not a score; it is only
   execution/progress evidence.
 - AIppocampus clean-source-only official adapter results are full

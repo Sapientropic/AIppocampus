@@ -27,6 +27,15 @@ import _paths
 
 _paths.ensure_paths()
 
+from amemgym_official_local_provider import (  # noqa: E402
+    LOCAL_SCRIPTED_PROVIDER,
+    local_scripted_llm_config_update,
+    local_scripted_provider_env,
+    local_scripted_public_status,
+    provider_plan_environment,
+    provider_runtime_for_provider,
+)
+
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"
 DEFAULT_ENV_DATA_PATH = _paths.REPO_ROOT / "benchmark_corpus" / "amemgym" / "v1.base" / "data.json"
@@ -36,6 +45,7 @@ DEFAULT_UPPERBOUND_OUTPUT_DIR = DEFAULT_OFFICIAL_OUTPUT_ROOT / "upperbound"
 DEFAULT_RANDOM_OUTPUT_FILE = DEFAULT_OFFICIAL_OUTPUT_ROOT / "random_metrics.json"
 DEFAULT_REPORT_OUTPUT = _paths.REPO_ROOT / "benchmark_corpus" / "reports" / "amemgym-official-summary.json"
 DEFAULT_ADAPTER_OVERLAY_ROOT = DEFAULT_OFFICIAL_OUTPUT_ROOT / "adapter-overlays"
+DEFAULT_PROVIDER_OVERLAY_ROOT = DEFAULT_OFFICIAL_OUTPUT_ROOT / "provider-overlays"
 DEFAULT_METRIC = "accuracy"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_DEFAULT_MODEL = "openai/gpt-4.1-mini"
@@ -141,6 +151,11 @@ def provider_environment(provider: str) -> ProviderEnvironment:
                 "base_url": "left_to_process_env_or_dotenv",
             },
         )
+    if provider == LOCAL_SCRIPTED_PROVIDER:
+        return ProviderEnvironment(
+            env_updates=local_scripted_provider_env(),
+            public_status=local_scripted_public_status(),
+        )
     if provider != "openrouter":
         raise ValueError(f"unknown provider: {provider}")
     credential_alias = None
@@ -216,7 +231,7 @@ def prepare_agent_config_for_provider(
     arm: str = OFFICIAL_NATIVE_ARM,
 ) -> Path:
     source = Path(agent_config_path)
-    if provider != "openrouter" and arm == OFFICIAL_NATIVE_ARM:
+    if provider not in {"openrouter", LOCAL_SCRIPTED_PROVIDER} and arm == OFFICIAL_NATIVE_ARM:
         return source
     config = read_json(source)
     if not isinstance(config, dict):
@@ -233,6 +248,11 @@ def prepare_agent_config_for_provider(
                 "source": "agent:openrouter-official-bridge",
             }
         )
+    elif provider == LOCAL_SCRIPTED_PROVIDER:
+        # This local provider is for full-output protocol evidence only. It
+        # keeps the official entrypoints and metric files intact while making
+        # the no-cost run visibly non-comparable to live LLM memory quality.
+        llm_config.update(local_scripted_llm_config_update())
     elif arm != OFFICIAL_NATIVE_ARM:
         # The generated AIppocampus configs are local derivative artifacts.
         # Keep model/temperature/max_tokens for comparability, but do not copy
@@ -246,9 +266,17 @@ def prepare_agent_config_for_provider(
     if arm == OFFICIAL_NATIVE_ARM:
         if provider == "openrouter":
             config["name"] = f"{config.get('name') or 'native'}-openrouter"
+        elif provider == LOCAL_SCRIPTED_PROVIDER:
+            config["name"] = "native-local-scripted"
     else:
         config["name"] = agent_name_for_arm(arm, llm_config.get("llm_model"))
-    suffix = "openrouter" if provider == "openrouter" else "default"
+    suffix = (
+        "openrouter"
+        if provider == "openrouter"
+        else "local-scripted"
+        if provider == LOCAL_SCRIPTED_PROVIDER
+        else "default"
+    )
     output = Path(output_root) / "agent-configs" / f"{re_safe_slug(str(config.get('name') or source.stem))}-{suffix}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -726,13 +754,14 @@ def inspect_aippocampus_agent_states(agent_dir: Path | None) -> dict[str, Any]:
     }
 
 
-def normalized_memory_matrix(overall: Any, upperbound: Any, random: Any) -> tuple[Any, int, int, int]:
+def normalized_memory_matrix(overall: Any, upperbound: Any, random: Any) -> tuple[Any, int, int, int, int]:
     zero_denominator_count = 0
     sample_count = 0
     below_random_count = 0
+    negative_memory_count = 0
 
     def walk(o_value: Any, ub_value: Any, random_value: Any) -> Any:
-        nonlocal zero_denominator_count, sample_count, below_random_count
+        nonlocal zero_denominator_count, sample_count, below_random_count, negative_memory_count
         if isinstance(o_value, list) and isinstance(ub_value, list) and isinstance(random_value, list):
             return [walk(o_child, ub_child, random_child) for o_child, ub_child, random_child in zip(o_value, ub_value, random_value, strict=True)]
         if not all(isinstance(value, int | float) and not isinstance(value, bool) for value in (o_value, ub_value, random_value)):
@@ -744,9 +773,12 @@ def normalized_memory_matrix(overall: Any, upperbound: Any, random: Any) -> tupl
         if abs(denominator) < 1e-12:
             zero_denominator_count += 1
             return None
-        return (float(o_value) - float(random_value)) / denominator
+        normalized = (float(o_value) - float(random_value)) / denominator
+        if normalized < 0:
+            negative_memory_count += 1
+        return normalized
 
-    return walk(overall, upperbound, random), zero_denominator_count, sample_count, below_random_count
+    return walk(overall, upperbound, random), zero_denominator_count, sample_count, below_random_count, negative_memory_count
 
 
 def mean_by_period(matrix: list[Any]) -> list[float | None]:
@@ -840,7 +872,13 @@ def score_summary(
         metrics["official_random_by_period"] = mean_by_period(random_matrix)
 
     if overall_matrix is not None and upperbound_matrix is not None and random_matrix is not None:
-        memory_matrix, zero_denominator_count, sample_count, below_random_count = normalized_memory_matrix(
+        (
+            memory_matrix,
+            zero_denominator_count,
+            sample_count,
+            below_random_count,
+            negative_memory_count,
+        ) = normalized_memory_matrix(
             overall_matrix,
             upperbound_matrix,
             random_matrix,
@@ -850,10 +888,15 @@ def score_summary(
         metrics["memory_score_denominator_zero_count"] = zero_denominator_count
         metrics["score_sample_count"] = sample_count
         metrics["below_random_sample_count"] = below_random_count
-        interpretation["normalized_memory_score_negative"] = below_random_count > 0
+        metrics["negative_memory_sample_count"] = negative_memory_count
+        interpretation["normalized_memory_score_negative"] = negative_memory_count > 0
         if below_random_count:
             interpretation["notes"].append(
-                "overall_below_random: normalized memory can be negative when official overall accuracy falls below the random baseline."
+                "overall_below_random: one or more official overall leaves fell below the random baseline before normalization."
+            )
+        if negative_memory_count:
+            interpretation["notes"].append(
+                "negative_normalized_memory: normalized memory is negative where the upper-bound denominator is positive and overall falls below random."
             )
         shapes["normalized_memory"] = matrix_shape(memory_matrix)
 
@@ -933,8 +976,14 @@ def safe_command_plan(
     random_output_file: Path | str,
     runner: str = "python",
     arm: str = OFFICIAL_NATIVE_ARM,
+    provider: str = "default",
 ) -> dict[str, Any]:
     pythonpath_add = [safe_path_label(Path(upstream_root) / "src")]
+    if provider == LOCAL_SCRIPTED_PROVIDER:
+        pythonpath_add = [
+            safe_path_label(DEFAULT_PROVIDER_OVERLAY_ROOT / "local-scripted-provider"),
+            *pythonpath_add,
+        ]
     if arm != OFFICIAL_NATIVE_ARM:
         pythonpath_add = [
             safe_path_label(DEFAULT_ADAPTER_OVERLAY_ROOT / "aippocampus" / "src"),
@@ -952,8 +1001,7 @@ def safe_command_plan(
         "working_directory": safe_path_label(upstream_root),
         "environment": {
             "pythonpath_add": pythonpath_add,
-            "provider_credential": "OPENAI_API_KEY required for overall and upperbound; never written to reports",
-            "provider_base_url": "OPENAI_BASE_URL optional; redacted from reports",
+            **provider_plan_environment(provider),
         },
         "arm": {
             "selected": arm,
@@ -1172,11 +1220,20 @@ def build_official_bridge_report(
         upstream_root=root,
         output_root=DEFAULT_ADAPTER_OVERLAY_ROOT,
     )
+    provider_runtime = provider_runtime_for_provider(
+        provider,
+        output_root=DEFAULT_PROVIDER_OVERLAY_ROOT,
+    )
     agent_public = public_agent_metadata(agent_config)
     expected_overall_agent_name = str(agent_public.get("agent_name") or "").strip() or None
     run_results = []
     adapter_ready = adapter_runtime["status"] in {"not_required", "ready"}
-    if upstream["status"] == "ready" and adapter_ready:
+    provider_ready = provider_runtime["status"] in {"not_required", "ready"}
+    pythonpath_entries = [
+        *provider_runtime["pythonpath_entries"],
+        *adapter_runtime["pythonpath_entries"],
+    ]
+    if upstream["status"] == "ready" and adapter_ready and provider_ready:
         for surface in run_surfaces:
             run_results.append(
                 run_official_surface(
@@ -1191,7 +1248,7 @@ def build_official_bridge_report(
                     runner=runner,
                     provider=provider,
                     reset=reset,
-                    pythonpath_entries=adapter_runtime["pythonpath_entries"],
+                    pythonpath_entries=pythonpath_entries,
                 )
             )
 
@@ -1232,6 +1289,8 @@ def build_official_bridge_report(
         status = "upstream_missing"
     elif not adapter_ready:
         status = "adapter_overlay_missing"
+    elif not provider_ready:
+        status = "provider_overlay_missing"
     elif all_scores_present:
         status = "official_score_summary"
     elif run_results or has_partial_outputs:
@@ -1260,6 +1319,8 @@ def build_official_bridge_report(
         state = score_payload.get("aippocampus_agent_state") or {}
         if state.get("semantic_worker_state") != "prepared":
             cannot_claim.append("semantic_worker_materialization_unless_agent_state_sidecars_are_present")
+    if provider == LOCAL_SCRIPTED_PROVIDER:
+        cannot_claim.append("real_llm_memory_quality_or_provider_model_score_from_local_scripted_provider")
     cannot_claim.extend(
         [
             "source_backed_overlay_is_official_accuracy",
@@ -1301,8 +1362,13 @@ def build_official_bridge_report(
             random_output_file=random_output_file,
             runner=runner,
             arm=arm,
+            provider=provider,
         ),
         "provider": provider_env.public_status,
+        "provider_runtime": {
+            "status": provider_runtime["status"],
+            **provider_runtime["metadata"],
+        },
         "agent": agent_public,
         "aippocampus_official_adapter_protocol": aippocampus_official_adapter_protocol(),
         "aippocampus_agent_adapter": {
@@ -1332,6 +1398,7 @@ def build_official_bridge_report(
             "source_backed_overlay": "separate_not_merged",
             "diagnosis": "not_run_by_this_summary",
             "cost_latency": "process_elapsed_only_unless_provider_run_metadata_is_recorded",
+            "provider_score_kind": provider_env.public_status.get("score_kind", "live_or_environment_provider"),
         },
         "privacy_boundary": {
             "raw_text_emitted": False,
@@ -1399,9 +1466,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--provider",
-        choices=("default", "openrouter"),
+        choices=("default", "openrouter", LOCAL_SCRIPTED_PROVIDER),
         default="default",
-        help="Provider env adapter. openrouter maps Open_Router into OPENAI_API_KEY for the official runner.",
+        help=(
+            "Provider env adapter. openrouter maps Open_Router into OPENAI_API_KEY; "
+            "local-scripted runs a deterministic no-credential protocol provider."
+        ),
     )
     parser.add_argument(
         "--arm",

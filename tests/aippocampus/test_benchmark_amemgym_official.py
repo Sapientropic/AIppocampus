@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -17,6 +19,7 @@ BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 if str(BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(BENCHMARKS))
 
+import amemgym_official_local_provider as local_provider  # noqa: E402
 import benchmark_amemgym_official as benchmark  # noqa: E402
 
 RAW_QUERY = "RAW AMEMGYM QUERY MUST NOT LEAK"
@@ -79,6 +82,7 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertAlmostEqual(payload["metrics"]["official_normalized_memory_score"], 1 / 3)
         self.assertEqual(payload["metrics"]["score_sample_count"], 8)
         self.assertEqual(payload["metrics"]["below_random_sample_count"], 0)
+        self.assertEqual(payload["metrics"]["negative_memory_sample_count"], 0)
         self.assertFalse(payload["score_interpretation"]["normalized_memory_score_negative"])
         self.assertEqual(payload["metrics"]["memory_score_denominator_zero_count"], 0)
         self.assertEqual(payload["claim_boundary"]["official_amemgym_score"], "official_output_summary")
@@ -112,9 +116,10 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
 
         self.assertAlmostEqual(payload["metrics"]["official_normalized_memory_score"], -1 / 3)
         self.assertEqual(payload["metrics"]["below_random_sample_count"], 8)
+        self.assertEqual(payload["metrics"]["negative_memory_sample_count"], 8)
         self.assertTrue(payload["score_interpretation"]["normalized_memory_score_negative"])
         self.assertTrue(
-            any(note.startswith("overall_below_random") for note in payload["score_interpretation"]["notes"])
+            any(note.startswith("negative_normalized_memory") for note in payload["score_interpretation"]["notes"])
         )
 
     def test_partial_official_outputs_report_progress_without_claiming_scores(self) -> None:
@@ -225,6 +230,80 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertEqual(result["provider"]["credential_status"], "set_redacted")
         self.assertEqual(result["provider"]["credential_alias"], "Open_Router")
         self.assertNotIn(FAKE_PROVIDER_VALUE, json.dumps(result, ensure_ascii=False))
+
+    def test_local_scripted_provider_reports_protocol_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            env_data = root / "data.json"
+            self._write_env_data(env_data)
+            agent_config = upstream / "configs" / "agent" / "native.json"
+
+            with mock.patch.object(benchmark, "DEFAULT_PROVIDER_OVERLAY_ROOT", root / "provider-overlays"):
+                payload = benchmark.build_official_bridge_report(
+                    upstream_root=upstream,
+                    env_data_path=env_data,
+                    agent_config_path=agent_config,
+                    overall_output_dir=root / "overall",
+                    upperbound_output_dir=root / "upperbound",
+                    random_output_file=root / "random_metrics.json",
+                    provider=benchmark.LOCAL_SCRIPTED_PROVIDER,
+                )
+
+        self.assertEqual(payload["provider"]["provider"], benchmark.LOCAL_SCRIPTED_PROVIDER)
+        self.assertEqual(payload["provider"]["credential_status"], "not_required")
+        self.assertEqual(payload["provider"]["model"], local_provider.LOCAL_SCRIPTED_MODEL)
+        self.assertEqual(payload["provider_runtime"]["status"], "ready")
+        self.assertTrue(payload["provider_runtime"]["local_scripted_overlay"])
+        self.assertEqual(payload["agent"]["agent_name"], "native-local-scripted")
+        self.assertEqual(payload["agent"]["llm_model"], local_provider.LOCAL_SCRIPTED_MODEL)
+        self.assertEqual(
+            payload["runner_plan"]["environment"]["provider_mode"],
+            "local scripted call_llm patch; no provider credentials or live model calls",
+        )
+        self.assertEqual(
+            payload["claim_boundary"]["provider_score_kind"],
+            "official_protocol_full_output_not_llm_quality",
+        )
+        self.assertIn(
+            "real_llm_memory_quality_or_provider_model_score_from_local_scripted_provider",
+            payload["cannot_claim"],
+        )
+        self.assertNotIn(FAKE_PROVIDER_VALUE, json.dumps(payload, ensure_ascii=False))
+
+    def test_local_scripted_sitecustomize_patches_amemgym_call_llm(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            overlay = local_provider.write_local_scripted_provider_overlay(root / "provider-overlays")
+            code = (
+                "import json, time\n"
+                "import amemgym.utils as utils\n"
+                "before = time.perf_counter()\n"
+                "time.sleep(9)\n"
+                "elapsed = time.perf_counter() - before\n"
+                "content, usage = utils.call_llm(\n"
+                "    [{'role':'user','content':'Please select the most suitable answer\\n1: A\\n2: B\\n'}],\n"
+                "    {}, json=True, return_token_usage=True,\n"
+                ")\n"
+                "print(json.dumps({'content': content, 'usage': usage, 'elapsed_lt_one': elapsed < 1}))\n"
+            )
+            env = os.environ.copy()
+            env.update(local_provider.local_scripted_provider_env(choice_index=2))
+            env["PYTHONPATH"] = os.pathsep.join([str(overlay["pythonpath"]), str(upstream / "src")])
+            completed = subprocess.run(
+                [sys.executable, "-c", code],
+                text=True,
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(json.loads(payload["content"]), {"answer": 2})
+        self.assertEqual(payload["usage"]["provider"], "local-scripted")
+        self.assertTrue(payload["elapsed_lt_one"])
 
     def test_aippocampus_clean_source_arm_registers_adapter_but_only_claims_file_retrieval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -376,6 +455,7 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
     def _write_upstream_stub(path: Path) -> Path:
         (path / "src" / "amemgym" / "eval").mkdir(parents=True)
         (path / "src" / "amemgym" / "assistants").mkdir(parents=True)
+        (path / "src" / "amemgym" / "utils").mkdir(parents=True)
         (path / "configs" / "agent").mkdir(parents=True)
         (path / "configs" / "env").mkdir(parents=True)
         (path / "pyproject.toml").write_text(
@@ -399,6 +479,15 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
             "base": "class BaseAgent: pass\n",
         }.items():
             (path / "src" / "amemgym" / "assistants" / f"{name}.py").write_text(body, encoding="utf-8")
+        (path / "src" / "amemgym" / "utils" / "llm_utils.py").write_text(
+            "def call_llm(*_args, **_kwargs):\n"
+            "    raise RuntimeError('upstream call_llm should be patched')\n",
+            encoding="utf-8",
+        )
+        (path / "src" / "amemgym" / "utils" / "__init__.py").write_text(
+            "from .llm_utils import call_llm\n",
+            encoding="utf-8",
+        )
         (path / "configs" / "agent" / "native.json").write_text(
             json.dumps(
                 {
