@@ -240,7 +240,9 @@ For these commands:
   sleep-cycle public summaries. Route-readiness rows are `navigation_only` and
   may show TTL, freshness, privacy, source-ref, and ROI suppression reasons;
   they can justify reopening source but cannot support factual claims, mutate
-  owner surfaces, or control foreground hooks.
+  owner surfaces, or control foreground hooks. The `control_authority_audit`
+  block counts attempted activation/mutation requests as blocked diagnostics;
+  it is not an API for applying those actions.
 - Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
   exposes a public-safe audit projection for the latest prompt hook run. Stable
   automation fields are `status`, `source`, `privacy_boundary`, and

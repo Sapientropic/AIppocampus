@@ -227,6 +227,44 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
             0,
         )
 
+    def test_observatory_control_authority_audit_blocks_control_attempts(self) -> None:
+        report = cognitive_observatory.cognitive_observatory_readout(
+            activation_surfaces=[
+                {
+                    "surface_id": "attempted-activation",
+                    "surface_kind": "ambient_card",
+                    "freshness": "current",
+                    "source_refs": [{"source_id": "clean:control", "message_id": "m-control"}],
+                    "requested_control_action": "activate_foreground",
+                    "owner_surface_mutation": True,
+                    "foreground_hook_mutation": True,
+                    "clean_source_mutation": True,
+                    "truth_status_changed": True,
+                    "raw_source_text": "PRIVATE_OBSERVATORY_CONTROL_SENTINEL",
+                }
+            ]
+        )
+        audit = report["control_authority_audit"]
+
+        self.assertEqual(audit["kind"], "aippocampus_observatory_control_authority_audit")
+        self.assertEqual(audit["mode"], "deterministic_public_safe")
+        self.assertEqual(audit["authority"], "diagnostic_only")
+        self.assertEqual(audit["decision"], "blocked_control_attempts_present")
+        self.assertFalse(audit["mutation_allowed"]["clean_source"])
+        self.assertFalse(audit["mutation_allowed"]["owner_surfaces"])
+        self.assertFalse(audit["mutation_allowed"]["foreground_hook"])
+        self.assertEqual(audit["metrics"]["control_action_attempt_count"], 1)
+        self.assertEqual(audit["metrics"]["blocked_control_action_count"], 1)
+        self.assertEqual(audit["metrics"]["owner_surface_mutation_attempt_count"], 1)
+        self.assertEqual(audit["metrics"]["foreground_hook_mutation_attempt_count"], 1)
+        self.assertEqual(audit["metrics"]["activation_truth_status_mutation_attempt_count"], 1)
+        self.assertEqual(audit["issue_readouts"]["github_576"]["control_authority"], "diagnostic_only_not_control_plane")
+        self.assertFalse(audit["issue_readouts"]["github_576"]["closeout_eligible"])
+        self.assertIn("observatory_control_plane", audit["cannot_claim"])
+
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("PRIVATE_OBSERVATORY_CONTROL_SENTINEL", encoded)
+
     def test_cli_facade_exposes_observatory_fixture_json(self) -> None:
         result = facade.run_command(["observatory", "--fixture", "--json"], capture_output=True)
 

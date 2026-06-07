@@ -13,6 +13,9 @@ from aippocampus_runtime.dream.sleep_cycle import public_sleep_cycle_summary
 from aippocampus_runtime.ops.activation_authority_audit import (
     activation_surface_authority_audit,
 )
+from aippocampus_runtime.ops.observatory_control_authority import (
+    observatory_control_authority_audit,
+)
 from aippocampus_runtime.ops.route_readiness import (
     ROUTE_READINESS_KIND,
     fixture_route_readiness_report,
@@ -185,6 +188,10 @@ def cognitive_observatory_readout(
         surfaces.append("recall_diagnostic")
     if sleep_summary:
         surfaces.append("sleep_cycle")
+    control_authority = observatory_control_authority_audit(
+        activation_surfaces=activation_surfaces or [],
+        activation_authority=authority,
+    )
     report = {
         "kind": OBSERVATORY_KIND,
         "schema_version": OBSERVATORY_SCHEMA_VERSION,
@@ -194,6 +201,7 @@ def cognitive_observatory_readout(
         "surfaces": surfaces,
         "route_readiness": readiness,
         "activation_authority": authority,
+        "control_authority_audit": control_authority,
         "recall_diagnostic": diagnostic,
         "sleep_cycle": sleep_summary,
         "metrics": metrics,
