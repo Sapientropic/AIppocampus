@@ -22,7 +22,7 @@ class FreshThreadRecallDemoBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "passed")
         self.assertEqual(set(payload["demo_report"]["arms"]), {"no_memory", "hook_only", "active_recall"})
-        self.assertEqual(payload["metrics"]["positive_flow_count"], 5)
+        self.assertEqual(payload["metrics"]["positive_flow_count"], 6)
         self.assertEqual(payload["metrics"]["negative_control_count"], 5)
         self.assertEqual(payload["metrics"]["max_turn_depth"], 3)
         self.assertEqual(payload["metrics"]["correction_control_count"], 1)
