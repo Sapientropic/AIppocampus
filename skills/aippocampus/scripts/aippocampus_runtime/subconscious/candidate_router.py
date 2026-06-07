@@ -25,6 +25,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.dream.constructive_outputs import (
+    prospective_invitation_block_reason,
+    prospective_invitation_match_use,
+)
 from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     normalize_term,
@@ -33,6 +37,7 @@ from aippocampus_runtime.navigation.associations import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.subconscious import match_terms
 
 ROUTER_SCHEMA_VERSION = 1
 DEFAULT_CANDIDATES_NAME = "promotion_candidates.jsonl"
@@ -535,13 +540,6 @@ def load_working_memory(path: Path) -> list[dict[str, Any]]:
     return [row for row in iter_jsonl(path) if row.get("kind") == "aippocampus_working_memory"]
 
 
-def broad_match_term(term: str, project_label: str | None) -> bool:
-    low = normalize_term(term).casefold()
-    if not low or low in GENERIC_TRIGGER_TERMS:
-        return True
-    return bool(project_label and low == project_label.casefold())
-
-
 def parse_utc(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -554,7 +552,12 @@ def parse_utc(value: str | None) -> datetime | None:
 
 def dream_horizon_timestamps(row: dict[str, Any], key: str) -> list[datetime]:
     horizon = row.get("trust_horizon") or {}
-    values = (row.get(key), horizon.get(key) if isinstance(horizon, dict) else None)
+    invitation = row.get("prospective_invitation") or {}
+    values = (
+        row.get(key),
+        horizon.get(key) if isinstance(horizon, dict) else None,
+        invitation.get(key) if isinstance(invitation, dict) else None,
+    )
     return [parsed for value in values if (parsed := parse_utc(str(value or "")))]
 
 
@@ -574,6 +577,9 @@ def dream_hypothesis_block_reason(row: dict[str, Any]) -> str:
     ):
         if any(timestamp <= now for timestamp in dream_horizon_timestamps(row, key)):
             return reason
+    invitation_block_reason = prospective_invitation_block_reason(row)
+    if invitation_block_reason:
+        return invitation_block_reason
     return ""
 
 
@@ -585,11 +591,7 @@ def match_working_memory(
     limit: int = 4,
 ) -> list[dict[str, Any]]:
     prompt_low = prompt.casefold()
-    prompt_parts = [
-        part.casefold()
-        for part in split_query_terms([prompt])
-        if len(part) >= 4 and part.casefold() not in GENERIC_TRIGGER_TERMS
-    ]
+    prompt_parts = match_terms.prompt_parts_for(prompt, generic_terms=GENERIC_TRIGGER_TERMS)
     matches: list[dict[str, Any]] = []
     for row in rows:
         if row.get("status") != "active" or row.get("route") not in ACTIVE_ROUTES:
@@ -605,27 +607,13 @@ def match_working_memory(
             continue
         matched: list[str] = []
         for term in row.get("trigger_terms") or []:
-            if broad_match_term(str(term), str(row_project or "")):
-                continue
-            low = str(term).casefold()
-            term_parts = [
-                part.casefold()
-                for part in split_query_terms([str(term)])
-                if len(part) >= 4 and part.casefold() not in GENERIC_TRIGGER_TERMS
-            ]
-            if not low:
-                continue
-            if " " in low or "-" in low:
-                # Multi-word working-memory triggers are meant to be concrete
-                # phrases ("consent gate", "Review card"). Do not let a single
-                # generic tail word such as "gate" wake unrelated high-risk
-                # review notes.
-                matched_phrase = low in prompt_low or (
-                    bool(term_parts) and all(part in prompt_low for part in term_parts)
-                )
-            else:
-                matched_phrase = low in prompt_low or any(part and part in low for part in prompt_parts)
-            if matched_phrase:
+            if match_terms.trigger_matches_prompt(
+                str(term),
+                prompt_low=prompt_low,
+                prompt_parts=prompt_parts,
+                generic_terms=GENERIC_TRIGGER_TERMS,
+                project_label=str(row_project or ""),
+            ):
                 matched.append(str(term))
         if not matched:
             continue
@@ -643,6 +631,11 @@ def match_working_memory(
         copy["matched_terms"] = unique_preserve(matched, limit=8)
         copy["score"] = round(score, 3)
         if copy.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
+            invitation_use = prospective_invitation_match_use(copy)
+            if invitation_use:
+                copy["dream_hypothesis_use"] = invitation_use
+                matches.append(copy)
+                continue
             copy["dream_hypothesis_use"] = {
                 "action": "use_quietly",
                 "reason": "matched_working_memory_terms",
@@ -688,6 +681,8 @@ def strip_for_hook(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "foreground_use": row.get("foreground_use"),
                 "sensitive_use_gate": row.get("sensitive_use_gate"),
                 "dream_hypothesis_use": row.get("dream_hypothesis_use"),
+                "constructive_artifact": row.get("constructive_artifact"),
+                "prospective_invitation": row.get("prospective_invitation"),
             }
         )
     return out

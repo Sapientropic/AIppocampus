@@ -18,7 +18,18 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_payload
+from aippocampus_runtime.dream.constructive_outputs import (
+    normalized_constructive_artifact,
+    normalized_prospective_invitation,
+)
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
+from aippocampus_runtime.dream.source_refs import (
+    bridge_claims_from_candidate,
+    has_source_refs,
+    resolve_refs,
+    source_ref_inventory,
+    source_refs_by_id,
+)
 from aippocampus_runtime.dream.worker_contract import (
     PROMPT_ORDER,
     stable_worker_contract,
@@ -137,49 +148,6 @@ def string_list(value: object, *, limit: int = 8, max_chars: int = 180) -> list[
     return out
 
 
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_id") or ref.get("source_line") or ref.get("line") or ""),
-    )
-
-
-def clean_source_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
-    clean = {
-        "thread_key": ref.get("thread_key") or ref.get("thread_id"),
-        "message_id": ref.get("message_id"),
-        "turn_id": ref.get("turn_id"),
-        "line": ref.get("line") or ref.get("source_line"),
-        "turn_index": ref.get("turn_index"),
-        "project_label": ref.get("project_label"),
-        "title": ref.get("title"),
-    }
-    return {key: value for key, value in clean.items() if value not in {None, ""}}
-
-
-def source_ref_inventory(pack: Mapping[str, Any]) -> list[dict[str, Any]]:
-    inventory: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in pack.get("source_refs") or []:
-        if not isinstance(item, Mapping):
-            continue
-        key = source_ref_key(item)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        inventory.append({"source_ref_id": f"sr{len(inventory)}", **clean_source_ref(item)})
-    return inventory
-
-
-def source_refs_by_id(pack: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    return {
-        str(item.get("source_ref_id")): {key: value for key, value in item.items() if key != "source_ref_id"}
-        for item in source_ref_inventory(pack)
-    }
-
-
 def safe_texture_payload(pack: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     selection = select_texture_signals(pack.get("texture_signals") or [], consumer="dream", limit=12)
     signals = [
@@ -276,42 +244,6 @@ def model_response_json(response: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("model response JSON root must be an object")
     return parsed
-
-
-def resolve_refs(source_ref_ids: object, by_id: Mapping[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    if isinstance(source_ref_ids, str):
-        raw_ids = [source_ref_ids]
-    elif isinstance(source_ref_ids, list):
-        raw_ids = source_ref_ids
-    else:
-        raw_ids = []
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for raw_id in raw_ids:
-        ref = by_id.get(str(raw_id))
-        if not ref:
-            continue
-        key = source_ref_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append(dict(ref))
-    return refs
-
-
-def bridge_claims_from_candidate(
-    candidate: Mapping[str, Any],
-    *,
-    by_id: Mapping[str, dict[str, Any]],
-    fallback_refs: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    claims: list[dict[str, Any]] = []
-    for item in candidate.get("bridge_claims") or []:
-        if not isinstance(item, Mapping):
-            continue
-        refs = resolve_refs(item.get("source_ref_ids"), by_id)
-        claims.append({"claim": compact_text(str(item.get("claim") or ""), 240), "source_refs": refs[:8]})
-    return claims
 
 
 def has_active_imagination_sensitive_risk(*parts: object) -> bool:
@@ -414,6 +346,21 @@ def finding_from_candidate(
             260,
         ),
     }
+    constructive_artifact, artifact_failures, artifact_review_required = normalized_constructive_artifact(
+        candidate,
+        dream_function=dream_function,
+        by_id=by_id,
+        resolve_refs=resolve_refs,
+    )
+    failures.extend(artifact_failures)
+    prospective_invitation, invitation_failures = normalized_prospective_invitation(
+        candidate,
+        dream_function=dream_function,
+        by_id=by_id,
+        resolve_refs=resolve_refs,
+        future_utc=future_utc,
+    )
+    failures.extend(invitation_failures)
 
     source_ref_audit_status = "model_candidate_source_ref_validated" if not failures else "failed"
     pack_id = str(pack.get("pack_id") or "")
@@ -428,7 +375,7 @@ def finding_from_candidate(
         "support_level": "candidate",
         "review_state": "needs_review",
         "foreground_eligible": False,
-        "human_review_required": False,
+        "human_review_required": bool(artifact_review_required),
         "formal_memory_eligible": False,
         "clean_source_mutation": False,
         "fingerprint": stable_digest(pack_id, dream_function, candidate_index, candidate_kind, title, prefix="dream_model"),
@@ -467,6 +414,25 @@ def finding_from_candidate(
         finding.update(prospective_fields)
     if active_imagination_fields:
         finding.update(active_imagination_fields)
+    if constructive_artifact:
+        finding["constructive_artifact"] = constructive_artifact
+        finding["downstream_use"] = [
+            "working_memory",
+            "ambient_recall_card",
+            "reflection_space",
+        ]
+    if prospective_invitation:
+        finding["prospective_invitation"] = prospective_invitation
+        # A prospective invitation is only useful if a later foreground agent
+        # can see it as a possible question. This is still not a new foreground
+        # channel: working memory and delivery gates decide whether it wakes.
+        finding["downstream_use"] = [
+            "working_memory",
+            "ambient_recall_card",
+            "reflection_space",
+        ]
+    if artifact_review_required:
+        finding["human_review_required"] = True
     finding.update({key: value for key, value in stance_fields.items() if value})
     return {key: value for key, value in finding.items() if value is not None}, None
 
@@ -621,16 +587,15 @@ def validation_status_from_row(row: Mapping[str, Any]) -> str:
     ).casefold()
     if raw in {"supported", "support", "confirmed", "later_supported"}:
         return "supported"
+    if raw in {"adopted", "used", "delivered", "accepted"}:
+        return "adopted"
+    if raw in {"ignored", "dismissed", "rejected", "not_used"}:
+        return "ignored"
     if raw in {"refuted", "refute", "contradicted", "later_refuted"}:
         return "refuted"
+    if raw in {"stale", "expired", "superseded"}:
+        return "stale"
     return ""
-
-
-def has_source_refs(row: Mapping[str, Any]) -> bool:
-    refs = row.get("source_refs")
-    if not isinstance(refs, list):
-        return False
-    return any(isinstance(ref, Mapping) and any(source_ref_key(ref)) for ref in refs)
 
 
 def explicit_validation_evidence(later_rows: list[Mapping[str, Any]]) -> dict[str, dict[str, int]]:
@@ -640,10 +605,20 @@ def explicit_validation_evidence(later_rows: list[Mapping[str, Any]]) -> dict[st
             continue
         status = validation_status_from_row(row)
         targets = validation_targets(row)
-        if status not in {"supported", "refuted"} or not targets or not has_source_refs(row):
+        if status not in {"supported", "adopted", "ignored", "refuted", "stale"} or not targets or not has_source_refs(row):
             continue
         for target in targets:
-            bucket = evidence.setdefault(target, {"supported": 0, "refuted": 0, "source_ref_count": 0})
+            bucket = evidence.setdefault(
+                target,
+                {
+                    "supported": 0,
+                    "adopted": 0,
+                    "ignored": 0,
+                    "refuted": 0,
+                    "stale": 0,
+                    "source_ref_count": 0,
+                },
+            )
             bucket[status] += 1
             bucket["source_ref_count"] += len(row.get("source_refs") or [])
     return evidence
@@ -675,12 +650,21 @@ def retrospective_validate_prospective_findings(
             continue
         bucket = evidence.get(finding_id, {})
         expires_at = parse_utc(str(finding.get("expires_at") or ""))
+        is_invitation = isinstance(finding.get("prospective_invitation"), Mapping)
         if int(bucket.get("refuted") or 0) > 0:
             status = "refuted"
+        elif int(bucket.get("adopted") or 0) > 0:
+            status = "adopted"
+        elif int(bucket.get("ignored") or 0) > 0:
+            status = "ignored"
+        elif int(bucket.get("stale") or 0) > 0:
+            status = "stale"
         elif int(bucket.get("supported") or 0) > 0:
             status = "supported"
         elif expires_at and expires_at <= now_dt:
             status = "stale"
+        elif is_invitation:
+            status = "still_unknown"
         else:
             status = "unknown"
         items.append(

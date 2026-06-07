@@ -3,8 +3,9 @@
 Status: research memo with deterministic Phase 1 compensatory output, a Phase 2
 source-pack/adjudication substrate, a selected real-history Phase 3 structural
 eval, bounded model-backed compensatory/amplification/prospective worker paths,
-an active-imagination sandbox, a detached sleep-cycle Dream Dialogue design, and
-a retrospective prospective-validation harness covered by mocked tests;
+an active-imagination sandbox, constructive draft/prospective-invitation
+foreground affordances, a detached sleep-cycle Dream Dialogue design, and a
+retrospective prospective-validation harness covered by mocked tests;
 awaiting live smoke, cross-model validation, and measured user-visible
 recall/reflection impact.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
@@ -487,10 +488,21 @@ The model-backed worker is bounded by design:
 - prospective candidates carry `emergence_signal`, `trajectory_hint`,
   `counter_evidence`, `review_after`, `expires_at`, and
   `language_boundary="hypothesis_not_prediction"`
+- compensatory and active-imagination candidates may carry a
+  `constructive_artifact` block for source-anchored draft questions, prompts,
+  outlines, or probes. These can be synthetic and useful, but must stay
+  `dream_draft_not_source`, cite source-ref ids, include counter-evidence and
+  `when_not_to_use`, and render only as optional probes.
+- prospective candidates may carry a `prospective_invitation` block with
+  trigger condition, question-first opening, expiry, annoyance risk, and
+  `status="dream_invitation_not_source_fact"`. A matching invitation is a
+  permissioned question shape, not a command or user-intent claim; high
+  annoyance, stale, rejected, sensitive, or non-matching invitations stay quiet.
 - retrospective prospective validation reports `supported`, `refuted`,
-  `stale`, and `unknown` buckets, but only when later evidence explicitly
-  targets the finding id and carries source refs; similar terms alone do not
-  count as support
+  `adopted`, `ignored`, `stale`, `unknown`, and invitation-specific
+  `still_unknown` buckets, but only when later evidence explicitly targets the
+  finding id and carries source refs; similar terms alone do not count as
+  support
 - active-imagination sandbox candidates carry `sandbox_boundary`, require
   `why_this_is_not_fact` and `counter_evidence`, require two independent source
   anchors, and park sensitive/profile-style interpretations even when
@@ -631,6 +643,15 @@ or parked residue; it must not rewrite Journey waypoints, replace a Journey
 with a smoother summary, emit user-profile claims, or promote model synthesis
 to source truth. This is still routing/reconciliation metadata, not proof of
 long-horizon Dream quality.
+As of the constructive-output / prospective-invitation slice, projected rows may
+also carry `constructive_artifact` or `prospective_invitation`. The first is a
+source-anchored draft artifact (`dream_draft_not_source`) that can help a future
+agent ask or check a better question without pretending the draft is quoted
+source. The second is an optional question to surface only when current prompt
+terms match its trigger and delivery gates have already allowed Dream material.
+Both remain under the same working-memory row, trust horizon, sensitive gate,
+and source-reopen boundary; they do not create a parallel foreground channel or
+make Dream a source of facts.
 The actual foreground path enforces this through working-memory matching and
 hook rendering: blocked, expired, review-due, or sensitive dream rows are not
 matched, matched dream rows carry a `dream_hypothesis_use` plan, and hook

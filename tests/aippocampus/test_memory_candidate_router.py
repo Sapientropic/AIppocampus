@@ -271,6 +271,56 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
         self.assertEqual(matched, [])
 
+    def test_prospective_invitation_match_carries_optional_question_policy(self) -> None:
+        dream_row = {
+            "kind": "aippocampus_working_memory",
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "candidate_type": "dream_hypothesis",
+            "title": "Blank-starting-point invitation",
+            "summary": "A prospective Dream invitation about AGI and blankness.",
+            "recommendation": "Ask as an optional question only when the trigger matches.",
+            "confidence": 0.66,
+            "trigger_terms": ["AGI blank starting point"],
+            "source_refs": [{"thread_key": "session:dream", "message_id": "msg-d", "line": 12}],
+            "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+            "review_state": "agent_adjudicated",
+            "foreground_use": {
+                "default_action": "quiet_substrate",
+                "strong_claim_requires_source_reopen": True,
+                "prospective_invitation_action": "optional_question_on_trigger",
+            },
+            "sensitive_use_gate": {"state": "allowed"},
+            "prospective_invitation": {
+                "status": "dream_invitation_not_source_fact",
+                "suggested_opening": "Is the blank starting point question live here?",
+                "invitation_type": "light_question",
+                "annoyance_risk": "low",
+                "requires_source_reopen_before_claim": True,
+            },
+        }
+        annoying = {
+            **dream_row,
+            "title": "Annoying invitation",
+            "prospective_invitation": {
+                **dream_row["prospective_invitation"],
+                "annoyance_risk": "high",
+            },
+        }
+
+        matched = router.match_working_memory(
+            "AGI 里的 blank starting point 要怎么理解？",
+            [dream_row, annoying],
+        )
+
+        self.assertEqual(len(matched), 1)
+        use = matched[0]["dream_hypothesis_use"]
+        self.assertEqual(use["action"], "deliver_as_optional_question")
+        self.assertEqual(use["invitation_diagnostic"], "delivered_as_optional_question")
+        self.assertEqual(use["render_boundary"], "dream_invitation_not_source_fact")
+        self.assertIn("blank starting point", use["suggested_opening"])
+        self.assertTrue(use["strong_claim_requires_source_reopen"])
+
 
 if __name__ == "__main__":
     unittest.main()

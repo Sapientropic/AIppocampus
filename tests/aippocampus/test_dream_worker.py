@@ -323,6 +323,264 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(payload["adjudicated_findings"][0]["adjudication_result"]["status"], "accepted")
         self.assertEqual(len(payload["dream_working_memory_rows"]), 1)
 
+    def test_active_imagination_accepts_constructive_draft_probe_not_source_fact(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            contract = json.loads(messages[0]["content"])
+            self.assertIn("constructive_artifact", contract["output_schema"]["findings"][0])
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "question_not_yet_asked",
+                                            "title": "Compaction loss probe",
+                                            "summary": "A source-anchored draft question can test the route without claiming the source already said it.",
+                                            "why_this_is_not_fact": "The wording is synthesized from source handles, not quoted from them.",
+                                            "counter_evidence": ["the source pack does not yet show a user asking this exact question"],
+                                            "activation_cues": ["clean source compaction loss", "source refs missing after compaction"],
+                                            "confidence": 0.61,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "Both source handles concern continuity and source refs.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "constructive_artifact": {
+                                                "artifact_kind": "draft_question",
+                                                "draft_text": "If compaction lost the last crucial turn, what source handle would let us notice the loss?",
+                                                "draft_origin": "active_imagination over source-ref continuity",
+                                                "intended_use": "foreground_probe",
+                                                "status": "dream_draft_not_source",
+                                                "source_ref_ids": ["sr0", "sr1"],
+                                                "counter_evidence": ["not an extractive quote"],
+                                                "when_not_to_use": ["exact source claim", "sensitive personal interpretation"],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="active_imagination",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        finding = payload["findings"][0]
+        artifact = finding["constructive_artifact"]
+        row = payload["dream_working_memory_rows"][0]
+
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(finding["worker_validation"]["status"], "passed")
+        self.assertEqual(artifact["status"], "dream_draft_not_source")
+        self.assertEqual(artifact["truth_boundary"], "dream_draft_not_source")
+        self.assertTrue(artifact["requires_source_reopen_before_claim"])
+        self.assertEqual(artifact["artifact_kind"], "draft_question")
+        self.assertIn("crucial turn", artifact["draft_text"])
+        self.assertEqual(payload["adjudicated_findings"][0]["adjudication_result"]["status"], "accepted")
+        self.assertEqual(row["constructive_artifact"]["status"], "dream_draft_not_source")
+        self.assertEqual(row["foreground_use"]["draft_artifact_action"], "optional_probe")
+        self.assertEqual(row["truth_boundary"], "adjudicated_dream_hypothesis_not_fact")
+
+    def test_constructive_draft_parks_unsupported_factual_or_sensitive_artifact(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "question_not_yet_asked",
+                                            "title": "Unsupported draft",
+                                            "summary": "The draft has no artifact source refs.",
+                                            "why_this_is_not_fact": "It is missing artifact refs.",
+                                            "counter_evidence": ["missing artifact anchors"],
+                                            "activation_cues": ["missing draft refs"],
+                                            "confidence": 0.59,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The base finding is source-backed.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "constructive_artifact": {
+                                                "artifact_kind": "draft_probe",
+                                                "draft_text": "The user secretly wants the agent to decide this for them.",
+                                                "intended_use": "foreground_probe",
+                                                "status": "dream_draft_not_source",
+                                                "source_ref_ids": [],
+                                                "counter_evidence": [],
+                                                "when_not_to_use": [],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="active_imagination",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        self.assertEqual(payload["status"], "candidate_parked")
+        failures = payload["findings"][0]["worker_validation"]["failed_checks"]
+        self.assertIn("constructive_artifact_missing_source_refs", failures)
+        self.assertIn("constructive_artifact_missing_counter_evidence", failures)
+        self.assertIn("sensitive_or_profile_artifact_requires_human_review", failures)
+        self.assertEqual(payload["dream_working_memory_rows"], [])
+
+    def test_prospective_worker_emits_bounded_invitation_with_trigger_and_expiry(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            directive = json.loads(messages[-1]["content"])
+            self.assertEqual(directive["dream_function"], "prospective")
+            self.assertIn("prospective_invitation_rule", directive)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "emergence_signal",
+                                            "title": "Blank-starting-point question is forming",
+                                            "summary": "Treat this as a possible invitation, not a claim about hidden intent.",
+                                            "emergence_signal": "blank starting point theme forming around memory and continuity",
+                                            "trajectory_hint": "if the user returns to AGI, selfhood, or blankness, a light question may help",
+                                            "counter_evidence": ["the user has not asked to discuss the theme yet"],
+                                            "activation_cues": ["AGI blank starting point", "returning to infant imagery"],
+                                            "confidence": 0.62,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The invitation remains bounded to selected source refs.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "prospective_invitation": {
+                                                "emerging_theme": "AI as subconscious layer and blank starting point",
+                                                "trigger_condition": "user next mentions AGI, selfhood, blankness, or returning-to-infant imagery",
+                                                "suggested_opening": "Is the blank starting point question live here?",
+                                                "invitation_type": "light_question",
+                                                "expires_after": "14d",
+                                                "annoyance_risk": "low",
+                                                "status": "dream_invitation_not_source_fact",
+                                                "source_ref_ids": ["sr0", "sr1"],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="prospective",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        finding = payload["findings"][0]
+        invitation = finding["prospective_invitation"]
+        row = payload["dream_working_memory_rows"][0]
+
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(invitation["status"], "dream_invitation_not_source_fact")
+        self.assertEqual(invitation["invitation_type"], "light_question")
+        self.assertTrue(invitation["expires_at"].endswith("Z"))
+        self.assertTrue(invitation["requires_source_reopen_before_claim"])
+        self.assertEqual(row["prospective_invitation"]["status"], "dream_invitation_not_source_fact")
+        self.assertIn("AGI blank starting point", row["trigger_terms"])
+        self.assertEqual(row["foreground_use"]["prospective_invitation_action"], "optional_question_on_trigger")
+
+    def test_prospective_invitation_requires_trigger_opening_status_and_refs(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "emergence_signal",
+                                            "title": "Incomplete invitation",
+                                            "summary": "This should park because the invitation cannot be delivered safely.",
+                                            "emergence_signal": "something forming",
+                                            "trajectory_hint": "maybe mention it later",
+                                            "counter_evidence": ["not enough signal"],
+                                            "activation_cues": ["some vague future theme"],
+                                            "confidence": 0.62,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The base finding cites sources.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "prospective_invitation": {
+                                                "emerging_theme": "too vague",
+                                                "suggested_opening": "",
+                                                "invitation_type": "assertion",
+                                                "expires_after": "soon",
+                                                "annoyance_risk": "low",
+                                                "status": "source_fact",
+                                                "source_ref_ids": [],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="prospective",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        self.assertEqual(payload["status"], "candidate_parked")
+        failures = payload["findings"][0]["worker_validation"]["failed_checks"]
+        self.assertIn("prospective_invitation_missing_trigger_condition", failures)
+        self.assertIn("prospective_invitation_missing_suggested_opening", failures)
+        self.assertIn("prospective_invitation_invalid_type", failures)
+        self.assertIn("prospective_invitation_invalid_status", failures)
+        self.assertIn("prospective_invitation_missing_source_refs", failures)
+        self.assertEqual(payload["dream_working_memory_rows"], [])
+
     def test_worker_preserves_foreground_useful_stance_fields_without_evidence_upgrade(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {
@@ -802,6 +1060,49 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
+
+    def test_retrospective_validation_tracks_invitation_adopted_ignored_and_still_unknown(self) -> None:
+        invitation = {
+            "finding_kind": "dream_synthesized",
+            "dream_function": "prospective",
+            "fingerprint": "pf_invitation",
+            "expires_at": "2026-06-30T00:00:00Z",
+            "prospective_invitation": {"status": "dream_invitation_not_source_fact"},
+        }
+        ignored = {
+            **invitation,
+            "fingerprint": "pf_ignored",
+        }
+        still_unknown = {
+            **invitation,
+            "fingerprint": "pf_still_unknown",
+        }
+        later_rows = [
+            {
+                "kind": "prospective_validation_event",
+                "target_finding_id": "pf_invitation",
+                "validation_status": "adopted",
+                "source_refs": [source_ref("session:adopted", "msg-adopted", 30)],
+            },
+            {
+                "kind": "prospective_validation_event",
+                "target_finding_id": "pf_ignored",
+                "validation_status": "ignored",
+                "source_refs": [source_ref("session:ignored", "msg-ignored", 40)],
+            },
+        ]
+
+        payload = dream_worker.retrospective_validate_prospective_findings(
+            [invitation, ignored, still_unknown],
+            later_rows,
+            now="2026-05-30T00:00:00Z",
+        )
+
+        by_id = {item["finding_id"]: item["validation_status"] for item in payload["items"]}
+        self.assertEqual(by_id["pf_invitation"], "adopted")
+        self.assertEqual(by_id["pf_ignored"], "ignored")
+        self.assertEqual(by_id["pf_still_unknown"], "still_unknown")
+        self.assertEqual(payload["counts"], {"adopted": 1, "ignored": 1, "still_unknown": 1})
 
     def test_public_summary_omits_source_refs_and_message_ids(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:

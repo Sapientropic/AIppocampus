@@ -149,6 +149,53 @@ class PromptRecallPolicyTests(unittest.TestCase):
         self.assertNotIn("evt-tex", encoded)
         self.assertNotIn("texture_signal_not_source_fact", encoded)
 
+    def test_dream_draft_and_invitation_render_as_optional_questions_not_facts(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 4.0,
+            "confidence": "medium",
+            "candidates": [],
+            "working_memory": [
+                {
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "title": "Blank-starting-point invitation",
+                    "summary": "A prospective invitation about AGI and blankness.",
+                    "confidence": 0.66,
+                    "matched_terms": ["AGI blank starting point"],
+                    "source_refs": [
+                        {
+                            "thread_key": "session:dream",
+                            "title": "Dream invitation",
+                            "line": 12,
+                        }
+                    ],
+                    "dream_hypothesis_use": {
+                        "action": "deliver_as_optional_question",
+                        "reason": "matched_prospective_invitation_trigger",
+                    },
+                    "constructive_artifact": {
+                        "status": "dream_draft_not_source",
+                        "artifact_kind": "draft_question",
+                        "draft_text": "What would a blank starting point preserve and what would it forget?",
+                    },
+                    "prospective_invitation": {
+                        "status": "dream_invitation_not_source_fact",
+                        "suggested_opening": "Is the blank starting point question live here?",
+                        "invitation_type": "light_question",
+                    },
+                }
+            ],
+        }
+
+        context = render.context_for_hook(result)
+
+        self.assertIn("Prospective Dream invitation, not source fact", context)
+        self.assertIn("Is the blank starting point question live here?", context)
+        self.assertIn("Dream draft, not source fact", context)
+        self.assertIn("optional probe", context)
+        self.assertIn("reopen source before any strong claim", context)
+
 
 if __name__ == "__main__":
     unittest.main()
