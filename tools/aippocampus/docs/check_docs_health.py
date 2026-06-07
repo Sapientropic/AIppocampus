@@ -125,6 +125,8 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "aippocampus_runtime/vault/sync.py",
     "aippocampus_runtime/subconscious/jobs.py",
     "aippocampus_runtime/subconscious/scheduler.py",
+    "aippocampus_runtime/subconscious/agent_fallback_executor.py",
+    "aippocampus_runtime/subconscious/agent_fallback_materializer.py",
     "aippocampus_runtime/subconscious/worker.py",
     "aippocampus_runtime/subconscious/review.py",
     "aippocampus_runtime/dream/compensatory.py",
