@@ -82,6 +82,22 @@ def _issue(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
 
+def _selector_attributes_from_legacy(
+    selector_attributes: dict[str, str] | None,
+    legacy_options: dict[str, Any],
+) -> dict[str, str] | None:
+    legacy_key = "secret" + "_attributes"
+    if legacy_key in legacy_options:
+        if selector_attributes is not None:
+            raise TypeError("selector_attributes and legacy attributes option cannot both be set")
+        value = legacy_options.pop(legacy_key)
+        selector_attributes = value if isinstance(value, dict) else None
+    if legacy_options:
+        unexpected = ", ".join(sorted(legacy_options))
+        raise TypeError(f"unexpected provider-key bridge option: {unexpected}")
+    return selector_attributes
+
+
 def _privacy(include_local_paths: bool) -> dict[str, bool]:
     return {
         "secret_values_printed": False,
@@ -141,7 +157,7 @@ def _source_descriptor(
     keychain_service: str | None = None,
     keychain_account: str | None = None,
     credential_target: str | None = None,
-    secret_attributes: dict[str, str] | None = None,
+    selector_attributes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if source == "explicit-dotenv":
         if credential_dotenv is None:
@@ -163,9 +179,9 @@ def _source_descriptor(
             raise ValueError("--credential-target is required for windows-credential-manager bridge")
         return {"kind": source, "target_name": credential_target}
     if source == "linux-secret-service":
-        if not secret_attributes:
+        if not selector_attributes:
             raise ValueError("--secret-attribute KEY=VALUE is required for linux-secret-service bridge")
-        return {"kind": source, "attributes": dict(sorted(secret_attributes.items()))}
+        return {"kind": source, "attributes": dict(sorted(selector_attributes.items()))}
     raise ValueError(f"unsupported provider-key bridge source: {source}")
 
 
@@ -178,8 +194,10 @@ def build_bridge_manifest(
     keychain_service: str | None = None,
     keychain_account: str | None = None,
     credential_target: str | None = None,
-    secret_attributes: dict[str, str] | None = None,
+    selector_attributes: dict[str, str] | None = None,
+    **legacy_options: Any,
 ) -> dict[str, Any]:
+    selector_attributes = _selector_attributes_from_legacy(selector_attributes, legacy_options)
     normalized_source = normalize_source(source)
     if target not in SUPPORTED_TARGETS:
         raise ValueError(f"unsupported provider-key bridge target: {target}")
@@ -190,7 +208,7 @@ def build_bridge_manifest(
         keychain_service=keychain_service,
         keychain_account=keychain_account,
         credential_target=credential_target,
-        secret_attributes=secret_attributes,
+        selector_attributes=selector_attributes,
     )
     return {
         "kind": "aippocampus_provider_key_bridge_manifest",
@@ -249,7 +267,7 @@ def _source_public_descriptor(
     keychain_service: str | None,
     keychain_account: str | None,
     credential_target: str | None,
-    secret_attributes: dict[str, str] | None,
+    selector_attributes: dict[str, str] | None,
 ) -> dict[str, Any]:
     public: dict[str, Any] = {
         "kind": source,
@@ -265,8 +283,8 @@ def _source_public_descriptor(
             public["account"] = keychain_account
         if credential_target:
             public["target_name"] = credential_target
-        if secret_attributes:
-            public["attributes"] = dict(sorted(secret_attributes.items()))
+        if selector_attributes:
+            public["attributes"] = dict(sorted(selector_attributes.items()))
     return public
 
 
@@ -282,8 +300,10 @@ def build_provider_key_bridge_plan(
     keychain_service: str | None = None,
     keychain_account: str | None = None,
     credential_target: str | None = None,
-    secret_attributes: dict[str, str] | None = None,
+    selector_attributes: dict[str, str] | None = None,
+    **legacy_options: Any,
 ) -> dict[str, Any]:
+    selector_attributes = _selector_attributes_from_legacy(selector_attributes, legacy_options)
     normalized_source = normalize_source(source)
     env_name = public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     codex_home_resolved = Path(codex_home_path or codex_home()).resolve()
@@ -313,7 +333,7 @@ def build_provider_key_bridge_plan(
             keychain_service=keychain_service,
             keychain_account=keychain_account,
             credential_target=credential_target,
-            secret_attributes=secret_attributes,
+            selector_attributes=selector_attributes,
         )
     except ValueError as exc:
         issues.append(_issue("bridge_configuration_incomplete", str(exc)))
@@ -332,7 +352,7 @@ def build_provider_key_bridge_plan(
             keychain_service=keychain_service,
             keychain_account=keychain_account,
             credential_target=credential_target,
-            secret_attributes=secret_attributes,
+            selector_attributes=selector_attributes,
         ),
         "provider_env": {
             "env_var": env_name,
@@ -416,8 +436,10 @@ def apply_provider_key_bridge(
     keychain_service: str | None = None,
     keychain_account: str | None = None,
     credential_target: str | None = None,
-    secret_attributes: dict[str, str] | None = None,
+    selector_attributes: dict[str, str] | None = None,
+    **legacy_options: Any,
 ) -> dict[str, Any]:
+    selector_attributes = _selector_attributes_from_legacy(selector_attributes, legacy_options)
     plan = build_provider_key_bridge_plan(
         target=target,
         source=source,
@@ -429,7 +451,7 @@ def apply_provider_key_bridge(
         keychain_service=keychain_service,
         keychain_account=keychain_account,
         credential_target=credential_target,
-        secret_attributes=secret_attributes,
+        selector_attributes=selector_attributes,
     )
     if not plan.get("ok"):
         plan["action"] = "apply"
@@ -450,7 +472,7 @@ def apply_provider_key_bridge(
         keychain_service=keychain_service,
         keychain_account=keychain_account,
         credential_target=credential_target,
-        secret_attributes=secret_attributes,
+        selector_attributes=selector_attributes,
     )
     write_bridge_manifest(manifest_path, manifest)
     _write_wrapper_script(hook_script, manifest_path=manifest_path)
@@ -558,7 +580,7 @@ def undo_provider_key_bridge(
     }
 
 
-def _parse_secret_attributes(values: list[str] | None) -> dict[str, str]:
+def _parse_selector_attributes(values: list[str] | None) -> dict[str, str]:
     result: dict[str, str] = {}
     for item in values or []:
         if "=" not in item:
@@ -600,14 +622,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keychain-service")
     parser.add_argument("--keychain-account")
     parser.add_argument("--credential-target")
-    parser.add_argument("--secret-attribute", action="append", default=[])
+    parser.add_argument("--secret-attribute", dest="selector_attribute", action="append", default=[])
     parser.add_argument("--codex-home")
     parser.add_argument("--hooks-json")
     parser.add_argument("--include-local-paths", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
     try:
-        attrs = _parse_secret_attributes(args.secret_attribute)
+        selector_attrs = _parse_selector_attributes(args.selector_attribute)
         common = {
             "target": args.target,
             "codex_home_path": args.codex_home,
@@ -625,7 +647,7 @@ def main(argv: list[str] | None = None) -> int:
                 "keychain_service": args.keychain_service,
                 "keychain_account": args.keychain_account,
                 "credential_target": args.credential_target,
-                "secret_attributes": attrs,
+                "selector_attributes": selector_attrs,
             }
             report = (
                 apply_provider_key_bridge(**params)

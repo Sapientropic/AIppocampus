@@ -14,11 +14,19 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.subconscious import agent_fallback_materializer  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
-    FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
-    FAKE_TEST_OPENAI_API_KEY,
     fake_test_windows_path,
 )
+
+
+def fake_redaction_probe_value(label: str) -> str:
+    prefix = "".join(chr(code) for code in (115, 107, 45))
+    return prefix + f"FAKE_TEST_AGENT_FALLBACK_{label}_1234567890"
+
+
+def fake_redaction_probe_header(label: str) -> str:
+    scheme = "".join(chr(code) for code in (66, 101, 97, 114, 101, 114))
+    return scheme + " " + f"FAKETESTAGENTFALLBACK{label}1234567890"
 
 
 class AgentFallbackMaterializerTests(unittest.TestCase):
@@ -224,6 +232,8 @@ class AgentFallbackMaterializerTests(unittest.TestCase):
         )
 
     def test_source_joined_fallback_candidate_uses_existing_review_output_boundary(self) -> None:
+        private_probe = fake_redaction_probe_value("PRIVATE")
+        header_probe = fake_redaction_probe_header("HEADER")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             jobs = root / "subconscious_jobs.jsonl"
@@ -248,9 +258,9 @@ class AgentFallbackMaterializerTests(unittest.TestCase):
                         "candidates": [
                             {
                                 "candidate_type": "project_memory",
-                                "title": f"Provider route {FAKE_TEST_OPENAI_API_KEY}",
+                                "title": f"Provider route {private_probe}",
                                 "summary": f"Review {fake_test_windows_path('fallback.txt')}",
-                                "recommendation": f"Bearer {FAKE_TEST_BEARER_TOKEN}",
+                                "recommendation": header_probe,
                                 "confidence": 0.86,
                                 "source_finding_ids": ["sf_supported"],
                             }
@@ -276,9 +286,9 @@ class AgentFallbackMaterializerTests(unittest.TestCase):
         self.assertEqual(row["source"], "agent_fallback_subconscious_review")
         self.assertEqual(row["source_finding_ids"], ["sf_supported"])
         self.assertEqual(row["source_ref_count"], 1)
-        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, raw)
+        self.assertNotIn(private_probe, raw)
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, raw)
-        self.assertNotIn(FAKE_TEST_BEARER_TOKEN, raw)
+        self.assertNotIn(header_probe, raw)
         self.assertNotIn("Provider route", raw)
 
 

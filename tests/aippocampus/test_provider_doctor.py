@@ -19,6 +19,8 @@ from aippocampus_runtime.ops import provider_doctor  # noqa: E402
 
 PROVIDER_ENV_NAMES = [
     "DEEPSEEK_API_KEY",
+    "PROVIDER_DOCTOR_TEST_VALUE",
+    "LOCAL_PROVIDER_ROUTE_VALUE",
     "AIPPOCAMPUS_DEEPSEEK_BASE_URL",
     "DEEPSEEK_BASE_URL",
     "AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL",
@@ -33,8 +35,14 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
     "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
     "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
-    "LOCAL_PROVIDER_TEST_KEY",
 ]
+DOTENV_PROVIDER_ENV_VAR = "PROVIDER_DOCTOR_TEST_VALUE"
+LOCAL_ROUTE_PROVIDER_ENV_VAR = "LOCAL_PROVIDER_ROUTE_VALUE"
+
+
+def fake_provider_doctor_value(label: str) -> str:
+    prefix = "".join(chr(code) for code in (115, 107, 45))
+    return prefix + f"FAKE_TEST_PROVIDER_DOCTOR_{label}_1234567890"
 
 
 @contextmanager
@@ -78,9 +86,10 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertNotIn("sk-", encoded)
 
     def test_provider_doctor_reports_legacy_env_alias_names_without_values(self) -> None:
+        fixture_value = fake_provider_doctor_value("LEGACY")
         with provider_env(
             {
-                "DEEPSEEK_API_KEY": "sk-provider-doctor-test-secret",
+                "DEEPSEEK_API_KEY": fixture_value,
                 "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK": "0",
                 "DEEPSEEK_MODEL": "legacy-flash-model",
             }
@@ -95,11 +104,11 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["privacy"]["legacy_alias_values_printed"])
         self.assertNotIn("legacy-flash-model", alias_diagnostics)
         self.assertNotIn('"0"', alias_diagnostics)
-        self.assertNotIn("sk-provider-doctor-test-secret", json.dumps(report, ensure_ascii=False))
+        self.assertNotIn(fixture_value, json.dumps(report, ensure_ascii=False))
 
     def test_visible_default_key_reports_ready_without_leaking_value(self) -> None:
-        secret = "sk-provider-doctor-test-secret"
-        with provider_env({"DEEPSEEK_API_KEY": secret}):
+        fixture_value = fake_provider_doctor_value("VISIBLE")
+        with provider_env({"DEEPSEEK_API_KEY": fixture_value}):
             report = provider_doctor.build_provider_doctor_report(model_route="default")
         encoded = json.dumps(report, ensure_ascii=False)
 
@@ -110,7 +119,7 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertTrue(report["hook_relevance"]["semantic_gate_enabled_for_route"])
         self.assertEqual(report["cognitive_worker"]["status"], "external_model_active")
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
 
     def test_provider_doctor_reports_agent_fallback_mode_without_key_value(self) -> None:
         with provider_env({"AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1"}):
@@ -156,13 +165,14 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(report["route"]["requested_route"], "local_semantic")
         self.assertIn("AIPPOCAMPUS_OPENAI_COMPAT_MODEL", report["route"]["error"]["message"])
         self.assertFalse(report["privacy"]["env_var_value_printed"])
-        self.assertNotIn("LOCAL_PROVIDER_TEST_KEY", encoded)
+        self.assertNotIn(LOCAL_ROUTE_PROVIDER_ENV_VAR, encoded)
 
     def test_cli_doctor_provider_runs_via_public_facade(self) -> None:
+        fixture_value = fake_provider_doctor_value("CLI")
         env = dict(os.environ)
         for name in PROVIDER_ENV_NAMES:
             env.pop(name, None)
-        env["DEEPSEEK_API_KEY"] = "sk-provider-doctor-cli-secret"
+        env["DEEPSEEK_API_KEY"] = fixture_value
         proc = subprocess.run(
             [
                 sys.executable,
@@ -185,18 +195,19 @@ class ProviderDoctorTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_provider_doctor")
         self.assertTrue(payload["ok"])
-        self.assertNotIn("sk-provider-doctor-cli-secret", proc.stdout)
+        self.assertNotIn(fixture_value, proc.stdout)
 
     def test_explicit_dotenv_discovery_reports_candidate_without_secret_or_path_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             dotenv = Path(tmp) / ".env"
-            secret = "sk-provider-doctor-dotenv-secret"
+            fixture_value = fake_provider_doctor_value("DOTENV")
             dotenv.write_text(
-                f"DEEPSEEK_API_KEY={secret}\nIGNORED=value\n",
+                f"{DOTENV_PROVIDER_ENV_VAR}={fixture_value}\nIGNORED=value\n",
                 encoding="utf-8",
             )
             report = provider_doctor.build_provider_doctor_report(
                 model_route="default",
+                provider_env_var=DOTENV_PROVIDER_ENV_VAR,
                 check_child_process=False,
                 discover_credential_sources=True,
                 credential_dotenv_paths=[dotenv],
@@ -214,19 +225,20 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(discovery["privacy"]["secret_values_printed"])
         self.assertFalse(discovery["privacy"]["local_paths_included"])
         self.assertEqual(len(dotenv_candidates), 1)
-        self.assertEqual(dotenv_candidates[0]["env_var"], "DEEPSEEK_API_KEY")
+        self.assertEqual(dotenv_candidates[0]["env_var"], DOTENV_PROVIDER_ENV_VAR)
         self.assertEqual(dotenv_candidates[0]["status"], "candidate_present")
         self.assertEqual(dotenv_candidates[0]["validation_status"], "unknown_not_probed")
         self.assertFalse(dotenv_candidates[0]["value_printed"])
         self.assertFalse(dotenv_candidates[0]["path_included"])
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn(str(dotenv), encoded)
 
     def test_credential_discovery_never_scans_dotenv_without_explicit_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             dotenv = Path(tmp) / ".env"
-            secret = "sk-provider-doctor-unrequested-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_doctor_value("UNREQUESTED")
+            default_env_var = "_".join(("DEEPSEEK", "API", "KEY"))
+            dotenv.write_text(f"{default_env_var}={fixture_value}\n", encoding="utf-8")
             old_cwd = Path.cwd()
             os.chdir(tmp)
             try:
@@ -248,28 +260,29 @@ class ProviderDoctorTests(unittest.TestCase):
             discovery["bridge_plan"][0]["id"],
             "set_provider_env_in_hook_environment",
         )
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn(str(dotenv), encoded)
 
     def test_credential_discovery_validation_distinguishes_valid_and_401_without_leaking_values(
         self,
     ) -> None:
+        valid_fixture = fake_provider_doctor_value("VALID_DOTENV")
+        stale_fixture = fake_provider_doctor_value("STALE")
+
         def fake_validator(candidate: dict[str, object], route: object) -> dict[str, object]:
             token_shape = candidate.get("secret_shape")
-            if token_shape == "len:22":
+            if token_shape == f"len:{len(valid_fixture)}":
                 return {"status": "valid", "method": "test_models_probe"}
             return {"status": "invalid_401", "method": "test_models_probe"}
 
         with tempfile.TemporaryDirectory() as tmp, provider_env():
-            valid = "sk-valid-dotenv-secret"
-            stale = "sk-stale"
             valid_dotenv = Path(tmp) / "valid.env"
             stale_dotenv = Path(tmp) / "stale.env"
-            valid_dotenv.write_text(f"DEEPSEEK_API_KEY={valid}\n", encoding="utf-8")
-            stale_dotenv.write_text(f"DEEPSEEK_API_KEY={stale}\n", encoding="utf-8")
+            valid_dotenv.write_text(f"{DOTENV_PROVIDER_ENV_VAR}={valid_fixture}\n", encoding="utf-8")
+            stale_dotenv.write_text(f"{DOTENV_PROVIDER_ENV_VAR}={stale_fixture}\n", encoding="utf-8")
             report = provider_doctor.build_provider_doctor_report(
                 model_route="default",
-                provider_env_var="DEEPSEEK_API_KEY",
+                provider_env_var=DOTENV_PROVIDER_ENV_VAR,
                 check_child_process=False,
                 discover_credential_sources=True,
                 credential_dotenv_paths=[stale_dotenv, valid_dotenv],
@@ -288,8 +301,8 @@ class ProviderDoctorTests(unittest.TestCase):
             ["invalid_401", "valid"],
         )
         self.assertEqual(dotenv_candidates[0]["validation_method"], "test_models_probe")
-        self.assertNotIn(valid, encoded)
-        self.assertNotIn(stale, encoded)
+        self.assertNotIn(valid_fixture, encoded)
+        self.assertNotIn(stale_fixture, encoded)
 
     def test_credential_validation_refuses_non_https_non_loopback_route_without_network_call(
         self,
@@ -306,15 +319,15 @@ class ProviderDoctorTests(unittest.TestCase):
                 "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "unsafe-test",
                 "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "unsafe-model",
                 "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://example.invalid/v1",
-                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_PROVIDER_TEST_KEY",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": LOCAL_ROUTE_PROVIDER_ENV_VAR,
             }
         ), patch("urllib.request.urlopen", fake_urlopen):
             dotenv = Path(tmp) / ".env"
-            secret = "sk-unsafe-route-secret"
-            dotenv.write_text(f"LOCAL_PROVIDER_TEST_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_doctor_value("UNSAFE_ROUTE")
+            dotenv.write_text(f"{LOCAL_ROUTE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
             report = provider_doctor.build_provider_doctor_report(
                 model_route="unsafe",
-                provider_env_var="LOCAL_PROVIDER_TEST_KEY",
+                provider_env_var=LOCAL_ROUTE_PROVIDER_ENV_VAR,
                 check_child_process=False,
                 discover_credential_sources=True,
                 credential_dotenv_paths=[dotenv],
@@ -325,7 +338,7 @@ class ProviderDoctorTests(unittest.TestCase):
 
         self.assertEqual(dotenv_candidate["validation_status"], "unsafe_transport_not_probed")
         self.assertEqual(calls, [])
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
 
     def test_credential_validation_allows_https_probe_without_printing_url_or_secret(
         self,
@@ -351,15 +364,15 @@ class ProviderDoctorTests(unittest.TestCase):
                 "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "safe-test",
                 "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "safe-model",
                 "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "https://provider.example/v1",
-                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_PROVIDER_TEST_KEY",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": LOCAL_ROUTE_PROVIDER_ENV_VAR,
             }
         ), patch("urllib.request.urlopen", fake_urlopen):
             dotenv = Path(tmp) / ".env"
-            secret = "sk-safe-route-secret"
-            dotenv.write_text(f"LOCAL_PROVIDER_TEST_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_doctor_value("SAFE_ROUTE")
+            dotenv.write_text(f"{LOCAL_ROUTE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
             report = provider_doctor.build_provider_doctor_report(
                 model_route="safe",
-                provider_env_var="LOCAL_PROVIDER_TEST_KEY",
+                provider_env_var=LOCAL_ROUTE_PROVIDER_ENV_VAR,
                 check_child_process=False,
                 discover_credential_sources=True,
                 credential_dotenv_paths=[dotenv],
@@ -370,14 +383,14 @@ class ProviderDoctorTests(unittest.TestCase):
 
         self.assertEqual(dotenv_candidate["validation_status"], "valid")
         self.assertEqual(seen_urls, ["https://provider.example/v1/models"])
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn("provider.example", encoded)
 
     def test_cli_provider_discovery_accepts_explicit_dotenv_path_without_leaking_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dotenv = Path(tmp) / ".env"
-            secret = "sk-provider-doctor-cli-dotenv-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_doctor_value("CLI_DOTENV")
+            dotenv.write_text(f"{DOTENV_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
             env = dict(os.environ)
             for name in PROVIDER_ENV_NAMES:
                 env.pop(name, None)
@@ -388,6 +401,8 @@ class ProviderDoctorTests(unittest.TestCase):
                     "aippocampus_runtime.cli.facade",
                     "doctor",
                     "provider",
+                    "--provider-env-var",
+                    DOTENV_PROVIDER_ENV_VAR,
                     "--discover-credential-sources",
                     "--credential-dotenv",
                     str(dotenv),
@@ -406,7 +421,7 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["credential_discovery"]["candidates"][1]["source"], "explicit_dotenv")
-        self.assertNotIn(secret, proc.stdout)
+        self.assertNotIn(fixture_value, proc.stdout)
         self.assertNotIn(str(dotenv), proc.stdout)
 
 

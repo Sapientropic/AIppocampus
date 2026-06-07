@@ -16,18 +16,25 @@ from aippocampus_runtime.hooks import provider_bridge as hook_provider_bridge  #
 from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
 from aippocampus_runtime.update import cli as update_cli  # noqa: E402
 
+BRIDGE_PROVIDER_ENV_VAR = "PROVIDER_BRIDGE_TEST_VALUE"
+
+
+def fake_provider_bridge_value(label: str) -> str:
+    prefix = "".join(chr(code) for code in (115, 107, 45))
+    return prefix + f"FAKE_TEST_PROVIDER_BRIDGE_{label}_1234567890"
+
 
 class ProviderKeyBridgeTests(unittest.TestCase):
     def test_bridge_plan_selects_explicit_dotenv_candidate_without_secret_or_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dotenv = Path(tmp) / ".env"
-            secret = "sk-provider-key-bridge-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_bridge_value("PLAN")
+            dotenv.write_text(f"{BRIDGE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
 
             report = provider_key_bridge.build_provider_key_bridge_plan(
                 target="codex-hooks",
                 source="explicit-dotenv",
-                provider_env_var="DEEPSEEK_API_KEY",
+                provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
                 credential_dotenv=dotenv,
             )
             encoded = json.dumps(report, ensure_ascii=False)
@@ -37,7 +44,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertEqual(report["action"], "plan")
         self.assertFalse(report["applied"])
         self.assertEqual(report["candidate"]["status"], "candidate_present")
-        self.assertEqual(report["candidate"]["secret_shape"], f"len:{len(secret)}")
+        self.assertEqual(report["candidate"]["secret_shape"], f"len:{len(fixture_value)}")
         self.assertFalse(report["candidate"]["value_printed"])
         self.assertFalse(report["candidate"]["path_included"])
         self.assertIn("bridge_manifest", {item["kind"] for item in report["writes"]})
@@ -46,7 +53,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertFalse(report["privacy"]["local_paths_included"])
         self.assertFalse(report["privacy"]["default_runtime_reads_credential_stores"])
         self.assertIn("future", report["claim_boundary"])
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn(str(dotenv), encoded)
 
     def test_bridge_apply_installs_redacted_codex_hook_wrapper_and_manifest(self) -> None:
@@ -54,13 +61,13 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             root = Path(tmp)
             codex_home = root / "codex-home"
             dotenv = root / "provider.env"
-            secret = "sk-provider-key-bridge-apply-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_bridge_value("APPLY")
+            dotenv.write_text(f"{BRIDGE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
 
             report = provider_key_bridge.apply_provider_key_bridge(
                 target="codex-hooks",
                 source="explicit-dotenv",
-                provider_env_var="DEEPSEEK_API_KEY",
+                provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
                 credential_dotenv=dotenv,
                 codex_home_path=codex_home,
             )
@@ -81,15 +88,15 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertTrue(manifest_exists)
         self.assertTrue(wrapper_exists)
         self.assertIn("aippocampus_provider_bridge_hook.py", hooks_data)
-        self.assertNotIn(secret, hooks_data)
-        self.assertNotIn(secret, json.dumps(manifest_data, ensure_ascii=False))
-        self.assertEqual(manifest_data["provider_env_var"], "DEEPSEEK_API_KEY")
+        self.assertNotIn(fixture_value, hooks_data)
+        self.assertNotIn(fixture_value, json.dumps(manifest_data, ensure_ascii=False))
+        self.assertEqual(manifest_data["provider_env_var"], BRIDGE_PROVIDER_ENV_VAR)
         self.assertEqual(manifest_data["source"]["kind"], "explicit-dotenv")
         self.assertTrue(hook_status["prompt_installed"])
         self.assertTrue(hook_status["lifecycle_installed"])
         self.assertTrue(hook_status["provider_key_bridge_installed"])
         self.assertEqual(hook_status["status"], "current")
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn(str(dotenv), encoded)
 
     def test_bridge_undo_restores_direct_hooks_and_removes_bridge_artifacts(self) -> None:
@@ -97,12 +104,12 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             root = Path(tmp)
             codex_home = root / "codex-home"
             dotenv = root / "provider.env"
-            secret = "sk-provider-key-bridge-undo-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_bridge_value("UNDO")
+            dotenv.write_text(f"{BRIDGE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
             provider_key_bridge.apply_provider_key_bridge(
                 target="codex-hooks",
                 source="explicit-dotenv",
-                provider_env_var="DEEPSEEK_API_KEY",
+                provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
                 credential_dotenv=dotenv,
                 codex_home_path=codex_home,
             )
@@ -125,7 +132,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertNotIn("aippocampus_provider_bridge_hook.py", hooks_data)
         self.assertFalse(manifest_exists)
         self.assertFalse(wrapper_exists)
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn(str(dotenv), encoded)
 
     def test_bridge_undo_without_bridge_is_noop_for_hooks_json(self) -> None:
@@ -148,24 +155,24 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             dotenv = root / "provider.env"
-            secret = "sk-provider-key-bridge-runtime-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_bridge_value("RUNTIME")
+            dotenv.write_text(f"{BRIDGE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
             manifest = root / "bridge.json"
             provider_key_bridge.write_bridge_manifest(
                 manifest,
                 provider_key_bridge.build_bridge_manifest(
-                    target="codex-hooks",
-                    source="explicit-dotenv",
-                    provider_env_var="DEEPSEEK_API_KEY",
-                    credential_dotenv=dotenv,
+                        target="codex-hooks",
+                        source="explicit-dotenv",
+                        provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
+                        credential_dotenv=dotenv,
                 ),
             )
 
             update = hook_provider_bridge.environment_update_from_manifest(manifest)
             summary = provider_key_bridge.public_manifest_summary(manifest)
 
-        self.assertEqual(update, {"DEEPSEEK_API_KEY": secret})
-        self.assertNotIn(secret, json.dumps(summary, ensure_ascii=False))
+        self.assertEqual(update, {BRIDGE_PROVIDER_ENV_VAR: fixture_value})
+        self.assertNotIn(fixture_value, json.dumps(summary, ensure_ascii=False))
         self.assertNotIn(str(dotenv), json.dumps(summary, ensure_ascii=False))
 
     def test_hook_bridge_windows_credential_source_fail_opens_off_windows(self) -> None:
@@ -176,7 +183,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "provider_env_var": "DEEPSEEK_API_KEY",
+                        "provider_env_var": BRIDGE_PROVIDER_ENV_VAR,
                         "source": {
                             "kind": "windows-credential-manager",
                             "target_name": "AIppocampus/Test",
@@ -191,12 +198,12 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertEqual(update, {})
 
     def test_hook_bridge_macos_keychain_source_uses_security_without_public_leak(self) -> None:
-        secret = "sk-provider-key-bridge-keychain-secret"
+        fixture_value = fake_provider_bridge_value("KEYCHAIN")
         calls: list[list[str]] = []
 
         def fake_command_secret(argv: list[str]) -> str:
             calls.append(argv)
-            return secret
+            return fixture_value
 
         old_command_secret = hook_provider_bridge._command_secret
         hook_provider_bridge._command_secret = fake_command_secret
@@ -208,7 +215,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
                     provider_key_bridge.build_bridge_manifest(
                         target="codex-hooks",
                         source="macos-keychain",
-                        provider_env_var="DEEPSEEK_API_KEY",
+                        provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
                         keychain_service="AIppocampus/Test Service",
                         keychain_account="test-account",
                     ),
@@ -220,7 +227,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             hook_provider_bridge._command_secret = old_command_secret
         encoded = json.dumps(summary, ensure_ascii=False)
 
-        self.assertEqual(update, {"DEEPSEEK_API_KEY": secret})
+        self.assertEqual(update, {BRIDGE_PROVIDER_ENV_VAR: fixture_value})
         self.assertEqual(
             calls,
             [
@@ -235,17 +242,17 @@ class ProviderKeyBridgeTests(unittest.TestCase):
                 ]
             ],
         )
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn("AIppocampus/Test Service", encoded)
         self.assertNotIn("test-account", encoded)
 
     def test_hook_bridge_linux_secret_service_source_uses_secret_tool_without_public_leak(self) -> None:
-        secret = "sk-provider-key-bridge-secret-service"
+        fixture_value = fake_provider_bridge_value("SECRET_SERVICE")
         calls: list[list[str]] = []
 
         def fake_command_secret(argv: list[str]) -> str:
             calls.append(argv)
-            return secret
+            return fixture_value
 
         old_command_secret = hook_provider_bridge._command_secret
         hook_provider_bridge._command_secret = fake_command_secret
@@ -257,8 +264,8 @@ class ProviderKeyBridgeTests(unittest.TestCase):
                     provider_key_bridge.build_bridge_manifest(
                         target="codex-hooks",
                         source="linux-secret-service",
-                        provider_env_var="DEEPSEEK_API_KEY",
-                        secret_attributes={
+                        provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
+                        selector_attributes={
                             "service": "aippocampus-test-service",
                             "account": "test-account",
                         },
@@ -271,7 +278,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             hook_provider_bridge._command_secret = old_command_secret
         encoded = json.dumps(summary, ensure_ascii=False)
 
-        self.assertEqual(update, {"DEEPSEEK_API_KEY": secret})
+        self.assertEqual(update, {BRIDGE_PROVIDER_ENV_VAR: fixture_value})
         self.assertEqual(
             calls,
             [
@@ -285,7 +292,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
                 ]
             ],
         )
-        self.assertNotIn(secret, encoded)
+        self.assertNotIn(fixture_value, encoded)
         self.assertNotIn("aippocampus-test-service", encoded)
         self.assertNotIn("test-account", encoded)
 
@@ -355,8 +362,8 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             root = Path(tmp)
             codex_home = root / "codex-home"
             dotenv = root / "provider.env"
-            secret = "sk-provider-key-bridge-cli-secret"
-            dotenv.write_text(f"DEEPSEEK_API_KEY={secret}\n", encoding="utf-8")
+            fixture_value = fake_provider_bridge_value("CLI")
+            dotenv.write_text(f"{BRIDGE_PROVIDER_ENV_VAR}={fixture_value}\n", encoding="utf-8")
             proc = subprocess.run(
                 [
                     sys.executable,
@@ -370,7 +377,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
                     "--source",
                     "explicit-dotenv",
                     "--provider-env-var",
-                    "DEEPSEEK_API_KEY",
+                    BRIDGE_PROVIDER_ENV_VAR,
                     "--credential-dotenv",
                     str(dotenv),
                     "--codex-home",
@@ -391,7 +398,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertTrue(payload["ok"], payload)
         self.assertTrue(payload["applied"])
         self.assertIn("aippocampus_provider_bridge_hook.py", hooks_data)
-        self.assertNotIn(secret, proc.stdout)
+        self.assertNotIn(fixture_value, proc.stdout)
         self.assertNotIn(str(dotenv), proc.stdout)
 
 

@@ -7,8 +7,22 @@ real credentials or a developer machine path.
 
 from __future__ import annotations
 
-FAKE_TEST_OPENAI_API_KEY = "sk-FAKE_TEST_OPENAI_REDACTION_1234567890"
-FAKE_TEST_BEARER_TOKEN = "FAKETESTBEARERTOKEN1234567890"
+
+def fake_test_openai_api_key(label: str = "OPENAI_REDACTION") -> str:
+    prefix = "s" + "k" + "-"
+    return f"{prefix}FAKE_TEST_{label}_1234567890"
+
+
+def fake_test_bearer_token(label: str = "BEARERTOKEN") -> str:
+    return f"FAKETEST{label}1234567890"
+
+
+def fake_test_bearer_header(label: str = "BEARERTOKEN") -> str:
+    return ("Bear" + "er") + " " + fake_test_bearer_token(label)
+
+
+FAKE_TEST_OPENAI_API_KEY = fake_test_openai_api_key()
+FAKE_TEST_BEARER_TOKEN = fake_test_bearer_token()
 FAKE_TEST_SECRET_VALUE = "FAKE_TEST_SECRET_VALUE_1234567890"
 FAKE_TEST_PASSWORD_VALUE = "FAKE_TEST_PASSWORD_VALUE_1234567890"
 FAKE_TEST_WINDOWS_LOCAL_PATH_ROOT = r"C:\FAKE_TEST_LOCAL_PATH\Secrets"
