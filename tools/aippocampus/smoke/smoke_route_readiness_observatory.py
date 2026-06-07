@@ -17,6 +17,7 @@ from repo_paths import ensure_repo_imports
 ensure_repo_imports(Path(__file__))
 
 from aippocampus_runtime.ops import cognitive_observatory  # noqa: E402
+from aippocampus_runtime.public_output import emit_public_text  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,9 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     report = cognitive_observatory.fixture_cognitive_observatory_readout()
     if args.json_output:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        emit_public_text(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print(cognitive_observatory.render_text(report), end="")
+        emit_public_text(cognitive_observatory.render_text(report), end="")
     return 0 if report.get("ok") else 1
 
 

@@ -109,7 +109,9 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
                 ],
                 "suppression_diagnostics": {
                     "reason_buckets": [
-                        "privacy_blocked",
+                        "secret_or_property_risk_blocked",
+                        "external_payload_blocked",
+                        "local_route_handle_only",
                         "current_thread_echo",
                         "source_validation_failed",
                     ]
@@ -131,7 +133,9 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
             {
                 "no_source_refs",
                 "stale_handle",
-                "privacy_partition_block",
+                "secret_or_property_risk_blocked",
+                "external_payload_blocked",
+                "local_route_handle_only",
                 "anti_nag_source_already_visible",
                 "semantic_provider_timeout",
                 "source_thickness_thin",

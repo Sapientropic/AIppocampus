@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.privacy_taxonomy import privacy_boundary_reason_bucket
 from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.warm_ambient.scout_profiles import (
     REQUIRED_GUARD_FAMILIES,
@@ -13,6 +14,9 @@ from aippocampus_runtime.warm_ambient.scout_profiles import (
 
 SOURCE_VALIDATION_DROP_STATUSES = {"missing_source_ref", "unsupported"}
 SUPPRESSION_REASON_BUCKET_ORDER = (
+    "local_route_handle_only",
+    "external_payload_blocked",
+    "secret_or_property_risk_blocked",
     "privacy_blocked",
     "evidence_sentinel_blocked",
     "guard_coverage_incomplete",
@@ -214,8 +218,13 @@ def suppression_reason_buckets(result: dict[str, Any]) -> list[str]:
     topic_epoch_action = str(topic_epoch_decision.get("action") or "").strip().casefold()
     status = str(result.get("status") or "").strip().casefold()
 
-    if "privacy_boundary_guard" in blocked_families:
-        buckets.append("privacy_blocked")
+    privacy_bucket = privacy_boundary_reason_bucket(
+        privacy_action=(result.get("privacy_actions") or [""])[0],
+        reason_codes=result.get("privacy_reason_codes"),
+        blocked="privacy_boundary_guard" in blocked_families,
+    )
+    if privacy_bucket:
+        buckets.append(privacy_bucket)
     if "evidence_gap_sentinel" in blocked_families:
         buckets.append("evidence_sentinel_blocked")
     if guard_coverage_incomplete(result.get("guard_coverage")):

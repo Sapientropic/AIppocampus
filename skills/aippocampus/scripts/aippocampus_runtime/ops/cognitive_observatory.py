@@ -19,6 +19,7 @@ from aippocampus_runtime.ops.route_readiness import (
     route_readiness_report,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 
 OBSERVATORY_KIND = "aippocampus_cognitive_observatory_readout"
@@ -527,7 +528,7 @@ def main(argv: list[str] | None = None) -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output, encoding="utf-8")
     else:
-        print(output, end="")
+        emit_public_text(output, end="")
     return 0 if report.get("ok") else 1
 
 

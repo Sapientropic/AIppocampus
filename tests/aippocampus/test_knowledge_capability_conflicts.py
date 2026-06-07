@@ -65,29 +65,46 @@ class KnowledgeCapabilityConflictResolverTests(unittest.TestCase):
         self.assertEqual(report["questions"][0]["code"], "missing_jurisdiction")
         self.assertIn("safety_high_risk_overrides_task_domain", report["reason_codes"])
 
-    def test_privacy_partition_suppresses_cross_domain_memory_or_tool_use(self) -> None:
+    def test_privacy_partition_blocks_external_payload_or_side_effect(self) -> None:
         report = capability_conflicts.resolve_capability_conflicts(
             [
                 {
-                    "action_id": "use_relationship_memory_for_project_tool",
-                    "capability_id": "memory.cross_domain_context.medium.v1",
+                    "action_id": "send_raw_relationship_memory_to_tool",
+                    "capability_id": "tool.external_payload.medium.v1",
                     "precedence_class": "task_domain",
                     "output_state": "call_tool",
-                    "tool_id": "calendar.lookup",
+                    "tool_id": "external.crm.write",
                 },
                 {
-                    "action_id": "deny_cross_partition_context",
-                    "capability_id": "privacy.partition_guard.high.v1",
+                    "action_id": "block_external_private_payload",
+                    "capability_id": "privacy.external_payload.high.v1",
                     "precedence_class": "privacy_boundary",
                     "output_state": "cannot_proceed",
-                    "reason_codes": ["cross_partition_denied"],
+                    "reason_codes": ["external_payload_blocked"],
                 },
             ]
         )
 
-        self.assertEqual(report["selected"]["action_id"], "deny_cross_partition_context")
-        self.assertEqual(report["suppressed"][0]["tool_id"], "calendar.lookup")
+        self.assertEqual(report["selected"]["action_id"], "block_external_private_payload")
+        self.assertEqual(report["suppressed"][0]["tool_id"], "external.crm.write")
         self.assertIn("privacy_boundary_overrides_task_domain", report["reason_codes"])
+
+    def test_same_user_cross_domain_memory_can_project_local_route_handle(self) -> None:
+        report = capability_conflicts.resolve_capability_conflicts(
+            [
+                {
+                    "action_id": "use_relationship_memory_as_local_route",
+                    "capability_id": "memory.cross_domain_context.medium.v1",
+                    "precedence_class": "task_domain",
+                    "output_state": "local_route_handle",
+                    "reason_codes": ["local_route_handle_only"],
+                }
+            ]
+        )
+
+        self.assertEqual(report["selected"]["action_id"], "use_relationship_memory_as_local_route")
+        self.assertEqual(report["output_state"], "local_route_handle")
+        self.assertIn("local_route_handle_only", report["reason_codes"])
 
     def test_source_truth_gate_suppresses_stale_task_operation(self) -> None:
         report = capability_conflicts.resolve_capability_conflicts(

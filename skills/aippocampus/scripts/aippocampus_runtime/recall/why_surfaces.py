@@ -37,7 +37,8 @@ def _source_ref_count_from_routes(routes: list[Any]) -> int:
 
 
 def recall_context_surface_report(payload: Mapping[str, Any]) -> dict[str, Any]:
-    routes = payload.get("routes") if isinstance(payload.get("routes"), list) else []
+    raw_routes = payload.get("routes")
+    routes: list[Any] = raw_routes if isinstance(raw_routes, list) else []
     route_ids = [
         str(route.get("route_id") or "")
         for route in routes
@@ -182,6 +183,12 @@ def ambient_cache_surface_report(cache: Mapping[str, Any] | None) -> dict[str, A
         buckets = [str(item) for item in diagnostics.get("reason_buckets") or []]
         if "privacy_blocked" in buckets:
             reason_codes.append("privacy_partition_block")
+        if "secret_or_property_risk_blocked" in buckets:
+            reason_codes.append("secret_or_property_risk_blocked")
+        if "external_payload_blocked" in buckets:
+            reason_codes.append("external_payload_blocked")
+        if "local_route_handle_only" in buckets:
+            reason_codes.append("local_route_handle_only")
         if "current_thread_echo" in buckets:
             reason_codes.append("anti_nag_source_already_visible")
         if "source_validation_failed" in buckets:
@@ -218,7 +225,8 @@ def semantic_gate_surface_report(
     public = public_semantic_gate_payload(semantic_gate)
     diagnostic = str(public.get("diagnostic") or "").casefold()
     availability = str(public.get("availability_reason") or "").casefold()
-    buckets = public.get("error_buckets") if isinstance(public.get("error_buckets"), dict) else {}
+    raw_buckets = public.get("error_buckets")
+    buckets: dict[Any, Any] = raw_buckets if isinstance(raw_buckets, dict) else {}
     reason_codes: list[str] = []
     if diagnostic in {"semantic_provider_read_timeout", "semantic_overall_deadline_exceeded", "semantic_timed_out_under_foreground_budget"} or availability == "semantic_worker_timeout" or buckets.get("read_timeout") or buckets.get("overall_deadline"):
         reason_codes.append("semantic_provider_timeout")
