@@ -56,6 +56,35 @@ def _foreground_suppression_reasons(raw: Any) -> list[str]:
     ]
 
 
+def _reason_set(value: Any) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {str(reason) for reason in value}
+
+
+def legacy_candidate_summary_suppressed(result: dict[str, Any]) -> bool:
+    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
+    brief = ambient.get("brief_precision") if isinstance(ambient, dict) else {}
+    if not isinstance(brief, dict):
+        brief = {}
+    raw_delivery = result.get("route_delivery_diagnostic")
+    delivery: dict[str, Any] = raw_delivery if isinstance(raw_delivery, dict) else {}
+    reasons = _reason_set(brief.get("foreground_suppression_reasons")) | _reason_set(
+        delivery.get("foreground_suppression_reasons")
+    )
+    suppressed_count = max(
+        _count(brief.get("composer_backstage_count")),
+        _count(brief.get("alias_spillover_suppressed_count")),
+        _count(brief.get("cross_project_generic_scent_suppressed_count")),
+        _count(delivery.get("semantic_trigger_generic_term_suppressed_count")),
+    )
+    return (
+        "generic_meta_terms_only" in reasons
+        and _count(brief.get("foreground_card_count")) == 0
+        and suppressed_count > 0
+    )
+
+
 def route_delivery_debug_summary(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
