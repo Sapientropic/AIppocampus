@@ -474,6 +474,11 @@ fixtures with this contract:
   commit reverted, patchset superseded, or SATD/workaround comment removed.
 - Scoring: count both supported flags and missed hard events. No soft semantic
   judge for forward-looking labels.
+- Production-like retrieval: source-disambiguation reports whether a multi-source
+  support chain entered the candidate pool separately from whether the route is
+  actionably foreground-visible. Successful current events may keep old failed
+  routes as diagnostic candidates, but the actionability gate must suppress them
+  unless a separate currentness rule proves they still apply.
 - Reporting: no single aggregate headline; family tables are the public result.
 
 The next version should replace the synthetic rows with curated public
@@ -487,6 +492,7 @@ python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --baseline em
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --predictions .tmp\vcs-source-window.jsonl --closed-book-predictions .tmp\vcs-closed-book.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\react-real-vcs-adversarial-v2\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
