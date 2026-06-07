@@ -150,6 +150,7 @@ class PairDecision:
     acceptance_source: str
     confirmation: dict[str, Any] | None = None
     confirmation_request: dict[str, Any] | None = None
+    ignored_confirmation: dict[str, Any] | None = None
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -681,6 +682,26 @@ def decide_pair(
             confirmation_request=payload,
         )
     if confirmation.get("decision") != "accept":
+        if auto_accept_borderline:
+            # Default unattended question tracking should not let stale or
+            # malformed calibration artifacts recreate the old human-review
+            # gate. Keep the ignored artifact in diagnostics, but let the
+            # source-backed borderline pair materialize as low-confidence
+            # navigation so later feedback can correct it.
+            return PairDecision(
+                pair_id=current_pair_id,
+                left_id=left.question_id,
+                right_id=right.question_id,
+                score=score,
+                decision="accepted",
+                link_type="recurring",
+                confidence=round(min(0.82, 0.56 + score * 0.34), 4),
+                reason="borderline score auto-accepted after ignoring invalid confirmation artifact",
+                threshold_policy=threshold_policy,
+                acceptance_source="borderline_auto",
+                confirmation_request=payload,
+                ignored_confirmation=confirmation,
+            )
         return PairDecision(
             pair_id=current_pair_id,
             left_id=left.question_id,
@@ -913,6 +934,7 @@ def build_question_link(
                     "acceptance_source": pair.acceptance_source,
                     "threshold_policy": pair.threshold_policy,
                     "confirmation": pair.confirmation,
+                    "ignored_confirmation": pair.ignored_confirmation,
                 }
                 for pair in accepted_pairs
             ],
@@ -1035,6 +1057,9 @@ def build_question_links(
         "accepted_pair_count": len(accepted_pairs),
         "borderline_auto_accepted_pair_count": sum(
             1 for pair in accepted_pairs if pair.acceptance_source == "borderline_auto"
+        ),
+        "borderline_auto_ignored_confirmation_count": sum(
+            1 for pair in accepted_pairs if pair.ignored_confirmation
         ),
         "borderline_skipped_pair_count": skipped_borderline,
         **confirmation_diagnostics(pair_decisions),
@@ -1178,6 +1203,7 @@ def run_question_tracking(
     }
     diagnostic_keys = (
         "pair_count accepted_pair_count borderline_auto_accepted_pair_count "
+        "borderline_auto_ignored_confirmation_count "
         "borderline_skipped_pair_count "
         "borderline_confirmation_accepted_pair_count borderline_confirmation_rejected_pair_count "
         "borderline_confirmation_stale_pair_count borderline_confirmation_malformed_pair_count "

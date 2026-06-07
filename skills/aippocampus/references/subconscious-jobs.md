@@ -471,7 +471,10 @@ Source-backed borderline pairs auto-materialize by default as low-confidence
 navigation with `borderline_auto` audit metadata. This keeps question tracking
 usable without laundering weak links into strong evidence. Explicit
 confirmation remains an opt-in calibration mode; accepted links still cite the
-original question source refs, not the confirmation artifact as truth.
+original question source refs, not the confirmation artifact as truth. Explicit
+reject artifacts still separate pairs, but stale, malformed, or source-id
+mismatched artifacts are ignored by the default auto-materialization path and
+only block links when strict confirmation mode is requested.
 
 ### `concept_edges`
 

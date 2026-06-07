@@ -55,7 +55,10 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   `question_link` findings by default. The older confirmation gate remains
   available as an explicit calibration mode; when a confirmation artifact is
   supplied, accepted/rejected/malformed/stale/source-id-mismatched outcomes are
-  audited, and rejected/invalid artifacts do not create links. Accepted
+  audited. Explicit rejects still separate a pair; malformed, stale, or
+  source-id-mismatched artifacts are ignored in the default auto-materialization
+  path so old calibration noise cannot recreate a mandatory human-review gate.
+  In explicit confirmation mode, those invalid artifacts remain blockers. Accepted
   `match_evidence` distinguishes `strong_score`, `borderline_auto`, and
   `borderline_confirmation` so borderline links are usable without being
   laundered into strong evidence. Confirmation audits keep pair id, source
