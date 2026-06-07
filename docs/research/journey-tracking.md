@@ -40,6 +40,14 @@ Current code implements the source-backed P1-P3 Journey core in
   same helper exercises foreground hint timing with positive and negative
   controls while keeping source refs and private route handles out of the
   agent-visible hint.
+- #834 frontier-probe slice:
+  `skills/aippocampus/scripts/aippocampus_runtime/navigation/frontier_probe.py`
+  maps Journey `current_frontier` text and source refs into bounded
+  concept-graph probes with deterministic `expand_concepts()` expansion. It can
+  emit `frontier_probe` rows, reviewable `resonance_candidate` hypotheses, and
+  non-foreground Dream input seeds. These are scouting artifacts only: they do
+  not mutate Journey state, do not become source evidence, and require source
+  reopen before any factual claim.
 
 Still designed/deferred: production Journey instantiation hooks over real
 private history, default AAR foreground projection, question-tracking P4
