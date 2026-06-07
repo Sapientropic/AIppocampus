@@ -171,6 +171,21 @@ Schema upgrades should be rebuildable. Do not put embeddings, DWM state, or
 debug provenance into `messages.jsonl`; use sidecars joined by `message_id`,
 `turn_id`, or `event_id`.
 
+## Agent Self-Notes
+
+`aippocampus_runtime/source/agent_self_notes.py` owns the private
+`agent-self-notes.jsonl` sidecar. A row with `kind=agent_self_note` is a short
+foreground-agent margin note about stance, hesitation, surprise, or closeout
+posture. It is not clean source, not a user profile, and not formal memory.
+
+Self-notes are `memory_atmosphere` / `direction_only` only. Their `source_refs`
+route a later agent back to the surrounding source neighborhood; those refs do
+not prove the note text or any factual claim. The append helper enforces a
+bounded note length, rejects mostly credential-shaped or raw tool-payload
+material, redacts local paths, and never mutates clean source. Explicit active
+recall may surface these rows when the agent asks to recover past state, but
+source-backed details still require the normal clean-source reopen path.
+
 ## Raw Rollout Discovery
 
 Raw rollout lookup scans both `$CODEX_HOME/sessions/` and
