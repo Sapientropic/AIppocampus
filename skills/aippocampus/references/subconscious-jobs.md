@@ -34,6 +34,10 @@ but they must not rewrite source, delete source, or directly write formal memory
   archive, compact, or delete.
 - `aippocampus_runtime.subconscious.scheduler`: hook-safe scheduler that starts detached
   subconscious runs only after cooldown, new-turn, API-key, and lock checks.
+- `aippocampus_runtime.subconscious.time_maintenance`: opt-in scheduled/idle
+  maintenance lane. It scans registry metadata and generated sidecars for due
+  reason codes, dry-runs the same bounded candidate rows it can later write,
+  and reuses scheduler leases/cooldowns instead of creating a second scheduler.
 - `aippocampus_runtime.subconscious.candidate_router`: deterministic promotion-candidate router for
   soft working memory. It prevents a human review inbox by assigning
   `use_silently`, `use_with_source`, `confirm_when_relevant`, or `park`.
@@ -567,6 +571,23 @@ starts a detached `--run-due` worker and logs to
 `$CODEX_HOME/aippocampus-registry/subconscious_scheduler.log`. This keeps the
 subconscious automatic without making every user prompt or Stop hook wait for
 DeepSeek.
+
+Preview time-driven idle maintenance without writes:
+
+```powershell
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.time_maintenance --cwd "$PWD" --json
+```
+
+Append bounded maintenance candidates after reviewing the dry-run:
+
+```powershell
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.time_maintenance --cwd "$PWD" --write --json
+```
+
+This entrypoint does not execute raw maintenance work by itself. It emits
+candidate actions for scheduled revisits, stale frontiers, camped journeys,
+dormant questions, stale association caches, and health-preemptive work so the
+host or enabled worker can reopen source and decide the next action.
 
 Run one focused job:
 

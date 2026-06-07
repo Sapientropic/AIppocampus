@@ -359,6 +359,8 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/staging_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/staging_maintenance.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/theme_emergence.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/time_maintenance.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/time_maintenance_plan.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/tool_loop.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/validation_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/worker.py",

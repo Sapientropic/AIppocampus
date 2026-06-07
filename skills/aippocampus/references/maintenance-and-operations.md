@@ -42,6 +42,19 @@ re-read, and `remaining_recommended_actions` states what still needs attention.
 Use `--fail-fast` only for strict CI/operator paths that need the old first
 failure to stop the command.
 
+`aippocampus_runtime.subconscious.time_maintenance` is an opt-in
+time-driven lane for idle or scheduled revisits. It reads registry metadata,
+health summaries, Journey/question/frontier sidecars, scheduler state, and
+small cache manifests; it does not scan raw transcripts or claim hooks wake
+without a host event. Default mode is a dry-run plan with sanitized reason
+codes such as `scheduled_revisit`, `stale_frontier`,
+`camped_journey_due`, `dormant_question_due`,
+`stale_association_cache`, and `health_preemptive_due`. `--write` appends
+bounded `time_maintenance_candidates.jsonl` rows and reuses the subconscious
+scheduler's local lock, project leases, and enqueue cooldowns. `--enqueue-worker`
+only writes agent-fallback tasks when cognitive worker mode resolves to an
+enabled fallback; provider-backed work remains optional.
+
 `aippocampus health --registry-wide --json` gives a lightweight registry rollup:
 thread health counts, recommended-action counts, storage totals, and top
 hashed thread refs by risk. It reads registry and generated manifests only, not
@@ -266,6 +279,8 @@ Common health and repair commands:
 - `aippocampus health --registry-wide --json`
 - `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD"`
 - `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD" --activation-dead-letter-manifest "<manifest.json>" --activation-working-memory "<working_memory.jsonl>" --json`
+- `python -m aippocampus_runtime.subconscious.time_maintenance --cwd "$PWD" --json`
+- `python -m aippocampus_runtime.subconscious.time_maintenance --cwd "$PWD" --write --json`
 - `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`
 - `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`
 - `python -m aippocampus_runtime.recall.segment_builder --cwd "$PWD"`
