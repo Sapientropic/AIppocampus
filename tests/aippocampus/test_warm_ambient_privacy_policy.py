@@ -103,6 +103,46 @@ class WarmAmbientPrivacyPolicyTests(unittest.TestCase):
         self.assertEqual(result["privacy_reason_codes"], ["secret_like"])
         self.assertFalse(result["raw_external_projection_allowed"])
 
+    def test_privacy_diagnostics_distinguish_route_handles_from_hard_blocks(self) -> None:
+        route_handle = {
+            "cards": [{"theme": "same-user route"}],
+            "blocked_by": [],
+            "privacy_actions": ["private_route"],
+            "privacy_reason_codes": ["ordinary_personal_conversation"],
+        }
+        secret_block = {
+            "cards": [],
+            "blocked_by": ["privacy_boundary_guard:direct"],
+            "privacy_actions": ["hard_block"],
+            "privacy_reason_codes": ["secret_like"],
+        }
+        external_block = {
+            "cards": [],
+            "blocked_by": ["privacy_boundary_guard:direct"],
+            "privacy_actions": ["external_projection_block"],
+            "privacy_reason_codes": ["external_payload"],
+        }
+        mixed_route_with_external_payload = {
+            "cards": [],
+            "blocked_by": ["privacy_boundary_guard:direct"],
+            "privacy_actions": ["private_route"],
+            "privacy_reason_codes": ["external_payload"],
+        }
+
+        self.assertEqual(warm.suppression_reason_buckets(route_handle), ["local_route_handle_only"])
+        self.assertEqual(
+            warm.suppression_reason_buckets(secret_block),
+            ["secret_or_property_risk_blocked", "no_supported_cards"],
+        )
+        self.assertEqual(
+            warm.suppression_reason_buckets(external_block),
+            ["external_payload_blocked", "no_supported_cards"],
+        )
+        self.assertEqual(
+            warm.suppression_reason_buckets(mixed_route_with_external_payload),
+            ["external_payload_blocked", "no_supported_cards"],
+        )
+
     def test_purpose_check_keeps_cross_domain_source_private_until_reopened(self) -> None:
         rows = [
             warm.parse_scout_output(

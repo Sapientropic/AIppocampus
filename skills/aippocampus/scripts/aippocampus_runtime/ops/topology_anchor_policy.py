@@ -6,6 +6,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.privacy_taxonomy import (
+    privacy_action_is_local_route,
+    privacy_boundary_reason_bucket,
+)
+
 POLICY_KIND = "aippocampus_topology_anchor_policy"
 SCHEMA_VERSION = 1
 
@@ -30,7 +35,22 @@ def topology_anchor_weight(row: Mapping[str, Any]) -> dict[str, Any]:
     high_degree = int(_as_float(row.get("degree")))
     unique_route_support = bool(row.get("unique_route_support"))
     supersession_edge = bool(row.get("supersession_edge") or row.get("contradiction_edge"))
-    privacy_blocked = bool(row.get("privacy_blocked"))
+    privacy_bucket = privacy_boundary_reason_bucket(
+        privacy_action=row.get("privacy_action"),
+        reason_codes=row.get("privacy_reason_codes"),
+        blocked=bool(row.get("privacy_blocked")),
+    )
+    local_route_handle = privacy_bucket == "local_route_handle_only" or (
+        not privacy_bucket and privacy_action_is_local_route(row.get("privacy_action"))
+    )
+    hard_privacy_bucket = privacy_bucket in {
+        "external_payload_blocked",
+        "secret_or_property_risk_blocked",
+        "privacy_blocked",
+    }
+    privacy_blocked = hard_privacy_bucket or (
+        bool(row.get("privacy_blocked")) and not local_route_handle
+    )
 
     reasons: list[str] = []
     weight = 0.0
@@ -40,7 +60,11 @@ def topology_anchor_weight(row: Mapping[str, Any]) -> dict[str, Any]:
     if not source_refs:
         diagnostic_only = True
         reasons.append("missing_source_refs")
-    if privacy_blocked:
+    if local_route_handle:
+        reasons.append("local_route_handle_only")
+    elif privacy_bucket:
+        reasons.append(privacy_bucket)
+    elif privacy_blocked:
         reasons.append("privacy_blocked")
 
     bridge_like = bool(bridge_score >= 0.65 and len(set(cluster_ids)) >= 2)

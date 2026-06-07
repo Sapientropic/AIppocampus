@@ -66,7 +66,8 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
                     "freshness": "current",
                     "created_unix": 1_000,
                     "ttl_seconds": 100,
-                    "privacy_state": "blocked",
+                    "privacy_action": "hard_block",
+                    "privacy_reason_codes": ["secret_like"],
                     "expected_value": 5,
                     "estimated_cost": 1,
                     "source_refs": [{"source_id": "clean:private"}],
@@ -97,11 +98,63 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["suppressed_count"], 4)
         self.assertEqual(report["metrics"]["stale_suppression_count"], 1)
         self.assertEqual(report["metrics"]["privacy_suppression_count"], 1)
+        self.assertEqual(report["metrics"]["secret_or_property_risk_suppression_count"], 1)
         self.assertEqual(report["metrics"]["low_value_suppression_count"], 1)
         self.assertEqual(report["metrics"]["no_source_refs_suppression_count"], 1)
+        self.assertIn("secret_or_property_risk_blocked", report["suppression_counts"])
         for row in report["rows"]:
             self.assertEqual(row["readiness_class"], "silent")
             self.assertTrue(row["navigation_only"])
+
+    def test_route_readiness_keeps_local_privacy_route_handles_ready(self) -> None:
+        report = route_readiness_report(
+            [
+                {
+                    "route_id": "same-user-cross-domain",
+                    "freshness": "current",
+                    "created_unix": 1_000,
+                    "ttl_seconds": 100,
+                    "privacy_action": "private_route",
+                    "privacy_reason_codes": ["ordinary_personal_conversation"],
+                    "expected_value": 5,
+                    "estimated_cost": 1,
+                    "source_refs": [{"source_id": "clean:relationship"}],
+                }
+            ],
+            now_unix=1_010,
+        )
+
+        row = report["rows"][0]
+        self.assertEqual(row["status"], "ready")
+        self.assertEqual(row["readiness_class"], "source_reopen_ready")
+        self.assertIn("local_route_handle_only", row["reason_codes"])
+        self.assertEqual(report["metrics"]["ready_count"], 1)
+        self.assertEqual(report["metrics"]["privacy_suppression_count"], 0)
+
+    def test_route_readiness_hard_reason_overrides_local_route_action(self) -> None:
+        report = route_readiness_report(
+            [
+                {
+                    "route_id": "mixed-privacy-route",
+                    "freshness": "current",
+                    "created_unix": 1_000,
+                    "ttl_seconds": 100,
+                    "privacy_action": "private_route",
+                    "privacy_reason_codes": ["external_payload"],
+                    "expected_value": 5,
+                    "estimated_cost": 1,
+                    "source_refs": [{"source_id": "clean:relationship"}],
+                }
+            ],
+            now_unix=1_010,
+        )
+
+        row = report["rows"][0]
+        self.assertEqual(row["status"], "suppressed")
+        self.assertIn("external_payload_blocked", row["reason_codes"])
+        self.assertNotIn("local_route_handle_only", row["reason_codes"])
+        self.assertEqual(report["metrics"]["privacy_suppression_count"], 1)
+        self.assertEqual(report["metrics"]["external_payload_suppression_count"], 1)
 
     def test_observatory_fixture_is_public_safe_and_read_only(self) -> None:
         report = cognitive_observatory.fixture_cognitive_observatory_readout()
