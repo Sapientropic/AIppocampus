@@ -1,5 +1,7 @@
 # Encrypted Sync V1
 
+Role: current contract.
+
 This document defines the first encrypted sync design for AIppocampus. It is a
 design contract, not an implementation note. The goal is to make multi-device
 sync safe before HTTP object storage or cloud-synced folders become normal use.

@@ -1,5 +1,7 @@
 # AAR v2 Action-Time Nudges
 
+Role: current contract.
+
 Status: first deterministic slice for #484 and #332 strategy-reader
 hardening.
 

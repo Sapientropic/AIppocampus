@@ -11,8 +11,30 @@ ARCHITECTURE_INDEX_ROLES = {
     "implementation map",
     "active design",
     "inventory",
-    "research/historical",
+    "research seed",
+    "archive",
 }
+ARCHITECTURE_INDEX_ROLE_SECTIONS = {
+    "## Current Contracts",
+    "## Implementation Maps",
+    "## Inventories",
+    "## Active Designs",
+    "## Research Seeds",
+    "## Archives",
+}
+
+
+def _normalize_role(value: str) -> str:
+    return " ".join(value.strip().strip("`.:").casefold().split())
+
+
+def _architecture_doc_role(path: Path) -> str | None:
+    text = path.read_text(encoding="utf-8")
+    for line in text.splitlines()[:8]:
+        match = re.match(r"Role:\s*`?([^`.]+)`?\.?$", line.strip(), re.IGNORECASE)
+        if match:
+            return _normalize_role(match.group(1))
+    return None
 
 
 def architecture_index_issues(repo_root: Path) -> list[str]:
@@ -25,10 +47,15 @@ def architecture_index_issues(repo_root: Path) -> list[str]:
 
     issues: list[str] = []
     rows: dict[str, str] = {}
+    index_text = index.read_text(encoding="utf-8")
+    for section in sorted(ARCHITECTURE_INDEX_ROLE_SECTIONS):
+        if section not in index_text:
+            issues.append(f"architecture index missing role section: {section}")
+
     pattern = re.compile(r"\|\s*\[[^\]]+\]\(([^)]+\.md)\)\s*\|\s*([^|]+?)\s*\|")
-    for match in pattern.finditer(index.read_text(encoding="utf-8")):
+    for match in pattern.finditer(index_text):
         filename = Path(match.group(1)).name
-        role = " ".join(match.group(2).strip().casefold().split())
+        role = _normalize_role(match.group(2))
         rows[filename] = role
         if role not in ARCHITECTURE_INDEX_ROLES:
             issues.append(
@@ -37,8 +64,24 @@ def architecture_index_issues(repo_root: Path) -> list[str]:
             )
 
     for doc in sorted(architecture_dir.glob("*.md")):
-        if doc.name != "README.md" and doc.name not in rows:
+        if doc.name == "README.md":
+            continue
+        if doc.name not in rows:
             issues.append(f"architecture index missing docs/architecture/{doc.name}")
+        doc_role = _architecture_doc_role(doc)
+        if not doc_role:
+            issues.append(f"architecture doc missing Role line: docs/architecture/{doc.name}")
+            continue
+        if doc_role not in ARCHITECTURE_INDEX_ROLES:
+            issues.append(
+                f"architecture doc has unsupported Role for {doc.name}: {doc_role}; "
+                f"use one of {sorted(ARCHITECTURE_INDEX_ROLES)}"
+            )
+        elif doc.name in rows and doc_role != rows[doc.name]:
+            issues.append(
+                f"architecture doc Role mismatch for {doc.name}: doc has {doc_role}, "
+                f"index has {rows[doc.name]}"
+            )
 
     for filename in sorted(rows):
         if filename == "README.md":

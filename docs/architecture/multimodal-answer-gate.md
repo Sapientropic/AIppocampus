@@ -1,5 +1,7 @@
 # Multimodal Answer Gate
 
+Role: current contract.
+
 Status: public-safe answer-time gate prototype for GitHub #543 and the #528
 multimodal source-backed recall track.
 

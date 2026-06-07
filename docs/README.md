@@ -32,6 +32,7 @@ before promoting a heavier mechanism into the ordinary user path.
   [`guides/coding-agent-memory.md`](guides/coding-agent-memory.md).
 - Community evidence and field-report intake:
   [`evidence/community-field-reports.md`](evidence/community-field-reports.md).
+- Evidence lane map: [`evidence/README.md`](evidence/README.md).
 - Current claim boundary: [`evidence/readiness/stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md).
 - Proof-slice maturity board:
   [`evidence/readiness/proof-slice-maturity.md`](evidence/readiness/proof-slice-maturity.md).
@@ -107,10 +108,12 @@ material.
 ### Evidence
 
 `evidence/` is for benchmark design, smoke maps, dated verification, product
-evidence, and claim boundaries. Keep raw JSON reports and private case packs
-out of git. The root keeps only navigation and small cross-cutting evidence
-pages; most detailed evidence pages are grouped by purpose: `readiness/`,
-`benchmarks/`, `dream/`, and `question/`.
+evidence, and claim boundaries. Start with [`evidence/README.md`](evidence/README.md)
+to choose between current claims, product/human evidence, benchmark maps, and
+dated ledgers. Keep raw JSON reports and private case packs out of git. The
+root keeps only navigation and small cross-cutting evidence pages; most
+detailed evidence pages are grouped by purpose: `readiness/`, `benchmarks/`,
+`dream/`, and `question/`.
 
 - [`magic-moments.md`](evidence/magic-moments.md) - short, claim-bounded
   second-user live-use examples that show the felt product value before the

@@ -1,5 +1,7 @@
 # huichen/wukong mining notes
 
+Role: research seed.
+
 Source: https://github.com/huichen/wukong
 
 Recommendation for aippocampus: mine concepts, do not adopt the code.

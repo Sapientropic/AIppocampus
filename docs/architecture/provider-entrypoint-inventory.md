@@ -1,5 +1,7 @@
 # Provider Entrypoint Inventory
 
+Role: inventory.
+
 Last audited: 2026-06-05.
 
 This inventory classifies runtime surfaces that mention Codex raw rollouts,

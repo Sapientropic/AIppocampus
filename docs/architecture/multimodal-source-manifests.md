@@ -1,5 +1,7 @@
 # Multimodal Source Manifests
 
+Role: current contract.
+
 Status: internal source contract and public-safe fixture for GitHub #541 and
 the #528 multimodal source-backed recall track.
 

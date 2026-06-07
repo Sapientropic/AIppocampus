@@ -5,7 +5,8 @@ and dated measurement records. It is intentionally a navigation page, not
 another command ledger. Keep current numeric claims and supersession rules in
 [`docs/evidence/current-claims.md`](current-claims.md), stage-level can-claim /
 cannot-claim status in
-[`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md), dated command evidence in
+[`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md), proof-slice maturity in
+[`readiness/proof-slice-maturity.md`](readiness/proof-slice-maturity.md), dated command evidence in
 [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md),
 benchmark design rationale in
 [`benchmarks/design/README.md`](benchmarks/design/README.md), and detailed

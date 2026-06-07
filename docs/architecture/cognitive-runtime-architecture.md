@@ -1,5 +1,7 @@
 # Cognitive Runtime Architecture
 
+Role: current contract.
+
 AIppocampus should not become one large all-purpose agent. It should become a
 fine-grained cognitive runtime: many small deterministic gates, semantic
 workers, job circuits, and routing layers cooperating over source-backed memory.

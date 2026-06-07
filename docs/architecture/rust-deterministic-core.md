@@ -1,5 +1,7 @@
 # Rust Deterministic Core
 
+Role: active design.
+
 Status: planning contract for GitHub issue #463. No Rust slice is shipped by
 this document.
 

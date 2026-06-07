@@ -1,5 +1,7 @@
 # High-Risk Answer Gates
 
+Role: current contract.
+
 This ADR defines the first deterministic answer-time gate for high-impact
 AIppocampus knowledge use. It builds on the governed knowledge-source manifest,
 claim-promotion, and update-lifecycle contracts without turning AIppocampus

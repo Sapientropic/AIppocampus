@@ -1,5 +1,7 @@
 # GB/TB-scale storage and long-thread roadmap
 
+Role: active design.
+
 This roadmap keeps aippocampus useful when a Codex Desktop thread grows from
 hundreds of MB to multi-GB, and when the whole registry grows from GB to TB
 through many threads, other agent runtime imports, and multi-device sync. It is

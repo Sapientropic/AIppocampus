@@ -1,5 +1,7 @@
 # Architecture Debt Register
 
+Role: implementation map.
+
 This is the lightweight action board for oversized runtime scripts and
 repo-owned test / benchmark / tool harnesses. It is not a scorecard and it does
 not replace source-backed design decisions.

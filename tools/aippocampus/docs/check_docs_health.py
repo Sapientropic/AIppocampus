@@ -17,6 +17,7 @@ import _paths
 _paths.ensure_paths()
 
 import architecture_index_guard
+import evidence_index_guard
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
@@ -27,6 +28,7 @@ from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_sco
 
 ARCHITECTURE_INDEX_ROLES = architecture_index_guard.ARCHITECTURE_INDEX_ROLES
 architecture_index_issues = architecture_index_guard.architecture_index_issues
+evidence_index_issues = evidence_index_guard.evidence_index_issues
 
 MAX_SKILL_LINES = 220
 MAX_SKILL_WORDS = 2600
@@ -74,6 +76,7 @@ REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
     "docs/architecture/legacy-alias-inventory.md",
+    "docs/evidence/README.md",
     "docs/evidence/benchmark-evidence-map.md",
     "docs/evidence/current-claims.md",
     "docs/evidence/readiness/stage-0-5-readiness.md",
@@ -1299,6 +1302,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(runtime_script_map_issues(repo_root))
     issues.extend(dream_phase1_contract_issues(repo_root))
     issues.extend(llm_call_contract_issues(repo_root))
+    issues.extend(evidence_index_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(current_claims_snapshot_issues(repo_root))
     issues.extend(proof_slice_maturity_board_issues(repo_root))

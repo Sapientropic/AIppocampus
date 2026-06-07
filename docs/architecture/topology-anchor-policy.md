@@ -1,5 +1,7 @@
 # Topology Anchor Policy
 
+Role: current contract.
+
 Topology can protect a source-reopenable memory from time-only decay, but it is
 navigation and lifecycle pressure only. It is not factual evidence, currentness,
 or a reason to skip source reopen.

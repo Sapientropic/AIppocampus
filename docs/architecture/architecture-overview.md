@@ -1,5 +1,7 @@
 # Architecture Overview
 
+Role: current contract.
+
 AIppocampus is a local-first continuity layer. It helps an agent recover prior
 source and continue honestly, without claiming the model itself has innate
 memory.
