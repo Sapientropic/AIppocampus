@@ -42,12 +42,13 @@ reason that it should no longer be an open executable item.
 
 | Layer | Current issues | Current disposition |
 |---|---|---|
-| Fresh-thread and question continuity | #248, #281 | Keep open as product-quality owners. Existing fixtures are substrate; closing needs source-ref rejoin, fallback, answer-quality, and fresh-thread usefulness evidence. |
+| Fresh-thread continuity | #281 | Keep open as a product-quality owner. Existing fixtures and private boundary smokes are substrate; closing needs fresh-thread usefulness evidence that survives broader private/live use rather than only selected structural packs. |
+| Question continuity | #248 | Closeout-ready after the 2026-06-08 selected private answer-quality review. Extraction gates, prefilter reporting/parity, source-ref rejoin, fallback, selected answer-quality review, and theme-resonance absence reporting exist. Current evidence does not justify default prefilter/scaffold adoption; reopen new work only for a fresh text-only miss, user-visible lift trial, or actual theme/user-review calibration data. |
 | Cognitive runtime evidence | #163, #310, #313, #574, #575, #576, #663 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, thread-story / cognitive-portrait live probes, anticipatory prewarm live sidecar or scheduler consumption, private/live load calibration, private/live Observatory evidence, and Episode/Arc richer adapters / real-history adjudication. The deterministic Episode/Arc packet-to-reopen navigation helper exists; packet routes still are not source evidence. |
 | Benchmark and retrieval proof | #309, #378 | Keep open as falsifiable evidence owners. Do not close with architecture prose; #378 needs broader repeated/external or public-quality continuous-memory comparison evidence, and #309 needs measured source-joined retrieval/rerank/vector/filter behavior beyond current deterministic proxy slices. |
 
-Current open queue at this pass: #163, #248, #281, #309, #310, #313, #378,
-#574, #575, #576, and #663.
+Current open queue after this pass should exclude #248 once the closeout PR
+lands: #163, #281, #309, #310, #313, #378, #574, #575, #576, and #663.
 
 ## Current Baseline To Preserve
 

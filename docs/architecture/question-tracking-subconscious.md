@@ -176,12 +176,23 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   raw answer text, source text, raw refs, message ids, or local paths. This is
   selected answer-quality review evidence, not full-history quality, live model
   behavioral equivalence, user-visible recall lift, or default prefilter safety.
+- 2026-06-08 selected private review evidence:
+  `docs/evidence/question/question-aware-answer-quality-2026-06-08.md` records
+  698 job rows, 43 eligible source-backed rows, 2 selected packs, source-ref
+  fidelity 1.0, plain and question-aware term coverage 1.0, and 2 complete
+  paired answer-quality reviews. Both arms were useful/supported/citation-
+  correct at 1.0, question-aware wrong-hint rate was 0.0, and usefulness delta
+  was 0.0. Decision: keep default prefilter/scaffold adoption disabled because
+  the plain source-derived baseline already covered this selected slice while
+  the question-aware scaffold was longer.
 - Closed first-slice queue: umbrella #133 and focused #134 through #139 are
   implementation evidence for the first deterministic/question-health/theme/
   ambient/sidecar/structural slices. Do not route remaining work back there.
-- Current follow-up owner: #248 owns unresolved design/runtime gaps after that
-  closeout, including extraction gates, default prefilter adoption,
-  answer-quality validation, broader calibration, and theme resonance.
+- #248 closeout boundary after 2026-06-08: extraction gates, prefilter
+  reporting/parity, selected private answer-quality review, and theme-resonance
+  absence reporting all exist. Reopen new work only for a fresh product gap
+  such as a text-only/source-derived baseline miss, user-visible release-trial
+  lift, or actual theme/user-review calibration data.
 - Adjacent user-visible symptoms: #201 and #281 cover places where vague or
   fresh-thread recall still feels too much like manual source search.
 - Designed/deferred under #248: real-user / private real-history calibration
@@ -1226,8 +1237,13 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   wrong-hint metrics. This is a review evidence path for selected clean-source
   cases, not a replacement for broader calibration or default prefilter
   adoption evidence.
-- Deferred: real-user / private real-history calibration beyond selected
-  fixtures and the one sanitized no-write external-provider smoke (#134),
+- 2026-06-08 selected private answer-quality review:
+  `docs/evidence/question/question-aware-answer-quality-2026-06-08.md` records
+  2 complete source-reopened paired comparisons. Both arms were useful and
+  supported, answer-usefulness delta was 0.0, and the default prefilter/scaffold
+  adoption decision remains disabled.
+- Deferred: real-user calibration beyond selected fixtures and the one
+  sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals
   (#135), enabling `question_index.sqlite` as a default lookup prefilter (#138),
   and broader live acceptance/dismissal calibration beyond source-id-backed

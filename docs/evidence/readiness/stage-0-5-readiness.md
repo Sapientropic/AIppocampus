@@ -322,6 +322,15 @@ above. The canonical command details live in
   selected review evidence, but it still does not claim full-history answer
   quality, live model equivalence, user-visible recall lift, or default
   prefilter safety.
+- The 2026-06-08 selected private review in
+  [`question-aware-answer-quality-2026-06-08.md`](../question/question-aware-answer-quality-2026-06-08.md)
+  read 698 job rows, found 43 eligible source-backed rows, selected 2 packs,
+  and recorded 2 complete source-reopened paired answer-quality reviews. Plain
+  and question-aware arms were both useful/supported/citation-correct at 1.0,
+  answer-usefulness delta was 0.0, and question-aware wrong-hint rate was 0.0.
+  Because the plain source-derived baseline already covered the selected slice
+  and the question-aware scaffold was longer, default prefilter/scaffold
+  adoption remains disabled.
 - #63 adds the first deterministic Journey Tracking P1-P3 core. It defines
   source-backed waypoint/journey structures, append-only waypoint history,
   conservative multi-thread instantiation, status transitions, expiry/TTL
