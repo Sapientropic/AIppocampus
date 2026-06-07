@@ -112,6 +112,55 @@ class EpisodeArcReadModelTests(unittest.TestCase):
         self.assertTrue(evidence["sequence_contract_ok"])
         self.assertTrue(evidence["middle_event_gap_detected"])
 
+    def test_behavior_and_decision_rows_adapt_into_rejected_route_arc(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [
+                event(
+                    "e-attempt",
+                    "attempted_route",
+                    20,
+                    sequence_index=0,
+                    episode_id="episode:adapter",
+                ),
+                {
+                    "episode_id": "episode:adapter",
+                    "event_id": "e-tool-failed",
+                    "event_kind": "tool_call_observed",
+                    "command_class": "test",
+                    "exit_code": 1,
+                    "hard_event_kind": "tool_call_failed",
+                    "sequence_index": 1,
+                    "source_refs": [source_ref(21, "m-21")],
+                    "turn_id": "turn-21",
+                    "source_line": 21,
+                },
+                {
+                    "episode_id": "episode:adapter",
+                    "decision_id": "decision-rejected",
+                    "event_type": "rejected_route",
+                    "sequence_index": 2,
+                    "source_refs": [source_ref(22, "m-22")],
+                    "turn_id": "turn-22",
+                    "source_line": 22,
+                },
+            ]
+        )
+
+        arc = arcs[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="rejected_route")
+        evidence = sequence_packets.evaluate_case_evidence(
+            {"episode_chain": arc, "sequence_packet": packet}
+        )
+
+        self.assertEqual(arc["episode_kind"], "rejected_route_arc")
+        self.assertEqual(arc["event_order"], ["attempted_route", "failed_check", "rejected_route"])
+        self.assertEqual(arc["sequence_gaps"], [])
+        self.assertTrue(arc["expected_valid"])
+        self.assertEqual(arc["causal_edges"][0]["relation"], "failed_with")
+        self.assertEqual(arc["causal_edges"][1]["relation"], "supported")
+        self.assertTrue(evidence["sequence_contract_ok"])
+        self.assertTrue(evidence["behavior_only_rejection_passed"])
+
     def test_thin_single_point_reopen_plan_only_allows_safe_uses(self) -> None:
         arcs = episode_arcs.build_episode_arcs(
             [event("e-single", "single_source_hint", 20, episode_id="episode:single")]
@@ -128,6 +177,56 @@ class EpisodeArcReadModelTests(unittest.TestCase):
         self.assertEqual(packet["current_assessment"]["proposed_use"], "refresh_sources")
         self.assertEqual(plan["safe_uses"], ["ask", "refresh_sources"])
         self.assertNotIn("warn", plan["safe_uses"])
+
+    def test_missing_middle_event_gap_requires_refresh_sources(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [
+                event("e-attempt", "attempted_route", 25, sequence_index=0, episode_id="episode:missing"),
+                event("e-rejected", "rejected_route", 27, sequence_index=2, episode_id="episode:missing"),
+            ]
+        )
+
+        arc = arcs[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        plan = episode_arcs.build_reopen_plan(arc)
+
+        self.assertEqual(arc["episode_kind"], "rejected_route_arc")
+        self.assertIn("missing_middle_event", arc["sequence_gaps"])
+        self.assertFalse(arc["expected_valid"])
+        self.assertEqual(packet["current_assessment"]["proposed_use"], "refresh_sources")
+        self.assertIn("sequence_order_uncertain", packet["cannot_claim"])
+        self.assertEqual(plan["safe_uses"], ["ask", "refresh_sources"])
+
+    def test_temporary_concern_extinction_stays_local_only_without_warning(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [
+                event("e-concern", "temporary_concern", 28, sequence_index=0, episode_id="episode:temporary"),
+                event(
+                    "e-normal",
+                    "later_normal_progress",
+                    29,
+                    sequence_index=1,
+                    episode_id="episode:temporary",
+                ),
+            ]
+        )
+
+        arc = arcs[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        plan = episode_arcs.build_reopen_plan(arc)
+        evidence = sequence_packets.evaluate_case_evidence(
+            {"episode_chain": arc, "sequence_packet": packet}
+        )
+
+        self.assertEqual(arc["episode_kind"], "temporary_concern_arc")
+        self.assertEqual(arc["current_validity"], "local_only")
+        self.assertEqual(arc["outcome"], "constraint_not_current")
+        self.assertEqual(arc["causal_edges"][0]["relation"], "extinguished_by")
+        self.assertEqual(arc["sequence_gaps"], [])
+        self.assertNotEqual(packet["current_assessment"]["proposed_use"], "warn")
+        self.assertIn("remind", plan["safe_uses"])
+        self.assertTrue(evidence["sequence_contract_ok"])
+        self.assertTrue(evidence["supersession_passed"])
 
     def test_supersession_arc_preserves_order_without_claiming_current_truth(self) -> None:
         arcs = episode_arcs.build_episode_arcs(
