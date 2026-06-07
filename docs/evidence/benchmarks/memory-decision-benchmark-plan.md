@@ -625,6 +625,17 @@ contract smoke has enough power:
   `no demonstrated memory advantage` even when secondary metrics favor
   AIppocampus.
 
+The `preregistered_slices` block records which narrow #378 slice this report
+actually ran. The current slice is
+`github_378_continuous_memory_public_synthetic_v1`: a deterministic
+public-synthetic contract smoke over the six attribution-arm fixtures. It
+freezes a sanitized case-manifest digest, scenario-selection role, required
+fair strategies, primary endpoint, decision preview, and public-quality gates.
+It intentionally reports `public_quality_claim_ready=false` because this slice
+has one deterministic repeat per case/arm and does not evaluate the registered
+lower-bound rule. It is a preregistered runner target, not a public superiority
+claim.
+
 The current public-synthetic report exposes the pre-registration decision as a
 contract-smoke preview. With the #410 ledger values, `fresh_context_spec_loop`
 is the current fair-strategy winner, so
