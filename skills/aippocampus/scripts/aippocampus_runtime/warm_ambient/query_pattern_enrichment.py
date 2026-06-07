@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""No-write query-pattern enrichment planner for registry/import refreshes.
+"""Query-pattern enrichment planner for registry/import refreshes.
 
-This module is deliberately a planner/report surface. It can tell an operator or
-future registry refresh which source generations would need query-pattern work,
-but it does not call DeepSeek, write `query_pattern_routes.jsonl`, or feed the
-foreground hook. Generated aliases and work ids are navigation material only.
+The default report surface stays no-write: it can tell an operator or future
+registry refresh which source generations would need query-pattern work, but it
+does not call DeepSeek or mutate registry artifacts. The companion
+`query_pattern_routes` module owns deterministic sidecar writes and foreground
+hot-path consumption. Generated aliases and work ids are navigation material
+only.
 """
 
 from __future__ import annotations
@@ -312,7 +314,7 @@ def query_pattern_enrichment_report(
             "registry_mutation_allowed": False,
             "sidecar_write_allowed": False,
             "live_deepseek_call_allowed": False,
-            "foreground_hook_consumption_wired": False,
+            "foreground_hook_consumption_wired": True,
             "generated_aliases_are_navigation_only": True,
             "query_pattern_routes_are_not_evidence": True,
             "source_reopen_required_before_claim": True,
@@ -331,10 +333,11 @@ def query_pattern_enrichment_report(
             "current_generation_cache_reuse_is_idempotent",
             "source_generation_change_invalidates_old_query_pattern_routes",
             "provider_gate_blocks_disallowed_external_model_work",
+            "query_pattern_route_sidecar_writer_exists",
+            "foreground_hot_path_can_consume_query_pattern_routes_as_scent",
         ],
         "cannot_claim": [
-            "query_pattern_routes_jsonl_is_written",
-            "foreground_hook_consumes_query_pattern_routes",
+            "registry_import_refresh_writes_query_pattern_routes_by_default",
             "live_deepseek_query_pattern_quality",
             "query_pattern_alias_is_source_truth",
             "live_latency_savings_are_proven",

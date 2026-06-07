@@ -210,11 +210,13 @@ For these commands:
 - Query-pattern enrichment report JSON is a no-write registry/import planning
   diagnostic. It may expose changed-generation counts, planned work item ids,
   cache reuse, invalidation counts, provider/privacy suppression, and aggregate
-  consumption metrics, but it must not call a live model, write
-  `query_pattern_routes.jsonl`, or expose raw source text, answer text, local
-  paths, prompts, or secrets. Generated aliases are navigation-only route
-  material; foreground use still requires source reopen and a separate hook
-  integration decision.
+  consumption metrics, but it must not call a live model or expose raw source
+  text, answer text, local paths, prompts, or secrets. The companion
+  `query_pattern_routes.jsonl` sidecar is a trusted-local navigation cache:
+  its writer filters stale source-generation digests, invalid local aliases,
+  and privacy-blocked rows, and the prompt hook may consume matching rows as
+  hot-path `scent` only. Generated aliases are not evidence; foreground use
+  still requires source reopen before any factual claim.
 - `semantic_recall_gate.py --cache-report --json` is an additive trusted-local
   operator diagnostic for the exact semantic result cache. Its public-safe
   projection may include counts, telemetry counters, value-class buckets, and

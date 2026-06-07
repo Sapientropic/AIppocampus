@@ -353,10 +353,14 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   `aippocampus_runtime.warm_ambient.query_pattern_enrichment` to check which
   changed source generations would enqueue query-pattern work, which current
   caches can be reused, and which old query-pattern routes would be invalidated
-  by a source-generation digest change. Its fixture deliberately does not call
-  DeepSeek, write `query_pattern_routes.jsonl`, or wire foreground-hook
-  consumption; generated aliases are navigation handles only and require source
-  reopen before any factual claim.
+  by a source-generation digest change. `aippocampus_runtime.warm_ambient.query_pattern_routes`
+  owns the deterministic `query_pattern_routes.jsonl` writer/reader and the
+  foreground-safe packet selector consumed by the prompt hook as scent. The
+  writer filters stale source-generation digests, invalid local aliases, and
+  privacy-blocked rows before publication. Generated aliases are navigation
+  handles only and require source reopen before any factual claim. This slice
+  still does not prove live DeepSeek alias quality, default registry/import
+  writes, or latency savings.
 - `aippocampus_runtime.dream.real_history_eval` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,

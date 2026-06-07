@@ -12,6 +12,7 @@ from aippocampus_runtime.recall.prompt_context_diagnostics import (
     legacy_candidate_summary_suppressed,
     route_delivery_debug_summary,
 )
+from aippocampus_runtime.recall.prompt_recall_hot_path_debug import hot_path_debug_summary
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
@@ -317,58 +318,9 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
             "worker_count": raw_semantic_gate.get("worker_count")
             or len(raw_semantic_gate.get("workers") or []),
         }
-    raw_hot_path = result.get("hot_path_funnel")
-    if isinstance(raw_hot_path, dict):
-        stages: list[dict[str, Any]] = []
-        for stage in raw_hot_path.get("stages") or []:
-            if not isinstance(stage, dict):
-                continue
-            stages.append(
-                {
-                    "stage": stage.get("stage"),
-                    "status": stage.get("status"),
-                    "candidate_count": stage.get("candidate_count"),
-                    "fallback_reason": stage.get("fallback_reason") or "",
-                    "elapsed_ms": stage.get("elapsed_ms"),
-                }
-            )
-        payload["hot_path_funnel"] = {
-            "decision": raw_hot_path.get("decision"),
-            "candidate_count": raw_hot_path.get("candidate_count"),
-            "source_reopen_promotion_count": raw_hot_path.get(
-                "source_reopen_promotion_count", 0
-            ),
-            "local_only": bool(raw_hot_path.get("local_only")),
-            "elapsed_ms": raw_hot_path.get("elapsed_ms"),
-            "stages": stages[:6],
-        }
-        raw_living = raw_hot_path.get("living_cue_cache")
-        if isinstance(raw_living, dict):
-            raw_diagnostics_value = raw_living.get("diagnostics")
-            raw_diagnostics = (
-                raw_diagnostics_value if isinstance(raw_diagnostics_value, dict) else {}
-            )
-            diagnostics = {
-                key: raw_diagnostics.get(key, 0)
-                for key in (
-                    "cache_hit_count",
-                    "cache_miss_count",
-                    "selected_count",
-                    "stale_suppressed_count",
-                    "temporary_suppressed_count",
-                    "would_overpersonalize_count",
-                    "low_confidence_suppressed_count",
-                    "missing_source_ref_count",
-                    "live_llm_call_count",
-                )
-            }
-            payload["hot_path_funnel"]["living_cue_cache"] = {
-                "decision": raw_living.get("decision"),
-                "support_level": raw_living.get("support_level"),
-                "selected_count": raw_living.get("selected_count", 0),
-                "candidate_ref_count": len(raw_living.get("candidate_refs") or []),
-                "diagnostics": diagnostics,
-            }
+    hot_path = hot_path_debug_summary(result.get("hot_path_funnel"))
+    if hot_path is not None:
+        payload["hot_path_funnel"] = hot_path
     route_delivery = route_delivery_debug_summary(result.get("route_delivery_diagnostic"))
     if route_delivery is not None:
         payload["route_delivery_diagnostic"] = route_delivery

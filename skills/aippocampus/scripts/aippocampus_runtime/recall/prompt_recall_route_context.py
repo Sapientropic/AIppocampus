@@ -35,6 +35,10 @@ from aippocampus_runtime.recall.prompt_recall_semantic import run_semantic_gate_
 from aippocampus_runtime.recall.prompt_recall_threshold import scent_threshold_policy
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.warm_ambient.query_pattern_routes import (
+    default_query_pattern_routes_path,
+    load_query_pattern_routes,
+)
 
 RECALL_SIGNAL_CUE_REASONS = {
     "topic_signal_accumulator_eased",
@@ -88,6 +92,11 @@ def _living_cue_entries_for_hot_path(
     return load_living_cue_entries(living_cues_file) if living_cues_file.exists() else []
 
 
+def _query_pattern_routes_for_hot_path(*, registry_path: Path) -> list[dict[str, Any]]:
+    routes_file = default_query_pattern_routes_path(registry_path.parent)
+    return load_query_pattern_routes(routes_file) if routes_file.exists() else []
+
+
 def _run_local_hot_path(
     *,
     prompt: str,
@@ -104,6 +113,7 @@ def _run_local_hot_path(
             registry_path=registry_path,
             living_cues_path=living_cues_path,
         ),
+        query_pattern_routes=_query_pattern_routes_for_hot_path(registry_path=registry_path),
     )
 
 

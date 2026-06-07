@@ -208,6 +208,35 @@ class PromptHotPathFunnelTests(unittest.TestCase):
         self.assertEqual(cue_stage["status"], "hit")
         self.assertEqual(cue_stage["fallback_reason"], "stale_navigation_only")
 
+    def test_query_pattern_routes_hit_before_cue_cache_without_evidence(self) -> None:
+        result = run_hot_path_funnel(
+            prompt="我们接着上次那个海马体预热走",
+            query_terms=["海马体", "预热"],
+            candidate_indexes=[],
+            query_pattern_routes=[
+                {
+                    "query_aliases": ["上次那个海马体预热"],
+                    "source_generation_digest": "gen-alpha-v2",
+                    "thread_key_hash": "thread_alpha_hash",
+                    "source_refs": [{"thread_key": "session:qp", "message_id": "msg-qp"}],
+                    "created_unix": 1_800_000_000,
+                    "ttl_seconds": 600,
+                    "confidence": 0.93,
+                }
+            ],
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["candidate_ids"], ["session:qp"])
+        self.assertEqual(result["candidate_reasons"]["session:qp"], "query_pattern_routes")
+        self.assertEqual(result["evidence"], [])
+        query_stage = next(stage for stage in result["stages"] if stage["stage"] == "query_pattern_routes")
+        cue_stage = next(stage for stage in result["stages"] if stage["stage"] == "cue_cache")
+        self.assertEqual(query_stage["status"], "hit")
+        self.assertEqual(cue_stage["status"], "skip")
+        self.assertEqual(cue_stage["fallback_reason"], "already_hit")
+        self.assertEqual(result["query_pattern_routes"]["diagnostics"]["live_llm_call_count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

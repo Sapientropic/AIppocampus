@@ -410,6 +410,16 @@ authority. It can render the same sanitized readout as JSON, text, or static
 no-script HTML for local inspection. These rows can justify reopening source,
 but they cannot support factual claims by themselves.
 
+Query-pattern prewarm now has a deterministic sidecar boundary:
+`aippocampus_runtime.warm_ambient.query_pattern_enrichment` remains the
+no-write planning report, while
+`aippocampus_runtime.warm_ambient.query_pattern_routes` publishes and reads
+`query_pattern_routes.jsonl` as a local navigation cache. The writer suppresses
+stale source-generation digests and privacy-blocked rows; the prompt hook reads
+the sidecar cheaply and can emit hot-path `scent` with source refs only. Alias
+text stays out of public packets and hook context, and every route still
+requires source reopen before any claim.
+
 ## Anti-Patterns
 
 Avoid these:

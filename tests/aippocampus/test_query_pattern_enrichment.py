@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,6 +14,11 @@ if str(SCRIPTS) not in sys.path:
 from aippocampus_runtime.warm_ambient.query_pattern_enrichment import (  # noqa: E402
     fixture_query_pattern_enrichment_report,
     query_pattern_enrichment_report,
+)
+from aippocampus_runtime.warm_ambient.query_pattern_routes import (  # noqa: E402
+    load_query_pattern_routes,
+    publish_query_pattern_routes,
+    select_query_pattern_packet,
 )
 
 
@@ -103,7 +109,7 @@ class QueryPatternEnrichmentTests(unittest.TestCase):
         self.assertTrue(report["no_write"])
         self.assertTrue(report["navigation_only"])
         self.assertFalse(report["contract"]["live_deepseek_call_allowed"])
-        self.assertFalse(report["contract"]["foreground_hook_consumption_wired"])
+        self.assertTrue(report["contract"]["foreground_hook_consumption_wired"])
         self.assertTrue(report["contract"]["generated_aliases_are_navigation_only"])
 
         metrics = report["metrics"]
@@ -195,11 +201,110 @@ class QueryPatternEnrichmentTests(unittest.TestCase):
         self.assertGreater(report["metrics"]["query_pattern_job_count"], 0)
         self.assertGreater(report["metrics"]["invalidated_query_pattern_route_count"], 0)
         self.assertIn("query_pattern_enrichment_is_no_write", report["can_claim"])
-        self.assertIn("foreground_hook_consumes_query_pattern_routes", report["cannot_claim"])
+        self.assertIn("query_pattern_route_sidecar_writer_exists", report["can_claim"])
+        self.assertIn(
+            "foreground_hot_path_can_consume_query_pattern_routes_as_scent",
+            report["can_claim"],
+        )
+        self.assertIn(
+            "registry_import_refresh_writes_query_pattern_routes_by_default",
+            report["cannot_claim"],
+        )
         self.assertIn("live_latency_savings_are_proven", report["cannot_claim"])
         self.assertFalse(report["privacy_boundary"]["raw_source_text_serialized"])
         self.assertFalse(report["privacy_boundary"]["local_paths_serialized"])
         self.assertNotIn("private\\query-pattern", encoded)
+
+    def test_materialized_routes_are_idempotent_and_generation_gated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "query_pattern_routes.jsonl"
+            current_generation_by_thread = {"thread_alpha_hash": "gen-alpha-v2"}
+            first = publish_query_pattern_routes(
+                output,
+                [
+                    {
+                        "thread_key_hash": "thread_alpha_hash",
+                        "source_generation_digest": "gen-alpha-v2",
+                        "query_aliases": [
+                            "上次那个海马体预热",
+                            "E:\\private\\query-pattern\\source.jsonl",
+                        ],
+                        "source_refs": [
+                            {
+                                "thread_key": "session:alpha",
+                                "message_id": "msg-a",
+                                "path": "E:\\private\\query-pattern\\source.jsonl",
+                            }
+                        ],
+                        "created_unix": 1_800_000_000,
+                        "ttl_seconds": 600,
+                        "confidence": 0.91,
+                    },
+                    {
+                        "thread_key_hash": "thread_alpha_hash",
+                        "source_generation_digest": "gen-alpha-v1",
+                        "query_aliases": ["旧 generation 不应继续命中"],
+                        "source_refs": [{"thread_key": "session:alpha-old", "message_id": "msg-old"}],
+                        "created_unix": 1_800_000_000,
+                        "ttl_seconds": 600,
+                        "confidence": 0.91,
+                    },
+                ],
+                current_generation_by_thread=current_generation_by_thread,
+            )
+            second = publish_query_pattern_routes(
+                output,
+                first["routes"],
+                current_generation_by_thread=current_generation_by_thread,
+            )
+
+            routes = load_query_pattern_routes(output)
+            packet = select_query_pattern_packet(
+                "我们接着上次那个海马体预热走",
+                routes,
+                now_unix=1_800_000_120,
+            )
+
+        self.assertTrue(first["changed"])
+        self.assertFalse(second["changed"])
+        self.assertEqual(first["metrics"]["route_write_count"], 1)
+        self.assertEqual(first["metrics"]["stale_generation_suppressed_count"], 1)
+        self.assertEqual(second["metrics"]["unchanged_publish_count"], 1)
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(routes[0]["query_aliases"], ["上次那个海马体预热"])
+        self.assertTrue(routes[0]["navigation_only"])
+        self.assertEqual(packet["decision"], "scent")
+        self.assertEqual(packet["candidate_refs"][0]["thread_key"], "session:alpha")
+        self.assertEqual(packet["diagnostics"]["live_llm_call_count"], 0)
+        self.assertEqual(packet["source_boundary"]["query_pattern_routes_are_not_evidence"], True)
+        encoded = json.dumps({"routes": routes, "packet": packet}, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("E:\\", encoded)
+        self.assertNotIn("source.jsonl", encoded)
+        self.assertNotIn("旧 generation", encoded)
+        self.assertNotIn("上次那个海马体预热", json.dumps(packet, ensure_ascii=False))
+
+    def test_query_pattern_selector_suppresses_privacy_blocked_route_rows(self) -> None:
+        packet = select_query_pattern_packet(
+            "海马体预热",
+            [
+                {
+                    "query_aliases": ["内部 canonical 海马体预热"],
+                    "source_generation_digest": "gen-alpha-v2",
+                    "thread_key_hash": "thread_alpha_hash",
+                    "source_refs": [{"thread_key": "session:alpha", "message_id": "msg-a"}],
+                    "privacy_blocked": True,
+                    "created_unix": 1_800_000_000,
+                    "ttl_seconds": 600,
+                    "confidence": 0.91,
+                }
+            ],
+            now_unix=1_800_000_120,
+        )
+
+        self.assertEqual(packet["decision"], "skip")
+        self.assertEqual(packet["diagnostics"]["cache_hit_count"], 1)
+        self.assertEqual(packet["diagnostics"]["privacy_suppressed_count"], 1)
+        self.assertEqual(packet["candidate_refs"], [])
 
 
 if __name__ == "__main__":
