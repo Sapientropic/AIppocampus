@@ -196,6 +196,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arcs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/rejected_route_probes.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/sequence_reopen.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/sequence_packets.py",
     "skills/aippocampus/scripts/conversation_sources/__init__.py",
     "skills/aippocampus/scripts/conversation_sources/base.py",

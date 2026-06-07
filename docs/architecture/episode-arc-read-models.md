@@ -54,9 +54,14 @@ navigation and host-agent caution surfaces, not a new ground-truth memory layer.
 `ask`/`refresh_sources` style use. Visible reminders require enough ordered
 source thickness and still carry `current_validity_requires_source_reopen`.
 
-`build_reopen_plan()` returns a source-window navigation plan: source event ids,
-source refs, source hashes, turn range, safe uses, and `cannot_claim`. It is a
-route back to source, not evidence that the route remains valid.
+`build_reopen_plan()` returns a source-window navigation plan from a full
+Episode/Arc row: source event ids, source refs, source hashes, turn range, safe
+uses, and `cannot_claim`. `build_sequence_packet_reopen_plan()` handles the
+host-facing packet case: it resolves packet timeline event ids / source-ref
+hashes through a caller-provided clean source-ref catalog. If the catalog is
+missing or incomplete, the plan degrades to `ask` / `refresh_sources` and marks
+`source_catalog_required_for_reopen`. Both plans are routes back to source, not
+evidence that the route remains valid.
 
 ## Deterministic Slice
 
@@ -94,6 +99,14 @@ becomes `temporary_concern_arc` / `local_only`, not a current constraint. These
 cases should navigate the agent back to source, not make it warn or block from
 the derived arc alone.
 
+The sequence-packet reopen helper is intentionally stricter than the arc
+builder. A packet cannot reopen source by itself because it only carries compact
+timeline handles and hashes. The helper needs a clean source-ref catalog from
+the caller and reports `complete`, `partial`, `unresolved`, or
+`invalid_packet`. Complete resolution may allow a visible reminder after source
+reopen; gappy, partial, unresolved, or invalid packets may only ask or refresh
+sources. Raw source text is never serialized in this public-safe route plan.
+
 ## Cannot Claim
 
 This slice cannot claim:
@@ -102,6 +115,7 @@ This slice cannot claim:
 - live private-history behavior lift;
 - Journey instantiation quality;
 - current code or user intent validity without source reopen;
+- host-facing sequence packets as source evidence by themselves;
 - that behavior-only events are factual source text.
 
 Future slices should deepen source adapters and real-history adjudication
