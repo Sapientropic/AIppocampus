@@ -386,6 +386,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/config.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/prewarm_planner.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/prompting.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/query_pattern_enrichment.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/scheduler.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/scout_profiles.py",

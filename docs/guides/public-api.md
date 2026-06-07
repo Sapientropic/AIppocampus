@@ -207,6 +207,14 @@ For these commands:
   `provenance_counts` and `support_level_counts` are allowed public-safe
   aggregate diagnostics. Per-card provenance/debug envelopes are not public
   schemas and must not be treated as source-backed evidence.
+- Query-pattern enrichment report JSON is a no-write registry/import planning
+  diagnostic. It may expose changed-generation counts, planned work item ids,
+  cache reuse, invalidation counts, provider/privacy suppression, and aggregate
+  consumption metrics, but it must not call a live model, write
+  `query_pattern_routes.jsonl`, or expose raw source text, answer text, local
+  paths, prompts, or secrets. Generated aliases are navigation-only route
+  material; foreground use still requires source reopen and a separate hook
+  integration decision.
 - `semantic_recall_gate.py --cache-report --json` is an additive trusted-local
   operator diagnostic for the exact semantic result cache. Its public-safe
   projection may include counts, telemetry counters, value-class buckets, and
