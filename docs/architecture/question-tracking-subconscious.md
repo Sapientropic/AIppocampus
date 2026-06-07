@@ -185,14 +185,15 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
 - 2026-06-08 selected private review evidence:
   `docs/evidence/question/question-aware-answer-quality-2026-06-08.md` records
   698 job rows, 43 eligible source-backed rows, 2 selected packs, source-ref
-  fidelity 1.0, plain and question-aware term coverage 1.0, and 2 complete
-  paired answer-quality reviews. Both arms were useful/supported/citation-
-  correct at 1.0, question-aware wrong-hint rate was 0.0, and usefulness delta
-  was 0.0. Root-cause boundary: this is not #248 closeout evidence because the
-  plain baseline was built from the same selected question-aware rows and
-  received question metadata, producing a term-coverage ceiling. The selected
-  slice also had only 1 `question_link` and 0 `theme_candidate` rows, so it did
-  not exercise theme-aware lift.
+  fidelity 1.0, plain and question-aware term coverage 1.0, question-blind
+  term coverage 0.7143, question-aware-over-question-blind delta 0.2857, and 2
+  complete paired answer-quality reviews. Both answer arms were
+  useful/supported/citation-correct at 1.0, question-aware wrong-hint rate was
+  0.0, and usefulness delta was 0.0. Root-cause boundary: this is not #248
+  closeout evidence because the plain baseline still has a term-coverage
+  ceiling, the question-blind baseline is same-row structural rather than true
+  retrieval, and the selected slice had only 1 `question_link` and 0
+  `theme_candidate` rows.
 - Closed first-slice queue: umbrella #133 and focused #134 through #139 are
   implementation evidence for the first deterministic/question-health/theme/
   ambient/sidecar/structural slices. Do not route remaining work back there.
@@ -1252,10 +1253,11 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   `docs/evidence/question/question-aware-answer-quality-2026-06-08.md` records
   2 complete source-reopened paired comparisons. Both arms were useful and
   supported, answer-usefulness delta was 0.0, and the default prefilter/scaffold
-  adoption decision remains disabled. This is now recorded as a no-lift
-  diagnostic, not #248 closeout evidence, because the plain baseline reused the
-  same selected question-aware rows and the selected slice lacked enough
-  question links or theme candidates to test theme-aware lift.
+  adoption decision remains disabled. The same run now records
+  question-aware-over-question-blind structural term lift of 0.2857, but it is
+  not #248 closeout evidence because the baseline is still same-row structural
+  rather than true retrieval and the selected slice lacked enough question
+  links or theme candidates to test theme-aware lift.
 - Deferred: real-user calibration beyond selected fixtures and the one
   sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals

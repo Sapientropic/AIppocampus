@@ -118,6 +118,23 @@ def render_plain_source_terms(rows: Iterable[Mapping[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def render_question_blind_source_terms(rows: Iterable[Mapping[str, Any]]) -> str:
+    lines = [
+        "Question-blind source-derived terms for structural comparison.",
+        "This omits question/theme labels; reopen clean source for quotes.",
+    ]
+    for row in rows:
+        refs = ", ".join(source_ref_hashes(source_refs(row)))
+        # This is still a same-selected-row structural proxy, not a true
+        # retrieval baseline. It intentionally keeps only generic row kind,
+        # source back-pointers, and non-theme concept tags so question-aware
+        # labels must earn their lift instead of being handed to the baseline.
+        concepts = ", ".join(compact_values(row.get("concepts") or []))
+        concept_suffix = f" concepts={concepts}" if concepts else ""
+        lines.append(f"- {finding_kind(row)} [{refs}]{concept_suffix}")
+    return "\n".join(lines)
+
+
 def expected_terms_for_rows(rows: Iterable[Mapping[str, Any]]) -> list[str]:
     terms: list[Any] = []
     for row in rows:
@@ -137,23 +154,34 @@ def structural_case_metrics(
     *,
     rows: Sequence[Mapping[str, Any]],
     plain_context: str,
+    question_blind_context: str,
     portrait_context: str,
 ) -> dict[str, Any]:
     expected_terms = expected_terms_for_rows(rows)
     plain_hits, total, _plain_missing = portrait.term_coverage(plain_context, expected_terms)
+    question_blind_hits, _total, _question_blind_missing = portrait.term_coverage(
+        question_blind_context,
+        expected_terms,
+    )
     portrait_hits, _total, _portrait_missing = portrait.term_coverage(
         portrait_context,
         expected_terms,
     )
     quote_required = sum(1 for row in rows if str(row.get("question_text") or "").strip())
     plain_coverage = round(plain_hits / max(1, total), 4)
+    question_blind_coverage = round(question_blind_hits / max(1, total), 4)
     question_aware_coverage = round(portrait_hits / max(1, total), 4)
     return {
         "prompt_case_count": 1 if expected_terms else 0,
         "expected_term_count": total,
         "plain_term_coverage": plain_coverage,
+        "question_blind_term_coverage": question_blind_coverage,
         "question_aware_term_coverage": question_aware_coverage,
         "term_coverage_delta": round(question_aware_coverage - plain_coverage, 4),
+        "question_aware_over_question_blind_delta": round(
+            question_aware_coverage - question_blind_coverage,
+            4,
+        ),
         "quote_required_case_count": quote_required,
         "prompt_case_hashes": ["pc_" + portrait.sha1_text("|".join(expected_terms))[:12]]
         if expected_terms
@@ -164,20 +192,31 @@ def structural_case_metrics(
 def no_lift_reason_codes(
     *,
     plain_term_coverage: float,
+    question_blind_term_coverage: float,
     question_aware_term_coverage: float,
     term_coverage_delta: float,
+    question_aware_over_question_blind_delta: float,
     question_aware_to_plain_token_ratio: float,
+    question_aware_to_question_blind_token_ratio: float,
     selected_kind_counts: Mapping[str, Any],
 ) -> list[str]:
     codes = ["same_selected_rows_baseline"]
     if plain_term_coverage >= 1.0:
         codes.append("plain_baseline_term_ceiling")
+    if question_blind_term_coverage >= 1.0:
+        codes.append("question_blind_baseline_term_ceiling")
     if term_coverage_delta <= 0.0:
         codes.append("question_aware_no_structural_term_lift")
+    if question_aware_over_question_blind_delta <= 0.0:
+        codes.append("question_aware_no_question_blind_structural_lift")
     if question_aware_term_coverage < plain_term_coverage:
         codes.append("question_aware_term_coverage_regressed")
+    if question_aware_term_coverage < question_blind_term_coverage:
+        codes.append("question_aware_question_blind_term_coverage_regressed")
     if question_aware_to_plain_token_ratio >= 1.0:
         codes.append("question_aware_scaffold_longer_than_plain")
+    if question_aware_to_question_blind_token_ratio >= 1.0:
+        codes.append("question_aware_scaffold_longer_than_question_blind")
     if int(selected_kind_counts.get("theme_candidate") or 0) <= 0:
         codes.append("no_selected_theme_candidates")
     if int(selected_kind_counts.get("question_link") or 0) < 3:
@@ -189,9 +228,12 @@ def comparison_design_diagnostic(
     *,
     selected_kind_counts: Mapping[str, Any],
     plain_term_coverage: float,
+    question_blind_term_coverage: float,
     question_aware_term_coverage: float,
     term_coverage_delta: float,
+    question_aware_over_question_blind_delta: float,
     question_aware_to_plain_token_ratio: float,
+    question_aware_to_question_blind_token_ratio: float,
 ) -> dict[str, Any]:
     return {
         "kind": EVALUATION_DESIGN_KIND,
@@ -206,21 +248,39 @@ def comparison_design_diagnostic(
             "shared_concepts",
             "hashed_source_refs",
         ],
+        "question_blind_structural_baseline_measured": True,
+        "question_blind_baseline_receives_question_metadata": False,
+        "question_blind_baseline_fields": [
+            "finding_kind",
+            "concepts",
+            "hashed_source_refs",
+        ],
+        "question_blind_is_true_retrieval_baseline": False,
         "expected_terms_derived_from_same_rows": True,
         "selection_lift_measured": False,
         "answer_generation_measured_by_benchmark": False,
         "baseline_contamination_risk": True,
         "plain_baseline_term_ceiling": plain_term_coverage >= 1.0,
+        "question_blind_baseline_term_ceiling": question_blind_term_coverage >= 1.0,
         "selected_question_link_count": int(selected_kind_counts.get("question_link") or 0),
         "selected_theme_candidate_count": int(selected_kind_counts.get("theme_candidate") or 0),
         "theme_layer_ready": int(selected_kind_counts.get("theme_candidate") or 0) > 0,
         "term_coverage_delta": term_coverage_delta,
+        "question_aware_over_question_blind_delta": question_aware_over_question_blind_delta,
         "question_aware_to_plain_token_ratio": question_aware_to_plain_token_ratio,
+        "question_aware_to_question_blind_token_ratio": (
+            question_aware_to_question_blind_token_ratio
+        ),
         "no_lift_reason_codes": no_lift_reason_codes(
             plain_term_coverage=plain_term_coverage,
+            question_blind_term_coverage=question_blind_term_coverage,
             question_aware_term_coverage=question_aware_term_coverage,
             term_coverage_delta=term_coverage_delta,
+            question_aware_over_question_blind_delta=question_aware_over_question_blind_delta,
             question_aware_to_plain_token_ratio=question_aware_to_plain_token_ratio,
+            question_aware_to_question_blind_token_ratio=(
+                question_aware_to_question_blind_token_ratio
+            ),
             selected_kind_counts=selected_kind_counts,
         ),
         "valid_next_evaluation": [
@@ -241,6 +301,7 @@ def build_question_aware_pack(
     cognitive_portrait = portrait.build_cognitive_portrait(portrait_rows)
     portrait_context = portrait.render_structured_portrait(cognitive_portrait)
     plain_context = render_plain_source_terms(rows)
+    question_blind_context = render_question_blind_source_terms(rows)
     source_ref_count = sum(len(source_refs(row)) for row in rows)
     source_thread_count = len(
         {
@@ -258,6 +319,7 @@ def build_question_aware_pack(
     structural_cases = structural_case_metrics(
         rows=rows,
         plain_context=plain_context,
+        question_blind_context=question_blind_context,
         portrait_context=portrait_context,
     )
     pack_id = "qhr_" + portrait.sha1_text("|".join(row_id(row) for row in rows))[:16]
@@ -274,6 +336,9 @@ def build_question_aware_pack(
         "theme_candidate_count": seed_kind_counts.get("theme_candidate", 0),
         "source_fidelity_rate": source_fidelity["source_fidelity_rate"],
         "plain_context_approx_tokens": portrait.approx_token_count(plain_context),
+        "question_blind_context_approx_tokens": portrait.approx_token_count(
+            question_blind_context
+        ),
         "question_aware_context_approx_tokens": portrait.approx_token_count(portrait_context),
         "over_personalization_risk_count": over_personalization["risk_counts"].get(
             "question_aware_portrait",
@@ -286,16 +351,29 @@ def build_question_aware_pack(
         / max(1, payload["plain_context_approx_tokens"]),
         4,
     )
+    payload["question_aware_to_question_blind_token_ratio"] = round(
+        payload["question_aware_context_approx_tokens"]
+        / max(1, payload["question_blind_context_approx_tokens"]),
+        4,
+    )
     payload["comparison_design"] = comparison_design_diagnostic(
         selected_kind_counts=seed_kind_counts,
         plain_term_coverage=float(payload["plain_term_coverage"]),
+        question_blind_term_coverage=float(payload["question_blind_term_coverage"]),
         question_aware_term_coverage=float(payload["question_aware_term_coverage"]),
         term_coverage_delta=float(payload["term_coverage_delta"]),
+        question_aware_over_question_blind_delta=float(
+            payload["question_aware_over_question_blind_delta"]
+        ),
         question_aware_to_plain_token_ratio=float(payload["question_aware_to_plain_token_ratio"]),
+        question_aware_to_question_blind_token_ratio=float(
+            payload["question_aware_to_question_blind_token_ratio"]
+        ),
     )
     if include_private_text:
         payload["debug_contexts"] = {
             "plain_source_terms": plain_context,
+            "question_blind_source_terms": question_blind_context,
             "question_aware_portrait": portrait_context,
         }
     return payload
@@ -385,6 +463,9 @@ def aggregate_metrics(packs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     for pack in packs:
         source_seed_kind_counts.update(pack.get("source_seed_kind_counts") or {})
     total_plain = sum(int(pack.get("plain_context_approx_tokens") or 0) for pack in packs)
+    total_question_blind = sum(
+        int(pack.get("question_blind_context_approx_tokens") or 0) for pack in packs
+    )
     total_portrait = sum(
         int(pack.get("question_aware_context_approx_tokens") or 0) for pack in packs
     )
@@ -394,12 +475,18 @@ def aggregate_metrics(packs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         * int(pack.get("expected_term_count") or 0)
         for pack in packs
     )
+    question_blind_hits = sum(
+        float(pack.get("question_blind_term_coverage") or 0.0)
+        * int(pack.get("expected_term_count") or 0)
+        for pack in packs
+    )
     question_aware_hits = sum(
         float(pack.get("question_aware_term_coverage") or 0.0)
         * int(pack.get("expected_term_count") or 0)
         for pack in packs
     )
     plain_coverage = round(plain_hits / max(1, total_expected_terms), 4)
+    question_blind_coverage = round(question_blind_hits / max(1, total_expected_terms), 4)
     question_aware_coverage = round(question_aware_hits / max(1, total_expected_terms), 4)
     return {
         "pack_count": len(packs),
@@ -408,9 +495,18 @@ def aggregate_metrics(packs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             [float(pack.get("source_fidelity_rate") or 0.0) for pack in packs] or [0.0]
         ),
         "portrait_token_ratio": round(total_portrait / max(1, total_plain), 4),
+        "question_aware_to_question_blind_token_ratio": round(
+            total_portrait / max(1, total_question_blind),
+            4,
+        ),
         "plain_term_coverage": plain_coverage,
+        "question_blind_term_coverage": question_blind_coverage,
         "question_aware_term_coverage": question_aware_coverage,
         "term_coverage_delta": round(question_aware_coverage - plain_coverage, 4),
+        "question_aware_over_question_blind_delta": round(
+            question_aware_coverage - question_blind_coverage,
+            4,
+        ),
         "prompt_case_count": sum(int(pack.get("prompt_case_count") or 0) for pack in packs),
         "quote_required_case_count": sum(
             int(pack.get("quote_required_case_count") or 0) for pack in packs
@@ -433,14 +529,20 @@ def scaffold_vs_evidence_report(metrics: Mapping[str, Any]) -> dict[str, Any]:
             "measurement": "deterministic_structural_proxy",
             "live_model_answer_quality_measured": False,
             "plain_term_coverage": metrics.get("plain_term_coverage", 0.0),
+            "question_blind_term_coverage": metrics.get("question_blind_term_coverage", 0.0),
             "question_aware_term_coverage": metrics.get("question_aware_term_coverage", 0.0),
             "term_coverage_delta": metrics.get("term_coverage_delta", 0.0),
+            "question_aware_over_question_blind_delta": metrics.get(
+                "question_aware_over_question_blind_delta",
+                0.0,
+            ),
             "verdict": verdict,
         },
         "helpful_recall_scaffolding": [
             "source-backed question/frontier/link/theme rows can be selected into sanitized packs",
             "hashed source-ref back-pointers preserve a route for later clean-source lookup",
-            "structural term coverage can be compared with a plain source-derived baseline",
+        "structural term coverage can be compared with a plain source-derived baseline",
+        "question-aware labels can also be compared with a question-blind same-row baseline",
         ],
         "requires_clean_source_lookup": [
             "exact quotes",
@@ -460,9 +562,16 @@ def evaluation_design_report(
     return comparison_design_diagnostic(
         selected_kind_counts=selected_kind_counts,
         plain_term_coverage=float(metrics.get("plain_term_coverage") or 0.0),
+        question_blind_term_coverage=float(metrics.get("question_blind_term_coverage") or 0.0),
         question_aware_term_coverage=float(metrics.get("question_aware_term_coverage") or 0.0),
         term_coverage_delta=float(metrics.get("term_coverage_delta") or 0.0),
+        question_aware_over_question_blind_delta=float(
+            metrics.get("question_aware_over_question_blind_delta") or 0.0
+        ),
         question_aware_to_plain_token_ratio=float(metrics.get("portrait_token_ratio") or 0.0),
+        question_aware_to_question_blind_token_ratio=float(
+            metrics.get("question_aware_to_question_blind_token_ratio") or 0.0
+        ),
     )
 
 
@@ -789,6 +898,18 @@ def known_failure_modes(
                 "next_step": "Use a true no-question-aware retrieval baseline or harder selected prompts.",
             }
         )
+    if float(metrics.get("question_blind_term_coverage") or 0.0) >= 1.0:
+        modes.append(
+            {
+                "code": "question_blind_baseline_term_ceiling",
+                "severity": "warning",
+                "meaning": (
+                    "The question-blind structural baseline already covers all expected terms, "
+                    "so this run cannot show positive question-label term lift."
+                ),
+                "next_step": "Use harder selected prompts or a true no-question-aware retrieval baseline.",
+            }
+        )
     if int((selection.get("selected_source_seed_kind_counts") or {}).get("question_link") or 0) < 3:
         modes.append(
             {
@@ -814,6 +935,21 @@ def known_failure_modes(
                 "severity": "warning",
                 "meaning": "The question-aware scaffold preserved fewer expected structural terms than the plain baseline.",
                 "next_step": "Treat the pack as navigation-only and improve rendering before helpfulness claims.",
+            }
+        )
+    if float(metrics.get("question_aware_over_question_blind_delta") or 0.0) <= 0.0:
+        modes.append(
+            {
+                "code": "question_aware_no_question_blind_structural_lift",
+                "severity": "warning",
+                "meaning": (
+                    "Question-aware labels did not add structural expected-term coverage "
+                    "over the question-blind same-row baseline."
+                ),
+                "next_step": (
+                    "Use richer question-link/theme rows, improve rendering, or move to "
+                    "a source-reopened answer comparison."
+                ),
             }
         )
     if selection.get("selected_lacks_link_or_theme_context"):
@@ -899,6 +1035,10 @@ def run_question_aware_real_history_benchmark(
         "question_aware_portrait_preserves_back_pointers_for_navigation",
         "known_failure_modes_are_reported_without_private_text",
     ]
+    if float(metrics.get("question_aware_over_question_blind_delta") or 0.0) > 0.0:
+        can_claim.append(
+            "question_aware_fields_add_structural_route_terms_over_question_blind_baseline"
+        )
     for claim in answer_review["can_claim"]:
         if claim not in can_claim:
             can_claim.append(claim)
@@ -908,6 +1048,7 @@ def run_question_aware_real_history_benchmark(
         "full_history_coverage",
         "quote_fidelity_without_clean_source_reopen",
         "user_visible_recall_improvement",
+        "true_no_question_aware_retrieval_baseline",
         "identity_or_personality_profile_validity",
         "answer_usefulness_beyond_structural_proxy",
     ]
