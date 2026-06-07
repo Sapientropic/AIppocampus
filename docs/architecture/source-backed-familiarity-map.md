@@ -57,6 +57,21 @@ paths as source rows, computes relative-path fingerprints, and includes an
 adversarial stale-card arm plus an unrelated README task arm. Passing the smoke
 only proves the deterministic contract, not live agent helpfulness.
 
+## Navigation Affordance Integration
+
+Selected repo familiarity cards now feed the shared navigation-potential
+projection instead of living as a separate coding-orientation packet. The adapter
+turns a card into a source-reopen route with the original
+`first_source_to_reopen`, `stop_after`, `do_not_use_for`, freshness, invalidation,
+and decision-shadow boundary attached.
+
+This integration is intentionally downstream of the selector contract. A
+non-coding prompt should not receive repo-card affordances because irrelevant
+cards are rejected before projection. A stale card may become backstage source
+refresh, but not a foreground coding route. A rejected-route card can warn or
+constrain the next coding move, but it still cannot prove current code state
+without reopening source.
+
 ## Opt-In Foreground Experiment Evidence
 
 The opt-in foreground experiment smoke compares public-safe fixture arms plus a

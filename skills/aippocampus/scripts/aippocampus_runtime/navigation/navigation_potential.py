@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.navigation.repo_familiarity import navigation_routes_from_cards
 from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
 
@@ -455,6 +456,16 @@ def _action_grammar(status: str, source_thickness: str, affordance: str) -> str:
 
 
 def _proposed_action(affordance: str, route: Mapping[str, Any], *, status: str) -> dict[str, str]:
+    raw_action = route.get("proposed_action")
+    if isinstance(raw_action, Mapping):
+        verb = _text(raw_action.get("verb"), 80)
+        obj = _text(raw_action.get("object"), 260)
+        if verb and obj:
+            if affordance == "backstage_prepare":
+                return {"verb": "refresh_sources", "object": obj}
+            if affordance == "surface_warning" and not verb.startswith("warn"):
+                return {"verb": "warn_route", "object": obj}
+            return {"verb": verb, "object": obj}
     summary = _route_summary(route)
     title = _route_title(route)
     obj = compact_text(summary or title, 220)
@@ -792,6 +803,8 @@ def _potential_from_route(
         "thread_keys": route_thread_keys,
         "matched_terms_only": matched_terms_only,
         "requires_source_reopen": grammar in {"reopenable_route", "direction_only"},
+        "preconditions": _strings(route.get("preconditions"), limit=8, chars=180),
+        "do_not_do": _strings(route.get("do_not_do"), limit=10, chars=160),
         "diagnostics": {
             "raw_prompt_stored": False,
             "signal_count": len(signals),
@@ -800,39 +813,6 @@ def _potential_from_route(
         },
     }
     return potential
-
-
-def _repo_card_routes(repo_familiarity_cards: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    routes: list[dict[str, Any]] = []
-    for card in repo_familiarity_cards:
-        if not isinstance(card, Mapping):
-            continue
-        refs = _source_refs(card.get("source_refs"))
-        if not refs:
-            continue
-        summary = _text(card.get("action_delta_required") or card.get("why_now") or card.get("landmark"), 520)
-        if not summary:
-            continue
-        routes.append(
-            {
-                "kind": "source_backed_familiarity_card",
-                "route_id": card.get("card_id"),
-                "route_kind": card.get("category") or "repo_familiarity",
-                "title": card.get("landmark"),
-                "summary": summary,
-                "route_terms": card.get("route_terms") or [],
-                "source_refs": refs,
-                "source_thickness": (card.get("decision_shadow") or {}).get("source_thickness")
-                if isinstance(card.get("decision_shadow"), Mapping)
-                else None,
-                "proposed_action": {
-                    "verb": "refresh_sources",
-                    "object": card.get("first_source_to_reopen") or summary,
-                },
-                "annoyance_risk": "medium",
-            }
-        )
-    return routes
 
 
 def build_navigation_potential_projection(
@@ -851,7 +831,7 @@ def build_navigation_potential_projection(
 
     now_value = now or now_utc()
     routes: list[Mapping[str, Any]] = list(cognitive_routes or [])
-    routes.extend(_repo_card_routes(repo_familiarity_cards or []))
+    routes.extend(navigation_routes_from_cards(repo_familiarity_cards or []))
     potentials = [
         potential
         for route in routes
@@ -950,9 +930,15 @@ def navigation_potentials_to_agency_inputs(
                 },
                 "preconditions": [
                     "reopen attached source refs before exact or high-risk claims",
+                    *[
+                        str(item)
+                        for item in potential.get("preconditions") or []
+                        if str(item).strip()
+                    ],
                 ],
                 "do_not_do": [
                     "treat_navigation_potential_as_source_truth",
+                    *[str(item) for item in potential.get("do_not_do") or [] if str(item).strip()],
                 ],
             }
         )

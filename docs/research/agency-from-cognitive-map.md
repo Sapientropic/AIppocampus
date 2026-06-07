@@ -285,6 +285,15 @@ superseded suppression, unresolved frontier action, corrected-route warning,
 source-thin non-authoritative scent, and the bridge into the existing agency
 selector.
 
+The #833 repo-familiarity follow-up keeps repo cards out of a parallel
+coding-only channel. Already-selected `source_backed_familiarity_card` rows now
+project into navigation potentials through the shared affordance surface:
+fresh coding-relevant cards can offer a constructive next step that names
+`first_source_to_reopen` and `stop_after`; stale cards downgrade to backstage
+source refresh; rejected-route decision-shadow cards become route constraints
+without claiming the route is still rejected; non-coding tasks stay quiet
+because selection remains scoped by the repo familiarity packet selector.
+
 The replayed host-timing fixture lives in
 `aippocampus_runtime.coding.agency_host_timing`, with a public no-write smoke at
 `tools/aippocampus/smoke/smoke_agency_host_timing.py`. It exercises

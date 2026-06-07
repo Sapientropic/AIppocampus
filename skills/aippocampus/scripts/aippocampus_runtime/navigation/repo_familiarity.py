@@ -73,6 +73,25 @@ def _source_refs(value: Any) -> list[dict[str, Any]]:
     return refs
 
 
+def _navigation_source_refs(refs: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Convert repo file refs into source-reopen handles for navigation gates."""
+
+    out: list[dict[str, Any]] = []
+    for ref in refs:
+        clean = dict(ref)
+        path = _text(clean.get("path"), 180)
+        if path and not clean.get("thread_key"):
+            clean["thread_key"] = f"repo:{path}"
+        if clean.get("line") and not clean.get("source_line"):
+            clean["source_line"] = clean.get("line")
+        out.append(clean)
+    return out
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
 def _route(value: Any) -> dict[str, list[str]]:
     if not isinstance(value, Mapping):
         return {}
@@ -202,6 +221,86 @@ def _rejection(card: Mapping[str, Any], reason: str, detail: str = "") -> dict[s
         "reason": reason,
         "detail": detail,
     }
+
+
+def _card_route_status(card: Mapping[str, Any], decision_shadow: Mapping[str, Any]) -> str:
+    freshness = str(card.get("freshness") or "").casefold()
+    if freshness in {"stale", "expired", "superseded"}:
+        return "stale"
+    constraint = " ".join(
+        str(decision_shadow.get(key) or "")
+        for key in ("route_constraint", "constraint", "status", "outcome")
+    ).casefold()
+    card_text = " ".join(
+        str(card.get(key) or "") for key in ("category", "landmark", "action_delta_required")
+    ).casefold()
+    if "rejected_route" in constraint or "do_not_repeat" in constraint or "rejected route" in card_text:
+        return "corrected"
+    return "unresolved"
+
+
+def navigation_routes_from_cards(cards: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Project already-selected repo familiarity cards into navigation routes.
+
+    Task relevance and invalidation checks belong in ``select_repo_familiarity_packet``.
+    This adapter keeps the selected card's route constraints attached so the
+    shared navigation-potential layer can offer a constructive coding route
+    instead of treating repo familiarity as a parallel warning channel.
+    """
+
+    routes: list[dict[str, Any]] = []
+    for card in cards:
+        if not isinstance(card, Mapping) or card.get("kind") != CARD_KIND:
+            continue
+        refs = _navigation_source_refs(_source_refs(card.get("source_refs")))
+        if not refs:
+            continue
+        action_delta = _text(card.get("action_delta_required"), 360)
+        first_source = _text(card.get("first_source_to_reopen"), 220)
+        stop_after = _text(card.get("stop_after"), 260)
+        if not action_delta or not first_source or not stop_after:
+            continue
+        decision_shadow = _mapping(card.get("decision_shadow"))
+        status = _card_route_status(card, decision_shadow)
+        source_thickness = str(decision_shadow.get("source_thickness") or "usable")
+        if source_thickness not in {"thin", "usable", "strong"}:
+            source_thickness = "usable"
+        verb = "warn_route" if status == "corrected" else "offer_next_step"
+        routes.append(
+            {
+                "kind": CARD_KIND,
+                "route_id": card.get("card_id"),
+                "route_kind": card.get("category") or "repo_familiarity",
+                "title": card.get("landmark"),
+                "summary": action_delta,
+                "status": status,
+                "frontier_proximity": "high" if status == "unresolved" else "medium",
+                "route_terms": card.get("route_terms") or [],
+                "source_refs": refs,
+                "source_thickness": source_thickness,
+                "proposed_action": {
+                    "verb": verb,
+                    "object": f"Reopen {first_source}; {action_delta}",
+                },
+                "preconditions": [
+                    f"reopen first source: {first_source}",
+                    f"stop after: {stop_after}",
+                ],
+                "do_not_do": [
+                    "treat_repo_familiarity_as_current_code_truth",
+                    *_strings(card.get("do_not_use_for"), limit=6),
+                ],
+                "repo_familiarity": {
+                    "first_source_to_reopen": first_source,
+                    "stop_after": stop_after,
+                    "freshness": _text(card.get("freshness"), 80),
+                    "invalidation_present": bool(card.get("invalidation")),
+                    "decision_shadow_present": bool(decision_shadow),
+                },
+                "annoyance_risk": "medium",
+            }
+        )
+    return routes
 
 
 def select_repo_familiarity_packet(
