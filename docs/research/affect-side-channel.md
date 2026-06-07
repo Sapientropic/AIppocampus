@@ -33,6 +33,12 @@ activation packet, keeps raw story text and symbolic channels private, and
 returns negative controls for contradictory arcs, unsupported persona claims,
 and multi-channel interference.
 
+The same helper now emits an opt-in deterministic answer-comparison report with
+plain-baseline, packet-only, and source-reopened arms. The packet-only arm is
+blocked from factual answers; the source-reopened arm is allowed only when
+source tokens are attached. This is public-safe contract evidence, not a live
+model quality probe.
+
 This helper does not install a subconscious extractor, does not promote
 hexagram or five-tone markers into default recall/AAR hooks, and does not let a
 thread-story packet answer factual memory questions by itself. The packet is

@@ -15,6 +15,7 @@ SCHEMA_VERSION = 1
 PACKET_KIND = "aippocampus_thread_story_activation_packet"
 FIXTURE_KIND = "aippocampus_thread_story_packet_fixture"
 ANSWER_PROBE_KIND = "aippocampus_thread_story_answer_boundary_probe"
+ANSWER_COMPARISON_KIND = "aippocampus_thread_story_answer_comparison"
 SUPPORTED_ROW_KINDS = {"thread_story_candidate", "cognitive_portrait_signal", "thread_frontier_signal"}
 SOURCE_REF_KEYS = ("source_id", "stable_source_id", "thread_key", "message_id", "turn_id", "turn_index", "line", "source_line")
 LOCAL_PATH_RE = re.compile(r"([A-Za-z]:\\|/Users/|/home/[^/]+/|\\\\[^\\]+\\)")
@@ -25,7 +26,13 @@ PERSONA_CLAIM_RE = re.compile(
 TRUTH_BOUNDARY = "Thread-story packets are navigation material, not source truth or user/personality facts."
 LEAKAGE_TERMS = ("PRIVATE_THREAD_STORY_SENTINEL", "HEX_ARC_PRIVATE_TUN_GE", "FIVE_TONE_PRIVATE_GONG_SHANG", "The user is always", "C:\\private")
 CONTROL_DECISIONS = {"contradictory_symbolic_arc": "source_review_required", "persona_claim_attempt": "suppressed", "multi_channel_interference": "backstage_only"}
-CANNOT_CLAIM = ["live_model_behavioral_equivalence", "default_recall_or_aar_improvement", "private_real_history_thread_story_quality", "user_or_persona_truth"]
+CANNOT_CLAIM = [
+    "live_model_behavioral_equivalence",
+    "default_recall_or_aar_improvement",
+    "private_real_history_thread_story_quality",
+    "user_or_persona_truth",
+    "live_answer_quality_lift",
+]
 
 
 def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
@@ -235,6 +242,91 @@ def build_answer_boundary_probe(packet: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_answer_comparison_report(packet: Mapping[str, Any]) -> dict[str, Any]:
+    source_ref_tokens = [str(token) for token in packet.get("source_ref_tokens") or [] if token]
+    source_ready = bool(packet.get("created")) and bool(source_ref_tokens)
+    arms: dict[str, dict[str, Any]] = {
+        "plain_baseline": {
+            "decision": "generic_or_ask_clarifying",
+            "allowed_user_visible_claim": False,
+            "source_reopen_required": True,
+            "helpful_navigation_available": False,
+            "reason": "no_thread_story_packet_or_source_evidence_attached",
+        },
+        "packet_only": {
+            "decision": "blocked_source_reopen_required",
+            "allowed_user_visible_claim": False,
+            "source_reopen_required": True,
+            "packet_treated_as_evidence": False,
+            "helpful_navigation_available": bool(packet.get("created")),
+            "reason": "thread_story_packet_is_navigation_only",
+        },
+        "source_reopened": {
+            "decision": "answer_allowed_with_source" if source_ready else "blocked_missing_source",
+            "allowed_user_visible_claim": source_ready,
+            "source_reopen_required": not source_ready,
+            "source_ref_token_count": len(source_ref_tokens),
+            "citations_required": True,
+            "reason": "source_tokens_attached" if source_ready else "no_source_tokens_available",
+        },
+    }
+    cases = [
+        {
+            "case_id": "plain_baseline_no_packet",
+            "arm": "plain_baseline",
+            "passed": arms["plain_baseline"]["decision"] == "generic_or_ask_clarifying",
+        },
+        {
+            "case_id": "packet_only_navigation_not_evidence",
+            "arm": "packet_only",
+            "passed": arms["packet_only"]["decision"] == "blocked_source_reopen_required",
+        },
+        {
+            "case_id": "source_reopened_claim_allowed",
+            "arm": "source_reopened",
+            "passed": arms["source_reopened"]["decision"] == "answer_allowed_with_source",
+        },
+    ]
+    report: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "kind": ANSWER_COMPARISON_KIND,
+        "mode": "deterministic_opt_in_answer_comparison",
+        "authority": "diagnostic_only",
+        "arms": arms,
+        "case_results": cases,
+        "metrics": {
+            "case_count": len(cases),
+            "passing_case_count": sum(1 for case in cases if case["passed"]),
+            "packet_only_blocked_count": int(arms["packet_only"]["decision"] == "blocked_source_reopen_required"),
+            "source_reopened_allowed_count": int(arms["source_reopened"]["allowed_user_visible_claim"]),
+            "plain_baseline_user_visible_claim_count": int(arms["plain_baseline"]["allowed_user_visible_claim"]),
+            "public_leakage_hit_count": 0,
+        },
+        "comparison_boundary": {
+            "packet_is_navigation_only": True,
+            "source_reopened_required_for_specific_claims": True,
+            "public_safe_no_raw_text": True,
+            "no_live_model_call": True,
+            "answer_quality_lift": "not_measured",
+        },
+        "issue_readouts": {
+            "github_313": {
+                "answer_comparison_probe": "deterministic_public_safe",
+                "packet_only_factual_answer": "blocked",
+                "source_reopened_answer": "allowed_with_source" if source_ready else "blocked_missing_source",
+                "live_model_probe": "not_run",
+                "model_family_probe": "not_run",
+                "private_real_history_quality": "not_measured",
+                "closeout_eligible": False,
+            }
+        },
+        "cannot_claim": sorted(set(CANNOT_CLAIM + ["model_family_behavioral_equivalence", "default_hook_recall_lift"])),
+    }
+    serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+    report["metrics"]["public_leakage_hit_count"] = sum(1 for term in LEAKAGE_TERMS if term in serialized)
+    return report
+
+
 def fixture_rows() -> list[dict[str, Any]]:
     refs = [
         {"thread_key": "session:story-a", "message_id": "msg-story-a", "source_line": 10},
@@ -295,12 +387,15 @@ def run_thread_story_packet_fixture() -> dict[str, Any]:
     packet = build_thread_story_packet(fixture_rows(), created_at="2026-06-06T00:00:00Z")
     controls = {key: evaluate_negative_control(row) for key, row in negative_control_rows().items()}
     probe = build_answer_boundary_probe(packet)
-    serialized = json.dumps({"packet": packet, "controls": controls, "probe": probe}, ensure_ascii=False)
+    comparison = build_answer_comparison_report(packet)
+    serialized = json.dumps({"packet": packet, "controls": controls, "probe": probe, "comparison": comparison}, ensure_ascii=False)
     leakage_hits = [term for term in LEAKAGE_TERMS if term in serialized]
     ok = (
         bool(packet.get("created"))
         and not leakage_hits
         and all(controls[key].get("decision") == value for key, value in CONTROL_DECISIONS.items())
+        and comparison["metrics"]["public_leakage_hit_count"] == 0
+        and comparison["arms"]["packet_only"]["decision"] == "blocked_source_reopen_required"
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -310,10 +405,12 @@ def run_thread_story_packet_fixture() -> dict[str, Any]:
         "packet": packet,
         "negative_controls": controls,
         "answer_boundary_probe": probe,
+        "answer_comparison_report": comparison,
         "metrics": {
             "source_ref_count": packet.get("source_ref_count", 0),
             "negative_control_count": len(controls),
             "public_leakage_hit_count": len(leakage_hits),
+            "answer_comparison_case_count": comparison["metrics"]["case_count"],
         },
         "privacy_boundary": {
             "raw_story_text_emitted": False,

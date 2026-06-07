@@ -166,6 +166,9 @@ freshness, sensitivity, source back-pointers, and suppression boundaries while
 keeping raw story text, symbolic affect channels, local paths, and persona-like
 claims out of the agent-visible packet. Its deterministic answer-boundary probe
 requires source reopen before packet-only material can support a factual answer.
+The same helper also reports a public-safe deterministic answer-comparison with
+plain-baseline, packet-only, and source-reopened arms so packet-only factual
+answers fail independently from source-reopened answers.
 
 This is still structured text navigation, not activation steering, live model
 equivalence, default recall lift, or user/personality truth.
@@ -274,6 +277,7 @@ most actionable next step. It tests the practical benefit (compactness) without
 requiring the impossible part (activation encoding).
 
 The first thread-story packet diagnostic now covers the leakage boundary for
-that structured-text direction. Broader answer-comparison / live-model probes
-are still required before claiming behavioral equivalence or user-visible
-recall improvement.
+that structured-text direction and includes a deterministic answer-comparison
+probe. Broader live-model, model-family, and private real-history probes are
+still required before claiming behavioral equivalence or user-visible recall
+improvement.

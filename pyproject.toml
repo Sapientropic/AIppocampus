@@ -340,6 +340,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/reflection/host_capture.py",
     "skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/reflection/thread_story.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/api.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/provider.py",

@@ -329,10 +329,13 @@ Current open queue at this pass: #163, #201, #248, #281, #309, #310, #311,
      it builds a source-backed activation packet with freshness, sensitivity,
      source back-pointers, suppression boundaries, negative controls for
      contradictory symbolic arcs / persona-like claims / multi-channel
-     interference, and an opt-in deterministic answer-boundary probe.
-   - Next hardening: add opt-in answer comparison / live model probes before
-     claiming behavioral equivalence or user-visible recall improvement. Keep
-     numerical activation codes and white-box steering out of this slice.
+     interference, an opt-in deterministic answer-boundary probe, and a
+     public-safe answer-comparison report over plain-baseline, packet-only, and
+     source-reopened arms.
+   - Next hardening: add live model / model-family probes and private-history
+     answer-quality review before claiming behavioral equivalence or
+     user-visible recall improvement. Keep numerical activation codes and
+     white-box steering out of this slice.
 
 16. Journey Tracking P1-P3 core
    - Source: `docs/research/journey-tracking.md`,

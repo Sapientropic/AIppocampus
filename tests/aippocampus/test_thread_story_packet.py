@@ -86,6 +86,43 @@ class ThreadStoryPacketTests(unittest.TestCase):
         self.assertIn("live_model_behavioral_equivalence", payload["cannot_claim"])
         self.assertIn("default_recall_or_aar_improvement", payload["cannot_claim"])
 
+    def test_answer_comparison_report_keeps_packet_only_arm_blocked(self) -> None:
+        payload = thread_story.run_thread_story_packet_fixture()
+        report = payload["answer_comparison_report"]
+        arms = report["arms"]
+
+        self.assertEqual(report["kind"], "aippocampus_thread_story_answer_comparison")
+        self.assertEqual(report["mode"], "deterministic_opt_in_answer_comparison")
+        self.assertEqual(report["authority"], "diagnostic_only")
+        self.assertEqual(arms["plain_baseline"]["decision"], "generic_or_ask_clarifying")
+        self.assertEqual(arms["packet_only"]["decision"], "blocked_source_reopen_required")
+        self.assertFalse(arms["packet_only"]["allowed_user_visible_claim"])
+        self.assertFalse(arms["packet_only"]["packet_treated_as_evidence"])
+        self.assertEqual(arms["source_reopened"]["decision"], "answer_allowed_with_source")
+        self.assertTrue(arms["source_reopened"]["allowed_user_visible_claim"])
+        self.assertEqual(arms["source_reopened"]["source_ref_token_count"], 3)
+
+        readout = report["issue_readouts"]["github_313"]
+        self.assertEqual(readout["answer_comparison_probe"], "deterministic_public_safe")
+        self.assertEqual(readout["packet_only_factual_answer"], "blocked")
+        self.assertEqual(readout["source_reopened_answer"], "allowed_with_source")
+        self.assertEqual(readout["live_model_probe"], "not_run")
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertIn("live_answer_quality_lift", report["cannot_claim"])
+
+    def test_answer_comparison_report_is_public_safe(self) -> None:
+        payload = thread_story.run_thread_story_packet_fixture()
+        report = payload["answer_comparison_report"]
+
+        self.assertEqual(report["metrics"]["public_leakage_hit_count"], 0)
+        serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("PRIVATE_THREAD_STORY_SENTINEL", serialized)
+        self.assertNotIn("HEX_ARC_PRIVATE_TUN_GE", serialized)
+        self.assertNotIn("FIVE_TONE_PRIVATE_GONG_SHANG", serialized)
+        self.assertNotIn("The user is always", serialized)
+        self.assertNotIn("C:\\private", serialized)
+        self.assertNotIn("source_refs", serialized)
+
 
 if __name__ == "__main__":
     unittest.main()
