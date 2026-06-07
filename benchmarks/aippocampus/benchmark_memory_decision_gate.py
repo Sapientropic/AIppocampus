@@ -1597,12 +1597,15 @@ def grade_case(case: GateCase, result: dict[str, Any], *, semantic_gate_called: 
     actual = normalize_actual_decision(result.get("decision"))
     expected_actual = EXPECTED_TO_ACTUAL[case.expected]
     evidence = result.get("evidence") or []
-    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
-    fresh_packet = (
-        ambient.get("fresh_thread_packet") if isinstance(ambient.get("fresh_thread_packet"), dict) else {}
+    raw_ambient = result.get("ambient_recall")
+    ambient: dict[str, Any] = raw_ambient if isinstance(raw_ambient, dict) else {}
+    raw_fresh_packet = ambient.get("fresh_thread_packet")
+    fresh_packet: dict[str, Any] = (
+        raw_fresh_packet if isinstance(raw_fresh_packet, dict) else {}
     )
-    reopen_plan = (
-        fresh_packet.get("reopen_plan") if isinstance(fresh_packet.get("reopen_plan"), dict) else {}
+    raw_reopen_plan = fresh_packet.get("reopen_plan")
+    reopen_plan: dict[str, Any] = (
+        raw_reopen_plan if isinstance(raw_reopen_plan, dict) else {}
     )
     evidence_source_match = None
     unexpected_evidence_source_count = 0
