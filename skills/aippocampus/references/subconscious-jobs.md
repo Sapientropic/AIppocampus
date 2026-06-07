@@ -38,6 +38,13 @@ but they must not rewrite source, delete source, or directly write formal memory
   maintenance lane. It scans registry metadata and generated sidecars for due
   reason codes, dry-runs the same bounded candidate rows it can later write,
   and reuses scheduler leases/cooldowns instead of creating a second scheduler.
+- `aippocampus_runtime.subconscious.agent_fallback_executor`: no-key
+  agent-fallback result producer. It consumes `agent_fallback_tasks.jsonl` plus
+  source-backed `subconscious_jobs.jsonl` findings and writes local-private
+  `agent_fallback_results.jsonl` rows; it does not call an external model.
+- `aippocampus_runtime.subconscious.agent_fallback_materializer`: source-join
+  gate for fallback results. It turns accepted local fallback results into the
+  same staging `promotion_candidates.jsonl` rows as review output.
 - `aippocampus_runtime.subconscious.candidate_router`: deterministic promotion-candidate router for
   soft working memory. It prevents a human review inbox by assigning
   `use_silently`, `use_with_source`, `confirm_when_relevant`, or `park`.
@@ -59,6 +66,12 @@ but they must not rewrite source, delete source, or directly write formal memory
   edges consumed by `aippocampus_runtime.navigation.concept_graph`.
 - `$CODEX_HOME/aippocampus-registry/subconscious_jobs.jsonl`: staging findings
   from non-edge jobs.
+- `$CODEX_HOME/aippocampus-registry/agent_fallback_tasks.jsonl`: no-key
+  fallback work orders queued by the scheduler when an agent fallback
+  capability is visible.
+- `$CODEX_HOME/aippocampus-registry/agent_fallback_results.jsonl`: local-private
+  fallback result rows produced by the executor. These are still synthesis and
+  must pass the materializer's source-finding join before review staging.
 - `$CODEX_HOME/aippocampus-registry/promotion_candidates.jsonl`: second-pass
   review output for later promotion workflows.
 - `$CODEX_HOME/aippocampus-registry/working_memory.jsonl`: soft working memory
@@ -224,16 +237,19 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   neither is available, and `off` when explicitly disabled. The agent fallback
   lane writes staging queue rows only; it does not call a host agent from the
   hook path or promote synthesis into memory.
-- future host-agent executors may write `agent_fallback_results.jsonl`, but
-  `aippocampus_runtime.subconscious.agent_fallback_materializer` can materialize
+- `aippocampus_runtime.subconscious.agent_fallback_executor` may write
+  `agent_fallback_results.jsonl` without an external provider key, but only from
+  queued fallback tasks and existing source-backed findings. The executor is the
+  local host-agent work-order bridge, not a hidden foreground prompt job. It
+  reports counts and safety boundaries publicly; result files remain
+  local-private.
+- `aippocampus_runtime.subconscious.agent_fallback_materializer` can materialize
   only candidates that join back to existing source-backed findings. Candidates
   without `source_finding_ids`, or with ids that do not resolve to
   `subconscious_jobs.jsonl` findings that carry `source_refs`, remain
-  diagnostic-only. For this #752 slice the materializer is a module-level
-  staging boundary, not a top-level end-user command; host-agent execution still
-  has to produce the result file intentionally. The materializer writes the same
-  public-safe `promotion_candidates.jsonl` staging rows used by the review path;
-  it is not promotion, adjudication, or a Dream quality claim.
+  diagnostic-only. The materializer writes the same public-safe
+  `promotion_candidates.jsonl` staging rows used by the review path; it is not
+  promotion, adjudication, or a Dream quality claim.
 - the scheduler uses a short enqueue lock plus per-project lease fields in
   `subconscious_state.json`
 - detached workers run `aippocampus_runtime.subconscious.jobs` with `--concurrency` and optional
@@ -588,6 +604,24 @@ This entrypoint does not execute raw maintenance work by itself. It emits
 candidate actions for scheduled revisits, stale frontiers, camped journeys,
 dormant questions, stale association caches, and health-preemptive work so the
 host or enabled worker can reopen source and decide the next action.
+
+Run the no-key agent fallback executor after queued fallback tasks and
+source-backed findings exist:
+
+```powershell
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.agent_fallback_executor --registry-dir "$env:CODEX_HOME\aippocampus-registry" --json
+```
+
+Then pass local-private fallback results through the unchanged source-join
+materializer:
+
+```powershell
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.agent_fallback_materializer --registry-dir "$env:CODEX_HOME\aippocampus-registry" --json
+```
+
+The executor and materializer are staging-only. They do not call external
+models, do not rewrite clean source, and do not turn fallback synthesis into
+source truth.
 
 Run one focused job:
 
