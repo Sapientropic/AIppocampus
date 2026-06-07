@@ -467,9 +467,11 @@ Output: `question_link` findings in the same `subconscious_jobs.jsonl` stream,
 with `question_cluster_id`, `linked_questions`, `dependency_edges`,
 `match_evidence`, and merged `source_refs`.
 
-Borderline pairs are not accepted by score alone. They remain skipped unless an
-explicit confirmation artifact accepts the pair; the accepted link still cites
-the original question source refs, not the confirmation as truth.
+Source-backed borderline pairs auto-materialize by default as low-confidence
+navigation with `borderline_auto` audit metadata. This keeps question tracking
+usable without laundering weak links into strong evidence. Explicit
+confirmation remains an opt-in calibration mode; accepted links still cite the
+original question source refs, not the confirmation artifact as truth.
 
 ### `concept_edges`
 

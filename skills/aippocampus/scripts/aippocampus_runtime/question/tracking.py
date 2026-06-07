@@ -6,8 +6,9 @@
 groups related questions, and writes append-only `question_link` findings back
 to the same stream.  The tracking layer treats generated findings as navigation
 structure only: every link must keep the original clean-source refs attached,
-and borderline links are skipped unless an explicit confirmation artifact
-accepts them.
+and source-backed borderline links materialize by default as low-confidence
+navigation with `borderline_auto` audit metadata.  Explicit confirmation
+artifacts remain an opt-in calibration mode for stricter review.
 """
 
 from __future__ import annotations
