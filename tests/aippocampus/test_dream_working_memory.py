@@ -274,6 +274,119 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "allowed")
         self.assertEqual(rows[0]["foreground_use"]["default_action"], "quiet_substrate")
 
+    def test_constructive_artifact_projects_as_optional_probe_not_evidence(self) -> None:
+        refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
+        row = wm.adjudicated_dream_findings_to_working_memory(
+            [
+                adjudicated_finding(
+                    dream_function="active_imagination",
+                    candidate_kind="question_not_yet_asked",
+                    activation_cues=["compaction loss probe"],
+                    constructive_artifact={
+                        "artifact_kind": "draft_question",
+                        "draft_text": "If compaction lost the last crucial turn, what source handle would show it?",
+                        "draft_origin": "active_imagination over source-ref continuity",
+                        "intended_use": "foreground_probe",
+                        "status": "dream_draft_not_source",
+                        "truth_boundary": "dream_draft_not_source",
+                        "source_refs": refs,
+                        "counter_evidence": ["not an extractive quote"],
+                        "when_not_to_use": ["exact source claim"],
+                        "requires_source_reopen_before_claim": True,
+                    },
+                )
+            ]
+        )[0]
+
+        self.assertIn("constructive_artifact", row)
+        if "constructive_artifact" not in row:
+            return
+        self.assertEqual(row["constructive_artifact"]["status"], "dream_draft_not_source")
+        self.assertIn("crucial turn", row["constructive_artifact"]["draft_text"])
+        self.assertEqual(row["foreground_use"]["draft_artifact_action"], "optional_probe")
+        self.assertEqual(row["constructive_artifact"]["foreground_use"], "optional_probe_not_evidence")
+        self.assertTrue(row["constructive_artifact"]["requires_source_reopen_before_claim"])
+        preview = wm.render_dream_hypothesis_preview(row)
+        self.assertIn("Dream draft", preview)
+        self.assertIn("optional probe", preview)
+        self.assertIn("not source fact", preview)
+
+    def test_prospective_invitation_surfaces_only_on_trigger_and_not_when_annoying_or_expired(self) -> None:
+        low_risk = wm.adjudicated_dream_findings_to_working_memory(
+            [
+                adjudicated_finding(
+                    dream_function="prospective",
+                    activation_cues=["AGI blank starting point"],
+                    review_after="2026-06-20T00:00:00Z",
+                    expires_at="2026-07-01T00:00:00Z",
+                    prospective_invitation={
+                        "emerging_theme": "AI as subconscious layer and blank starting point",
+                        "trigger_condition": "user mentions AGI, selfhood, or blankness",
+                        "suggested_opening": "Is the blank starting point question live here?",
+                        "invitation_type": "light_question",
+                        "expires_after": "14d",
+                        "expires_at": "2026-07-01T00:00:00Z",
+                        "annoyance_risk": "low",
+                        "status": "dream_invitation_not_source_fact",
+                        "truth_boundary": "dream_invitation_not_source_fact",
+                        "requires_source_reopen_before_claim": True,
+                    },
+                )
+            ]
+        )[0]
+        self.assertIn("prospective_invitation", low_risk)
+        if "prospective_invitation" not in low_risk:
+            return
+        invitation = dict(low_risk.get("prospective_invitation") or {})
+
+        delivered = wm.plan_dream_hypothesis_use(
+            low_risk,
+            prompt="AGI 里的 blank starting point 要怎么理解？",
+            now="2026-06-01T00:00:00Z",
+        )
+        unrelated = wm.plan_dream_hypothesis_use(
+            low_risk,
+            prompt="帮我看一个 Rust borrow checker 报错",
+            now="2026-06-01T00:00:00Z",
+        )
+        high_annoyance = wm.plan_dream_hypothesis_use(
+            {
+                **low_risk,
+                "prospective_invitation": {
+                    **invitation,
+                    "annoyance_risk": "high",
+                },
+            },
+            prompt="AGI 里的 blank starting point 要怎么理解？",
+            now="2026-06-01T00:00:00Z",
+        )
+        expired = wm.plan_dream_hypothesis_use(
+            {
+                **low_risk,
+                "expires_at": "2026-05-01T00:00:00Z",
+                "prospective_invitation": {
+                    **invitation,
+                    "expires_at": "2026-05-01T00:00:00Z",
+                },
+            },
+            prompt="AGI 里的 blank starting point 要怎么理解？",
+            now="2026-06-01T00:00:00Z",
+        )
+
+        self.assertEqual(low_risk["foreground_use"]["prospective_invitation_action"], "optional_question_on_trigger")
+        self.assertEqual(delivered["action"], "deliver_as_optional_question")
+        self.assertEqual(delivered["reason"], "prospective_invitation_trigger_matched")
+        self.assertEqual(delivered["invitation_diagnostic"], "delivered_as_optional_question")
+        self.assertIn("blank starting point", delivered["suggested_opening"])
+        self.assertEqual(unrelated["action"], "stay_silent")
+        self.assertEqual(unrelated["reason"], "trigger_not_matched")
+        self.assertEqual(unrelated["invitation_diagnostic"], "trigger_not_matched")
+        self.assertEqual(high_annoyance["action"], "stay_silent")
+        self.assertEqual(high_annoyance["reason"], "prospective_invitation_annoyance_high")
+        self.assertEqual(high_annoyance["invitation_diagnostic"], "annoyance_suppressed")
+        self.assertEqual(expired["reason"], "dream_hypothesis_expired")
+        self.assertEqual(expired["invitation_diagnostic"], "delivery_gate_blocked")
+
     def test_profile_or_secret_dream_hypothesis_is_parked_before_working_memory_projection(self) -> None:
         sensitive = adjudicated_finding(
             title="Durable personality diagnosis",

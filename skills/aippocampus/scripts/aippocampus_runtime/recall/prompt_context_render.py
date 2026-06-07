@@ -585,12 +585,38 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                     f" | source: {ref.get('title') or ref.get('thread_key')} line {ref.get('line')}"
                 )
             if item.get("candidate_type") == "dream_hypothesis":
-                lines.append(
-                    f"- Dream hypothesis, not source fact: {item.get('title')} "
-                    f"(confidence {item.get('confidence')}, terms: {terms}): "
-                    f"{compact_text(str(item.get('summary') or ''), 220)}"
-                    f"{source}"
-                )
+                invitation = item.get("prospective_invitation") or {}
+                artifact = item.get("constructive_artifact") or {}
+                use_plan = item.get("dream_hypothesis_use") or {}
+                rendered_specific = False
+                if (
+                    isinstance(invitation, dict)
+                    and invitation.get("suggested_opening")
+                    and isinstance(use_plan, dict)
+                    and use_plan.get("action") == "deliver_as_optional_question"
+                ):
+                    opening = compact_text(str(invitation.get("suggested_opening") or ""), 220)
+                    invitation_type = str(invitation.get("invitation_type") or "light_question")
+                    lines.append(
+                        f"- Prospective Dream invitation, not source fact "
+                        f"({invitation_type}, terms: {terms}): {opening}{source}"
+                    )
+                    rendered_specific = True
+                if isinstance(artifact, dict) and artifact.get("draft_text"):
+                    draft_kind = str(artifact.get("artifact_kind") or "draft_probe")
+                    draft = compact_text(str(artifact.get("draft_text") or ""), 220)
+                    lines.append(
+                        f"- Dream draft, not source fact "
+                        f"({draft_kind}; optional probe, terms: {terms}): {draft}{source}"
+                    )
+                    rendered_specific = True
+                if not rendered_specific:
+                    lines.append(
+                        f"- Dream hypothesis, not source fact: {item.get('title')} "
+                        f"(confidence {item.get('confidence')}, terms: {terms}): "
+                        f"{compact_text(str(item.get('summary') or ''), 220)}"
+                        f"{source}"
+                    )
                 lines.append(
                     "  Use quietly only if this changes the route; reopen source before any strong claim."
                 )

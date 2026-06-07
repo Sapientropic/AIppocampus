@@ -18,6 +18,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.dream.constructive_outputs import (
+    clean_constructive_artifact,
+    clean_prospective_invitation,
+    prospective_invitation_block_reason,
+    prospective_invitation_delivery_plan,
+    prospective_invitation_silent_plan,
+)
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.subconscious.candidate_router import (
     USE_WITH_SOURCE,
@@ -216,6 +223,8 @@ def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:
         finding.get("summary"),
         finding.get("recommendation"),
         finding.get("counter_evidence"),
+        finding.get("constructive_artifact"),
+        finding.get("prospective_invitation"),
     )
 
 
@@ -460,6 +469,8 @@ def adjudicated_dream_findings_to_working_memory(
         )
         activation_cues = unique_preserve(finding.get("activation_cues") or [], limit=12)
         trust_horizon = dream_trust_horizon(finding, raw_refs)
+        constructive_artifact = clean_constructive_artifact(finding.get("constructive_artifact"))
+        prospective_invitation = clean_prospective_invitation(finding.get("prospective_invitation"))
         candidate = {
             "candidate_type": DREAM_HYPOTHESIS_TYPE,
             "title": title,
@@ -469,6 +480,29 @@ def adjudicated_dream_findings_to_working_memory(
                 "re-open clean source before factual claims."
             ),
         }
+        trigger_terms = activation_cues or trigger_terms_for(candidate, concepts, project_label)
+        if prospective_invitation:
+            trigger_terms = unique_preserve(
+                [
+                    *trigger_terms,
+                    prospective_invitation.get("trigger_condition"),
+                    prospective_invitation.get("emerging_theme"),
+                ],
+                limit=12,
+            )
+        foreground_use = {
+            "default_action": "quiet_substrate",
+            "use_only_when_it_changes_current_answer": True,
+            "strong_claim_requires_source_reopen": True,
+            "accepted_capsule_can_be_used_quietly_until_invalidated": True,
+            "stay_silent_when_source_visible": True,
+            "stay_silent_when_annoyance_risk_high": True,
+            "render_boundary": "dream_hypothesis_not_source_fact",
+        }
+        if constructive_artifact:
+            foreground_use["draft_artifact_action"] = "optional_probe"
+        if prospective_invitation:
+            foreground_use["prospective_invitation_action"] = "optional_question_on_trigger"
         rows.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -490,7 +524,7 @@ def adjudicated_dream_findings_to_working_memory(
                 # fallback keeps deterministic structural eval rows usable, but
                 # live model-backed rows should arrive with activation_cues so
                 # summary/scaffold prose cannot widen the trigger surface.
-                "trigger_terms": activation_cues or trigger_terms_for(candidate, concepts, project_label),
+                "trigger_terms": trigger_terms,
                 "activation_cues": activation_cues,
                 "concepts": concepts,
                 "source_finding_ids": [source_finding_id],
@@ -520,15 +554,7 @@ def adjudicated_dream_findings_to_working_memory(
                 "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
                 "expires_at": finding.get("expires_at"),
                 "trust_horizon": trust_horizon,
-                "foreground_use": {
-                    "default_action": "quiet_substrate",
-                    "use_only_when_it_changes_current_answer": True,
-                    "strong_claim_requires_source_reopen": True,
-                    "accepted_capsule_can_be_used_quietly_until_invalidated": True,
-                    "stay_silent_when_source_visible": True,
-                    "stay_silent_when_annoyance_risk_high": True,
-                    "render_boundary": "dream_hypothesis_not_source_fact",
-                },
+                "foreground_use": foreground_use,
                 "sensitive_use_gate": {
                     "state": "blocked" if sensitive_dream_hypothesis(finding) else "allowed",
                     "human_or_user_intervention_required_for_direct_assertion": True,
@@ -539,6 +565,10 @@ def adjudicated_dream_findings_to_working_memory(
                 "clean_source_mutation": False,
             }
         )
+        if constructive_artifact:
+            rows[-1]["constructive_artifact"] = constructive_artifact
+        if prospective_invitation:
+            rows[-1]["prospective_invitation"] = prospective_invitation
     return rows
 
 
@@ -593,11 +623,27 @@ def plan_dream_hypothesis_use(
     if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
         return {"action": "stay_silent", "reason": "sensitive_review_required"}
     if dream_hypothesis_expired(row, now=now):
+        invitation_blocked = prospective_invitation_silent_plan(
+            row,
+            reason="dream_hypothesis_expired",
+            diagnostic="delivery_gate_blocked",
+        )
+        if invitation_blocked:
+            return invitation_blocked
         return {"action": "stay_silent", "reason": "dream_hypothesis_expired"}
     if source_visible:
         return {"action": "stay_silent", "reason": "source_already_visible"}
     if str(annoyance_risk or "").casefold() in {"high", "annoying", "noisy"}:
         return {"action": "stay_silent", "reason": "annoyance_risk_high"}
+    invitation_block_reason = prospective_invitation_block_reason(row)
+    if invitation_block_reason:
+        return {
+            "action": "stay_silent",
+            "reason": invitation_block_reason,
+            "invitation_diagnostic": "annoyance_suppressed"
+            if invitation_block_reason == "prospective_invitation_annoyance_high"
+            else "delivery_gate_blocked",
+        }
     horizon = row.get("trust_horizon") or {}
     stored_fingerprint = str(
         row.get("source_fingerprint")
@@ -670,7 +716,21 @@ def plan_dream_hypothesis_use(
         prompt_terms = [term for term in text_terms(prompt) if len(term) >= 4]
         route_relevance = bool(prompt_terms and any(term in haystack for term in prompt_terms))
     if not route_relevance:
+        trigger_miss = prospective_invitation_silent_plan(
+            row,
+            reason="trigger_not_matched",
+            diagnostic="trigger_not_matched",
+        )
+        if trigger_miss:
+            return trigger_miss
         return {"action": "stay_silent", "reason": "no_route_relevance"}
+    invitation_plan = prospective_invitation_delivery_plan(
+        row,
+        trust_horizon_status=horizon_status,
+        matched_prompt_terms=text_terms(prompt)[:6],
+    )
+    if invitation_plan:
+        return invitation_plan
     return {
         "action": "use_quietly",
         "reason": "dream_hypothesis_changes_route_or_answer",
@@ -683,6 +743,20 @@ def plan_dream_hypothesis_use(
 
 
 def render_dream_hypothesis_preview(row: Mapping[str, Any]) -> str:
+    invitation = clean_prospective_invitation(row.get("prospective_invitation"))
+    if invitation:
+        opening = compact_text(str(invitation.get("suggested_opening") or ""), 180)
+        return (
+            f"Prospective Dream invitation, not source fact: {opening}. "
+            "Ask only as an optional question when the trigger matches; reopen source before strong claims."
+        )
+    artifact = clean_constructive_artifact(row.get("constructive_artifact"))
+    if artifact:
+        draft = compact_text(str(artifact.get("draft_text") or ""), 180)
+        return (
+            f"Dream draft, not source fact: {draft}. "
+            "Use only as an optional probe; reopen source before making a strong claim."
+        )
     title = compact_text(str(row.get("title") or "Adjudicated dream hypothesis"), 160)
     return (
         f"Dream hypothesis, not source fact: {title}. "
