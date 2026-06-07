@@ -255,6 +255,36 @@ Current tests live in `tests/aippocampus/test_agency_affordance.py` and cover
 the first four evaluation cases: should stay silent, should remind, should
 warn, and should offer next step.
 
+## Implemented Navigation Potential Slice
+
+The #832 bridge slice adds
+`skills/aippocampus/scripts/aippocampus_runtime/navigation/navigation_potential.py`.
+It projects existing cognitive-map routes, concept-graph edge signals, Journey
+frontiers, correction windows, agency feedback, and repo familiarity cards into
+`aippocampus_navigation_potential` rows.
+
+This layer answers what a route can support now:
+
+- terminal or superseded routes are suppressed as `silent` with
+  `ignore_or_blocked` grammar;
+- corrected routes become a bounded `surface_warning` / source-reopen path
+  instead of a repeated old suggestion;
+- unresolved, source-backed, frontier-adjacent routes can become
+  `offer_next_step`;
+- source-thin scent stays `direction_only` / backstage and cannot become a
+  foreground offer by itself.
+
+The projection also emits `agency_affordance_inputs` so the existing agency
+selector can turn eligible navigation potentials into bounded tickets without
+making the cognitive map itself own host permissions, sequencing, or safety.
+Diagnostics name the signal families used for the decision and explicitly do
+not store raw prompt text.
+
+Current tests live in `tests/aippocampus/test_navigation_potential.py` and cover
+superseded suppression, unresolved frontier action, corrected-route warning,
+source-thin non-authoritative scent, and the bridge into the existing agency
+selector.
+
 The replayed host-timing fixture lives in
 `aippocampus_runtime.coding.agency_host_timing`, with a public no-write smoke at
 `tools/aippocampus/smoke/smoke_agency_host_timing.py`. It exercises
