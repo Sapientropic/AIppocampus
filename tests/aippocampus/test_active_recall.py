@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import io
 import json
 import sys
@@ -285,6 +286,202 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertNotIn("SECRET_TOKEN", raw_payload)
         self.assertNotIn("abc123", raw_payload)
         self.assertNotIn(str(root), raw_payload)
+
+    def test_context_mode_surfaces_agent_self_notes_without_hook_autoinjection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            notes_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "agent_self_note",
+                        "schema_version": 1,
+                        "note_id": "asn-test",
+                        "created_at": "2026-06-07T00:00:00Z",
+                        "thread_key": "session:old",
+                        "source_refs": [
+                            {
+                                "thread_key": "session:old",
+                                "message_id": "msg-stance",
+                                "line": 19,
+                            }
+                        ],
+                        "note_text": "这次的状态是先找设计意图，再动手。",
+                        "support_level": "scent",
+                        "action_grammar": "direction_only",
+                        "memory_surface": "memory_atmosphere",
+                        "source_reopen_required_before_claim": True,
+                        "claims_user_fact": False,
+                        "claims_world_fact": False,
+                        "claims_source_fact": False,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            context_fn = getattr(packaged_active_recall, "active_recall_context", None)
+            self.assertIsNotNone(context_fn, "active_recall_context API should exist")
+            assert context_fn is not None
+            result = context_fn(
+                prompt="我想找回上次我在这个问题前的状态",
+                cwd=root,
+                agent_self_notes_path=notes_path,
+                max_matches=3,
+            )
+
+        self.assertTrue(result["agent_initiated_recall"])
+        self.assertEqual(result["decision"], "context")
+        self.assertFalse(result["source_boundary"]["passive_hook_required"])
+        self.assertTrue(result["source_boundary"]["source_reopen_required_for_facts"])
+        self.assertEqual(result["surface_counts"]["agent_self_notes"], 1)
+        self.assertEqual(result["memory_atmosphere"][0]["active_recall_surface"], "agent_self_note")
+        self.assertEqual(result["memory_atmosphere"][0]["action_grammar"], "direction_only")
+        self.assertFalse(result["memory_atmosphere"][0]["trust_contract"]["treat_as_fact"])
+        self.assertEqual(result["source_reopen_routes"][0]["message_id"], "msg-stance")
+
+    def test_context_mode_cli_is_public_safe_and_omits_raw_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            notes_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "agent_self_note",
+                        "schema_version": 1,
+                        "note_id": "asn-secret-test",
+                        "created_at": "2026-06-07T00:00:00Z",
+                        "thread_key": "session:old",
+                        "source_refs": [{"thread_key": "session:old", "message_id": "msg-safe"}],
+                        "note_text": "这次我先守住 source boundary。",
+                        "support_level": "scent",
+                        "action_grammar": "direction_only",
+                        "memory_surface": "memory_atmosphere",
+                        "source_reopen_required_before_claim": True,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                try:
+                    code = packaged_active_recall.main(
+                        [
+                            "--mode",
+                            "context",
+                            "我想找回状态 SECRET_TOKEN=abc123",
+                            "--cwd",
+                            str(root),
+                            "--agent-self-notes",
+                            str(notes_path),
+                            "--json",
+                        ]
+                    )
+                except SystemExit as exc:
+                    code = int(exc.code or 0)
+            raw = stdout.getvalue()
+            payload = json.loads(raw) if raw.strip() else {}
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_agent_initiated_recall_context")
+        self.assertTrue(payload["agent_initiated_recall"])
+        self.assertEqual(payload["surface_counts"]["agent_self_notes"], 1)
+        self.assertNotIn("SECRET_TOKEN", raw)
+        self.assertNotIn("abc123", raw)
+        self.assertNotIn(str(root), raw)
+        self.assertNotIn("prompt", payload)
+
+    def test_context_mode_redacts_preexisting_self_note_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            notes_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "agent_self_note",
+                        "schema_version": 1,
+                        "note_id": "asn-manual-secret",
+                        "created_at": "2026-06-07T00:00:00Z",
+                        "thread_key": "session:old",
+                        "source_refs": [{"thread_key": "session:old", "message_id": "msg-safe"}],
+                        "note_text": r"token=abc123 and E:\private\workspace\note.md",
+                        "support_level": "scent",
+                        "action_grammar": "direction_only",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = packaged_active_recall.active_recall_context(
+                prompt="我想找回上次状态",
+                cwd=root,
+                agent_self_notes_path=notes_path,
+                max_matches=3,
+            )
+            raw = json.dumps(result, ensure_ascii=False)
+
+        self.assertEqual(result["surface_counts"]["agent_self_notes"], 1)
+        self.assertNotIn("abc123", raw)
+        self.assertNotIn(r"E:\private\workspace\note.md", raw)
+        self.assertIn("<redacted:secret>", raw)
+        self.assertIn("<redacted:local-path>", raw)
+
+    def test_context_mode_surfaces_dream_working_memory_as_candidate_direction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            working_memory_path = root / "working_memory.jsonl"
+            working_memory_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_working_memory",
+                        "status": "active",
+                        "route": "use_with_source",
+                        "candidate_key": "wm-dream-stance",
+                        "candidate_type": "dream_hypothesis",
+                        "review_state": "source_adjudicated",
+                        "title": "Foreground stance source boundary",
+                        "summary": "Dream hypothesis only; the agent should reopen source before claims.",
+                        "recommendation": "Use as route direction only.",
+                        "confidence": 0.82,
+                        "trigger_terms": ["状态", "source boundary"],
+                        "source_refs": [
+                            {
+                                "thread_key": "session:dream",
+                                "message_id": "msg-dream",
+                                "line": 55,
+                            }
+                        ],
+                        "truth_boundary": "dream_hypothesis_not_source_fact",
+                        "foreground_use": {"strong_claim_requires_source_reopen": True},
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            context_fn = getattr(packaged_active_recall, "active_recall_context", None)
+            self.assertIsNotNone(context_fn, "active_recall_context API should exist")
+            assert context_fn is not None
+            self.assertIn("working_memory_path", inspect.signature(context_fn).parameters)
+
+            result = context_fn(
+                prompt="我想找回上次这个 source boundary 状态",
+                cwd=root,
+                working_memory_path=working_memory_path,
+                max_matches=3,
+            )
+
+        self.assertEqual(result["surface_counts"]["working_memory"], 1)
+        self.assertEqual(result["surface_counts"]["dream"], 1)
+        self.assertEqual(result["working_continuity_brief"][0]["candidate_type"], "dream_hypothesis")
+        self.assertEqual(result["working_continuity_brief"][0]["action_grammar"], "direction_with_ref")
+        self.assertFalse(result["working_continuity_brief"][0]["trust_contract"]["treat_as_fact"])
+        self.assertEqual(result["source_reopen_routes"][0]["message_id"], "msg-dream")
 
 
 if __name__ == "__main__":

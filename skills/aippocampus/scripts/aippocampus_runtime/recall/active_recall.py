@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.health import health_report
 from aippocampus_runtime.recall.active_recall_lock import (
     default_active_recall_lock_path,
@@ -20,6 +21,7 @@ from aippocampus_runtime.recall.active_recall_lock import (
     start_or_update_recall_lock,
     summarize_lock_roi,
 )
+from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
     profile_recall_terms,
@@ -34,6 +36,17 @@ from aippocampus_runtime.recall.retrieval import (
 from aippocampus_runtime.recall.rollout_search import RolloutSearchOptions, search_rollout_payload
 from aippocampus_runtime.recall.segment_search import SegmentSearchOptions, search_segments_payload
 from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.source.agent_self_notes import (
+    default_agent_self_notes_path,
+    load_agent_self_notes,
+    search_agent_self_notes,
+)
+from aippocampus_runtime.subconscious.candidate_router import (
+    default_working_memory_path,
+    load_working_memory,
+    match_working_memory,
+    strip_for_hook,
+)
 
 
 def read_prompt(args: argparse.Namespace) -> str:
@@ -239,6 +252,192 @@ def active_recall_lock_metrics(*, lock_path: Path) -> dict[str, Any]:
     return summarize_lock_roi(lock_path)
 
 
+def _safe_route_ref(ref: dict[str, Any]) -> dict[str, Any]:
+    allowed = (
+        "thread_key",
+        "source_id",
+        "message_id",
+        "turn_id",
+        "turn_index",
+        "line",
+        "phase",
+        "title",
+    )
+    route: dict[str, Any] = {}
+    for key in allowed:
+        value = ref.get(key)
+        if value in (None, "", []):
+            continue
+        route[key] = _public_text(value, chars=180) if isinstance(value, str) else value
+    return route
+
+
+def _public_text(value: Any, *, chars: int) -> str:
+    sanitized, _ = sanitize_external_model_text(str(value or ""))
+    return compact_text(sanitized or "<redacted:sensitive-text>", chars)
+
+
+def _source_reopen_routes_from_surfaces(
+    surfaces: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    routes: list[dict[str, Any]] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for surface in surfaces:
+        for ref in surface.get("source_refs") or []:
+            if not isinstance(ref, dict):
+                continue
+            route = _safe_route_ref(ref)
+            if not route:
+                continue
+            route["source_reopen_required_before_claim"] = True
+            marker = tuple(sorted((key, str(value)) for key, value in route.items()))
+            if marker in seen:
+                continue
+            seen.add(marker)
+            routes.append(route)
+            if len(routes) >= limit:
+                return routes
+    return routes
+
+
+def _public_self_note_surface(row: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "note_id",
+        "created_at",
+        "thread_key",
+        "note_text",
+        "trigger",
+        "support_level",
+        "trust_level",
+        "action_grammar",
+        "trust_contract",
+        "active_recall_surface",
+        "retrieval_role",
+        "matched_terms",
+        "source_boundary",
+    )
+    public = {key: row.get(key) for key in keys if row.get(key) not in (None, "", [])}
+    if "note_text" in public:
+        public["note_text"] = _public_text(public["note_text"], chars=280)
+    if "thread_key" in public:
+        public["thread_key"] = _public_text(public["thread_key"], chars=180)
+    public["source_refs"] = [
+        route for ref in row.get("source_refs") or [] if (route := _safe_route_ref(ref))
+    ][:4]
+    return public
+
+
+def _public_working_memory_cards(rows: list[dict[str, Any]], *, max_cards: int) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    payload = ambient_recall_from_decision(
+        {
+            "decision": "scent",
+            "confidence": "medium",
+            "evidence": [],
+            "working_memory": strip_for_hook(rows),
+            "cognitive_map": [],
+            "candidates": [],
+        },
+        max_cards=max_cards,
+    )
+    cards: list[dict[str, Any]] = []
+    rows_by_ref = {
+        str(row.get("candidate_key") or row.get("title") or ""): row
+        for row in rows
+    }
+    for card in payload.get("cards") or []:
+        if not isinstance(card, dict):
+            continue
+        public = dict(card)
+        source_key = str(public.get("candidate_key") or "")
+        if not source_key:
+            source_key = str(public.get("theme") or "")
+        source_row = rows_by_ref.get(source_key) or {}
+        if source_row.get("candidate_type"):
+            public["candidate_type"] = source_row.get("candidate_type")
+        public["active_recall_surface"] = "working_memory"
+        public["retrieval_role"] = "working_continuity_brief"
+        public["source_refs"] = [
+            route for ref in public.get("source_refs") or [] if (route := _safe_route_ref(ref))
+        ][:4]
+        cards.append(public)
+    return cards
+
+
+def active_recall_context(
+    *,
+    prompt: str,
+    cwd: Path,
+    registry_path: Path | None = None,
+    agent_self_notes_path: Path | None = None,
+    working_memory_path: Path | None = None,
+    max_matches: int = 4,
+) -> dict[str, Any]:
+    """Return explicit agent-initiated continuity context.
+
+    This path is intentionally separate from prompt-time hooks: it may surface
+    direction-only atmosphere rows when the agent asks to remember, but every
+    source-backed or exact claim still has to reopen clean source through the
+    returned route refs.
+    """
+
+    del cwd  # The explicit context payload must not expose local workspace paths.
+    notes_path = agent_self_notes_path or default_agent_self_notes_path(registry_path)
+    self_note_matches = (
+        search_agent_self_notes(
+            prompt,
+            load_agent_self_notes(notes_path),
+            limit=max_matches,
+        )
+        if notes_path.exists()
+        else []
+    )
+    memory_atmosphere = [_public_self_note_surface(row) for row in self_note_matches]
+    wm_path = working_memory_path or default_working_memory_path(registry_path=registry_path)
+    working_rows = (
+        match_working_memory(
+            prompt,
+            load_working_memory(wm_path),
+            limit=max_matches,
+        )
+        if wm_path.exists()
+        else []
+    )
+    working_brief = _public_working_memory_cards(working_rows, max_cards=max_matches)
+    routes = _source_reopen_routes_from_surfaces(
+        [*self_note_matches, *working_rows],
+        limit=max_matches,
+    )
+    dream_count = sum(1 for row in working_rows if row.get("candidate_type") == "dream_hypothesis")
+    return {
+        "kind": "aippocampus_agent_initiated_recall_context",
+        "schema_version": 1,
+        "decision": "context" if memory_atmosphere or working_brief or routes else "empty",
+        "agent_initiated_recall": True,
+        "memory_atmosphere": memory_atmosphere,
+        "working_continuity_brief": working_brief,
+        "source_reopen_routes": routes,
+        "surface_counts": {
+            "agent_self_notes": len(memory_atmosphere),
+            "working_memory": len(working_brief),
+            "dream": dream_count,
+            "atmosphere": len(memory_atmosphere),
+        },
+        "source_boundary": {
+            "passive_hook_required": False,
+            "hook_auto_injection_unchanged": True,
+            "direction_only_is_not_evidence": True,
+            "source_reopen_required_for_facts": True,
+            "raw_prompt_serialized": False,
+            "local_paths_serialized": False,
+        },
+        "suggested_next": "reopen_source" if routes else "search_clean_source",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("prompt", nargs="*", help="Current user message or task description.")
@@ -254,14 +453,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--search", choices=["auto", "always", "never"], default="auto")
     parser.add_argument(
         "--mode",
-        choices=["legacy", "probe", "read", "reopen", "metrics"],
+        choices=["legacy", "probe", "read", "reopen", "metrics", "context"],
         default="legacy",
         help=(
-            "legacy keeps the old search decision flow; probe/read expose "
-            "navigation-only locks; reopen opens clean source by lock id; "
-            "metrics reports public-safe aggregate lock ROI."
+            "legacy keeps the old search decision flow; context returns explicit "
+            "agent-initiated direction-only route material; probe/read expose "
+            "navigation-only locks; reopen opens clean source by lock id; metrics "
+            "reports public-safe aggregate lock ROI."
         ),
     )
+    parser.add_argument("--agent-self-notes")
+    parser.add_argument("--working-memory")
     parser.add_argument("--use-lock", action="store_true", dest="use_lock")
     parser.add_argument("--use-background-lock", action="store_true", dest="use_lock")
     parser.add_argument("--lock-id")
@@ -330,6 +532,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if not prompt:
         raise SystemExit("active_recall.py requires prompt text or --stdin")
+    if args.mode == "context":
+        result = active_recall_context(
+            prompt=prompt,
+            cwd=cwd,
+            registry_path=registry_path,
+            agent_self_notes_path=Path(args.agent_self_notes).resolve()
+            if args.agent_self_notes
+            else None,
+            working_memory_path=Path(args.working_memory).resolve()
+            if args.working_memory
+            else None,
+            max_matches=args.max,
+        )
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"active recall context: {result.get('decision')}")
+            for row in result.get("memory_atmosphere") or []:
+                print(f"- [direction_only] {row.get('note_text')}")
+        return 0
     if args.mode == "probe":
         result = active_recall_probe(
             prompt=prompt,

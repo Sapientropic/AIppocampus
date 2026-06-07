@@ -253,6 +253,18 @@ would change the answer, plan, or action. Any specific memory-backed claim still
 requires clean-source reopen; scent packets, route reasons, locks, aliases, and
 candidate refs are not enough.
 
+Agent-initiated recall is a separate pull path from quiet hooks. When the
+foreground agent or user explicitly asks to remember, inspect, or recover past
+continuity, `aippocampus_runtime.recall.active_recall --mode context` may read
+private direction-only sidecars such as `agent_self_note` rows plus existing
+working-memory / Dream rows and return `memory_atmosphere`,
+`working_continuity_brief`, and source-reopen routes. This path is allowed to
+find low-authority atmosphere that the passive hook would not inject, but it
+does not change hook thresholds and does not turn those rows into evidence.
+The context payload must not serialize raw prompts, local paths, source
+snippets, or secret-shaped material; exact or factual claims still require
+clean-source reopen through the returned refs.
+
 `aippocampus_runtime.reflection.aar_v2` owns the #484 deterministic first slice
 for action-time AAR nudges. It can propose a source-backed advisory nudge when
 the next action is a specific memory/source claim from weak scent/candidate/dream
