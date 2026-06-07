@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 import _paths
 
@@ -135,6 +135,7 @@ def selected_fixture_scenarios() -> list[dict[str, Any]]:
             "name": "borderline_request_payload",
             "strong_threshold": 0.99,
             "borderline_threshold": 0.10,
+            "auto_accept_borderline": False,
             "rows": [
                 question_row("7", fingerprint="sf_borderline_1"),
                 question_row(
@@ -211,11 +212,13 @@ def run_scenario(scenario: Mapping[str, Any]) -> dict[str, Any]:
     borderline_threshold = float(
         scenario.get("borderline_threshold") or tracking.DEFAULT_BORDERLINE_THRESHOLD
     )
+    auto_accept_borderline = bool(scenario.get("auto_accept_borderline", True))
     links, diagnostics = tracking.build_question_links(
         candidates,
         [],
         strong_threshold=strong_threshold,
         borderline_threshold=borderline_threshold,
+        auto_accept_borderline=auto_accept_borderline,
     )
     source_sets = _linked_source_sets(links)
     positive_pairs = [tuple(pair) for pair in scenario.get("positive_pairs") or []]
@@ -274,11 +277,16 @@ def run_scenario(scenario: Mapping[str, Any]) -> dict[str, Any]:
         "missed_positive_pairs": missed_positive_pairs,
         "negative_pair_count": len(negative_pairs),
         "merged_negative_pairs": merged_negative_pairs,
+        "auto_accept_borderline": auto_accept_borderline,
         "pending_confirmation_request_count": pending_count,
         "expected_pending_confirmation_request_count": expected_pending,
         "threshold_comparison": {
             "baseline": "static_strong_threshold_only",
-            "current": "adaptive_thresholds_with_borderline_confirmation_requests",
+            "current": (
+                "adaptive_thresholds_with_default_borderline_auto_accept"
+                if auto_accept_borderline
+                else "adaptive_thresholds_with_explicit_borderline_confirmation_requests"
+            ),
             "baseline_linked_positive_pairs": baseline_linked_positive_pairs,
             "current_linked_positive_pairs": current_linked_positive_pairs,
             "baseline_missed_positive_pair_count": len(baseline_missed_positive_pairs),
@@ -298,7 +306,7 @@ def run_scenario(scenario: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def aggregate_scenarios(results: list[Mapping[str, Any]]) -> dict[str, Any]:
+def aggregate_scenarios(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     obvious = [item for item in results if item.get("name") == "obvious_recurring_context_question"]
     generic = [item for item in results if item.get("name") == "generic_low_information_questions"]
     orientation = [item for item in results if item.get("name") == "orientation_conflict_separation"]

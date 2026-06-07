@@ -51,13 +51,16 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale refs
   when registry clean-source resolution is available, adds deterministic
   salience tags, adapts strong/borderline thresholds from six-axis evidence,
-  and accepts borderline pairs only when an explicit confirmation artifact is
-  supplied. Confirmation artifacts are now audited as accepted, rejected,
-  malformed, stale, or source-id mismatched; rejected/invalid artifacts do not
-  create links. Accepted `match_evidence` keeps a compact artifact-audit block
-  with pair id, source finding ids, model/source, prompt version, and timestamp;
-  it does not copy source refs or raw clean-source text into the confirmation
-  layer.
+  and auto-materializes source-backed borderline pairs as low-confidence
+  `question_link` findings by default. The older confirmation gate remains
+  available as an explicit calibration mode; when a confirmation artifact is
+  supplied, accepted/rejected/malformed/stale/source-id-mismatched outcomes are
+  audited, and rejected/invalid artifacts do not create links. Accepted
+  `match_evidence` distinguishes `strong_score`, `borderline_auto`, and
+  `borderline_confirmation` so borderline links are usable without being
+  laundered into strong evidence. Confirmation audits keep pair id, source
+  finding ids, model/source, prompt version, and timestamp; they do not copy
+  source refs or raw clean-source text into the confirmation layer.
 - Implemented first health slice: `skills/aippocampus/scripts/aippocampus_runtime/question/health.py`
   derives source-backed question stats for `aippocampus health`, including
   recurring links, neutral dormancy, explicit-resolution signals, frontier
@@ -77,16 +80,16 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   `question_resolution` after `question_tracking` when requested.
 - Implemented first #134 offline confirmation/calibration slice:
   `question_tracking.py` can now export compact
-  `question_pair_confirmation_request` JSONL for borderline pairs. The request
-  includes pair ids, source finding ids, extracted question axes, scores, and
-  threshold policy, but not clean-source messages or full source refs. The
-  selected-fixture calibration runner
+  `question_pair_confirmation_request` JSONL for borderline pairs when the
+  explicit confirmation mode is requested. The request includes pair ids,
+  source finding ids, extracted question axes, scores, and threshold policy,
+  but not clean-source messages or full source refs. The selected-fixture
+  calibration runner
   `benchmarks/aippocampus/benchmark_question_tracking_calibration.py` checks
   that obvious recurring questions still link, low-information generic
-  questions stay separated, and borderline pairs produce auditable pending
-  requests. It also compares the static strong-threshold baseline with the
-  current adaptive-threshold path and reports non-regression deltas for missed
-  positives and merged negatives.
+  questions stay separated, default adaptive thresholds do not regress the
+  static strong-threshold baseline, and explicit calibration mode can still
+  produce auditable pending requests.
 - Implemented first #134 optional live/model adapter slice:
   `skills/aippocampus/scripts/aippocampus_runtime/question/confirmation_live.py` consumes pending
   request JSONL and writes explicit confirmation artifacts that the tracking
@@ -182,17 +185,20 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   fidelity 1.0, plain and question-aware term coverage 1.0, and 2 complete
   paired answer-quality reviews. Both arms were useful/supported/citation-
   correct at 1.0, question-aware wrong-hint rate was 0.0, and usefulness delta
-  was 0.0. Decision: keep default prefilter/scaffold adoption disabled because
-  the plain source-derived baseline already covered this selected slice while
-  the question-aware scaffold was longer.
+  was 0.0. Root-cause boundary: this is not #248 closeout evidence because the
+  plain baseline was built from the same selected question-aware rows and
+  received question metadata, producing a term-coverage ceiling. The selected
+  slice also had only 1 `question_link` and 0 `theme_candidate` rows, so it did
+  not exercise theme-aware lift.
 - Closed first-slice queue: umbrella #133 and focused #134 through #139 are
   implementation evidence for the first deterministic/question-health/theme/
   ambient/sidecar/structural slices. Do not route remaining work back there.
-- #248 closeout boundary after 2026-06-08: extraction gates, prefilter
-  reporting/parity, selected private answer-quality review, and theme-resonance
-  absence reporting all exist. Reopen new work only for a fresh product gap
-  such as a text-only/source-derived baseline miss, user-visible release-trial
-  lift, or actual theme/user-review calibration data.
+- #248 remains open after 2026-06-08: extraction gates, prefilter
+  reporting/parity, selected private answer-quality review plumbing, default
+  borderline auto-materialization, and theme-resonance absence reporting all
+  exist, but a fair no-question-aware retrieval/answer baseline, broader
+  private-history calibration, and theme/user-review lift evidence remain
+  unresolved.
 - Adjacent user-visible symptoms: #201 and #281 cover places where vague or
   fresh-thread recall still feels too much like manual source search.
 - Designed/deferred under #248: real-user / private real-history calibration
@@ -1155,9 +1161,11 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
 - Shipped first slice: stale candidates without concrete source anchors are
   skipped rather than linked; when a registry clean-source index is available,
   well-shaped refs are rechecked against it.
-- Shipped first slice: borderline pairs are accepted only when an explicit
-  confirmation artifact accepts the pair; the link still derives truth from the
-  original question source refs.
+- Shipped first slice: source-backed borderline pairs auto-materialize by
+  default as low-confidence `question_link` rows, while explicit confirmation
+  mode remains available for calibration. The link still derives truth from the
+  original question source refs, and `match_evidence` records whether a pair was
+  `strong_score`, `borderline_auto`, or `borderline_confirmation`.
 - Shipped artifact-audit slice: rejected, malformed, stale, and source-id
   mismatched confirmation artifacts are counted in diagnostics and never replace
   the original question source refs. Accepted pairs keep a compact artifact
@@ -1166,11 +1174,12 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
 - Shipped first #134 offline confirmation/calibration slice:
   `aippocampus_runtime.question.tracking --pending-confirmations-output` exports compact
   confirmation-request JSONL for borderline pairs without full history or source
-  refs. `benchmark_question_tracking_calibration.py` provides selected-fixture
-  evidence that default thresholds keep obvious recurring questions, reject
-  low-information generic merges, surface pending requests for review, and do
-  not regress the static strong-threshold baseline on selected positive /
-  negative pairs.
+  refs when `--require-borderline-confirmation` is used. The default runtime no
+  longer blocks on those requests. `benchmark_question_tracking_calibration.py`
+  provides selected-fixture evidence that default thresholds keep obvious
+  recurring questions, reject low-information generic merges, and do not regress
+  the static strong-threshold baseline on selected positive / negative pairs;
+  explicit calibration mode still surfaces pending requests for review.
 - Shipped first #134 optional live/model adapter slice:
   `question_confirmation_live.py` turns pending request JSONL into explicit
   confirmation artifacts for the tracking `--borderline-confirmations` path.
@@ -1180,12 +1189,11 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   generation, optional live artifact generation, and tracking round trip without
   persisting formal jobs or emitting source refs/raw question text.
 - Shipped materialization bridge: the deterministic `question_tracking` job now
-  writes compact pending requests to the registry sibling
-  `question_pair_confirmation_requests.jsonl` and consumes explicit sibling
-  artifacts from `question_pair_confirmation_artifacts.jsonl` on later runs
-  before appending formal `question_link` rows. It still does not call a live
-  model by default; the artifact only confirms a borderline pair and never
-  becomes source truth.
+  auto-materializes eligible borderline links by default, and can still consume
+  explicit sibling artifacts from `question_pair_confirmation_artifacts.jsonl`
+  when calibration mode is used. It does not call a live model by default; any
+  artifact only accepts/rejects an already source-backed borderline pair and
+  never becomes source truth.
 - Shipped first salience/threshold slice: every parsed candidate gets a
   deterministic `salience` profile with score, tags, reasons, and `trackable`.
   Low-information source-backed rows are kept as candidates but skipped as
@@ -1241,7 +1249,10 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   `docs/evidence/question/question-aware-answer-quality-2026-06-08.md` records
   2 complete source-reopened paired comparisons. Both arms were useful and
   supported, answer-usefulness delta was 0.0, and the default prefilter/scaffold
-  adoption decision remains disabled.
+  adoption decision remains disabled. This is now recorded as a no-lift
+  diagnostic, not #248 closeout evidence, because the plain baseline reused the
+  same selected question-aware rows and the selected slice lacked enough
+  question links or theme candidates to test theme-aware lift.
 - Deferred: real-user calibration beyond selected fixtures and the one
   sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals

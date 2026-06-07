@@ -58,9 +58,10 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
         ],
         "notes": (
             "Deterministic Phase 2 runner over existing question_candidate and frontier_marker findings. "
-            "It uses local multi-field scoring and only accepts borderline links when an explicit confirmation artifact "
-            "is provided. It writes question_link findings back to subconscious_jobs.jsonl and never treats "
-            "vector or model output as truth without source_refs."
+            "It uses local multi-field scoring, auto-materializes source-backed borderline links by default, "
+            "and keeps explicit confirmation artifacts as an optional calibration/audit path. It writes "
+            "question_link findings back to subconscious_jobs.jsonl and never treats vector or model output "
+            "as truth without source_refs."
         ),
     },
     "theme_emergence": {
