@@ -2,8 +2,9 @@
 
 Role: active design.
 
-Status: first deterministic sidecar implemented for #575. Live hook capture,
-private real-history calibration, and host-timing quality remain future work.
+Status: first deterministic sidecar and public-safe calibration report
+implemented for #575. Live hook capture, private real-history calibration, and
+host-timing quality remain future work.
 
 ## Purpose
 
@@ -27,6 +28,9 @@ deterministic sidecar:
 - `apply_cognitive_load_boosts(candidates, sidecar)` blends a candidate's
   semantic score, source authority, and bounded load boost into an explainable
   ranking row.
+- `build_cognitive_load_calibration_report(sidecar, ranked_candidates=...)`
+  emits a no-write calibration readout separating routing weight, source truth,
+  and affect/personality boundaries.
 
 The E2E50 scaffold can still accept optional `cognitive_load` rows through
 `aippocampus_runtime/coding/sequence_packets.py`, but that path is a benchmark
@@ -60,6 +64,25 @@ The load boost is blocked when candidate `source_status` is `refuted`,
 `superseded`, `untrusted`, or `forbidden`, or when `source_authority` is below
 `0.5`. This protects the source-as-world rule: load can increase caution, but
 it cannot override source truth.
+
+## Calibration Report
+
+The #575 calibration report is deterministic and public-safe. It does not read
+raw behavior notes; it reads only sidecar metrics, privacy flags, and optional
+ranked-candidate score breakdowns.
+
+It reports three axes separately:
+
+- `routing_weight`: bounded load deltas, false-positive rate, decay coverage,
+  and source-reopen recommendations.
+- `source_truth`: source-authority and status gates that can block load boosts
+  or ask for source refresh.
+- `affect_or_personality_truth`: explicitly blocked; load signals do not infer
+  stress, emotion, identity, personality, or user-trait truth.
+
+The issue readout `issue_readouts.github_575` marks this as deterministic
+public-safe evidence. It keeps live hook capture, host-timing quality, private
+real-history calibration, and user-visible recall improvement as unmeasured.
 
 ## Projection Boundary
 
@@ -110,6 +133,8 @@ calibration before private reviewed cases exist.
 - weak, untrusted, or superseded sources receive no load boost and ask for
   source refresh instead;
 - public projection omits raw paths, raw notes, and emotion/personality claims;
+- the calibration report separates routing-weight diagnostics from blocked
+  affect/personality truth;
 - caps, decay, invalidation, source authority, and metric slots remain visible.
 
 Future work should only wire this into a live hook or broader host policy after

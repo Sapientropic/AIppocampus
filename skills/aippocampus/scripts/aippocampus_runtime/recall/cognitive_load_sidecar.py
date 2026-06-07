@@ -40,12 +40,26 @@ SIDE_CAR_CANNOT_CLAIM = [
     "semantic_relevance_replaced_by_load_weight",
     "private_stress_narrative_stored",
 ]
+CALIBRATION_KIND = "aippocampus_cognitive_load_calibration_report"
+CALIBRATION_CANNOT_CLAIM = [
+    "private_real_history_calibration",
+    "live_hook_capture_quality",
+    "affect_personality_truth_from_load_signal",
+    "user_visible_recall_improvement",
+]
 
 
 def _rate(numerator: int, denominator: int) -> float | None:
     if denominator <= 0:
         return None
     return round(numerator / denominator, 6)
+
+
+def _as_float(value: Any, *, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -232,7 +246,7 @@ def build_cognitive_load_sidecar(
         )
     entries.sort(key=lambda row: (-float(row["load_boost"]), row["source_ref_key"]))
 
-    return {
+    payload: dict[str, Any] = {
         "schema_version": 1,
         "kind": "aippocampus_cognitive_load_sidecar",
         "status": "ready",
@@ -268,6 +282,109 @@ def build_cognitive_load_sidecar(
             "source_ref_keys_only": True,
         },
         "cannot_claim": SIDE_CAR_CANNOT_CLAIM,
+    }
+    payload["calibration_report"] = build_cognitive_load_calibration_report(payload)
+    return payload
+
+
+def build_cognitive_load_calibration_report(
+    sidecar: Mapping[str, Any],
+    ranked_candidates: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    metrics = _as_mapping(sidecar.get("metrics"))
+    privacy_boundary = _as_mapping(sidecar.get("privacy_boundary"))
+    candidate_rows = list(ranked_candidates) if ranked_candidates is not None else []
+    boosted_candidate_count = sum(
+        1
+        for row in candidate_rows
+        if _as_float(_as_mapping(row.get("score_breakdown")).get("cognitive_load_boost")) > 0
+    )
+    refresh_recommended_count = sum(
+        1
+        for row in candidate_rows
+        if _as_mapping(row.get("cognitive_load")).get("advisory_action") == "refresh_sources"
+    )
+    source_reopen_recommended_count = sum(
+        1
+        for row in candidate_rows
+        if str(_as_mapping(row.get("cognitive_load")).get("advisory_action") or "").startswith(
+            "source_reopen_recommended"
+        )
+    )
+    cannot_claim = sorted(
+        {
+            *[str(item) for item in _as_list(sidecar.get("cannot_claim"))],
+            *CALIBRATION_CANNOT_CLAIM,
+        }
+    )
+
+    return {
+        "schema_version": 1,
+        "kind": CALIBRATION_KIND,
+        "mode": "deterministic_public_safe_calibration",
+        "authority": "diagnostic_only",
+        "projection_boundary": PROJECTION_BOUNDARY,
+        "calibration_axes": {
+            "routing_weight": {
+                "status": "bounded_routing_metadata",
+                "metric_source": "observable_behavior_counts_and_score_breakdown",
+                "max_load_boost": _as_float(metrics.get("max_load_boost")),
+                "load_weight_false_positive_rate": metrics.get("load_weight_false_positive_rate"),
+                "load_weight_decay_coverage": metrics.get("load_weight_decay_coverage"),
+                "boosted_candidate_count": boosted_candidate_count,
+                "source_reopen_recommended_count": source_reopen_recommended_count,
+            },
+            "source_truth": {
+                "status": "source_authority_controls_load",
+                "blocked_statuses": sorted(BLOCKED_SOURCE_STATUSES),
+                "min_source_authority_for_boost": MIN_SOURCE_AUTHORITY_FOR_BOOST,
+                "refresh_recommended_count": refresh_recommended_count,
+                "source_truth_overridden": False,
+            },
+            "affect_or_personality_truth": {
+                "status": "blocked_not_inferred",
+                "inference_allowed": False,
+                "emotion_or_personality_claims_emitted": bool(
+                    privacy_boundary.get("emotion_or_personality_claims_emitted")
+                ),
+                "overpersonalization_from_load_signal_count": int(
+                    metrics.get("overpersonalization_from_load_signal_count") or 0
+                ),
+                "raw_stress_narrative_stored": False,
+            },
+        },
+        "metrics": {
+            "entry_count": int(metrics.get("entry_count") or 0),
+            "candidate_count": len(candidate_rows),
+            "boosted_candidate_count": boosted_candidate_count,
+            "source_reopen_recommended_count": source_reopen_recommended_count,
+            "refresh_recommended_count": refresh_recommended_count,
+            "load_weight_false_positive_rate": metrics.get("load_weight_false_positive_rate"),
+            "caution_hint_useful_rate": metrics.get("caution_hint_useful_rate"),
+            "overpersonalization_from_load_signal_count": int(
+                metrics.get("overpersonalization_from_load_signal_count") or 0
+            ),
+        },
+        "privacy_boundary": {
+            "raw_paths_emitted": bool(privacy_boundary.get("raw_paths_emitted")),
+            "raw_notes_emitted": bool(privacy_boundary.get("raw_notes_emitted")),
+            "emotion_or_personality_claims_emitted": bool(
+                privacy_boundary.get("emotion_or_personality_claims_emitted")
+            ),
+            "source_ref_keys_only": bool(privacy_boundary.get("source_ref_keys_only")),
+        },
+        "issue_readouts": {
+            "github_575": {
+                "calibration_report": "deterministic_public_safe",
+                "load_routing_weight": "measured_as_bounded_score_delta",
+                "affect_or_personality_truth": "blocked_not_inferred",
+                "live_hook_capture": "not_run",
+                "private_real_history_calibration": "not_measured",
+                "host_timing_quality": "not_measured",
+                "closeout_eligible": False,
+            }
+        },
+        "cannot_claim": cannot_claim,
     }
 
 
