@@ -656,6 +656,44 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
 
         self.assertIn("temporal_override_chain", payload["source_disambiguation"]["by_track"])
 
+    def test_rollout_route_chain_readout_separates_retrieval_from_actionability(self) -> None:
+        payload = benchmark.run_benchmark(
+            dataset_path=ROLLOUT_DATASET,
+            production_like_retrieval=True,
+            source_disambiguation_top_k=2,
+        )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["metrics"]["future_event_flag_recall_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["future_event_flag_precision"], 1.0)
+        self.assertEqual(payload["metrics"]["anti_drift_violation_count"], 0)
+
+        source_metrics = payload["source_disambiguation"]["metrics"]
+        self.assertEqual(source_metrics["required_chain_candidate_count"], 3)
+        self.assertEqual(source_metrics["multi_source_chain_recovered_count"], 3)
+        self.assertEqual(source_metrics["positive_chain_complete_rate"], 1.0)
+        self.assertEqual(source_metrics["negative_route_drag_count"], 2)
+        self.assertEqual(source_metrics["anti_drift_route_suppression_count"], 2)
+        self.assertEqual(source_metrics["anti_drift_route_suppression_rate"], 1.0)
+        self.assertEqual(source_metrics["foreground_action_false_positive_count"], 0)
+
+        source_events = {
+            row["event_id"]: row for row in payload["source_disambiguation"]["events"]
+        }
+        refactor_passed = source_events["background-refactor-tests-passed"]
+        self.assertEqual(
+            refactor_passed["top_source_ids"],
+            ["foreground-smoke-failed", "foreground-route-abandoned"],
+        )
+        self.assertEqual(refactor_passed["selected_past_source_ids"], [])
+        self.assertTrue(refactor_passed["negative_route_drag"])
+        self.assertTrue(refactor_passed["anti_drift_route_suppressed"])
+        self.assertEqual(refactor_passed["route_actionability"]["decision"], "suppress")
+        self.assertEqual(
+            refactor_passed["route_actionability"]["reason"],
+            "successful_current_event",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
