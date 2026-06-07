@@ -566,9 +566,11 @@ Verification for that slice:
   full anti-nag precision.
 - `python tools\aippocampus\run_tests.py --tier benchmark`: passed.
 
-This is a deterministic measurement surface, not product proof that #65's real
-correction activation/outcome event pipeline, live hook capture, live semantic
-adjudication, or private real-history compaction survival has shipped.
+This is a deterministic measurement surface, not product proof of live semantic
+adjudication or broad private real-history compaction survival. The later #311
+runtime slice adds an opt-in, source-ref-gated host-event capture adapter and
+aggregate-only private-history buckets, but default foreground hook writes are
+still not installed as a public-readiness claim.
 
 ## 2026-05-30 Real Codex Long-Session Continuity Smoke
 
