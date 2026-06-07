@@ -223,6 +223,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_synthetic_scale_capacity_smoke",
         "test_theme_emergence",
         "test_thread_story_packet",
+        "test_time_driven_maintenance",
         "test_topology_anchor_policy",
         "test_update_sync",
         "test_vault_dashboard_assets",
