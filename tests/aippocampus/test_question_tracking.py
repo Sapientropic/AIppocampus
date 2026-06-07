@@ -173,7 +173,39 @@ class QuestionTrackingTests(unittest.TestCase):
         self.assertTrue(prefilter["source_join_required_before_acceleration"])
         self.assertIn("question_index_sidecar", prefilter["available_prefilter_evaluators"])
 
-    def test_borderline_links_require_explicit_confirmation(self) -> None:
+    def test_borderline_links_auto_materialize_without_confirmation_by_default(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+        )
+        self.assertEqual(result["link_count"], 1)
+        self.assertEqual(result["accepted_pair_count"], 1)
+        self.assertEqual(result["borderline_auto_accepted_pair_count"], 1)
+        self.assertEqual(result["borderline_skipped_pair_count"], 0)
+        self.assertEqual(result["pending_confirmation_request_count"], 0)
+        link = result["links"][0]
+        self.assertEqual(link["link_type"], "recurring")
+        self.assertEqual(link["match_evidence"]["borderline_auto_accepted_pair_count"], 1)
+        self.assertEqual(link["match_evidence"]["accepted_pairs"][0]["acceptance_source"], "borderline_auto")
+        self.assertIsNone(link["match_evidence"]["accepted_pairs"][0]["confirmation"])
+        self.assertGreaterEqual(len(link["source_refs"]), 2)
+
+    def test_borderline_confirmation_gate_remains_available_when_explicitly_required(self) -> None:
         self.write_rows(
             [
                 self.question_row("1"),
@@ -192,6 +224,7 @@ class QuestionTrackingTests(unittest.TestCase):
             no_write=True,
             strong_threshold=0.99,
             borderline_threshold=0.10,
+            auto_accept_borderline=False,
         )
         self.assertEqual(skipped["link_count"], 0)
         self.assertEqual(skipped["borderline_skipped_pair_count"], 1)
@@ -224,6 +257,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             confirmation_fn=confirm,
+            auto_accept_borderline=False,
         )
 
         self.assertEqual(accepted["link_count"], 1)
@@ -233,6 +267,10 @@ class QuestionTrackingTests(unittest.TestCase):
         self.assertEqual(
             link["match_evidence"]["accepted_pairs"][0]["confirmation"]["model"],
             "test-reviewer",
+        )
+        self.assertEqual(
+            link["match_evidence"]["accepted_pairs"][0]["acceptance_source"],
+            "borderline_confirmation",
         )
         self.assertGreaterEqual(len(link["source_refs"]), 2)
 
@@ -256,6 +294,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             pending_confirmations_output_path=request_path,
+            auto_accept_borderline=False,
         )
         requests = list(tracking.iter_jsonl(request_path))
         self.assertEqual(request_result["pending_confirmation_wrote_count"], 1)
@@ -290,6 +329,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             confirmation_fn=load_confirmation_decisions(decisions_path),
+            auto_accept_borderline=False,
         )
 
         self.assertEqual(accepted["link_count"], 1)
@@ -332,6 +372,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             confirmation_fn=malformed,
+            auto_accept_borderline=False,
         )
 
         self.assertEqual(result["link_count"], 0)
@@ -367,6 +408,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             confirmation_fn=reject,
+            auto_accept_borderline=False,
         )
 
         self.assertEqual(result["link_count"], 0)
@@ -450,6 +492,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             confirmation_fn=stale,
+            auto_accept_borderline=False,
         )
 
         self.assertEqual(result["link_count"], 0)
@@ -488,6 +531,7 @@ class QuestionTrackingTests(unittest.TestCase):
             strong_threshold=0.99,
             borderline_threshold=0.10,
             confirmation_fn=mismatch,
+            auto_accept_borderline=False,
         )
 
         self.assertEqual(result["link_count"], 0)

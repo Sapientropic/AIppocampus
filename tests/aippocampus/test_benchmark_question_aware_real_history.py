@@ -190,6 +190,14 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
                 "live_model_answer_quality_measured"
             ]
         )
+        self.assertTrue(payload["evaluation_design"]["same_selected_rows_for_plain_and_question_aware"])
+        self.assertTrue(payload["evaluation_design"]["plain_baseline_receives_question_metadata"])
+        self.assertFalse(payload["evaluation_design"]["selection_lift_measured"])
+        self.assertFalse(payload["evaluation_design"]["answer_generation_measured_by_benchmark"])
+        self.assertIn(
+            "same_selected_rows_baseline",
+            payload["evaluation_design"]["no_lift_reason_codes"],
+        )
         self.assertIn(
             "final factual claims",
             payload["scaffold_vs_evidence"]["requires_clean_source_lookup"],
@@ -371,6 +379,7 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertIn("clean_source_required_for_evidence", codes)
         self.assertIn("quote_fidelity_requires_clean_source_reopen", codes)
         self.assertIn("selected_slice_not_full_history", codes)
+        self.assertIn("plain_baseline_term_ceiling", codes)
 
     def test_status_marks_scaffold_regression_as_lookup_required(self) -> None:
         payload = benchmark.run_question_aware_real_history_benchmark(

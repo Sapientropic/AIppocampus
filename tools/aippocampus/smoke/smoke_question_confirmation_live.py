@@ -27,7 +27,8 @@ from aippocampus_runtime.question.confirmation import load_confirmation_decision
 
 
 def _route_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    route = payload.get("route") if isinstance(payload.get("route"), dict) else {}
+    route_value = payload.get("route")
+    route = route_value if isinstance(route_value, dict) else {}
     return {
         key: route.get(key)
         for key in ("provider", "model", "route_name")
@@ -59,6 +60,7 @@ def run_question_confirmation_live_smoke(
             strong_threshold=strong_threshold,
             borderline_threshold=borderline_threshold,
             pending_confirmations_output_path=pending_path,
+            auto_accept_borderline=False,
         )
         live_payload = live.run_question_confirmation_live(
             requests_path=pending_path,
@@ -84,6 +86,7 @@ def run_question_confirmation_live_smoke(
                 strong_threshold=strong_threshold,
                 borderline_threshold=borderline_threshold,
                 confirmation_fn=load_confirmation_decisions(artifact_path),
+                auto_accept_borderline=False,
             )
             roundtrip = {
                 "ran": True,

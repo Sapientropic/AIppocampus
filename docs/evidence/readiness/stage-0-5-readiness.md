@@ -192,8 +192,10 @@ view across proof lines, use
   first-slice evidence; follow-up #248 owns the remaining extraction-gate,
   default-prefilter, answer-quality, broader calibration, and theme-resonance
   gaps. The #248 answer-quality review path is now available for selected
-  source-reopened comparisons, but it is not full-history quality proof or
-  default-prefilter safety evidence.
+  source-reopened comparisons, and borderline tracking links now materialize by
+  default instead of blocking on human confirmation, but neither is full-history
+  quality proof, fair no-question-aware baseline evidence, or default-prefilter
+  safety evidence.
 - Benchmark evidence now includes a deterministic #406 Codex-style
   `host_native_continuous_no_aippocampus` contract arm, but it is not live
   host telemetry and does not prove
@@ -322,6 +324,16 @@ above. The canonical command details live in
   selected review evidence, but it still does not claim full-history answer
   quality, live model equivalence, user-visible recall lift, or default
   prefilter safety.
+- The 2026-06-08 selected private review in
+  [`question-aware-answer-quality-2026-06-08.md`](../question/question-aware-answer-quality-2026-06-08.md)
+  read 698 job rows, found 43 eligible source-backed rows, selected 2 packs,
+  and recorded 2 complete source-reopened paired answer-quality reviews. Plain
+  and question-aware arms were both useful/supported/citation-correct at 1.0,
+  answer-usefulness delta was 0.0, and question-aware wrong-hint rate was 0.0.
+  This is now a no-lift root-cause diagnostic rather than #248 closeout
+  evidence: the plain baseline reused the same selected question-aware rows and
+  reached a term-coverage ceiling, while the selected slice had only 1
+  `question_link` and 0 `theme_candidate` rows.
 - #63 adds the first deterministic Journey Tracking P1-P3 core. It defines
   source-backed waypoint/journey structures, append-only waypoint history,
   conservative multi-thread instantiation, status transitions, expiry/TTL

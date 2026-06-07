@@ -22,7 +22,6 @@ sys.path.insert(0, str(SCRIPTS))
 
 # isort: off
 from aippocampus_runtime.navigation import concept_graph
-from aippocampus_runtime.question import confirmation
 from aippocampus_runtime.source import (
     semantic_scope_builder as semantic_scope_materializer,
 )
@@ -1209,7 +1208,7 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(rows[-1]["source"], "deterministic_question_tracking")
         self.assertEqual(rows[-1]["question_count"], 2)
 
-    def test_question_tracking_job_materializes_confirmed_borderline_artifacts(self) -> None:
+    def test_question_tracking_job_auto_materializes_borderline_links(self) -> None:
         def question_row(suffix: str, **overrides: Any) -> dict[str, Any]:
             row = {
                 "schema_version": 1,
@@ -1260,50 +1259,7 @@ class SubconsciousJobsTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            requests_path = confirmation.default_confirmation_requests_path(jobs_output)
-            artifacts_path = confirmation.default_confirmation_artifacts_path(jobs_output)
-
             first = deterministic_jobs.run_question_tracking_job(
-                registry_path=None,
-                jobs_output_path=jobs_output,
-                edges_output_path=root / "subconscious_edges.jsonl",
-                no_write=False,
-                dry_run=False,
-            )
-
-            requests = [
-                json.loads(line)
-                for line in requests_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
-            self.assertEqual(first["finding_count"], 0)
-            self.assertEqual(first["tracking"]["pending_confirmation_wrote_count"], 1)
-            self.assertEqual(first["confirmation_requests_path"], str(requests_path))
-            self.assertEqual(first["confirmation_artifacts_path"], str(artifacts_path))
-            self.assertEqual(len(requests), 1)
-            self.assertEqual(requests[0]["kind"], "question_pair_confirmation_request")
-
-            artifacts_path.write_text(
-                json.dumps(
-                    {
-                        "artifact_kind": "question_pair_confirmation_artifact",
-                        "pair_id": requests[0]["pair_id"],
-                        "source_finding_ids": requests[0]["source_finding_ids"],
-                        "decision": "accept",
-                        "link_type": "recurring",
-                        "confidence": 0.86,
-                        "model": "offline-fixture-reviewer",
-                        "source": "offline_fixture_question_confirmation",
-                        "prompt_version": "test-question-confirmation-v1",
-                        "rationale": "The compact request shows both questions concern context continuity.",
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            second = deterministic_jobs.run_question_tracking_job(
                 registry_path=None,
                 jobs_output_path=jobs_output,
                 edges_output_path=root / "subconscious_edges.jsonl",
@@ -1317,15 +1273,14 @@ class SubconsciousJobsTests(unittest.TestCase):
             ]
             links = [row for row in rows if row.get("finding_kind") == "question_link"]
 
-        self.assertEqual(second["finding_count"], 1)
-        self.assertEqual(second["tracking"]["borderline_confirmation_accepted_pair_count"], 1)
+        self.assertEqual(first["finding_count"], 1)
+        self.assertEqual(first["tracking"]["borderline_auto_accepted_pair_count"], 1)
+        self.assertEqual(first["tracking"]["pending_confirmation_wrote_count"], 0)
         self.assertEqual(len(links), 1)
         self.assertEqual(links[0]["source"], "deterministic_question_tracking")
         self.assertEqual(
-            links[0]["match_evidence"]["accepted_pairs"][0]["confirmation"]["artifact_audit"][
-                "prompt_version"
-            ],
-            "test-question-confirmation-v1",
+            links[0]["match_evidence"]["accepted_pairs"][0]["acceptance_source"],
+            "borderline_auto",
         )
 
     def test_run_jobs_runs_theme_emergence_after_question_tracking(self) -> None:

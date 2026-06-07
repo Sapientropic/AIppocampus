@@ -42,12 +42,13 @@ reason that it should no longer be an open executable item.
 
 | Layer | Current issues | Current disposition |
 |---|---|---|
-| Fresh-thread and question continuity | #248, #281 | Keep open as product-quality owners. Existing fixtures are substrate; closing needs source-ref rejoin, fallback, answer-quality, and fresh-thread usefulness evidence. |
+| Fresh-thread continuity | #281 | Keep open as a product-quality owner. Existing fixtures and private boundary smokes are substrate; closing needs fresh-thread usefulness evidence that survives broader private/live use rather than only selected structural packs. |
+| Question continuity | #248 | Keep open, but narrowed. Extraction gates, prefilter reporting/parity, source-ref rejoin, fallback, selected answer-quality review plumbing, default borderline auto-materialization, and theme-resonance absence reporting exist. The 2026-06-08 review is a no-lift root-cause diagnostic, not closeout: the plain baseline reused the same selected question-aware rows, and the current private slice has only 1 `question_link` and 0 `theme_candidate` rows. Next useful slices are fair no-question-aware baseline evaluation, richer candidate/link materialization, and theme/user-review lift evidence. |
 | Cognitive runtime evidence | #163, #310, #313, #574, #575, #576, #663 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, thread-story / cognitive-portrait live probes, anticipatory prewarm live sidecar or scheduler consumption, private/live load calibration, private/live Observatory evidence, and Episode/Arc richer adapters / real-history adjudication. The deterministic Episode/Arc packet-to-reopen navigation helper exists; packet routes still are not source evidence. |
 | Benchmark and retrieval proof | #309, #378 | Keep open as falsifiable evidence owners. Do not close with architecture prose; #378 needs broader repeated/external or public-quality continuous-memory comparison evidence, and #309 needs measured source-joined retrieval/rerank/vector/filter behavior beyond current deterministic proxy slices. |
 
-Current open queue at this pass: #163, #248, #281, #309, #310, #313, #378,
-#574, #575, #576, and #663.
+Current open queue after this pass should keep #248 alongside #163, #281,
+#309, #310, #313, #378, #574, #575, #576, and #663.
 
 ## Current Baseline To Preserve
 
@@ -190,16 +191,16 @@ Current open queue at this pass: #163, #248, #281, #309, #310, #313, #378,
      `question_tracking.py` kept as the package owner: it groups existing
      `question_candidate` findings, writes `question_link` rows to
      `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale
-     refs when registry clean-source resolution is available, and requires
-     explicit confirmation artifacts for borderline pairs.
+     refs when registry clean-source resolution is available, and
+     auto-materializes source-backed borderline pairs as low-confidence links
+     by default.
    - First offline #134 slice is implemented:
      `aippocampus_runtime.question.tracking` can export compact pending
-     confirmation requests for borderline pairs, and
+     confirmation requests for borderline pairs when explicit calibration mode
+     is requested, and
      `benchmark_question_tracking_calibration.py` checks selected fixtures for
-     obvious recurring retention, generic merge rejection, and pending request
-     formation. The report now compares the static strong-threshold baseline
-     with the current adaptive-threshold path and exposes missed-positive /
-     merged-negative deltas.
+     obvious recurring retention, generic merge rejection, default adaptive
+     threshold non-regression, and optional pending request formation.
    - First optional live/model adapter slice is implemented:
      `question_confirmation_live.py` converts pending requests into confirmation
      artifacts for the tracking `--borderline-confirmations` path, but defaults

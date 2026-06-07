@@ -146,6 +146,7 @@ class PairDecision:
     confidence: float
     reason: str
     threshold_policy: dict[str, Any]
+    acceptance_source: str
     confirmation: dict[str, Any] | None = None
     confirmation_request: dict[str, Any] | None = None
 
@@ -573,6 +574,7 @@ def decide_pair(
     strong_threshold: float,
     borderline_threshold: float,
     confirmation_fn: ConfirmationFn | None,
+    auto_accept_borderline: bool = True,
     feedback: tuple[QuestionPairFeedback, ...] = (),
 ) -> PairDecision | None:
     if not pair_is_trackable(left, right):
@@ -599,6 +601,7 @@ def decide_pair(
             confidence=0.0,
             reason="dismissal feedback increased separation pressure",
             threshold_policy=threshold_policy,
+            acceptance_source="feedback_separated",
         )
     if score >= effective_strong:
         return PairDecision(
@@ -611,6 +614,7 @@ def decide_pair(
             confidence=round(min(0.98, 0.62 + score * 0.34), 4),
             reason="deterministic multi-field score met strong threshold",
             threshold_policy=threshold_policy,
+            acceptance_source="strong_score",
         )
     if score < effective_borderline:
         return None
@@ -626,7 +630,7 @@ def decide_pair(
         confirmation_fn(payload) if confirmation_fn else None,
         payload=payload,
     )
-    if not confirmation:
+    if not confirmation and not auto_accept_borderline:
         return PairDecision(
             pair_id=current_pair_id,
             left_id=left.question_id,
@@ -637,6 +641,27 @@ def decide_pair(
             confidence=0.0,
             reason="borderline score skipped without explicit confirmation artifact",
             threshold_policy=threshold_policy,
+            acceptance_source="borderline_confirmation_required",
+            confirmation_request=payload,
+        )
+    if not confirmation:
+        # Borderline pairs have already passed source-ref, salience, feedback,
+        # and adaptive-threshold gates. Auto-accepting them keeps the question
+        # layer usable; the evidence block preserves how weak the link was so
+        # later feedback, confirmation artifacts, or threshold calibration can
+        # identify the auto materialization instead of laundering it into a
+        # strong match.
+        return PairDecision(
+            pair_id=current_pair_id,
+            left_id=left.question_id,
+            right_id=right.question_id,
+            score=score,
+            decision="accepted",
+            link_type="recurring",
+            confidence=round(min(0.82, 0.56 + score * 0.34), 4),
+            reason="borderline score auto-accepted by source-backed deterministic policy",
+            threshold_policy=threshold_policy,
+            acceptance_source="borderline_auto",
             confirmation_request=payload,
         )
     if confirmation.get("decision") == "reject":
@@ -650,6 +675,7 @@ def decide_pair(
             confidence=0.0,
             reason="borderline score rejected by explicit confirmation artifact",
             threshold_policy=threshold_policy,
+            acceptance_source="borderline_confirmation_rejected",
             confirmation=confirmation,
             confirmation_request=payload,
         )
@@ -664,6 +690,7 @@ def decide_pair(
             confidence=0.0,
             reason="borderline confirmation artifact was invalid",
             threshold_policy=threshold_policy,
+            acceptance_source="borderline_confirmation_invalid",
             confirmation=confirmation,
             confirmation_request=payload,
         )
@@ -677,6 +704,7 @@ def decide_pair(
         confidence=float(confirmation["confidence"]),
         reason="borderline score accepted by explicit confirmation artifact",
         threshold_policy=threshold_policy,
+        acceptance_source="borderline_confirmation",
         confirmation=confirmation,
         confirmation_request=payload,
     )
@@ -865,7 +893,12 @@ def build_question_link(
         ],
         "match_evidence": {
             "method": "deterministic_multifield_hash_vector_v1",
-            "strong_pair_count": sum(1 for pair in accepted_pairs if not pair.confirmation),
+            "strong_pair_count": sum(
+                1 for pair in accepted_pairs if pair.acceptance_source == "strong_score"
+            ),
+            "borderline_auto_accepted_pair_count": sum(
+                1 for pair in accepted_pairs if pair.acceptance_source == "borderline_auto"
+            ),
             "borderline_confirmed_pair_count": len(confirmed_pairs),
             "accepted_pairs": [
                 {
@@ -876,6 +909,7 @@ def build_question_link(
                     "link_type": pair.link_type,
                     "confidence": pair.confidence,
                     "reason": pair.reason,
+                    "acceptance_source": pair.acceptance_source,
                     "threshold_policy": pair.threshold_policy,
                     "confirmation": pair.confirmation,
                 }
@@ -957,6 +991,7 @@ def build_question_links(
     strong_threshold: float = DEFAULT_STRONG_THRESHOLD,
     borderline_threshold: float = DEFAULT_BORDERLINE_THRESHOLD,
     confirmation_fn: ConfirmationFn | None = None,
+    auto_accept_borderline: bool = True,
     feedback: tuple[QuestionPairFeedback, ...] = (),
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     pair_decisions: list[PairDecision] = []
@@ -973,6 +1008,7 @@ def build_question_links(
                 strong_threshold=strong_threshold,
                 borderline_threshold=borderline_threshold,
                 confirmation_fn=confirmation_fn,
+                auto_accept_borderline=auto_accept_borderline,
                 feedback=feedback,
             )
             if not decision:
@@ -996,6 +1032,9 @@ def build_question_links(
     diagnostics = {
         "pair_count": len(pair_decisions),
         "accepted_pair_count": len(accepted_pairs),
+        "borderline_auto_accepted_pair_count": sum(
+            1 for pair in accepted_pairs if pair.acceptance_source == "borderline_auto"
+        ),
         "borderline_skipped_pair_count": skipped_borderline,
         **confirmation_diagnostics(pair_decisions),
         "pending_confirmation_request_count": sum(
@@ -1071,6 +1110,7 @@ def run_question_tracking(
     confirmation_fn: ConfirmationFn | None = None,
     pending_confirmations_output_path: Path | None = None,
     ambient_policy_path: Path | None = None,
+    auto_accept_borderline: bool = True,
     no_write: bool = False,
 ) -> dict[str, Any]:
     output = output_path or jobs_path
@@ -1088,6 +1128,7 @@ def run_question_tracking(
         strong_threshold=strong_threshold,
         borderline_threshold=borderline_threshold,
         confirmation_fn=confirmation_fn,
+        auto_accept_borderline=auto_accept_borderline,
         feedback=feedback,
     )
     existing_ids = existing_question_link_ids(rows if output == jobs_path else iter_jsonl(output))
@@ -1130,11 +1171,13 @@ def run_question_tracking(
         "no_write": no_write,
         "strong_threshold": strong_threshold,
         "borderline_threshold": borderline_threshold,
+        "auto_accept_borderline": auto_accept_borderline,
         "links": links,
         "batch_id": batch_id,
     }
     diagnostic_keys = (
-        "pair_count accepted_pair_count borderline_skipped_pair_count "
+        "pair_count accepted_pair_count borderline_auto_accepted_pair_count "
+        "borderline_skipped_pair_count "
         "borderline_confirmation_accepted_pair_count borderline_confirmation_rejected_pair_count "
         "borderline_confirmation_stale_pair_count borderline_confirmation_malformed_pair_count "
         "borderline_confirmation_source_mismatch_pair_count borderline_confirmation_audit "
@@ -1175,6 +1218,14 @@ def main() -> int:
     parser.add_argument("--borderline-threshold", type=float, default=DEFAULT_BORDERLINE_THRESHOLD)
     parser.add_argument("--borderline-confirmations")
     parser.add_argument(
+        "--require-borderline-confirmation",
+        action="store_true",
+        help=(
+            "Restore the old calibration mode: borderline pairs write compact "
+            "confirmation requests instead of auto-materializing question links."
+        ),
+    )
+    parser.add_argument(
         "--pending-confirmations-output",
         help=(
             "Write JSONL confirmation-request payloads for borderline pairs that "
@@ -1212,6 +1263,7 @@ def main() -> int:
                 else None
             ),
             ambient_policy_path=Path(args.ambient_policy).resolve() if args.ambient_policy else None,
+            auto_accept_borderline=not args.require_borderline_confirmation,
             no_write=args.no_write,
         )
     except Exception as exc:

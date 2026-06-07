@@ -39,6 +39,7 @@ PORTRAIT_FINDING_KINDS = {
 }
 DEFAULT_ROWS_PER_PACK = 32
 ANSWER_QUALITY_REVIEW_KIND = "question_aware_answer_quality_review"
+EVALUATION_DESIGN_KIND = "question_aware_evaluation_design_diagnostic"
 ANSWER_QUALITY_REVIEW_ARMS = (
     "plain_baseline",
     "question_aware_source_reopen",
@@ -160,6 +161,76 @@ def structural_case_metrics(
     }
 
 
+def no_lift_reason_codes(
+    *,
+    plain_term_coverage: float,
+    question_aware_term_coverage: float,
+    term_coverage_delta: float,
+    question_aware_to_plain_token_ratio: float,
+    selected_kind_counts: Mapping[str, Any],
+) -> list[str]:
+    codes = ["same_selected_rows_baseline"]
+    if plain_term_coverage >= 1.0:
+        codes.append("plain_baseline_term_ceiling")
+    if term_coverage_delta <= 0.0:
+        codes.append("question_aware_no_structural_term_lift")
+    if question_aware_term_coverage < plain_term_coverage:
+        codes.append("question_aware_term_coverage_regressed")
+    if question_aware_to_plain_token_ratio >= 1.0:
+        codes.append("question_aware_scaffold_longer_than_plain")
+    if int(selected_kind_counts.get("theme_candidate") or 0) <= 0:
+        codes.append("no_selected_theme_candidates")
+    if int(selected_kind_counts.get("question_link") or 0) < 3:
+        codes.append("not_enough_selected_question_links_for_theme_layer")
+    return codes
+
+
+def comparison_design_diagnostic(
+    *,
+    selected_kind_counts: Mapping[str, Any],
+    plain_term_coverage: float,
+    question_aware_term_coverage: float,
+    term_coverage_delta: float,
+    question_aware_to_plain_token_ratio: float,
+) -> dict[str, Any]:
+    return {
+        "kind": EVALUATION_DESIGN_KIND,
+        "same_selected_rows_for_plain_and_question_aware": True,
+        "plain_baseline_receives_question_metadata": True,
+        "plain_baseline_fields": [
+            "question_short",
+            "linked_question_short",
+            "theme_short",
+            "title",
+            "concepts",
+            "shared_concepts",
+            "hashed_source_refs",
+        ],
+        "expected_terms_derived_from_same_rows": True,
+        "selection_lift_measured": False,
+        "answer_generation_measured_by_benchmark": False,
+        "baseline_contamination_risk": True,
+        "plain_baseline_term_ceiling": plain_term_coverage >= 1.0,
+        "selected_question_link_count": int(selected_kind_counts.get("question_link") or 0),
+        "selected_theme_candidate_count": int(selected_kind_counts.get("theme_candidate") or 0),
+        "theme_layer_ready": int(selected_kind_counts.get("theme_candidate") or 0) > 0,
+        "term_coverage_delta": term_coverage_delta,
+        "question_aware_to_plain_token_ratio": question_aware_to_plain_token_ratio,
+        "no_lift_reason_codes": no_lift_reason_codes(
+            plain_term_coverage=plain_term_coverage,
+            question_aware_term_coverage=question_aware_term_coverage,
+            term_coverage_delta=term_coverage_delta,
+            question_aware_to_plain_token_ratio=question_aware_to_plain_token_ratio,
+            selected_kind_counts=selected_kind_counts,
+        ),
+        "valid_next_evaluation": [
+            "compare a true no-question-aware retrieval/answer path against a question-aware retrieval/answer path",
+            "materialize enough source-backed question links and theme candidates before testing theme-aware lift",
+            "record actual generated answer arms or source-reopened operator review without giving the plain arm question-aware metadata",
+        ],
+    }
+
+
 def build_question_aware_pack(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -214,6 +285,13 @@ def build_question_aware_pack(
         payload["question_aware_context_approx_tokens"]
         / max(1, payload["plain_context_approx_tokens"]),
         4,
+    )
+    payload["comparison_design"] = comparison_design_diagnostic(
+        selected_kind_counts=seed_kind_counts,
+        plain_term_coverage=float(payload["plain_term_coverage"]),
+        question_aware_term_coverage=float(payload["question_aware_term_coverage"]),
+        term_coverage_delta=float(payload["term_coverage_delta"]),
+        question_aware_to_plain_token_ratio=float(payload["question_aware_to_plain_token_ratio"]),
     )
     if include_private_text:
         payload["debug_contexts"] = {
@@ -371,6 +449,21 @@ def scaffold_vs_evidence_report(metrics: Mapping[str, Any]) -> dict[str, Any]:
             "answer-quality judgments beyond the deterministic structural proxy",
         ],
     }
+
+
+def evaluation_design_report(
+    *,
+    metrics: Mapping[str, Any],
+    selection: Mapping[str, Any],
+) -> dict[str, Any]:
+    selected_kind_counts = selection.get("selected_source_seed_kind_counts") or {}
+    return comparison_design_diagnostic(
+        selected_kind_counts=selected_kind_counts,
+        plain_term_coverage=float(metrics.get("plain_term_coverage") or 0.0),
+        question_aware_term_coverage=float(metrics.get("question_aware_term_coverage") or 0.0),
+        term_coverage_delta=float(metrics.get("term_coverage_delta") or 0.0),
+        question_aware_to_plain_token_ratio=float(metrics.get("portrait_token_ratio") or 0.0),
+    )
 
 
 def parse_review_bool(value: Any) -> bool | None:
@@ -684,6 +777,36 @@ def known_failure_modes(
                 "next_step": "Do not claim token savings; tune portrait rendering before size claims.",
             }
         )
+    if float(metrics.get("plain_term_coverage") or 0.0) >= 1.0:
+        modes.append(
+            {
+                "code": "plain_baseline_term_ceiling",
+                "severity": "warning",
+                "meaning": (
+                    "The plain baseline already covers all expected structural terms, "
+                    "so this run cannot show positive term-coverage lift."
+                ),
+                "next_step": "Use a true no-question-aware retrieval baseline or harder selected prompts.",
+            }
+        )
+    if int((selection.get("selected_source_seed_kind_counts") or {}).get("question_link") or 0) < 3:
+        modes.append(
+            {
+                "code": "not_enough_selected_question_links_for_theme_layer",
+                "severity": "warning",
+                "meaning": "The selected slice has too few question_link rows to exercise theme-aware recall.",
+                "next_step": "Materialize more source-backed links before testing theme-level lift.",
+            }
+        )
+    if "theme_candidate" in (selection.get("missing_selected_kinds") or []):
+        modes.append(
+            {
+                "code": "no_selected_theme_candidates",
+                "severity": "warning",
+                "meaning": "The selected slice has no theme_candidate rows, so theme resonance is not being tested.",
+                "next_step": "Run theme emergence after enough recurring question links exist.",
+            }
+        )
     if float(metrics.get("term_coverage_delta") or 0.0) < 0.0:
         modes.append(
             {
@@ -769,6 +892,7 @@ def run_question_aware_real_history_benchmark(
         min_packs=min_packs,
     )
     scaffold_report = scaffold_vs_evidence_report(metrics)
+    evaluation_design = evaluation_design_report(metrics=metrics, selection=selection)
     answer_review = answer_quality_review_report(review_rows)
     can_claim = [
         "selected_question_rows_can_form_sanitized_source_backed_structural_packs",
@@ -798,6 +922,7 @@ def run_question_aware_real_history_benchmark(
         "eligible_row_count": sum(1 for row in rows if is_relevant_source_backed(row)),
         "pack_selection": selection,
         "metrics": metrics,
+        "evaluation_design": evaluation_design,
         "scaffold_vs_evidence": scaffold_report,
         "answer_quality_review": answer_review,
         "known_failure_modes": known_failure_modes(
