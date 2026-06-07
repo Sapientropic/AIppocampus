@@ -1,7 +1,9 @@
 # Correction Reconsolidation
 
-Status: first deterministic runtime prototype implemented; live hook capture and
-private real-history adjudication remain future work.
+Status: deterministic runtime prototype implemented, plus first opt-in
+source-ref-gated host-event capture adapter and aggregate-only private-history
+adjudication report. Default hook writes, live semantic adjudication quality,
+and broad private real-history correction survival remain future work.
 Origin: user/product discussion, 2026-05-28.
 Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Dream Task Design](dream-task-design.md),
@@ -154,13 +156,22 @@ The hook set should grow in tiers.
 The deterministic layer should record compact append-only events, not final
 truth.
 
-The first runtime prototype lives in
-`skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py`. It can build and
-append source-backed `correction_activation_event` and
+The runtime prototype lives in
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py`.
+It can build and append source-backed `correction_activation_event` and
 `correction_outcome_event` JSONL rows, sanitize correction surfaces, changed-file
 hints, and verification/tool evidence, and emit detached
 `correction_adjudication_candidate` rows. These rows remain staging evidence and
 candidate hypotheses; they are not formal memory.
+
+The #311 slice adds
+`aippocampus_runtime.reflection.host_capture.capture_host_correction_event()` as
+an opt-in adapter for `UserPromptSubmit`, `Stop`, `PostToolUse`,
+`SubagentStop`, and `PreCompact` payloads. It writes no row unless the payload
+has source refs or stable source-locating fields, so live prompt text cannot
+become reconsolidation evidence by itself. It also adds
+`host_capture.aggregate_private_history_adjudication()`, which reports only
+aggregate status buckets and privacy boundaries for private real-history packs.
 
 `correction_activation_event` should include:
 
@@ -259,10 +270,12 @@ The first implemented slice is deliberately narrow:
    treated as a product-quality path.
 
 The shipped helper covers append-only rows, source refs, privacy scanning,
-deterministic six-status adjudication candidates, and active-task anchor
-rendering after compaction or horizon loss. Foreground hooks are intentionally
-unchanged in this slice, so this does not yet prove live Codex hook capture or
-private real-history compaction survival.
+source-ref-gated host-event capture, deterministic six-status adjudication
+candidates, aggregate-only private-history buckets, and active-task anchor
+rendering after compaction or horizon loss. Foreground hook installation is
+intentionally unchanged by default, so this does not yet prove default live
+Codex hook writes, live semantic adjudication quality, or broad private
+real-history compaction survival.
 
 Success is not "every correction becomes memory." Success is that the system has
 a source-backed event and candidate layer that can preserve important task

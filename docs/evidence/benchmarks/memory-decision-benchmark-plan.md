@@ -1776,9 +1776,11 @@ planned hook-stage expectations, simulated `visible`, `post_compaction`, and
 `horizon_lost` states, synthetic correction/outcome event chains, same-epoch
 repeated-anchor suppression, and mocked adjudication statuses. The runner now
 reuses the `correction_reconsolidation.py` status and active-anchor gate so the
-benchmark does not drift from the runtime prototype. It still does not prove
-live Codex hook capture, live semantic adjudication quality, or private
-real-history compaction survival.
+benchmark does not drift from the runtime prototype. The #311 runtime slice adds
+an opt-in source-ref-gated host-event adapter and aggregate-only private-history
+bucket report; it still does not prove default live Codex hook writes, live
+semantic adjudication quality, or broad private real-history compaction
+survival.
 
 The Track D `ok` gate is stricter than the diagnostic counters alone:
 `ok=false` whenever `correct_count < total_cases`, even if no named regression

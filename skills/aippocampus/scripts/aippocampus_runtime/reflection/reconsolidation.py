@@ -5,6 +5,12 @@ This is the narrow runtime slice behind the Track D benchmark. It records
 source-backed correction activation/outcome rows and can produce conservative
 adjudication candidates for later review. It deliberately does not install
 foreground hooks or promote anything into formal memory.
+
+Host-event capture is intentionally an opt-in adapter: it can turn
+UserPromptSubmit / Stop-like payloads into sanitized append-only rows only when
+the payload carries source refs. Default hooks should call it only after an
+operator chooses a write path, because correction rows are private staging
+evidence rather than ambient recall output.
 """
 
 from __future__ import annotations

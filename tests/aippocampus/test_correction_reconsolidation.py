@@ -13,6 +13,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.reflection import host_capture  # noqa: E402
 from aippocampus_runtime.reflection import reconsolidation as corr  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
@@ -306,6 +307,105 @@ class CorrectionReconsolidationTests(unittest.TestCase):
         self.assertEqual(result["anchors"][0]["kind"], corr.ACTIVE_ANCHOR_KIND)
         self.assertIn("live_hook_capture", result["cannot_claim"])
         self.assertNotIn(FAKE_TEST_SECRET_VALUE, encoded)
+
+    def test_host_prompt_payload_creates_sanitized_activation_event_when_source_backed(self) -> None:
+        result = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session:live-correction",
+                "cwd": fake_test_windows_path("AIppocampus"),
+                "topic_epoch": "epoch-live",
+                "prompt": (
+                    "Correction: use the source-backed route, not "
+                    f"token={FAKE_TEST_SECRET_VALUE} or {fake_test_windows_path('private.txt')}."
+                ),
+                "source_refs": [source_ref(40)],
+                "target_type": "route",
+                "provisional_importance": "active_task",
+            }
+        )
+
+        encoded = json.dumps(result, ensure_ascii=False)
+        self.assertTrue(result["created"])
+        self.assertEqual(result["event_kind"], corr.ACTIVATION_KIND)
+        self.assertEqual(len(result["events"]), 1)
+        event = result["events"][0]
+        self.assertEqual(event["kind"], corr.ACTIVATION_KIND)
+        self.assertEqual(event["hook_stage"], "UserPromptSubmit")
+        self.assertEqual(event["source"], "live_host_event_capture")
+        self.assertEqual(event["host_event_name"], "UserPromptSubmit")
+        self.assertEqual(event["target_type"], "route")
+        self.assertEqual(event["provisional_importance"], "active_task")
+        self.assertTrue(event["privacy_scan"]["redacted"])
+        self.assertNotIn(FAKE_TEST_SECRET_VALUE, encoded)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
+
+    def test_host_payload_without_source_refs_is_blocked_instead_of_written(self) -> None:
+        result = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session:missing-source",
+                "cwd": "AIppocampus",
+                "prompt": "Correction: follow the newer source route.",
+            }
+        )
+
+        self.assertFalse(result["created"])
+        self.assertEqual(result["reason"], "missing_source_refs")
+        self.assertEqual(result["events"], [])
+        self.assertIn("host_payload_without_source_refs", result["cannot_claim"])
+
+    def test_host_stop_payload_creates_outcome_and_aggregate_buckets_without_private_text(self) -> None:
+        activation_result = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session:live-correction",
+                "cwd": "AIppocampus",
+                "topic_epoch": "epoch-live",
+                "prompt": "Correction: keep the route source-backed.",
+                "source_refs": [source_ref(50)],
+                "target_type": "route",
+            }
+        )
+        activation = activation_result["events"][0]
+        outcome_result = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "Stop",
+                "session_id": "session:live-correction",
+                "cwd": fake_test_windows_path("AIppocampus"),
+                "topic_epoch": "epoch-live",
+                "activation_event_id": activation["event_id"],
+                "final_response": (
+                    "Adopted the correction and omitted "
+                    f"Bearer {FAKE_TEST_BEARER_TOKEN}."
+                ),
+                "source_refs": [source_ref(51)],
+                "adoption_signal": "adopted",
+                "changed_files": [fake_test_windows_path("secret.txt"), "docs/research/correction-reconsolidation.md"],
+                "verification_evidence": [
+                    {"kind": "test", "status": "passed", "summary": "targeted correction test passed"}
+                ],
+            }
+        )
+        outcome = outcome_result["events"][0]
+        candidates = corr.adjudicate_events([activation, outcome])
+        report = host_capture.aggregate_private_history_adjudication([activation, outcome], candidates)
+        encoded = json.dumps({"outcome": outcome, "report": report}, ensure_ascii=False)
+
+        self.assertTrue(outcome_result["created"])
+        self.assertEqual(outcome["kind"], corr.OUTCOME_KIND)
+        self.assertEqual(outcome["source"], "live_host_event_capture")
+        self.assertEqual(outcome["host_event_name"], "Stop")
+        self.assertEqual(outcome["adoption_signal"], "adopted")
+        self.assertEqual(report["kind"], "aippocampus_correction_real_history_adjudication_report")
+        self.assertEqual(report["privacy_boundary"]["aggregate_only"], True)
+        self.assertEqual(report["privacy_boundary"]["raw_correction_text_emitted"], False)
+        self.assertEqual(report["buckets"]["valid_adopted"]["count"], 1)
+        self.assertEqual(report["metrics"]["activation_event_count"], 1)
+        self.assertEqual(report["metrics"]["outcome_event_count"], 1)
+        self.assertEqual(report["metrics"]["candidate_count"], 1)
+        self.assertNotIn(FAKE_TEST_BEARER_TOKEN, encoded)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
 
 
 if __name__ == "__main__":

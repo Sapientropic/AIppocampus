@@ -257,14 +257,18 @@ above. The canonical command details live in
 - #66 adds a deterministic synthetic Track D runner for compaction-continuity
   measurement. #65 adds the first deterministic correction-reconsolidation
   runtime helper for source-backed activation/outcome rows, adjudication
-  candidates, and post-compaction active-anchor rendering. Together they upgrade
-  the measurement and event surfaces. #45 adds a slow/live real Codex
+  candidates, and post-compaction active-anchor rendering. #311 adds an opt-in
+  source-ref-gated host-event capture adapter plus aggregate-only
+  private-history adjudication buckets, while keeping default hook writes and
+  formal-memory promotion off. Together they upgrade the measurement and event
+  surfaces. #45 adds a slow/live real Codex
   app-server long-session smoke that ran 50 completed pre-compaction turns,
   forced `thread/compact/start`, observed `contextCompaction` plus completed
   `preCompact` / `postCompact` hooks, verified post-compaction recall of a
   corrected synthetic state, and rebuilt clean source from the real rollout
   without exposing raw prompts or local paths. This still does not claim live
-  semantic adjudication quality or private real-history correction survival.
+  semantic adjudication quality, default hook write installation, or broad
+  private real-history correction survival.
 - #67 adds the first deterministic coding decision-event extractor and compact
   ticket renderer over clean-source messages. It upgrades rejected-route staging
   evidence, but it does not claim complete design-intent extraction, global
