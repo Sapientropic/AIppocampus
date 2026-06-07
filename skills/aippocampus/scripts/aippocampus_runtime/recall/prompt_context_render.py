@@ -496,12 +496,17 @@ def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _has_foregroundable_ambient_card(result: dict[str, Any]) -> bool:
-    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
-    cards = ambient.get("cards") if isinstance(ambient, dict) else []
-    if not isinstance(cards, list):
+    raw_ambient = result.get("ambient_recall")
+    if not isinstance(raw_ambient, dict):
         return False
-    cache_status = ambient.get("cache_status") if isinstance(ambient.get("cache_status"), dict) else {}
-    source_reopen = ambient.get("source_reopen") if isinstance(ambient.get("source_reopen"), dict) else {}
+    raw_cards = raw_ambient.get("cards")
+    if not isinstance(raw_cards, list):
+        return False
+    cards = raw_cards
+    raw_cache_status = raw_ambient.get("cache_status")
+    cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
+    raw_source_reopen = raw_ambient.get("source_reopen")
+    source_reopen: dict[str, Any] = raw_source_reopen if isinstance(raw_source_reopen, dict) else {}
     cache_hit = str(cache_status.get("status") or "") in {"hit", "related_hit"} and int(
         cache_status.get("card_count") or 0
     ) > 0
@@ -512,7 +517,8 @@ def _has_foregroundable_ambient_card(result: dict[str, Any]) -> bool:
         if not isinstance(card, dict):
             continue
         action = str(card.get("action_grammar") or "")
-        trust = card.get("trust_contract") if isinstance(card.get("trust_contract"), dict) else {}
+        raw_trust = card.get("trust_contract")
+        trust: dict[str, Any] = raw_trust if isinstance(raw_trust, dict) else {}
         if action and action != "ignore_or_blocked" and not trust.get("agent_should_ignore"):
             return True
     return False
