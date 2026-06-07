@@ -498,6 +498,12 @@ The model-backed worker is bounded by design:
   `status="dream_invitation_not_source_fact"`. A matching invitation is a
   permissioned question shape, not a command or user-intent claim; high
   annoyance, stale, rejected, sensitive, or non-matching invitations stay quiet.
+- amplification candidates may carry a `journey_bridge_hypothesis` block when
+  the selected source pack contains Journey-shaped resonance. The bridge must
+  stay `dream_bridge_not_source_fact`, cite at least two Journey refs and source
+  refs from both sides, include `possible_reason`, `unblock_condition`, and
+  `falsification_cues`, and park if the explanation becomes profile-like or
+  sensitive. Accepted bridges render only as optional Journey unblock probes.
 - retrospective prospective validation reports `supported`, `refuted`,
   `adopted`, `ignored`, `stale`, `unknown`, and invitation-specific
   `still_unknown` buckets, but only when later evidence explicitly targets the
@@ -521,6 +527,48 @@ language framed as possibility rather than prediction. It still cannot claim
 private real-history dream quality, live provider quality, predictive validity,
 active-imagination usefulness, or user-visible recall/reflection lift until
 selected real-history smokes and human/source review exist.
+
+Useful bridge example:
+
+```json
+{
+  "journey_bridge_hypothesis": {
+    "bridge_kind": "shared_unblock_condition",
+    "source_journey_refs": ["journey:docs-ia", "journey:dream-routing"],
+    "shared_pattern": "both routes camp before replacing an old structure",
+    "possible_reason": "each route may be waiting for a reversible boundary before the next move is safe",
+    "unblock_condition": "define the rollback, snapshot, or recovery boundary before rebuilding",
+    "falsification_cues": [
+      "one journey moves after unrelated external approval",
+      "source shows the blockage was only missing time"
+    ],
+    "status": "dream_bridge_not_source_fact",
+    "source_ref_ids": ["sr0", "sr1"]
+  }
+}
+```
+
+Rejected/parked bridge example:
+
+```json
+{
+  "journey_bridge_hypothesis": {
+    "bridge_kind": "frontier_rhyme",
+    "source_journey_refs": ["journey:one"],
+    "shared_pattern": "similar",
+    "possible_reason": "",
+    "unblock_condition": "",
+    "falsification_cues": [],
+    "status": "dream_bridge_not_source_fact",
+    "source_ref_ids": ["sr0"]
+  }
+}
+```
+
+The rejected shape stops at similarity and lacks the second Journey/source side,
+a causal hypothesis, an unblock condition, and falsification cues. A bridge
+that explains the route through the user's durable personality or hidden intent
+is also parked for human review even when the source refs resolve.
 
 ### Live Dream Worker DeepSeek KV Cache Contract
 
@@ -652,6 +700,12 @@ terms match its trigger and delivery gates have already allowed Dream material.
 Both remain under the same working-memory row, trust horizon, sensitive gate,
 and source-reopen boundary; they do not create a parallel foreground channel or
 make Dream a source of facts.
+As of the Journey bridge slice, amplification rows may also carry
+`journey_bridge_hypothesis`. Working memory stores it as a source-ref-carried
+candidate route, reflection topology can inspect it as an interpretive node, and
+hook rendering may show only its `unblock_condition` as an optional unblock
+probe under matching trigger terms. It does not rewrite Journey history, prove
+the shared cause, or permit a strong claim without reopening source.
 The actual foreground path enforces this through working-memory matching and
 hook rendering: blocked, expired, review-due, or sensitive dream rows are not
 matched, matched dream rows carry a `dream_hypothesis_use` plan, and hook

@@ -77,6 +77,16 @@ def stable_worker_contract(
                         "status": "dream_invitation_not_source_fact",
                         "source_ref_ids": ["sr0"],
                     },
+                    "journey_bridge_hypothesis": {
+                        "bridge_kind": "optional amplification only: shared_blockage | shared_unblock_condition | frontier_rhyme | counterpath",
+                        "source_journey_refs": ["journey:a", "journey:b"],
+                        "shared_pattern": "source-bounded pattern both journeys share",
+                        "possible_reason": "tentative why, never a source fact or personality claim",
+                        "unblock_condition": "bounded condition a future agent can test before moving",
+                        "falsification_cues": ["source cues that would disconfirm the bridge"],
+                        "status": "dream_bridge_not_source_fact",
+                        "source_ref_ids": ["sr0", "sr1"],
+                    },
                 }
             ]
         },
@@ -88,6 +98,7 @@ def stable_worker_contract(
             "activation_cues must describe prompt meanings where the hypothesis matters, not copy generic words from the title or summary.",
             "constructive_artifact may draft useful new questions or probes, but must stay status=dream_draft_not_source with source_ref_ids, counter_evidence, and when_not_to_use.",
             "prospective_invitation may surface only as question-first optional wording under matching trigger conditions; status must be dream_invitation_not_source_fact.",
+            "journey_bridge_hypothesis may appear only for amplification; it must cite two source_journey_refs, source refs from both bridge sides, possible_reason, unblock_condition, falsification_cues, and status=dream_bridge_not_source_fact.",
             "Do not state private or factual claims beyond the selected source pack.",
             "Do not request foreground execution, clean-source mutation, or formal memory promotion.",
         ],
@@ -121,5 +132,11 @@ def variable_run_directive(
             "For prospective only, optional prospective_invitation must include trigger_condition, "
             "question-first suggested_opening, valid invitation_type, expires_after, annoyance_risk, "
             "source_ref_ids, and status=dream_invitation_not_source_fact."
+        ),
+        "journey_bridge_hypothesis_rule": (
+            "For amplification only, optional journey_bridge_hypothesis must explain a cross-Journey "
+            "bridge with two source_journey_refs, source_ref_ids from both sides, shared_pattern, "
+            "possible_reason, unblock_condition, falsification_cues, and status=dream_bridge_not_source_fact. "
+            "It is an unblock probe, not source truth or a user profile."
         ),
     }

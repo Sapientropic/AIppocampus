@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_payload
+from aippocampus_runtime.dream import journey_bridges
 from aippocampus_runtime.dream.constructive_outputs import (
     normalized_constructive_artifact,
     normalized_prospective_invitation,
@@ -361,6 +362,9 @@ def finding_from_candidate(
         future_utc=future_utc,
     )
     failures.extend(invitation_failures)
+    bridge_result = journey_bridges.normalized_bridge(candidate, dream_function, by_id, resolve_refs)
+    journey_bridge, bridge_failures, bridge_review_required = bridge_result
+    failures.extend(bridge_failures)
 
     source_ref_audit_status = "model_candidate_source_ref_validated" if not failures else "failed"
     pack_id = str(pack.get("pack_id") or "")
@@ -375,7 +379,7 @@ def finding_from_candidate(
         "support_level": "candidate",
         "review_state": "needs_review",
         "foreground_eligible": False,
-        "human_review_required": bool(artifact_review_required),
+        "human_review_required": bool(artifact_review_required or bridge_review_required),
         "formal_memory_eligible": False,
         "clean_source_mutation": False,
         "fingerprint": stable_digest(pack_id, dream_function, candidate_index, candidate_kind, title, prefix="dream_model"),
@@ -431,7 +435,8 @@ def finding_from_candidate(
             "ambient_recall_card",
             "reflection_space",
         ]
-    if artifact_review_required:
+    journey_bridges.attach_journey_bridge_to_finding(finding, journey_bridge)
+    if artifact_review_required or bridge_review_required:
         finding["human_review_required"] = True
     finding.update({key: value for key, value in stance_fields.items() if value})
     return {key: value for key, value in finding.items() if value is not None}, None

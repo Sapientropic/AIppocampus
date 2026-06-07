@@ -130,6 +130,16 @@ class ReflectionSpaceTests(unittest.TestCase):
             "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
             "dream_function": "amplification",
             "sensitive_use_gate": {"state": "allowed"},
+            "journey_bridge_hypothesis": {
+                "status": "dream_bridge_not_source_fact",
+                "bridge_kind": "shared_unblock_condition",
+                "source_journey_refs": [f"journey:{first['journey_id']}", "journey:other"],
+                "shared_pattern": "both routes camp before replacing an old structure",
+                "possible_reason": "each journey may be waiting for a reversible boundary",
+                "unblock_condition": "define rollback before rebuilding",
+                "falsification_cues": ["source shows an external-only blocker"],
+                "foreground_use": "journey_unblock_probe_not_evidence",
+            },
         }
         blocked = {
             **dream_row,
@@ -149,6 +159,8 @@ class ReflectionSpaceTests(unittest.TestCase):
         self.assertEqual(len(dream_nodes), 1)
         self.assertEqual(dream_nodes[0]["truth_boundary"], "adjudicated_dream_hypothesis_not_fact")
         self.assertTrue(dream_nodes[0]["source_reopen_required_for_strong_claims"])
+        self.assertEqual(dream_nodes[0]["journey_bridge_hypothesis"]["status"], "dream_bridge_not_source_fact")
+        self.assertIn("inspect_journey_bridge", dream_nodes[0]["available_actions"])
         self.assertEqual(len(dream_edges), 1)
         self.assertEqual(topology["ignored_dream_hypothesis_count"], 1)
         self.assertTrue(topology["interaction_contract"]["dream_hypotheses_are_interpretive_not_facts"])

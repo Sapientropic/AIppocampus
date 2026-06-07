@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.dream import journey_bridges
 from aippocampus_runtime.dream.constructive_outputs import (
     clean_constructive_artifact,
     clean_prospective_invitation,
@@ -225,6 +226,7 @@ def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:
         finding.get("counter_evidence"),
         finding.get("constructive_artifact"),
         finding.get("prospective_invitation"),
+        finding.get("journey_bridge_hypothesis"),
     )
 
 
@@ -342,6 +344,8 @@ def adjudicated_dream_is_eligible(finding: Mapping[str, Any]) -> bool:
     if audit_failed(finding):
         return False
     if not bridge_claims_have_source_refs(finding):
+        return False
+    if not journey_bridges.journey_bridge_present_is_valid(finding.get("journey_bridge_hypothesis")):
         return False
     return True
 
@@ -471,6 +475,7 @@ def adjudicated_dream_findings_to_working_memory(
         trust_horizon = dream_trust_horizon(finding, raw_refs)
         constructive_artifact = clean_constructive_artifact(finding.get("constructive_artifact"))
         prospective_invitation = clean_prospective_invitation(finding.get("prospective_invitation"))
+        journey_bridge = journey_bridges.clean_journey_bridge_from_finding(finding)
         candidate = {
             "candidate_type": DREAM_HYPOTHESIS_TYPE,
             "title": title,
@@ -490,10 +495,10 @@ def adjudicated_dream_findings_to_working_memory(
                 ],
                 limit=12,
             )
+        trigger_terms = journey_bridges.trigger_terms_with_journey_bridge(trigger_terms, journey_bridge)
         foreground_use = {
             "default_action": "quiet_substrate",
-            "use_only_when_it_changes_current_answer": True,
-            "strong_claim_requires_source_reopen": True,
+            "use_only_when_it_changes_current_answer": True, "strong_claim_requires_source_reopen": True,
             "accepted_capsule_can_be_used_quietly_until_invalidated": True,
             "stay_silent_when_source_visible": True,
             "stay_silent_when_annoyance_risk_high": True,
@@ -503,6 +508,7 @@ def adjudicated_dream_findings_to_working_memory(
             foreground_use["draft_artifact_action"] = "optional_probe"
         if prospective_invitation:
             foreground_use["prospective_invitation_action"] = "optional_question_on_trigger"
+        journey_bridges.add_journey_bridge_foreground_use(foreground_use, journey_bridge)
         rows.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -569,6 +575,7 @@ def adjudicated_dream_findings_to_working_memory(
             rows[-1]["constructive_artifact"] = constructive_artifact
         if prospective_invitation:
             rows[-1]["prospective_invitation"] = prospective_invitation
+        journey_bridges.attach_journey_bridge_to_row(rows[-1], journey_bridge)
     return rows
 
 
@@ -724,13 +731,13 @@ def plan_dream_hypothesis_use(
         if trigger_miss:
             return trigger_miss
         return {"action": "stay_silent", "reason": "no_route_relevance"}
-    invitation_plan = prospective_invitation_delivery_plan(
-        row,
-        trust_horizon_status=horizon_status,
-        matched_prompt_terms=text_terms(prompt)[:6],
-    )
+    matched_prompt_terms = text_terms(prompt)[:6]
+    invitation_plan = prospective_invitation_delivery_plan(row, trust_horizon_status=horizon_status, matched_prompt_terms=matched_prompt_terms)
     if invitation_plan:
         return invitation_plan
+    bridge_plan = journey_bridges.journey_bridge_delivery_plan_for_prompt(row, horizon_status, matched_prompt_terms)
+    if bridge_plan:
+        return bridge_plan
     return {
         "action": "use_quietly",
         "reason": "dream_hypothesis_changes_route_or_answer",
@@ -738,11 +745,13 @@ def plan_dream_hypothesis_use(
         "requires_source_reopen": False,
         "truth_boundary": row.get("truth_boundary"),
         "trust_horizon_status": trust_horizon_status(row, now=now),
-        "matched_prompt_terms": text_terms(prompt)[:6],
+        "matched_prompt_terms": matched_prompt_terms,
     }
 
 
 def render_dream_hypothesis_preview(row: Mapping[str, Any]) -> str:
+    if bridge_preview := journey_bridges.render_journey_bridge_preview(row):
+        return bridge_preview
     invitation = clean_prospective_invitation(row.get("prospective_invitation"))
     if invitation:
         opening = compact_text(str(invitation.get("suggested_opening") or ""), 180)

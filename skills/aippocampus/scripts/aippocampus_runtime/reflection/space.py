@@ -538,6 +538,16 @@ def dream_hypothesis_nodes_and_edges(
                 "clean_source_mutation": False,
             }
         )
+        bridge = row.get("journey_bridge_hypothesis")
+        if isinstance(bridge, Mapping) and bridge.get("status") == "dream_bridge_not_source_fact":
+            nodes[-1]["journey_bridge_hypothesis"] = {
+                "status": "dream_bridge_not_source_fact",
+                "bridge_kind": compact_text(str(bridge.get("bridge_kind") or ""), 80),
+                "source_journey_refs": [str(item) for item in bridge.get("source_journey_refs") or []][:4],
+                "shared_pattern": compact_text(str(bridge.get("shared_pattern") or ""), 220),
+                "unblock_condition": compact_text(str(bridge.get("unblock_condition") or ""), 220),
+            }
+            nodes[-1]["available_actions"].append("inspect_journey_bridge")
         keys = source_ref_keys(refs)
         for journey_node_id, journey_keys in journey_ref_keys.items():
             overlap = keys & journey_keys

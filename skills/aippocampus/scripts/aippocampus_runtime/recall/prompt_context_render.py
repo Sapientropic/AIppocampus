@@ -587,6 +587,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             if item.get("candidate_type") == "dream_hypothesis":
                 invitation = item.get("prospective_invitation") or {}
                 artifact = item.get("constructive_artifact") or {}
+                journey_bridge = item.get("journey_bridge_hypothesis") or {}
                 use_plan = item.get("dream_hypothesis_use") or {}
                 rendered_specific = False
                 if (
@@ -600,6 +601,20 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                     lines.append(
                         f"- Prospective Dream invitation, not source fact "
                         f"({invitation_type}, terms: {terms}): {opening}{source}"
+                    )
+                    rendered_specific = True
+                if (
+                    isinstance(journey_bridge, dict)
+                    and journey_bridge.get("unblock_condition")
+                    and isinstance(use_plan, dict)
+                    and use_plan.get("action") == "deliver_as_optional_unblock_probe"
+                ):
+                    unblock = compact_text(str(journey_bridge.get("unblock_condition") or ""), 220)
+                    bridge_kind = str(journey_bridge.get("bridge_kind") or "journey_bridge")
+                    lines.append(
+                        f"- Journey bridge Dream hypothesis, not source fact "
+                        f"({bridge_kind}; optional unblock probe, terms: {terms}): "
+                        f"{unblock}{source}"
                     )
                     rendered_specific = True
                 if isinstance(artifact, dict) and artifact.get("draft_text"):
