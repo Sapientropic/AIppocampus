@@ -63,7 +63,6 @@ CLAIM_LEVEL = "selected_real_history_structural_eval"
 DEFAULT_DREAM_WORKER_MODE = "deterministic"
 MODEL_BACKED_DREAM_WORKER_MODE = "model_backed"
 
-SEED_FINDING_KINDS = {"question_candidate", "frontier_marker", "question_link"}
 USER_VISIBLE_EVALUATION_AXES = [
     "structural_validity",
     "recall_utility",
@@ -77,6 +76,12 @@ CODING_DECISION_SHADOW_SEED_KINDS = {
     "decision_event",
     "rejected_route",
 }
+SEED_FINDING_KINDS = {
+    "question_candidate",
+    "frontier_marker",
+    "question_link",
+    *CODING_DECISION_SHADOW_SEED_KINDS,
+}
 LOW_SIGNAL_TERMS = {
     "aippocampus",
     "app",
@@ -87,8 +92,10 @@ LOW_SIGNAL_TERMS = {
     "memory",
     "messages",
     "need",
+    "only",
     "project",
     "question",
+    "route",
     "source",
     "thread",
     "user",
@@ -260,11 +267,30 @@ def job_seed(row: Mapping[str, Any]) -> RealHistorySeed | None:
         row.get("linked_question_short"),
         row.get("question_short"),
         row.get("frontier_type"),
+        row.get("event_type"),
+        row.get("decision_type"),
+        row.get("candidate_type"),
+        row.get("rejected_route"),
     ]
     text_terms = terms_from_text(
         " ".join(
             str(row.get(key) or "")
-            for key in ("title", "summary", "question_text", "boundary_reason")
+            for key in (
+                "title",
+                "summary",
+                "question_text",
+                "boundary_reason",
+                # Coding decision-shadow rows are admitted only as a #163 eval
+                # workload. They still need clean source refs and stay behind
+                # the Dream not-a-fact boundary; these fields just give the
+                # pack selector a route-specific resonance surface.
+                "decision_text",
+                "decision_summary",
+                "rejected_route",
+                "reopen_condition",
+                "why_rejected",
+                "rationale",
+            )
         )
     )
     terms = tuple(

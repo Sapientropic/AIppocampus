@@ -92,6 +92,37 @@ def fixture_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     return job_rows, working_rows
 
 
+def coding_decision_fixture_rows() -> list[dict[str, object]]:
+    return [
+        {
+            "kind": "aippocampus_subconscious_job_finding",
+            "finding_kind": "decision_event",
+            "event_type": "rejected_route",
+            "fingerprint": "sf_coding_rejected_route",
+            "title": "Rejected registry split route",
+            "decision_text": "Do not collapse registry_search back into direct registry imports.",
+            "rejected_route": "direct registry imports",
+            "reopen_condition": "Only revisit if source-joined fallback cannot preserve route refs.",
+            "concepts": ["registry split", "old route refs", "source joined fallback"],
+            "source_refs": [source_ref("session:coding-a", "msg-coding-a", 60)],
+            "confidence": 0.86,
+        },
+        {
+            "kind": "aippocampus_subconscious_job_finding",
+            "finding_kind": "rejected_route",
+            "event_type": "rejected_route",
+            "fingerprint": "sf_coding_future_probe",
+            "title": "Future source checks the rejected registry route",
+            "summary": "Later source should reopen the old registry split with fresh route-ref evidence.",
+            "rejected_route": "old direct import route",
+            "reopen_condition": "fresh route-ref evidence",
+            "concepts": ["registry split", "fresh route evidence", "dream retrospective"],
+            "source_refs": [source_ref("session:coding-b", "msg-coding-b", 70)],
+            "confidence": 0.82,
+        },
+    ]
+
+
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
@@ -168,6 +199,23 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertIn("frontier_marker", pack["source_seed_kinds"])
         self.assertIn("working_memory", pack["source_seed_kinds"])
         self.assertNotIn("cli", pack["themes"])
+
+    def test_select_real_history_packs_can_include_coding_decision_shadow_probe(self) -> None:
+        packs = dream_eval.select_real_history_packs(
+            job_rows=coding_decision_fixture_rows(),
+            working_memory_rows=[],
+            max_packs=2,
+        )
+
+        self.assertEqual(len(packs), 1)
+        pack = packs[0]
+        self.assertIn("decision_event", pack["source_seed_kinds"])
+        self.assertIn("rejected_route", pack["source_seed_kinds"])
+        self.assertEqual(pack["source_ref_audit"]["source_thread_count"], 2)
+        self.assertIn("registry split", pack["themes"])
+        probe = dream_eval.coding_decision_shadow_probe_status(packs)
+        self.assertTrue(probe["included"])
+        self.assertEqual(probe["status"], "included")
 
     def test_small_worker_emits_adjudicated_compensatory_and_amplification_rows(self) -> None:
         job_rows, working_rows = fixture_rows()
@@ -293,6 +341,26 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertFalse(probe["included"])
         self.assertEqual(probe["status"], "deferred_no_coding_decision_shadow_pack")
         self.assertIn("coding_decision_shadow_probe_deferred", payload["cannot_claim"])
+
+    def test_eval_reports_included_coding_decision_shadow_probe_without_overclaiming(self) -> None:
+        payload = dream_eval.run_dream_real_history_eval(
+            job_rows=coding_decision_fixture_rows(),
+            working_memory_rows=[],
+            max_packs=2,
+            min_packs=1,
+        )
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        probe = payload["metrics"]["coding_decision_shadow_probe"]
+        self.assertTrue(probe["included"])
+        self.assertEqual(probe["status"], "included")
+        self.assertEqual(probe["coding_pack_count"], 1)
+        self.assertNotIn("coding_decision_shadow_probe_deferred", payload["cannot_claim"])
+        self.assertIn("private_real_history_dream_quality", payload["cannot_claim"])
+        self.assertIn("user_visible_reflection_value", payload["cannot_claim"])
+        self.assertNotIn("Do not collapse", encoded)
+        self.assertNotIn("session:coding", encoded)
+        self.assertNotIn("msg-coding", encoded)
 
     def test_eval_can_run_model_backed_worker_through_visibility_ablation(self) -> None:
         job_rows, working_rows = fixture_rows()
@@ -421,7 +489,7 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
 
     def test_cli_loads_manual_source_review_rows_without_leaking_private_handles(self) -> None:
         job_rows, working_rows = fixture_rows()
-        review_rows = [
+        review_rows: list[dict[str, object]] = [
             {
                 "kind": "dream_manual_source_review",
                 "review_status": "supported",
