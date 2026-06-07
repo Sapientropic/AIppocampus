@@ -279,6 +279,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_eviction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/worker_hook_handoff.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/__init__.py",

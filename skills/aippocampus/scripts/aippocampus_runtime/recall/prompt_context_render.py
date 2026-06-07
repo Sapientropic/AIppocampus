@@ -495,6 +495,35 @@ def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _has_foregroundable_ambient_card(result: dict[str, Any]) -> bool:
+    raw_ambient = result.get("ambient_recall")
+    if not isinstance(raw_ambient, dict):
+        return False
+    raw_cards = raw_ambient.get("cards")
+    if not isinstance(raw_cards, list):
+        return False
+    cards = raw_cards
+    raw_cache_status = raw_ambient.get("cache_status")
+    cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
+    raw_source_reopen = raw_ambient.get("source_reopen")
+    source_reopen: dict[str, Any] = raw_source_reopen if isinstance(raw_source_reopen, dict) else {}
+    cache_hit = str(cache_status.get("status") or "") in {"hit", "related_hit"} and int(
+        cache_status.get("card_count") or 0
+    ) > 0
+    reopen_success = int(source_reopen.get("success_count") or 0) > 0
+    if not (cache_hit or reopen_success):
+        return False
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        action = str(card.get("action_grammar") or "")
+        raw_trust = card.get("trust_contract")
+        trust: dict[str, Any] = raw_trust if isinstance(raw_trust, dict) else {}
+        if action and action != "ignore_or_blocked" and not trust.get("agent_should_ignore"):
+            return True
+    return False
+
+
 def _has_direction_with_ref_card(result: dict[str, Any]) -> bool:
     ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
     cards = ambient.get("cards") if isinstance(ambient, dict) else []
@@ -533,7 +562,7 @@ def _evidence_card_line(card: dict[str, Any]) -> str:
 
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
     decision = result.get("decision")
-    if decision == "skip":
+    if decision == "skip" and not _has_foregroundable_ambient_card(result):
         return None
     lines: list[str] = []
     if decision == "evidence":

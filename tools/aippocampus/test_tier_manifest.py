@@ -235,6 +235,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_warm_ambient_recall",
         "test_warm_ambient_scheduler_policy",
         "test_warm_ambient_topic_epoch_policy",
+        "test_worker_hook_handoff_smoke",
     }
 )
 
@@ -298,6 +299,7 @@ SMOKE_STEMS = frozenset(
         "test_semantic_paraphrase_reuse_smoke",
         "test_simulate_prompt_hook",
         "test_synthetic_scale_capacity_smoke",
+        "test_worker_hook_handoff_smoke",
     }
 )
 
@@ -433,6 +435,7 @@ TAG_OVERRIDES = {
     "test_stage_0_5_smoke": ("release", "slow"),
     "test_sync_bundle": ("sync", "filesystem"),
     "test_update_sync": ("install", "filesystem", "hook", "packaging"),
+    "test_worker_hook_handoff_smoke": ("smoke", "hook", "warm"),
 }
 
 
