@@ -40,10 +40,12 @@ def run_question_tracking_job(
         else 0
     )
     confirmation_writes_enabled = not no_write and not dry_run
-    # The deterministic job must not call an external model on its own. It only
-    # persists compact review requests and consumes explicit artifacts from the
-    # sibling file on a later run, so unattended jobs cannot quietly weaken the
-    # source-ref boundary or turn live calibration into a truth claim.
+    # The deterministic job must not call an external model on its own.
+    # Source-backed borderline pairs auto-materialize by default because a
+    # human-confirmation requirement made the question layer nearly unusable in
+    # unattended runs. Confirmation artifacts remain an explicit calibration or
+    # override path; callers must opt into `require_borderline_confirmation`
+    # semantics at the tracking layer when they need a human-review fixture.
     confirmation_fn = (
         load_confirmation_decisions(confirmation_artifacts_path)
         if confirmation_artifacts_path.exists()
