@@ -97,7 +97,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   evidence and bounded `cognitive_load` sidecars through
   `aippocampus_runtime.coding.sequence_packets`: those rows are scored as
   ordered read-model contracts and routing/caution metadata only, not as current
-  validity facts, affect labels, or personality claims.
+  validity facts, affect labels, or personality claims. The companion
+  `aippocampus_runtime.coding.episode_arcs` slice builds deterministic coding
+  Episode/Arc read-models and source-window reopen plans for #663; the schema
+  and cannot-claim boundary live in
+  `docs/architecture/episode-arc-read-models.md`.
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py` runs the #517
   public-safe knowledge pollution and privacy-partition benchmark. It reuses
   the governed knowledge source/claim schema and high-risk answer gate, then

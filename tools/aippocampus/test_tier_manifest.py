@@ -91,6 +91,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_coding_decision_events",
         "test_coding_rejected_route_probes",
         "test_coding_ticket_host_contract",
+        "test_episode_arcs",
         "test_compat_shim_inventory",
         "test_compensatory_dream",
         "test_correction_reconsolidation",
