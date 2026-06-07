@@ -62,6 +62,65 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertFalse(row["trust_contract"]["treat_as_fact"])
         self.assertIn('"clean_source_mutation_allowed": false', raw)
 
+    def test_long_self_note_keeps_private_body_but_compact_projection(self) -> None:
+        notes = self._notes_module()
+        long_note = (
+            "opening posture: be bold about the observed magic, "
+            + "but keep the source boundary explicit; " * 14
+            + "tail marker: do not turn atmosphere into evidence."
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "agent-self-notes.jsonl"
+
+            row = notes.append_agent_self_note(
+                path,
+                note_text=long_note,
+                thread_key="session:old",
+                source_refs=[{"thread_key": "session:old", "message_id": "msg-long"}],
+            )
+
+        self.assertLessEqual(len(row["note_text"]), notes.AGENT_SELF_NOTE_PROJECTION_MAX_CHARS)
+        self.assertTrue(row["note_text"].endswith("..."))
+        self.assertIn("note_body_private", row)
+        self.assertGreater(len(row["note_body_private"]), notes.AGENT_SELF_NOTE_PROJECTION_MAX_CHARS)
+        self.assertIn("tail marker", row["note_body_private"])
+        self.assertFalse(row["note_body_private_default_visible"])
+        self.assertTrue(row["note_body_private_reopen_required"])
+        self.assertEqual(row["action_grammar"], "direction_only")
+        self.assertFalse(row["trust_contract"]["treat_as_fact"])
+
+    def test_active_recall_surface_omits_private_body_by_default(self) -> None:
+        notes = self._notes_module()
+        from aippocampus_runtime.recall import active_recall
+
+        long_note = (
+            "recoverable posture: keep the foreground note small, "
+            + "private nuance stays behind a reopen boundary; " * 14
+            + "hidden tail marker should not be injected."
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            notes.append_agent_self_note(
+                notes_path,
+                note_text=long_note,
+                thread_key="session:old",
+                source_refs=[{"thread_key": "session:old", "message_id": "msg-long"}],
+            )
+
+            payload = active_recall.active_recall_context(
+                prompt="我想找回上次前的状态",
+                cwd=root,
+                agent_self_notes_path=notes_path,
+                working_memory_path=root / "missing-working-memory.jsonl",
+            )
+
+        serialized = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["surface_counts"]["agent_self_notes"], 1)
+        self.assertIn("note_text", payload["memory_atmosphere"][0])
+        self.assertNotIn('"note_body_private":', serialized)
+        self.assertNotIn("hidden tail marker should not be injected", serialized)
+
     def test_sensitive_and_raw_payload_material_is_rejected_or_redacted(self) -> None:
         notes = self._notes_module()
         with tempfile.TemporaryDirectory() as tmp:

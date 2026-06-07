@@ -3,11 +3,9 @@
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import re
-import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -20,7 +18,9 @@ from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 AGENT_SELF_NOTE_SCHEMA_VERSION = 1
 AGENT_SELF_NOTE_KIND = "agent_self_note"
 AGENT_SELF_NOTES_FILE = "agent-self-notes.jsonl"
-AGENT_SELF_NOTE_MAX_CHARS = 280
+AGENT_SELF_NOTE_PROJECTION_MAX_CHARS = 280
+AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS = 1200
+AGENT_SELF_NOTE_MAX_CHARS = AGENT_SELF_NOTE_PROJECTION_MAX_CHARS
 AGENT_SELF_NOTE_BOUNDARY = "agent_self_note_not_source_fact"
 
 VALID_TRIGGERS = {"thread_end", "explicit_agent_reflection", "closeout"}
@@ -62,10 +62,50 @@ SAFE_SOURCE_REF_FIELDS = (
     "phase",
     "title",
 )
+PUBLIC_SOURCE_REF_FIELDS = (
+    "thread_key",
+    "source_id",
+    "message_id",
+    "turn_id",
+    "turn_index",
+    "line",
+    "phase",
+    "title",
+)
+PUBLIC_SELF_NOTE_SURFACE_FIELDS = (
+    "note_id",
+    "created_at",
+    "thread_key",
+    "note_text",
+    "trigger",
+    "support_level",
+    "trust_level",
+    "action_grammar",
+    "trust_contract",
+    "active_recall_surface",
+    "retrieval_role",
+    "matched_terms",
+    "source_boundary",
+    "claims_user_fact",
+    "claims_world_fact",
+    "claims_source_fact",
+    "source_reopen_required_before_claim",
+    "foreground_projection_max_chars",
+    "note_body_private_available",
+    "note_body_private_chars",
+    "note_body_private_max_chars",
+    "note_body_private_default_visible",
+    "note_body_private_reopen_required",
+)
 
 
 class AgentSelfNoteRejected(ValueError):
     """The requested self-note would serialize unsafe or empty material."""
+
+    def __init__(self, code: str, **details: Any) -> None:
+        super().__init__(code)
+        self.code = code
+        self.details = dict(details)
 
 
 def default_agent_self_notes_path(
@@ -141,21 +181,66 @@ def _clean_source_refs(refs: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
     return out
 
 
+def _normalize_note_text(note_text: str) -> str:
+    return re.sub(r"\s+", " ", str(note_text or "")).strip()
+
+
+def _project_note_text(note_text: str) -> str:
+    text = _normalize_note_text(note_text)
+    if len(text) <= AGENT_SELF_NOTE_PROJECTION_MAX_CHARS:
+        return text
+    return text[: AGENT_SELF_NOTE_PROJECTION_MAX_CHARS - 4].rstrip() + " ..."
+
+
+def sanitize_agent_self_note_payload(
+    note_text: str,
+    *,
+    project_root: str | Path | None = None,
+) -> tuple[str, str | None, dict[str, Any]]:
+    text = _normalize_note_text(note_text)
+    if not text:
+        raise AgentSelfNoteRejected("agent_self_note_empty")
+    if RAW_PAYLOAD_RE.search(text):
+        raise AgentSelfNoteRejected("agent_self_note_raw_payload_rejected")
+    if len(text) > AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS:
+        raise AgentSelfNoteRejected(
+            "agent_self_note_too_long",
+            max_chars=AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS,
+            projection_chars=AGENT_SELF_NOTE_PROJECTION_MAX_CHARS,
+            received_chars=len(text),
+        )
+    sanitized, policy = sanitize_external_model_text(text, project_root=project_root)
+    sanitized = _normalize_note_text(sanitized)
+    if policy.get("hard_block") or not sanitized:
+        raise AgentSelfNoteRejected("agent_self_note_sensitive_material_rejected")
+    if RAW_PAYLOAD_RE.search(sanitized):
+        raise AgentSelfNoteRejected("agent_self_note_raw_payload_rejected")
+    if len(sanitized) > AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS:
+        raise AgentSelfNoteRejected(
+            "agent_self_note_too_long",
+            max_chars=AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS,
+            projection_chars=AGENT_SELF_NOTE_PROJECTION_MAX_CHARS,
+            received_chars=len(sanitized),
+        )
+    projection = _project_note_text(sanitized)
+    private_body = (
+        sanitized
+        if len(sanitized) > AGENT_SELF_NOTE_PROJECTION_MAX_CHARS
+        else None
+    )
+    return projection, private_body, policy
+
+
 def sanitize_agent_self_note_text(
     note_text: str,
     *,
     project_root: str | Path | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    text = compact_text(str(note_text or "").strip(), AGENT_SELF_NOTE_MAX_CHARS)
-    if not text:
-        raise AgentSelfNoteRejected("agent_self_note_empty")
-    if RAW_PAYLOAD_RE.search(text):
-        raise AgentSelfNoteRejected("agent_self_note_raw_payload_rejected")
-    sanitized, policy = sanitize_external_model_text(text, project_root=project_root)
-    sanitized = compact_text(sanitized.strip(), AGENT_SELF_NOTE_MAX_CHARS)
-    if policy.get("hard_block") or not sanitized:
-        raise AgentSelfNoteRejected("agent_self_note_sensitive_material_rejected")
-    return sanitized, policy
+    projection, _private_body, policy = sanitize_agent_self_note_payload(
+        note_text,
+        project_root=project_root,
+    )
+    return projection, policy
 
 
 def build_agent_self_note_row(
@@ -169,7 +254,7 @@ def build_agent_self_note_row(
 ) -> dict[str, Any]:
     clean_trigger = trigger if trigger in VALID_TRIGGERS else "explicit_agent_reflection"
     cleaned_refs = _clean_source_refs(source_refs)
-    sanitized_text, redaction_policy = sanitize_agent_self_note_text(
+    sanitized_text, private_body, redaction_policy = sanitize_agent_self_note_payload(
         note_text,
         project_root=project_root,
     )
@@ -186,6 +271,7 @@ def build_agent_self_note_row(
         "source_refs": cleaned_refs,
         "source_ref_count": len(cleaned_refs),
         "note_text": sanitized_text,
+        "foreground_projection_max_chars": AGENT_SELF_NOTE_PROJECTION_MAX_CHARS,
         "author_role": "foreground_agent",
         "trigger": clean_trigger,
         "authority": "direction_only",
@@ -209,6 +295,22 @@ def build_agent_self_note_row(
             "redaction_types": list(redaction_policy.get("redaction_types") or [])[:8],
         },
     }
+    if private_body is not None:
+        # The longer body gives an explicit reopen path enough nuance without
+        # letting passive or active recall quietly become a hidden narrative
+        # channel. Default surfaces must continue to read `note_text` only.
+        row.update(
+            {
+                "note_body_private": private_body,
+                "note_body_private_chars": len(private_body),
+                "note_body_private_max_chars": AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS,
+                "note_body_private_available": True,
+                "note_body_private_default_visible": False,
+                "note_body_private_reopen_required": True,
+            }
+        )
+    else:
+        row["note_body_private_available"] = False
     return with_trust_fields(row)
 
 
@@ -246,11 +348,57 @@ def _row_search_text(row: Mapping[str, Any]) -> str:
         str(value or "")
         for value in (
             row.get("note_text"),
+            row.get("note_body_private"),
             row.get("thread_key"),
             row.get("trigger"),
             ref_text,
         )
     )
+
+
+def _public_text(value: Any, *, chars: int) -> str:
+    sanitized, _ = sanitize_external_model_text(str(value or ""))
+    return compact_text(sanitized or "<redacted:sensitive-text>", chars)
+
+
+def public_agent_self_note_route_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
+    route: dict[str, Any] = {}
+    for key in PUBLIC_SOURCE_REF_FIELDS:
+        value = ref.get(key)
+        if value in (None, "", []):
+            continue
+        route[key] = _public_text(value, chars=180) if isinstance(value, str) else value
+    return route
+
+
+def public_agent_self_note_route_refs(
+    row: Mapping[str, Any],
+    *,
+    limit: int = 4,
+) -> list[dict[str, Any]]:
+    return [
+        route
+        for ref in row.get("source_refs") or []
+        if isinstance(ref, Mapping)
+        and (route := public_agent_self_note_route_ref(ref))
+    ][:limit]
+
+
+def public_agent_self_note_surface(row: Mapping[str, Any]) -> dict[str, Any]:
+    public = {
+        key: row.get(key)
+        for key in PUBLIC_SELF_NOTE_SURFACE_FIELDS
+        if row.get(key) not in (None, "", [])
+    }
+    if "note_text" in public:
+        public["note_text"] = _public_text(
+            public["note_text"],
+            chars=AGENT_SELF_NOTE_PROJECTION_MAX_CHARS,
+        )
+    if "thread_key" in public:
+        public["thread_key"] = _public_text(public["thread_key"], chars=180)
+    public["source_refs"] = public_agent_self_note_route_refs(row, limit=4)
+    return public
 
 
 def _state_recall_requested(prompt: str) -> bool:
@@ -293,95 +441,11 @@ def search_agent_self_notes(
     return [item for _, item in scored[: max(0, int(limit or 0))]]
 
 
-def _parse_source_ref_json(values: list[str] | None) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    for value in values or []:
-        try:
-            parsed = json.loads(value)
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"invalid --source-ref-json: {exc}") from exc
-        if not isinstance(parsed, dict):
-            raise SystemExit("--source-ref-json must decode to an object")
-        refs.append(parsed)
-    return refs
-
-
-def _registry_path_from_args(args: argparse.Namespace) -> Path | None:
-    if args.registry:
-        return Path(args.registry).resolve()
-    registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
-    return registry_paths(registry_dir)[0]
-
-
-def _notes_path_from_args(args: argparse.Namespace, registry_path: Path | None) -> Path:
-    if args.notes_path:
-        return Path(args.notes_path).resolve()
-    registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
-    return default_agent_self_notes_path(registry_path, registry_dir)
-
-
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["append", "search", "list"])
-    parser.add_argument("text", nargs="*", help="Note text for append or query text for search.")
-    parser.add_argument("--stdin", action="store_true")
-    parser.add_argument("--cwd", default=".")
-    parser.add_argument("--registry")
-    parser.add_argument("--registry-dir")
-    parser.add_argument("--notes-path")
-    parser.add_argument("--thread-key", default="unknown-thread")
-    parser.add_argument("--trigger", default="explicit_agent_reflection", choices=sorted(VALID_TRIGGERS))
-    parser.add_argument("--source-ref-json", action="append")
-    parser.add_argument("--max", type=int, default=4)
-    parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(argv)
+    from importlib import import_module
 
-    registry_path = _registry_path_from_args(args)
-    notes_path = _notes_path_from_args(args, registry_path)
-    text_parts = list(args.text or [])
-    if args.stdin:
-        text_parts.append(sys.stdin.read())
-    text = " ".join(text_parts).strip()
-
-    payload: dict[str, Any]
-    if args.command == "append":
-        if not text:
-            raise SystemExit("agent_self_notes append requires note text or --stdin")
-        row = append_agent_self_note(
-            notes_path,
-            note_text=text,
-            thread_key=args.thread_key,
-            source_refs=_parse_source_ref_json(args.source_ref_json),
-            trigger=args.trigger,
-            project_root=Path(args.cwd).resolve(),
-        )
-        payload = {"ok": True, "row": row}
-    elif args.command == "search":
-        rows = search_agent_self_notes(text, load_agent_self_notes(notes_path), limit=args.max)
-        payload = {
-            "kind": "aippocampus_agent_self_note_search",
-            "query": text,
-            "count": len(rows),
-            "rows": rows,
-        }
-    else:
-        rows = load_agent_self_notes(notes_path)[: max(0, int(args.max or 0))]
-        payload = {"kind": "aippocampus_agent_self_notes", "rows": rows}
-
-    if args.json_output:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    else:
-        if args.command == "append":
-            payload_row = payload.get("row")
-            note_id = payload_row.get("note_id") if isinstance(payload_row, dict) else ""
-            print(f"agent self-note: {note_id}")
-        else:
-            payload_rows = payload.get("rows")
-            if isinstance(payload_rows, list):
-                for payload_row in payload_rows:
-                    if isinstance(payload_row, dict):
-                        print(f"- {payload_row.get('created_at')} {payload_row.get('note_text')}")
-    return 0
+    cli = import_module("aippocampus_runtime.source.agent_self_note_cli")
+    return int(cli.main(argv) or 0)
 
 
 if __name__ == "__main__":
@@ -392,12 +456,18 @@ __all__ = [
     "AGENT_SELF_NOTE_BOUNDARY",
     "AGENT_SELF_NOTE_KIND",
     "AGENT_SELF_NOTE_MAX_CHARS",
+    "AGENT_SELF_NOTE_PRIVATE_BODY_MAX_CHARS",
+    "AGENT_SELF_NOTE_PROJECTION_MAX_CHARS",
     "AGENT_SELF_NOTES_FILE",
     "AgentSelfNoteRejected",
     "append_agent_self_note",
     "build_agent_self_note_row",
     "default_agent_self_notes_path",
     "load_agent_self_notes",
+    "public_agent_self_note_route_ref",
+    "public_agent_self_note_route_refs",
+    "public_agent_self_note_surface",
+    "sanitize_agent_self_note_payload",
     "sanitize_agent_self_note_text",
     "search_agent_self_notes",
     "write_agent_self_notes",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -191,6 +192,148 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(log_rotation.script_name, "log_retention.py")
         self.assertEqual(log_rotation.args, ["rotate", "--json"])
+
+        self_note_append = facade.resolve_command(
+            ["self-note", "append", "--current-thread", "--stdin", "--json"]
+        )
+        self.assertEqual(self_note_append.command, "self-note")
+        self.assertEqual(
+            self_note_append.module_name,
+            "aippocampus_runtime.source.agent_self_note_cli",
+        )
+        self.assertEqual(self_note_append.script_name, "agent_self_note_cli.py")
+        self.assertEqual(
+            self_note_append.args,
+            ["append", "--current-thread", "--stdin", "--json"],
+        )
+
+    def test_self_note_current_thread_append_round_trips_as_atmosphere(self) -> None:
+        note = "future posture: move decisively, but keep source boundary explicit."
+        raw_thread_id = "codex-raw-thread-id-should-not-escape"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = {
+                **os.environ,
+                "AIPPOCAMPUS_REGISTRY_DIR": str(root / "registry"),
+                "CODEX_THREAD_ID": raw_thread_id,
+            }
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "self-note",
+                    "append",
+                    "--current-thread",
+                    "--cwd",
+                    str(root),
+                    "--stdin",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                input=note,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+
+        raw = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0, raw)
+        payload = json.loads(proc.stdout)
+        preview = payload["round_trip_preview"]
+        atmosphere = preview["memory_atmosphere"]
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["kind"], "aippocampus_agent_self_note_append")
+        self.assertTrue(payload["source_ref_attached"])
+        self.assertEqual(preview["decision"], "context")
+        self.assertEqual(preview["surface_counts"]["agent_self_notes"], 1)
+        self.assertEqual(atmosphere[0]["action_grammar"], "direction_only")
+        self.assertFalse(atmosphere[0]["trust_contract"]["treat_as_fact"])
+        self.assertFalse(atmosphere[0]["claims_user_fact"])
+        self.assertFalse(atmosphere[0]["claims_source_fact"])
+        self.assertTrue(atmosphere[0]["source_reopen_required_before_claim"])
+        self.assertNotIn(raw_thread_id, raw)
+        self.assertNotIn(str(root), raw)
+        self.assertNotIn("raw prompt", raw.casefold())
+
+    def test_self_note_current_thread_long_append_returns_compact_projection_only(self) -> None:
+        note = (
+            "opening posture: be bold about the observed magic, "
+            + "but keep the source boundary explicit and atmosphere-only; " * 14
+            + "hidden tail marker should stay private."
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(root / "registry")}
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "self-note",
+                    "append",
+                    "--current-thread",
+                    "--cwd",
+                    str(root),
+                    "--stdin",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                input=note,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+
+        raw = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0, raw)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertLessEqual(len(payload["note"]["note_text"]), 280)
+        self.assertTrue(payload["note"]["note_body_private_available"])
+        self.assertFalse(payload["note"]["note_body_private_default_visible"])
+        self.assertNotIn("note_body_private\":", raw)
+        self.assertNotIn("hidden tail marker should stay private", raw)
+
+    def test_self_note_current_thread_append_rejects_raw_payload_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(root / "registry")}
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "self-note",
+                    "append",
+                    "--current-thread",
+                    "--cwd",
+                    str(root),
+                    "--stdin",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                input="tool_result stdout stderr should not become a margin note",
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+
+        raw = proc.stdout + proc.stderr
+        self.assertNotEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "agent_self_note_raw_payload_rejected")
+        self.assertNotIn(str(root), raw)
 
     def test_onboard_status_text_points_to_first_recall_modes(self) -> None:
         from aippocampus_runtime.onboarding import facade as onboard_facade
