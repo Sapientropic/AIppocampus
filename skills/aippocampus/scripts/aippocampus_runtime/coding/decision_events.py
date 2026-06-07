@@ -15,6 +15,10 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.coding.code_state_anchors import (
+    assess_code_state_currentness,
+    compact_code_state_anchors,
+)
 from aippocampus_runtime.core import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -490,6 +494,17 @@ def review_decision_candidates(candidates: Sequence[Mapping[str, Any]]) -> list[
     return reviewed
 
 
+def attach_code_state_anchors(
+    candidate: Mapping[str, Any],
+    anchors: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    copy = dict(candidate)
+    compact = compact_code_state_anchors(anchors)
+    if compact:
+        copy["code_state_anchors"] = compact
+    return copy
+
+
 def prompt_matches_candidate(prompt: str, candidate: Mapping[str, Any]) -> bool:
     prompt_low = prompt.casefold()
     terms = [
@@ -582,6 +597,7 @@ def build_decision_state_assessment(
     as_of: str | None = None,
     basis_refs: Sequence[Mapping[str, Any]] | None = None,
     repo_state_fingerprint: str = "",
+    current_code_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     refs = merge_source_refs(basis_refs or candidate.get("source_refs") or [])
     explicit_thickness = str(candidate.get("source_thickness") or "")
@@ -602,6 +618,21 @@ def build_decision_state_assessment(
     )
     if thickness == "thin" and proposed_use not in THIN_SOURCE_SAFE_USES:
         proposed_use = "refresh_sources"
+    code_state_anchors = compact_code_state_anchors(candidate.get("code_state_anchors") or [])
+    code_state_currentness = assess_code_state_currentness(
+        code_state_anchors,
+        current_code_state=current_code_state,
+    )
+    freshness = freshness_for_assessment(source_status)
+    confidence = assessment_confidence(
+        source_status=source_status,
+        thickness=thickness,
+        basis_refs=refs,
+    )
+    if code_state_currentness["requires_refresh"]:
+        proposed_use = "refresh_sources"
+        freshness = "stale"
+        confidence = min(confidence, 0.35)
     decision_id = str(candidate.get("decision_id") or "")
     created_at = as_of or now_utc()
     return {
@@ -614,6 +645,8 @@ def build_decision_state_assessment(
             thickness,
             proposed_use,
             repo_state_fingerprint,
+            code_state_currentness.get("status"),
+            code_state_currentness.get("signals"),
             length=20,
         ),
         "created_at": created_at,
@@ -622,15 +655,13 @@ def build_decision_state_assessment(
         "decision_event_id": decision_id,
         "basis_refs": refs,
         "repo_state_fingerprint": repo_state_fingerprint,
+        "code_state_anchors": code_state_anchors,
+        "code_state_currentness": code_state_currentness,
         "source_review_status": source_status,
         "source_thickness": thickness,
         "still_rejected": still_rejected_for_assessment(source_status),
-        "freshness": freshness_for_assessment(source_status),
-        "confidence": assessment_confidence(
-            source_status=source_status,
-            thickness=thickness,
-            basis_refs=refs,
-        ),
+        "freshness": freshness,
+        "confidence": confidence,
         "proposed_use": proposed_use,
         "truth_boundary": "derived_weather_not_source_fact",
         "terrain_event_mutated": False,
@@ -645,11 +676,13 @@ def assess_decision_candidates(
     candidates: Sequence[Mapping[str, Any]],
     *,
     prompt: str = "",
+    current_code_state: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     return [
         build_decision_state_assessment(
             candidate,
             action_relevant=prompt_matches_candidate(prompt, candidate) if prompt else True,
+            current_code_state=current_code_state,
         )
         for candidate in candidates
     ]
@@ -732,6 +765,7 @@ def render_coding_continuity_ticket(
     visible_context_has_source: bool = False,
     limit: int = 1,
     assessments: Sequence[Mapping[str, Any]] | None = None,
+    current_code_state: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if trigger not in TICKET_TRIGGERS or visible_context_has_source:
         return []
@@ -744,7 +778,11 @@ def render_coding_continuity_ticket(
         decision_id = str(candidate.get("decision_id") or "")
         assessment = dict(
             assessment_lookup.get(decision_id)
-            or build_decision_state_assessment(candidate, action_relevant=action_relevant)
+            or build_decision_state_assessment(
+                candidate,
+                action_relevant=action_relevant,
+                current_code_state=current_code_state,
+            )
         )
         source_status = str(assessment.get("source_review_status") or "")
         proposed_use = str(assessment.get("proposed_use") or "")
@@ -783,6 +821,8 @@ def render_coding_continuity_ticket(
                 "evidence_refs": assessment.get("basis_refs") or [],
                 "basis_refs": assessment.get("basis_refs") or [],
                 "source_thickness": assessment.get("source_thickness"),
+                "code_state_anchors": assessment.get("code_state_anchors") or [],
+                "code_state_currentness": assessment.get("code_state_currentness") or {},
                 "derived_assessment": assessment,
                 "expires_at": "task_or_topic_epoch_end",
                 "summary": candidate.get("summary"),
@@ -909,4 +949,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

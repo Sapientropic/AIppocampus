@@ -13,8 +13,11 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.coding import (
+    code_state_anchors,  # noqa: E402
+    host_contract,  # noqa: E402
+)
 from aippocampus_runtime.coding import decision_events as decisions  # noqa: E402
-from aippocampus_runtime.coding import host_contract  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_SECRET_VALUE,
@@ -47,6 +50,24 @@ def message(
 
 
 class CodingDecisionEventsTests(unittest.TestCase):
+    def _repo_scoped_candidate(self) -> dict[str, object]:
+        rows = [
+            message(
+                message_id="m1",
+                turn_id="t1",
+                role="user",
+                line=1,
+                text="Do not replace the src/widget.py guard with summary-only lookup.",
+            )
+        ]
+        candidates = decisions.review_decision_candidates(
+            decisions.extract_decision_candidates(rows, thread_key="session:code-anchor")
+        )
+        for candidate in candidates:
+            if candidate["event_type"] == "rejected_route":
+                return candidate
+        self.fail("expected rejected_route coding decision candidate")
+
     def test_extracts_accepted_rejected_superseded_and_local_candidates(self) -> None:
         rows = [
             message(
@@ -331,6 +352,130 @@ class CodingDecisionEventsTests(unittest.TestCase):
         self.assertEqual(second["wrote_count"], 1)
         self.assertEqual(len(lines), 2)
         self.assertEqual(first_snapshot.splitlines()[0], lines[0])
+
+    def test_code_state_anchor_populates_repo_scope_and_public_safe_metadata(self) -> None:
+        candidate = self._repo_scoped_candidate()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            file_path = root / "src" / "widget.py"
+            file_path.parent.mkdir(parents=True)
+            file_path.write_text("def guard():\n    return 'source-backed'\n", encoding="utf-8")
+
+            anchor = code_state_anchors.build_checkout_code_state_anchor(
+                candidate,
+                repo_root=root,
+                repo_commit="abc123",
+                branch_or_head_ref="sapientropic/issue-847-code-state-anchors",
+                pr_ref="#873",
+                issue_ref="#847",
+                test_or_check_refs=[
+                    {
+                        "id": "check-1",
+                        "name": "unit tests",
+                        "status": "success",
+                        "raw_log": "raw test log should not serialize",
+                    }
+                ],
+            )
+            anchored = decisions.attach_code_state_anchors(candidate, [anchor])
+            encoded = json.dumps(anchored, ensure_ascii=False)
+
+        stored_anchor = anchored["code_state_anchors"][0]
+        file_scope = stored_anchor["file_diff_scope"][0]
+        self.assertEqual(stored_anchor["repo_commit"], "abc123")
+        self.assertEqual(stored_anchor["pr_ref"], "#873")
+        self.assertEqual(stored_anchor["issue_ref"], "#847")
+        self.assertEqual(file_scope["path"], "src/widget.py")
+        self.assertEqual(file_scope["change_kind"], "observed")
+        self.assertTrue(file_scope["new_file_fingerprint"].startswith("sha256:"))
+        self.assertEqual(stored_anchor["test_or_check_refs"][0]["status"], "success")
+        self.assertNotIn("raw test log", encoded)
+        self.assertNotIn(str(root), encoded)
+        self.assertFalse(stored_anchor["privacy_boundary"]["raw_diffs_serialized"])
+
+    def test_missing_code_state_anchor_fails_open_for_existing_decision_weather(self) -> None:
+        candidate = self._repo_scoped_candidate()
+
+        assessment = decisions.build_decision_state_assessment(
+            candidate,
+            current_code_state={
+                "repo_commit": "different-commit",
+                "file_fingerprints": {"src/widget.py": "sha256:different"},
+            },
+        )
+
+        self.assertEqual(assessment["proposed_use"], "warn")
+        self.assertEqual(assessment["code_state_currentness"]["status"], "no_anchors")
+        self.assertFalse(assessment["code_state_currentness"]["requires_refresh"])
+
+    def test_code_state_mismatch_degrades_assessment_to_refresh_sources(self) -> None:
+        candidate = self._repo_scoped_candidate()
+        anchor = {
+            "kind": code_state_anchors.CODE_STATE_ANCHOR_KIND,
+            "repo_commit": "abc123",
+            "file_diff_scope": [
+                {
+                    "path": "src/widget.py",
+                    "change_kind": "observed",
+                    "new_file_fingerprint": "sha256:oldhash",
+                }
+            ],
+            "privacy_boundary": {"raw_diffs_serialized": False, "raw_test_logs_serialized": False},
+        }
+        anchored = decisions.attach_code_state_anchors(candidate, [anchor])
+
+        assessment = decisions.build_decision_state_assessment(
+            anchored,
+            current_code_state={
+                "repo_commit": "def456",
+                "file_fingerprints": {"src/widget.py": "sha256:newhash"},
+            },
+        )
+
+        self.assertEqual(assessment["proposed_use"], "refresh_sources")
+        self.assertEqual(assessment["freshness"], "stale")
+        self.assertTrue(assessment["code_state_currentness"]["requires_refresh"])
+        self.assertIn("commit_mismatch", assessment["code_state_currentness"]["signals"])
+        self.assertIn("file_hash_mismatch", assessment["code_state_currentness"]["signals"])
+
+    def test_ticket_carries_compact_code_state_anchors_without_raw_logs_or_diffs(self) -> None:
+        candidate = self._repo_scoped_candidate()
+        anchor = {
+            "kind": code_state_anchors.CODE_STATE_ANCHOR_KIND,
+            "repo_commit": "abc123",
+            "branch_or_head_ref": "sapientropic/issue-847-code-state-anchors",
+            "pr_ref": "#873",
+            "issue_ref": "#847",
+            "file_diff_scope": [
+                {
+                    "path": "src/widget.py",
+                    "change_kind": "observed",
+                    "new_file_fingerprint": "sha256:oldhash",
+                    "raw_diff": "raw diff should not serialize",
+                }
+            ],
+            "test_or_check_refs": [
+                {"name": "unit tests", "status": "success", "raw_log": "raw log should not serialize"}
+            ],
+            "privacy_boundary": {"raw_diffs_serialized": False, "raw_test_logs_serialized": False},
+        }
+        anchored = decisions.attach_code_state_anchors(candidate, [anchor])
+
+        tickets = decisions.render_coding_continuity_ticket(
+            [anchored],
+            prompt="Patch src/widget.py by using summary-only lookup.",
+            trigger="compaction_loss",
+            current_code_state={"repo_commit": "def456"},
+        )
+        encoded = json.dumps(tickets, ensure_ascii=False)
+
+        self.assertEqual(len(tickets), 1)
+        self.assertEqual(tickets[0]["proposed_use"], "refresh_sources")
+        self.assertEqual(tickets[0]["intervention_level"], "state_check")
+        self.assertEqual(tickets[0]["code_state_anchors"][0]["pr_ref"], "#873")
+        self.assertTrue(tickets[0]["code_state_currentness"]["requires_refresh"])
+        self.assertNotIn("raw diff", encoded)
+        self.assertNotIn("raw log", encoded)
 
 
 if __name__ == "__main__":

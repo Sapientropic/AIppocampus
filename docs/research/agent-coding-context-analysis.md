@@ -198,6 +198,21 @@ decision_state_assessment:
     - "clean-source:..."
     - "repo-state:..."
   repo_state_fingerprint: "..."
+  code_state_anchors:
+    - repo_commit: "..."
+      branch_or_head_ref: "..."
+      pr_ref: "#..."
+      issue_ref: "#..."
+      file_diff_scope:
+        - path: "repo/relative.py"
+          change_kind: "observed"
+          new_file_fingerprint: "sha256:..."
+      test_or_check_refs:
+        - name: "checks (3.13)"
+          status: "success"
+  code_state_currentness:
+    status: "no_anchors | anchors_present_unchecked | current_or_unverified | refresh_required"
+    signals: ["commit_mismatch | file_hash_mismatch | pr_missing | dirty_state_changed"]
   source_thickness: "thin | usable | strong"
   still_rejected: "yes | no | unknown"
   freshness: "fresh | aging | stale | superseded"
@@ -215,6 +230,14 @@ generic confidence score.
 judgment about whether an old reason still appears to hold under present source
 and repo state. Old source can prove that a route was rejected then. It cannot,
 by itself, prove that the route should still be rejected now.
+
+`code_state_anchors` are optional coordinates from the host or checkout:
+commit/head refs, PR/issue refs, repo-relative file fingerprints, and check
+statuses. They help a future agent reopen the current evidence for a coding
+decision, but they are not proof of user intent and cannot make current-code
+claims by themselves. Missing anchors fail open; mismatched anchors degrade the
+assessment toward `refresh_sources` or `ask`. Public reports must not serialize
+raw diffs, raw test logs, secrets, or local absolute paths.
 
 Hard rule: when `source_thickness="thin"`, the only safe `proposed_use` values
 are `refresh_sources` or `ask`. Thin evidence must not warn, block, or assert
