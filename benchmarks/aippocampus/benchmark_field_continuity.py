@@ -317,6 +317,31 @@ def _quality_gates(validation: Mapping[str, Any], metrics: Mapping[str, Any]) ->
     return {**gates, "ok": all(gates.values())}
 
 
+def _issue_readouts(validation: Mapping[str, Any], metrics: Mapping[str, Any]) -> dict[str, Any]:
+    families = set(_as_list(validation.get("scenario_families")))
+    fresh_family_covered = "fresh_projectless_familiarity" in families
+    return {
+        "github_281": {
+            "field_continuity_quality_proxy_measured": bool(fresh_family_covered),
+            "claim_level": "public_safe_fixture_quality_proxy",
+            "fresh_projectless_familiarity_status": (
+                "covered" if fresh_family_covered else "missing"
+            ),
+            "source_reopen_success_rate": metrics.get("source_reopen_success_rate"),
+            "progressive_route_recovery_rate": metrics.get("progressive_route_recovery_rate"),
+            "wrong_family_persistence_rate": metrics.get("wrong_family_persistence_rate"),
+            "irrelevant_memory_drag_rate": metrics.get("irrelevant_memory_drag_rate"),
+            "active_recall_or_source_reopen_boundary_failures": metrics.get(
+                "active_recall_or_source_reopen_boundary_failures"
+            ),
+            "live_fresh_thread_quality": "not_measured",
+            "private_real_history_quality": "not_measured",
+            "private_seed_review": "contract_only",
+            "closeout_eligible": False,
+        }
+    }
+
+
 def _sanitized_case(case: Mapping[str, Any]) -> dict[str, Any]:
     arms: dict[str, Any] = {}
     for arm_name, arm_result in _as_mapping(case.get("arms")).items():
@@ -372,6 +397,7 @@ def run_benchmark(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
         },
         "metrics": metrics,
         "quality_gates": gates,
+        "issue_readouts": _issue_readouts(validation, metrics),
         "fixture_validation": _jsonable_validation(validation),
         "privacy_boundary": {
             "public_safe_synthetic_fixtures": True,

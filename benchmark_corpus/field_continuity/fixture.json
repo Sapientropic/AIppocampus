@@ -309,6 +309,8 @@
     "field reports are benchmark seeds, not official product proof by themselves",
     "real-history field-continuity recall quality",
     "universal fresh-thread recall quality",
+    "GitHub #281 live fresh-thread quality",
+    "GitHub #281 private real-history quality",
     "foreground-hook-only sufficiency",
     "live semantic-model quality",
     "hosted-service or cross-device production readiness"

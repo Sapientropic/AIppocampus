@@ -142,6 +142,24 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["config"]["uses_live_model"])
         self.assertFalse(payload["config"]["uses_private_history"])
 
+    def test_issue_281_readout_exposes_field_continuity_quality_proxy(self) -> None:
+        payload = benchmark.run_benchmark()
+        readout = payload["issue_readouts"]["github_281"]
+
+        self.assertTrue(readout["field_continuity_quality_proxy_measured"])
+        self.assertEqual(readout["claim_level"], "public_safe_fixture_quality_proxy")
+        self.assertEqual(readout["fresh_projectless_familiarity_status"], "covered")
+        self.assertEqual(readout["source_reopen_success_rate"], 1.0)
+        self.assertEqual(readout["progressive_route_recovery_rate"], 1.0)
+        self.assertEqual(readout["wrong_family_persistence_rate"], 0.0)
+        self.assertEqual(readout["irrelevant_memory_drag_rate"], 0.0)
+        self.assertEqual(readout["live_fresh_thread_quality"], "not_measured")
+        self.assertEqual(readout["private_real_history_quality"], "not_measured")
+        self.assertEqual(readout["private_seed_review"], "contract_only")
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertIn("GitHub #281 live fresh-thread quality", payload["cannot_claim"])
+        self.assertIn("GitHub #281 private real-history quality", payload["cannot_claim"])
+
     def test_report_is_sanitized_and_does_not_overclaim(self) -> None:
         payload = benchmark.run_benchmark()
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
