@@ -180,11 +180,29 @@ posture. It is not clean source, not a user profile, and not formal memory.
 
 Self-notes are `memory_atmosphere` / `direction_only` only. Their `source_refs`
 route a later agent back to the surrounding source neighborhood; those refs do
-not prove the note text or any factual claim. The append helper enforces a
-bounded note length, rejects mostly credential-shaped or raw tool-payload
-material, redacts local paths, and never mutates clean source. Explicit active
-recall may surface these rows when the agent asks to recover past state, but
-source-backed details still require the normal clean-source reopen path.
+not prove the note text or any factual claim. The append helper rejects mostly
+credential-shaped or raw tool-payload material, redacts local paths, and never
+mutates clean source. Explicit active recall may surface these rows when the
+agent asks to recover past state, but source-backed details still require the
+normal clean-source reopen path.
+
+The default foreground projection stays compact: `note_text` is capped at 280
+characters and is the only note body active recall may inject by default. Longer
+operator/agent appends may store an optional `note_body_private` body capped at
+1200 characters, with `note_body_private_default_visible=false` and
+`note_body_private_reopen_required=true`. That private body is a protected
+reopen/deepen target, not a passive-hook or active-recall foreground surface.
+
+Foreground agents can append one voluntary current-thread note through the
+public facade:
+
+```bash
+aippocampus self-note append --current-thread --stdin --json
+```
+
+That facade attaches a compact public-safe current-thread route, returns a tiny
+active-recall preview, and still treats the row as an atmosphere-only margin
+note rather than formal memory, a user profile fact, or clean source.
 
 ## Raw Rollout Discovery
 

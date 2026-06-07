@@ -116,6 +116,29 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         )
         self.assertIn("live_semantic_model_quality", payload["cannot_claim"])
 
+    def test_live_eval_reports_missing_sharegpt_corpus_as_not_ready(self) -> None:
+        def fake_live_semantic(prompt: str, **kwargs) -> dict:
+            self.fail("missing corpus should be diagnosed before semantic calls")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing-sharegpt"
+            payload = live_benchmark.run_live_semantic_eval(
+                sharegpt_corpus_dir=missing,
+                sharegpt_conversations=1,
+                semantic_gate_fn=fake_live_semantic,
+            )
+
+        raw = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(payload["ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertFalse(payload["quality_claim_attempted"])
+        self.assertEqual(payload["status"], "missing_sharegpt_corpus")
+        self.assertEqual(payload["diagnostic"]["reason_code"], "sharegpt_corpus_missing")
+        self.assertIn("convert_to_aippocampus.py", payload["diagnostic"]["preparation_command"])
+        self.assertIn("benchmark_corpus/output/sharegpt_coding_multiturn", raw)
+        self.assertNotIn(str(missing), raw)
+        self.assertIn("live_semantic_model_quality", payload["cannot_claim"])
+
     def test_live_eval_uses_prompt_hook_with_sanitized_report(self) -> None:
         seen_prompts: list[str] = []
 

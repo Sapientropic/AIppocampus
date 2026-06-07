@@ -35,6 +35,13 @@ DEFAULT_WORKERS = ("gate", "alias", "scope")
 DEFAULT_CASE_WORKERS = 0
 SCHEMA_VERSION = 1
 HIGH_CONFIDENCE_SEMANTIC_THRESHOLD = 0.9
+SHAREGPT_CODING_CORPUS_REL = "benchmark_corpus/output/sharegpt_coding_multiturn"
+SHAREGPT_CODING_MESSAGES_REL = f"{SHAREGPT_CODING_CORPUS_REL}/messages.jsonl"
+SHAREGPT_CODING_PREP_COMMAND = (
+    "python benchmark_corpus/convert_to_aippocampus.py --source sharegpt "
+    "--input benchmark_corpus/sharegpt_raw --min-turns 2 --coding-only "
+    "--output benchmark_corpus/output/sharegpt_coding_multiturn"
+)
 
 
 SemanticGateFn = Callable[..., dict[str, Any]]
@@ -425,6 +432,7 @@ def unavailable_payload(*, reason: str, started: float, config: dict[str, Any]) 
         "status": "skipped_missing_semantic_backend",
         "ok": True,
         "quality_gate_ok": False,
+        "quality_claim_attempted": False,
         "config": config,
         "metrics": {
             "total_cases": 0,
@@ -478,6 +486,52 @@ def unavailable_payload(*, reason: str, started: float, config: dict[str, Any]) 
             quality_gate_ok=False,
         ),
         "skip_reason": reason,
+        "privacy_boundary": privacy_boundary(case_ids_are_hashed=True),
+        "cannot_claim": ["live_semantic_model_quality"],
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
+def missing_sharegpt_corpus_payload(
+    *,
+    started: float,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_live_semantic_gate_benchmark",
+        "generated_at": gate.now_utc(),
+        "status": "missing_sharegpt_corpus",
+        "ok": False,
+        "quality_gate_ok": False,
+        "quality_claim_attempted": False,
+        "config": {
+            **config,
+            "required_public_corpus": SHAREGPT_CODING_CORPUS_REL,
+        },
+        "metrics": {
+            "total_cases": 0,
+            "correct_count": 0,
+            "accuracy": 0.0,
+            "semantic_model_call_count": 0,
+        },
+        "cases": [],
+        "issue_readouts": issue_readouts_for_metrics(
+            {
+                "semantic_model_call_count": 0,
+                "semantic_evidence_guarded_to_scent_count": 0,
+                "semantic_evidence_to_source_required_route_count": 0,
+                "semantic_evidence_guarded_to_plain_scent_count": 0,
+                "evidence_false_positive_count": 0,
+            },
+            quality_gate_ok=False,
+        ),
+        "diagnostic": {
+            "reason_code": "sharegpt_corpus_missing",
+            "missing_artifact": SHAREGPT_CODING_MESSAGES_REL,
+            "preparation_command": SHAREGPT_CODING_PREP_COMMAND,
+            "quality_claim_attempted": False,
+        },
         "privacy_boundary": privacy_boundary(case_ids_are_hashed=True),
         "cannot_claim": ["live_semantic_model_quality"],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
@@ -669,10 +723,13 @@ def run_live_semantic_eval(
         workers=semantic_workers,
         use_cache=semantic_result_cache_enabled,
     )
+    corpus_dir = Path(sharegpt_corpus_dir or gate.DEFAULT_SHAREGPT_CORPUS_DIR)
+    if not (corpus_dir / "messages.jsonl").exists():
+        return missing_sharegpt_corpus_payload(started=started, config=config)
     with tempfile.TemporaryDirectory(prefix="aippocampus-live-semantic-benchmark-") as tmp:
         fixture = gate.build_sharegpt_coding_fixture(
             Path(tmp),
-            corpus_dir=Path(sharegpt_corpus_dir or gate.DEFAULT_SHAREGPT_CORPUS_DIR),
+            corpus_dir=corpus_dir,
             max_conversations=sharegpt_conversations,
         )
         cases = gate.select_cases(live_semantic_cases(fixture), case_limit)
@@ -699,6 +756,7 @@ def run_live_semantic_eval(
         "status": status,
         "ok": True,
         "quality_gate_ok": quality_gate_ok,
+        "quality_claim_attempted": True,
         "config": config,
         "metrics": metrics,
         "cases": results,
@@ -725,6 +783,11 @@ def print_human_summary(payload: dict[str, Any]) -> None:
     )
     if payload.get("skip_reason"):
         print(f"- skip reason: {payload['skip_reason']}")
+    diagnostic = payload.get("diagnostic") or {}
+    if diagnostic.get("reason_code") == "sharegpt_corpus_missing":
+        print(f"- missing artifact: {diagnostic.get('missing_artifact')}")
+        print(f"- prepare corpus: {diagnostic.get('preparation_command')}")
+        print("- quality claim attempted: false")
 
 
 def parse_workers(raw: str) -> tuple[str, ...]:

@@ -70,6 +70,10 @@ COMMANDS = {
         "aippocampus_runtime.recall.why_cli",
         prefix=("why-not-recall",),
     ),
+    "self-note": CommandSpec(
+        "agent_self_note_cli.py",
+        "aippocampus_runtime.source.agent_self_note_cli",
+    ),
 }
 
 SCRIPT_MODULES = {
@@ -297,6 +301,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  health              Run runtime health checks", file=target)
     print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
+    print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
     print("  update status       Check personal core/magic readiness", file=target)
     print("  export              Export a portable AIppocampus bundle", file=target)
     print("  import              Import a portable AIppocampus bundle", file=target)

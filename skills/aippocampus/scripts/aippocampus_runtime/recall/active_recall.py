@@ -39,6 +39,7 @@ from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.agent_self_notes import (
     default_agent_self_notes_path,
     load_agent_self_notes,
+    public_agent_self_note_surface,
     search_agent_self_notes,
 )
 from aippocampus_runtime.subconscious.candidate_router import (
@@ -302,33 +303,6 @@ def _source_reopen_routes_from_surfaces(
     return routes
 
 
-def _public_self_note_surface(row: dict[str, Any]) -> dict[str, Any]:
-    keys = (
-        "note_id",
-        "created_at",
-        "thread_key",
-        "note_text",
-        "trigger",
-        "support_level",
-        "trust_level",
-        "action_grammar",
-        "trust_contract",
-        "active_recall_surface",
-        "retrieval_role",
-        "matched_terms",
-        "source_boundary",
-    )
-    public = {key: row.get(key) for key in keys if row.get(key) not in (None, "", [])}
-    if "note_text" in public:
-        public["note_text"] = _public_text(public["note_text"], chars=280)
-    if "thread_key" in public:
-        public["thread_key"] = _public_text(public["thread_key"], chars=180)
-    public["source_refs"] = [
-        route for ref in row.get("source_refs") or [] if (route := _safe_route_ref(ref))
-    ][:4]
-    return public
-
-
 def _public_working_memory_cards(rows: list[dict[str, Any]], *, max_cards: int) -> list[dict[str, Any]]:
     if not rows:
         return []
@@ -395,7 +369,7 @@ def active_recall_context(
         if notes_path.exists()
         else []
     )
-    memory_atmosphere = [_public_self_note_surface(row) for row in self_note_matches]
+    memory_atmosphere = [public_agent_self_note_surface(row) for row in self_note_matches]
     wm_path = working_memory_path or default_working_memory_path(registry_path=registry_path)
     working_rows = (
         match_working_memory(
