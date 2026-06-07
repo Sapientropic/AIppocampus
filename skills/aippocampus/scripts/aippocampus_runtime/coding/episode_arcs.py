@@ -58,7 +58,9 @@ _RELATIONS = {
     ("attempted_route", "failed_check"): "failed_with",
     ("attempted_route", "tool_failure"): "failed_with",
     ("failed_check", "route_rejected"): "supported",
+    ("failed_check", "rejected_route"): "supported",
     ("tool_failure", "route_rejected"): "supported",
+    ("tool_failure", "rejected_route"): "supported",
     ("user_correction", "accepted_workaround"): "accepted_after",
     ("user_correction", "accepted_decision"): "accepted_after",
     ("accepted_workaround", "source_reopen"): "requires_reopen_before",
@@ -133,19 +135,75 @@ def _sort_key(row: Mapping[str, Any], fallback_index: int) -> tuple[int, int, in
         return (1, fallback_index, fallback_index)
 
 
+def _nonzero_exit(row: Mapping[str, Any]) -> bool:
+    value = row.get("exit_code")
+    if value is None:
+        value = row.get("exit_status")
+    try:
+        return int(str(value)) != 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _row_reports_failure(row: Mapping[str, Any]) -> bool:
+    material = " ".join(
+        str(row.get(key) or "")
+        for key in ("hard_event_kind", "status", "failure_family", "result")
+    ).casefold()
+    return _nonzero_exit(row) or "failed" in material or "failure" in material
+
+
 def _event_kind(row: Mapping[str, Any]) -> str:
-    return str(row.get("event_kind") or row.get("event_type") or "").strip()
+    raw = str(row.get("event_kind") or row.get("event_type") or row.get("decision_kind") or "").strip()
+    lowered = raw.casefold()
+    command_class = str(row.get("command_class") or row.get("target_class") or "").casefold()
+    operation_family = str(
+        row.get("critical_operation_family")
+        or row.get("operation_family")
+        or row.get("event_family")
+        or ""
+    ).casefold()
+    if _row_reports_failure(row):
+        if command_class == "test" or operation_family in {"test_check_command_result", "test_result"}:
+            return "failed_check"
+        if lowered in {"tool_call_observed", "tool_call", "command_result"}:
+            return "tool_failure"
+    if lowered == "do_not_repeat":
+        return "rejected_route"
+    return raw
+
+
+def _event_origin(row: Mapping[str, Any], event_kind: str, profile: Mapping[str, Any]) -> str:
+    origin = str(row.get("origin") or row.get("source_family") or "").strip()
+    if origin:
+        return origin
+    if event_kind in {"failed_check", "tool_failure"} or row.get("command_class") or row.get("hard_event_kind"):
+        return "behavior_event"
+    if row.get("decision_id") or row.get("event_type") or row.get("decision_kind"):
+        return "coding_decision_event"
+    return str(profile.get("origin") or "clean_source")
+
+
+def _arc_origin(events: Sequence[Mapping[str, Any]], profile: Mapping[str, Any]) -> str:
+    origins = [str(event.get("origin") or "") for event in events]
+    if "behavior_event" in origins:
+        return "behavior_event"
+    if origins and all(origin == "coding_decision_event" for origin in origins):
+        return "coding_decision_event"
+    return str(profile.get("origin") or "clean_source")
 
 
 def _normalize_event(row: Mapping[str, Any], fallback_index: int) -> dict[str, Any]:
     refs = _compact_source_refs(row)
     event_kind = _event_kind(row)
+    _, profile = _profile_for([event_kind])
     event_id = str(row.get("event_id") or row.get("decision_id") or "").strip()
     if not event_id:
         event_id = _stable_id("event", event_kind, refs, fallback_index, length=16)
     return {
         "event_id": event_id,
         "event_kind": event_kind,
+        "origin": _event_origin(row, event_kind, profile),
         "source_refs": refs,
         "source_ref_hash": _source_ref_hash(refs[0]) if refs else "",
         "turn_id": str(row.get("turn_id") or ""),
@@ -272,7 +330,7 @@ def build_episode_arcs(event_rows: Sequence[Mapping[str, Any]]) -> list[dict[str
                 "kind": EPISODE_ARC_KIND,
                 "episode_id": episode_id,
                 "episode_kind": episode_kind,
-                "origin": str(profile.get("origin") or "clean_source"),
+                "origin": _arc_origin(events, profile),
                 "source_event_ids": [str(event["event_id"]) for event in events],
                 "source_refs": source_refs,
                 "source_ref_hashes": source_hashes,
