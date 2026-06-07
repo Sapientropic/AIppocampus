@@ -9,6 +9,7 @@ from aippocampus_runtime.core import compact_text, sanitize_external_model_paylo
 from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
 from aippocampus_runtime.recall.prompt_context_diagnostics import (
     brief_precision_debug_summary,
+    legacy_candidate_summary_suppressed,
     route_delivery_debug_summary,
 )
 
@@ -553,26 +554,37 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 )
         lines.append(_evidence_boundary_line(evidence_cards))
     else:
+        has_direction_with_ref = _has_direction_with_ref_card(result)
         if _fresh_packet_source_required(result):
             lines.append(
                 "Ambient recall route (aippocampus source_required). Reopen source before facts:"
             )
-        elif _has_direction_with_ref_card(result):
+        elif has_direction_with_ref:
             lines.append(
                 "Ambient recall candidate-backed direction (aippocampus direction_with_ref). Use refs as route context, not fact:"
             )
         else:
             lines.append("Ambient recall scent (aippocampus direction_only). Related prior context:")
-        for item in result.get("candidates") or []:
+        visible_candidates = (
+            []
+            if legacy_candidate_summary_suppressed(result)
+            else list(result.get("candidates") or [])
+        )
+        route_lines = [*fresh_packet_reopen_lines(result), *semantic_route_hint_lines(result)]
+        candidate_lines: list[str] = []
+        for item in visible_candidates:
             anchors = ", ".join(item.get("anchors") or [])
             terms = ", ".join(item.get("matched_terms") or item.get("keywords") or [])
             tail = f" | terms: {terms}" if terms else ""
-            lines.append(f"- {item.get('title')}: {anchors}{tail}")
-        lines.extend(fresh_packet_reopen_lines(result))
-        lines.extend(semantic_route_hint_lines(result))
-        lines.append(
-            "Use only if it helps; do not mention recalled content as fact unless backed by bounded_evidence, source_open, or reopened source."
-        )
+            candidate_lines.append(f"- {item.get('title')}: {anchors}{tail}")
+        if candidate_lines or route_lines or has_direction_with_ref:
+            lines.extend(candidate_lines)
+            lines.extend(route_lines)
+            lines.append(
+                "Use only if it helps; do not mention recalled content as fact unless backed by bounded_evidence, source_open, or reopened source."
+            )
+        else:
+            lines.clear()
     if result.get("working_memory"):
         lines.append("Soft working memory candidates (working continuity; source-backed staging):")
         for item in result.get("working_memory") or []:
@@ -721,7 +733,11 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             "Escalate to source court for exact quotes, wider context, conflicts, stale/sensitive/high-risk claims, or ignore_or_blocked routes."
         )
     if result.get("reasons"):
+        if not lines:
+            return None
         lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))
+    elif not lines:
+        return None
     context = "\n".join(lines)
     return compact_text(context, max_chars)
 
