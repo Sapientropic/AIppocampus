@@ -255,11 +255,53 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(
             payload["metrics"]["semantic_evidence_guarded_to_plain_scent_count"], 0
         )
+        self.assertEqual(payload["metrics"]["paid_semantic_hit_count"], 2)
+        self.assertEqual(payload["metrics"]["high_confidence_paid_semantic_hit_count"], 2)
+        self.assertEqual(payload["metrics"]["paid_semantic_hit_to_source_reopen_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["source_reopen_after_semantic_hit_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["semantic_hit_user_visible_lift_rate"], 1.0)
+        self.assertEqual(
+            payload["metrics"]["paid_semantic_hit_guarded_to_plain_scent_count"], 0
+        )
+        self.assertEqual(
+            payload["metrics"]["manual_query_invention_after_paid_semantic_hit_count"],
+            0,
+        )
+        self.assertEqual(payload["metrics"]["useful_route_suppressed_count"], 0)
+        self.assertEqual(payload["metrics"]["all_scent_collapse_rate"], 0.0)
+        self.assertEqual(payload["metrics"]["overconservative_suppression_reason_counts"], {})
+        self.assertFalse(
+            payload["metrics"]["bounded_evidence_after_semantic_reopen_rate_measured"]
+        )
+        self.assertIsNone(
+            payload["metrics"]["bounded_evidence_after_semantic_reopen_rate"]
+        )
         readout = payload["issue_readouts"]["github_786"]
         self.assertTrue(readout["live_semantic_reopen_quality_measured"])
         self.assertEqual(readout["live_semantic_reopen_quality"], "source_required_reopen_route")
         self.assertEqual(readout["semantic_evidence_guarded_to_plain_scent_count"], 0)
         self.assertTrue(readout["live_semantic_reopen_closeout_eligible"])
+        readout_201 = payload["issue_readouts"]["github_201"]
+        self.assertTrue(readout_201["live_paid_semantic_route_actionability_measured"])
+        self.assertEqual(readout_201["paid_semantic_hit_count"], 2)
+        self.assertEqual(readout_201["paid_semantic_hit_to_source_reopen_rate"], 1.0)
+        self.assertEqual(
+            readout_201["manual_query_invention_after_paid_semantic_hit_count"],
+            0,
+        )
+        self.assertEqual(
+            readout_201["paid_semantic_hit_guarded_to_plain_scent_count"],
+            0,
+        )
+        self.assertEqual(readout_201["semantic_hit_user_visible_lift_rate"], 1.0)
+        self.assertEqual(readout_201["all_scent_collapse_rate"], 0.0)
+        self.assertFalse(
+            readout_201["bounded_evidence_after_semantic_reopen_rate_measured"]
+        )
+        self.assertTrue(readout_201["source_boundary_preserved"])
+        self.assertTrue(
+            readout_201["live_semantic_route_actionability_closeout_eligible"]
+        )
         self.assertEqual(
             payload["metrics"]["continuation_language_metrics"]["zh"][
                 "semantic_evidence_to_source_required_route_count"
@@ -271,6 +313,56 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
                 "semantic_evidence_guarded_to_plain_scent_count"
             ],
             0,
+        )
+
+    def test_paid_semantic_metrics_count_manual_search_delegation(self) -> None:
+        rows = [
+            {
+                "semantic_gate_called": True,
+                "semantic_available": True,
+                "semantic_decision": "evidence",
+                "semantic_confidence": 0.94,
+                "actual": "scent",
+                "source_required_reopen_plan_ready": False,
+                "source_reopen_manual_query_expected": None,
+            },
+            {
+                "semantic_gate_called": True,
+                "semantic_available": True,
+                "semantic_decision": "evidence",
+                "semantic_confidence": 0.91,
+                "actual": "scent",
+                "source_required_reopen_plan_ready": True,
+                "source_reopen_manual_query_expected": True,
+            },
+            {
+                "semantic_gate_called": True,
+                "semantic_available": True,
+                "semantic_decision": "evidence",
+                "semantic_confidence": 0.88,
+                "actual": "evidence",
+                "source_required_reopen_plan_ready": False,
+                "source_reopen_manual_query_expected": False,
+            },
+        ]
+
+        metrics = live_benchmark.summarize_live_semantic_results(rows)
+
+        self.assertEqual(metrics["paid_semantic_hit_count"], 2)
+        self.assertEqual(metrics["high_confidence_paid_semantic_hit_count"], 2)
+        self.assertEqual(metrics["paid_semantic_hit_to_source_reopen_rate"], 0.5)
+        self.assertEqual(metrics["source_reopen_after_semantic_hit_rate"], 0.5)
+        self.assertEqual(metrics["paid_semantic_hit_guarded_to_plain_scent_count"], 1)
+        self.assertEqual(metrics["manual_query_invention_after_paid_semantic_hit_count"], 2)
+        self.assertEqual(metrics["useful_route_suppressed_count"], 2)
+        self.assertEqual(metrics["all_scent_collapse_rate"], 0.5)
+        self.assertEqual(metrics["semantic_hit_user_visible_lift_rate"], 0.5)
+        self.assertEqual(
+            metrics["overconservative_suppression_reason_counts"],
+            {
+                "manual_query_expected_after_reopen_route": 1,
+                "plain_scent_without_reopen_plan": 1,
+            },
         )
 
     def test_live_eval_fails_quality_gate_when_live_semantic_never_available(self) -> None:

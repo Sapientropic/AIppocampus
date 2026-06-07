@@ -34,9 +34,55 @@ DEFAULT_SEMANTIC_TIMEOUT = 12
 DEFAULT_WORKERS = ("gate", "alias", "scope")
 DEFAULT_CASE_WORKERS = 0
 SCHEMA_VERSION = 1
+HIGH_CONFIDENCE_SEMANTIC_THRESHOLD = 0.9
 
 
 SemanticGateFn = Callable[..., dict[str, Any]]
+
+
+def paid_semantic_hit_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rows where model-only semantic evidence was useful but still needs source.
+
+    These are the #201 pressure cases: the semantic path found enough to avoid
+    broad manual search, but the hook correctly kept the foreground decision at
+    scent until clean source can be reopened.
+    """
+
+    hits: list[dict[str, Any]] = []
+    for row in rows:
+        if not (
+            row.get("semantic_gate_called")
+            and row.get("semantic_available")
+            and row.get("semantic_decision") == "evidence"
+        ):
+            continue
+        expected = str(row.get("expected") or "")
+        if expected:
+            if expected == "should_scent":
+                hits.append(row)
+            continue
+        if row.get("actual") == "scent":
+            hits.append(row)
+    return hits
+
+
+def paid_semantic_suppression_reasons(rows: list[dict[str, Any]]) -> dict[str, int]:
+    reasons: dict[str, int] = {}
+    for row in rows:
+        actual = row.get("actual")
+        if actual not in {"scent", "evidence"}:
+            reasons["semantic_hit_no_user_visible_route"] = (
+                reasons.get("semantic_hit_no_user_visible_route", 0) + 1
+            )
+        if actual == "scent" and not row.get("source_required_reopen_plan_ready"):
+            reasons["plain_scent_without_reopen_plan"] = (
+                reasons.get("plain_scent_without_reopen_plan", 0) + 1
+            )
+        if actual == "scent" and bool(row.get("source_reopen_manual_query_expected")):
+            reasons["manual_query_expected_after_reopen_route"] = (
+                reasons.get("manual_query_expected_after_reopen_route", 0) + 1
+            )
+    return dict(sorted(reasons.items()))
 
 
 def semantic_error_kind(error: Any) -> str:
@@ -96,6 +142,22 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
         and row.get("source_required_reopen_plan_ready")
     )
     plain_scent = guarded_to_scent - source_required_routes
+    paid_hits = paid_semantic_hit_rows(called)
+    high_confidence_paid_hits = sum(
+        1
+        for row in paid_hits
+        if float(row.get("semantic_confidence") or 0.0) >= HIGH_CONFIDENCE_SEMANTIC_THRESHOLD
+    )
+    manual_query_after_paid_hit = sum(
+        1
+        for row in paid_hits
+        if row.get("actual") in {"scent", "skip"}
+        and (
+            not row.get("source_required_reopen_plan_ready")
+            or bool(row.get("source_reopen_manual_query_expected"))
+        )
+    )
+    source_reopen_after_semantic_hit_rate = safe_rate(source_required_routes, len(paid_hits))
     evidence_allowed = sum(
         1
         for row in called
@@ -125,6 +187,20 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
         "semantic_evidence_guarded_to_scent_count": guarded_to_scent,
         "semantic_evidence_to_source_required_route_count": source_required_routes,
         "semantic_evidence_guarded_to_plain_scent_count": plain_scent,
+        "paid_semantic_hit_count": len(paid_hits),
+        "high_confidence_paid_semantic_hit_count": high_confidence_paid_hits,
+        "paid_semantic_hit_to_source_reopen_rate": source_reopen_after_semantic_hit_rate,
+        "source_reopen_after_semantic_hit_rate": source_reopen_after_semantic_hit_rate,
+        "semantic_hit_user_visible_lift_rate": source_reopen_after_semantic_hit_rate,
+        "paid_semantic_hit_guarded_to_plain_scent_count": plain_scent,
+        "manual_query_invention_after_paid_semantic_hit_count": manual_query_after_paid_hit,
+        "useful_route_suppressed_count": manual_query_after_paid_hit,
+        "all_scent_collapse_rate": safe_rate(plain_scent, len(paid_hits)),
+        "overconservative_suppression_reason_counts": (
+            paid_semantic_suppression_reasons(paid_hits)
+        ),
+        "bounded_evidence_after_semantic_reopen_rate_measured": False,
+        "bounded_evidence_after_semantic_reopen_rate": None,
         "semantic_evidence_allowed_count": evidence_allowed,
         "continuation_language_metrics": continuation_language_metrics(called),
     }
@@ -373,6 +449,20 @@ def unavailable_payload(*, reason: str, started: float, config: dict[str, Any]) 
             },
             "semantic_latency_ms": latency_summary([]),
             "semantic_evidence_guarded_to_scent_count": 0,
+            "semantic_evidence_to_source_required_route_count": 0,
+            "semantic_evidence_guarded_to_plain_scent_count": 0,
+            "paid_semantic_hit_count": 0,
+            "high_confidence_paid_semantic_hit_count": 0,
+            "paid_semantic_hit_to_source_reopen_rate": 0.0,
+            "source_reopen_after_semantic_hit_rate": 0.0,
+            "semantic_hit_user_visible_lift_rate": 0.0,
+            "paid_semantic_hit_guarded_to_plain_scent_count": 0,
+            "manual_query_invention_after_paid_semantic_hit_count": 0,
+            "useful_route_suppressed_count": 0,
+            "all_scent_collapse_rate": 0.0,
+            "overconservative_suppression_reason_counts": {},
+            "bounded_evidence_after_semantic_reopen_rate_measured": False,
+            "bounded_evidence_after_semantic_reopen_rate": None,
             "semantic_evidence_allowed_count": 0,
             "continuation_language_metrics": continuation_language_metrics([]),
         },
@@ -428,6 +518,13 @@ def issue_readouts_for_metrics(metrics: dict[str, Any], *, quality_gate_ok: bool
         metrics.get("semantic_evidence_to_source_required_route_count") or 0
     )
     plain_scent = int(metrics.get("semantic_evidence_guarded_to_plain_scent_count") or 0)
+    paid_hits = int(metrics.get("paid_semantic_hit_count") or guarded_to_scent)
+    manual_query_after_paid_hit = int(
+        metrics.get("manual_query_invention_after_paid_semantic_hit_count") or 0
+    )
+    lift_rate = float(metrics.get("semantic_hit_user_visible_lift_rate") or 0.0)
+    all_scent_collapse_rate = float(metrics.get("all_scent_collapse_rate") or 0.0)
+    false_positives = int(metrics.get("evidence_false_positive_count") or 0)
     measured = bool(
         quality_gate_ok
         and int(metrics.get("semantic_model_call_count") or 0) > 0
@@ -450,7 +547,48 @@ def issue_readouts_for_metrics(metrics: dict[str, Any], *, quality_gate_ok: bool
             "live_semantic_reopen_closeout_eligible": bool(
                 measured
                 and live_quality == "source_required_reopen_route"
-                and int(metrics.get("evidence_false_positive_count") or 0) == 0
+                and false_positives == 0
+            ),
+        },
+        "github_201": {
+            "live_paid_semantic_route_actionability_measured": measured,
+            "live_semantic_route_actionability": live_quality,
+            "paid_semantic_hit_count": paid_hits,
+            "high_confidence_paid_semantic_hit_count": int(
+                metrics.get("high_confidence_paid_semantic_hit_count") or 0
+            ),
+            "paid_semantic_hit_to_source_reopen_rate": float(
+                metrics.get("paid_semantic_hit_to_source_reopen_rate") or 0.0
+            ),
+            "source_reopen_after_semantic_hit_rate": float(
+                metrics.get("source_reopen_after_semantic_hit_rate") or 0.0
+            ),
+            "semantic_hit_user_visible_lift_rate": lift_rate,
+            "paid_semantic_hit_guarded_to_plain_scent_count": int(
+                metrics.get("paid_semantic_hit_guarded_to_plain_scent_count") or plain_scent
+            ),
+            "manual_query_invention_after_paid_semantic_hit_count": (
+                manual_query_after_paid_hit
+            ),
+            "useful_route_suppressed_count": int(
+                metrics.get("useful_route_suppressed_count") or manual_query_after_paid_hit
+            ),
+            "all_scent_collapse_rate": all_scent_collapse_rate,
+            "overconservative_suppression_reason_counts": dict(
+                metrics.get("overconservative_suppression_reason_counts") or {}
+            ),
+            "bounded_evidence_after_semantic_reopen_rate_measured": bool(
+                metrics.get("bounded_evidence_after_semantic_reopen_rate_measured")
+            ),
+            "bounded_evidence_after_semantic_reopen_rate": metrics.get(
+                "bounded_evidence_after_semantic_reopen_rate"
+            ),
+            "source_boundary_preserved": false_positives == 0,
+            "live_semantic_route_actionability_closeout_eligible": bool(
+                measured
+                and live_quality == "source_required_reopen_route"
+                and manual_query_after_paid_hit == 0
+                and false_positives == 0
             ),
         }
     }

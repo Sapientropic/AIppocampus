@@ -793,8 +793,13 @@ Report boundary:
   `semantic_decision_counts`, `semantic_evidence_guarded_to_scent_count`,
   `semantic_evidence_to_source_required_route_count`,
   `semantic_evidence_guarded_to_plain_scent_count`,
+  `paid_semantic_hit_count`,
+  `paid_semantic_hit_to_source_reopen_rate`,
+  `manual_query_invention_after_paid_semantic_hit_count`,
+  `useful_route_suppressed_count`, `all_scent_collapse_rate`,
   `semantic_evidence_allowed_count`, sanitized `semantic_error_kind_counts`,
-  and `issue_readouts.github_786.live_semantic_reopen_quality`
+  `issue_readouts.github_201.live_semantic_route_actionability`, and
+  `issue_readouts.github_786.live_semantic_reopen_quality`
 - reports do not emit raw prompts, aliases, model reasons, snippets, titles,
   source-reference details, absolute paths, or provider error text
 - semantic payload construction is quality-first for the foreground hook:
@@ -988,6 +993,25 @@ Current smoke and diagnostic results from 2026-05-30:
   downgrade every semantic `evidence` to `scent`; the live evidence cases now
   prove the narrower boundary: vague continuation stays `scent`, while explicit
   prior wording/source/decision prompts may surface source-backed evidence.
+- #201 / #786 live semantic route-actionability smoke on 2026-06-07: public
+  checked-in local corpus converted to clean source, 4 conversations / 8 cases,
+  DeepSeek-compatible live semantic route enabled with `--semantic-workers
+  default`, `--case-workers 1`, and sanitized JSON output under `.tmp`. Result:
+  `status=sufficient`, `quality_gate_ok=true`, 8/8 correct, semantic available
+  4/4, evidence false positives 0, and `semantic_evidence_guarded_to_scent_count=3`.
+  All 3 high-confidence paid/live semantic `evidence -> scent` continuation
+  cases carried `source_required` / `reopenable_route`,
+  `semantic_evidence_guarded_to_plain_scent_count=0`,
+  `paid_semantic_hit_to_source_reopen_rate=1.0`,
+  `manual_query_invention_after_paid_semantic_hit_count=0`,
+  `all_scent_collapse_rate=0.0`, and
+  `live_semantic_route_actionability=source_required_reopen_route`. This proves
+  the source-reopen route projection and no-manual-query handoff for this public
+  live smoke only. It pairs with the deterministic recall-navigation
+  follow-through fixture for bounded-evidence-after-reopen behavior; the live
+  smoke itself reports `bounded_evidence_after_semantic_reopen_rate` as not
+  measured and does not claim all future semantic prompts or private-registry
+  vague recall are solved.
 - #786 semantic-reopen smoke on 2026-06-06: public checked-in local corpus
   converted to clean source, 4 conversations / 8 cases, DeepSeek-compatible
   live semantic route enabled with `--semantic-workers default`,
