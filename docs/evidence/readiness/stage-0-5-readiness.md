@@ -330,10 +330,12 @@ above. The canonical command details live in
   and recorded 2 complete source-reopened paired answer-quality reviews. Plain
   and question-aware arms were both useful/supported/citation-correct at 1.0,
   answer-usefulness delta was 0.0, and question-aware wrong-hint rate was 0.0.
-  This is now a no-lift root-cause diagnostic rather than #248 closeout
-  evidence: the plain baseline reused the same selected question-aware rows and
-  reached a term-coverage ceiling, while the selected slice had only 1
-  `question_link` and 0 `theme_candidate` rows.
+  The revised structural report also compares against a question-blind same-row
+  baseline: question-blind term coverage was 0.7143, question-aware coverage was
+  1.0, and the structural route-term delta was 0.2857. This is still not #248
+  closeout evidence because it is not a true no-question-aware retrieval or
+  generated-answer baseline, and the selected slice had only 1 `question_link`
+  and 0 `theme_candidate` rows.
 - #63 adds the first deterministic Journey Tracking P1-P3 core. It defines
   source-backed waypoint/journey structures, append-only waypoint history,
   conservative multi-thread instantiation, status transitions, expiry/TTL

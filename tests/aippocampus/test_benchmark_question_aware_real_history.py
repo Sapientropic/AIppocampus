@@ -176,6 +176,11 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["pack_count"], 1)
         self.assertEqual(payload["metrics"]["source_ref_fidelity_rate"], 1.0)
         self.assertEqual(payload["metrics"]["source_seed_kind_counts"]["theme_candidate"], 1)
+        self.assertIn("question_blind_term_coverage", payload["metrics"])
+        self.assertGreater(
+            payload["metrics"]["question_aware_over_question_blind_delta"],
+            0.0,
+        )
         self.assertGreater(payload["metrics"]["quote_required_case_count"], 0)
         self.assertEqual(
             payload["pack_selection"]["strategy"],
@@ -192,6 +197,9 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         )
         self.assertTrue(payload["evaluation_design"]["same_selected_rows_for_plain_and_question_aware"])
         self.assertTrue(payload["evaluation_design"]["plain_baseline_receives_question_metadata"])
+        self.assertTrue(payload["evaluation_design"]["question_blind_structural_baseline_measured"])
+        self.assertFalse(payload["evaluation_design"]["question_blind_baseline_receives_question_metadata"])
+        self.assertFalse(payload["evaluation_design"]["question_blind_is_true_retrieval_baseline"])
         self.assertFalse(payload["evaluation_design"]["selection_lift_measured"])
         self.assertFalse(payload["evaluation_design"]["answer_generation_measured_by_benchmark"])
         self.assertIn(
@@ -206,6 +214,42 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertNotIn("msg-private", rendered)
         self.assertNotIn("session:private", rendered)
         self.assertNotIn(str(REPO_ROOT), rendered)
+
+    def test_question_blind_baseline_omits_question_and_theme_labels(self) -> None:
+        context = benchmark.render_question_blind_source_terms(fixture_rows())
+
+        self.assertIn("question_candidate", context)
+        self.assertIn("source refs", context)
+        self.assertNotIn("context after compaction", context)
+        self.assertNotIn("Recurring question theme", context)
+        self.assertNotIn("handoff calibration", context)
+
+    def test_question_aware_terms_lift_over_question_blind_baseline(self) -> None:
+        payload = benchmark.run_question_aware_real_history_benchmark(
+            job_rows=[
+                {
+                    "finding_kind": "question_candidate",
+                    "fingerprint": "sf_unique_question",
+                    "question_short": "activation boundary lift",
+                    "question_text": "Where should activation boundary lift appear?",
+                    "source_refs": [source_ref("1")],
+                    "concepts": ["continuity"],
+                }
+            ],
+        )
+
+        self.assertLess(
+            payload["metrics"]["question_blind_term_coverage"],
+            payload["metrics"]["question_aware_term_coverage"],
+        )
+        self.assertGreater(
+            payload["metrics"]["question_aware_over_question_blind_delta"],
+            0.0,
+        )
+        self.assertIn(
+            "question_aware_fields_add_structural_route_terms_over_question_blind_baseline",
+            payload["can_claim"],
+        )
 
     def test_frontier_concepts_counted_by_baseline_are_preserved_by_scaffold(self) -> None:
         payload = benchmark.run_question_aware_real_history_benchmark(
@@ -277,6 +321,7 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertIn("private_real_history_answer_quality", payload["cannot_claim"])
         self.assertIn("quote_fidelity_without_clean_source_reopen", payload["cannot_claim"])
         self.assertIn("user_visible_recall_improvement", payload["cannot_claim"])
+        self.assertIn("true_no_question_aware_retrieval_baseline", payload["cannot_claim"])
         self.assertIn("answer_usefulness_beyond_structural_proxy", payload["cannot_claim"])
 
     def test_answer_quality_review_compares_paired_arms_without_overclaiming(self) -> None:
