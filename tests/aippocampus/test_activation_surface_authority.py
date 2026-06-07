@@ -129,13 +129,129 @@ class ActivationSurfaceAuthorityTests(unittest.TestCase):
         )
         surfaces = {row["surface_id"]: row for row in report["surfaces"]}
 
-        self.assertEqual(surfaces["demote_noisy_trigger"]["authority_level"], "guardrail")
+        self.assertEqual(surfaces["demote_noisy_trigger"]["authority_level"], "advisory")
         self.assertEqual(surfaces["park_uncertain_dream"]["authority_level"], "blocked")
         self.assertEqual(surfaces["retire_superseded_nudge"]["authority_level"], "blocked")
         self.assertFalse(surfaces["park_uncertain_dream"]["eligible_for_foreground"])
         self.assertEqual(report["metrics"]["activation_truth_status_mutation_attempt_count"], 0)
         self.assertEqual(report["metrics"]["activation_clean_source_mutation_attempt_count"], 0)
         self.assertTrue(report["contract"]["pruning_changes_activation_eligibility_only"])
+
+    def test_pruning_rows_become_guardrail_only_when_source_backed_or_elevated(self) -> None:
+        report = activation_surface_authority_audit(
+            [
+                {
+                    "surface_id": "plain_demote",
+                    "surface_kind": "pruning_row",
+                    "pruning_action": "demote",
+                    "authority_level": "guardrail",
+                },
+                {
+                    "surface_id": "source_backed_demote",
+                    "surface_kind": "pruning_row",
+                    "pruning_action": "demote",
+                    "authority_level": "guardrail",
+                    "source_refs": [{"source_id": "clean:prune", "message_id": "m-prune"}],
+                },
+                {
+                    "surface_id": "operator_elevated_demote",
+                    "surface_kind": "pruning_row",
+                    "pruning_action": "demote",
+                    "authority_level": "guardrail",
+                    "explicit_authority_elevation": True,
+                },
+            ]
+        )
+        surfaces = {row["surface_id"]: row for row in report["surfaces"]}
+
+        self.assertEqual(surfaces["plain_demote"]["authority_level"], "advisory")
+        self.assertEqual(surfaces["source_backed_demote"]["authority_level"], "guardrail")
+        self.assertEqual(surfaces["operator_elevated_demote"]["authority_level"], "guardrail")
+        self.assertEqual(
+            surfaces["plain_demote"]["authority_diagnostics"]["pruning_authority"],
+            "default_advisory",
+        )
+
+    def test_activation_freshness_decay_downgrades_or_blocks_strategy_rows(self) -> None:
+        report = activation_surface_authority_audit(
+            [
+                {
+                    "surface_id": "stale_working_memory",
+                    "surface_kind": "working_memory",
+                    "authority_level": "advisory",
+                    "freshness": "stale",
+                },
+                {
+                    "surface_id": "review_overdue_nudge",
+                    "surface_kind": "aar_nudge",
+                    "authority_level": "advisory",
+                    "freshness": "review_overdue",
+                },
+                {
+                    "surface_id": "superseded_trigger",
+                    "surface_kind": "semantic_trigger",
+                    "authority_level": "advisory",
+                    "freshness": "superseded",
+                },
+                {
+                    "surface_id": "current_source_evidence",
+                    "surface_kind": "source_reopen_evidence",
+                    "authority_level": "advisory",
+                    "freshness": "stale",
+                    "source_refs": [{"source_id": "clean:still-evidence", "message_id": "m1"}],
+                },
+            ]
+        )
+        surfaces = {row["surface_id"]: row for row in report["surfaces"]}
+
+        self.assertEqual(surfaces["stale_working_memory"]["authority_level"], "candidate")
+        self.assertEqual(surfaces["review_overdue_nudge"]["authority_level"], "candidate")
+        self.assertEqual(surfaces["superseded_trigger"]["authority_level"], "blocked")
+        self.assertFalse(surfaces["superseded_trigger"]["eligible_for_foreground"])
+        self.assertEqual(
+            surfaces["stale_working_memory"]["authority_diagnostics"]["freshness_decay"],
+            "advisory_to_candidate",
+        )
+        self.assertEqual(surfaces["current_source_evidence"]["authority_level"], "advisory")
+        self.assertTrue(surfaces["current_source_evidence"]["can_support_factual_claim"])
+
+    def test_report_exposes_versioned_default_authority_policy_envelope(self) -> None:
+        report = activation_surface_authority_audit(
+            [{"surface_id": "route", "surface_kind": "ambient_card"}]
+        )
+        policy = report["authority_policy"]
+
+        self.assertEqual(policy["version"], "activation-authority-defaults-v2")
+        self.assertEqual(policy["default_authority"]["pruning_row"], "advisory")
+        self.assertIn("mapping_hash", policy)
+        self.assertEqual(len(policy["mapping_hash"]), 16)
+        self.assertIn("pruning rows reduce foreground eligibility", policy["rationale"])
+        self.assertFalse(policy["privacy_boundary"]["raw_prompt_serialized"])
+
+    def test_candidate_validation_annotations_do_not_upgrade_candidate_authority(self) -> None:
+        report = activation_surface_authority_audit(
+            [
+                {
+                    "surface_id": "validated_semantic_route",
+                    "surface_kind": "semantic_trigger",
+                    "authority_level": "candidate",
+                    "source_reopen_success_count": 4,
+                    "last_verified_at": "2026-06-07T00:00:00Z",
+                    "independent_source_ref_count": 2,
+                    "source_refs": [{"source_id": "clean:route", "message_id": "m-route"}],
+                }
+            ]
+        )
+        row = report["surfaces"][0]
+        validation = row["candidate_validation"]
+
+        self.assertEqual(row["authority_level"], "candidate")
+        self.assertEqual(validation["status"], "validated_route")
+        self.assertEqual(validation["successful_source_reopen_count"], 4)
+        self.assertEqual(validation["independent_source_ref_count"], 2)
+        self.assertEqual(validation["authority_boundary"], "candidate_not_evidence")
+        self.assertFalse(validation["upgrades_authority"])
+        self.assertFalse(row["can_support_factual_claim"])
 
     def test_authority_leak_counts_strategy_rows_used_as_fact_without_source(self) -> None:
         report = activation_surface_authority_audit(
@@ -360,6 +476,53 @@ class ActivationSurfaceAuthorityTests(unittest.TestCase):
         self.assertTrue(report["contract"]["no_write_report_only"])
         self.assertTrue(report["contract"]["clean_source_preserved"])
         self.assertTrue(report["contract"]["foreground_hook_mutation"] is False)
+
+    def test_dead_letter_report_marks_repeated_audit_inactivity_without_deleting_source(self) -> None:
+        report = activation_dead_letter_candidate_report(
+            [
+                {
+                    "surface_id": "retired_never_reopened",
+                    "surface_kind": "ambient_card",
+                    "pruning_action": "retire",
+                    "no_source_reopen_count": 5,
+                    "dead_letter_audit_count": 4,
+                    "source_refs": [{"source_id": "clean:old", "message_id": "m-old"}],
+                    "provenance_pointer": "manifest:old-route",
+                }
+            ],
+            no_source_reopen_threshold=3,
+        )
+        candidate = report["candidates"][0]
+
+        self.assertTrue(candidate["inactive_after_repeated_audits"])
+        self.assertTrue(candidate["payload_compaction_ready"])
+        self.assertEqual(candidate["recommended_action"], "dead_letter_candidate_mark_inactive")
+        self.assertTrue(candidate["source_refs_preserved"])
+        self.assertTrue(report["contract"]["clean_source_preserved"])
+        self.assertFalse(report["contract"]["truth_status_changed"])
+
+        manifest = apply_dead_letter_candidate_manifest(
+            [
+                {
+                    "surface_id": "retired_never_reopened",
+                    "surface_kind": "ambient_card",
+                    "pruning_action": "retire",
+                    "no_source_reopen_count": 5,
+                    "dead_letter_audit_count": 4,
+                    "source_refs": [{"source_id": "clean:old", "message_id": "m-old"}],
+                    "provenance_pointer": "manifest:old-route",
+                }
+            ],
+            no_source_reopen_threshold=3,
+            applied_at="2026-06-07T00:00:00Z",
+        )
+        update = manifest["updates"][0]
+
+        self.assertTrue(update["inactive_after_repeated_audits"])
+        self.assertTrue(update["payload_compaction_ready"])
+        self.assertEqual(update["lifecycle_action"], "dead_lettered")
+        self.assertTrue(update["source_refs_preserved"])
+        self.assertFalse(update["truth_status_changed"])
 
     def test_dead_letter_report_stays_public_safe_and_embeds_in_authority_audit(self) -> None:
         local_path = "E:" + "\\private\\activation\\surface.json"

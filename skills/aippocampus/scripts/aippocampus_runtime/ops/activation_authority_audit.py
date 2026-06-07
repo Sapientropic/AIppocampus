@@ -42,6 +42,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct file execution fallback
 
 AUTHORITY_AUDIT_KIND = "aippocampus_activation_surface_authority_audit"
 AUTHORITY_SCHEMA_VERSION = 1
+AUTHORITY_POLICY_VERSION = "activation-authority-defaults-v2"
 
 AUTHORITY_LEVELS = {
     "candidate": "Navigation hint only; may seed search or attention.",
@@ -58,7 +59,7 @@ SURFACE_DEFAULT_AUTHORITY = {
     "semantic_trigger": "candidate",
     "ambient_card": "candidate",
     "active_recall_lock": "advisory",
-    "pruning_row": "guardrail",
+    "pruning_row": "advisory",
 }
 
 SOURCE_EVIDENCE_KINDS = {"source_reopen_evidence", "current_checkout_evidence"}
@@ -68,6 +69,8 @@ PRUNING_ACTIONS = {"keep", "demote", "park", "supersede", "retire"}
 BLOCKING_PRUNING_ACTIONS = {"park", "supersede", "retire"}
 FOREGROUND_REDUCTION_ACTIONS = {"demote", "park", "supersede", "retire"}
 FRESHNESS_PENALTY = {"stale": 35, "superseded": 80}
+FRESHNESS_DECAY_TO_CANDIDATE = {"stale", "review_overdue"}
+FRESHNESS_BLOCKING_STATES = {"superseded", "expired", "retired", "dead_lettered"}
 SOURCE_REF_KEYS = (
     "source_id",
     "stable_source_id",
@@ -155,6 +158,24 @@ def _safe_source_refs(value: Any) -> list[dict[str, Any]]:
     return refs
 
 
+def _authority_policy_envelope() -> dict[str, Any]:
+    encoded = json.dumps(SURFACE_DEFAULT_AUTHORITY, sort_keys=True, ensure_ascii=False)
+    return {
+        "version": AUTHORITY_POLICY_VERSION,
+        "mapping_hash": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
+        "default_authority": dict(SURFACE_DEFAULT_AUTHORITY),
+        "rationale": (
+            "Activation rows orient foreground attention; pruning rows reduce foreground "
+            "eligibility and should default to advisory unless source-backed or explicitly elevated."
+        ),
+        "privacy_boundary": {
+            "raw_prompt_serialized": False,
+            "raw_source_snippets_serialized": False,
+            "local_paths_serialized": False,
+        },
+    }
+
+
 def _as_sequence(value: Any) -> list[Any]:
     if value is None or value == "":
         return []
@@ -178,14 +199,81 @@ def _protected_reference_count(row: Mapping[str, Any]) -> int:
     return total
 
 
-def _authority_level(row: Mapping[str, Any], surface_kind: str) -> str:
+def _pruning_guardrail_allowed(row: Mapping[str, Any]) -> bool:
+    return bool(
+        row.get("source_refs")
+        or row.get("evidence_refs")
+        or row.get("explicit_authority_elevation")
+        or row.get("authority_elevation_reason")
+    )
+
+
+def _authority_level_and_diagnostics(
+    row: Mapping[str, Any],
+    surface_kind: str,
+) -> tuple[str, dict[str, Any]]:
+    diagnostics: dict[str, Any] = {
+        "freshness_decay": "none",
+        "pruning_authority": "not_pruning",
+    }
     action = _text(row.get("pruning_action") or row.get("lifecycle_action"))
     if surface_kind == "pruning_row" and action in BLOCKING_PRUNING_ACTIONS:
-        return "blocked"
+        diagnostics["pruning_authority"] = "blocking_lifecycle_action"
+        return "blocked", diagnostics
     raw = _text(row.get("authority_level"))
-    if raw in AUTHORITY_LEVELS:
-        return raw
-    return SURFACE_DEFAULT_AUTHORITY.get(surface_kind, "candidate")
+    if surface_kind == "pruning_row":
+        if raw == "guardrail" and _pruning_guardrail_allowed(row):
+            diagnostics["pruning_authority"] = "guardrail_elevated"
+            level = "guardrail"
+        else:
+            diagnostics["pruning_authority"] = "default_advisory"
+            level = SURFACE_DEFAULT_AUTHORITY["pruning_row"]
+    elif raw in AUTHORITY_LEVELS:
+        level = raw
+    else:
+        level = SURFACE_DEFAULT_AUTHORITY.get(surface_kind, "candidate")
+
+    freshness = _text(row.get("freshness"), "unknown")
+    if surface_kind in ACTIVATION_SURFACE_KINDS:
+        if freshness in FRESHNESS_BLOCKING_STATES:
+            diagnostics["freshness_decay"] = f"{freshness}_to_blocked"
+            return "blocked", diagnostics
+        if freshness in FRESHNESS_DECAY_TO_CANDIDATE and level == "advisory":
+            diagnostics["freshness_decay"] = "advisory_to_candidate"
+            return "candidate", diagnostics
+    return level, diagnostics
+
+
+def _authority_level(row: Mapping[str, Any], surface_kind: str) -> str:
+    level, _ = _authority_level_and_diagnostics(row, surface_kind)
+    return level
+
+
+def _candidate_validation(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    success_count = _int(
+        row.get("successful_source_reopen_count")
+        or row.get("source_reopen_success_count")
+        or row.get("source_reopen_hit_count")
+    )
+    validation_history = row.get("validation_history")
+    if success_count <= 0 and not validation_history:
+        return None
+    independent_count = _int(
+        row.get("independent_source_ref_count")
+        or row.get("validated_independent_source_ref_count")
+    )
+    return {
+        "status": "validated_route" if success_count > 0 else "unverified_route",
+        "successful_source_reopen_count": success_count,
+        "last_verified_at": _public_label(
+            row.get("last_verified_at") or row.get("last_source_reopen_success_at"),
+            "unknown",
+        ),
+        "independent_source_ref_count": independent_count,
+        "authority_boundary": "candidate_not_evidence",
+        "upgrades_authority": False,
+        "supports_factual_claim": False,
+    }
 
 
 def _resolution_class(surface_kind: str, authority_level: str) -> str:
@@ -218,7 +306,7 @@ def normalize_activation_surface(row: Mapping[str, Any]) -> dict[str, Any]:
     """Return a public-safe authority row for audit output."""
 
     surface_kind = _text(row.get("surface_kind") or row.get("kind"), "unknown")
-    authority_level = _authority_level(row, surface_kind)
+    authority_level, authority_diagnostics = _authority_level_and_diagnostics(row, surface_kind)
     source_refs = _safe_source_refs(row.get("source_refs") or row.get("evidence_refs") or [])
     pruning_action = _text(row.get("pruning_action") or row.get("lifecycle_action") or "none")
     if pruning_action not in PRUNING_ACTIONS and pruning_action != "none":
@@ -235,10 +323,11 @@ def normalize_activation_surface(row: Mapping[str, Any]) -> dict[str, Any]:
     freshness = _text(row.get("freshness"), "unknown")
     if is_activation_surface:
         rank -= FRESHNESS_PENALTY.get(freshness, 0)
-    return {
+    normalized = {
         "surface_id": _public_label(row.get("surface_id") or row.get("id"), surface_kind),
         "surface_kind": surface_kind,
         "authority_level": authority_level,
+        "authority_diagnostics": authority_diagnostics,
         "resolution_class": _resolution_class(surface_kind, authority_level),
         "conflict_key": _public_label(row.get("conflict_key") or row.get("topic"), "default"),
         "freshness": freshness,
@@ -266,6 +355,11 @@ def normalize_activation_surface(row: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "source_reopen_attempt_count": _int(row.get("source_reopen_attempt_count")),
         "source_reopen_success_count": _int(row.get("source_reopen_success_count")),
+        "dead_letter_audit_count": _int(
+            row.get("dead_letter_audit_count")
+            or row.get("inactive_audit_count")
+            or row.get("audit_cycle_count")
+        ),
         "protected_reference_count": _protected_reference_count(row),
         "provenance_pointer_hash": _public_hash(
             row.get("provenance_pointer") or row.get("manifest_pointer") or "", "none"
@@ -274,6 +368,10 @@ def normalize_activation_surface(row: Mapping[str, Any]) -> dict[str, Any]:
         else None,
         "rank": rank,
     }
+    validation = _candidate_validation(row)
+    if validation is not None:
+        normalized["candidate_validation"] = validation
+    return normalized
 
 
 def activation_dead_letter_candidate_report(
@@ -428,6 +526,7 @@ def activation_surface_authority_audit(surfaces: Iterable[Mapping[str, Any]]) ->
         "schema_version": AUTHORITY_SCHEMA_VERSION,
         "kind": AUTHORITY_AUDIT_KIND,
         "authority_levels": dict(AUTHORITY_LEVELS),
+        "authority_policy": _authority_policy_envelope(),
         "precedence": [
             USER_CORRECTION_KIND,
             "current_checkout_evidence",
