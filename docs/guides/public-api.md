@@ -239,12 +239,13 @@ For these commands:
   readout as a static, no-script operator view. The first stable slice
   aggregates route-readiness/prewarm
   diagnostics, activation-surface authority, optional recall diagnostics, and
-  sleep-cycle public summaries. Route-readiness rows are `navigation_only` and
-  may show TTL, freshness, privacy, source-ref, and ROI suppression reasons;
-  they can justify reopening source but cannot support factual claims, mutate
-  owner surfaces, or control foreground hooks. The `control_authority_audit`
-  block counts attempted activation/mutation requests as blocked diagnostics;
-  it is not an API for applying those actions.
+  sleep-cycle public summaries. A `--query-pattern-routes <json-or-jsonl>`
+  input may add query-pattern route counts and active/suppressed buckets without
+  emitting alias text. Route-readiness and query-pattern rows are
+  `navigation_only`; they can justify reopening source but cannot support
+  factual claims, mutate owner surfaces, or control foreground hooks. The
+  `control_authority_audit` block counts attempted activation/mutation requests
+  as blocked diagnostics; it is not an API for applying those actions.
 - Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
   exposes a public-safe audit projection for the latest prompt hook run. Stable
   automation fields are `status`, `source`, `privacy_boundary`, and

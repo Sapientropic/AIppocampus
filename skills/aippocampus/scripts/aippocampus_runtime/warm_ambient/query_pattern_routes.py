@@ -27,6 +27,7 @@ from aippocampus_runtime.registry.api import unique_preserve
 QUERY_PATTERN_ROUTE_KIND = "aippocampus_query_pattern_route"
 QUERY_PATTERN_PACKET_KIND = "aippocampus_query_pattern_route_packet"
 QUERY_PATTERN_PUBLISH_KIND = "aippocampus_query_pattern_route_publish_report"
+QUERY_PATTERN_ROUTES_REPORT_KIND = "aippocampus_query_pattern_routes_report"
 QUERY_PATTERN_ROUTE_SCHEMA_VERSION = 1
 DEFAULT_QUERY_PATTERN_ROUTES_NAME = "query_pattern_routes.jsonl"
 
@@ -277,6 +278,87 @@ def publish_query_pattern_routes(
             "query_pattern_routes_are_not_evidence": True,
             "source_reopen_required_before_claim": True,
         },
+    }
+
+
+def query_pattern_routes_report(
+    routes: Iterable[Mapping[str, Any]],
+    *,
+    now_unix: float | None = None,
+) -> dict[str, Any]:
+    """Summarize query-pattern routes without exposing alias text."""
+
+    now_value = time.time() if now_unix is None else now_unix
+    rows: list[dict[str, Any]] = []
+    metrics = {
+        "route_count": 0,
+        "active_route_count": 0,
+        "suppressed_route_count": 0,
+        "stale_suppressed_count": 0,
+        "privacy_suppressed_count": 0,
+        "missing_source_ref_count": 0,
+        "low_confidence_suppressed_count": 0,
+        "live_llm_call_count": 0,
+    }
+    for raw in routes:
+        if not isinstance(raw, Mapping):
+            continue
+        route = normalize_query_pattern_route(raw)
+        metrics["route_count"] += 1
+        reason_codes: list[str] = []
+        ttl_remaining = _ttl_remaining(route, now_unix=now_value)
+        if route.get("state") in STALE_STATES or (ttl_remaining is not None and ttl_remaining <= 0):
+            reason_codes.append("stale_or_expired")
+            metrics["stale_suppressed_count"] += 1
+        if _privacy_blocked(route):
+            reason_codes.append("privacy_blocked")
+            metrics["privacy_suppressed_count"] += 1
+        if not route.get("source_refs"):
+            reason_codes.append("missing_source_refs")
+            metrics["missing_source_ref_count"] += 1
+        if _float_bucket(route.get("confidence"), default=0.0) < MIN_SELECT_CONFIDENCE:
+            reason_codes.append("low_confidence")
+            metrics["low_confidence_suppressed_count"] += 1
+        status = "suppressed" if reason_codes else "active"
+        metrics["active_route_count" if status == "active" else "suppressed_route_count"] += 1
+        rows.append(
+            {
+                "query_pattern_route_id": route["query_pattern_route_id"],
+                "thread_key_hash": route["thread_key_hash"],
+                "source_generation_digest": route["source_generation_digest"],
+                "status": status,
+                "reason_codes": reason_codes,
+                "source_ref_count": len(route.get("source_refs") or []),
+                "ttl_remaining_seconds": ttl_remaining,
+                "confidence": route["confidence"],
+                "navigation_only": True,
+                "source_reopen_required_before_claim": True,
+            }
+        )
+    return {
+        "kind": QUERY_PATTERN_ROUTES_REPORT_KIND,
+        "schema_version": QUERY_PATTERN_ROUTE_SCHEMA_VERSION,
+        "ok": True,
+        "navigation_only": True,
+        "rows": rows,
+        "metrics": metrics,
+        "contract": {
+            "query_aliases_omitted": True,
+            "query_pattern_routes_are_navigation_only": True,
+            "query_pattern_routes_are_not_evidence": True,
+            "source_reopen_required_before_claim": True,
+        },
+        "privacy_boundary": {
+            "raw_prompt_serialized": False,
+            "raw_source_text_serialized": False,
+            "local_paths_serialized": False,
+            "query_alias_text_serialized": False,
+        },
+        "cannot_claim": [
+            "query_pattern_route_is_source_truth",
+            "query_pattern_alias_quality_is_proven",
+            "foreground_latency_savings_are_proven",
+        ],
     }
 
 
