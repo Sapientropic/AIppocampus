@@ -348,6 +348,15 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   `full_sweep` choices. That activation report is also no-write and
   navigation-only; it preserves Scout output as candidate routing until source
   is reopened.
+- registry/import query-pattern enrichment planning is also a no-write
+  diagnostic surface. Use
+  `aippocampus_runtime.warm_ambient.query_pattern_enrichment` to check which
+  changed source generations would enqueue query-pattern work, which current
+  caches can be reused, and which old query-pattern routes would be invalidated
+  by a source-generation digest change. Its fixture deliberately does not call
+  DeepSeek, write `query_pattern_routes.jsonl`, or wire foreground-hook
+  consumption; generated aliases are navigation handles only and require source
+  reopen before any factual claim.
 - `aippocampus_runtime.dream.real_history_eval` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,
