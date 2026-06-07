@@ -1,6 +1,7 @@
 # Field Continuity Fixture Report
 
-Status: implemented public-safe contract-smoke fixture for GitHub #454.
+Status: implemented public-safe contract-smoke fixture for GitHub #454, with
+a bounded public-safe quality-proxy readout for GitHub #281.
 
 This report records the narrow evidence boundary for
 `benchmarks/aippocampus/benchmark_field_continuity.py`. The runner turns the
@@ -61,6 +62,26 @@ all boundaries in this deterministic fixture. `hook_only` and
 `stale_wrong_route_control` remain controls, not evidence that hook-only
 continuity is sufficient.
 
+## GitHub #281 Readout
+
+The benchmark report includes `issue_readouts.github_281` as a public-safe
+fixture-quality proxy for fresh-thread progressive associative recall. It maps
+the `fresh_projectless_familiarity` family and existing field-continuity
+metrics into a small issue-local readout:
+
+- `field_continuity_quality_proxy_measured`
+- `fresh_projectless_familiarity_status`
+- `source_reopen_success_rate`
+- `progressive_route_recovery_rate`
+- `wrong_family_persistence_rate`
+- `irrelevant_memory_drag_rate`
+
+This readout deliberately reports `live_fresh_thread_quality=not_measured`,
+`private_real_history_quality=not_measured`,
+`private_seed_review=contract_only`, and `closeout_eligible=false`. It helps
+continue #281 with a reproducible public fixture signal, but it does not prove
+real fresh-thread quality, private-history recall quality, or close the issue.
+
 ## Command
 
 ```powershell
@@ -81,6 +102,7 @@ python -m unittest tests.aippocampus.test_benchmark_field_continuity
 
 - real-history field-continuity recall quality
 - universal fresh-thread recall quality
+- private real-history quality for GitHub #281
 - foreground-hook-only sufficiency
 - live semantic-model quality
 - hosted-service or cross-device production readiness

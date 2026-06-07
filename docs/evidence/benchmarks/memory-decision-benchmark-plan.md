@@ -108,7 +108,8 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   adds one repo-internal `CapabilityContract` prototype for synthetic
   contract-review assistance.
 - `benchmarks/aippocampus/benchmark_field_continuity.py` runs the #454 Field
-  Continuity / Magic Moment Reproducibility contract slice. It converts the
+  Continuity / Magic Moment Reproducibility contract slice and exposes an
+  issue-local `issue_readouts.github_281` public-safe quality proxy. It converts the
   second-user field-report shapes from Discussion #428 into public-safe
   scenario-family fixtures, negative controls, hash-only private seed reporting
   rules, and claim-boundary metrics. It is a deterministic contract smoke, not
@@ -265,7 +266,11 @@ public API stability.
 does not replace Track A-D, and it does not turn community field reports into
 official benchmark proof by itself. Its job is to make the user-visible
 "magic moment" reports reproducible as scenario contracts with controls and
-privacy-safe reporting.
+privacy-safe reporting. For #281, the same public fixture also exposes
+`issue_readouts.github_281` as a bounded fresh-thread progressive-recall proxy:
+it records whether the `fresh_projectless_familiarity` family is covered and
+whether source reopen, progressive route recovery, wrong-family suppression,
+and irrelevant-memory suppression hold in the deterministic fixture.
 
 Scenario families:
 
@@ -302,9 +307,12 @@ Required metrics mirror #454 without reducing the suite to top-k retrieval:
 `exact_prompt_or_tool_failure_recovery`, `completion_nuance_preserved`,
 `wrong_family_persistence`, and `irrelevant_memory_drag`.
 
-The first implementation proves the fixture and report contract. It cannot
-claim real-history field-continuity recall quality, live semantic-model
-quality, foreground-hook-only sufficiency, or hosted/cross-device readiness.
+The first implementation proves the fixture and report contract. The #281
+readout is `public_safe_fixture_quality_proxy` only and keeps
+`live_fresh_thread_quality`, `private_real_history_quality`, and private seed
+review outside the claim. It cannot claim real-history field-continuity recall
+quality, live semantic-model quality, foreground-hook-only sufficiency, or
+hosted/cross-device readiness.
 
 ### Benchmark Suite Profiles
 
