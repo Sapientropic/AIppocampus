@@ -129,6 +129,7 @@ them, or when the registry above points to an unresolved live/private gap.
 | Prompt hook | `smoke_semantic_paraphrase_reuse.py` | implemented | P2 | focused smoke | diagnostic_proxy | Semantic paraphrase reuse drift | Default quality gate | none |
 | Warm ambient | `smoke_living_cue_cache.py` | implemented | P1 | focused smoke | contract_smoke | Learned cue/cache regression | Fresh-thread quality proof | #281 |
 | Host/ecosystem | `smoke_codex_long_session_continuity.py` | implemented | P1 | optional local host smoke | diagnostic_proxy | Long-session host continuity regression | Cross-host proof | none |
+| Host/ecosystem | `smoke_provider_key_bridge_os_store.py` | implemented | P1 | optional local host smoke | diagnostic_proxy | OS credential-store adapter drift, cleanup failure, or public output leaking hook credential locators | Provider-key correctness, already-running hook visibility, or cross-host proof from one machine | #784 |
 | E2E50 | `smoke_e2e50_seed_candidates.py` | implemented | P1 | benchmark-smoke support guard | diagnostic_proxy | Candidate-seed scanner drift | Representative E2E50 quality | #279 |
 | Host/ecosystem | `smoke_claude_code_mcp_host.py` | implemented | P2 | optional local host smoke | diagnostic_proxy | MCP host integration drift | General MCP support proof | none |
 | Host/ecosystem | `smoke_claude_code_history.py` | implemented | P2 | optional local host smoke | diagnostic_proxy | Local-history parser drift | Cross-agent quality | none |

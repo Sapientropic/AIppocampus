@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -188,6 +189,166 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             update = hook_provider_bridge.environment_update_from_manifest(manifest)
 
         self.assertEqual(update, {})
+
+    def test_hook_bridge_macos_keychain_source_uses_security_without_public_leak(self) -> None:
+        secret = "sk-provider-key-bridge-keychain-secret"
+        calls: list[list[str]] = []
+
+        def fake_command_secret(argv: list[str]) -> str:
+            calls.append(argv)
+            return secret
+
+        old_command_secret = hook_provider_bridge._command_secret
+        hook_provider_bridge._command_secret = fake_command_secret
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest = Path(tmp) / "bridge.json"
+                provider_key_bridge.write_bridge_manifest(
+                    manifest,
+                    provider_key_bridge.build_bridge_manifest(
+                        target="codex-hooks",
+                        source="macos-keychain",
+                        provider_env_var="DEEPSEEK_API_KEY",
+                        keychain_service="AIppocampus/Test Service",
+                        keychain_account="test-account",
+                    ),
+                )
+
+                update = hook_provider_bridge.environment_update_from_manifest(manifest)
+                summary = provider_key_bridge.public_manifest_summary(manifest)
+        finally:
+            hook_provider_bridge._command_secret = old_command_secret
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        self.assertEqual(update, {"DEEPSEEK_API_KEY": secret})
+        self.assertEqual(
+            calls,
+            [
+                [
+                    "security",
+                    "find-generic-password",
+                    "-w",
+                    "-s",
+                    "AIppocampus/Test Service",
+                    "-a",
+                    "test-account",
+                ]
+            ],
+        )
+        self.assertNotIn(secret, encoded)
+        self.assertNotIn("AIppocampus/Test Service", encoded)
+        self.assertNotIn("test-account", encoded)
+
+    def test_hook_bridge_linux_secret_service_source_uses_secret_tool_without_public_leak(self) -> None:
+        secret = "sk-provider-key-bridge-secret-service"
+        calls: list[list[str]] = []
+
+        def fake_command_secret(argv: list[str]) -> str:
+            calls.append(argv)
+            return secret
+
+        old_command_secret = hook_provider_bridge._command_secret
+        hook_provider_bridge._command_secret = fake_command_secret
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest = Path(tmp) / "bridge.json"
+                provider_key_bridge.write_bridge_manifest(
+                    manifest,
+                    provider_key_bridge.build_bridge_manifest(
+                        target="codex-hooks",
+                        source="linux-secret-service",
+                        provider_env_var="DEEPSEEK_API_KEY",
+                        secret_attributes={
+                            "service": "aippocampus-test-service",
+                            "account": "test-account",
+                        },
+                    ),
+                )
+
+                update = hook_provider_bridge.environment_update_from_manifest(manifest)
+                summary = provider_key_bridge.public_manifest_summary(manifest)
+        finally:
+            hook_provider_bridge._command_secret = old_command_secret
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        self.assertEqual(update, {"DEEPSEEK_API_KEY": secret})
+        self.assertEqual(
+            calls,
+            [
+                [
+                    "secret-tool",
+                    "lookup",
+                    "account",
+                    "test-account",
+                    "service",
+                    "aippocampus-test-service",
+                ]
+            ],
+        )
+        self.assertNotIn(secret, encoded)
+        self.assertNotIn("aippocampus-test-service", encoded)
+        self.assertNotIn("test-account", encoded)
+
+    def test_windows_credential_blob_decoder_prefers_utf8_unless_blob_looks_wide(self) -> None:
+        ascii_secret = "plain-provider-token"
+        wide_secret = "wide-provider-token"
+
+        self.assertEqual(
+            hook_provider_bridge._decode_windows_credential_blob(ascii_secret.encode("utf-8")),
+            ascii_secret,
+        )
+        self.assertEqual(
+            hook_provider_bridge._decode_windows_credential_blob(wide_secret.encode("utf-16-le")),
+            wide_secret,
+        )
+
+    def test_hook_bridge_main_sets_env_before_delegating_without_public_leak(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dotenv = root / "provider.env"
+            provider_env_var = "PROVIDER_BRIDGE_TEST_VALUE"
+            fixture_value = "provider-bridge-main-fixture-value"
+            dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
+            manifest = root / "bridge.json"
+            provider_key_bridge.write_bridge_manifest(
+                manifest,
+                provider_key_bridge.build_bridge_manifest(
+                    target="codex-hooks",
+                    source="explicit-dotenv",
+                    provider_env_var=provider_env_var,
+                    credential_dotenv=dotenv,
+                ),
+            )
+            observed: dict[str, object] = {}
+
+            def fake_delegate(event: str, args: list[str]) -> int:
+                observed["event"] = event
+                observed["args"] = list(args)
+                observed["env_value"] = hook_provider_bridge.os.environ.get(provider_env_var)
+                return 0
+
+            old_stdin = sys.stdin
+            old_delegate = hook_provider_bridge._delegate
+            old_env = hook_provider_bridge.os.environ.get(provider_env_var)
+            hook_provider_bridge._delegate = fake_delegate
+            sys.stdin = StringIO('{"hook_event_name": "UserPromptSubmit"}')
+            try:
+                hook_provider_bridge.os.environ.pop(provider_env_var, None)
+                exit_code = hook_provider_bridge.main(["--manifest", str(manifest), "--json"])
+            finally:
+                sys.stdin = old_stdin
+                hook_provider_bridge._delegate = old_delegate
+                if old_env is None:
+                    hook_provider_bridge.os.environ.pop(provider_env_var, None)
+                else:
+                    hook_provider_bridge.os.environ[provider_env_var] = old_env
+        encoded = json.dumps(observed, ensure_ascii=False)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(observed["event"], "UserPromptSubmit")
+        self.assertEqual(observed["args"], ["--json"])
+        self.assertEqual(observed["env_value"], fixture_value)
+        self.assertNotIn(str(dotenv), encoded)
 
     def test_cli_onboard_provider_key_apply_is_redacted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

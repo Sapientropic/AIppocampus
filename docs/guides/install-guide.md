@@ -444,6 +444,19 @@ rerun `aippocampus doctor provider --json`; apply can only prepare
 future/restarted hook processes, not prove an already-running Desktop hook saw
 the key.
 
+Maintainers can smoke-test the OS credential-store bridge separately:
+
+```sh
+python tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py --source auto --json
+```
+
+The smoke creates a temporary test credential in the selected OS store, verifies
+that the wrapper can load it into a hook-process environment update, and cleans
+it up. Public output redacts the secret, store locator, and local temporary
+paths. Unsupported platforms or missing OS store tools return an explicit
+`skipped` report. Dated evidence and the claim boundary live in
+[`public-readiness-verification.md`](../evidence/readiness/public-readiness-verification.md#2026-06-07-issue-784-provider-key-bridge-os-store-smoke).
+
 Package modules remain available when the facade is not installed:
 
 ```sh

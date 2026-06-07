@@ -20,6 +20,42 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-07 Issue #784 Provider-Key Bridge OS Store Smoke
+
+Issue #784 kept the provider-key bridge open after the env-only doctor and
+explicit `.env` hook-wrapper work because the OS credential-store adapters still
+needed real quality evidence. This slice added
+`tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py`, which creates a
+temporary provider-key test secret in the selected OS credential store, verifies
+that the AIppocampus-owned hook wrapper can project it into a hook-process
+environment update, and removes the temporary credential again.
+
+Positive local evidence from the Windows host run:
+
+- `python tools\aippocampus\smoke\smoke_provider_key_bridge_os_store.py --source windows-credential-manager --json`
+  returned `ok=true`, `status=adapter_read_ok`, and `skipped=false`.
+- The smoke wrote a temporary Windows Credential Manager generic credential,
+  read it through the same wrapper path used by hook commands, confirmed the
+  projected `DEEPSEEK_API_KEY` matched the temporary secret, and deleted the
+  credential through the cleanup path.
+- Public output reported no secret values, locator values, local temporary
+  paths, or manifest-stored secret value.
+
+Cross-platform contract evidence in the same slice:
+
+- Unit tests cover macOS Keychain and Linux Secret Service command construction
+  through the hook-wrapper adapter without printing the secret, service,
+  account, or attribute locator in public summaries.
+- The smoke supports `--source macos-keychain`, `--source linux-secret-service`,
+  and `--source auto`; unsupported platforms or unavailable OS store tools
+  return an explicit `skipped` report instead of pretending the adapter passed.
+
+Cannot claim from this slice: arbitrary password-manager support, macOS or Linux
+host-store success until the smoke runs on those hosts, already-running Codex
+Desktop hook visibility, provider-key correctness or freshness, or default
+`aippocampus doctor provider` reading credential stores. The doctor remains an
+env-visibility diagnostic; the bridge remains explicit opt-in hook onboarding.
+
 ## 2026-06-05 Issue #643 R2 Provider Metadata Evidence Smoke
 
 Issue #643 keeps metadata-padding decisions tied to real provider evidence

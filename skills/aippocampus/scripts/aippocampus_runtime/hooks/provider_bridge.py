@@ -78,7 +78,14 @@ def _linux_secret_service_secret(source: dict[str, Any]) -> str | None:
 
 
 def _decode_windows_credential_blob(blob: bytes) -> str:
-    for encoding in ("utf-16-le", "utf-8"):
+    # Generic Windows credentials are commonly stored as UTF-16LE text, but
+    # callers can write opaque bytes. Prefer UTF-16LE only when the byte pattern
+    # looks like wchar text; otherwise an even-length ASCII/UTF-8 blob can
+    # decode into unrelated CJK characters and silently set the wrong key.
+    odd_nulls = blob[1::2].count(0)
+    likely_utf16 = bool(blob) and odd_nulls >= max(1, len(blob) // 4)
+    encodings = ("utf-16-le", "utf-8") if likely_utf16 else ("utf-8", "utf-16-le")
+    for encoding in encodings:
         try:
             text = blob.decode(encoding).rstrip("\x00")
         except UnicodeDecodeError:
