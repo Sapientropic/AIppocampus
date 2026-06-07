@@ -140,6 +140,70 @@ class CognitiveLoadSidecarTests(unittest.TestCase):
         self.assertNotIn("stressed", encoded)
         self.assertNotIn("anxious personality", encoded)
 
+    def test_calibration_report_separates_load_routing_from_affect_truth(self) -> None:
+        ref = {"source_id": "thread:calibration", "message_id": "m-load", "line": 15}
+        payload = sidecar.build_cognitive_load_sidecar(
+            [
+                {
+                    "event_id": "evt-correction",
+                    "event_type": "user_correction",
+                    "timestamp": "2026-06-05T00:00:00Z",
+                    "source_refs": [ref],
+                    "load_weight_reviewed": True,
+                    "load_weight_false_positive": True,
+                    "caution_hint_reviewed": True,
+                    "overpersonalization_from_load_signal": True,
+                    "raw_note": "The user felt overwhelmed and has an anxious personality.",
+                }
+            ],
+            now="2026-06-06T00:00:00Z",
+        )
+        ranked = sidecar.apply_cognitive_load_boosts(
+            [
+                {
+                    "candidate_id": "calibrated-load-candidate",
+                    "source_refs": [ref],
+                    "semantic_score": 0.7,
+                    "source_authority": 0.9,
+                }
+            ],
+            payload,
+        )
+        report = sidecar.build_cognitive_load_calibration_report(payload, ranked)
+
+        self.assertEqual(report["kind"], "aippocampus_cognitive_load_calibration_report")
+        self.assertEqual(report["mode"], "deterministic_public_safe_calibration")
+        self.assertEqual(
+            report["calibration_axes"]["routing_weight"]["status"],
+            "bounded_routing_metadata",
+        )
+        self.assertEqual(
+            report["calibration_axes"]["affect_or_personality_truth"]["status"],
+            "blocked_not_inferred",
+        )
+        self.assertFalse(
+            report["calibration_axes"]["affect_or_personality_truth"]["inference_allowed"],
+        )
+        self.assertEqual(
+            report["calibration_axes"]["source_truth"]["status"],
+            "source_authority_controls_load",
+        )
+        self.assertEqual(report["metrics"]["load_weight_false_positive_rate"], 1.0)
+        self.assertEqual(report["metrics"]["overpersonalization_from_load_signal_count"], 1)
+
+        readout = report["issue_readouts"]["github_575"]
+        self.assertEqual(readout["calibration_report"], "deterministic_public_safe")
+        self.assertEqual(readout["load_routing_weight"], "measured_as_bounded_score_delta")
+        self.assertEqual(readout["affect_or_personality_truth"], "blocked_not_inferred")
+        self.assertEqual(readout["private_real_history_calibration"], "not_measured")
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertIn("private_real_history_calibration", report["cannot_claim"])
+
+        serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("overwhelmed", serialized)
+        self.assertNotIn("anxious personality", serialized)
+        self.assertNotIn("source_refs", serialized)
+
 
 if __name__ == "__main__":
     unittest.main()
