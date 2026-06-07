@@ -141,6 +141,8 @@ def _decision_reasons(
         )
     if any(item.get("hot_path_reason") == "living_cue_cache" for item in candidates[:3]):
         reasons.append("living cue cache route")
+    if any(item.get("hot_path_reason") == "query_pattern_routes" for item in candidates[:3]):
+        reasons.append("query pattern routes route")
     if any(item.get("probe_score") for item in candidates[:3]):
         reasons.append("clean-source probe rerank")
     if any(item.get("life_wide_timeline_source") for item in candidates[:3]):

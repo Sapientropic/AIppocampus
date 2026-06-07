@@ -21,6 +21,7 @@ from aippocampus_runtime.recall.living_cue_cache import select_living_cue_packet
 from aippocampus_runtime.recall.prompt_recall_core import candidate_summary, sort_candidates
 from aippocampus_runtime.recall.retrieval import search_hybrid_index
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.warm_ambient.query_pattern_routes import select_query_pattern_packet
 
 MAX_STAGE_CANDIDATES = 3
 
@@ -250,6 +251,37 @@ def _living_cue_candidates(
     return _hit_rows(hits), packet, "" if hits else "living_cue_missing_thread_ref"
 
 
+def _query_pattern_route_candidates(
+    *,
+    prompt: str,
+    routes: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
+    packet = select_query_pattern_packet(prompt, routes)
+    if packet.get("decision") != "scent":
+        raw_diagnostics = packet.get("diagnostics")
+        diagnostics = raw_diagnostics if isinstance(raw_diagnostics, dict) else {}
+        if diagnostics.get("cache_hit_count"):
+            return [], packet, "query_pattern_routes_suppressed"
+        return [], packet, "no_query_pattern_route_match"
+
+    hits: list[dict[str, Any]] = []
+    for ref in packet.get("candidate_refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        thread_key = str(ref.get("thread_key") or "").strip()
+        if not thread_key:
+            continue
+        hits.append(
+            {
+                "thread_key": thread_key,
+                "source_refs": [ref],
+                "hot_path_reason": "query_pattern_routes",
+                "hot_path_navigation_only": True,
+            }
+        )
+    return _hit_rows(hits), packet, "" if hits else "query_pattern_route_missing_thread_ref"
+
+
 def _index_path(candidate: dict[str, Any]) -> Path | None:
     candidate_paths = candidate.get("paths")
     raw_paths: dict[str, Any] = candidate_paths if isinstance(candidate_paths, dict) else {}
@@ -360,6 +392,7 @@ def run_hot_path_funnel(
     query_terms: list[str],
     candidate_indexes: list[dict[str, Any]],
     living_cue_entries: list[dict[str, Any]] | None = None,
+    query_pattern_routes: list[dict[str, Any]] | None = None,
     candidate_cap: int = 8,
 ) -> dict[str, Any]:
     """Return local route candidates plus stage diagnostics.
@@ -373,6 +406,7 @@ def run_hot_path_funnel(
     stages: list[dict[str, Any]] = []
     candidates: list[dict[str, Any]] = []
     living_cue_packet: dict[str, Any] | None = None
+    query_pattern_packet: dict[str, Any] | None = None
 
     stage_start = time.perf_counter()
     candidates = _thread_profile_candidates(prompt=prompt, candidate_indexes=candidate_indexes)
@@ -408,6 +442,33 @@ def run_hot_path_funnel(
                 status="hit" if candidates else "skip",
                 candidate_count=len(candidates),
                 fallback_reason=living_reason or ("" if candidates else "no_living_cue_match"),
+                start=stage_start,
+            )
+        )
+
+    stage_start = time.perf_counter()
+    if candidates:
+        stages.append(
+            _stage(
+                stage="query_pattern_routes",
+                status="skip",
+                candidate_count=0,
+                fallback_reason="already_hit",
+                start=stage_start,
+            )
+        )
+    else:
+        candidates, query_pattern_packet, query_pattern_reason = _query_pattern_route_candidates(
+            prompt=prompt,
+            routes=query_pattern_routes or [],
+        )
+        stages.append(
+            _stage(
+                stage="query_pattern_routes",
+                status="hit" if candidates else "skip",
+                candidate_count=len(candidates),
+                fallback_reason=query_pattern_reason
+                or ("" if candidates else "no_query_pattern_route_match"),
                 start=stage_start,
             )
         )
@@ -500,6 +561,7 @@ def run_hot_path_funnel(
         "stages": stages,
         "evidence": [],
         "living_cue_cache": living_cue_packet,
+        "query_pattern_routes": query_pattern_packet,
         "source_reopen_promotion_count": 0,
         "local_only": True,
         "elapsed_ms": _elapsed_ms(overall_start),
