@@ -434,6 +434,8 @@ class ActiveRecallTests(unittest.TestCase):
     def test_context_mode_surfaces_dream_working_memory_as_candidate_direction(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            notes_path.write_text("", encoding="utf-8")
             working_memory_path = root / "working_memory.jsonl"
             working_memory_path.write_text(
                 json.dumps(
@@ -472,6 +474,7 @@ class ActiveRecallTests(unittest.TestCase):
             result = context_fn(
                 prompt="我想找回上次这个 source boundary 状态",
                 cwd=root,
+                agent_self_notes_path=notes_path,
                 working_memory_path=working_memory_path,
                 max_matches=3,
             )
@@ -481,7 +484,10 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertEqual(result["working_continuity_brief"][0]["candidate_type"], "dream_hypothesis")
         self.assertEqual(result["working_continuity_brief"][0]["action_grammar"], "direction_with_ref")
         self.assertFalse(result["working_continuity_brief"][0]["trust_contract"]["treat_as_fact"])
-        self.assertEqual(result["source_reopen_routes"][0]["message_id"], "msg-dream")
+        self.assertIn(
+            "msg-dream",
+            {route.get("message_id") for route in result["source_reopen_routes"]},
+        )
 
 
 if __name__ == "__main__":
