@@ -1,0 +1,387 @@
+#!/usr/bin/env python3
+"""Build ordered Episode/Arc read-models for coding continuity events.
+
+Episode/Arc rows sit between source events and host-agent action tickets. They
+preserve ordered local causality such as "attempted route -> failed check ->
+rejected route", but they are still derived navigation weather. Current
+validity always requires reopening source before the foreground agent acts.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from typing import Any, Mapping, Sequence
+
+from aippocampus_runtime.coding import sequence_packets
+from aippocampus_runtime.question.source_refs import clean_source_ref, source_ref_key
+from aippocampus_runtime.registry.api import unique_preserve
+
+EPISODE_ARC_KIND = "aippocampus_episode_arc_read_model"
+EPISODE_ARC_SCHEMA_VERSION = "aippocampus.episode_arc_read_model.v1"
+REOPEN_PLAN_KIND = "aippocampus_episode_window_reopen_plan"
+
+SAFE_GAPPY_USES = ["ask", "refresh_sources"]
+
+_PROFILE_BY_KIND: dict[str, dict[str, Any]] = {
+    "rejected_route_arc": {
+        "markers": {"attempted_route", "failed_check", "tool_failure", "route_rejected", "rejected_route"},
+        "required_any": (("attempted_route",), ("failed_check", "tool_failure"), ("route_rejected", "rejected_route")),
+        "outcome": "route_rejected",
+        "current_validity": "needs_reopen",
+        "origin": "behavior_event",
+    },
+    "correction_arc": {
+        "markers": {"user_correction", "accepted_workaround", "accepted_decision", "source_reopen"},
+        "required_any": (("user_correction",), ("accepted_workaround", "accepted_decision"), ("source_reopen",)),
+        "outcome": "needs_reopen",
+        "current_validity": "needs_reopen",
+        "origin": "clean_source",
+    },
+    "supersession_arc": {
+        "markers": {"old_rule", "new_rule", "current_rule_selected", "superseded", "superseded_by"},
+        "required_any": (("old_rule",), ("new_rule", "superseded_by"), ("current_rule_selected",)),
+        "outcome": "superseded",
+        "current_validity": "superseded",
+        "origin": "clean_source",
+    },
+    "temporary_concern_arc": {
+        "markers": {"temporary_concern", "later_normal_progress"},
+        "required_any": (("temporary_concern",), ("later_normal_progress",)),
+        "outcome": "constraint_not_current",
+        "current_validity": "local_only",
+        "origin": "clean_source",
+    },
+}
+
+_RELATIONS = {
+    ("attempted_route", "failed_check"): "failed_with",
+    ("attempted_route", "tool_failure"): "failed_with",
+    ("failed_check", "route_rejected"): "supported",
+    ("tool_failure", "route_rejected"): "supported",
+    ("user_correction", "accepted_workaround"): "accepted_after",
+    ("user_correction", "accepted_decision"): "accepted_after",
+    ("accepted_workaround", "source_reopen"): "requires_reopen_before",
+    ("accepted_decision", "source_reopen"): "requires_reopen_before",
+    ("old_rule", "new_rule"): "superseded_by",
+    ("new_rule", "current_rule_selected"): "supported",
+    ("temporary_concern", "later_normal_progress"): "extinguished_by",
+}
+
+
+def _as_mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
+    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
+    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
+    return f"{prefix}_{digest}"
+
+
+def _unique_objects(items: list[Any], *, limit: int) -> list[Any]:
+    seen: set[str] = set()
+    out: list[Any] = []
+    for item in items:
+        key = json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _source_ref_hash(ref: Mapping[str, Any]) -> str:
+    raw = json.dumps(source_ref_key(ref), ensure_ascii=False, sort_keys=True)
+    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:20]
+    return f"sha256:{digest}"
+
+
+def _compact_source_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
+    candidates = _as_list(row.get("source_refs"))
+    if not candidates:
+        candidates = [dict(row)]
+    refs: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for candidate in candidates:
+        clean = clean_source_ref(candidate)
+        if not clean:
+            continue
+        key = source_ref_key(clean)
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(clean)
+    return refs[:8]
+
+
+def _sort_key(row: Mapping[str, Any], fallback_index: int) -> tuple[int, int, int]:
+    raw_index = row.get("sequence_index")
+    if raw_index is None:
+        raw_index = row.get("event_index")
+    if raw_index is None:
+        return (1, fallback_index, fallback_index)
+    try:
+        return (0, int(str(raw_index)), fallback_index)
+    except (TypeError, ValueError):
+        return (1, fallback_index, fallback_index)
+
+
+def _event_kind(row: Mapping[str, Any]) -> str:
+    return str(row.get("event_kind") or row.get("event_type") or "").strip()
+
+
+def _normalize_event(row: Mapping[str, Any], fallback_index: int) -> dict[str, Any]:
+    refs = _compact_source_refs(row)
+    event_kind = _event_kind(row)
+    event_id = str(row.get("event_id") or row.get("decision_id") or "").strip()
+    if not event_id:
+        event_id = _stable_id("event", event_kind, refs, fallback_index, length=16)
+    return {
+        "event_id": event_id,
+        "event_kind": event_kind,
+        "source_refs": refs,
+        "source_ref_hash": _source_ref_hash(refs[0]) if refs else "",
+        "turn_id": str(row.get("turn_id") or ""),
+        "turn_index": row.get("turn_index"),
+        "source_line": row.get("source_line") or row.get("line"),
+        "affected_scope": _as_mapping(row.get("affected_scope")),
+        "sequence_gaps": [str(item) for item in _as_list(row.get("sequence_gaps")) if str(item).strip()],
+    }
+
+
+def _group_rows(rows: Sequence[Mapping[str, Any]]) -> list[tuple[str, list[tuple[int, Mapping[str, Any]]]]]:
+    groups: dict[str, list[tuple[int, Mapping[str, Any]]]] = {}
+    fallback_group = _stable_id("episode", len(rows), rows[:1], rows[-1:] if rows else [], length=16)
+    for index, row in enumerate(rows):
+        episode_id = str(
+            row.get("episode_id")
+            or row.get("arc_id")
+            or row.get("sequence_id")
+            or row.get("case_id")
+            or fallback_group
+        )
+        groups.setdefault(episode_id, []).append((index, row))
+    return list(groups.items())
+
+
+def _profile_for(kinds: Sequence[str]) -> tuple[str, Mapping[str, Any]]:
+    kind_set = set(kinds)
+    best_kind = "tacit_constraint_arc"
+    best_score = 0
+    for episode_kind, profile in _PROFILE_BY_KIND.items():
+        score = len(kind_set & set(profile["markers"]))
+        if score > best_score:
+            best_kind = episode_kind
+            best_score = score
+    if best_kind == "tacit_constraint_arc":
+        return best_kind, {"outcome": "unknown", "current_validity": "needs_reopen", "origin": "clean_source"}
+    return best_kind, _PROFILE_BY_KIND[best_kind]
+
+
+def _required_positions(kinds: Sequence[str], required_any: Sequence[Sequence[str]]) -> list[int | None]:
+    positions: list[int | None] = []
+    for options in required_any:
+        found: int | None = None
+        for index, event_kind in enumerate(kinds):
+            if event_kind in options:
+                found = index
+                break
+        positions.append(found)
+    return positions
+
+
+def _semantic_gaps(episode_kind: str, kinds: Sequence[str], profile: Mapping[str, Any]) -> list[str]:
+    gaps: list[str] = []
+    if len(kinds) < 2:
+        return ["single_point_trap"]
+    required_any = profile.get("required_any")
+    if not isinstance(required_any, tuple):
+        return gaps
+    positions = _required_positions(kinds, required_any)
+    present = [position for position in positions if position is not None]
+    if 0 < len(present) < len(positions):
+        gaps.append("missing_middle_event")
+    if len(present) == len(positions) and present != sorted(present):
+        gaps.append("event_order_semantic_mismatch")
+    return gaps
+
+
+def _relation_between(start_kind: str, end_kind: str) -> str:
+    return _RELATIONS.get((start_kind, end_kind), "followed_by")
+
+
+def _causal_edges(events: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    edges: list[dict[str, str]] = []
+    for start, end in zip(events, events[1:], strict=False):
+        edges.append(
+            {
+                "from": str(start.get("event_kind") or ""),
+                "relation": _relation_between(str(start.get("event_kind") or ""), str(end.get("event_kind") or "")),
+                "to": str(end.get("event_kind") or ""),
+            }
+        )
+    return edges
+
+
+def _merge_scope(events: Sequence[Mapping[str, Any]]) -> dict[str, list[Any]]:
+    merged: dict[str, list[Any]] = {"files": [], "modules": [], "symbols": []}
+    for event in events:
+        scope = _as_mapping(event.get("affected_scope"))
+        for field in merged:
+            merged[field].extend(_as_list(scope.get(field)))
+    return {field: _unique_objects(values, limit=12) for field, values in merged.items() if values}
+
+
+def _turn_range(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    first = events[0] if events else {}
+    last = events[-1] if events else {}
+    return {
+        "first_turn_id": first.get("turn_id") or "",
+        "last_turn_id": last.get("turn_id") or "",
+        "first_source_line": first.get("source_line"),
+        "last_source_line": last.get("source_line"),
+    }
+
+
+def build_episode_arcs(event_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Build deterministic ordered Episode/Arc read-models from event rows."""
+
+    arcs: list[dict[str, Any]] = []
+    for episode_id, grouped_rows in _group_rows(event_rows):
+        ordered_rows = [row for index, row in sorted(grouped_rows, key=lambda item: _sort_key(item[1], item[0]))]
+        events = [_normalize_event(row, index) for index, row in enumerate(ordered_rows)]
+        events = [event for event in events if event["event_kind"]]
+        if not events:
+            continue
+        kinds = [str(event["event_kind"]) for event in events]
+        episode_kind, profile = _profile_for(kinds)
+        explicit_gaps = [gap for event in events for gap in event.get("sequence_gaps", [])]
+        sequence_gaps = unique_preserve(explicit_gaps + _semantic_gaps(episode_kind, kinds, profile), limit=8)
+        source_refs = _unique_objects([ref for event in events for ref in event["source_refs"]], limit=16)
+        source_hashes = [str(event.get("source_ref_hash") or "") for event in events if event.get("source_ref_hash")]
+        arcs.append(
+            {
+                "schema_version": EPISODE_ARC_SCHEMA_VERSION,
+                "kind": EPISODE_ARC_KIND,
+                "episode_id": episode_id,
+                "episode_kind": episode_kind,
+                "origin": str(profile.get("origin") or "clean_source"),
+                "source_event_ids": [str(event["event_id"]) for event in events],
+                "source_refs": source_refs,
+                "source_ref_hashes": source_hashes,
+                "turn_range": _turn_range(events),
+                "affected_scope": _merge_scope(events),
+                "event_order": kinds,
+                "causal_edges": _causal_edges(events),
+                "outcome": str(profile.get("outcome") or "unknown"),
+                "current_validity": str(profile.get("current_validity") or "needs_reopen"),
+                "truth_status": sequence_packets.CHAIN_TRUTH_STATUS,
+                "sequence_gaps": sequence_gaps,
+                "expected_valid": not sequence_gaps,
+            }
+        )
+    return arcs
+
+
+def _source_thickness(arc: Mapping[str, Any]) -> str:
+    if arc.get("sequence_gaps") or len(_as_list(arc.get("source_event_ids"))) < 2:
+        return "thin"
+    if str(arc.get("episode_kind") or "") == "supersession_arc" and len(_as_list(arc.get("source_event_ids"))) >= 3:
+        return "strong"
+    return "usable"
+
+
+def _recommended_use(arc: Mapping[str, Any]) -> str:
+    if _source_thickness(arc) == "thin" or arc.get("sequence_gaps"):
+        return "refresh_sources"
+    if str(arc.get("current_validity") or "") == "needs_reopen":
+        return "refresh_sources"
+    return "remind"
+
+
+def _cannot_claim(arc: Mapping[str, Any]) -> list[str]:
+    claims = [
+        "route_handle_is_not_evidence",
+        "current_validity_requires_source_reopen",
+        "episode_arc_as_truth_layer",
+    ]
+    if arc.get("sequence_gaps"):
+        claims.append("sequence_order_uncertain")
+    if _source_thickness(arc) == "thin":
+        claims.append("thin_source_visible_action_not_allowed")
+    return claims
+
+
+def render_sequence_packet(
+    arc: Mapping[str, Any],
+    *,
+    trigger: str,
+    why_relevant: str | None = None,
+) -> dict[str, Any]:
+    """Render the host-facing sequence packet for an Episode/Arc read-model."""
+
+    events = _as_list(arc.get("_events"))
+    if not events:
+        event_ids = [str(value) for value in _as_list(arc.get("source_event_ids"))]
+        event_kinds = [str(value) for value in _as_list(arc.get("event_order"))]
+        hashes = [str(value) for value in _as_list(arc.get("source_ref_hashes"))]
+        events = [
+            {
+                "event_id": event_id,
+                "event_kind": event_kind,
+                "source_ref_hash": hashes[index] if index < len(hashes) else "",
+            }
+            for index, (event_id, event_kind) in enumerate(zip(event_ids, event_kinds, strict=False))
+        ]
+
+    packet: dict[str, Any] = {
+        "kind": sequence_packets.SEQUENCE_PACKET_KIND,
+        "trigger": trigger,
+        "why_relevant": why_relevant or str(arc.get("episode_kind") or "episode_arc"),
+        "timeline": [
+            {
+                "event_id": str(event.get("event_id") or ""),
+                "event_kind": str(event.get("event_kind") or ""),
+                "source_ref_hash": str(event.get("source_ref_hash") or ""),
+            }
+            for event in events
+        ],
+        "current_assessment": {
+            "source_thickness": _source_thickness(arc),
+            "freshness": "needs_reopen" if str(arc.get("current_validity") or "") == "needs_reopen" else "aging",
+            "proposed_use": _recommended_use(arc),
+            "truth_boundary": "derived_weather_not_source_fact",
+        },
+        "cannot_claim": _cannot_claim(arc),
+    }
+    if arc.get("sequence_gaps"):
+        packet["sequence_gaps"] = list(_as_list(arc.get("sequence_gaps")))
+    return packet
+
+
+def build_reopen_plan(arc: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a source-window navigation plan without treating the arc as truth."""
+
+    source_thickness = _source_thickness(arc)
+    safe_uses = SAFE_GAPPY_USES if source_thickness == "thin" or arc.get("sequence_gaps") else SAFE_GAPPY_USES + ["remind"]
+    return {
+        "kind": REOPEN_PLAN_KIND,
+        "episode_id": str(arc.get("episode_id") or ""),
+        "episode_kind": str(arc.get("episode_kind") or ""),
+        "recommended_use": _recommended_use(arc),
+        "safe_uses": safe_uses,
+        "route": {
+            "source_event_ids": [str(value) for value in _as_list(arc.get("source_event_ids"))],
+            "source_refs": list(_as_list(arc.get("source_refs"))),
+            "source_ref_hashes": [str(value) for value in _as_list(arc.get("source_ref_hashes"))],
+            "source_window": dict(_as_mapping(arc.get("turn_range"))),
+        },
+        "cannot_claim": unique_preserve(_cannot_claim(arc) + ["episode_arc_is_not_current_truth"], limit=12),
+    }

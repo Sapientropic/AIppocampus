@@ -192,6 +192,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/coding/agency_host_timing.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/code_state_anchors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arcs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/rejected_route_probes.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/sequence_packets.py",

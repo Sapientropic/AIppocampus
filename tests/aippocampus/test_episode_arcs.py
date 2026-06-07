@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime.coding import episode_arcs, sequence_packets  # noqa: E402
+
+
+def source_ref(line: int, message_id: str) -> dict[str, object]:
+    return {
+        "thread_key": "thread:episode-arc-test",
+        "message_id": message_id,
+        "turn_id": f"turn-{line}",
+        "source_line": line,
+    }
+
+
+def event(
+    event_id: str,
+    event_kind: str,
+    line: int,
+    *,
+    sequence_index: int | None = None,
+    episode_id: str = "episode:route",
+) -> dict[str, object]:
+    row: dict[str, object] = {
+        "episode_id": episode_id,
+        "event_id": event_id,
+        "event_kind": event_kind,
+        "source_refs": [source_ref(line, f"m-{line}")],
+        "turn_id": f"turn-{line}",
+        "source_line": line,
+        "affected_scope": {"files": [{"path": "src/widget.py", "path_kind": "repo_relative"}]},
+    }
+    if sequence_index is not None:
+        row["sequence_index"] = sequence_index
+    return row
+
+
+class EpisodeArcReadModelTests(unittest.TestCase):
+    def test_builds_rejected_route_arc_packet_and_reopen_plan(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [
+                event("e-attempt", "attempted_route", 10, sequence_index=0),
+                event("e-failed", "failed_check", 11, sequence_index=1),
+                event("e-rejected", "route_rejected", 12, sequence_index=2),
+            ]
+        )
+
+        self.assertEqual(len(arcs), 1)
+        arc = arcs[0]
+        self.assertEqual(arc["kind"], episode_arcs.EPISODE_ARC_KIND)
+        self.assertEqual(arc["episode_kind"], "rejected_route_arc")
+        self.assertEqual(arc["source_event_ids"], ["e-attempt", "e-failed", "e-rejected"])
+        self.assertEqual(arc["event_order"], ["attempted_route", "failed_check", "route_rejected"])
+        self.assertEqual(arc["turn_range"]["first_turn_id"], "turn-10")
+        self.assertEqual(arc["turn_range"]["last_turn_id"], "turn-12")
+        self.assertEqual(arc["affected_scope"]["files"][0]["path"], "src/widget.py")
+        self.assertEqual(arc["current_validity"], "needs_reopen")
+        self.assertEqual(arc["truth_status"], sequence_packets.CHAIN_TRUTH_STATUS)
+        self.assertEqual(arc["sequence_gaps"], [])
+
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        evidence = sequence_packets.evaluate_case_evidence(
+            {"episode_chain": arc, "sequence_packet": packet}
+        )
+
+        self.assertEqual(packet["kind"], sequence_packets.SEQUENCE_PACKET_KIND)
+        self.assertEqual(
+            [row["event_kind"] for row in packet["timeline"]],
+            ["attempted_route", "failed_check", "route_rejected"],
+        )
+        self.assertEqual(packet["current_assessment"]["proposed_use"], "refresh_sources")
+        self.assertEqual(packet["current_assessment"]["truth_boundary"], "derived_weather_not_source_fact")
+        self.assertIn("current_validity_requires_source_reopen", packet["cannot_claim"])
+        self.assertTrue(evidence["sequence_contract_ok"])
+        self.assertTrue(evidence["behavior_only_rejection_passed"])
+
+        plan = episode_arcs.build_reopen_plan(arc)
+        self.assertEqual(plan["kind"], episode_arcs.REOPEN_PLAN_KIND)
+        self.assertEqual(plan["episode_id"], arc["episode_id"])
+        self.assertEqual(plan["route"]["source_event_ids"], ["e-attempt", "e-failed", "e-rejected"])
+        self.assertEqual(plan["recommended_use"], "refresh_sources")
+        self.assertIn("source_window", plan["route"])
+        self.assertIn("episode_arc_is_not_current_truth", plan["cannot_claim"])
+
+    def test_same_events_wrong_order_are_marked_gappy_not_promoted(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [
+                event("e-failed", "failed_check", 11, episode_id="episode:wrong-order"),
+                event("e-attempt", "attempted_route", 10, episode_id="episode:wrong-order"),
+                event("e-rejected", "route_rejected", 12, episode_id="episode:wrong-order"),
+            ]
+        )
+
+        arc = arcs[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="post_compact_behavior_audit")
+        evidence = sequence_packets.evaluate_case_evidence(
+            {"episode_chain": arc, "sequence_packet": packet}
+        )
+
+        self.assertEqual(arc["event_order"], ["failed_check", "attempted_route", "route_rejected"])
+        self.assertIn("event_order_semantic_mismatch", arc["sequence_gaps"])
+        self.assertFalse(arc["expected_valid"])
+        self.assertEqual(packet["current_assessment"]["proposed_use"], "refresh_sources")
+        self.assertIn("sequence_order_uncertain", packet["cannot_claim"])
+        self.assertTrue(evidence["sequence_contract_ok"])
+        self.assertTrue(evidence["middle_event_gap_detected"])
+
+    def test_thin_single_point_reopen_plan_only_allows_safe_uses(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [event("e-single", "single_source_hint", 20, episode_id="episode:single")]
+        )
+
+        arc = arcs[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="source_reopen")
+        plan = episode_arcs.build_reopen_plan(arc)
+
+        self.assertEqual(arc["episode_kind"], "tacit_constraint_arc")
+        self.assertIn("single_point_trap", arc["sequence_gaps"])
+        self.assertFalse(arc["expected_valid"])
+        self.assertEqual(packet["current_assessment"]["source_thickness"], "thin")
+        self.assertEqual(packet["current_assessment"]["proposed_use"], "refresh_sources")
+        self.assertEqual(plan["safe_uses"], ["ask", "refresh_sources"])
+        self.assertNotIn("warn", plan["safe_uses"])
+
+    def test_supersession_arc_preserves_order_without_claiming_current_truth(self) -> None:
+        arcs = episode_arcs.build_episode_arcs(
+            [
+                event("e-old", "old_rule", 30, sequence_index=0, episode_id="episode:supersession"),
+                event("e-new", "new_rule", 31, sequence_index=1, episode_id="episode:supersession"),
+                event(
+                    "e-current",
+                    "current_rule_selected",
+                    32,
+                    sequence_index=2,
+                    episode_id="episode:supersession",
+                ),
+            ]
+        )
+
+        arc = arcs[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        evidence = sequence_packets.evaluate_case_evidence(
+            {"episode_chain": arc, "sequence_packet": packet}
+        )
+
+        self.assertEqual(arc["episode_kind"], "supersession_arc")
+        self.assertEqual(arc["current_validity"], "superseded")
+        self.assertEqual(arc["causal_edges"][0]["relation"], "superseded_by")
+        self.assertTrue(evidence["sequence_contract_ok"])
+        self.assertTrue(evidence["supersession_passed"])
+        self.assertIn("episode_arc_as_truth_layer", packet["cannot_claim"])
+
+
+if __name__ == "__main__":
+    unittest.main()

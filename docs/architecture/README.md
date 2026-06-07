@@ -60,6 +60,7 @@ Roles:
 | [browser-extension-design.md](browser-extension-design.md) | active design | Browser companion and local MCP bridge direction; confirm external platform details before relying on them. |
 | [cognitive-load-sidecar.md](cognitive-load-sidecar.md) | active design | Deterministic cognitive-load sidecar and live-calibration boundary. |
 | [encrypted-sync-v2.md](encrypted-sync-v2.md) | active design | Encrypted sync recovery, conflict, revocation, and migration design. |
+| [episode-arc-read-models.md](episode-arc-read-models.md) | active design | Ordered Episode/Arc read-model schema, sequence packet projection, and source-window reopen boundary. |
 | [gb-scale-roadmap.md](gb-scale-roadmap.md) | active design | Large-thread storage, retention, search, and sync scale roadmap. |
 | [question-tracking-subconscious.md](question-tracking-subconscious.md) | active design | Question extraction, tracking, and theme-emergence design. |
 | [rust-deterministic-core.md](rust-deterministic-core.md) | active design | Future Rust deterministic-core migration gate. |
