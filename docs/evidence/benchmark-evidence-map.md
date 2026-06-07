@@ -265,6 +265,7 @@ pasting raw JSON into multiple docs.
 | Semantic paraphrase reuse smoke | `tools/aippocampus/smoke/smoke_semantic_paraphrase_reuse.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Living cue cache public-safe smoke | `tools/aippocampus/smoke/smoke_living_cue_cache.py` | `skills/aippocampus/references/ambient-hooks.md`, `docs/research/ambient-associative-recall.md`, #281 |
 | Real Codex long-session continuity smoke | `tools/aippocampus/smoke/smoke_codex_long_session_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |
+| Provider-key bridge OS credential-store smoke | `tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py` | `docs/guides/install-guide.md`, `docs/evidence/readiness/public-readiness-verification.md`, #784 |
 | E2E50 silent-constraint candidate seed scanner | `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py`; deterministic unittest included in `benchmark-smoke` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #279 |
 | E2E50 silent-constraint case-pack scorer scaffold | `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py`; deterministic unittest included in `benchmark-smoke`; sequence/load validator in `aippocampus_runtime/coding/sequence_packets.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/e2e50_silent_constraint/fixture.json`, #279/#663/#575 |
 | Claude Code MCP host probe | `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py` | `docs/evidence/readiness/public-readiness-verification.md` |
