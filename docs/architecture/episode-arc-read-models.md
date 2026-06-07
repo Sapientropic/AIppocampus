@@ -67,6 +67,14 @@ turn/source-line hints, optional `sequence_index`, and optional
 provided, otherwise preserves input order, and marks wrong-order or thin chains
 as gappy instead of silently repairing them.
 
+The adapter path is intentionally small and deterministic. Existing behavior
+rows such as `tool_call_observed` with a failed test/check exit become
+`failed_check`; generic failed tool rows become `tool_failure`; coding
+`decision_event` rows can contribute `rejected_route`, `user_correction`, or
+`accepted_decision` steps without becoming source truth. Mixed behavior and
+decision rows may form one arc, but the output remains a read-model and still
+requires source reopen before foreground action.
+
 Current deterministic arc profiles cover:
 
 - rejected route: `attempted_route -> failed_check/tool_failure ->
@@ -81,8 +89,10 @@ Current deterministic arc profiles cover:
 Negative controls are intentional product behavior. The same event set in the
 wrong order becomes `event_order_semantic_mismatch`; a single source hint
 becomes `single_point_trap`; a chain missing an expected middle event becomes
-`missing_middle_event`. These cases should navigate the agent back to source,
-not make it warn or block from the derived arc alone.
+`missing_middle_event`; a temporary concern followed by later normal progress
+becomes `temporary_concern_arc` / `local_only`, not a current constraint. These
+cases should navigate the agent back to source, not make it warn or block from
+the derived arc alone.
 
 ## Cannot Claim
 
