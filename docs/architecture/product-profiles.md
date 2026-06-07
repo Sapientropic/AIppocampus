@@ -1,5 +1,7 @@
 # Product Profiles
 
+Role: current contract.
+
 Status: product and architecture boundary for GitHub #680.
 
 This note defines where AIppocampus should feel quiet and low-friction, and

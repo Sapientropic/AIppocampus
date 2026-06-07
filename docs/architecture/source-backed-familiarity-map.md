@@ -1,5 +1,7 @@
 # Source-Backed Familiarity Map
 
+Role: active design.
+
 Status: first deterministic repo-adapter slice.
 Related: #250, `aippocampus_runtime.navigation.repo_familiarity`,
 `tools/aippocampus/smoke/smoke_repo_familiarity.py`,

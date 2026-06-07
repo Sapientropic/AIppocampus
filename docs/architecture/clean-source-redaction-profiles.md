@@ -1,5 +1,7 @@
 # Clean-Source Redaction Profiles
 
+Role: current contract.
+
 Issue: #591. Related privacy surfaces: #352 and #357.
 
 Clean source is the canonical evidence source for AIppocampus. Its default

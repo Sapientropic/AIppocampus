@@ -1,5 +1,7 @@
 # Runtime Envelope And Failure Taxonomy
 
+Role: current contract.
+
 Status: current contract for GitHub #817.
 
 AIppocampus has many focused runtime subpackages. File layout is useful, but it

@@ -1,5 +1,7 @@
 # Multimodal Provider Routing
 
+Role: current contract.
+
 Status: internal provider capability-routing contract and public-safe fixture
 for GitHub #542 and the #528 multimodal source-backed recall track.
 

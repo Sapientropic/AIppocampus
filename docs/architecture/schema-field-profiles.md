@@ -1,5 +1,7 @@
 # Schema Field Profiles
 
+Role: current contract.
+
 Last checked: 2026-06-03.
 
 This note defines the field-budget discipline for AIppocampus schemas. It is a

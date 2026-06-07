@@ -1,5 +1,7 @@
 # Legacy Alias Inventory
 
+Role: inventory.
+
 Last audited: 2026-06-04.
 
 This is the canonical inventory for legacy environment names and path

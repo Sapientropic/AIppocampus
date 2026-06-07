@@ -1,5 +1,7 @@
 # Encrypted Sync V2 Decision Track
 
+Role: active design.
+
 This note owns the encrypted sync v2 decisions from GitHub #306. It is a
 contract and follow-up planner, not an implementation claim. The v1 runtime
 contract in [`encrypted-sync-v1.md`](encrypted-sync-v1.md) remains unchanged

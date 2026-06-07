@@ -1,5 +1,7 @@
 # Compatibility Shim Inventory
 
+Role: inventory.
+
 The authoritative inventory is executable:
 
 ```powershell

@@ -125,8 +125,14 @@ class DocsHealthTests(unittest.TestCase):
             repo = Path(tmp)
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
-            (architecture / "contract.md").write_text("# Contract\n", encoding="utf-8")
-            (architecture / "missing-from-index.md").write_text("# Missing\n", encoding="utf-8")
+            (architecture / "contract.md").write_text(
+                "# Contract\n\nRole: current contract.\n",
+                encoding="utf-8",
+            )
+            (architecture / "missing-from-index.md").write_text(
+                "# Missing\n\nRole: active design.\n",
+                encoding="utf-8",
+            )
             (architecture / "README.md").write_text(
                 "\n".join(
                     [
@@ -155,6 +161,47 @@ class DocsHealthTests(unittest.TestCase):
         )
         self.assertIn(
             "architecture index references missing file: docs/architecture/gone.md",
+            issues,
+        )
+        self.assertIn(
+            "architecture doc Role mismatch for contract.md: doc has current contract, index has vague",
+            issues,
+        )
+        self.assertIn(
+            "architecture index missing role section: ## Current Contracts",
+            issues,
+        )
+
+    def test_architecture_index_reports_missing_doc_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            architecture = repo / "docs" / "architecture"
+            architecture.mkdir(parents=True)
+            (architecture / "contract.md").write_text("# Contract\n", encoding="utf-8")
+            (architecture / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# Architecture Index",
+                        "",
+                        "## Current Contracts",
+                        "## Implementation Maps",
+                        "## Inventories",
+                        "## Active Designs",
+                        "## Research Seeds",
+                        "## Archives",
+                        "",
+                        "| File | Role | Use |",
+                        "| --- | --- | --- |",
+                        "| [contract.md](contract.md) | current contract | current truth |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.architecture_index_issues(repo)
+
+        self.assertIn(
+            "architecture doc missing Role line: docs/architecture/contract.md",
             issues,
         )
 
@@ -761,6 +808,30 @@ class DocsHealthTests(unittest.TestCase):
             issues = docs_health.benchmark_evidence_map_issues(repo)
 
         self.assertIn("benchmark evidence map missing current claims snapshot pointer", issues)
+
+    def test_evidence_index_guard_covers_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        self.assertEqual(docs_health.evidence_index_issues(repo_root), [])
+
+    def test_evidence_index_reports_missing_lanes_and_docs_readme_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            evidence = docs / "evidence"
+            evidence.mkdir(parents=True)
+            (docs / "README.md").write_text("# Docs\n", encoding="utf-8")
+            (evidence / "README.md").write_text(
+                "# Evidence\n\nOnly benchmark reports.\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.evidence_index_issues(repo)
+
+        self.assertIn("evidence README missing current claim snapshot lane", issues)
+        self.assertIn("evidence README missing dated verification ledger lane", issues)
+        self.assertIn("docs README missing evidence README pointer", issues)
 
     def test_current_claims_guard_reports_stale_evidence_wording(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

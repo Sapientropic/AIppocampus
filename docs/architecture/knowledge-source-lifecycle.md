@@ -1,5 +1,7 @@
 # Knowledge Source Lifecycle
 
+Role: current contract.
+
 This ADR defines the first deterministic lifecycle contract for governed
 knowledge sources. It extends the public knowledge-source manifest and claim
 record schemas without introducing a live watcher, professional review system,

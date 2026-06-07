@@ -1,5 +1,7 @@
 # Edge Capture And Consolidation Boundary
 
+Role: current contract.
+
 AIppocampus has two lanes that should not be collapsed into one foreground
 workflow.
 

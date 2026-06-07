@@ -1,5 +1,7 @@
 # AIppocampus Browser Extension 设计文档
 
+Role: active design.
+
 > 状态：概念验证阶段 | 创建：2026-05-27 | 触发：知乎文章「你愿意死后让亲友用 AI 复活自己吗」
 >
 > Source boundary: this is a product/design working note. Competitive stats,

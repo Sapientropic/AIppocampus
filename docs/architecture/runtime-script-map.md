@@ -1,5 +1,7 @@
 # Runtime Entry Map
 
+Role: implementation map.
+
 This is the maintainer navigation map for `skills/aippocampus/scripts/`.
 Runtime ownership now lives in package modules under
 `aippocampus_runtime/` and `conversation_sources/`. The public human-facing

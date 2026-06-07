@@ -1,5 +1,7 @@
 # Question Tracking as a Subconscious Layer
 
+Role: active design.
+
 ## Origin
 
 This document comes from two converging insights:

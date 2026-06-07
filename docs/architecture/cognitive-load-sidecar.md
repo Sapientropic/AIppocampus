@@ -1,5 +1,7 @@
 # Cognitive-Load Sidecar
 
+Role: active design.
+
 Status: first deterministic sidecar implemented for #575. Live hook capture,
 private real-history calibration, and host-timing quality remain future work.
 

@@ -1,5 +1,7 @@
 # Path Identity Contract
 
+Role: current contract.
+
 AIppocampus compares local workspaces and registry artifacts across hosts,
 symlinks, temporary directories, sync targets, and agent surfaces. Path handling
 therefore has three separate meanings:

@@ -1,5 +1,7 @@
 # Project Planning Automation
 
+Role: implementation map.
+
 AIppocampus uses GitHub issues as executable work items and the GitHub Project
 as a planning view. Automation may keep metadata fresh, but docs and real code
 remain the source of truth.

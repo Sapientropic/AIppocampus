@@ -1,5 +1,7 @@
 # Agent Skill Capability Contracts
 
+Role: current contract.
+
 Status: architecture contract plus public-safe internal manifest prototype for
 GitHub #518.
 
