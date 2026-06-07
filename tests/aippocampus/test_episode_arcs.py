@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -8,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.coding import episode_arcs, sequence_packets  # noqa: E402
+from aippocampus_runtime.coding import episode_arcs, sequence_packets, sequence_reopen  # noqa: E402
 
 
 def source_ref(line: int, message_id: str) -> dict[str, object]:
@@ -43,6 +44,27 @@ def event(
 
 
 class EpisodeArcReadModelTests(unittest.TestCase):
+    def source_catalog_for_arc(self, arc: dict[str, object]) -> list[dict[str, object]]:
+        raw_event_ids = arc.get("source_event_ids")
+        raw_source_hashes = arc.get("source_ref_hashes")
+        raw_source_refs = arc.get("source_refs")
+        event_ids = [str(item) for item in raw_event_ids if str(item).strip()] if isinstance(raw_event_ids, list) else []
+        source_hashes = (
+            [str(item) for item in raw_source_hashes if str(item).strip()]
+            if isinstance(raw_source_hashes, list)
+            else []
+        )
+        source_refs = [item for item in raw_source_refs if isinstance(item, dict)] if isinstance(raw_source_refs, list) else []
+        return [
+            {
+                "event_id": event_id,
+                "source_ref_hash": source_hash,
+                "source_refs": [source_ref],
+                "raw_source_text": "RAW_SEQUENCE_REOPEN_SENTINEL",
+            }
+            for event_id, source_hash, source_ref in zip(event_ids, source_hashes, source_refs, strict=False)
+        ]
+
     def test_builds_rejected_route_arc_packet_and_reopen_plan(self) -> None:
         arcs = episode_arcs.build_episode_arcs(
             [
@@ -88,6 +110,74 @@ class EpisodeArcReadModelTests(unittest.TestCase):
         self.assertEqual(plan["recommended_use"], "refresh_sources")
         self.assertIn("source_window", plan["route"])
         self.assertIn("episode_arc_is_not_current_truth", plan["cannot_claim"])
+
+    def test_sequence_packet_reopen_plan_resolves_catalog_without_arc_truth(self) -> None:
+        arc = episode_arcs.build_episode_arcs(
+            [
+                event("e-attempt", "attempted_route", 10, sequence_index=0),
+                event("e-failed", "failed_check", 11, sequence_index=1),
+                event("e-rejected", "route_rejected", 12, sequence_index=2),
+            ]
+        )[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        plan = sequence_reopen.build_sequence_packet_reopen_plan(
+            packet,
+            source_catalog=self.source_catalog_for_arc(arc),
+        )
+
+        self.assertEqual(plan["kind"], sequence_reopen.SEQUENCE_PACKET_REOPEN_PLAN_KIND)
+        self.assertEqual(plan["resolution_status"], "complete")
+        self.assertEqual(plan["route"]["source_event_ids"], ["e-attempt", "e-failed", "e-rejected"])
+        self.assertEqual(
+            plan["route"]["resolved_source_event_ids"],
+            ["e-attempt", "e-failed", "e-rejected"],
+        )
+        self.assertEqual(plan["route"]["source_window"]["unresolved_event_count"], 0)
+        self.assertFalse(plan["route"]["source_window"]["raw_source_serialized"])
+        self.assertIn("sequence_packet_is_not_evidence", plan["cannot_claim"])
+        self.assertIn("current_validity_requires_source_reopen", plan["cannot_claim"])
+        self.assertNotIn("RAW_SEQUENCE_REOPEN_SENTINEL", json.dumps(plan, ensure_ascii=False))
+        self.assertEqual(
+            plan["issue_readouts"]["github_663"]["source_reopen_from_sequence_packet"],
+            "complete",
+        )
+        self.assertFalse(plan["issue_readouts"]["github_663"]["closeout_eligible"])
+
+    def test_sequence_packet_reopen_plan_degrades_without_source_catalog(self) -> None:
+        arc = episode_arcs.build_episode_arcs(
+            [
+                event("e-attempt", "attempted_route", 10, sequence_index=0),
+                event("e-failed", "failed_check", 11, sequence_index=1),
+                event("e-rejected", "route_rejected", 12, sequence_index=2),
+            ]
+        )[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        plan = sequence_reopen.build_sequence_packet_reopen_plan(packet)
+
+        self.assertEqual(plan["resolution_status"], "unresolved")
+        self.assertEqual(plan["recommended_use"], "refresh_sources")
+        self.assertEqual(plan["safe_uses"], ["ask", "refresh_sources"])
+        self.assertEqual(plan["route"]["source_refs"], [])
+        self.assertEqual(len(plan["route"]["unresolved_timeline_events"]), 3)
+        self.assertIn("source_catalog_required_for_reopen", plan["cannot_claim"])
+
+    def test_gappy_sequence_packet_reopen_plan_stays_refresh_only(self) -> None:
+        arc = episode_arcs.build_episode_arcs(
+            [
+                event("e-attempt", "attempted_route", 25, sequence_index=0, episode_id="episode:gappy-packet"),
+                event("e-rejected", "rejected_route", 27, sequence_index=2, episode_id="episode:gappy-packet"),
+            ]
+        )[0]
+        packet = episode_arcs.render_sequence_packet(arc, trigger="pre_patch")
+        plan = sequence_reopen.build_sequence_packet_reopen_plan(
+            packet,
+            source_catalog=self.source_catalog_for_arc(arc),
+        )
+
+        self.assertEqual(plan["resolution_status"], "complete")
+        self.assertEqual(plan["recommended_use"], "refresh_sources")
+        self.assertEqual(plan["safe_uses"], ["ask", "refresh_sources"])
+        self.assertIn("sequence_order_uncertain", plan["cannot_claim"])
 
     def test_same_events_wrong_order_are_marked_gappy_not_promoted(self) -> None:
         arcs = episode_arcs.build_episode_arcs(
