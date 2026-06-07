@@ -196,6 +196,49 @@ class PromptRecallPolicyTests(unittest.TestCase):
         self.assertIn("optional probe", context)
         self.assertIn("reopen source before any strong claim", context)
 
+    def test_journey_bridge_renders_as_optional_unblock_probe_not_fact(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 4.0,
+            "confidence": "medium",
+            "candidates": [],
+            "working_memory": [
+                {
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "title": "Safety-boundary bridge",
+                    "summary": "A Dream bridge over two camped journeys.",
+                    "confidence": 0.64,
+                    "matched_terms": ["rollback boundary before rebuild"],
+                    "source_refs": [
+                        {
+                            "thread_key": "session:dream",
+                            "title": "Dream bridge",
+                            "line": 44,
+                        }
+                    ],
+                    "dream_hypothesis_use": {
+                        "action": "deliver_as_optional_unblock_probe",
+                        "reason": "journey_bridge_trigger_matched",
+                    },
+                    "journey_bridge_hypothesis": {
+                        "status": "dream_bridge_not_source_fact",
+                        "bridge_kind": "shared_unblock_condition",
+                        "shared_pattern": "both routes camp before replacing an old structure",
+                        "possible_reason": "each journey may be waiting for a reversible boundary",
+                        "unblock_condition": "define the rollback, snapshot, or recovery boundary before rebuilding",
+                    },
+                }
+            ],
+        }
+
+        context = render.context_for_hook(result)
+
+        self.assertIn("Journey bridge Dream hypothesis, not source fact", context)
+        self.assertIn("optional unblock probe", context)
+        self.assertIn("define the rollback", context)
+        self.assertIn("reopen source before any strong claim", context)
+
 
 if __name__ == "__main__":
     unittest.main()

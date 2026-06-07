@@ -25,10 +25,8 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.dream.constructive_outputs import (
-    prospective_invitation_block_reason,
-    prospective_invitation_match_use,
-)
+from aippocampus_runtime.dream import constructive_outputs as dream_constructive
+from aippocampus_runtime.dream import journey_bridges
 from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     normalize_term,
@@ -577,7 +575,7 @@ def dream_hypothesis_block_reason(row: dict[str, Any]) -> str:
     ):
         if any(timestamp <= now for timestamp in dream_horizon_timestamps(row, key)):
             return reason
-    invitation_block_reason = prospective_invitation_block_reason(row)
+    invitation_block_reason = dream_constructive.prospective_invitation_block_reason(row)
     if invitation_block_reason:
         return invitation_block_reason
     return ""
@@ -631,9 +629,9 @@ def match_working_memory(
         copy["matched_terms"] = unique_preserve(matched, limit=8)
         copy["score"] = round(score, 3)
         if copy.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
-            invitation_use = prospective_invitation_match_use(copy)
-            if invitation_use:
-                copy["dream_hypothesis_use"] = invitation_use
+            special_use = dream_constructive.prospective_invitation_match_use(copy) or journey_bridges.journey_bridge_match_use(copy)
+            if special_use:
+                copy["dream_hypothesis_use"] = special_use
                 matches.append(copy)
                 continue
             copy["dream_hypothesis_use"] = {
@@ -683,6 +681,7 @@ def strip_for_hook(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "dream_hypothesis_use": row.get("dream_hypothesis_use"),
                 "constructive_artifact": row.get("constructive_artifact"),
                 "prospective_invitation": row.get("prospective_invitation"),
+                "journey_bridge_hypothesis": row.get("journey_bridge_hypothesis"),
             }
         )
     return out

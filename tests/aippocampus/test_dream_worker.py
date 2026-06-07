@@ -266,6 +266,199 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(len(payload["dream_working_memory_rows"]), 1)
         self.assertIn("reflection_space", payload["dream_working_memory_rows"][0]["downstream_use"])
 
+    def test_amplification_worker_accepts_journey_bridge_unblock_probe(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            contract = json.loads(messages[0]["content"])
+            directive = json.loads(messages[-1]["content"])
+            self.assertIn("journey_bridge_hypothesis", contract["output_schema"]["findings"][0])
+            self.assertIn("journey_bridge_hypothesis_rule", directive)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "journey_pattern_resonance",
+                                            "title": "Two journeys camp at the same safety boundary",
+                                            "summary": "Treat the bridge as a source-anchored unblock probe, not a fact.",
+                                            "activation_cues": ["rollback boundary before rebuild", "camped journey safety condition"],
+                                            "confidence": 0.64,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "Both source handles describe stalled route work around safety boundaries.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "journey_bridge_hypothesis": {
+                                                "bridge_kind": "shared_unblock_condition",
+                                                "source_journey_refs": ["journey:docs-ia", "journey:dream-routing"],
+                                                "shared_pattern": "both routes camp before replacing an old structure",
+                                                "possible_reason": "each journey may be waiting for a reversible boundary before the next move is safe",
+                                                "unblock_condition": "define the rollback, snapshot, or recovery boundary before rebuilding",
+                                                "falsification_cues": [
+                                                    "one journey moves after unrelated external approval",
+                                                    "source shows the blockage was only missing time",
+                                                ],
+                                                "status": "dream_bridge_not_source_fact",
+                                                "source_ref_ids": ["sr0", "sr1"],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="amplification",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        finding = payload["findings"][0]
+        bridge = finding["journey_bridge_hypothesis"]
+        row = payload["dream_working_memory_rows"][0]
+
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(finding["worker_validation"]["status"], "passed")
+        self.assertEqual(bridge["status"], "dream_bridge_not_source_fact")
+        self.assertEqual(bridge["bridge_kind"], "shared_unblock_condition")
+        self.assertEqual(bridge["source_journey_refs"], ["journey:docs-ia", "journey:dream-routing"])
+        self.assertIn("reversible boundary", bridge["possible_reason"])
+        self.assertIn("rollback", bridge["unblock_condition"])
+        self.assertEqual(payload["adjudicated_findings"][0]["adjudication_result"]["status"], "accepted")
+        self.assertEqual(row["journey_bridge_hypothesis"]["foreground_use"], "journey_unblock_probe_not_evidence")
+        self.assertEqual(row["foreground_use"]["journey_bridge_action"], "optional_unblock_probe_on_trigger")
+
+    def test_journey_bridge_requires_two_sided_refs_unblock_and_falsification(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "journey_pattern_resonance",
+                                            "title": "Weak similarity",
+                                            "summary": "This only says two routes are similar.",
+                                            "activation_cues": ["weak journey similarity"],
+                                            "confidence": 0.63,
+                                            "source_ref_ids": ["sr0"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "Only one source side is cited.",
+                                                    "source_ref_ids": ["sr0"],
+                                                }
+                                            ],
+                                            "journey_bridge_hypothesis": {
+                                                "bridge_kind": "frontier_rhyme",
+                                                "source_journey_refs": ["journey:one"],
+                                                "shared_pattern": "similar",
+                                                "possible_reason": "",
+                                                "unblock_condition": "",
+                                                "falsification_cues": [],
+                                                "status": "dream_bridge_not_source_fact",
+                                                "source_ref_ids": ["sr0"],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="amplification",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        failures = payload["findings"][0]["worker_validation"]["failed_checks"]
+
+        self.assertEqual(payload["status"], "candidate_parked")
+        self.assertIn("journey_bridge_missing_source_refs_from_both_sides", failures)
+        self.assertIn("journey_bridge_missing_source_journey_refs", failures)
+        self.assertIn("journey_bridge_shared_pattern_too_weak", failures)
+        self.assertIn("journey_bridge_missing_possible_reason", failures)
+        self.assertIn("journey_bridge_missing_unblock_condition", failures)
+        self.assertIn("journey_bridge_missing_falsification_cues", failures)
+        self.assertEqual(payload["dream_working_memory_rows"], [])
+
+    def test_sensitive_journey_bridge_explanation_requires_human_review(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "journey_pattern_resonance",
+                                            "title": "Overpersonalized bridge",
+                                            "summary": "The bridge crosses into a profile-like explanation.",
+                                            "activation_cues": ["profile-like bridge"],
+                                            "confidence": 0.62,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The candidate has source refs but the explanation is unsafe.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "journey_bridge_hypothesis": {
+                                                "bridge_kind": "shared_blockage",
+                                                "source_journey_refs": ["journey:a", "journey:b"],
+                                                "shared_pattern": "both journeys pause before a decisive route change",
+                                                "possible_reason": "the user's durable personality secretly sabotages closure",
+                                                "unblock_condition": "ask for human review before using this explanation",
+                                                "falsification_cues": ["source shows external blockers only"],
+                                                "status": "dream_bridge_not_source_fact",
+                                                "source_ref_ids": ["sr0", "sr1"],
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="amplification",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        finding = payload["findings"][0]
+
+        self.assertEqual(payload["status"], "candidate_parked")
+        self.assertTrue(finding["human_review_required"])
+        self.assertIn(
+            "sensitive_or_profile_journey_bridge_requires_human_review",
+            finding["worker_validation"]["failed_checks"],
+        )
+        self.assertEqual(payload["dream_working_memory_rows"], [])
+
     def test_prospective_model_worker_emits_hypothesis_not_prediction(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             directive = json.loads(messages[-1]["content"])

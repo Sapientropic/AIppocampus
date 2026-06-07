@@ -321,6 +321,54 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertIn("blank starting point", use["suggested_opening"])
         self.assertTrue(use["strong_claim_requires_source_reopen"])
 
+    def test_journey_bridge_match_carries_unblock_probe_policy_and_hook_payload(self) -> None:
+        dream_row = {
+            "kind": "aippocampus_working_memory",
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "candidate_type": "dream_hypothesis",
+            "title": "Safety-boundary bridge",
+            "summary": "A Dream bridge over two camped journeys.",
+            "recommendation": "Use as an unblock probe only.",
+            "confidence": 0.64,
+            "trigger_terms": ["rollback", "rollback boundary before rebuild"],
+            "source_refs": [{"thread_key": "session:dream", "message_id": "msg-d", "line": 12}],
+            "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+            "review_state": "agent_adjudicated",
+            "foreground_use": {
+                "default_action": "quiet_substrate",
+                "strong_claim_requires_source_reopen": True,
+                "journey_bridge_action": "optional_unblock_probe_on_trigger",
+            },
+            "sensitive_use_gate": {"state": "allowed"},
+            "journey_bridge_hypothesis": {
+                "status": "dream_bridge_not_source_fact",
+                "bridge_kind": "shared_unblock_condition",
+                "source_journey_refs": ["journey:docs-ia", "journey:dream-routing"],
+                "shared_pattern": "both routes camp before replacing an old structure",
+                "possible_reason": "each journey may be waiting for a reversible boundary",
+                "unblock_condition": "define the rollback, snapshot, or recovery boundary before rebuilding",
+                "falsification_cues": ["source shows one blockage was only missing time"],
+                "foreground_use": "journey_unblock_probe_not_evidence",
+                "requires_source_reopen_before_claim": True,
+            },
+        }
+
+        matched = router.match_working_memory(
+            "这条 journey 下一步是不是要先定义 rollback boundary？",
+            [dream_row],
+        )
+        hook_rows = router.strip_for_hook(matched)
+
+        self.assertEqual(len(matched), 1)
+        use = matched[0]["dream_hypothesis_use"]
+        self.assertEqual(use["action"], "deliver_as_optional_unblock_probe")
+        self.assertEqual(use["journey_bridge_diagnostic"], "delivered_as_optional_unblock_probe")
+        self.assertEqual(use["render_boundary"], "dream_bridge_not_source_fact")
+        self.assertIn("rollback", use["unblock_condition"])
+        self.assertIn("journey_bridge_hypothesis", hook_rows[0])
+        self.assertEqual(hook_rows[0]["journey_bridge_hypothesis"]["status"], "dream_bridge_not_source_fact")
+
 
 if __name__ == "__main__":
     unittest.main()

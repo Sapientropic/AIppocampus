@@ -311,6 +311,55 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertIn("optional probe", preview)
         self.assertIn("not source fact", preview)
 
+    def test_journey_bridge_projects_as_optional_unblock_probe_not_evidence(self) -> None:
+        refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
+        row = wm.adjudicated_dream_findings_to_working_memory(
+            [
+                adjudicated_finding(
+                    dream_function="amplification",
+                    candidate_kind="journey_pattern_resonance",
+                    activation_cues=["rollback boundary before rebuild"],
+                    journey_bridge_hypothesis={
+                        "bridge_kind": "shared_unblock_condition",
+                        "source_journey_refs": ["journey:docs-ia", "journey:dream-routing"],
+                        "shared_pattern": "both routes camp before replacing an old structure",
+                        "possible_reason": "each journey may be waiting for a reversible boundary before the next move is safe",
+                        "unblock_condition": "define the rollback, snapshot, or recovery boundary before rebuilding",
+                        "falsification_cues": ["source shows one blockage was only missing time"],
+                        "status": "dream_bridge_not_source_fact",
+                        "truth_boundary": "dream_bridge_not_source_fact",
+                        "source_refs": refs,
+                        "foreground_use": "journey_unblock_probe_not_evidence",
+                        "requires_source_reopen_before_claim": True,
+                    },
+                )
+            ]
+        )[0]
+
+        self.assertIn("journey_bridge_hypothesis", row)
+        bridge = row["journey_bridge_hypothesis"]
+        self.assertEqual(bridge["status"], "dream_bridge_not_source_fact")
+        self.assertEqual(bridge["foreground_use"], "journey_unblock_probe_not_evidence")
+        self.assertIn("rollback", bridge["unblock_condition"])
+        self.assertIn("rollback boundary before rebuild", row["trigger_terms"])
+        self.assertTrue(any("define the rollback" in term for term in row["trigger_terms"]))
+        self.assertEqual(row["foreground_use"]["journey_bridge_action"], "optional_unblock_probe_on_trigger")
+
+        plan = wm.plan_dream_hypothesis_use(
+            row,
+            prompt="这条 journey 下一步是不是要先定义 rollback boundary？",
+            now="2026-06-01T00:00:00Z",
+        )
+        preview = wm.render_dream_hypothesis_preview(row)
+
+        self.assertEqual(plan["action"], "deliver_as_optional_unblock_probe")
+        self.assertEqual(plan["reason"], "journey_bridge_trigger_matched")
+        self.assertEqual(plan["journey_bridge_diagnostic"], "delivered_as_optional_unblock_probe")
+        self.assertIn("rollback", plan["unblock_condition"])
+        self.assertIn("Journey bridge Dream hypothesis", preview)
+        self.assertIn("optional unblock probe", preview)
+        self.assertIn("not source fact", preview)
+
     def test_prospective_invitation_surfaces_only_on_trigger_and_not_when_annoying_or_expired(self) -> None:
         low_risk = wm.adjudicated_dream_findings_to_working_memory(
             [

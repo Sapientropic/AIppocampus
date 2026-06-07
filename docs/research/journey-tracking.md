@@ -259,6 +259,13 @@ Journey
 （都经历了 屯→革→突破），说明用户在不同领域有相似的体验模式。
 这是 Dream amplification 的输入。
 
+实现边界：path resonance 不能只输出相似分数或共享标签。进入 Dream
+amplification 时，它必须变成可反驳的 `journey_bridge_hypothesis`：同时引用
+两个 Journey 侧的 source refs，说明 `shared_pattern`、`possible_reason`、
+`unblock_condition` 和 `falsification_cues`，并保持
+`status="dream_bridge_not_source_fact"`。前台只能把它当作 Journey 解堵探针；
+如果解释滑向人格、隐藏意图或 life-wide 深因，必须停车等待人工/source review。
+
 ## 卦象深层结构：从标签到状态转移语法
 
 当前设计把卦象当 64 个标签用：`waypoint.arc = "屯"`。这等于只取了符号，
