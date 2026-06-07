@@ -24,6 +24,7 @@ from aippocampus_runtime.ops.route_readiness import (
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
+from aippocampus_runtime.warm_ambient.query_pattern_routes import query_pattern_routes_report
 
 OBSERVATORY_KIND = "aippocampus_cognitive_observatory_readout"
 OBSERVATORY_SCHEMA_VERSION = 1
@@ -33,6 +34,22 @@ def _load_json(path: str | Path | None) -> Any:
     if not path:
         return None
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _load_json_or_jsonl(path: str | Path | None) -> Any:
+    if not path:
+        return None
+    source = Path(path)
+    if source.suffix.casefold() == ".jsonl":
+        rows: list[dict[str, Any]] = []
+        for line in source.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            if isinstance(item, Mapping):
+                rows.append(dict(item))
+        return rows
+    return _load_json(source)
 
 
 def _as_list(value: Any, key: str) -> list[dict[str, Any]]:
@@ -147,6 +164,18 @@ def fixture_cognitive_observatory_readout() -> dict[str, Any]:
         activation_surfaces=activation_surfaces,
         recall_diagnostic=_recall_diagnostic_from_fixture(),
         sleep_cycle_payload=sleep_cycle_payload,
+        query_pattern_routes=[
+            {
+                "query_aliases": ["fixture query pattern route"],
+                "source_generation_digest": "gen-observatory-v1",
+                "thread_key_hash": "thread_observatory",
+                "source_refs": [{"source_id": "clean:query-pattern", "message_id": "m3"}],
+                "created_unix": 1_800_000_000,
+                "ttl_seconds": 900,
+                "confidence": 0.9,
+            }
+        ],
+        now_unix=1_800_000_120,
     )
 
 
@@ -158,6 +187,8 @@ def cognitive_observatory_readout(
     activation_surfaces: list[dict[str, Any]] | None = None,
     recall_diagnostic: Mapping[str, Any] | None = None,
     sleep_cycle_payload: Mapping[str, Any] | None = None,
+    query_pattern_routes: list[dict[str, Any]] | None = None,
+    now_unix: float | None = None,
     min_roi_score: float = 1.0,
 ) -> dict[str, Any]:
     if route_readiness and route_readiness.get("kind") == ROUTE_READINESS_KIND:
@@ -175,6 +206,11 @@ def cognitive_observatory_readout(
         if isinstance(sleep_cycle_payload, Mapping)
         else None
     )
+    query_routes = (
+        query_pattern_routes_report(query_pattern_routes, now_unix=now_unix)
+        if query_pattern_routes is not None
+        else None
+    )
     metrics = {
         "route_ready_count": (readiness.get("metrics") or {}).get("ready_count", 0),
         "route_suppressed_count": (readiness.get("metrics") or {}).get("suppressed_count", 0),
@@ -182,12 +218,18 @@ def cognitive_observatory_readout(
         "activation_conflict_count": (authority.get("metrics") or {}).get("conflict_count", 0),
         "recall_diagnostic_present": diagnostic is not None,
         "sleep_summary_present": sleep_summary is not None,
+        "query_pattern_route_count": (query_routes or {}).get("metrics", {}).get("route_count", 0),
+        "query_pattern_active_route_count": (query_routes or {})
+        .get("metrics", {})
+        .get("active_route_count", 0),
     }
     surfaces = ["route_readiness", "activation_authority"]
     if diagnostic:
         surfaces.append("recall_diagnostic")
     if sleep_summary:
         surfaces.append("sleep_cycle")
+    if query_routes:
+        surfaces.append("query_pattern_routes")
     control_authority = observatory_control_authority_audit(
         activation_surfaces=activation_surfaces or [],
         activation_authority=authority,
@@ -204,6 +246,7 @@ def cognitive_observatory_readout(
         "control_authority_audit": control_authority,
         "recall_diagnostic": diagnostic,
         "sleep_cycle": sleep_summary,
+        "query_pattern_routes": query_routes,
         "metrics": metrics,
         "contract": {
             "read_only_report": True,
@@ -226,6 +269,7 @@ def cognitive_observatory_readout(
             "read_only_observatory_readout_exists",
             "public_safe_static_observatory_export_exists",
             "suppressed_prewarm_reason_codes_are_reported",
+            "public_safe_query_pattern_route_observability_exists",
         ],
         "cannot_claim": [
             "complete_cognitive_observatory_ui_exists",
@@ -233,6 +277,7 @@ def cognitive_observatory_readout(
             "sleep_cycle_anticipatory_planner_is_live",
             "observatory_rows_can_mutate_control_state",
             "diagnostic_roi_proves_memory_quality",
+            "query_pattern_route_is_source_truth",
         ],
     }
     return redact_sensitive_values(redact_private_paths(report))
@@ -264,6 +309,7 @@ def _metric_cards(metrics: Mapping[str, Any]) -> str:
         ("activation_conflict_count", "Authority conflicts"),
         ("recall_diagnostic_present", "Recall diagnostic"),
         ("sleep_summary_present", "Sleep summary"),
+        ("query_pattern_active_route_count", "Query-pattern routes"),
     ]
     cards = []
     for key, label in labels:
@@ -506,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--activation-surfaces", help="JSON file/list with activation surfaces.")
     parser.add_argument("--recall-diagnostic", help="JSON recall diagnostic report to embed.")
     parser.add_argument("--sleep-cycle", help="JSON sleep-cycle report to summarize.")
+    parser.add_argument("--query-pattern-routes", help="JSON/JSONL query-pattern routes sidecar.")
     parser.add_argument("--min-roi-score", type=float, default=1.0)
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--html", action="store_true", dest="html_output")
@@ -524,6 +571,11 @@ def main(argv: list[str] | None = None) -> int:
             activation_surfaces=_as_list(_load_json(args.activation_surfaces), "surfaces"),
             recall_diagnostic=_as_mapping(_load_json(args.recall_diagnostic)),
             sleep_cycle_payload=_as_mapping(_load_json(args.sleep_cycle)),
+            query_pattern_routes=(
+                _as_list(_load_json_or_jsonl(args.query_pattern_routes), "routes")
+                if args.query_pattern_routes
+                else None
+            ),
             min_roi_score=args.min_roi_score,
         )
     if args.json_output:

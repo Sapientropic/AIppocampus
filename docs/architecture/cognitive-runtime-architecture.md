@@ -418,7 +418,9 @@ no-write planning report, while
 stale source-generation digests and privacy-blocked rows; the prompt hook reads
 the sidecar cheaply and can emit hot-path `scent` with source refs only. Alias
 text stays out of public packets and hook context, and every route still
-requires source reopen before any claim.
+requires source reopen before any claim. The Cognitive Observatory can now embed
+a `query_pattern_routes` report with route counts, active/suppressed buckets,
+and source-ref counts while still omitting alias text and local paths.
 
 ## Anti-Patterns
 

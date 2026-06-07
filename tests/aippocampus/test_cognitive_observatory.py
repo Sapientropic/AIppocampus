@@ -195,6 +195,64 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("<sensitive-value-redacted>", encoded)
         self.assertNotIn(sensitive_value, encoded)
 
+    def test_observatory_reports_query_pattern_routes_without_alias_text(self) -> None:
+        private_alias = "内部 canonical 海马体预热"
+        report = cognitive_observatory.cognitive_observatory_readout(
+            query_pattern_routes=[
+                {
+                    "query_aliases": [private_alias, "E:\\private\\query-pattern\\source.jsonl"],
+                    "source_generation_digest": "gen-alpha-v2",
+                    "thread_key_hash": "thread_alpha_hash",
+                    "source_refs": [
+                        {
+                            "source_id": "clean:qp:m7",
+                            "thread_key": "session:test-old",
+                            "message_id": "m7",
+                            "line": 14,
+                            "path": "E:\\private\\query-pattern\\source.jsonl",
+                        }
+                    ],
+                    "created_unix": 1_800_000_000,
+                    "ttl_seconds": 600,
+                    "confidence": 0.92,
+                },
+                {
+                    "query_aliases": ["stale canonical 海马体预热"],
+                    "source_generation_digest": "gen-alpha-v1",
+                    "thread_key_hash": "thread_alpha_hash",
+                    "source_refs": [{"thread_key": "session:test-old", "message_id": "msg-old"}],
+                    "state": "stale",
+                    "confidence": 0.92,
+                },
+                {
+                    "query_aliases": ["blocked canonical 海马体预热"],
+                    "source_generation_digest": "gen-alpha-v2",
+                    "thread_key_hash": "thread_alpha_hash",
+                    "source_refs": [{"thread_key": "session:test-old", "message_id": "msg-blocked"}],
+                    "privacy_blocked": True,
+                    "confidence": 0.92,
+                },
+            ],
+            now_unix=1_800_000_120,
+        )
+        query_routes = report["query_pattern_routes"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("query_pattern_routes", report["surfaces"])
+        self.assertEqual(query_routes["kind"], "aippocampus_query_pattern_routes_report")
+        self.assertEqual(query_routes["metrics"]["route_count"], 3)
+        self.assertEqual(query_routes["metrics"]["active_route_count"], 1)
+        self.assertEqual(query_routes["metrics"]["stale_suppressed_count"], 1)
+        self.assertEqual(query_routes["metrics"]["privacy_suppressed_count"], 1)
+        self.assertEqual(report["metrics"]["query_pattern_active_route_count"], 1)
+        self.assertTrue(query_routes["contract"]["query_aliases_omitted"])
+        self.assertIn("query_pattern_route_is_source_truth", query_routes["cannot_claim"])
+        self.assertNotIn(private_alias, encoded)
+        self.assertNotIn("stale canonical", encoded)
+        self.assertNotIn("blocked canonical", encoded)
+        self.assertNotIn("E:\\", encoded)
+        self.assertNotIn("source.jsonl", encoded)
+
     def test_observatory_static_html_is_public_safe_and_read_only(self) -> None:
         report = cognitive_observatory.fixture_cognitive_observatory_readout()
         html = cognitive_observatory.render_html(report)
@@ -282,6 +340,43 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("Cognitive Observatory", result.stdout)
         self.assertIn("navigation_only", result.stdout)
         self.assertNotIn("<script", result.stdout.casefold())
+
+    def test_cli_facade_exposes_query_pattern_routes_jsonl_report(self) -> None:
+        routes_path = REPO_ROOT / ".tmp" / "test-query-pattern-routes-observatory.jsonl"
+        try:
+            routes_path.parent.mkdir(exist_ok=True)
+            routes_path.write_text(
+                json.dumps(
+                    {
+                        "query_aliases": ["内部 canonical 海马体预热"],
+                        "source_generation_digest": "gen-alpha-v2",
+                        "thread_key_hash": "thread_alpha_hash",
+                        "source_refs": [{"thread_key": "session:test-old", "message_id": "msg-a"}],
+                        "created_unix": 1_800_000_000,
+                        "ttl_seconds": 600,
+                        "confidence": 0.92,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = facade.run_command(
+                ["observatory", "--query-pattern-routes", str(routes_path), "--json"],
+                capture_output=True,
+            )
+        finally:
+            try:
+                routes_path.unlink()
+            except FileNotFoundError:
+                pass
+
+        self.assertTrue(result.ok, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertIn("query_pattern_routes", payload["surfaces"])
+        self.assertEqual(payload["query_pattern_routes"]["metrics"]["active_route_count"], 1)
+        self.assertNotIn("内部 canonical", result.stdout)
 
 
 if __name__ == "__main__":
