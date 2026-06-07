@@ -18,6 +18,7 @@ DEAD_LETTER_APPLY_MANIFEST_KIND = "aippocampus_activation_dead_letter_apply_mani
 DEFAULT_WRONG_ROUTE_DRAG_THRESHOLD = 3
 DEFAULT_NO_SOURCE_REOPEN_THRESHOLD = 3
 DEFAULT_FALSE_POSITIVE_THRESHOLD = 3
+DEFAULT_REPEATED_AUDIT_INACTIVE_THRESHOLD = 3
 FOREGROUND_REDUCTION_ACTIONS = {"demote", "park", "supersede", "retire"}
 
 
@@ -63,6 +64,21 @@ def _dead_letter_reason_codes(
     return reasons
 
 
+def _inactive_after_repeated_audits(
+    row: Mapping[str, Any],
+    *,
+    no_source_reopen_threshold: int,
+) -> bool:
+    return bool(
+        _int(row.get("dead_letter_audit_count")) >= DEFAULT_REPEATED_AUDIT_INACTIVE_THRESHOLD
+        and _int(row.get("no_source_reopen_count")) >= no_source_reopen_threshold
+        and (
+            str(row.get("pruning_action") or "none") in FOREGROUND_REDUCTION_ACTIONS
+            or row.get("authority_level") == "blocked"
+        )
+    )
+
+
 def _dead_letter_candidates_from_rows(
     rows: Sequence[dict[str, Any]],
     *,
@@ -94,6 +110,10 @@ def _dead_letter_candidates_from_rows(
                 }
             )
             continue
+        inactive_after_repeated_audits = _inactive_after_repeated_audits(
+            row,
+            no_source_reopen_threshold=no_source_reopen_threshold,
+        )
         candidates.append(
             {
                 "surface_id_hash": surface_id_hash,
@@ -104,7 +124,13 @@ def _dead_letter_candidates_from_rows(
                 "provenance_pointer_hash": row.get("provenance_pointer_hash"),
                 "source_refs_preserved": True,
                 "payload_compacted": False,
-                "recommended_action": "dead_letter_candidate_no_write",
+                "inactive_after_repeated_audits": inactive_after_repeated_audits,
+                "payload_compaction_ready": inactive_after_repeated_audits,
+                "recommended_action": (
+                    "dead_letter_candidate_mark_inactive"
+                    if inactive_after_repeated_audits
+                    else "dead_letter_candidate_no_write"
+                ),
                 "review_note": "No-write candidate only; apply requires owner-specific source/provenance/reference checks.",
             }
         )
@@ -146,6 +172,9 @@ def activation_dead_letter_candidate_report_from_rows(
             "wrong_route_drag_threshold_hits": _reason_count(candidates, "wrong_route_drag_threshold"),
             "no_source_reopen_threshold_hits": _reason_count(candidates, "no_source_reopen_threshold"),
             "false_positive_threshold_hits": _reason_count(candidates, "false_positive_threshold"),
+            "repeated_audit_inactive_candidate_count": sum(
+                1 for candidate in candidates if candidate.get("inactive_after_repeated_audits")
+            ),
             "referenced_row_protection_count": len(protected),
             "protected_surface_count": len(protected),
             "candidate_source_ref_count": sum(_int(candidate.get("source_ref_count")) for candidate in candidates),
@@ -184,6 +213,8 @@ def _candidate_update(candidate: Mapping[str, Any], *, applied_at: str) -> dict[
         "append_only": True,
         "source_refs_preserved": True,
         "payload_compacted": False,
+        "inactive_after_repeated_audits": bool(candidate.get("inactive_after_repeated_audits")),
+        "payload_compaction_ready": bool(candidate.get("payload_compaction_ready")),
         "clean_source_mutation": False,
         "truth_status_changed": False,
         "rebuild_or_review_note": (
@@ -235,6 +266,9 @@ def apply_dead_letter_candidate_manifest_from_rows(
             "referenced_row_protection_count": len(skipped),
             "wrong_route_drag_threshold_hits": _reason_count(updates, "wrong_route_drag_threshold"),
             "no_source_reopen_threshold_hits": _reason_count(updates, "no_source_reopen_threshold"),
+            "repeated_audit_inactive_candidate_count": sum(
+                1 for update in updates if update.get("inactive_after_repeated_audits")
+            ),
             "activation_surface_authority_leak_count": sum(1 for row in rows if row["authority_leak"]),
         },
         "contract": {

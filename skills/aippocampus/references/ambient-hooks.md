@@ -325,6 +325,26 @@ rejected states may live as long as the ambient cache for the current topic
 epoch. This overlay is not a second long-lived cache and must not be promoted to
 truth or formal memory.
 
+Activation-surface authority defaults are reported by
+`aippocampus_runtime.ops.activation_authority_audit` as a versioned policy
+envelope with a stable mapping hash and rationale. Strategy-like rows may guide
+attention, but freshness and lifecycle state constrain foreground authority:
+`stale` and `review_overdue` advisory activation rows degrade to `candidate`,
+while `superseded`, `expired`, `retired`, and `dead_lettered` rows become
+blocked/non-foreground. Source-reopen evidence, current-checkout evidence, and
+explicit user corrections keep their existing precedence; activation freshness
+alone must not delete source, mutate truth status, or override source-court
+behavior.
+
+Pruning rows reduce activation eligibility and foreground noise. They default to
+`advisory`, not `guardrail`; `park`, `supersede`, and `retire` remain blocking
+lifecycle actions, while `demote` stays a reversible foreground-reduction hint.
+A pruning row may become `guardrail` only when it is source-backed or explicitly
+operator-elevated. Candidate route validation is exposed only as bounded
+metadata such as successful source-reopen count, last verified timestamp, and
+independent source-ref count. That metadata can help a foreground agent choose a
+route, but it must not upgrade a candidate into factual evidence.
+
 Dead-letter reporting for activation surfaces is owned by
 `aippocampus_runtime.ops.activation_authority_audit`, not by the foreground
 hook. A row may become a dead-letter candidate only after lifecycle/pruning has
@@ -340,8 +360,10 @@ surface writer. It may mark a safe candidate as `dead_lettered`, but it must
 skip rows still referenced by promotion candidates, dream inputs, review
 artifacts, question links, or source-reopen evidence. It does not delete clean
 source, raw rollout, registry refs, provenance, or foreground hook state.
-Physical payload compaction remains owner-specific and requires separate
-source/provenance/reference and rebuild-review checks.
+Repeated audits may mark a candidate as inactive or payload-compaction-ready
+after deterministic no-source-reopen thresholds, but that is report/manifest
+state only. Physical payload compaction remains owner-specific and requires
+separate source/provenance/reference and rebuild-review checks.
 
 For the ambient thread cache owner, that apply step lives in
 `aippocampus_runtime.recall.ambient_cache_compaction` and is maintenance-only, not
