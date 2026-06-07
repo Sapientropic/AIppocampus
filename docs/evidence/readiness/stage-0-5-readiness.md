@@ -369,10 +369,13 @@ above. The canonical command details live in
   sanitized visibility-ablation harness that reports recall, reflection,
   unsupported-claim suppression, source-support correctness, manual
   source-review coverage, and cost/cache behavior separately from structural
-  lift. It still does not claim live provider amplification quality, predictive
-  validity, active-imagination usefulness, private real-history dream quality,
-  real user-visible reflection value, or any unadjudicated dream influence on
-  recall/reflection space.
+  lift. The #163 eval selector can now include source-backed coding
+  decision-shadow seed rows (`coding_ticket`, `coding_decision_event`,
+  `decision_event`, `rejected_route`) as a falsifiable Dream workload when
+  present in selected packs. It still does not claim live provider amplification
+  quality, predictive validity, active-imagination usefulness, private
+  real-history dream quality, real user-visible reflection value, live host
+  timing, or any unadjudicated dream influence on recall/reflection space.
 - #69 adds the first deterministic reflection-space topology/feedback MVP. It
   renders Journey/Waypoint/current-frontier topology data with
   expand/merge/revive/abandon actions and converts source-ref-carried recall

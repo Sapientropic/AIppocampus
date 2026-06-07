@@ -194,6 +194,9 @@ The coding decision-shadow probe did not run because none of the selected packs
 contained `coding_ticket`, `coding_decision_event`, `decision_event`, or
 `rejected_route` seed kinds. Issue #163/#158 therefore still need a falsifiable
 coding Dream retrospective workload; this run only reports the deferment.
+Later #163 selector work can admit those source-backed coding seed kinds when
+they are present; this dated report should still be read as 2026-06-04 evidence,
+not as proof that a reviewed coding Dream workload has run.
 
 The shadow replay is not positive behavior evidence. It was historical
 shadow-only replay, with no delivered treatment/control events and only one

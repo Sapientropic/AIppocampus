@@ -446,6 +446,13 @@ decision-shadow probe or deferred that workload; when deferred, the top-level
 `cannot_claim` keeps prospective Dream value on a falsifiable coding workload
 out of scope.
 
+Current selector behavior admits source-backed `coding_ticket`,
+`coding_decision_event`, `decision_event`, and `rejected_route` rows as Dream
+eval seeds when they share a cross-thread route surface. This only makes the
+#163 coding decision-shadow workload available to the eval; it still cannot
+claim private-history behavior lift, live host timing, or source-reopened
+review usefulness without a reviewed run.
+
 ### Implemented Phase 3.5 Bounded Model-Backed Workers
 
 `skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py` adds the first bounded
