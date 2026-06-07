@@ -19,7 +19,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = 4
+from continuous_memory_preregistered_slices import build_preregistered_slices
+
+SCHEMA_VERSION = 5
 BARE_CONTINUOUS_NO_MEMORY = "bare_continuous_no_memory"
 HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS = "host_native_continuous_no_aippocampus"
 ARM_ORDER = (
@@ -1735,6 +1737,15 @@ def run_benchmark(
     )
     cost_harm_ledger = build_cost_harm_ledger(rows, metrics=metrics)
     preregistration = build_preregistration(cost_harm_ledger)
+    preregistered_slices = build_preregistered_slices(
+        rows=rows,
+        metrics=metrics,
+        scenario_controls=scenario_controls,
+        cost_harm_ledger=cost_harm_ledger,
+        preregistration=preregistration,
+        selected_arms=selected_arms,
+        scenario_selection_role=scenario_selection_role,
+    )
     required_arms_present = set(ARM_ORDER) <= set(selected_arms)
     attribution_controls_present = (
         metrics["memory_presence_effect"] == 0.0
@@ -1786,6 +1797,7 @@ def run_benchmark(
         "scenario_controls": scenario_controls,
         "cost_harm_ledger": cost_harm_ledger,
         "preregistration": preregistration,
+        "preregistered_slices": preregistered_slices,
         "rows": rows,
         "privacy_boundary": {
             "public_safe_synthetic_fixtures": True,

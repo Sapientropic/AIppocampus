@@ -355,6 +355,47 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertEqual(decision["primary_endpoint_winner"], "fresh_context_spec_loop")
         self.assertIn("no demonstrated memory advantage", decision["decision_label"])
 
+    def test_report_exposes_preregistered_slice_readout_without_superiority_claim(self) -> None:
+        payload = benchmark.run_benchmark()
+        slices = payload["preregistered_slices"]
+
+        self.assertEqual(len(slices), 1)
+        readout = slices[0]
+        self.assertEqual(readout["issue"], "github_378")
+        self.assertEqual(
+            readout["slice_id"],
+            "github_378_continuous_memory_public_synthetic_v1",
+        )
+        self.assertEqual(readout["claim_level"], "preregistered_diagnostic_slice")
+        self.assertEqual(readout["status"], "diagnostic_contract_smoke")
+        self.assertEqual(readout["runner_profile"], "public_synthetic_contract_smoke")
+        self.assertEqual(readout["scenario_selection_role"], "report")
+        self.assertEqual(readout["case_count"], payload["metrics"]["case_count"])
+        self.assertEqual(readout["arm_count"], payload["metrics"]["arm_count"])
+        self.assertEqual(
+            readout["primary_endpoint"]["name"],
+            payload["preregistration"]["primary_endpoint"]["name"],
+        )
+        self.assertEqual(
+            readout["decision"]["primary_endpoint_winner"],
+            "fresh_context_spec_loop",
+        )
+        self.assertFalse(
+            readout["decision"]["continuous_memory_advantage_claim_allowed"]
+        )
+        self.assertFalse(readout["public_quality_gates"]["lower_bound_rule_evaluated"])
+        self.assertFalse(readout["public_quality_gates"]["paired_repeat_power_gate_passed"])
+        self.assertFalse(readout["public_quality_gates"]["public_quality_claim_ready"])
+        self.assertEqual(len(readout["case_manifest_digest_sha256"]), 64)
+        self.assertIn(
+            "full #378 continuous-memory superiority",
+            readout["cannot_claim"],
+        )
+        self.assertIn(
+            "public-quality continuous-memory advantage from this single diagnostic slice",
+            readout["cannot_claim"],
+        )
+
     def test_report_tracks_scenario_provenance_holdouts_and_negative_controls(self) -> None:
         payload = benchmark.run_benchmark()
         controls = payload["scenario_controls"]
@@ -480,6 +521,8 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("public_log_or_vcs_derived", benchmark_plan)
         self.assertIn("holdout_blind", benchmark_plan)
         self.assertIn("holdout_excluded", benchmark_plan)
+        self.assertIn("preregistered_slices", benchmark_plan)
+        self.assertIn("github_378_continuous_memory_public_synthetic_v1", benchmark_plan)
         self.assertIn("source_grounded_task_success_under_equalized_cost", benchmark_plan)
         self.assertIn("no demonstrated memory advantage", benchmark_plan)
         self.assertIn("not a public superiority claim", benchmark_plan)
