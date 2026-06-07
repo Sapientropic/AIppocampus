@@ -379,6 +379,52 @@ class QuestionTrackingTests(unittest.TestCase):
         self.assertEqual(result["borderline_skipped_pair_count"], 1)
         self.assertEqual(result["borderline_confirmation_malformed_pair_count"], 1)
 
+    def test_default_borderline_auto_ignores_invalid_confirmation_artifacts(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+
+        def stale(payload: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "decision": "accept",
+                "confidence": 0.91,
+                "source_finding_ids": payload["source_finding_ids"],
+                "created_at": "2000-01-01T00:00:00Z",
+                "model": "test-reviewer",
+                "rationale": "Old confirmation should not be trusted.",
+            }
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            confirmation_fn=stale,
+        )
+
+        self.assertEqual(result["link_count"], 1)
+        self.assertEqual(result["accepted_pair_count"], 1)
+        self.assertEqual(result["borderline_auto_accepted_pair_count"], 1)
+        self.assertEqual(result["borderline_skipped_pair_count"], 0)
+        self.assertEqual(result["borderline_auto_ignored_confirmation_count"], 1)
+        link = result["links"][0]
+        pair = link["match_evidence"]["accepted_pairs"][0]
+        self.assertEqual(pair["acceptance_source"], "borderline_auto")
+        self.assertEqual(pair["ignored_confirmation"]["invalid_reason"], "stale_artifact")
+        self.assertEqual(
+            pair["reason"],
+            "borderline score auto-accepted after ignoring invalid confirmation artifact",
+        )
+
     def test_rejected_borderline_confirmation_is_audited_without_linking(self) -> None:
         self.write_rows(
             [
@@ -419,6 +465,41 @@ class QuestionTrackingTests(unittest.TestCase):
             result["borderline_confirmation_audit"][0]["confirmation"]["decision"],
             "reject",
         )
+
+    def test_default_borderline_auto_keeps_explicit_reject_override(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+
+        def reject(payload: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "decision": "reject",
+                "confidence": 0.88,
+                "source_finding_ids": payload["source_finding_ids"],
+                "model": "test-reviewer",
+                "rationale": "The reviewer deliberately separated this pair.",
+            }
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            confirmation_fn=reject,
+        )
+
+        self.assertEqual(result["link_count"], 0)
+        self.assertEqual(result["borderline_skipped_pair_count"], 1)
+        self.assertEqual(result["borderline_confirmation_rejected_pair_count"], 1)
 
     def test_ambient_dismissal_feedback_separates_same_source_backed_pair(self) -> None:
         self.write_rows(
