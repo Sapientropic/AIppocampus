@@ -26,7 +26,9 @@ from aippocampus_runtime.recall.continuity_domains import (
     SNAPSHOT_DIR_NAME,
     default_continuity_domains_latest_path,
     load_continuity_domains_snapshot,
-    match_continuity_domain_pointers,
+)
+from aippocampus_runtime.recall.continuity_route_projection import (
+    active_continuity_route_projection,
 )
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
@@ -409,23 +411,18 @@ def active_recall_context(
         cwd=cwd_path,
         snapshot_path=domain_snapshot_path,
     )
-    domain_pointers = match_continuity_domain_pointers(
-        prompt,
-        domain_snapshot,
-        limit=max_matches,
-        clean_source_dir=domain_clean_source_dir,
+    continuity_projection = active_continuity_route_projection(
+        prompt=prompt,
         snapshot_path=domain_snapshot_path,
+        snapshot=domain_snapshot,
+        clean_source_dir=domain_clean_source_dir,
+        max_matches=max_matches,
     )
-    domain_brief = [
-        {
-            **pointer,
-            "active_recall_surface": "continuity_domain",
-            "retrieval_role": "working_continuity_brief",
-        }
-        for pointer in domain_pointers
-    ]
+    domain_pointers = continuity_projection["domain_pointers"]
+    domain_brief = continuity_projection["domain_brief"]
+    pathlet_brief = continuity_projection["pathlet_brief"]
     routes = _source_reopen_routes_from_surfaces(
-        [*self_note_matches, *working_rows, *domain_pointers],
+        [*self_note_matches, *working_rows, *domain_pointers, *continuity_projection["pathlet_pointers"]],
         limit=max_matches,
     )
     for pointer in domain_pointers:
@@ -440,19 +437,32 @@ def active_recall_context(
                     "recommended_tool": "recall_deepen",
                 }
             )
+    routes.extend(continuity_projection["pathlet_source_reopen_routes"])
     dream_count = sum(1 for row in working_rows if row.get("candidate_type") == "dream_hypothesis")
+    route_status = continuity_projection["continuity_route_status"]
+    fresh_thread_route_packet = continuity_projection["fresh_thread_route_packet"]
+    suggested_next = (
+        "reopen_source"
+        if routes
+        else "publish_continuity_domains_snapshot"
+        if route_status["snapshot_status"] in {"missing", "unreadable"}
+        else "search_clean_source"
+    )
     return {
         "kind": "aippocampus_agent_initiated_recall_context",
         "schema_version": 1,
-        "decision": "context" if memory_atmosphere or working_brief or domain_brief or routes else "empty",
+        "decision": "context" if memory_atmosphere or working_brief or domain_brief or pathlet_brief or routes else "empty",
         "agent_initiated_recall": True,
         "memory_atmosphere": memory_atmosphere,
-        "working_continuity_brief": [*domain_brief, *working_brief],
+        "working_continuity_brief": [*domain_brief, *pathlet_brief, *working_brief],
         "source_reopen_routes": routes,
+        "fresh_thread_route_packet": fresh_thread_route_packet,
+        "continuity_route_status": route_status,
         "surface_counts": {
             "agent_self_notes": len(memory_atmosphere),
             "working_memory": len(working_brief),
             "continuity_domains": len(domain_brief),
+            "continuity_pathlets": len(pathlet_brief),
             "dream": dream_count,
             "atmosphere": len(memory_atmosphere),
         },
@@ -464,7 +474,7 @@ def active_recall_context(
             "raw_prompt_serialized": False,
             "local_paths_serialized": False,
         },
-        "suggested_next": "reopen_source" if routes else "search_clean_source",
+        "suggested_next": suggested_next,
     }
 
 

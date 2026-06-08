@@ -1029,6 +1029,7 @@ def match_continuity_domain_pointers(
     limit: int = 3,
     clean_source_dir: Path | None = None,
     snapshot_path: Path | None = None,
+    include_blocked: bool = False,
 ) -> list[dict[str, Any]]:
     if not isinstance(snapshot, Mapping):
         return []
@@ -1050,9 +1051,8 @@ def match_continuity_domain_pointers(
             raw_contract if isinstance(raw_contract, Mapping) else {}
         )
         action = str(contract.get("action_grammar") or "")
-        if status in {"blocked", "stale", "superseded", "retired"}:
-            continue
-        if action == ACTION_IGNORE_OR_BLOCKED:
+        inactive = status in {"blocked", "stale", "superseded", "retired"} or action == ACTION_IGNORE_OR_BLOCKED
+        if inactive and not include_blocked:
             continue
         negative_text = " ".join(str(item) for item in domain.get("negative_cues") or [])
         negative_terms = _terms(negative_text)
@@ -1073,7 +1073,7 @@ def match_continuity_domain_pointers(
         overlap = _overlap_score(prompt_terms, prompt_text, domain_terms, text)
         if overlap <= 0:
             continue
-        status_bonus = 0 if status == "active" else -3
+        status_bonus = -3 if inactive else 0
         scored.append((overlap + status_bonus, str(domain.get("domain_id") or ""), dict(domain)))
     scored.sort(key=lambda item: (-item[0], item[1]))
     return [

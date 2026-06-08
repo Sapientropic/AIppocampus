@@ -529,6 +529,115 @@ class ContinuityDomainTests(unittest.TestCase):
             json.dumps(deepen_payload["source_window"], ensure_ascii=False),
         )
 
+    def test_mcp_context_returns_pathlet_route_before_broad_manual_search(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            snapshot = materialize_continuity_domains(
+                [
+                    {
+                        "event_kind": "pathlet_created",
+                        "pathlet_id": "pathlet-frontend-taste",
+                        "title": "Frontend taste route",
+                        "scope_labels": ["frontend taste", "layout density"],
+                        "ordered_source_refs": [
+                            {"message_id": "msg-a"},
+                            {"message_id": "msg-b"},
+                        ],
+                    }
+                ],
+                clean_source_dir=clean,
+            )
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+
+            context_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 951,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_context",
+                        "arguments": {
+                            "intent": "frontend taste layout density",
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                            "max": 5,
+                        },
+                    },
+                }
+            )
+            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            pathlet_route = next(
+                route for route in context_payload["routes"] if route.get("kind") == "pathlet"
+            )
+            deepen_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 952,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": pathlet_route["handle"],
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                        },
+                    },
+                }
+            )
+            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+
+        self.assertEqual(pathlet_route["suggested_next"]["tool"], "recall_deepen")
+        self.assertEqual(pathlet_route["action_grammar"], "reopenable_route")
+        self.assertEqual(pathlet_route["source_refs"][0]["message_id"], "msg-a")
+        self.assertTrue(pathlet_route["source_boundary"]["pathlet_is_navigation_only"])
+        self.assertEqual(
+            context_payload["metrics"]["continuity_pathlet_route_count"],
+            1,
+        )
+        self.assertEqual(deepen_payload["support_level"], "evidence")
+        self.assertEqual(deepen_payload["source_refs"][0]["message_id"], "msg-a")
+
+    def test_mcp_context_reports_missing_continuity_snapshot_when_no_routes_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            clean = cwd / ".aippocampus" / "clean-source"
+            clean.mkdir(parents=True, exist_ok=True)
+            (clean / "messages.jsonl").write_text("", encoding="utf-8")
+            (clean / "turns.jsonl").write_text("", encoding="utf-8")
+            missing_snapshot = cwd / "missing" / "latest.json"
+
+            context_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 953,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_context",
+                        "arguments": {
+                            "intent": "unmatched little hippocampus route",
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(cwd / "empty-registry"),
+                            "continuity_domains_snapshot": str(missing_snapshot),
+                            "max": 5,
+                        },
+                    },
+                }
+            )
+            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+
+        self.assertEqual(context_payload["status"], "no_routes")
+        self.assertEqual(context_payload["continuity_route_status"]["snapshot_status"], "missing")
+        self.assertIn(
+            "continuity_domains_snapshot",
+            context_payload["continuity_route_status"]["missing_artifacts"],
+        )
+        self.assertIn("publish_continuity_domains_snapshot", context_payload["suggested_next"])
+
     def test_mcp_rejects_bare_continuity_domain_handle_without_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cwd = Path(tmp)

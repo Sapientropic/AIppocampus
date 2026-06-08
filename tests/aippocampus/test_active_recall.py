@@ -18,6 +18,56 @@ from aippocampus_runtime.recall import active_recall as active_recall  # noqa: E
 from aippocampus_runtime.recall import active_recall as packaged_active_recall  # noqa: E402
 from aippocampus_runtime.recall import active_recall_lock  # noqa: E402
 from aippocampus_runtime.recall import retrieval as retrieval  # noqa: E402
+from aippocampus_runtime.recall.continuity_domains import (
+    materialize_continuity_domains,  # noqa: E402
+)
+
+
+def _write_context_clean_source(clean: Path, rows: list[dict[str, object]]) -> None:
+    clean.mkdir(parents=True, exist_ok=True)
+    with (clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
+        for index, row in enumerate(rows, start=1):
+            payload = {
+                "message_id": row["message_id"],
+                "turn_id": row.get("turn_id") or f"turn-{index}",
+                "turn_index": index,
+                "source_line": index * 2,
+                "role": row.get("role") or "user",
+                "phase": row.get("phase") or "",
+                "text": row.get("text") or "",
+            }
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    with (clean / "turns.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
+        for index, row in enumerate(rows, start=1):
+            fh.write(
+                json.dumps(
+                    {
+                        "turn_id": row.get("turn_id") or f"turn-{index}",
+                        "turn_index": index,
+                        "message_ids": [row["message_id"]],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+
+def _write_context_domain_snapshot(
+    root: Path,
+    events: list[dict[str, object]],
+    *,
+    rows: list[dict[str, object]],
+) -> tuple[Path, Path]:
+    clean = root / ".aippocampus" / "clean-source"
+    _write_context_clean_source(clean, rows)
+    snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+    snapshot_path = root / "continuity-domain-snapshots" / "latest.json"
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_path.write_text(
+        json.dumps({"snapshot": snapshot}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return clean, snapshot_path
 
 
 class ActiveRecallTests(unittest.TestCase):
@@ -488,6 +538,223 @@ class ActiveRecallTests(unittest.TestCase):
             "msg-dream",
             {route.get("message_id") for route in result["source_reopen_routes"]},
         )
+
+    def test_context_mode_builds_fresh_thread_route_packet_from_domain_and_pathlet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            _, snapshot_path = _write_context_domain_snapshot(
+                root,
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-go-runtime",
+                        "title": "Go runtime sidecar route",
+                        "working_conclusion_short": "RAW_GO_CONCLUSION_SENTINEL",
+                        "activation_cues": ["Go runtime", "sidecar", "Telethon limits"],
+                        "source_refs": [{"message_id": "msg-go-a"}],
+                    },
+                    {
+                        "event_kind": "pathlet_created",
+                        "pathlet_id": "pathlet-go-runtime",
+                        "title": "Go runtime from Telethon limit to sidecar spike",
+                        "summary": "RAW_PATHLET_SUMMARY_SENTINEL",
+                        "scope_labels": ["Go runtime", "sidecar route"],
+                        "ordered_source_refs": [
+                            {"message_id": "msg-go-a"},
+                            {"message_id": "msg-go-b"},
+                        ],
+                    },
+                ],
+                rows=[
+                    {"message_id": "msg-go-a", "text": "Telethon limits made the runtime route worth reopening."},
+                    {"message_id": "msg-go-b", "text": "The sidecar spike is only usable after source reopen."},
+                ],
+            )
+
+            result = packaged_active_recall.active_recall_context(
+                prompt="继续 Go runtime sidecar 的路线",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                continuity_domains_snapshot_path=snapshot_path,
+                max_matches=4,
+            )
+            packet = result["fresh_thread_route_packet"]
+            raw = json.dumps(result, ensure_ascii=False)
+
+        self.assertEqual(result["decision"], "context")
+        self.assertEqual(result["surface_counts"]["continuity_domains"], 1)
+        self.assertEqual(result["surface_counts"]["continuity_pathlets"], 1)
+        self.assertEqual(packet["kind"], "aippocampus_narrative_packet")
+        self.assertEqual(packet["use_boundary"]["action_grammar"], "reopenable_route")
+        self.assertTrue(packet["use_boundary"]["source_reopen_required_before_claim"])
+        self.assertEqual(packet["route_shape"]["pathlets"][0]["pathlet_id"], "pathlet-go-runtime")
+        self.assertEqual(packet["route_shape"]["continuity_domains"][0]["domain_id"], "cd-go-runtime")
+        self.assertIn(
+            "msg-go-b",
+            {ref.get("message_id") for ref in packet["source_reopen"]["recommended_refs"]},
+        )
+        self.assertIn(
+            "continuity_domain",
+            {route.get("kind") for route in result["source_reopen_routes"]},
+        )
+        self.assertNotIn("RAW_GO_CONCLUSION_SENTINEL", raw)
+        self.assertNotIn("RAW_PATHLET_SUMMARY_SENTINEL", raw)
+
+    def test_context_mode_life_preference_route_uses_source_trailed_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            _, snapshot_path = _write_context_domain_snapshot(
+                root,
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-zh-writing-preference",
+                        "title": "中文写作偏好路线",
+                        "activation_cues": ["中文写作", "短段落", "不要文字墙"],
+                        "scope_labels": ["life-wide preference"],
+                        "source_refs": [{"message_id": "msg-pref-a"}],
+                    },
+                    {
+                        "event_kind": "pathlet_created",
+                        "pathlet_id": "pathlet-zh-writing-preference",
+                        "title": "短段落写作偏好到协作输出边界",
+                        "scope_labels": ["中文写作", "短段落"],
+                        "ordered_source_refs": [
+                            {"message_id": "msg-pref-a"},
+                            {"message_id": "msg-pref-b"},
+                        ],
+                    },
+                ],
+                rows=[
+                    {"message_id": "msg-pref-a", "text": "用户偏好中文短段落。"},
+                    {"message_id": "msg-pref-b", "text": "协作输出不要变成文字墙。"},
+                ],
+            )
+
+            result = packaged_active_recall.active_recall_context(
+                prompt="我之前说过中文写作要短段落，不要文字墙吗",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                continuity_domains_snapshot_path=snapshot_path,
+                max_matches=3,
+            )
+            packet = result["fresh_thread_route_packet"]
+
+        self.assertEqual(result["surface_counts"]["continuity_domains"], 1)
+        self.assertEqual(result["surface_counts"]["continuity_pathlets"], 1)
+        self.assertEqual(packet["route_shape"]["pathlets"][0]["pathlet_id"], "pathlet-zh-writing-preference")
+        self.assertEqual(packet["route_shape"]["continuity_domains"][0]["domain_id"], "cd-zh-writing-preference")
+        self.assertTrue(packet["source_boundary"]["pathlet_sequence_domain_and_glyphs_are_navigation"])
+
+    def test_context_mode_keeps_stale_and_superseded_routes_as_blocked_navigation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            _, snapshot_path = _write_context_domain_snapshot(
+                root,
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-old-runtime",
+                        "title": "Old runtime direction",
+                        "status": "stale",
+                        "activation_cues": ["old runtime"],
+                        "source_refs": [{"message_id": "msg-old-a"}],
+                    },
+                    {
+                        "event_kind": "pathlet_superseded",
+                        "pathlet_id": "pathlet-old-runtime",
+                        "title": "Old runtime pathlet",
+                        "scope_labels": ["old runtime"],
+                        "ordered_source_refs": [{"message_id": "msg-old-a"}],
+                    },
+                ],
+                rows=[{"message_id": "msg-old-a", "text": "This old runtime route was superseded."}],
+            )
+
+            result = packaged_active_recall.active_recall_context(
+                prompt="继续 old runtime 路线",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                continuity_domains_snapshot_path=snapshot_path,
+                max_matches=3,
+            )
+            packet = result["fresh_thread_route_packet"]
+
+        self.assertEqual(packet["use_boundary"]["action_grammar"], "ignore_or_blocked")
+        self.assertEqual(result["surface_counts"]["continuity_domains"], 0)
+        self.assertEqual(result["surface_counts"]["continuity_pathlets"], 0)
+        self.assertEqual(result["continuity_route_status"]["blocked_route_count"], 2)
+        self.assertEqual(result["source_reopen_routes"], [])
+        self.assertEqual(result["suggested_next"], "search_clean_source")
+
+    def test_context_mode_reports_missing_continuity_snapshot_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            missing_snapshot = root / "missing" / "latest.json"
+
+            result = packaged_active_recall.active_recall_context(
+                prompt="小海马体现在到底有什么用，能不能别让我手搜？",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                continuity_domains_snapshot_path=missing_snapshot,
+                max_matches=3,
+            )
+
+        self.assertEqual(result["decision"], "empty")
+        self.assertEqual(result["continuity_route_status"]["snapshot_status"], "missing")
+        self.assertIn("continuity_domains_snapshot", result["continuity_route_status"]["missing_artifacts"])
+        self.assertEqual(result["suggested_next"], "publish_continuity_domains_snapshot")
+
+    def test_context_mode_broad_prompt_does_not_project_domain_or_pathlet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            _, snapshot_path = _write_context_domain_snapshot(
+                root,
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-go-runtime",
+                        "title": "Go runtime sidecar route",
+                        "activation_cues": ["Go runtime", "sidecar"],
+                        "source_refs": [{"message_id": "msg-go-a"}],
+                    },
+                    {
+                        "event_kind": "pathlet_created",
+                        "pathlet_id": "pathlet-go-runtime",
+                        "title": "Go runtime sidecar route",
+                        "scope_labels": ["Go runtime"],
+                        "ordered_source_refs": [{"message_id": "msg-go-a"}],
+                    },
+                ],
+                rows=[{"message_id": "msg-go-a", "text": "Runtime source."}],
+            )
+
+            result = packaged_active_recall.active_recall_context(
+                prompt="今天晚饭和天气怎么安排",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                continuity_domains_snapshot_path=snapshot_path,
+                max_matches=3,
+            )
+
+        self.assertIsNone(result["fresh_thread_route_packet"])
+        self.assertEqual(result["surface_counts"]["continuity_domains"], 0)
+        self.assertEqual(result["surface_counts"]["continuity_pathlets"], 0)
 
 
 if __name__ == "__main__":

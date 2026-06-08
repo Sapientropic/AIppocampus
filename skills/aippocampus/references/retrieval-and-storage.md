@@ -572,9 +572,13 @@ funnel between hook-time scent and low-level source reopen. `recall_context`
 turns a fuzzy cue into compact route handles, source-window candidates, scope
 labels, and evidence levels. It must not include raw prompt text, raw private
 paths, raw tool payloads, or source claims that have not been reopened.
-`recall_deepen` consumes those handles, ambient navigation seeds, or active
-recall lock handles and opens clean source only when the handle is still fresh
-and reopenable. Handles carry source-artifact freshness so a changed
+When a published continuity-domain snapshot exists, `recall_context` may also
+surface continuity-domain handles or ordered pathlet handles before broad
+manual search. If that snapshot is missing or unreadable, the response should
+say so as a missing route artifact instead of flattening the result into "no
+memory." `recall_deepen` consumes those handles, ambient navigation seeds, or
+active recall lock handles and opens clean source only when the handle is still
+fresh and reopenable. Handles carry source-artifact freshness so a changed
 clean-source file forces the agent to rerun `recall_context` rather than using
 old navigation as evidence.
 
