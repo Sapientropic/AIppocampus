@@ -225,7 +225,7 @@ def check_workflow(repo: Path, checks: list[Check]) -> None:
         "Check tag matches package version": "tag/version guard",
         "git\", \"rev-list\", \"-n\", \"1\", tag": "tag commit guard",
         "check-jsonschema": "MCP schema validation",
-        "Smoke built wheel": "built wheel CLI smoke",
+        "Fresh-venv wheel contract": "fresh-venv wheel public contract smoke",
         "mcp-publisher login github-oidc": "MCP GitHub OIDC auth",
         "mcp-publisher validate server.json": "MCP Registry validation",
         "mcp-publisher publish server.json": "explicit MCP publish target",

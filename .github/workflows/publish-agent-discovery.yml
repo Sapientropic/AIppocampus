@@ -87,11 +87,8 @@ jobs:
       - name: Check package metadata
         run: python -m twine check dist/*
 
-      - name: Smoke built wheel
-        run: |
-          python -m pip install --force-reinstall dist/*.whl
-          aippocampus --help
-          aippocampus mcp list-tools
+      - name: Fresh-venv wheel contract
+        run: python tools/aippocampus/release/check_wheel_contract.py --wheel dist/*.whl --json
 
       - name: Publish package to PyPI
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_pypi) }}
