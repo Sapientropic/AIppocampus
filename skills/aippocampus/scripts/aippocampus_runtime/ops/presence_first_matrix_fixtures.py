@@ -188,12 +188,16 @@ def fixture_presence_first_matrix() -> dict[str, Any]:
         "memory_atmosphere": {
             "agent_behavior": "quietly_orients_without_claim",
             "action_grammar": atmosphere.get("action_grammar"),
-            "context_layer_seen": "Memory atmosphere" in atmosphere_context,
+            "context_layer_seen": (
+                "Memory atmosphere" in atmosphere_context
+                or "action: direction_only" in atmosphere_context
+            ),
             "makes_factual_claim": bool(atmosphere_contract.get("treat_as_fact")),
             "current_posture_pass": bool(
                 atmosphere.get("action_grammar") == authority.ACTION_DIRECTION_ONLY
                 and not atmosphere_contract.get("treat_as_fact")
-                and "Memory atmosphere" in atmosphere_context
+                and "action: direction_only" in atmosphere_context
+                and "can_use: orientation only" in atmosphere_context
             ),
             "old_posture_pass": bool(
                 old_atmosphere.get("action_grammar") == authority.ACTION_DIRECTION_ONLY

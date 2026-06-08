@@ -1206,8 +1206,10 @@ class AmbientRecallHookTests(unittest.TestCase):
         context = hook.context_for_hook(result)
         self.assertIsNotNone(context)
         self.assertIn("Ambient recall scent", context)
-        self.assertIn("Ambient recall private context", context)
-        self.assertIn("Use only if it helps", context)
+        self.assertIn("action: direction_only", context)
+        self.assertIn("can_use: orientation only", context)
+        self.assertIn("must_reopen_for: exact quotes", context)
+        self.assertNotIn("Ambient recall private context", context)
         self.assertNotIn("line 190", context)
 
     def test_chinese_hook_cue_emits_scent(self) -> None:
