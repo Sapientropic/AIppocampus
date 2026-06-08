@@ -27,13 +27,17 @@ from aippocampus_runtime.registry.api import unique_preserve
 QUERY_PATTERN_ROUTE_KIND = "aippocampus_query_pattern_route"
 QUERY_PATTERN_PACKET_KIND = "aippocampus_query_pattern_route_packet"
 QUERY_PATTERN_PUBLISH_KIND = "aippocampus_query_pattern_route_publish_report"
+REGISTRY_QUERY_PATTERN_PUBLISH_KIND = "aippocampus_registry_query_pattern_route_publish_report"
 QUERY_PATTERN_ROUTES_REPORT_KIND = "aippocampus_query_pattern_routes_report"
 QUERY_PATTERN_ROUTE_SCHEMA_VERSION = 1
 DEFAULT_QUERY_PATTERN_ROUTES_NAME = "query_pattern_routes.jsonl"
+DEFAULT_REGISTRY_ROUTE_TTL_SECONDS = 14 * 24 * 60 * 60
+DEFAULT_REGISTRY_ROUTE_CONFIDENCE = 0.62
 
 MAX_ALIASES = 12
 MAX_SOURCE_REFS = 6
 MAX_SELECTED = 3
+MAX_REGISTRY_ROUTES = 200
 MIN_SELECT_CONFIDENCE = 0.5
 SECRETISH_MARKERS = ("secret", "token", "password", "credential", "api_key")
 SUPPRESSED_SENSITIVITY = {"blocked", "private", "secret", "sensitive", "suppress"}
@@ -278,6 +282,180 @@ def publish_query_pattern_routes(
             "query_pattern_routes_are_not_evidence": True,
             "source_reopen_required_before_claim": True,
         },
+    }
+
+
+def _clean_manifest_for_entry(entry: Mapping[str, Any]) -> Mapping[str, Any]:
+    paths = entry.get("paths")
+    if not isinstance(paths, Mapping):
+        return {}
+    raw_dir = paths.get("clean_source_dir")
+    if not raw_dir:
+        return {}
+    manifest_path = Path(str(raw_dir)) / "manifest.json"
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, Mapping) else {}
+
+
+def _registry_generation_digest(entry: Mapping[str, Any], manifest: Mapping[str, Any]) -> str:
+    # Query-pattern route freshness is tied to deterministic clean-source
+    # identity/count metadata, not registry updated_at. Registry refreshes may
+    # rewrite timestamps without changing source; using updated_at here would
+    # create churn and make every refresh look like a stale alias boundary.
+    material = {
+        "thread_key": entry.get("thread_key"),
+        "source_provider": entry.get("source_provider") or manifest.get("source_provider"),
+        "source_transcript_size": manifest.get("source_transcript_size")
+        or entry.get("rollout_size"),
+        "source_transcript_mtime": manifest.get("source_transcript_mtime"),
+        "message_count": manifest.get("message_count")
+        or entry.get("clean_message_count")
+        or entry.get("message_count"),
+        "turn_count": manifest.get("turn_count") or entry.get("clean_turn_count"),
+        "event_count": manifest.get("event_count"),
+        "route_note_count": manifest.get("route_note_count"),
+    }
+    return _sha(json.dumps(material, ensure_ascii=False, sort_keys=True), prefix="gen")
+
+
+def _registry_alias_candidates(entry: Mapping[str, Any]) -> list[Any]:
+    aliases: list[Any] = [
+        entry.get("title"),
+        entry.get("project_label"),
+        entry.get("workspace_name"),
+    ]
+    for key in ("keywords", "anchor_titles", "project_tags"):
+        value = entry.get(key)
+        if isinstance(value, (list, tuple)):
+            aliases.extend(value)
+    return aliases
+
+
+def registry_query_pattern_route_rows(
+    registry: Mapping[str, Any],
+    *,
+    max_routes: int = MAX_REGISTRY_ROUTES,
+    ttl_seconds: int = DEFAULT_REGISTRY_ROUTE_TTL_SECONDS,
+) -> list[dict[str, Any]]:
+    """Project registry/import metadata into deterministic navigation-only routes.
+
+    This default route builder is intentionally weaker than model-backed query
+    enrichment: it uses only registry metadata, clean-source manifest metadata,
+    and thread/source ids. It does not inspect message text or assert alias
+    quality. The foreground packet still has to reopen source before claims.
+    """
+
+    rows: list[dict[str, Any]] = []
+    entries = registry.get("threads") if isinstance(registry, Mapping) else []
+    if not isinstance(entries, list):
+        return rows
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        thread_key = str(entry.get("thread_key") or "").strip()
+        if not thread_key:
+            continue
+        aliases = _aliases(_registry_alias_candidates(entry))
+        if not aliases:
+            continue
+        manifest = _clean_manifest_for_entry(entry)
+        source_ref: dict[str, Any] = {"thread_key": thread_key}
+        if manifest.get("source_id"):
+            source_ref["source_id"] = manifest.get("source_id")
+        thread_hash = _sha(thread_key, prefix="thread")
+        rows.append(
+            {
+                "thread_key_hash": thread_hash,
+                "source_generation_digest": _registry_generation_digest(entry, manifest),
+                "query_aliases": aliases,
+                "source_refs": [source_ref],
+                "confidence": DEFAULT_REGISTRY_ROUTE_CONFIDENCE,
+                "state": "current",
+                "ttl_seconds": max(1, int(ttl_seconds)),
+                "navigation_only": True,
+                "output_authority": "navigation_only",
+                "source_reopen_required": True,
+                "sensitivity": "local_route_handle_only",
+                "privacy_state": "allowed",
+            }
+        )
+        if len(rows) >= max(0, int(max_routes)):
+            break
+    return rows
+
+
+def publish_registry_query_pattern_routes(
+    registry: Mapping[str, Any],
+    *,
+    registry_dir: Path | None = None,
+    output_path: Path | None = None,
+    max_routes: int = MAX_REGISTRY_ROUTES,
+) -> dict[str, Any]:
+    """Publish the default registry/import query-pattern sidecar.
+
+    The returned report deliberately omits normalized route rows because those
+    rows contain local query aliases. Operators get counts and boundary flags;
+    the sidecar remains a local route cache, not public evidence.
+    """
+
+    root = registry_dir.resolve() if registry_dir else Path.cwd()
+    path = output_path or default_query_pattern_routes_path(root)
+    rows = registry_query_pattern_route_rows(registry, max_routes=max_routes)
+    current_generation_by_thread = {
+        str(row.get("thread_key_hash")): str(row.get("source_generation_digest") or "")
+        for row in rows
+    }
+    report = publish_query_pattern_routes(
+        path,
+        rows,
+        current_generation_by_thread=current_generation_by_thread,
+    )
+    metrics = dict(report.get("metrics") or {})
+    return {
+        "kind": REGISTRY_QUERY_PATTERN_PUBLISH_KIND,
+        "schema_version": QUERY_PATTERN_ROUTE_SCHEMA_VERSION,
+        "ok": bool(report.get("ok")),
+        "changed": bool(report.get("changed")),
+        "navigation_only": True,
+        "metrics": metrics,
+        "contract": {
+            "registry_import_refresh_default_sidecar_write": True,
+            "query_pattern_routes_are_navigation_only": True,
+            "query_pattern_routes_are_not_evidence": True,
+            "source_reopen_required_before_claim": True,
+            "live_llm_call_allowed": False,
+            "public_report_omits_alias_text": True,
+        },
+        "privacy_boundary": {
+            "raw_prompt_serialized": False,
+            "raw_source_text_serialized": False,
+            "local_paths_serialized": False,
+            "query_alias_text_serialized": False,
+            "source_refs_serialized": False,
+        },
+        "cannot_claim": [
+            "live_deepseek_query_pattern_quality",
+            "query_pattern_alias_is_source_truth",
+            "live_latency_savings_are_proven",
+            "scheduler_default_adoption_is_proven",
+        ],
+    }
+
+
+def public_registry_query_pattern_routes_summary(report: Mapping[str, Any]) -> dict[str, int]:
+    metrics = report.get("metrics")
+    if not isinstance(metrics, Mapping):
+        metrics = {}
+    return {
+        "route_write_count": _int(metrics.get("route_write_count")),
+        "stale_generation_suppressed_count": _int(
+            metrics.get("stale_generation_suppressed_count")
+        ),
+        "privacy_suppressed_count": _int(metrics.get("privacy_suppressed_count")),
+        "live_llm_call_count": _int(metrics.get("live_llm_call_count")),
     }
 
 

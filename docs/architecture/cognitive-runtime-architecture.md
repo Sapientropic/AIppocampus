@@ -414,13 +414,17 @@ Query-pattern prewarm now has a deterministic sidecar boundary:
 `aippocampus_runtime.warm_ambient.query_pattern_enrichment` remains the
 no-write planning report, while
 `aippocampus_runtime.warm_ambient.query_pattern_routes` publishes and reads
-`query_pattern_routes.jsonl` as a local navigation cache. The writer suppresses
-stale source-generation digests and privacy-blocked rows; the prompt hook reads
-the sidecar cheaply and can emit hot-path `scent` with source refs only. Alias
-text stays out of public packets and hook context, and every route still
-requires source reopen before any claim. The Cognitive Observatory can now embed
-a `query_pattern_routes` report with route counts, active/suppressed buckets,
-and source-ref counts while still omitting alias text and local paths.
+`query_pattern_routes.jsonl` as a local navigation cache. Onboarding now
+publishes a default deterministic sidecar from registry/import metadata during
+the existing sidecar refresh phase: it uses thread/source ids, clean-source
+manifest freshness metadata, and sanitized registry aliases only. The writer
+suppresses stale source-generation digests and privacy-blocked rows; the prompt
+hook reads the sidecar cheaply and can emit hot-path `scent` with source refs
+only. Alias text stays out of public reports, public packets, and hook context,
+and every route still requires source reopen before any claim. The Cognitive
+Observatory can now embed a `query_pattern_routes` report with route counts,
+active/suppressed buckets, and source-ref counts while still omitting alias text
+and local paths.
 
 Cognitive-load calibration can also appear in the Observatory as a summary-only
 surface. `aippocampus_runtime.ops.observatory_cognitive_load` accepts the #575

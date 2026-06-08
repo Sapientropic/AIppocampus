@@ -18,6 +18,7 @@ from aippocampus_runtime.warm_ambient.query_pattern_enrichment import (  # noqa:
 from aippocampus_runtime.warm_ambient.query_pattern_routes import (  # noqa: E402
     load_query_pattern_routes,
     publish_query_pattern_routes,
+    publish_registry_query_pattern_routes,
     select_query_pattern_packet,
 )
 
@@ -282,6 +283,66 @@ class QueryPatternEnrichmentTests(unittest.TestCase):
         self.assertNotIn("source.jsonl", encoded)
         self.assertNotIn("旧 generation", encoded)
         self.assertNotIn("上次那个海马体预热", json.dumps(packet, ensure_ascii=False))
+
+    def test_registry_query_pattern_sidecar_publishes_default_routes_without_public_aliases(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = root / "registry"
+            clean_source = registry_dir / "threads" / "session-alpha" / "clean-source"
+            clean_source.mkdir(parents=True)
+            (clean_source / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "source_id": "source_alpha",
+                        "source_transcript_size": 2048,
+                        "source_transcript_mtime": 1_800_000_000,
+                        "message_count": 3,
+                        "turn_count": 2,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry = {
+                "threads": [
+                    {
+                        "thread_key": "session:alpha",
+                        "title": "上次那个海马体预热",
+                        "project_label": "AIppocampus",
+                        "workspace_name": "E:\\private\\workspace",
+                        "keywords": ["query pattern", "E:\\private\\secret.txt"],
+                        "anchor_titles": ["Active Path Packet"],
+                        "clean_message_count": 3,
+                        "clean_turn_count": 2,
+                        "paths": {"clean_source_dir": str(clean_source)},
+                    }
+                ]
+            }
+
+            first = publish_registry_query_pattern_routes(registry, registry_dir=registry_dir)
+            second = publish_registry_query_pattern_routes(registry, registry_dir=registry_dir)
+            routes = load_query_pattern_routes(registry_dir / "query_pattern_routes.jsonl")
+            packet = select_query_pattern_packet("接着上次那个海马体预热", routes)
+
+        self.assertEqual(first["kind"], "aippocampus_registry_query_pattern_route_publish_report")
+        self.assertTrue(first["ok"])
+        self.assertTrue(first["changed"])
+        self.assertFalse(second["changed"])
+        self.assertEqual(first["metrics"]["route_write_count"], 1)
+        self.assertEqual(second["metrics"]["unchanged_publish_count"], 1)
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(packet["decision"], "scent")
+        self.assertEqual(packet["candidate_refs"][0]["thread_key"], "session:alpha")
+        self.assertEqual(packet["candidate_refs"][0]["source_id"], "source_alpha")
+        self.assertTrue(first["contract"]["registry_import_refresh_default_sidecar_write"])
+        self.assertTrue(first["contract"]["query_pattern_routes_are_navigation_only"])
+        self.assertEqual(first["metrics"]["live_llm_call_count"], 0)
+        encoded_report = json.dumps(first, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("上次那个海马体预热", encoded_report)
+        self.assertNotIn("E:\\", encoded_report)
+        self.assertNotIn("secret.txt", encoded_report)
 
     def test_query_pattern_selector_suppresses_privacy_blocked_route_rows(self) -> None:
         packet = select_query_pattern_packet(
