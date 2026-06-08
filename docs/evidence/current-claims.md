@@ -1,5 +1,9 @@
 # Current Evidence Claims
 
+Role: current benchmark/readiness claim snapshot.
+Status: current owner for numeric evidence claims, supersession, cannot-claim
+boundaries, and known benchmark-result remediation pointers.
+
 This is the current-claims snapshot for benchmark and readiness numbers that
 are easy to over-read when old dated ledgers still say "current" in their local
 context. It is not a command ledger and it does not replace source reports.
@@ -26,6 +30,21 @@ Rules:
   boundaries stay in
   [`docs/evidence/benchmarks/amemgym.md`](benchmarks/amemgym.md) until a dated
   result owner upgrades a claim.
+
+## Known Negative Results And Remediation
+
+Start here before opening dated report history. These rows are the current
+reader-facing ledger for open and resolved remediation routes that are easy to
+over-read as either product failure or product proof.
+
+| Area | Current evidence state | Remediation route | Reader boundary |
+| --- | --- | --- | --- |
+| Continuous-memory preregistered repeat profile | The 2026-06-08 public-synthetic repeat profile is explicit negative evidence: `lower_bound_passed=false` and `decision_label=no demonstrated memory advantage`. | [#960](https://github.com/Sapientropic/AIppocampus/issues/960) owns remediation of the negative result and any next repeated-evidence slice. | Do not claim continuous-memory superiority until a later dated row supersedes this negative evidence. |
+| Track B private source-evidence retrieval | The selected private slice is 97/100 top-5 after semantic-sidecar refresh, with 3 `rank_below_top_k` misses. | [#963](https://github.com/Sapientropic/AIppocampus/issues/963) owns miss taxonomy and repair. | Do not turn the 0.97 selected slice into broad real-user gate quality or semantic completeness. |
+| AMemGym official runner evidence | AMemGym has adapter/protocol/overlay evidence but no Current Claim Snapshot metric row yet. | [#958](https://github.com/Sapientropic/AIppocampus/issues/958) owns moving beyond local-scripted protocol smoke. | Do not present protocol output or overlay diagnostics as an official live-model score. |
+| React VCS lexical near-miss false positives | The current 2026-06-09 row reports 60/60 gold true positives and 30/30 explicit-cue hard negatives suppressed. | [#961](https://github.com/Sapientropic/AIppocampus/issues/961) is closed; the fix is reflected in the current snapshot row. | Do not use older 2026-06-04 false-positive evidence as the current source-disambiguation state. |
+| Progressive recall route follow-through gaps | The current row reports `route_actionability_rate=1.0` and eligible `source_reopen_follow_through_rate=1.0`, with stale handles rejected before source use. | [#962](https://github.com/Sapientropic/AIppocampus/issues/962) is closed; the fix is reflected in the current snapshot row. | This still does not close broad live #201 or default foreground-lift claims. |
+| Multimodal NIAH stale conflicting-source selection | The current row reports 4/4 answer/source-selection/source-anchor-citation after conflict repair and keeps the ambiguous-currentness negative control as reopen-required. | [#964](https://github.com/Sapientropic/AIppocampus/issues/964) is closed; the fix is reflected in the current snapshot row. | This is a supplied-pool synthesis contract, not retrieval or live vision-model quality. |
 
 ## Current Claim Snapshot
 
