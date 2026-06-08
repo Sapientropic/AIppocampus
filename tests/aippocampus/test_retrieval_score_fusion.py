@@ -140,6 +140,57 @@ class RetrievalScoreFusionTests(unittest.TestCase):
         self.assertEqual(len(payload["ranked"]), 1)
         self.assertEqual(payload["ranked"][0]["source_id"], "message:safe")
         self.assertEqual(payload["skipped"][0]["reason"], "missing_stable_source_join")
+        self.assertEqual(payload["skipped"][0]["gate"], "source_join_gate")
+
+    def test_source_join_gate_is_separate_from_provenance_richness(self) -> None:
+        payload = fusion.blend(
+            [
+                {
+                    "source_id": "message:weak-but-joined",
+                    "text_score": 10.0,
+                },
+                {
+                    "score_kind": "vector",
+                    "score": 1.0,
+                },
+            ],
+            context="normal_recall",
+        )
+
+        self.assertEqual(len(payload["ranked"]), 1)
+        joined = payload["ranked"][0]
+        self.assertEqual(joined["source_id"], "message:weak-but-joined")
+        self.assertEqual(joined["source_boundary"]["source_join_gate"], "passed")
+        self.assertEqual(joined["source_boundary"]["provenance_richness"], "weak_join_only")
+        self.assertEqual(joined["raw_signals"]["source"], 0.0)
+        self.assertEqual(joined["normalized_signals"]["source"], 0.0)
+        self.assertEqual(payload["skipped"][0]["gate"], "source_join_gate")
+        self.assertEqual(payload["skipped"][0]["reason"], "missing_stable_source_join")
+
+    def test_source_richness_is_monotonic_after_source_join_gate(self) -> None:
+        payload = fusion.blend(
+            [
+                {
+                    "source_id": "message:one-ref",
+                    "text_score": 10.0,
+                    "source_refs": [source_ref("one", 120)],
+                },
+                {
+                    "source_id": "message:two-refs",
+                    "text_score": 10.0,
+                    "source_refs": [source_ref("two-a", 130), source_ref("two-b", 131)],
+                },
+            ],
+            context="normal_recall",
+        )
+
+        by_id = {row["source_id"]: row for row in payload["ranked"]}
+        one = by_id["message:one-ref"]
+        two = by_id["message:two-refs"]
+        self.assertGreater(two["raw_signals"]["source"], one["raw_signals"]["source"])
+        self.assertGreater(two["normalized_signals"]["source"], one["normalized_signals"]["source"])
+        self.assertEqual(one["source_boundary"]["provenance_richness"], "source_refs")
+        self.assertEqual(two["source_boundary"]["provenance_richness"], "source_refs")
 
     def test_message_id_join_is_thread_scoped_and_sqlite_id_is_ignored(self) -> None:
         payload = fusion.blend(

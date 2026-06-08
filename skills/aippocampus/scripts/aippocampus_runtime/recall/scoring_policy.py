@@ -106,14 +106,20 @@ class SignalBlendWeights:
 
 @dataclass(frozen=True)
 class SourceSignalPolicy:
+    # Source join presence is enforced as a hard eligibility gate in
+    # score_fusion.blend(). These values are only the post-gate provenance
+    # richness hint, so a join key without source refs deliberately gets no
+    # ranking boost.
     ref_base: float = 0.55
     per_ref: float = 0.15
     maximum: float = 1.0
-    join_key_only: float = 0.25
+    join_key_only: float = 0.0
 
 
 @dataclass(frozen=True)
 class ScoreFusionPolicy:
+    # The source weight stays small because provenance richness is a tie-break
+    # after the source-join gate, not a second evidence/authority layer.
     normal_recall: SignalBlendWeights = SignalBlendWeights(
         text=0.65, vector=0.20, graph=0.10, source=0.05
     )
