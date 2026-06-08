@@ -846,6 +846,25 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("evidence README missing dated verification ledger lane", issues)
         self.assertIn("docs README missing evidence README pointer", issues)
 
+    def test_reader_path_guard_requires_start_here_entrypoints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            docs.mkdir(parents=True)
+            (repo / "README.md").write_text("# Project\n", encoding="utf-8")
+            (docs / "README.md").write_text("# Docs\n\nstart-here.md\n", encoding="utf-8")
+            (docs / "start-here.md").write_text(
+                "# Start Here\n\nNo install path yet.\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.reader_path_issues(repo)
+
+        self.assertIn("root README missing docs/start-here.md reader-path pointer", issues)
+        self.assertIn("docs README missing first-recall reader path", issues)
+        self.assertIn("start-here missing 10-minute public API path", issues)
+        self.assertIn("start-here missing first-recall install path", issues)
+
     def test_current_claims_guard_reports_stale_evidence_wording(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

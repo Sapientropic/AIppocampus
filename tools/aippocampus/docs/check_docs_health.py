@@ -24,6 +24,7 @@ from product_profile_guard import (
     product_profile_contract_issues,
     public_core_product_profile_issues,
 )
+from reader_path_guard import reader_path_issues
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
 
@@ -89,11 +90,8 @@ REQUIRED_PROJECT_DOCS = [
 ]
 
 DOCS_ROOT_ALLOWED_MARKDOWN = {
-    "README.md",
-    "agent-context.md",
-    "roadmap.md",
-    "the-unfinished-map.md",
-    "未干的地图.md",
+    "README.md", "agent-context.md", "roadmap.md", "start-here.md",
+    "the-unfinished-map.md", "未干的地图.md",
 }
 
 DOCS_ROOT_ALLOWED_DIRECTORIES = {
@@ -1293,6 +1291,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     if origin_stub.exists():
         issues.append("docs/origin.md duplicates the origin essay; link docs/未干的地图.md instead")
 
+    issues.extend(reader_path_issues(repo_root))
     issues.extend(runtime_script_map_issues(repo_root))
     issues.extend(dream_phase1_contract_issues(repo_root))
     issues.extend(llm_call_contract_issues(repo_root))
