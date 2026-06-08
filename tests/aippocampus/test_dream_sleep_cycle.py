@@ -20,6 +20,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.dream import sleep_cycle as dream_sleep_cycle  # noqa: E402
+from aippocampus_runtime.dream import working_memory_publication  # noqa: E402
 from aippocampus_runtime.model.client import (  # noqa: E402
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
@@ -288,6 +289,41 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertEqual(len(queue_rows), 1)
         self.assertEqual(len(finding_rows), 1)
         self.assertFalse(working_memory_path.exists())
+
+    def test_sleep_cycle_can_publish_reader_safe_working_memory_snapshot(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            del call_config
+            dream_function = json.loads(messages[-1]["content"])["dream_function"]
+            return {
+                "choices": [{"message": {"content": accepted_content(dream_function)}}],
+                "usage": {},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            working_memory_path = root / "working_memory.jsonl"
+            payload = dream_sleep_cycle.run_sleep_cycle(
+                [ready_pack()],
+                now="2026-05-30T00:00:00Z",
+                config=config(),
+                model_call=fake_model_call,
+                max_items=1,
+                no_write=False,
+                publish_working_memory=True,
+                run_ready=True,
+                queue_output_path=root / "dream_queue.jsonl",
+                findings_output_path=root / "dream_findings.jsonl",
+                working_memory_output_path=working_memory_path,
+            )
+            rows, diagnostic = working_memory_publication.load_working_memory_with_diagnostics(
+                working_memory_path
+            )
+
+        self.assertEqual(payload["counts"]["written_working_memory"], 1)
+        self.assertEqual(payload["working_memory_publication"]["status"], "published")
+        self.assertEqual(diagnostic["status"], "published_generation_loaded")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["candidate_type"], "dream_hypothesis")
 
     def test_sleep_cycle_reports_parked_output_without_projecting_working_memory(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:

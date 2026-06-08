@@ -27,6 +27,9 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.dream import constructive_outputs as dream_constructive
 from aippocampus_runtime.dream import journey_bridges
+from aippocampus_runtime.dream.working_memory_publication import (  # noqa: F401
+    load_working_memory as load_working_memory,
+)
 from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     normalize_term,
@@ -532,10 +535,6 @@ def route_candidates(candidates_path: Path, jobs_path: Path) -> dict[str, Any]:
         "route_counts": dict(route_counts),
         "rows": rows,
     }
-
-
-def load_working_memory(path: Path) -> list[dict[str, Any]]:
-    return [row for row in iter_jsonl(path) if row.get("kind") == "aippocampus_working_memory"]
 
 
 def parse_utc(value: str | None) -> datetime | None:
