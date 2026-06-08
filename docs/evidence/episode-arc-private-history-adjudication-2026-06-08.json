@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "kind": "aippocampus_episode_arc_private_history_adjudication_report",
+  "schema_version": 1,
+  "created_at": "2026-06-08T02:00:05Z",
+  "status": "measured_public_safe_aggregate",
+  "input_surface": {
+    "thread_count_scanned": 100,
+    "threads_with_clean_messages": 100,
+    "threads_with_clean_events": 70,
+    "message_rows_scanned": 5164,
+    "behavior_event_rows_scanned": 83221,
+    "bad_json_row_count": 0,
+    "max_threads": 100,
+    "max_line_gap": 3000
+  },
+  "metrics": {
+    "decision_candidate_count": 5052,
+    "rejected_decision_candidate_count": 1851,
+    "failed_behavior_event_count": 2566,
+    "rejected_decision_with_failed_behavior_chain_count": 684,
+    "episode_arc_count": 1851,
+    "rejected_route_arc_count": 1851,
+    "complete_arc_count": 684,
+    "gappy_arc_count": 1167,
+    "complete_rejected_route_arc_count": 684,
+    "source_ref_count": 5017,
+    "sequence_packet_reopen_complete_count": 1851,
+    "remind_safe_use_count": 684
+  },
+  "episode_kind_counts": {
+    "rejected_route_arc": 1851
+  },
+  "origin_counts": {
+    "behavior_event": 684,
+    "coding_decision_event": 1167
+  },
+  "current_validity_counts": {
+    "needs_reopen": 1851
+  },
+  "outcome_counts": {
+    "route_rejected": 1851
+  },
+  "sequence_gap_counts": {
+    "single_point_trap": 1167
+  },
+  "sequence_packet_reopen_resolution_counts": {
+    "complete": 1851
+  },
+  "safe_use_counts": {
+    "ask": 1851,
+    "refresh_sources": 1851,
+    "remind": 684
+  },
+  "issue_readouts": {
+    "github_663": {
+      "private_history_adjudication": "measured_public_safe_aggregate",
+      "complete_rejected_route_arc_count": 684,
+      "gappy_arc_count": 1167,
+      "source_reopen_from_sequence_packet": "aggregate_measured",
+      "live_host_behavior": "not_measured",
+      "closeout_eligible": false
+    }
+  },
+  "privacy_boundary": {
+    "aggregate_only": true,
+    "raw_source_text_emitted": false,
+    "raw_command_text_emitted": false,
+    "source_refs_emitted": false,
+    "source_ref_hash_samples_emitted": false,
+    "event_ids_emitted": false,
+    "thread_ids_emitted": false,
+    "local_paths_emitted": false
+  },
+  "contract": {
+    "episode_arcs_are_read_models": true,
+    "sequence_packets_are_navigation_only": true,
+    "current_validity_requires_source_reopen": true,
+    "source_truth_unchanged": true,
+    "formal_memory_promoted": false
+  },
+  "cannot_claim": [
+    "broad_episode_arc_owner_complete",
+    "live_host_behavior_lift",
+    "user_visible_recall_lift",
+    "current_validity_without_source_reopen",
+    "episode_arc_as_truth_layer",
+    "private_history_generalizes_beyond_this_registry"
+  ]
+}
