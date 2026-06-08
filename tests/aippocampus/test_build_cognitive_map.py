@@ -41,7 +41,83 @@ class BuildCognitiveMapTests(unittest.TestCase):
         self.assertEqual(result["route_count"], 0)
         self.assertEqual(result["landmark_count"], 0)
         self.assertEqual(result["episodes"][0]["thread_key"], "session:map")
+        self.assertEqual(result["status"], "needs_subconscious_with_registry_overview")
+        self.assertEqual(result["registry_overview_count"], 1)
+
+    def test_empty_registry_still_needs_subconscious_without_overview(self) -> None:
+        result = cognitive_map.build_cognitive_map(
+            registry={"schema_version": 1, "threads": []}, job_findings=[]
+        )
+
+        self.assertEqual(result["route_count"], 0)
+        self.assertEqual(result["registry_overview_count"], 0)
         self.assertEqual(result["status"], "needs_subconscious")
+
+    def test_registry_alone_builds_cold_start_overview_without_routes(self) -> None:
+        registry = {
+            "schema_version": 1,
+            "threads": [
+                {
+                    "thread_key": "session:map",
+                    "title": "AIppocampus continuity map",
+                    "project_label": "AIppocampus",
+                    "updated_at": "2026-06-01T00:00:00Z",
+                    "keywords": ["心理地图", "认知地图"],
+                    "anchor_titles": ["外置海马体"],
+                    "summary": "This registry summary is not evidence.",
+                },
+                {
+                    "thread_key": "session:dream",
+                    "title": "Dream publication",
+                    "project_label": "AIppocampus",
+                    "updated_at": "2026-06-02T00:00:00Z",
+                    "keywords": ["Dream", "working memory"],
+                    "anchor_titles": ["reader-safe publication"],
+                },
+            ],
+        }
+
+        result = cognitive_map.build_cognitive_map(registry=registry, job_findings=[])
+
+        self.assertEqual(result["route_count"], 0)
+        self.assertEqual(result["landmark_count"], 0)
+        self.assertEqual(result["status"], "needs_subconscious_with_registry_overview")
+        self.assertEqual(result["registry_overview"]["kind"], "cognitive_map_registry_overview")
+        self.assertEqual(result["registry_overview"]["source"], "registry_metadata")
+        self.assertEqual(result["registry_overview"]["cluster_count"], 1)
+        cluster = result["registry_overview"]["clusters"][0]
+        self.assertEqual(cluster["label"], "AIppocampus")
+        self.assertEqual(cluster["thread_keys"], ["session:dream", "session:map"])
+        self.assertIn("心理地图", cluster["navigation_terms"])
+        self.assertIn("外置海马体", cluster["anchor_titles"])
+        self.assertTrue(cluster["source_boundary"]["registry_derived_navigation_only"])
+        self.assertTrue(cluster["source_boundary"]["not_source_backed_route"])
+        self.assertTrue(cluster["source_boundary"]["source_reopen_required_for_claims"])
+
+    def test_registry_overview_matches_only_as_weak_navigation(self) -> None:
+        registry = {
+            "schema_version": 1,
+            "threads": [
+                {
+                    "thread_key": "session:map",
+                    "title": "AIppocampus continuity map",
+                    "project_label": "AIppocampus",
+                    "keywords": ["心理地图", "认知地图"],
+                    "anchor_titles": ["外置海马体"],
+                }
+            ],
+        }
+        result = cognitive_map.build_cognitive_map(registry=registry, job_findings=[])
+
+        matches = cognitive_map.match_cognitive_map("继续 AIppocampus 心理地图", result)
+
+        self.assertEqual(matches[0]["kind"], "cognitive_map_registry_overview")
+        self.assertEqual(matches[0]["provenance_class"], "cognitive_map_registry_overview")
+        self.assertEqual(matches[0]["source"], "registry_metadata")
+        self.assertEqual(matches[0]["source_refs"], [])
+        self.assertEqual(matches[0]["thread_keys"], ["session:map"])
+        self.assertTrue(matches[0]["source_boundary"]["registry_derived_navigation_only"])
+        self.assertTrue(matches[0]["source_boundary"]["source_reopen_required_for_claims"])
 
     def test_deepseek_subconscious_finding_creates_source_backed_route(self) -> None:
         registry = {

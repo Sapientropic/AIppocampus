@@ -4,6 +4,9 @@
 The cognitive map is a navigation layer, not a source of truth. Routes are
 materialized only from source-backed subconscious findings, so registry metadata
 can place episodes on the map but cannot invent semantic routes by itself.
+When those routes do not exist yet, a registry-derived far-view overview may
+orient the foreground agent, but it remains a weak route context that requires
+clean-source reopen before claims.
 """
 
 from __future__ import annotations
@@ -19,6 +22,10 @@ from aippocampus_runtime.navigation.associations import (
     normalize_term,
     source_text_is_noise,
     term_is_noise,
+)
+from aippocampus_runtime.navigation.cognitive_map_overview import (
+    match_registry_overview,
+    registry_overview_from_episodes,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
@@ -394,7 +401,17 @@ def build_cognitive_map(
         key=lambda item: (float(item.get("confidence") or 0.0), str(item.get("label") or "")),
         reverse=True,
     )
-    status = "active" if routes else "needs_subconscious"
+    registry_overview = registry_overview_from_episodes(episodes)
+    registry_overview_count = int(registry_overview.get("cluster_count") or 0)
+    status = (
+        "active"
+        if routes
+        else (
+            "needs_subconscious_with_registry_overview"
+            if registry_overview_count
+            else "needs_subconscious"
+        )
+    )
     return {
         "schema_version": COGNITIVE_MAP_SCHEMA_VERSION,
         "kind": "aippocampus_cognitive_map",
@@ -406,13 +423,16 @@ def build_cognitive_map(
         "landmark_count": len(landmark_rows),
         "region_count": len(region_rows),
         "route_count": len(routes),
+        "registry_overview_count": registry_overview_count,
         "episodes": episodes,
+        "registry_overview": registry_overview,
         "landmarks": landmark_rows,
         "regions": region_rows,
         "routes": routes,
         "rules": {
             "source_boundary": "Routes are model-organized navigation hints, not facts. Verify exact claims against clean source.",
             "no_route_from_registry_only": True,
+            "registry_overview_navigation_only": True,
         },
     }
 
@@ -507,6 +527,10 @@ def match_cognitive_map(
         ),
         reverse=True,
     )
+    if not matches and not (cognitive_map.get("routes") or []):
+        matches = match_registry_overview(
+            prompt_low, prompt_terms, cognitive_map, project_label=project_label, limit=limit
+        )
     return matches[:limit]
 
 
@@ -535,6 +559,7 @@ def summarize_result(
         "landmark_count": result.get("landmark_count"),
         "region_count": result.get("region_count"),
         "route_count": result.get("route_count"),
+        "registry_overview_count": result.get("registry_overview_count"),
         "output": str(output_path),
         "source_jobs": str(jobs_path),
     }
