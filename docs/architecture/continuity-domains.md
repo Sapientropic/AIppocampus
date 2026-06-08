@@ -8,8 +8,9 @@ interpretation, reopen the source trail, and revise the interpretation without
 turning summaries into truth.
 
 This contract covers issues #926 through #930 and folds in the pathlet /
-narrative-mesh direction from discussion #700. The runtime module is
-`aippocampus_runtime.recall.continuity_domains`.
+narrative-mesh direction from discussion #700. The durable domain substrate is
+`aippocampus_runtime.recall.continuity_domains`; the task-time route projection
+for #700 narrative packets is `aippocampus_runtime.recall.narrative_packet`.
 
 Contract v1 ships the runtime substrate and progressive recall exposure. It
 does not claim that passive hooks automatically create continuity domains.
