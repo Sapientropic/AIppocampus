@@ -37,6 +37,8 @@ bare ground every time a thread, device, model, or project changes.
 
 The origin essay is [未干的地图](docs/未干的地图.md). English readers can start with
 [The Unfinished Map](docs/the-unfinished-map.md).
+For role-based documentation paths, use
+[Start Here](docs/start-here.md).
 
 ## Quick Start
 
