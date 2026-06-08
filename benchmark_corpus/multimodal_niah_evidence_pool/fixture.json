@@ -43,14 +43,16 @@
       "ground_truth_evidence_ids": ["msrc-bill-001"],
       "distractor_evidence_ids": ["msrc-email-001", "msrc-receipt-001", "msrc-calendar-001"],
       "pool_evidence_ids": ["msrc-calendar-001", "msrc-bill-001", "msrc-email-001", "msrc-receipt-001"],
-      "selected_evidence_ids": ["msrc-email-001"],
-      "cited_source_anchor_ids": ["email-001:body"],
+      "input_selected_evidence_ids": ["msrc-email-001"],
+      "input_cited_source_anchor_ids": ["email-001:body"],
+      "input_selected_answer_state": "answer_with_stale_conflicting_evidence",
+      "selected_evidence_ids": ["msrc-bill-001"],
+      "cited_source_anchor_ids": ["bill-001:total"],
       "stale_or_conflicting_distractor_ids": ["msrc-email-001"],
       "expected_answer_state": "answer_with_conflict_explanation",
-      "selected_answer_state": "answer_with_stale_conflicting_evidence",
-      "answer_correct": false,
-      "expected_failure": true,
-      "failure_mode": "stale_conflicting_evidence_selected"
+      "selected_answer_state": "answer_with_conflict_explanation",
+      "answer_correct": true,
+      "expected_failure": false
     },
     {
       "case_id": "niah-cross-modal-join-medium",

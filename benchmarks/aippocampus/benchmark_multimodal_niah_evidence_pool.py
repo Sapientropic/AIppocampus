@@ -27,13 +27,20 @@ _paths.ensure_paths()
 
 from benchmark_statistics import binomial_rate_report, rounded_rate
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 FIXTURE_SCHEMA_VERSION = "aippocampus.multimodal_niah_evidence_pool_fixture.v1"
 SOURCE_FIXTURE_SCHEMA_VERSION = "aippocampus.multimodal_corpus_fixture.v1"
 DEFAULT_FIXTURE = (
     _paths.REPO_ROOT / "benchmark_corpus" / "multimodal_niah_evidence_pool" / "fixture.json"
 )
 SOURCE_REOPEN_MODES = {"disabled", "deterministic_fixture"}
+CURRENTNESS_AUTHORITY_RANK = {
+    "final_bill": 50,
+    "merchant_receipt": 40,
+    "user_calendar_source": 30,
+    "user_message_source": 20,
+    "user_provided_media": 10,
+}
 REQUIRED_CASE_FIELDS = {
     "case_id",
     "corpus_case_id",
@@ -132,12 +139,115 @@ def _has_reopenable_sources(
     source_ids: Sequence[str],
     sources: Mapping[str, Mapping[str, Any]],
 ) -> bool:
+    if not source_ids:
+        return False
     for source_id in source_ids:
         source = sources.get(source_id)
         anchor = _as_mapping(source.get("source_anchor") if source else None)
         if not source or not anchor.get("anchor_id") or not source.get("content_hash_sha256"):
             return False
     return True
+
+
+def _source_rank(source_id: str, sources: Mapping[str, Mapping[str, Any]]) -> tuple[str, int] | None:
+    source = sources.get(source_id)
+    if not source:
+        return None
+    captured_at = str(source.get("captured_at") or "")
+    authority = str(source.get("authority_level") or "")
+    if not captured_at or authority not in CURRENTNESS_AUTHORITY_RANK:
+        return None
+    return captured_at, CURRENTNESS_AUTHORITY_RANK[authority]
+
+
+def _currentness_winner(
+    source_ids: Sequence[str],
+    sources: Mapping[str, Mapping[str, Any]],
+) -> tuple[str | None, str]:
+    ranked = [(source_id, _source_rank(source_id, sources)) for source_id in source_ids]
+    if any(rank is None for _, rank in ranked):
+        return None, "missing_currentness_metadata"
+    max_time = max(rank[0] for _, rank in ranked if rank is not None)
+    max_authority = max(rank[1] for _, rank in ranked if rank is not None)
+    time_winners = {source_id for source_id, rank in ranked if rank and rank[0] == max_time}
+    authority_winners = {
+        source_id for source_id, rank in ranked if rank and rank[1] == max_authority
+    }
+    winners = time_winners & authority_winners
+    if len(winners) == 1:
+        return next(iter(winners)), "unique_current_source_from_metadata"
+    if time_winners != authority_winners:
+        return None, "authority_time_conflict"
+    return None, "ambiguous_currentness"
+
+
+def _anchor_ids_for_decision(
+    source_ids: Sequence[str],
+    sources: Mapping[str, Mapping[str, Any]],
+) -> list[str]:
+    return _anchor_ids(source_ids, sources) if source_ids else []
+
+
+def _resolve_selection(
+    case: Mapping[str, Any],
+    *,
+    sources: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    pool_ids = _as_list(case.get("pool_evidence_ids"))
+    ground_truth_ids = _as_list(case.get("ground_truth_evidence_ids"))
+    input_selected_ids = _as_list(case.get("input_selected_evidence_ids")) or _as_list(
+        case.get("selected_evidence_ids")
+    )
+    expected_state = str(case.get("expected_answer_state") or "")
+    selected_state = str(case.get("selected_answer_state") or "")
+    if case.get("query_shape") != "conflict_resolution":
+        return {
+            "selected_evidence_ids": input_selected_ids,
+            "cited_source_anchor_ids": _as_list(case.get("cited_source_anchor_ids")),
+            "selected_answer_state": selected_state,
+            "answer_correct": bool(case.get("answer_correct")),
+            "selection_decision": "accept_initial_selection",
+            "currentness_decision": "not_conflict_resolution",
+            "selection_reason_codes": [],
+            "needs_source_reopen": False,
+        }
+
+    winner_id, currentness_decision = _currentness_winner(pool_ids, sources)
+    if winner_id is None:
+        return {
+            "selected_evidence_ids": [],
+            "cited_source_anchor_ids": [],
+            "selected_answer_state": "needs_source_reopen",
+            "answer_correct": expected_state == "needs_source_reopen",
+            "selection_decision": "needs_source_reopen",
+            "currentness_decision": currentness_decision,
+            "selection_reason_codes": [
+                "conflict_resolution_pool",
+                currentness_decision,
+                "source_reopen_required_before_claim",
+            ],
+            "needs_source_reopen": True,
+        }
+
+    selected_ids = [winner_id]
+    return {
+        "selected_evidence_ids": selected_ids,
+        "cited_source_anchor_ids": _anchor_ids_for_decision(selected_ids, sources),
+        "selected_answer_state": expected_state,
+        "answer_correct": set(selected_ids) == set(ground_truth_ids),
+        "selection_decision": (
+            "accept_initial_current_source"
+            if set(input_selected_ids) == set(selected_ids)
+            else "prefer_current_source"
+        ),
+        "currentness_decision": currentness_decision,
+        "selection_reason_codes": [
+            "conflict_resolution_pool",
+            "source_metadata_currentness_supported",
+            "unique_current_source",
+        ],
+        "needs_source_reopen": False,
+    }
 
 
 def _modality_mix(source_ids: Sequence[str], sources: Mapping[str, Mapping[str, Any]]) -> dict[str, int]:
@@ -247,7 +357,10 @@ def validate_fixture(
         distractor_ids = _as_list(case.get("distractor_evidence_ids"))
         pool_ids = _as_list(case.get("pool_evidence_ids"))
         selected_ids = _as_list(case.get("selected_evidence_ids"))
-        all_case_source_ids = ground_truth_ids + distractor_ids + pool_ids + selected_ids
+        input_selected_ids = _as_list(case.get("input_selected_evidence_ids"))
+        all_case_source_ids = (
+            ground_truth_ids + distractor_ids + pool_ids + selected_ids + input_selected_ids
+        )
         for source_id in all_case_source_ids:
             if source_id not in source_ids:
                 blockers.append(
@@ -295,6 +408,14 @@ def validate_fixture(
                     "selection_outside_supplied_pool",
                     f"cases.{case_id}.selected_evidence_ids",
                     "A scored answerer may only select evidence from the supplied pool.",
+                )
+            )
+        if not set(input_selected_ids) <= set(pool_ids):
+            blockers.append(
+                _blocker(
+                    "input_selection_outside_supplied_pool",
+                    f"cases.{case_id}.input_selected_evidence_ids",
+                    "Initial answerer selections must also come from the supplied pool.",
                 )
             )
         expected_pool = built_pools.get(case_id, {}).get("pool_evidence_ids", [])
@@ -350,21 +471,33 @@ def _evaluate_case(
 ) -> dict[str, Any]:
     ground_truth_ids = _as_list(case.get("ground_truth_evidence_ids"))
     pool_ids = _as_list(case.get("pool_evidence_ids"))
-    selected_ids = _as_list(case.get("selected_evidence_ids"))
+    input_selected_ids = _as_list(case.get("input_selected_evidence_ids")) or _as_list(
+        case.get("selected_evidence_ids")
+    )
+    input_cited_anchor_ids = _as_list(case.get("input_cited_source_anchor_ids")) or _as_list(
+        case.get("cited_source_anchor_ids")
+    )
+    input_selected_answer_state = str(
+        case.get("input_selected_answer_state") or case.get("selected_answer_state") or ""
+    )
+    selection = _resolve_selection(case, sources=sources)
+    selected_ids = _as_list(selection.get("selected_evidence_ids"))
     stale_or_conflicting = set(_as_list(case.get("stale_or_conflicting_distractor_ids")))
-    cited_anchor_ids = _as_list(case.get("cited_source_anchor_ids"))
+    cited_anchor_ids = _as_list(selection.get("cited_source_anchor_ids"))
     expected_abstain = bool(case.get("expected_abstain")) or str(
         case.get("expected_answer_state") or ""
     ).startswith("abstain")
-    selected_abstained = str(case.get("selected_answer_state") or "").startswith("abstain")
+    selected_answer_state = str(selection.get("selected_answer_state") or "")
+    selected_abstained = selected_answer_state.startswith("abstain")
     ground_truth_present = set(ground_truth_ids) <= set(pool_ids)
     source_selection_correct = set(selected_ids) == set(ground_truth_ids)
     source_anchor_citation_correct = source_selection_correct and set(
         _anchor_ids(ground_truth_ids, sources)
     ) <= set(cited_anchor_ids)
+    input_stale_or_conflicting_selected = bool(set(input_selected_ids) & stale_or_conflicting)
     stale_or_conflicting_selected = bool(set(selected_ids) & stale_or_conflicting)
     unsupported_claim = expected_abstain and not selected_abstained
-    answer_correct = bool(case.get("answer_correct"))
+    answer_correct = bool(selection.get("answer_correct"))
 
     return {
         "case_id": case.get("case_id"),
@@ -373,12 +506,15 @@ def _evaluate_case(
         "question_sha1": sha1_text(str(corpus_case.get("question") or ""))[:16],
         "answer_sha1": sha1_text(str(corpus_case.get("answer") or ""))[:16],
         "expected_answer_state_sha1": sha1_text(str(case.get("expected_answer_state") or ""))[:16],
-        "selected_answer_state_sha1": sha1_text(str(case.get("selected_answer_state") or ""))[:16],
+        "input_selected_answer_state_sha1": sha1_text(input_selected_answer_state)[:16],
+        "selected_answer_state_sha1": sha1_text(selected_answer_state)[:16],
         "pool_size": len(pool_ids),
         "pool_evidence_ids": pool_ids,
         "pool_modality_mix": _modality_mix(pool_ids, sources),
         "ground_truth_evidence_ids": ground_truth_ids,
+        "input_selected_evidence_ids": input_selected_ids,
         "selected_evidence_ids": selected_ids,
+        "input_cited_source_anchor_ids": input_cited_anchor_ids,
         "cited_source_anchor_ids": cited_anchor_ids,
         "ground_truth_present": ground_truth_present,
         "ground_truth_reopenable": _has_reopenable_sources(ground_truth_ids, sources),
@@ -389,9 +525,18 @@ def _evaluate_case(
         "expected_abstain": expected_abstain,
         "abstention_correct": expected_abstain and selected_abstained,
         "unsupported_claim": unsupported_claim,
+        "input_stale_or_conflicting_distractor_selected": input_stale_or_conflicting_selected,
         "stale_or_conflicting_distractor_selected": stale_or_conflicting_selected,
+        "selection_decision": selection.get("selection_decision"),
+        "currentness_decision": selection.get("currentness_decision"),
+        "selection_reason_codes": _as_list(selection.get("selection_reason_codes")),
+        "needs_source_reopen": bool(selection.get("needs_source_reopen")),
         "expected_failure": bool(case.get("expected_failure")),
-        "failure_mode": case.get("failure_mode") if case.get("expected_failure") else None,
+        "failure_mode": (
+            case.get("failure_mode")
+            if case.get("expected_failure") and not source_selection_correct
+            else None
+        ),
     }
 
 
@@ -429,6 +574,10 @@ def _metrics(cases: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], dict[s
         ),
         "stale_or_conflicting_distractor_selection_rate": (
             sum(1 for case in conflict if case.get("stale_or_conflicting_distractor_selected")),
+            len(conflict),
+        ),
+        "needs_source_reopen_rate": (
+            sum(1 for case in conflict if case.get("needs_source_reopen")),
             len(conflict),
         ),
     }
@@ -508,15 +657,34 @@ def run_benchmark(
         if isinstance(case, Mapping)
     ]
     metrics, rate_estimates = _metrics(cases)
-    expected_failure_observed = any(
-        case.get("expected_failure") and not case.get("source_selection_correct") for case in cases
-    )
+    conflict_cases = [case for case in cases if case.get("query_shape") == "conflict_resolution"]
+    conflict_decisions = {
+        "case_count": len(conflict_cases),
+        "input_stale_or_conflicting_distractor_selection_count": sum(
+            1 for case in conflict_cases if case.get("input_stale_or_conflicting_distractor_selected")
+        ),
+        "stale_or_conflicting_distractor_selection_count": sum(
+            1 for case in conflict_cases if case.get("stale_or_conflicting_distractor_selected")
+        ),
+        "current_source_selected_count": sum(
+            1
+            for case in conflict_cases
+            if case.get("selection_decision")
+            in {"prefer_current_source", "accept_initial_current_source"}
+        ),
+        "needs_source_reopen_count": sum(
+            1 for case in conflict_cases if case.get("needs_source_reopen")
+        ),
+    }
     ok = (
         bool(validation["ok"])
         and metrics["pool_ground_truth_coverage_rate"] == 1.0
+        and metrics["answer_correctness"] == 1.0
+        and metrics["source_selection_accuracy"] == 1.0
+        and metrics["source_anchor_citation_accuracy"] == 1.0
+        and metrics["stale_or_conflicting_distractor_selection_rate"] == 0.0
         and metrics["unsupported_claim_rate"] == 0.0
         and metrics["abstention_accuracy"] == 1.0
-        and expected_failure_observed
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -556,6 +724,7 @@ def run_benchmark(
             "source_reopen": _source_reopen_track(cases, mode=source_reopen_mode),
         },
         "metrics": metrics,
+        "conflict_decisions": conflict_decisions,
         "rate_estimates": rate_estimates,
         "cases": cases,
         "claim_boundary": {
