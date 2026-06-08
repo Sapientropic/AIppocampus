@@ -290,6 +290,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock_compaction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_path_packet.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/narrative_packet.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_policy.py",
