@@ -35,6 +35,8 @@ preferences, or relationship context change what I should do next?
 - If no, continue normally without ceremony.
 - If yes, consume the smallest useful continuity packet or route first.
 - If a route already exists, follow it before broad manual search.
+- If a continuity domain pointer exists, treat it as a durable route back to
+  the source trail, not as a fact to repeat.
 - If exact wording, sensitive facts, conflicts, stale claims, or high-risk
   action are involved, reopen source or use bounded evidence before claiming.
 
@@ -89,8 +91,9 @@ modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
 
 Start route-first:
 
-- Prefer ambient cards, Active Path Packets, active locks, route handles, or
-  progressive MCP tools before inventing broad manual searches.
+- Prefer ambient cards, Active Path Packets, active locks, route handles,
+  continuity domain pointers, or progressive MCP tools before inventing broad
+  manual searches.
 - Use `get_turn_context`, `recall_context`, `recall_deepen`, and
   `search_memory` when an agent client exposes them.
 - Use direct clean-source search when the user gives exact wording, no route
@@ -150,7 +153,7 @@ Open the narrowest reference that matches the current work:
   installation.
 - `references/retrieval-and-storage.md`: clean source schema, registry,
   hybrid/segment/RAG-lite search, cognitive map, concept graph,
-  vault/dashboard, Graphify bridge, export/import.
+  continuity domains, vault/dashboard, Graphify bridge, export/import.
 - `references/maintenance-and-operations.md`: health checks, checkpoints,
   rollout audit, retention reports, cold archives, thread slimming, operational
   safety.

@@ -689,6 +689,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 provenance_note = "wayfinding route"
             elif provenance == "source_backed_reopen":
                 provenance_note = "source-backed reopen candidate"
+            elif provenance == "continuity_domain_pointer":
+                provenance_note = "continuity domain pointer"
             else:
                 provenance_note = "navigation hint"
             source_note = ""
@@ -702,6 +704,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 source_note = " candidate-backed refs available; route guidance only, not evidence"
             elif action == "ignore_or_blocked":
                 source_note = " blocked or unsafe to use"
+            if provenance == "continuity_domain_pointer":
+                source_note += " pointer only; domain brief is not source truth"
             if visibility == "deep_archival_recall":
                 source_note += " deep archival requested"
             evidence_line = ""

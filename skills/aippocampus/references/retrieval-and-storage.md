@@ -171,6 +171,46 @@ Schema upgrades should be rebuildable. Do not put embeddings, DWM state, or
 debug provenance into `messages.jsonl`; use sidecars joined by `message_id`,
 `turn_id`, or `event_id`.
 
+## Continuity Domains
+
+Continuity domains are the Contract v1 source-trailed abstraction layer above
+clean source. The canonical contract lives at
+`docs/architecture/continuity-domains.md`; this reference owns only the runtime
+storage route.
+
+The event log is append-only and lives beside clean source:
+
+```text
+$AIPPOCAMPUS_REGISTRY_DIR/threads/<thread>/clean-source/continuity-domain-events.jsonl
+```
+
+Snapshots are rebuildable projections under the thread store:
+
+```text
+$AIPPOCAMPUS_REGISTRY_DIR/threads/<thread>/continuity-domain-snapshots/<snapshot_id>.json
+$AIPPOCAMPUS_REGISTRY_DIR/threads/<thread>/continuity-domain-snapshots/latest.json
+```
+
+`aippocampus_runtime.recall.continuity_domains` materializes supported domain
+and pathlet events, rejects unsupported or unresolved refs when clean source is
+available, and redacts local paths or secret-shaped values before public
+projection. The snapshot may contain `working_conclusion_short`, but default
+hook output must render only a `continuity_domain_pointer`; explicit
+`recall_deepen` or source reopen is required before factual claims.
+
+This is a runtime substrate, not an automatic memory author. Passive hooks do
+not create domain events. Explicit producers or future background jobs must
+write events under the Contract v1 rules before active recall or MCP can
+surface domain pointers.
+
+Macro tendencies in this layer are derived-only pointers. They are not
+runtime-writable facts, user profile facts, or replacements for clean source.
+
+Situation glyphs consume Dream, Journey, hexagram, cognitive-map,
+source-texture, navigation-potential, working-memory, and continuity-domain
+signals as `direction_only` atmosphere. They are path-order-sensitive and must
+stay lower authority than their source trail.
+
 ## Agent Self-Notes
 
 `aippocampus_runtime/source/agent_self_notes.py` owns the private

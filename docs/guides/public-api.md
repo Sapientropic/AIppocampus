@@ -423,6 +423,14 @@ opens the next source-backed layer when the handle is still fresh and
 reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
 instead of silently becoming evidence.
 
+Contract v1 continuity domains use this same progressive path. `recall_context`
+may return a `continuity_domain` route when a source-trailed working conclusion
+matches the cue; the route is still navigation only. `recall_deepen` may then
+open the domain brief and representative clean-source trail. Default context
+packets must not expose the domain working conclusion body. The current public
+surface is a runtime/read substrate: hooks and MCP read existing domain
+snapshots, but they do not automatically author durable domain events.
+
 `recall_diagnostic` mirrors the CLI why/why-not diagnostic for agent hosts. It
 returns cue hashes, reason codes, route ids, counts, safe next action, and
 `cannot_claim` boundaries. It is a read-only observability tool; it must not
