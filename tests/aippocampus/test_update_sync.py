@@ -64,6 +64,60 @@ def write_minimal_repo(repo: Path) -> None:
     (skill / "scripts" / "runtime.py").write_text("print('ok')\n", encoding="utf-8")
 
 
+def aippocampus_hook_commands_by_event(hooks_path: Path) -> dict[str, list[str]]:
+    data = json.loads(hooks_path.read_text(encoding="utf-8"))
+    result: dict[str, list[str]] = {}
+    for event, groups in (data.get("hooks") or {}).items():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            for handler in group.get("hooks") or []:
+                if not isinstance(handler, dict):
+                    continue
+                command = str(handler.get("command") or "")
+                if any(
+                    marker in command
+                    for marker in (
+                        "aippocampus_provider_bridge_hook.py",
+                        "aippocampus_runtime.hooks.prompt",
+                        "aippocampus_runtime.hooks.lifecycle",
+                    )
+                ):
+                    result.setdefault(str(event), []).append(command)
+    return result
+
+
+def append_direct_aippocampus_hook_duplicates(hooks_path: Path) -> None:
+    data = json.loads(hooks_path.read_text(encoding="utf-8"))
+    hooks = data.setdefault("hooks", {})
+    hooks.setdefault("UserPromptSubmit", []).append(
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": update_cli.install_prompt.command_for(),
+                    "timeout": update_cli.install_prompt.DEFAULT_HOOK_TIMEOUT_SECONDS,
+                }
+            ]
+        }
+    )
+    for event in update_cli.HOOK_EVENTS:
+        hooks.setdefault(event, []).append(
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": update_cli.install_lifecycle.command_for(),
+                        "timeout": update_cli.install_lifecycle.DEFAULT_TIMEOUT_SECONDS,
+                    }
+                ]
+            }
+        )
+    hooks_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 class UpdateSyncTests(unittest.TestCase):
     def test_json_error_output_does_not_echo_raw_exception_text(self) -> None:
         stdout = StringIO()
@@ -520,6 +574,138 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(payload["surfaces"]["hooks"]["status"], "current")
         self.assertTrue(payload["surfaces"]["hooks"]["provider_key_bridge_installed"])
         self.assertNotIn(fixture_value, json.dumps(payload, ensure_ascii=False))
+
+    def test_update_status_reports_bridge_and_direct_duplicate_execution(self) -> None:
+        from aippocampus_runtime.ops import provider_key_bridge
+
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            dotenv = root / "provider.env"
+            write_minimal_repo(repo)
+            provider_env_var = "PROVIDER_UPDATE_BRIDGE_DUPLICATE"
+            fixture_value = "sk-FAKE_TEST_UPDATE_PROVIDER_BRIDGE_DUPLICATE_1234567890"
+            dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
+            provider_key_bridge.apply_provider_key_bridge(
+                target="codex-hooks",
+                source="explicit-dotenv",
+                provider_env_var=provider_env_var,
+                credential_dotenv=dotenv,
+                codex_home_path=codex_home,
+            )
+            append_direct_aippocampus_hook_duplicates(hooks_json)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        hooks = payload["surfaces"]["hooks"]
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(hooks["status"], "duplicate_effective_hook_execution")
+        self.assertTrue(hooks["provider_key_bridge_installed"])
+        self.assertIn("duplicate_effective_hook_execution", hooks["reason_codes"])
+        self.assertIn("aippocampus update apply --surface hooks", hooks["recommended_actions"])
+        duplicate_events = {
+            row["event"] for row in hooks["duplicate_effective_hook_execution"]
+        }
+        self.assertEqual(
+            duplicate_events,
+            {"UserPromptSubmit", "SessionStart", "Stop", "PreCompact", "PostCompact"},
+        )
+        for row in hooks["duplicate_effective_hook_execution"]:
+            self.assertEqual(set(row["handler_kinds"]), {"bridge", "direct"})
+        self.assertIn("hooks", payload["summary"]["needs_action"])
+        self.assertNotIn(fixture_value, json.dumps(payload, ensure_ascii=False))
+
+    def test_hooks_apply_normalizes_provider_bridge_and_direct_duplicates(self) -> None:
+        from aippocampus_runtime.ops import provider_key_bridge
+
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            dotenv = root / "provider.env"
+            write_minimal_repo(repo)
+            provider_env_var = "PROVIDER_UPDATE_BRIDGE_NORMALIZE"
+            fixture_value = "sk-FAKE_TEST_UPDATE_PROVIDER_BRIDGE_NORMALIZE_1234567890"
+            dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
+            provider_key_bridge.apply_provider_key_bridge(
+                target="codex-hooks",
+                source="explicit-dotenv",
+                provider_env_var=provider_env_var,
+                credential_dotenv=dotenv,
+                codex_home_path=codex_home,
+            )
+            append_direct_aippocampus_hook_duplicates(hooks_json)
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "hooks",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+            commands = aippocampus_hook_commands_by_event(hooks_json)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["applied_surfaces"][0]["ok"])
+        self.assertNotIn("hooks", payload["post_status"]["needs_action"])
+        self.assertEqual(
+            set(commands),
+            {"UserPromptSubmit", "SessionStart", "Stop", "PreCompact", "PostCompact"},
+        )
+        for event, event_commands in commands.items():
+            self.assertEqual(len(event_commands), 1, event)
+            self.assertIn("aippocampus_provider_bridge_hook.py", event_commands[0])
+            self.assertNotIn("aippocampus_runtime.hooks.prompt", event_commands[0])
+            self.assertNotIn("aippocampus_runtime.hooks.lifecycle", event_commands[0])
+        self.assertNotIn(fixture_value, json.dumps(payload, ensure_ascii=False))
+
+    def test_provider_bridge_apply_replaces_existing_direct_hooks(self) -> None:
+        from aippocampus_runtime.ops import provider_key_bridge
+
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            dotenv = root / "provider.env"
+            provider_env_var = "PROVIDER_UPDATE_BRIDGE_DIRECT_FIRST"
+            fixture_value = "sk-FAKE_TEST_UPDATE_PROVIDER_BRIDGE_DIRECT_FIRST_1234567890"
+            dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+
+            report = provider_key_bridge.apply_provider_key_bridge(
+                target="codex-hooks",
+                source="explicit-dotenv",
+                provider_env_var=provider_env_var,
+                credential_dotenv=dotenv,
+                codex_home_path=codex_home,
+            )
+            commands = aippocampus_hook_commands_by_event(hooks_json)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(
+            set(commands),
+            {"UserPromptSubmit", "SessionStart", "Stop", "PreCompact", "PostCompact"},
+        )
+        for event, event_commands in commands.items():
+            self.assertEqual(len(event_commands), 1, event)
+            self.assertIn("aippocampus_provider_bridge_hook.py", event_commands[0])
+            self.assertNotIn("aippocampus_runtime.hooks.prompt", event_commands[0])
+            self.assertNotIn("aippocampus_runtime.hooks.lifecycle", event_commands[0])
+        self.assertNotIn(fixture_value, json.dumps(report, ensure_ascii=False))
 
     def test_plugin_apply_rebuilds_staged_package_without_hook_or_cache_side_effects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
