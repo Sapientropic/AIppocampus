@@ -454,8 +454,14 @@ class OnboardCodexTests(unittest.TestCase):
             result["data"]["actions"]["query_pattern_routes"]["metrics"]["live_llm_call_count"],
             0,
         )
+        query_route_metrics = result["data"]["actions"]["query_pattern_routes"]["metrics"]
+        self.assertGreaterEqual(query_route_metrics["route_write_count"], 2)
         self.assertEqual(
-            result["data"]["actions"]["query_pattern_routes"]["metrics"]["route_write_count"],
+            query_route_metrics["alias_source_route_counts"]["registry_metadata"],
+            1,
+        )
+        self.assertGreaterEqual(
+            query_route_metrics["alias_source_route_counts"]["reviewed_semantic"],
             1,
         )
         self.assertTrue(
@@ -466,11 +472,18 @@ class OnboardCodexTests(unittest.TestCase):
 
         public = onboard.public_onboarding_result(result)
         encoded_public = json.dumps(public, ensure_ascii=False)
+        public_query_routes = public["data"]["actions"]["query_pattern_routes"]
+        self.assertGreaterEqual(public_query_routes["route_write_count"], 2)
         self.assertEqual(
-            public["data"]["actions"]["query_pattern_routes"]["route_write_count"],
+            public_query_routes["alias_source_route_counts"]["registry_metadata"],
+            1,
+        )
+        self.assertGreaterEqual(
+            public_query_routes["alias_source_route_counts"]["reviewed_semantic"],
             1,
         )
         self.assertNotIn("query_aliases", encoded_public)
+        self.assertNotIn("外置小海马", encoded_public)
         self.assertNotIn(str(self.root), encoded_public)
 
     def test_cli_json_uses_public_onboarding_projection(self) -> None:

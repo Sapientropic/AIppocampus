@@ -357,10 +357,21 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   owns the deterministic `query_pattern_routes.jsonl` writer/reader and the
   foreground-safe packet selector consumed by the prompt hook as scent. The
   writer filters stale source-generation digests, invalid local aliases, and
-  privacy-blocked rows before publication. Generated aliases are navigation
-  handles only and require source reopen before any factual claim. This slice
-  still does not prove live DeepSeek alias quality, default registry/import
-  writes, or latency savings.
+  privacy-blocked rows before publication. Default publication includes
+  deterministic registry/import metadata routes and active reviewed semantic
+  trigger aliases from `semantic_triggers.jsonl`. Reviewed seed triggers
+  without explicit source refs may derive bounded registry route handles from
+  matching public registry metadata, and the publisher reserves route budget for
+  reviewed semantic rows so cheap metadata rows cannot starve natural aliases.
+  Route rows may carry a local `alias_source` such as `registry_metadata`,
+  `reviewed_semantic`, `local_offline_generated`, or
+  `external_model_generated`; public packets, Observatory reports, and hook
+  debug payloads may expose only aggregate source counts and hit-rate
+  diagnostics, never alias text. Generated aliases are navigation handles only
+  and require source reopen before any factual claim. Current fixtures cover the
+  gap between registry-only canonical names and reviewed/generated natural or
+  multilingual aliases, but they still do not prove live DeepSeek alias quality,
+  scheduler adoption, or latency savings.
 - `aippocampus_runtime.dream.real_history_eval` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,

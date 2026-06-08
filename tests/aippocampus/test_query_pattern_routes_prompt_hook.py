@@ -59,6 +59,7 @@ class QueryPatternRoutesPromptHookTests(unittest.TestCase):
         routes.write_text(
             json.dumps(
                 {
+                    "alias_source": "reviewed_semantic",
                     "query_aliases": [
                         private_alias,
                         fake_test_windows_path("query-pattern-source.jsonl"),
@@ -111,6 +112,12 @@ class QueryPatternRoutesPromptHookTests(unittest.TestCase):
         self.assertEqual(
             public["hot_path_funnel"]["query_pattern_routes"]["selected_count"],
             1,
+        )
+        self.assertEqual(
+            public["hot_path_funnel"]["query_pattern_routes"]["diagnostics"][
+                "selected_count_by_alias_source"
+            ],
+            {"reviewed_semantic": 1},
         )
         self.assertIn("Ambient recall scent", context)
         self.assertNotIn(private_alias, encoded_public + encoded_context)

@@ -22,11 +22,19 @@ QUERY_PATTERN_DIAGNOSTIC_KEYS = (
     "cache_hit_count",
     "cache_miss_count",
     "selected_count",
+    "cache_hit_count_by_alias_source",
+    "selected_count_by_alias_source",
+    "registry_alias_hit_rate",
+    "generated_alias_hit_rate",
+    "registry_to_generated_alias_lift",
+    "multilingual_alias_route_hit_count",
+    "nickname_miss_count",
     "stale_suppressed_count",
     "privacy_suppressed_count",
     "low_confidence_suppressed_count",
     "missing_source_ref_count",
     "live_llm_call_count",
+    "alias_text_publicly_serialized",
 )
 
 

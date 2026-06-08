@@ -19,6 +19,7 @@ from aippocampus_runtime.warm_ambient.query_pattern_routes import (  # noqa: E40
     load_query_pattern_routes,
     publish_query_pattern_routes,
     publish_registry_query_pattern_routes,
+    query_pattern_routes_report,
     select_query_pattern_packet,
 )
 
@@ -343,6 +344,328 @@ class QueryPatternEnrichmentTests(unittest.TestCase):
         self.assertNotIn("上次那个海马体预热", encoded_report)
         self.assertNotIn("E:\\", encoded_report)
         self.assertNotIn("secret.txt", encoded_report)
+
+    def test_registry_sidecar_projects_reviewed_semantic_triggers_into_query_pattern_routes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = root / "registry"
+            clean_source = registry_dir / "threads" / "session-aippocampus" / "clean-source"
+            clean_source.mkdir(parents=True)
+            (clean_source / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "source_id": "source_aippocampus",
+                        "source_transcript_size": 2048,
+                        "source_transcript_mtime": 1_800_000_000,
+                        "message_count": 3,
+                        "turn_count": 2,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (registry_dir / "semantic_triggers.jsonl").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_semantic_trigger",
+                        "status": "active",
+                        "trigger_id": "reviewed-aippo",
+                        "aliases": ["外置小海马", "hook worker handoff"],
+                        "confidence": 0.91,
+                        "source_refs": [
+                            {
+                                "thread_key": "session:aippocampus",
+                                "message_id": "m-reviewed",
+                                "path": "E:\\private\\semantic-trigger.jsonl",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry = {
+                "threads": [
+                    {
+                        "thread_key": "session:aippocampus",
+                        "title": "AIppocampus",
+                        "project_label": "AIppocampus",
+                        "clean_message_count": 3,
+                        "clean_turn_count": 2,
+                        "paths": {"clean_source_dir": str(clean_source)},
+                    }
+                ]
+            }
+
+            report = publish_registry_query_pattern_routes(registry, registry_dir=registry_dir)
+            routes = load_query_pattern_routes(registry_dir / "query_pattern_routes.jsonl")
+            registry_routes = [
+                route for route in routes if route.get("alias_source") == "registry_metadata"
+            ]
+            natural_prompt = "我们继续外置小海马那个 hook worker handoff"
+            registry_packet = select_query_pattern_packet(
+                natural_prompt,
+                registry_routes,
+                now_unix=1_800_000_120,
+            )
+            reviewed_packet = select_query_pattern_packet(
+                natural_prompt,
+                routes,
+                now_unix=1_800_000_120,
+            )
+
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["registry_metadata"], 1)
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["reviewed_semantic"], 1)
+        self.assertEqual(registry_packet["decision"], "skip")
+        self.assertEqual(reviewed_packet["decision"], "scent")
+        self.assertEqual(
+            reviewed_packet["diagnostics"]["selected_count_by_alias_source"],
+            {"reviewed_semantic": 1},
+        )
+        self.assertEqual(reviewed_packet["candidate_refs"][0]["thread_key"], "session:aippocampus")
+        encoded_public = json.dumps(
+            {"report": report, "packet": reviewed_packet},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        self.assertNotIn("外置小海马", encoded_public)
+        self.assertNotIn("hook worker handoff", encoded_public)
+        self.assertNotIn("E:\\", encoded_public)
+
+    def test_reviewed_semantic_trigger_routes_are_not_starved_by_registry_route_cap(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_dir = Path(tmp) / "registry"
+            registry_dir.mkdir()
+            (registry_dir / "semantic_triggers.jsonl").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_semantic_trigger",
+                        "status": "active",
+                        "trigger_id": "reviewed-aippo",
+                        "aliases": ["外置小海马"],
+                        "confidence": 0.91,
+                        "source_refs": [{"thread_key": "session:0", "message_id": "m-reviewed"}],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry = {
+                "threads": [
+                    {
+                        "thread_key": f"session:{index}",
+                        "title": f"Canonical project {index}",
+                        "project_label": "AIppocampus",
+                    }
+                    for index in range(4)
+                ]
+            }
+
+            report = publish_registry_query_pattern_routes(
+                registry,
+                registry_dir=registry_dir,
+                max_routes=2,
+            )
+            routes = load_query_pattern_routes(registry_dir / "query_pattern_routes.jsonl")
+
+        self.assertLessEqual(report["metrics"]["route_write_count"], 2)
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["reviewed_semantic"], 1)
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["registry_metadata"], 1)
+        self.assertEqual(
+            select_query_pattern_packet("继续外置小海马", routes)["decision"],
+            "scent",
+        )
+
+    def test_reviewed_seed_trigger_without_source_refs_derives_registry_route_handles(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_dir = Path(tmp) / "registry"
+            registry_dir.mkdir()
+            (registry_dir / "semantic_triggers.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_semantic_trigger",
+                        "trigger_id": "seed_aippocampus_external_hippocampus",
+                        "status": "active",
+                        "source": "reviewed_seed",
+                        "title": "AIppocampus external hippocampus recall",
+                        "concept": "external hippocampus",
+                        "aliases": ["外置小海马"],
+                        "confidence": 0.88,
+                        "reviewed_seed_rationale": (
+                            "Public AIppocampus architecture vocabulary for scent-only routing."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry = {
+                "threads": [
+                    {
+                        "thread_key": "session:aippocampus",
+                        "title": "AIppocampus",
+                        "project_label": "AIppocampus",
+                    }
+                ]
+            }
+
+            report = publish_registry_query_pattern_routes(registry, registry_dir=registry_dir)
+            routes = load_query_pattern_routes(registry_dir / "query_pattern_routes.jsonl")
+            packet = select_query_pattern_packet("继续外置小海马", routes)
+
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["reviewed_semantic"], 1)
+        self.assertEqual(packet["decision"], "scent")
+        self.assertEqual(packet["candidate_refs"][0]["thread_key"], "session:aippocampus")
+        encoded_public = json.dumps({"report": report, "packet": packet}, ensure_ascii=False)
+        self.assertNotIn("外置小海马", encoded_public)
+
+    def test_reviewed_seed_registry_derivation_keeps_project_match_before_alias_cap(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_dir = Path(tmp) / "registry"
+            registry_dir.mkdir()
+            (registry_dir / "semantic_triggers.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_semantic_trigger",
+                        "trigger_id": "seed_aippocampus_prompt_hook_gate",
+                        "status": "active",
+                        "source": "reviewed_seed",
+                        "title": "Prompt hook recall gate and project scope",
+                        "concept": "prompt recall gate",
+                        "aliases": [
+                            "prompt hook",
+                            "UserPromptSubmit",
+                            "recall gate",
+                            "scent-only",
+                            "scent",
+                            "project-scoped",
+                            "project scope",
+                            "cwd",
+                            "same-name entity trap",
+                            "semantic gate",
+                            "foreground hook",
+                            "hook worker handoff",
+                        ],
+                        "confidence": 0.87,
+                        "reviewed_seed_rationale": (
+                            "These aliases are public runtime-boundary terms for "
+                            "AIppocampus hook routing."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry = {
+                "threads": [
+                    {
+                        "thread_key": "session:aippocampus",
+                        "title": "AIppocampus",
+                        "project_label": "AIppocampus",
+                    }
+                ]
+            }
+
+            publish_registry_query_pattern_routes(registry, registry_dir=registry_dir)
+            routes = load_query_pattern_routes(registry_dir / "query_pattern_routes.jsonl")
+            packet = select_query_pattern_packet("hook worker handoff", routes)
+
+        self.assertEqual(packet["decision"], "scent")
+        self.assertEqual(
+            packet["diagnostics"]["selected_count_by_alias_source"],
+            {"reviewed_semantic": 1},
+        )
+
+    def test_generated_alias_quality_slice_hits_natural_multilingual_nickname_without_public_aliases(
+        self,
+    ) -> None:
+        registry_only_routes = [
+            {
+                "query_pattern_route_id": "registry-aippocampus",
+                "alias_source": "registry_metadata",
+                "query_aliases": ["AIppocampus"],
+                "source_generation_digest": "gen-aippocampus-v1",
+                "thread_key_hash": "thread_aippocampus",
+                "source_refs": [{"thread_key": "session:aippocampus", "message_id": "m1"}],
+                "created_unix": 1_800_000_000,
+                "ttl_seconds": 600,
+                "confidence": 0.62,
+            }
+        ]
+        reviewed_routes = [
+            *registry_only_routes,
+            {
+                "query_pattern_route_id": "reviewed-aippocampus",
+                "alias_source": "reviewed_semantic",
+                "query_aliases": ["外置小海马", "hook worker handoff"],
+                "source_generation_digest": "gen-aippocampus-v1",
+                "thread_key_hash": "thread_aippocampus",
+                "source_refs": [{"thread_key": "session:aippocampus", "message_id": "m2"}],
+                "created_unix": 1_800_000_000,
+                "ttl_seconds": 600,
+                "confidence": 0.92,
+            },
+        ]
+
+        natural_prompt = "我们继续外置小海马那个 hook worker handoff"
+        registry_packet = select_query_pattern_packet(
+            natural_prompt,
+            registry_only_routes,
+            now_unix=1_800_000_120,
+        )
+        reviewed_packet = select_query_pattern_packet(
+            natural_prompt,
+            reviewed_routes,
+            now_unix=1_800_000_120,
+        )
+        report = query_pattern_routes_report(reviewed_routes, now_unix=1_800_000_120)
+
+        self.assertEqual(registry_packet["decision"], "skip")
+        self.assertEqual(registry_packet["diagnostics"]["nickname_miss_count"], 1)
+        self.assertEqual(reviewed_packet["decision"], "scent")
+        self.assertEqual(reviewed_packet["support_level"], "source_required")
+        self.assertEqual(
+            reviewed_packet["diagnostics"]["cache_hit_count_by_alias_source"],
+            {"reviewed_semantic": 1},
+        )
+        self.assertEqual(
+            reviewed_packet["diagnostics"]["selected_count_by_alias_source"],
+            {"reviewed_semantic": 1},
+        )
+        self.assertEqual(reviewed_packet["diagnostics"]["registry_alias_hit_rate"], 0.0)
+        self.assertEqual(reviewed_packet["diagnostics"]["generated_alias_hit_rate"], 1.0)
+        self.assertEqual(
+            reviewed_packet["diagnostics"]["registry_to_generated_alias_lift"],
+            1.0,
+        )
+        self.assertEqual(reviewed_packet["diagnostics"]["multilingual_alias_route_hit_count"], 1)
+        self.assertFalse(reviewed_packet["diagnostics"]["alias_text_publicly_serialized"])
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["registry_metadata"], 1)
+        self.assertEqual(report["metrics"]["alias_source_route_counts"]["reviewed_semantic"], 1)
+        self.assertEqual(report["metrics"]["generated_alias_route_count"], 1)
+        self.assertFalse(report["privacy_boundary"]["query_alias_text_serialized"])
+
+        public_encoded = json.dumps(
+            {"packet": reviewed_packet, "report": report},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        self.assertNotIn("外置小海马", public_encoded)
+        self.assertNotIn("hook worker handoff", public_encoded)
 
     def test_query_pattern_selector_suppresses_privacy_blocked_route_rows(self) -> None:
         packet = select_query_pattern_packet(

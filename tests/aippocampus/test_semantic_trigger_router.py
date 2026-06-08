@@ -41,6 +41,9 @@ class SemanticTriggerRouterTests(unittest.TestCase):
 
         self.assertEqual(seed.name, "reviewed-semantic-triggers.seed.jsonl")
         self.assertTrue(seed.exists(), seed)
+        seed_text = seed.read_text(encoding="utf-8")
+        self.assertIn("外置小海马", seed_text)
+        self.assertIn("hook worker handoff", seed_text)
 
     def test_hook_trigger_candidate_becomes_semantic_trigger(self) -> None:
         self.write_candidates(
