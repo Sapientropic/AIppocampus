@@ -60,14 +60,26 @@ uvx aippocampus --help
 Use this command for a read-only local onboarding/status check:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider auto --status --format json
 ```
 
-Use this command only after the user agrees to register local Codex history:
+This is a provider-matrix readiness probe. It may list Codex, Claude Code, and
+generic JSONL providers, but it does not register all detected providers.
+
+Use one of these commands only after the user agrees to register selected local
+history:
 
 ```sh
 uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider claude-code --dry-run --format json
+uvx aippocampus onboard --provider claude-code --format json
+uvx aippocampus import conversation --format generic-jsonl --input <path> --json
 ```
+
+Codex is the complete prompt/lifecycle hook path today. Claude Code support is
+local-history onboarding plus MCP/project-skill setup, not AIppocampus Claude
+hooks; see docs/guides/ecosystem-integration-matrix.md and
+docs/guides/claude-code-mcp.md.
 
 ## MCP
 

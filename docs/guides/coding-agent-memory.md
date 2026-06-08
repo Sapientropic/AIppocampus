@@ -39,15 +39,22 @@ collaboration remain separate tracks with their own evidence boundaries.
 The current narrow lane can:
 
 - inspect the packaged CLI without cloning the repository;
-- check local Codex onboarding status without registering new history;
-- register local Codex history after explicit consent, then build clean-source
-  and search artifacts;
+- check the local provider matrix without registering new history;
+- register selected local provider history after explicit consent, then build
+  clean-source and search artifacts;
 - search old conversation source and return source-backed snippets;
 - expose read-mostly MCP tools such as `search_memory`, `recall_context`,
   `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`,
   `register_thread`, `sync_status`, and `memory_health`;
 - use progressive recall and repo-familiarity packets as navigation that still
   requires source reopen before specific claims.
+
+Codex has the most complete host path today: local history onboarding,
+MCP/progressive recall, plugin packaging, and opt-in prompt/lifecycle hooks.
+Claude Code has local-history onboarding plus the MCP/project-skill path; it
+does not have AIppocampus Claude hook support. Keep the precise support table in
+[`ecosystem-integration-matrix.md`](ecosystem-integration-matrix.md), with
+Claude Code setup details in [`claude-code-mcp.md`](claude-code-mcp.md).
 
 The important product boundary is that source is evidence. Summaries, semantic
 labels, hook scents, route handles, benchmark metrics, and familiarity cards are
@@ -83,17 +90,22 @@ Start with the public package path. These commands work without a clone when
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus onboard --provider codex --status
+uvx aippocampus onboard --provider auto --status
 ```
 
 The status check is read-only. It may report that no local provider history is
-registered yet; that is still a valid result.
+registered yet, or that several providers are detectable; both are valid
+results. `auto --status` is a provider-matrix probe, not consent to ingest
+every provider.
 
-After explicit user consent to register local Codex history, run the first real
-source-backed recall:
+After explicit user consent, choose one provider-specific write path and run the
+first real source-backed recall:
 
 ```sh
 uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider claude-code --dry-run
+uvx aippocampus onboard --provider claude-code
+uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus search "a distinctive old phrase"
 ```
 
