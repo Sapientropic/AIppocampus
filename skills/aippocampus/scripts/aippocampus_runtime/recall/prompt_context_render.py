@@ -12,6 +12,16 @@ from aippocampus_runtime.recall.prompt_context_diagnostics import (
     legacy_candidate_summary_suppressed,
     route_delivery_debug_summary,
 )
+from aippocampus_runtime.recall.prompt_foreground_budget import (
+    ambient_cards as _ambient_cards,
+)
+from aippocampus_runtime.recall.prompt_foreground_budget import (
+    compact_weak_scent_lines,
+    foreground_context_debug_summary,
+    has_direction_with_ref_card,
+    is_weak_direction_only_scent,
+    truncate_preserving_lines,
+)
 from aippocampus_runtime.recall.prompt_recall_hot_path_debug import hot_path_debug_summary
 
 MAX_CONTEXT_CHARS = 1800
@@ -281,6 +291,7 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     upstream into query generation; that would silently change recall behavior.
     """
 
+    foreground_context = context_for_hook(result) or ""
     payload = {
         "decision": result.get("decision"),
         "score": result.get("score"),
@@ -297,6 +308,10 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
         ),
         "scent_threshold_policy": scent_threshold_debug_summary(
             result.get("scent_threshold_policy")
+        ),
+        "foreground_context": foreground_context_debug_summary(
+            result,
+            context=foreground_context,
         ),
         "elapsed_ms": result.get("elapsed_ms"),
     }
@@ -475,18 +490,6 @@ def _has_foregroundable_ambient_card(result: dict[str, Any]) -> bool:
             return True
     return False
 
-
-def _has_direction_with_ref_card(result: dict[str, Any]) -> bool:
-    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
-    cards = ambient.get("cards") if isinstance(ambient, dict) else []
-    if not isinstance(cards, list):
-        return False
-    return any(
-        isinstance(card, dict) and str(card.get("action_grammar") or "") == "direction_with_ref"
-        for card in cards
-    )
-
-
 def _evidence_boundary_line(evidence_cards: list[dict[str, Any]]) -> str:
     actions = {str(card.get("action_grammar") or "") for card in evidence_cards}
     if "source_open" in actions:
@@ -516,6 +519,13 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
     decision = result.get("decision")
     if decision == "skip" and not _has_foregroundable_ambient_card(result):
         return None
+    if is_weak_direction_only_scent(result):
+        if legacy_candidate_summary_suppressed(result) and not _ambient_cards(result):
+            return None
+        return truncate_preserving_lines(
+            "\n".join(compact_weak_scent_lines(result)),
+            max_chars,
+        )
     lines: list[str] = []
     if decision == "evidence":
         lines.append(
@@ -535,7 +545,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 )
         lines.append(_evidence_boundary_line(evidence_cards))
     else:
-        has_direction_with_ref = _has_direction_with_ref_card(result)
+        has_direction_with_ref = has_direction_with_ref_card(result)
         if _fresh_packet_source_required(result):
             lines.append(
                 "Ambient recall route (aippocampus source_required). Reopen source before facts:"
