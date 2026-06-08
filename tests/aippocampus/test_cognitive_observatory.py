@@ -253,6 +253,103 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertNotIn("E:\\", encoded)
         self.assertNotIn("source.jsonl", encoded)
 
+    def test_observatory_reports_cognitive_load_calibration_without_source_hash_samples(
+        self,
+    ) -> None:
+        report = cognitive_observatory.cognitive_observatory_readout(
+            cognitive_load_calibration={
+                "kind": "aippocampus_cognitive_load_private_history_calibration",
+                "status": "measured_public_safe_aggregate",
+                "input_surface": {
+                    "thread_count_scanned": 2,
+                    "threads_with_signal_count": 1,
+                    "message_rows_scanned": 8,
+                    "event_rows_scanned": 13,
+                },
+                "extraction_metrics": {
+                    "signal_event_count": 3,
+                    "message_signal_event_count": 1,
+                    "behavior_signal_event_count": 2,
+                },
+                "sidecar_metrics": {
+                    "entry_count": 3,
+                    "max_load_boost": 0.16,
+                    "load_weight_decay_coverage": 1.0,
+                    "load_weight_false_positive_rate": (
+                        "PRIVATE_RATE_TEXT_MUST_NOT_SURFACE with spaces"
+                    ),
+                    "caution_hint_useful_rate": None,
+                    "overpersonalization_from_load_signal_count": 0,
+                },
+                "sidecar_projection": {
+                    "load_bucket_counts": {
+                        "medium": 1,
+                        "low": 2,
+                        "PRIVATE BUCKET TEXT MUST NOT SURFACE": 5,
+                    },
+                    "reason_code_counts": {
+                        "failed_test": 2,
+                        "user_correction": 1,
+                        "PRIVATE REASON TEXT MUST NOT SURFACE": 4,
+                    },
+                    "source_ref_key_sample": [
+                        "sha256:PRIVATE_SOURCE_HASH_SAMPLE_MUST_NOT_SURFACE"
+                    ],
+                },
+                "calibration_report": {
+                    "issue_readouts": {
+                        "github_575": {
+                            "private_real_history_calibration": (
+                                "measured_public_safe_aggregate"
+                            ),
+                            "live_hook_capture": (
+                                "PRIVATE_LIVE_HOOK_TEXT_MUST_NOT_SURFACE with spaces"
+                            ),
+                            "host_timing_quality": "not_measured",
+                            "closeout_eligible": False,
+                        }
+                    },
+                    "cannot_claim": [
+                        "user_visible_recall_improvement",
+                        "PRIVATE_CANNOT_CLAIM_TEXT_MUST_NOT_SURFACE with spaces",
+                    ],
+                },
+                "raw_source_text": "PRIVATE_COGNITIVE_LOAD_TEXT_SENTINEL",
+                "local_path": "E:\\private\\load\\source.jsonl",
+            }
+        )
+        load = report["cognitive_load_calibration"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("cognitive_load_calibration", report["surfaces"])
+        self.assertIn(575, report["issues"])
+        self.assertEqual(report["metrics"]["cognitive_load_signal_event_count"], 3)
+        self.assertEqual(load["kind"], "aippocampus_observatory_cognitive_load_calibration_summary")
+        self.assertEqual(load["metrics"]["thread_count_scanned"], 2)
+        self.assertEqual(load["metrics"]["sidecar_entry_count"], 3)
+        self.assertEqual(load["reason_code_counts"]["failed_test"], 2)
+        self.assertEqual(
+            load["issue_readouts"]["github_575"]["private_real_history_calibration"],
+            "measured_public_safe_aggregate",
+        )
+        self.assertEqual(load["issue_readouts"]["github_575"]["live_hook_capture"], "not_run")
+        self.assertFalse(load["issue_readouts"]["github_575"]["closeout_eligible"])
+        self.assertTrue(load["contract"]["load_is_routing_metadata_only"])
+        self.assertTrue(load["contract"]["affect_or_personality_truth_blocked"])
+        self.assertIn(
+            "cognitive_load_summary_proves_user_visible_lift",
+            load["cannot_claim"],
+        )
+        self.assertNotIn("PRIVATE_SOURCE_HASH_SAMPLE_MUST_NOT_SURFACE", encoded)
+        self.assertNotIn("PRIVATE_COGNITIVE_LOAD_TEXT_SENTINEL", encoded)
+        self.assertNotIn("PRIVATE_RATE_TEXT_MUST_NOT_SURFACE", encoded)
+        self.assertNotIn("PRIVATE BUCKET TEXT MUST NOT SURFACE", encoded)
+        self.assertNotIn("PRIVATE REASON TEXT MUST NOT SURFACE", encoded)
+        self.assertNotIn("PRIVATE_LIVE_HOOK_TEXT_MUST_NOT_SURFACE", encoded)
+        self.assertNotIn("PRIVATE_CANNOT_CLAIM_TEXT_MUST_NOT_SURFACE", encoded)
+        self.assertNotIn("E:\\", encoded)
+        self.assertNotIn("source.jsonl", encoded)
+
     def test_observatory_static_html_is_public_safe_and_read_only(self) -> None:
         report = cognitive_observatory.fixture_cognitive_observatory_readout()
         html = cognitive_observatory.render_html(report)
@@ -377,6 +474,50 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("query_pattern_routes", payload["surfaces"])
         self.assertEqual(payload["query_pattern_routes"]["metrics"]["active_route_count"], 1)
         self.assertNotIn("内部 canonical", result.stdout)
+
+    def test_cli_facade_embeds_cognitive_load_calibration_json(self) -> None:
+        report_path = REPO_ROOT / ".tmp" / "test-cognitive-load-observatory.json"
+        try:
+            report_path.parent.mkdir(exist_ok=True)
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_cognitive_load_private_history_calibration",
+                        "status": "measured_public_safe_aggregate",
+                        "input_surface": {"thread_count_scanned": 1},
+                        "extraction_metrics": {"signal_event_count": 4},
+                        "sidecar_metrics": {"entry_count": 4, "max_load_boost": 0.16},
+                        "sidecar_projection": {
+                            "source_ref_key_sample": [
+                                "sha256:PRIVATE_CLI_SAMPLE_MUST_NOT_SURFACE"
+                            ]
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = facade.run_command(
+                [
+                    "observatory",
+                    "--cognitive-load-calibration",
+                    str(report_path),
+                    "--json",
+                ],
+                capture_output=True,
+            )
+        finally:
+            try:
+                report_path.unlink()
+            except FileNotFoundError:
+                pass
+
+        self.assertTrue(result.ok, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertIn("cognitive_load_calibration", payload["surfaces"])
+        self.assertEqual(payload["metrics"]["cognitive_load_signal_event_count"], 4)
+        self.assertNotIn("PRIVATE_CLI_SAMPLE_MUST_NOT_SURFACE", result.stdout)
 
 
 if __name__ == "__main__":
