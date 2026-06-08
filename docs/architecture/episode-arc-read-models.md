@@ -2,10 +2,13 @@
 
 Role: active design.
 
-Status: first deterministic coding slice implemented in
-`aippocampus_runtime/coding/episode_arcs.py`; broader Episode/Arc coverage
-remains an active owner track and should not be claimed complete from this
-slice alone.
+Status: deterministic coding slices implemented in
+`aippocampus_runtime/coding/episode_arcs.py` and
+`aippocampus_runtime/coding/sequence_reopen.py`; aggregate private-history
+adjudication is implemented in
+`aippocampus_runtime/coding/episode_arc_private_adjudication.py`. Broader
+Episode/Arc coverage remains an active owner track and should not be claimed
+complete from these slices alone.
 
 Episode/Arc read-models preserve ordered local causality that is easy to lose
 in flattened memory: tried route, failed check, user correction, accepted
@@ -107,12 +110,22 @@ the caller and reports `complete`, `partial`, `unresolved`, or
 reopen; gappy, partial, unresolved, or invalid packets may only ask or refresh
 sources. Raw source text is never serialized in this public-safe route plan.
 
+The aggregate private-history adjudication helper is an owner diagnostic for
+#663. `aippocampus episode-arcs --json` scans local registry clean-source
+messages/events, extracts source-backed coding decision candidates, pairs
+rejected-route decisions with nearby failed behavior events when available, and
+reports only aggregate counts and buckets. It does not serialize raw source
+text, raw command text, source refs, source-ref hash samples, event ids, thread
+ids, local paths, or registry paths. The first dated evidence slice is
+`docs/evidence/episode-arc-private-history-adjudication-2026-06-08.md`.
+
 ## Cannot Claim
 
 This slice cannot claim:
 
 - the broader #663 Episode/Arc owner track is complete;
 - live private-history behavior lift;
+- private-history generality beyond the aggregate cohort;
 - Journey instantiation quality;
 - current code or user intent validity without source reopen;
 - host-facing sequence packets as source evidence by themselves;

@@ -167,6 +167,7 @@ The CLI contract applies to documented operator commands, especially:
 - `python -m aippocampus_runtime.sync.encrypted.admin key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
 - `aippocampus hooks prompt status|install|uninstall`
 - `aippocampus hooks lifecycle status|install|uninstall`
+- `aippocampus episode-arcs --json`
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
@@ -249,6 +250,13 @@ For these commands:
   factual claims, mutate owner surfaces, or control foreground hooks. The
   `control_authority_audit` block counts attempted activation/mutation requests
   as blocked diagnostics; it is not an API for applying those actions.
+- `episode-arcs --json` emits an aggregate-only, private-history Episode/Arc
+  adjudication readout for #663. It scans local clean-source messages/events and
+  reports counts, buckets, and claim boundaries for rejected-route chains. It
+  must not emit source text, raw command text, source refs, source-ref hash
+  samples, event ids, thread ids, local paths, or registry paths. Sequence
+  packets remain navigation-only and current validity still requires source
+  reopen.
 - Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
   exposes a public-safe audit projection for the latest prompt hook run. Stable
   automation fields are `status`, `source`, `privacy_boundary`, and

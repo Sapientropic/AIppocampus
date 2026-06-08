@@ -60,6 +60,10 @@ COMMANDS = {
         "cognitive_observatory.py",
         "aippocampus_runtime.ops.cognitive_observatory",
     ),
+    "episode-arcs": CommandSpec(
+        "episode_arc_private_adjudication.py",
+        "aippocampus_runtime.coding.episode_arc_private_adjudication",
+    ),
     "why-recall": CommandSpec(
         "why_recall.py",
         "aippocampus_runtime.recall.why_cli",
@@ -85,6 +89,9 @@ SCRIPT_MODULES = {
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
     "provider_doctor.py": "aippocampus_runtime.ops.provider_doctor",
     "cognitive_observatory.py": "aippocampus_runtime.ops.cognitive_observatory",
+    "episode_arc_private_adjudication.py": (
+        "aippocampus_runtime.coding.episode_arc_private_adjudication"
+    ),
     "update.py": "aippocampus_runtime.update.cli",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
@@ -314,6 +321,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  observatory         Read-only route-readiness observatory report", file=target)
+    print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)
     print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
