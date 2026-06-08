@@ -28,6 +28,7 @@ uv run --python 3.12 python -c 'import aippocampus_runtime; print("uv-run-ok")'
 python -m pip install -e .
 python -m pip install -e ".[release]"
 python -m build --sdist --wheel
+python tools/aippocampus/release/check_wheel_contract.py --json
 python tools/aippocampus/docs/check_docs_health.py --json
 python tools/aippocampus/release/check_agent_discovery_release.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
@@ -37,6 +38,12 @@ python tools/aippocampus/run_tests.py --tier pr
 python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
 python tools/aippocampus/run_coverage.py --tier pr
 ```
+
+The wheel contract builds the wheel into a fresh venv by default and verifies
+the documented CLI, MCP, generic JSONL import/search/reopen, public module
+imports, config doctor, and isolated hook rollback surfaces without provider
+credentials or network dependency resolution. In CI, pass `--wheel dist/*.whl`
+to reuse an already-built release artifact.
 
 The Ruff hard gate is deliberately staged through `pyproject.toml`: `E9/F/I/B`
 must pass in normal CI and release checks. Use the advisory all-rule report

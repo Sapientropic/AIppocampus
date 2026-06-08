@@ -81,7 +81,7 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
                 "Check tag matches package version",
                 'git", "rev-list", "-n", "1", tag',
                 "check-jsonschema",
-                "Smoke built wheel",
+                "Fresh-venv wheel contract",
                 "mcp-publisher login github-oidc",
                 "mcp-publisher validate server.json",
                 "mcp-publisher publish server.json",
