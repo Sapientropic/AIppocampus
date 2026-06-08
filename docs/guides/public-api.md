@@ -241,7 +241,10 @@ For these commands:
   diagnostics, activation-surface authority, optional recall diagnostics, and
   sleep-cycle public summaries. A `--query-pattern-routes <json-or-jsonl>`
   input may add query-pattern route counts and active/suppressed buckets without
-  emitting alias text. Route-readiness and query-pattern rows are
+  emitting alias text. A `--cognitive-load-calibration <json>` input may add a
+  #575 cognitive-load calibration summary with counts/rates only; source-ref
+  hash samples, private text, command text, and paths are not passed through.
+  Route-readiness, query-pattern, and cognitive-load rows are
   `navigation_only`; they can justify reopening source but cannot support
   factual claims, mutate owner surfaces, or control foreground hooks. The
   `control_authority_audit` block counts attempted activation/mutation requests
