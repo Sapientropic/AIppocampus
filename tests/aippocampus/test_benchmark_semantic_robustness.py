@@ -21,6 +21,7 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
         self.assertTrue(payload["ok"], payload)
+        self.assertTrue(payload["quality_gate_ok"], payload)
         self.assertEqual(payload["kind"], "aippocampus_semantic_robustness_benchmark")
         self.assertEqual(payload["track"], "Track S")
         self.assertEqual(payload["status"], "diagnostic_only")
@@ -47,6 +48,7 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
         self.assertIn("false_evidence_escalation_rate", s1)
         self.assertIn("missed_scent_or_evidence_rate", s1)
         self.assertIn("route_flip_taxonomy", s1)
+        self.assertEqual(s1["false_evidence_escalation_count"], 0)
 
         s2 = tracks["s2_retrieval_invariance"]["metrics"]
         self.assertGreaterEqual(s2["bundle_count"], 2)
@@ -62,6 +64,11 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
         self.assertIn("explicit_negation_violation_rate", s3)
         self.assertIn("source_evidence_over_escalation_rate", s3)
         self.assertIn("surface_lingering_scent_count", s3)
+        self.assertEqual(s3["explicit_negation_violation_count"], 0)
+        self.assertEqual(s3["stale_as_current_count"], 0)
+        self.assertEqual(s3["source_evidence_over_escalation_count"], 0)
+        for row in tracks["s3_hard_negative_suppression"]["cases"]:
+            self.assertEqual(row["actual"], "skip", row)
 
         self.assertEqual(tracks["s4_offline_proxy_alignment"]["status"], "disabled_by_default")
         self.assertEqual(tracks["s4_offline_proxy_alignment"]["claim_boundary"], "proxy_not_truth")

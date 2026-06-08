@@ -73,6 +73,7 @@ from aippocampus_runtime.recall.prompt_recall_route_context import (
     candidate_memory_context,
     prepare_route_context,
 )
+from aippocampus_runtime.recall.prompt_route_blocks import memory_route_block_intent
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
 from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
@@ -104,6 +105,7 @@ def _decision_reasons(
     semantic_result: dict[str, Any] | None,
     natural_evidence: list[str],
     source_evidence: list[str],
+    memory_route_block: list[str],
     suppressed: bool,
 ) -> list[str]:
     reasons: list[str] = []
@@ -144,6 +146,8 @@ def _decision_reasons(
         reasons.append("natural evidence intent: " + ", ".join(natural_evidence[:2]))
     if source_evidence:
         reasons.append("source evidence intent: " + ", ".join(source_evidence[:2]))
+    if memory_route_block:
+        reasons.append("memory route blocked: user forbade old or superseded source route")
     if candidates:
         reasons.append(
             "registry overlap: " + ", ".join(str(item["title"]) for item in candidates[:2])
@@ -713,6 +717,7 @@ def assess_prompt(
         semantic_result=semantic_result,
         natural_evidence=natural_evidence,
         source_evidence=source_evidence,
+        memory_route_block=memory_route_block_intent(prompt),
         suppressed=suppressed,
     )
     if current_checkout_live_fact:

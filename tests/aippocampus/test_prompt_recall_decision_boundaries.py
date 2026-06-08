@@ -23,6 +23,7 @@ for _path in (
 from aippocampus_runtime.recall import (  # noqa: E402
     prompt_context_render,
     prompt_cues,
+    prompt_route_blocks,
 )
 from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
 
@@ -365,6 +366,106 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
 
         self.assertEqual(evidence, [])
         self.assertIn("current checkout required: read current repo first", reasons)
+
+    def test_explicit_old_source_block_suppresses_scent_and_evidence(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+        prompt = (
+            "Do not cite or reopen the old NeonMemory consent gate source; "
+            "write a fresh unrelated packaging note."
+        )
+
+        result = decision.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=clean_registry,
+            use_semantic_gate=False,
+            search_budget=2,
+        )
+
+        self.assertTrue(prompt_route_blocks.memory_route_block_intent(prompt))
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["evidence"], [])
+        self.assertIn(
+            "memory route blocked: user forbade old or superseded source route",
+            result["reasons"],
+        )
+
+    def test_superseded_currentness_block_suppresses_source_evidence(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+        prompt = (
+            "The old NeonMemory consent gate note is superseded; do not "
+            "treat it as current source evidence."
+        )
+
+        result = decision.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=clean_registry,
+            use_semantic_gate=False,
+            search_budget=2,
+        )
+
+        self.assertTrue(prompt_route_blocks.memory_route_block_intent(prompt))
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["evidence"], [])
+        self.assertIn(
+            "memory route blocked: user forbade old or superseded source route",
+            result["reasons"],
+        )
+
+    def test_scent_only_source_boundary_still_allows_navigation_scent(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+        prompt = "还记得 NeonMemory consent gate 吗？先别引用原文。"
+
+        result = decision.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=clean_registry,
+            use_semantic_gate=False,
+            search_budget=2,
+        )
+
+        self.assertFalse(prompt_route_blocks.memory_route_block_intent(prompt))
+        self.assertTrue(prompt_cues.negative_evidence_intent(prompt))
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["evidence"], [])
+
+    def test_old_source_negation_without_fresh_redirect_still_allows_scent(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+        prompt = "还记得 NeonMemory consent gate 吗？Do not cite the old source."
+
+        result = decision.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=clean_registry,
+            use_semantic_gate=False,
+            search_budget=2,
+        )
+
+        self.assertFalse(prompt_route_blocks.memory_route_block_intent(prompt))
+        self.assertTrue(prompt_cues.negative_evidence_intent(prompt))
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["evidence"], [])
+
+    def test_old_route_block_does_not_suppress_different_source_request(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+        prompt = (
+            "Do not cite or reopen the old Atlas dashboard source; can you cite "
+            "source-backed evidence for NeonMemory consent gate?"
+        )
+
+        result = decision.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=clean_registry,
+            use_semantic_gate=False,
+            search_budget=2,
+        )
+
+        self.assertFalse(prompt_route_blocks.memory_route_block_intent(prompt))
+        self.assertFalse(prompt_cues.negative_evidence_intent(prompt))
+        self.assertEqual(result["decision"], "evidence")
+        self.assertGreaterEqual(len(result["evidence"]), 1)
 
     def test_golden_foreground_projection_outputs_cover_skip_scent_evidence_and_bridge(self) -> None:
         clean_registry = self._write_clean_source_registry()

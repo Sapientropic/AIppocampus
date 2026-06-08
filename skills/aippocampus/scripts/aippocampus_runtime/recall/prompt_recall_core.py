@@ -17,6 +17,7 @@ from typing import Any
 
 from aippocampus_runtime.recall import prompt_cues
 from aippocampus_runtime.recall.prompt_recall_policy import PROMPT_RECALL_GATE_POLICY
+from aippocampus_runtime.recall.prompt_route_blocks import memory_route_block_intent
 from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS
 from aippocampus_runtime.registry.api import (
     deep_search_entry,
@@ -518,6 +519,12 @@ def should_suppress(
         # code prompts. They often contain harmless placeholders in tests, but
         # the next paste can contain a real cookie/header/key; do not let
         # semantic aliases or registry overlap turn that into foreground recall.
+        return True
+    if memory_route_block_intent(prompt):
+        # This is stronger than ordinary "no source" wording. A user can ask
+        # for scent-only continuity, but when they explicitly forbid reopening
+        # an old/superseded route the foreground hook must not keep that route
+        # alive as either scent or evidence.
         return True
     if explicit:
         return False
