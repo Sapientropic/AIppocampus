@@ -249,6 +249,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(
             by_id["dream_or_subconscious_ready"]["status"], "needs_semantic_provider"
         )
+        self.assertEqual(
+            by_id["source_search_ready"]["next_command"],
+            "aippocampus onboard --provider auto --status",
+        )
         self.assertFalse(by_id["agent_fallback_ready"]["ready"])
         self.assertEqual(
             by_id["agent_fallback_ready"]["status"],
