@@ -122,6 +122,23 @@ def tool_python_files() -> list[Path]:
     )
 
 
+def claim_boundary_helper_files() -> list[Path]:
+    files = [
+        *benchmark_python_files(),
+        *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "source_evidence").glob("*.py")),
+        *sorted((REPO_ROOT / "tools" / "aippocampus" / "smoke").glob("*.py")),
+    ]
+    helper_files: list[Path] = []
+    for path in files:
+        if path.name == "claim_boundary_refs.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        helper_names = re.findall(r"^def\s+([A-Za-z_]\w*)\(", text, flags=re.MULTILINE)
+        if any("cannot_claim" in name or "claim_boundary" in name for name in helper_names):
+            helper_files.append(path)
+    return sorted(set(helper_files))
+
+
 def mypy_file_entries() -> set[str]:
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     match = re.search(r"(?ms)^\[tool\.mypy\].*?^files\s*=\s*\[(.*?)^\]", text)
@@ -404,6 +421,36 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "#500",
         ):
             self.assertIn(phrase, text)
+
+    def test_claim_boundary_helper_pressure_is_registered(self) -> None:
+        text = DEBT_REGISTER.read_text(encoding="utf-8")
+        helper_paths = [
+            path.relative_to(REPO_ROOT).as_posix()
+            for path in claim_boundary_helper_files()
+        ]
+        missing = [path for path in helper_paths if f"`{path}`" not in text]
+
+        self.assertIn("## Claim-Boundary Duplication Pressure", text)
+        self.assertIn("Do not add new runner-local caveat catalogs by default", text)
+        self.assertIn("prefer `claim_boundary_ref`", text)
+        self.assertEqual(missing, [])
+
+    def test_claim_boundary_helpers_share_canonical_ref(self) -> None:
+        import importlib
+
+        refs = importlib.import_module("claim_boundary_refs")
+        self.assertEqual(
+            refs.CANONICAL_CANNOT_CLAIM_REF,
+            "docs/architecture/schema-field-profiles.md#cannot-claim",
+        )
+        missing = [
+            path.relative_to(REPO_ROOT).as_posix()
+            for path in claim_boundary_helper_files()
+            if path.name != "benchmark_suite.py"
+            and "claim_boundary_refs import" not in path.read_text(encoding="utf-8")
+        ]
+
+        self.assertEqual(missing, [])
 
     def test_architecture_debt_report_emits_full_inventory(self) -> None:
         proc = subprocess.run(

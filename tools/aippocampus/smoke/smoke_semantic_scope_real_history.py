@@ -61,6 +61,7 @@ from aippocampus_runtime.subconscious.worker import (
     default_project_timeline_path,
     default_staging_path,
 )
+from claim_boundary_refs import claim_boundary_ref
 
 DEFAULT_LIVE_CONCURRENCY = max(2, DEFAULT_CONCURRENCY)
 DEFAULT_LIVE_SAMPLES_PER_JOB = max(2, DEFAULT_SAMPLES_PER_JOB)
@@ -452,6 +453,9 @@ def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
             result.get("claim_level"),
             allowed=PUBLIC_CLAIM_LEVELS,
             fallback="diagnostic_only",
+        ),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/readiness/stage-0-5-readiness.md"
         ),
         "cannot_claim": public_claims(result.get("cannot_claim")),
         "live_model_used": bool(result.get("live_model_used")),
@@ -917,6 +921,9 @@ def run_semantic_scope_real_history_smoke(
             "ok": status_before == "sufficient" or not require_labels,
             "stage2_semantic_sidecar_status": status_before,
             "claim_level": semantic_claim_level(status_before, live=False),
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/readiness/stage-0-5-readiness.md"
+            ),
             "cannot_claim": semantic_cannot_claim(status_before, live=False, write_sidecars=False),
             "live_model_used": False,
             "sidecars_written": False,
@@ -945,6 +952,9 @@ def run_semantic_scope_real_history_smoke(
             "ok": False,
             "stage2_semantic_sidecar_status": status,
             "claim_level": semantic_claim_level(status, live=True),
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/readiness/stage-0-5-readiness.md"
+            ),
             "cannot_claim": semantic_cannot_claim(status, live=True, write_sidecars=write_sidecars),
             "live_model_used": False,
             "sidecars_written": False,
@@ -1139,6 +1149,9 @@ def run_semantic_scope_real_history_smoke(
         "ok": ok,
         "stage2_semantic_sidecar_status": status_after,
         "claim_level": semantic_claim_level(status_after, live=True),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/readiness/stage-0-5-readiness.md"
+        ),
         "cannot_claim": semantic_cannot_claim(
             status_after, live=True, write_sidecars=write_sidecars
         ),

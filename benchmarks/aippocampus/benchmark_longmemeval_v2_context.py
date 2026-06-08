@@ -26,6 +26,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from claim_boundary_refs import claim_boundary_ref
+
 SCHEMA_VERSION = 1
 DEFAULT_CASE_LIMIT = 20
 DEFAULT_QUESTIONS_FILE = (
@@ -352,6 +354,9 @@ def skipped_payload(
         ),
         "cases": [],
         "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": cannot_claim(status),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -570,6 +575,9 @@ def run_longmemeval_v2_context_mapping(
         ),
         "cases": cases,
         "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": cannot_claim(status),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }

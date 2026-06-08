@@ -7,6 +7,7 @@ from typing import Any
 
 from benchmark_memory_decision_gate import sha1_text as legacy_sha1_text
 from benchmark_statistics import binomial_rate_report
+from claim_boundary_refs import claim_boundary_ref
 
 from .defaults import QUERY_ORIGIN_TAXONOMY, TRACK_B_QUERY_ORIGIN_ISSUES
 
@@ -56,6 +57,9 @@ def claim_boundary(
         "measures": measures,
         "can_claim": can_claim,
         "cannot_claim": cannot_claim,
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "issue_refs": TRACK_B_QUERY_ORIGIN_ISSUES,
     }
 
@@ -192,6 +196,10 @@ def source_evidence_validation_guidance(
             "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "#track-b-source-evidence-retrieval"
+        ),
     }
 
 
@@ -232,6 +240,9 @@ def summarize_sharegpt_public_payload(payload: dict[str, Any]) -> dict[str, Any]
         "metrics": payload.get("metrics") or {},
         "skip_reason": payload.get("skip_reason"),
         "privacy_boundary": payload.get("privacy_boundary") or {},
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": payload.get("cannot_claim") or [],
         "query_origin": query_origin(
             "source_derived_sparse",
@@ -261,6 +272,9 @@ def summarize_standard_retrieval_payload(payload: dict[str, Any]) -> dict[str, A
         "corpus": payload.get("corpus") or {},
         "metrics": payload.get("metrics") or {},
         "privacy_boundary": payload.get("privacy_boundary") or {},
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": payload.get("cannot_claim") or [],
         "query_origin": query_origin(
             "human_or_fixture_question",

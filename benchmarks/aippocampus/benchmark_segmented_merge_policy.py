@@ -27,6 +27,7 @@ from aippocampus_runtime.recall.scoring_policy import (  # noqa: E402
     SegmentMergePolicy,
 )
 from aippocampus_runtime.recall.segment_search import merge_topk_with_diagnostics  # noqa: E402
+from claim_boundary_refs import claim_boundary_ref
 
 SCHEMA_VERSION = 1
 DEFAULT_FIXTURE = (
@@ -304,6 +305,9 @@ def run_segmented_merge_policy_benchmark(
         "cases": evaluated["cases"],
         "sensitivity": sensitivity_analysis(fixture, evaluated["cases"]),
         "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md"
+        ),
         "cannot_claim": cannot_claim(),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
