@@ -99,6 +99,100 @@ GENERIC_PRODUCER_TERMS = {
     "回来",
     "源头",
 }
+LOW_INFORMATION_PRODUCER_TERMS = {
+    "it",
+    "its",
+    "one",
+    "ones",
+    "you",
+    "your",
+    "yours",
+    "answer",
+    "answers",
+    "question",
+    "questions",
+    "trigger",
+    "triggers",
+    "opening",
+    "thing",
+    "things",
+    "change",
+    "changes",
+    "update",
+    "updates",
+    "这个",
+    "那个",
+    "这些",
+    "那些",
+    "这里",
+    "那里",
+    "这边",
+    "那边",
+    "怎么",
+    "怎样",
+    "如何",
+    "什么",
+    "为啥",
+    "为什么",
+    "哪个",
+    "一下",
+    "一个",
+    "一些",
+}
+ENGLISH_LOW_INFORMATION_CORE_TERMS = {
+    "it",
+    "its",
+    "one",
+    "ones",
+    "you",
+    "your",
+    "yours",
+    "answer",
+    "answers",
+    "question",
+    "questions",
+    "thing",
+    "things",
+    "change",
+    "changes",
+    "update",
+    "updates",
+}
+ENGLISH_LOW_INFORMATION_FILLER_TERMS = {
+    *ENGLISH_LOW_INFORMATION_CORE_TERMS,
+    "a",
+    "an",
+    "the",
+    "this",
+    "that",
+    "these",
+    "those",
+    "my",
+    "our",
+    "their",
+    "should",
+    "would",
+    "could",
+    "can",
+    "need",
+    "needs",
+    "needed",
+    "to",
+    "be",
+    "is",
+    "are",
+    "was",
+    "were",
+    "do",
+    "does",
+    "did",
+    "please",
+}
+CJK_DEICTIC_ACTION_RE = re.compile(
+    r"(这个|那个|这些|那些|这里|那里|这边|那边).{0,32}"
+    r"(要怎么|怎么|怎样|如何|改|修改|调整|处理|做|办|弄)"
+)
+CJK_ACTION_PROMPT_RE = re.compile(r"(要怎么|怎么改|怎么办|怎么做|如何改|改一下|弄一下)")
 
 
 def _hash(value: Any, *, prefix: str) -> str:
@@ -119,25 +213,57 @@ def _privacy_suppressed_term(term: str) -> bool:
     return any(marker in str(projected) for marker in REDACTION_MARKERS)
 
 
-def _clean_candidate_term(term: str) -> tuple[str, bool]:
+def _low_information_producer_term(text: str) -> bool:
+    low = text.casefold()
+    if low in LOW_INFORMATION_PRODUCER_TERMS:
+        return True
+    latin_tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", low)
+    if latin_tokens and len(latin_tokens) <= 5:
+        token_set = set(latin_tokens)
+        if token_set & ENGLISH_LOW_INFORMATION_CORE_TERMS and token_set <= ENGLISH_LOW_INFORMATION_FILLER_TERMS:
+            return True
+    # A deictic action prompt such as "这个要怎么改一下" is a useful recall
+    # activator, but it is not a durable label or activation cue. Reject it
+    # even when split_query_terms keeps a nearby project alias in the same
+    # phrase, otherwise a generic follow-up can project an unrelated route.
+    if _has_cjk(text) and CJK_DEICTIC_ACTION_RE.search(text):
+        return True
+    if _has_cjk(text) and len(text) <= 32 and CJK_ACTION_PROMPT_RE.search(text):
+        return True
+    if _has_cjk(text) and len(text) <= 12:
+        if CJK_DEICTIC_ACTION_RE.search(text):
+            return True
+        if CJK_ACTION_PROMPT_RE.search(text):
+            return True
+    return False
+
+
+def _clean_candidate_term_detail(term: str) -> tuple[str, str]:
     text = re.sub(r"\s+", " ", str(term or "")).strip(" \t\r\n\"'`.,;:!?，。；：！？、")
     if not text:
-        return "", False
+        return "", ""
     if _privacy_suppressed_term(text):
-        return "", True
+        return "", "privacy"
     low = text.casefold()
     if low in GENERIC_PRODUCER_TERMS:
-        return "", False
+        return "", "low_information"
+    if _low_information_producer_term(text):
+        return "", "low_information"
     if len(text) > 48:
-        return "", False
+        return "", "shape"
     if _has_cjk(text):
         if len(text) < 2:
-            return "", False
+            return "", "shape"
     elif len(text) < 3:
-        return "", False
+        return "", "shape"
     if len(text.split()) > 4:
-        return "", False
-    return text, False
+        return "", "shape"
+    return text, ""
+
+
+def _clean_candidate_term(term: str) -> tuple[str, bool]:
+    text, reason = _clean_candidate_term_detail(term)
+    return text, reason == "privacy"
 
 
 def _entry_clean_source_dir(entry: Mapping[str, Any]) -> Path | None:
@@ -243,7 +369,7 @@ def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _signal_term_values(row: Mapping[str, Any]) -> tuple[list[str], int]:
+def _signal_term_values(row: Mapping[str, Any]) -> tuple[list[str], int, int]:
     values: list[str] = []
     for key in SIGNAL_TEXT_KEYS:
         if row.get(key):
@@ -254,14 +380,17 @@ def _signal_term_values(row: Mapping[str, Any]) -> tuple[list[str], int]:
             values.extend(str(item) for item in raw if item)
     terms: list[str] = []
     privacy_suppressed = 0
+    low_information_suppressed = 0
     for value in values:
         for raw in split_query_terms([value]):
-            term, suppressed = _clean_candidate_term(raw)
-            if suppressed:
+            term, reason = _clean_candidate_term_detail(raw)
+            if reason == "privacy":
                 privacy_suppressed += 1
+            elif reason == "low_information":
+                low_information_suppressed += 1
             if term:
                 terms.append(term)
-    return unique_preserve(terms, limit=16), privacy_suppressed
+    return unique_preserve(terms, limit=16), privacy_suppressed, low_information_suppressed
 
 
 def _refs_by_thread(refs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -273,19 +402,22 @@ def _refs_by_thread(refs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
     return by_thread
 
 
-def _terms_for_message(text: str, registry_terms: list[str]) -> tuple[list[str], int]:
+def _terms_for_message(text: str, registry_terms: list[str]) -> tuple[list[str], int, int]:
     terms: list[str] = []
     privacy_suppressed = 0
+    low_information_suppressed = 0
     low_text = text.casefold()
     for raw in [*split_query_terms([text]), *registry_terms]:
         if raw.casefold() not in low_text and raw not in registry_terms:
             continue
-        term, suppressed = _clean_candidate_term(raw)
-        if suppressed:
+        term, reason = _clean_candidate_term_detail(raw)
+        if reason == "privacy":
             privacy_suppressed += 1
+        elif reason == "low_information":
+            low_information_suppressed += 1
         if term:
             terms.append(term)
-    return unique_preserve(terms, limit=32), privacy_suppressed
+    return unique_preserve(terms, limit=32), privacy_suppressed, low_information_suppressed
 
 
 def _candidate_score(
@@ -402,6 +534,7 @@ def propose_continuity_domain_events_from_registry(
     registry_terms_by_thread: dict[str, set[str]] = {}
     missing_source_ref_count = 0
     privacy_suppressed_terms: set[str] = set()
+    low_information_label_suppressed_count = 0
     scanned_thread_count = 0
     signal_candidate_count = 0
     known_refs: dict[str, dict[str, set[str]]] = defaultdict(
@@ -430,9 +563,10 @@ def propose_continuity_domain_events_from_registry(
             if ref is None:
                 missing_source_ref_count += 1
                 continue
-            terms, suppressed_count = _terms_for_message(text, registry_terms)
+            terms, suppressed_count, low_information_count = _terms_for_message(text, registry_terms)
             if suppressed_count:
                 privacy_suppressed_terms.update(split_query_terms([text])[:suppressed_count])
+            low_information_label_suppressed_count += low_information_count
             for term in terms:
                 key = (thread_key, term)
                 if not any(existing == ref for existing in term_refs[key]):
@@ -450,8 +584,9 @@ def propose_continuity_domain_events_from_registry(
                 if safe_source_refs(raw_refs):
                     missing_source_ref_count += 1
                 continue
-            terms, suppressed_count = _signal_term_values(row)
+            terms, suppressed_count, low_information_count = _signal_term_values(row)
             privacy_suppressed_terms.update(f"signal:{file_name}:{index}" for index in range(suppressed_count))
+            low_information_label_suppressed_count += low_information_count
             for thread_key, thread_refs in _refs_by_thread(refs).items():
                 for term in terms:
                     key = (thread_key, term)
@@ -508,6 +643,7 @@ def propose_continuity_domain_events_from_registry(
             "rejected_event_count": rejected_event_count,
             "missing_source_ref_count": missing_source_ref_count,
             "privacy_suppressed_count": len(privacy_suppressed_terms),
+            "low_information_label_suppressed_count": low_information_label_suppressed_count,
         },
         "top_domain_labels": label_rows,
         "source_boundary": {
