@@ -23,6 +23,7 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
+from claim_boundary_refs import claim_boundary_ref  # noqa: E402
 
 CASES: list[dict[str, Any]] = [
     {
@@ -239,6 +240,9 @@ def claim_boundary(
         return {
             "claim_level": "seeded_semantic_cue_reuse_smoke",
             "coverage_mode": "seeded_semantic_cue_reuse",
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+            ),
             "cannot_claim": [
                 "cold_natural_multilingual_recall_quality",
                 "sleep_time_trigger_generation_quality",
@@ -248,6 +252,9 @@ def claim_boundary(
         return {
             "claim_level": "unseeded_local_fallback_smoke",
             "coverage_mode": "unseeded_local_fallback",
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+            ),
             "cannot_claim": [
                 "seeded_cue_cache_reuse_quality",
                 "live_semantic_gate_quality",
@@ -257,6 +264,9 @@ def claim_boundary(
     return {
         "claim_level": "unseeded_foreground_semantic_smoke",
         "coverage_mode": "unseeded_foreground_semantic",
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": ["seeded_cue_cache_reuse_quality"],
     }
 
@@ -279,6 +289,7 @@ def summarize_rows(
         "seeded_semantic_cues": bool(seeded_semantic_cues),
         "coverage_mode": boundary["coverage_mode"],
         "claim_boundary": boundary,
+        "claim_boundary_ref": boundary["claim_boundary_ref"],
         "cannot_claim": boundary["cannot_claim"],
         "rows": rows,
     }

@@ -26,6 +26,7 @@ import smoke_source_evidence_recall_eval as source_evidence_eval
 
 import benchmark_fts5_recall as fts5_benchmark
 import sharegpt_sampling
+from claim_boundary_refs import claim_boundary_ref
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from source_evidence.defaults import (
     DEFAULT_FTS5_CASES,
@@ -431,6 +432,9 @@ def run_source_evidence_retrieval_benchmark(
                 "case_ids_are_hashed": True,
                 "output_shape": "sanitized_standard_public_retrieval_qa_only",
             },
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+            ),
             "cannot_claim": sorted(
                 set(
                     [str(item) for item in standard_public_payload.get("cannot_claim") or []]
@@ -625,6 +629,9 @@ def run_source_evidence_retrieval_benchmark(
             "case_ids_are_hashed": True,
             "output_shape": "sanitized_track_b_retrieval_aggregates",
         },
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": cannot_claim(
             fts5_payload=fts5_payload,
             source_payload=source_payload,

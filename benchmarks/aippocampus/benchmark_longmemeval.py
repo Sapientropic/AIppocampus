@@ -23,6 +23,7 @@ import _paths
 _paths.ensure_paths()
 
 import benchmark_source_evidence_retrieval as retrieval_benchmark
+from claim_boundary_refs import claim_boundary_ref
 
 SCHEMA_VERSION = 1
 DEFAULT_SPLIT = "longmemeval-v1-small"
@@ -159,6 +160,9 @@ def skipped_payload(
         "metrics": {"question_count": 0},
         "cases": [],
         "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": cannot_claim(reason),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -290,6 +294,9 @@ def run_longmemeval_benchmark(
             "corpus": retrieval.get("corpus") or {},
         },
         "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": sorted(set(cannot_claim(status)) | set(retrieval.get("cannot_claim") or [])),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }

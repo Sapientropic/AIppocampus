@@ -42,6 +42,7 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     semantic_labels_for_message,
 )
 from benchmark_statistics import binomial_rate_report
+from claim_boundary_refs import claim_boundary_ref
 
 PROMPT_KIND = "fuzzy_life_wide_source_evidence"
 NON_TECHNICAL_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
@@ -843,6 +844,10 @@ def selection_explanation(
                 "A sufficient result supports this selected semantic-sidecar slice only; "
                 "it is not global recall quality or semantic completeness."
             ),
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+                "#track-b-source-evidence-retrieval"
+            ),
             "next_action": next_action,
         }
     return {
@@ -863,6 +868,10 @@ def selection_explanation(
         "claim_boundary": (
             "Do not claim selected semantic-sidecar source-evidence coverage from fallback "
             "results, even when hit-rate and sample gates pass."
+        ),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "#track-b-source-evidence-retrieval"
         ),
         "next_action": (
             "Run again without --allow-deterministic-labels before making semantic-sidecar "
@@ -954,6 +963,10 @@ def run_source_evidence_recall_eval(
         "claim_level": "selected_source_evidence_recall_eval"
         if status == "sufficient"
         else "diagnostic_only",
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "#track-b-source-evidence-retrieval"
+        ),
         "cannot_claim": cannot_claim(
             status,
             require_semantic_sidecar=require_semantic_sidecar,

@@ -27,6 +27,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from claim_boundary_refs import claim_boundary_ref
+
 SCHEMA_VERSION = 1
 DEFAULT_CASE_LIMIT = 20
 DEFAULT_DATASET_DIR = _paths.REPO_ROOT / "benchmark_corpus" / "memoryagentbench"
@@ -617,6 +619,9 @@ def build_case_pack(
             "absolute_paths_emitted": False,
             "intended_storage": "local .tmp/ or benchmark_corpus/reports/ output only",
         },
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": CANNOT_CLAIM,
     }
 
@@ -668,6 +673,9 @@ def stage3_mode_fields(write_update_mode: str) -> dict[str, str]:
 
 def stage3_claim_boundary(write_update_mode: str) -> dict[str, str]:
     return {
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "deterministic_contract_evidence": "mode_fields_hashes_counts_only",
         "local_artifact_policy": "ignored_operator_dataset_only",
         "official_runner_compatibility": "not_claimed",
@@ -768,6 +776,9 @@ def build_stage3_incremental_dry_run(
             },
             "cases": [],
             "claim_boundary": stage3_claim_boundary(write_update_mode),
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+            ),
             "source_evidence_boundary": {
                 "source_hashes_only": True,
                 "raw_context_emitted": False,
@@ -822,6 +833,9 @@ def build_stage3_incremental_dry_run(
         },
         "cases": cases,
         "claim_boundary": stage3_claim_boundary(write_update_mode),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "source_evidence_boundary": {
             "source_hashes_only": True,
             "raw_context_emitted": False,
@@ -1030,6 +1044,9 @@ def run_memoryagentbench_smoke(
             if prediction_template_path
             else None,
         },
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
         "cannot_claim": CANNOT_CLAIM,
         "next_step": next_step,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),

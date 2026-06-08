@@ -27,6 +27,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from claim_boundary_refs import claim_boundary_ref
+
 SCHEMA_VERSION = 1
 DEFAULT_CASE_LIMIT = 20
 DEFAULT_MANIFEST = _paths.REPO_ROOT / "benchmark_corpus" / "amemgym_manifest.json"
@@ -633,6 +635,7 @@ def run_amemgym_smoke(
                 "cost_latency": "elapsed_ms_only_no_model_calls",
             },
             "claim_boundary": claim_boundary(predictions_present=False),
+            "claim_boundary_ref": claim_boundary_ref("docs/evidence/benchmarks/amemgym.md"),
             "privacy_boundary": {
                 "raw_text_emitted": False,
                 "absolute_paths_emitted": False,
@@ -723,6 +726,7 @@ def run_amemgym_smoke(
             "cost_latency": "elapsed_ms_only_no_model_calls",
         },
         "claim_boundary": claim_boundary(predictions_present=bool(predictions)),
+        "claim_boundary_ref": claim_boundary_ref("docs/evidence/benchmarks/amemgym.md"),
         "privacy_boundary": {
             "raw_text_emitted": False,
             "absolute_paths_emitted": False,
@@ -746,6 +750,7 @@ def run_amemgym_smoke(
 
 def claim_boundary(*, predictions_present: bool) -> dict[str, str]:
     return {
+        "claim_boundary_ref": claim_boundary_ref("docs/evidence/benchmarks/amemgym.md"),
         "amemgym_score": "not_claimed",
         "official_runner_compatibility": "not_claimed",
         "native_accuracy": "local_prediction_exact_match_only" if predictions_present else "not_measured",

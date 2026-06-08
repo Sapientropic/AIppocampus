@@ -22,6 +22,7 @@ import _paths
 
 _paths.ensure_paths()
 
+from claim_boundary_refs import claim_boundary_ref
 from aippocampus_runtime.recall.scoring_policy import (  # noqa: E402
     SEGMENT_MERGE_POLICY,
     SegmentMergePolicy,
@@ -304,6 +305,9 @@ def run_segmented_merge_policy_benchmark(
         "cases": evaluated["cases"],
         "sensitivity": sensitivity_analysis(fixture, evaluated["cases"]),
         "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md"
+        ),
         "cannot_claim": cannot_claim(),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }

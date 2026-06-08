@@ -85,6 +85,42 @@ Current non-runtime action rows:
 The complete test / benchmark / tool inventory is in the evidence snapshot and
 the deterministic report output.
 
+## Claim-Boundary Duplication Pressure
+
+This queue tracks runner and smoke files that define local `cannot_claim` or
+`claim_boundary` helpers. These helpers are often legitimate active-run
+boundaries, but they are also the easiest place for caveat lists to multiply
+without improving source-backed behavior.
+
+Do not add new runner-local caveat catalogs by default. Keep active run-level
+or track-local `cannot_claim` entries only where a reader could over-read that
+specific output; for inherited or inactive caveats, prefer `claim_boundary_ref`
+or the parent evidence owner instead of mirroring full lists. The canonical rule
+remains [`schema-field-profiles.md#cannot-claim`](./schema-field-profiles.md#cannot-claim).
+Runner and smoke pressure files should consume
+`benchmarks/aippocampus/claim_boundary_refs.py` unless they are the current
+aggregation owner (`benchmark_suite.py`) or a documented successor. That keeps
+the canonical pointer movable without turning domain-specific runner caveats
+into a new global claim schema.
+
+Current local helper pressure points:
+
+| Path | Local helper(s) | Next pressure boundary |
+| --- | --- | --- |
+| `benchmarks/aippocampus/benchmark_amemgym.py` | `claim_boundary` | Keep AMemGym protocol/output caveats owned by the AMemGym evidence doc; do not spread official-score caveats into generic benchmark helpers. |
+| `benchmarks/aippocampus/benchmark_longmemeval.py` | `cannot_claim` | Keep V1 retrieval-only caveats local unless a shared external-benchmark policy emerges from multiple real adapters. |
+| `benchmarks/aippocampus/benchmark_longmemeval_v2_context.py` | `cannot_claim` | Keep V2 context-mapping pilot caveats local and diagnostic; do not promote pilot status into suite-level quality claims. |
+| `benchmarks/aippocampus/benchmark_memoryagentbench.py` | `stage3_claim_boundary` | Keep Stage 3 dry-run boundaries inside MemoryAgentBench until official scoring inputs are wired. |
+| `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` | `cannot_claim` | Keep segmented-merge caveats owned by the merge-policy fixture report; split only if another segment runner reuses the same policy. |
+| `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` | `cannot_claim` | Prefer source-evidence track ownership and `cannot_claim_by_track`; avoid copying Track B caveats into unrelated runners. |
+| `benchmarks/aippocampus/benchmark_suite.py` | `collect_cannot_claim`, `collect_cannot_claim_by_track`, `suite_level_cannot_claims`, `profile_cannot_claims`, `claim_boundary_policy` | This is the current aggregation owner. Extend this policy before adding a second suite-level caveat layer. |
+| `benchmarks/aippocampus/source_evidence/reporting.py` | `claim_boundary` | Keep source-evidence reporting helpers focused on query-origin and track-local summaries. |
+| `tools/aippocampus/smoke/simulate_multilingual_prompt_hook.py` | `claim_boundary` | Keep prompt-hook smoke caveats narrow; broad multilingual quality belongs in benchmark/readiness evidence, not this simulator. |
+| `tools/aippocampus/smoke/smoke_life_wide_registry.py` | `cannot_claim_for_stage2` | Keep Stage 2 aggregate caveats tied to readiness evidence; avoid adding per-label caveat catalogs here. |
+| `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py` | `semantic_cannot_claim` | Split public projection from live-provider orchestration before adding more semantic-readiness caveats. |
+| `tools/aippocampus/smoke/smoke_semantic_scope_source_review.py` | `cannot_claim` | Keep source-review caveats local to selected review status; do not turn them into global semantic correctness policy. |
+| `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py` | `cannot_claim` | Keep selected-source eval caveats local and point fallback warnings back to the owner report instead of repeating inherited lists. |
+
 ## Guard Budget Change Policy
 
 Raise a guard budget only when the added code is still inside the same owner

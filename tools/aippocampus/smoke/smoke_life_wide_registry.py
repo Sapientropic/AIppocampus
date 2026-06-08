@@ -23,6 +23,7 @@ from aippocampus_runtime.core import aippocampus_registry_dir
 from aippocampus_runtime.navigation.project_timeline import build_project_timeline
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from claim_boundary_refs import claim_boundary_ref
 
 NON_TECHNICAL_LIFE_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
 
@@ -333,6 +334,9 @@ def run_life_wide_registry_smoke(
             "ok": not require_evidence,
             "stage2_evidence_status": status,
             "claim_level": claim_level_for_status(status),
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/readiness/stage-0-5-readiness.md"
+            ),
             "cannot_claim": cannot_claim_for_stage2(status),
             "privacy_boundary": privacy_boundary,
             "registry": {"exists": False},
@@ -366,6 +370,9 @@ def run_life_wide_registry_smoke(
         "ok": status == "sufficient" or not require_evidence,
         "stage2_evidence_status": status,
         "claim_level": claim_level_for_status(status),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/readiness/stage-0-5-readiness.md"
+        ),
         "cannot_claim": cannot_claim_for_stage2(status),
         "privacy_boundary": privacy_boundary,
         "registry": {"exists": True},

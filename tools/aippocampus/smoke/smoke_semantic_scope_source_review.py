@@ -43,6 +43,7 @@ from aippocampus_runtime.source.semantic_scope_source_review_core import (
 )
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
+from claim_boundary_refs import claim_boundary_ref
 
 PROMPT_KIND = "semantic_scope_label_source_review"
 
@@ -593,6 +594,9 @@ def run_semantic_scope_source_review(
             "ok": len(cases) >= min_cases,
             "status": status,
             "claim_level": "diagnostic_only",
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/readiness/stage-0-5-readiness.md"
+            ),
             "cannot_claim": cannot_claim(status, live=False),
             "live_model_used": False,
             "case_count": len(cases),
@@ -621,6 +625,9 @@ def run_semantic_scope_source_review(
             "ok": False,
             "status": status,
             "claim_level": "blocked_live_model",
+            "claim_boundary_ref": claim_boundary_ref(
+                "docs/evidence/readiness/stage-0-5-readiness.md"
+            ),
             "cannot_claim": cannot_claim(status, live=True),
             "live_model_used": False,
             "case_count": len(cases),
@@ -712,6 +719,9 @@ def run_semantic_scope_source_review(
         "claim_level": "selected_semantic_label_source_review"
         if status == "sufficient" and failures == 0
         else "diagnostic_only",
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/readiness/stage-0-5-readiness.md"
+        ),
         "cannot_claim": cannot_claim(status, live=True),
         "live_model_used": True,
         "case_count": len(cases),
