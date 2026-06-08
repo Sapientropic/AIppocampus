@@ -415,16 +415,23 @@ Query-pattern prewarm now has a deterministic sidecar boundary:
 no-write planning report, while
 `aippocampus_runtime.warm_ambient.query_pattern_routes` publishes and reads
 `query_pattern_routes.jsonl` as a local navigation cache. Onboarding now
-publishes a default deterministic sidecar from registry/import metadata during
-the existing sidecar refresh phase: it uses thread/source ids, clean-source
-manifest freshness metadata, and sanitized registry aliases only. The writer
-suppresses stale source-generation digests and privacy-blocked rows; the prompt
-hook reads the sidecar cheaply and can emit hot-path `scent` with source refs
-only. Alias text stays out of public reports, public packets, and hook context,
-and every route still requires source reopen before any claim. The Cognitive
-Observatory can now embed a `query_pattern_routes` report with route counts,
-active/suppressed buckets, and source-ref counts while still omitting alias text
-and local paths.
+publishes a default deterministic sidecar during the existing sidecar refresh
+phase: it uses thread/source ids, clean-source manifest freshness metadata,
+sanitized registry aliases, and reviewed semantic triggers from
+`semantic_triggers.jsonl`. Reviewed seed triggers without explicit source refs
+may derive bounded registry route handles when their reviewed public vocabulary
+overlaps registry metadata; this is route readiness only, not source truth. The
+publisher reserves budget for reviewed semantic rows so cheap registry metadata
+cannot starve natural alias routes. The writer suppresses stale
+source-generation digests and privacy-blocked rows; the prompt hook reads the
+sidecar cheaply and can emit hot-path `scent` with source refs only. Alias text
+stays out of public reports, public packets, and hook context, while public
+diagnostics may expose alias-source aggregate counts and hit rates for registry,
+reviewed, local-offline, and external-model generated aliases. Every route still
+requires source reopen before any claim. The Cognitive Observatory can now embed
+a `query_pattern_routes` report with route counts, active/suppressed buckets,
+alias-source buckets, and source-ref counts while still omitting alias text and
+local paths.
 
 Cognitive-load calibration can also appear in the Observatory as a summary-only
 surface. `aippocampus_runtime.ops.observatory_cognitive_load` accepts the #575

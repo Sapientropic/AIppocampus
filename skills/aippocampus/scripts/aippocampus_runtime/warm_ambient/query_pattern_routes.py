@@ -33,6 +33,7 @@ QUERY_PATTERN_ROUTE_SCHEMA_VERSION = 1
 DEFAULT_QUERY_PATTERN_ROUTES_NAME = "query_pattern_routes.jsonl"
 DEFAULT_REGISTRY_ROUTE_TTL_SECONDS = 14 * 24 * 60 * 60
 DEFAULT_REGISTRY_ROUTE_CONFIDENCE = 0.62
+DEFAULT_REVIEWED_SEMANTIC_ROUTE_RESERVE = 40
 
 MAX_ALIASES = 12
 MAX_SOURCE_REFS = 6
@@ -42,6 +43,25 @@ MIN_SELECT_CONFIDENCE = 0.5
 SECRETISH_MARKERS = ("secret", "token", "password", "credential", "api_key")
 SUPPRESSED_SENSITIVITY = {"blocked", "private", "secret", "sensitive", "suppress"}
 STALE_STATES = {"stale", "expired", "superseded", "rejected"}
+REGISTRY_ALIAS_SOURCE = "registry_metadata"
+UNSPECIFIED_ALIAS_SOURCE = "unspecified"
+GENERATED_ALIAS_SOURCES = {
+    "reviewed_semantic",
+    "local_offline_generated",
+    "external_model_generated",
+}
+ALIAS_SOURCE_ALIASES = {
+    "registry": REGISTRY_ALIAS_SOURCE,
+    "registry_metadata_alias": REGISTRY_ALIAS_SOURCE,
+    "reviewed": "reviewed_semantic",
+    "semantic_reviewed": "reviewed_semantic",
+    "local": "local_offline_generated",
+    "local_generated": "local_offline_generated",
+    "offline_generated": "local_offline_generated",
+    "external_model": "external_model_generated",
+    "model_generated": "external_model_generated",
+    "generated": "external_model_generated",
+}
 
 
 def default_query_pattern_routes_path(registry_dir: Path) -> Path:
@@ -80,6 +100,51 @@ def _aliases(value: Any) -> list[str]:
         for alias in unique_preserve([_normalize_alias(item) for item in value], limit=MAX_ALIASES)
         if alias
     ]
+
+
+def _alias_source(row: Mapping[str, Any]) -> str:
+    raw = (
+        row.get("alias_source")
+        or row.get("query_alias_source")
+        or row.get("route_alias_source")
+        or row.get("generation_source")
+        or UNSPECIFIED_ALIAS_SOURCE
+    )
+    value = re.sub(r"[^a-z0-9_]+", "_", str(raw or "").casefold()).strip("_")
+    return ALIAS_SOURCE_ALIASES.get(value, value or UNSPECIFIED_ALIAS_SOURCE)
+
+
+def _is_generated_alias_source(value: str) -> bool:
+    return value in GENERATED_ALIAS_SOURCES
+
+
+def _increment_count(bucket: dict[str, int], key: str, amount: int = 1) -> None:
+    bucket[key] = bucket.get(key, 0) + max(0, int(amount))
+
+
+def _has_multilingual_alias(route: Mapping[str, Any]) -> bool:
+    for alias in route.get("query_aliases") or []:
+        text = str(alias or "")
+        if re.search(r"[\u4e00-\u9fff]", text):
+            return True
+    return False
+
+
+def _nickname_or_role_prompt(prompt: str) -> bool:
+    text = str(prompt or "").casefold()
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return True
+    cues = (
+        "little hippocampus",
+        "external hippocampus",
+        "nickname",
+        "handoff",
+        "hook",
+        "worker",
+        "continue",
+        "resume",
+    )
+    return any(cue in text for cue in cues)
 
 
 def _float_bucket(value: Any, *, default: float = 0.0) -> float:
@@ -162,6 +227,7 @@ def normalize_query_pattern_route(row: Mapping[str, Any]) -> dict[str, Any]:
         "thread_key_hash": _thread_hash(row, refs),
         "source_generation_digest": str(row.get("source_generation_digest") or ""),
         "query_aliases": aliases,
+        "alias_source": _alias_source(row),
         "source_refs": refs,
         "confidence": _float_bucket(row.get("confidence"), default=0.8),
         "state": _state(row),
@@ -273,6 +339,7 @@ def publish_query_pattern_routes(
             "stale_generation_suppressed_count": stale_generation_suppressed_count,
             "invalid_route_suppressed_count": invalid_route_suppressed_count,
             "privacy_suppressed_count": privacy_suppressed_count,
+            "alias_source_route_counts": _alias_source_counts(normalized),
             "unchanged_publish_count": 0 if changed else 1,
             "live_llm_call_count": 0,
         },
@@ -334,6 +401,94 @@ def _registry_alias_candidates(entry: Mapping[str, Any]) -> list[Any]:
     return aliases
 
 
+def _registry_freshness_by_thread(registry: Mapping[str, Any]) -> dict[str, dict[str, str]]:
+    freshness: dict[str, dict[str, str]] = {}
+    entries = registry.get("threads") if isinstance(registry, Mapping) else []
+    if not isinstance(entries, list):
+        return freshness
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        thread_key = str(entry.get("thread_key") or "").strip()
+        if not thread_key:
+            continue
+        manifest = _clean_manifest_for_entry(entry)
+        freshness[thread_key] = {
+            "thread_key_hash": _sha(thread_key, prefix="thread"),
+            "source_generation_digest": _registry_generation_digest(entry, manifest),
+            "source_id": str(manifest.get("source_id") or ""),
+        }
+    return freshness
+
+
+def _normalized_overlap(left: Iterable[str], right: Iterable[str]) -> bool:
+    left_terms = [
+        re.sub(r"[\s\-_]+", " ", str(value or "").casefold()).strip()
+        for value in left
+    ]
+    right_terms = [
+        re.sub(r"[\s\-_]+", " ", str(value or "").casefold()).strip()
+        for value in right
+    ]
+    for left_term in left_terms:
+        if len(left_term) < 2:
+            continue
+        for right_term in right_terms:
+            if len(right_term) < 2:
+                continue
+            if left_term in right_term or right_term in left_term:
+                return True
+    return False
+
+
+def _reviewed_seed_registry_refs(
+    trigger: Mapping[str, Any],
+    aliases: list[str],
+    registry: Mapping[str, Any],
+    freshness_by_thread: Mapping[str, Mapping[str, str]],
+) -> list[dict[str, Any]]:
+    """Derive route handles for reviewed public seeds that omit source refs.
+
+    Reviewed seed triggers are allowed to name public AIppocampus vocabulary
+    without private source refs. Query-pattern routes still need reopen handles,
+    so we attach only bounded registry thread/source ids whose metadata overlaps
+    the seed. This keeps seed aliases useful as navigation while preserving the
+    rule that aliases are not evidence.
+    """
+
+    if not trigger.get("reviewed_seed_rationale"):
+        return []
+    seed_text = " ".join(
+        str(trigger.get(key) or "")
+        for key in ("title", "concept", "review_note", "reviewed_seed_rationale")
+    )
+    project_hint = "AIppocampus" if "aippocampus" in seed_text.casefold() else ""
+    trigger_terms = _aliases([project_hint, trigger.get("title"), trigger.get("concept"), *aliases])
+    if not trigger_terms:
+        return []
+    entries = registry.get("threads") if isinstance(registry, Mapping) else []
+    if not isinstance(entries, list):
+        return []
+    refs: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        thread_key = str(entry.get("thread_key") or "").strip()
+        if not thread_key:
+            continue
+        registry_terms = _aliases(_registry_alias_candidates(entry))
+        if not _normalized_overlap(trigger_terms, registry_terms):
+            continue
+        ref: dict[str, Any] = {"thread_key": thread_key}
+        source_id = (freshness_by_thread.get(thread_key) or {}).get("source_id")
+        if source_id:
+            ref["source_id"] = source_id
+        refs.append(ref)
+        if len(refs) >= MAX_SOURCE_REFS:
+            break
+    return refs
+
+
 def registry_query_pattern_route_rows(
     registry: Mapping[str, Any],
     *,
@@ -371,6 +526,7 @@ def registry_query_pattern_route_rows(
                 "thread_key_hash": thread_hash,
                 "source_generation_digest": _registry_generation_digest(entry, manifest),
                 "query_aliases": aliases,
+                "alias_source": REGISTRY_ALIAS_SOURCE,
                 "source_refs": [source_ref],
                 "confidence": DEFAULT_REGISTRY_ROUTE_CONFIDENCE,
                 "state": "current",
@@ -385,6 +541,113 @@ def registry_query_pattern_route_rows(
         if len(rows) >= max(0, int(max_routes)):
             break
     return rows
+
+
+def _iter_semantic_trigger_rows(path: Path) -> Iterable[Mapping[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[Mapping[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(item, Mapping):
+                    rows.append(item)
+    except OSError:
+        return []
+    return rows
+
+
+def semantic_trigger_query_pattern_route_rows(
+    registry: Mapping[str, Any],
+    *,
+    registry_dir: Path,
+    max_routes: int = MAX_REGISTRY_ROUTES,
+    ttl_seconds: int = DEFAULT_REGISTRY_ROUTE_TTL_SECONDS,
+) -> list[dict[str, Any]]:
+    """Project reviewed semantic triggers into query-pattern route rows.
+
+    This reuses the existing reviewed-semantic sidecar instead of inventing
+    Python phrase lists. Trigger aliases remain local matching handles; public
+    reports only expose source buckets and counts.
+    """
+
+    freshness_by_thread = _registry_freshness_by_thread(registry)
+    rows: list[dict[str, Any]] = []
+    triggers_path = registry_dir.resolve() / "semantic_triggers.jsonl"
+    for trigger in _iter_semantic_trigger_rows(triggers_path):
+        if trigger.get("kind") not in {None, "", "aippocampus_semantic_trigger"}:
+            continue
+        if str(trigger.get("status") or "active").casefold() != "active":
+            continue
+        aliases = _aliases(
+            trigger.get("query_aliases")
+            or trigger.get("aliases")
+            or trigger.get("activation_cues")
+            or []
+        )
+        refs = safe_source_refs(trigger.get("source_refs"))[:MAX_SOURCE_REFS]
+        if not refs:
+            refs = _reviewed_seed_registry_refs(
+                trigger,
+                aliases,
+                registry,
+                freshness_by_thread,
+            )
+        if not aliases or not refs:
+            continue
+        thread_key = ""
+        for ref in refs:
+            raw_thread = str(ref.get("thread_key") or "").strip()
+            if raw_thread:
+                thread_key = raw_thread
+                break
+        if not thread_key:
+            continue
+        freshness = freshness_by_thread.get(thread_key, {})
+        source_id = freshness.get("source_id")
+        if source_id and not refs[0].get("source_id"):
+            refs[0] = {**refs[0], "source_id": source_id}
+        route_id = str(
+            trigger.get("query_pattern_route_id") or trigger.get("trigger_id") or ""
+        ).strip()
+        rows.append(
+            {
+                "query_pattern_route_id": route_id,
+                "thread_key_hash": freshness.get("thread_key_hash")
+                or _sha(thread_key, prefix="thread"),
+                "source_generation_digest": freshness.get("source_generation_digest")
+                or str(trigger.get("source_generation_digest") or ""),
+                "query_aliases": aliases,
+                "alias_source": "reviewed_semantic",
+                "source_refs": refs,
+                "confidence": _float_bucket(trigger.get("confidence"), default=0.86),
+                "state": "current",
+                "ttl_seconds": max(1, int(ttl_seconds)),
+                "navigation_only": True,
+                "output_authority": "navigation_only",
+                "source_reopen_required": True,
+                "sensitivity": "local_route_handle_only",
+                "privacy_state": "allowed",
+            }
+        )
+        if len(rows) >= max(0, int(max_routes)):
+            break
+    return rows
+
+
+def _reviewed_semantic_route_reserve(max_routes: int) -> int:
+    """Reserve route budget so cheap metadata rows cannot starve reviewed aliases."""
+
+    limit = max(0, int(max_routes))
+    if limit == 0:
+        return 0
+    return min(limit, max(1, min(DEFAULT_REVIEWED_SEMANTIC_ROUTE_RESERVE, limit // 4)))
 
 
 def publish_registry_query_pattern_routes(
@@ -403,7 +666,24 @@ def publish_registry_query_pattern_routes(
 
     root = registry_dir.resolve() if registry_dir else Path.cwd()
     path = output_path or default_query_pattern_routes_path(root)
-    rows = registry_query_pattern_route_rows(registry, max_routes=max_routes)
+    route_limit = max(0, int(max_routes))
+    semantic_candidates = semantic_trigger_query_pattern_route_rows(
+        registry,
+        registry_dir=root,
+        max_routes=route_limit,
+    )
+    semantic_reserve = _reviewed_semantic_route_reserve(route_limit) if semantic_candidates else 0
+    semantic_rows = semantic_candidates[:semantic_reserve]
+    registry_rows = registry_query_pattern_route_rows(
+        registry,
+        max_routes=max(0, route_limit - len(semantic_rows)),
+    )
+    remaining = max(0, route_limit - len(registry_rows) - len(semantic_rows))
+    if remaining:
+        semantic_rows.extend(
+            semantic_candidates[len(semantic_rows) : len(semantic_rows) + remaining]
+        )
+    rows = [*registry_rows, *semantic_rows]
     current_generation_by_thread = {
         str(row.get("thread_key_hash")): str(row.get("source_generation_digest") or "")
         for row in rows
@@ -445,10 +725,13 @@ def publish_registry_query_pattern_routes(
     }
 
 
-def public_registry_query_pattern_routes_summary(report: Mapping[str, Any]) -> dict[str, int]:
+def public_registry_query_pattern_routes_summary(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = report.get("metrics")
     if not isinstance(metrics, Mapping):
         metrics = {}
+    alias_counts = metrics.get("alias_source_route_counts")
+    if not isinstance(alias_counts, Mapping):
+        alias_counts = {}
     return {
         "route_write_count": _int(metrics.get("route_write_count")),
         "stale_generation_suppressed_count": _int(
@@ -456,7 +739,37 @@ def public_registry_query_pattern_routes_summary(report: Mapping[str, Any]) -> d
         ),
         "privacy_suppressed_count": _int(metrics.get("privacy_suppressed_count")),
         "live_llm_call_count": _int(metrics.get("live_llm_call_count")),
+        "alias_source_route_counts": {
+            str(key): _int(value) for key, value in alias_counts.items()
+        },
     }
+
+
+def _alias_source_counts(routes: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for route in routes:
+        if not isinstance(route, Mapping):
+            continue
+        _increment_count(counts, _alias_source(route))
+    return counts
+
+
+def _alias_quality_rates(diagnostics: dict[str, Any]) -> None:
+    hits_by_source = diagnostics.get("cache_hit_count_by_alias_source")
+    if not isinstance(hits_by_source, dict):
+        hits_by_source = {}
+    total_hits = _int(diagnostics.get("cache_hit_count"))
+    registry_hits = _int(hits_by_source.get(REGISTRY_ALIAS_SOURCE))
+    generated_hits = sum(
+        _int(count)
+        for source, count in hits_by_source.items()
+        if _is_generated_alias_source(str(source))
+    )
+    registry_rate = round(registry_hits / total_hits, 4) if total_hits else 0.0
+    generated_rate = round(generated_hits / total_hits, 4) if total_hits else 0.0
+    diagnostics["registry_alias_hit_rate"] = registry_rate
+    diagnostics["generated_alias_hit_rate"] = generated_rate
+    diagnostics["registry_to_generated_alias_lift"] = round(generated_rate - registry_rate, 4)
 
 
 def query_pattern_routes_report(
@@ -468,7 +781,7 @@ def query_pattern_routes_report(
 
     now_value = time.time() if now_unix is None else now_unix
     rows: list[dict[str, Any]] = []
-    metrics = {
+    metrics: dict[str, Any] = {
         "route_count": 0,
         "active_route_count": 0,
         "suppressed_route_count": 0,
@@ -476,6 +789,11 @@ def query_pattern_routes_report(
         "privacy_suppressed_count": 0,
         "missing_source_ref_count": 0,
         "low_confidence_suppressed_count": 0,
+        "alias_source_route_counts": {},
+        "alias_source_alias_counts": {},
+        "active_alias_source_route_counts": {},
+        "registry_alias_route_count": 0,
+        "generated_alias_route_count": 0,
         "live_llm_call_count": 0,
     }
     for raw in routes:
@@ -499,6 +817,19 @@ def query_pattern_routes_report(
             metrics["low_confidence_suppressed_count"] += 1
         status = "suppressed" if reason_codes else "active"
         metrics["active_route_count" if status == "active" else "suppressed_route_count"] += 1
+        alias_source = str(route.get("alias_source") or UNSPECIFIED_ALIAS_SOURCE)
+        _increment_count(metrics["alias_source_route_counts"], alias_source)
+        _increment_count(
+            metrics["alias_source_alias_counts"],
+            alias_source,
+            len(route.get("query_aliases") or []),
+        )
+        if alias_source == REGISTRY_ALIAS_SOURCE:
+            metrics["registry_alias_route_count"] += 1
+        if _is_generated_alias_source(alias_source):
+            metrics["generated_alias_route_count"] += 1
+        if status == "active":
+            _increment_count(metrics["active_alias_source_route_counts"], alias_source)
         rows.append(
             {
                 "query_pattern_route_id": route["query_pattern_route_id"],
@@ -565,6 +896,7 @@ def _matched(route: dict[str, Any], query_terms: list[str]) -> bool:
 
 
 def _empty_packet(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    _alias_quality_rates(diagnostics)
     return {
         "kind": QUERY_PATTERN_PACKET_KIND,
         "schema_version": QUERY_PATTERN_ROUTE_SCHEMA_VERSION,
@@ -590,11 +922,19 @@ def _diagnostics() -> dict[str, Any]:
         "cache_hit_count": 0,
         "cache_miss_count": 0,
         "selected_count": 0,
+        "cache_hit_count_by_alias_source": {},
+        "selected_count_by_alias_source": {},
+        "registry_alias_hit_rate": 0.0,
+        "generated_alias_hit_rate": 0.0,
+        "registry_to_generated_alias_lift": 0.0,
+        "multilingual_alias_route_hit_count": 0,
+        "nickname_miss_count": 0,
         "stale_suppressed_count": 0,
         "privacy_suppressed_count": 0,
         "low_confidence_suppressed_count": 0,
         "missing_source_ref_count": 0,
         "live_llm_call_count": 0,
+        "alias_text_publicly_serialized": False,
         "output_boundary": "query_pattern_packet_no_raw_alias_text",
     }
 
@@ -618,6 +958,10 @@ def select_query_pattern_packet(
         if not _matched(route, terms):
             continue
         diagnostics["cache_hit_count"] += 1
+        alias_source = str(route.get("alias_source") or UNSPECIFIED_ALIAS_SOURCE)
+        _increment_count(diagnostics["cache_hit_count_by_alias_source"], alias_source)
+        if _has_multilingual_alias(route):
+            diagnostics["multilingual_alias_route_hit_count"] += 1
         ttl_remaining = _ttl_remaining(route, now_unix=now_value)
         if route.get("state") in STALE_STATES or (ttl_remaining is not None and ttl_remaining <= 0):
             diagnostics["stale_suppressed_count"] += 1
@@ -636,6 +980,8 @@ def select_query_pattern_packet(
 
     if diagnostics["cache_hit_count"] == 0:
         diagnostics["cache_miss_count"] = 1
+        if _nickname_or_role_prompt(prompt):
+            diagnostics["nickname_miss_count"] = 1
     if not scored:
         return _empty_packet(diagnostics)
 
@@ -644,7 +990,12 @@ def select_query_pattern_packet(
     refs: list[dict[str, Any]] = []
     for route in selected:
         refs.extend(route.get("source_refs") or [])
+        _increment_count(
+            diagnostics["selected_count_by_alias_source"],
+            str(route.get("alias_source") or UNSPECIFIED_ALIAS_SOURCE),
+        )
     diagnostics["selected_count"] = len(selected)
+    _alias_quality_rates(diagnostics)
     return {
         "kind": QUERY_PATTERN_PACKET_KIND,
         "schema_version": QUERY_PATTERN_ROUTE_SCHEMA_VERSION,

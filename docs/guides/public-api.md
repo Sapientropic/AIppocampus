@@ -215,12 +215,19 @@ For these commands:
   text, answer text, local paths, prompts, or secrets. The companion
   `query_pattern_routes.jsonl` sidecar is a trusted-local navigation cache:
   onboarding may publish default deterministic routes from registry/import
-  metadata during sidecar refresh, its writer filters stale source-generation
-  digests, invalid local aliases, and privacy-blocked rows, and the prompt hook
-  may consume matching rows as hot-path `scent` only. Public publish reports
-  expose counts and boundary flags, not alias text or source refs. Generated
-  aliases are not evidence; foreground use still requires source reopen before
-  any factual claim.
+  metadata and reviewed `semantic_triggers.jsonl` rows during sidecar refresh,
+  its writer filters stale source-generation digests, invalid local aliases, and
+  privacy-blocked rows, and the prompt hook may consume matching rows as
+  hot-path `scent` only. Reviewed seed triggers without explicit source refs may
+  derive bounded registry route handles from matching registry metadata; that
+  derived handle is still navigation-only. The publisher reserves route budget
+  for reviewed semantic rows so default registry metadata cannot starve natural
+  alias routes. Public publish reports expose counts and boundary flags, not
+  alias text or source refs. Query-pattern route packets, hook debug summaries,
+  and Observatory reports may expose alias-source aggregate counts and rates for
+  `registry_metadata`, `reviewed_semantic`, `local_offline_generated`, and
+  `external_model_generated` rows. Generated aliases are not evidence;
+  foreground use still requires source reopen before any factual claim.
 - `semantic_recall_gate.py --cache-report --json` is an additive trusted-local
   operator diagnostic for the exact semantic result cache. Its public-safe
   projection may include counts, telemetry counters, value-class buckets, and
