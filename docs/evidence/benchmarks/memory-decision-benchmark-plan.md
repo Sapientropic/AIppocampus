@@ -627,18 +627,38 @@ contract smoke has enough power:
 
 The `preregistered_slices` block records which narrow #378 slice this report
 actually ran. The current slice is
-`github_378_continuous_memory_public_synthetic_v1`: a deterministic
-public-synthetic contract smoke over the six attribution-arm fixtures. It
-freezes a sanitized case-manifest digest, scenario-selection role, required
-fair strategies, primary endpoint, decision preview, and public-quality gates.
-It intentionally reports `public_quality_claim_ready=false` because this slice
-has one deterministic repeat per case/arm and does not evaluate the registered
-lower-bound rule. It is a preregistered runner target, not a public superiority
-claim.
+`github_378_continuous_memory_public_synthetic_v1`. The default runner profile
+remains a deterministic public-synthetic contract smoke over the six
+attribution-arm fixtures: it freezes a sanitized case-manifest digest,
+scenario-selection role, required fair strategies, primary endpoint, decision
+preview, and public-quality gates, but it has only one deterministic repeat per
+case/arm.
+
+For the registered repeat readout, run:
+
+```powershell
+python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --public-quality-repeat-profile --json
+```
+
+That `public_synthetic_preregistered_repeat` profile expands the same
+public-safe fixture pack to `repeat_count_per_case_arm=5`,
+`case_arm_trial_count=30`, and `row_count=180`.
+It evaluates the registered lower-bound rule with
+`lower_bound_method=minimum_observed_paired_delta_for_deterministic_public_synthetic_repeats`.
+The 2026-06-08 local run reported `lower_bound_units=-27.7675`,
+`mean_delta_units=-27.7675`, `lower_bound_passed=false`,
+`primary_endpoint_winner=fresh_context_spec_loop`, and
+`decision_label=no demonstrated memory advantage`.
+
+This repeated public-synthetic slice is useful negative evidence for #378's
+no-advantage rule. It still does not claim full #378 continuous-memory
+superiority, live host-native cost or compaction telemetry, private real-history
+generality, or cost-weight robust continuous-memory advantage.
 
 The current public-synthetic report exposes the pre-registration decision as a
-contract-smoke preview. With the #410 ledger values, `fresh_context_spec_loop`
-is the current fair-strategy winner, so
+contract-smoke preview by default and as a repeated lower-bound readout when
+`--public-quality-repeat-profile` is used. With the current #410 ledger values,
+`fresh_context_spec_loop` is the current fair-strategy winner, so
 `continuous_memory_advantage_claim_allowed=false`.
 
 ### Repeatable Baseline Command

@@ -396,6 +396,39 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             readout["cannot_claim"],
         )
 
+    def test_public_quality_repeat_profile_evaluates_lower_bound_without_claim(self) -> None:
+        payload = benchmark.run_benchmark(repeat_count_per_case_arm=5)
+        readout = payload["preregistered_slices"][0]
+        repeat = readout["paired_repeat_readout"]
+        decision = payload["preregistration"]["current_report_decision"]
+
+        self.assertEqual(payload["config"]["runner_profile"], "public_synthetic_preregistered_repeat")
+        self.assertEqual(payload["config"]["repeat_count_per_case_arm"], 5)
+        self.assertEqual(payload["metrics"]["case_count"], 6)
+        self.assertEqual(payload["metrics"]["case_arm_trial_count"], 30)
+        self.assertEqual(payload["metrics"]["row_count"], 180)
+        self.assertEqual(readout["frozen_inputs"]["repeat_count_per_case_arm"], 5)
+        self.assertEqual(repeat["repeat_count_per_case_arm"], 5)
+        self.assertTrue(repeat["paired_repeat_power_gate_passed"])
+        self.assertTrue(repeat["lower_bound_rule_evaluated"])
+        self.assertLess(repeat["lower_bound_units"], 0)
+        self.assertFalse(repeat["lower_bound_passed"])
+        self.assertEqual(
+            len(repeat["paired_net_value_deltas_by_repeat"]),
+            5,
+        )
+        self.assertTrue(
+            readout["public_quality_gates"]["paired_repeat_power_gate_passed"]
+        )
+        self.assertTrue(readout["public_quality_gates"]["lower_bound_rule_evaluated"])
+        self.assertFalse(readout["public_quality_gates"]["public_quality_claim_ready"])
+        self.assertEqual(
+            decision["evaluated_as"],
+            "public_synthetic_preregistered_repeat_readout",
+        )
+        self.assertEqual(decision["decision_label"], "no demonstrated memory advantage")
+        self.assertFalse(decision["continuous_memory_advantage_claim_allowed"])
+
     def test_report_tracks_scenario_provenance_holdouts_and_negative_controls(self) -> None:
         payload = benchmark.run_benchmark()
         controls = payload["scenario_controls"]
@@ -523,9 +556,12 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("holdout_excluded", benchmark_plan)
         self.assertIn("preregistered_slices", benchmark_plan)
         self.assertIn("github_378_continuous_memory_public_synthetic_v1", benchmark_plan)
+        self.assertIn("public_synthetic_preregistered_repeat", benchmark_plan)
+        self.assertIn("lower_bound_units=-27.7675", benchmark_plan)
         self.assertIn("source_grounded_task_success_under_equalized_cost", benchmark_plan)
         self.assertIn("no demonstrated memory advantage", benchmark_plan)
         self.assertIn("not a public superiority claim", benchmark_plan)
+        self.assertIn("public_synthetic_preregistered_repeat", evidence_map)
 
     def test_cli_emits_json_and_can_write_report(self) -> None:
         output = REPO_ROOT / ".tmp" / "test-continuous-memory-arms.json"

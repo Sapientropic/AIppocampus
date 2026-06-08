@@ -50,7 +50,7 @@ this main action queue.
 
 ## Test, Benchmark, And Tool Debt Budgets
 
-Last counted: 2026-06-05.
+Last counted: 2026-06-08.
 Counting method: `script_line_count()` from
 `tests/aippocampus/test_architecture_boundaries.py`: nonblank lines excluding
 lines whose first non-space character is `#`.
@@ -79,7 +79,7 @@ Current non-runtime action rows:
 | `tests/aippocampus/test_subconscious_jobs.py` | 2655 | 2700 | #153 / #248 | Split deterministic question-tracking fixtures or shared model-route/job-output assertions before adding more job families; keep runner semantics visible. |
 | `tests/aippocampus/test_import_coupling.py` | 107 | 2500 | #658 / #659 | Continue moving reusable analysis helpers into `import_coupling_helpers.py`; invert remaining shim-preservation assertions toward explicit public allowlists. |
 | `benchmarks/aippocampus/benchmark_amemgym_official.py` | 1234 | 1400 | #742 | Split official adapter overlay/protocol generation or score-output discovery into a sibling helper before adding more AMemGym arms, provider metadata extraction, or cost/latency parsing. |
-| `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | 1785 | 1800 | #378 | Preregistered slice readout projection now lives in `continuous_memory_preregistered_slices.py`; split arm fixture catalog or cost/harm scoring before adding more arms or private-history adapters. |
+| `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | 1751 | 1800 | #378 | Preregistered repeat readout and registration projection live in `continuous_memory_preregistered_slices.py`; split arm fixture catalog or cost/harm scoring before adding more arms or private-history adapters. |
 | `tools/aippocampus/docs/check_docs_health.py` | 1372 | 1400 | #672 | Product profile guards now live in `tools/aippocampus/docs/product_profile_guard.py`; split another focused check group or shared markdown/path scanner before adding more public-readiness domains; keep single CLI output stable. |
 
 The complete test / benchmark / tool inventory is in the evidence snapshot and

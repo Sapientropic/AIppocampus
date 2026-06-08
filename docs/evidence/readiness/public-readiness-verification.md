@@ -1067,6 +1067,33 @@ The #378 runner now extends `cost_harm_ledger` with
   public-quality #378 superiority, live host-native cost telemetry, private
   real-history generality, or competitor superiority.
 
+## 2026-06-08 - Continuous-memory preregistered repeat readout
+
+The #378 runner now has an explicit public-synthetic repeat profile for the
+registered lower-bound rule.
+
+- Command:
+  `python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --public-quality-repeat-profile --json --output .tmp\continuous-memory-repeat-profile.json`.
+- The run reported `runner_profile=public_synthetic_preregistered_repeat`,
+  `repeat_count_per_case_arm=5`, `case_arm_trial_count=30`, and
+  `row_count=180`.
+- The repeated readout reported
+  `lower_bound_method=minimum_observed_paired_delta_for_deterministic_public_synthetic_repeats`,
+  `lower_bound_units=-27.7675`, `mean_delta_units=-27.7675`,
+  `lower_bound_passed=false`,
+  `primary_endpoint_winner=fresh_context_spec_loop`, and
+  `decision_label=no demonstrated memory advantage`.
+- This is public-safe negative evidence for the preregistered no-advantage
+  rule. It evaluates the lower-bound gate instead of leaving it as prose, but
+  it still does not claim full #378 continuous-memory superiority.
+- Verification commands passed during this slice:
+  `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms -v`
+  and the repeat-profile command above. Broader PR-lane verification is tracked
+  in the merge PR for this slice.
+- This does not claim live host-native cost or compaction telemetry, private
+  real-history generality, cost-weight robust continuous-memory advantage,
+  answer-generation model quality, or competitor superiority.
+
 ## 2026-06-03 - First-recall onboarding receipt smoke
 
 The #470 slice moves the first-user path toward a 5-minute source-backed recall
