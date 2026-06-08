@@ -184,7 +184,14 @@ def graph_signal(candidate: Mapping[str, Any]) -> float:
     return 0.0
 
 
-def source_signal(candidate: Mapping[str, Any]) -> float:
+def source_richness_signal(candidate: Mapping[str, Any]) -> float:
+    """Return post-gate provenance richness, not source eligibility.
+
+    `blend()` rejects candidates without a stable source join before this
+    function runs. A join key alone is enough to remain eligible, but it is weak
+    provenance and should not earn a soft ranking boost by itself.
+    """
+
     refs = [ref for ref in candidate.get("source_refs") or [] if isinstance(ref, Mapping)]
     if refs:
         return min(
@@ -192,6 +199,16 @@ def source_signal(candidate: Mapping[str, Any]) -> float:
             SOURCE_SIGNAL_POLICY.ref_base + len(refs) * SOURCE_SIGNAL_POLICY.per_ref,
         )
     return SOURCE_SIGNAL_POLICY.join_key_only if source_join_key(candidate) else 0.0
+
+
+def source_signal(candidate: Mapping[str, Any]) -> float:
+    """Compatibility alias for the post-gate provenance richness signal."""
+
+    return source_richness_signal(candidate)
+
+
+def provenance_richness_class(candidate: Mapping[str, Any]) -> str:
+    return "source_refs" if candidate.get("source_refs") else "weak_join_only"
 
 
 def normalize(values: Mapping[str, float], key: str) -> float:
@@ -210,7 +227,9 @@ def merge_candidate(into: dict[str, Any], candidate: Mapping[str, Any]) -> None:
     into["text_score"] = max(float(into.get("text_score") or 0.0), text_signal(candidate))
     into["vector_score"] = max(float(into.get("vector_score") or 0.0), vector_signal(candidate))
     into["graph_score"] = max(float(into.get("graph_score") or 0.0), graph_signal(candidate))
-    into["source_score"] = max(float(into.get("source_score") or 0.0), source_signal(candidate))
+    into["source_score"] = max(
+        float(into.get("source_score") or 0.0), source_richness_signal(candidate)
+    )
     refs = into.setdefault("source_refs", [])
     seen = {source_ref_key(ref) for ref in refs if isinstance(ref, Mapping)}
     for ref in candidate.get("source_refs") or []:
@@ -285,9 +304,13 @@ def score_merged_candidate(
         "channels": sorted(str(channel) for channel in candidate.get("channels") or []),
         "source_refs": list(candidate.get("source_refs") or []),
         "source_boundary": {
+            "source_join_gate": "passed",
             "stable_source_join_required": True,
             "source_refs_present": bool(candidate.get("source_refs")),
+            "provenance_richness": provenance_richness_class(candidate),
+            "source_richness_score_is_ranking_hint": True,
             "ranking_scores_are_not_truth": True,
+            "source_reopen_required_for_claims": True,
         },
         "payload": candidate.get("payload"),
     }
@@ -316,8 +339,10 @@ def blend(
         if not source_id:
             skipped.append(
                 {
+                    "gate": "source_join_gate",
                     "reason": "missing_stable_source_join",
                     "channels": candidate.get("channels") or [candidate.get("score_kind") or ""],
+                    "source_richness_scored": False,
                 }
             )
             continue
@@ -366,6 +391,8 @@ def blend(
         "policy_boundary": {
             "scores_are_ranking_hints_only": True,
             "source_refs_or_stable_source_ids_required": True,
+            "source_join_gate_required": True,
+            "source_richness_is_post_gate_ranking_hint": True,
             "vectors_optional": True,
             "graph_optional": True,
         },
