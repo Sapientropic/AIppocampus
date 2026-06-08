@@ -449,6 +449,29 @@ class OnboardCodexTests(unittest.TestCase):
         )
         self.assertTrue((self.registry_dir / "project_timeline.json").exists())
         self.assertTrue((self.registry_dir / "semantic_triggers.jsonl").exists())
+        self.assertTrue((self.registry_dir / "query_pattern_routes.jsonl").exists())
+        self.assertEqual(
+            result["data"]["actions"]["query_pattern_routes"]["metrics"]["live_llm_call_count"],
+            0,
+        )
+        self.assertEqual(
+            result["data"]["actions"]["query_pattern_routes"]["metrics"]["route_write_count"],
+            1,
+        )
+        self.assertTrue(
+            result["data"]["actions"]["query_pattern_routes"]["contract"][
+                "query_pattern_routes_are_navigation_only"
+            ]
+        )
+
+        public = onboard.public_onboarding_result(result)
+        encoded_public = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(
+            public["data"]["actions"]["query_pattern_routes"]["route_write_count"],
+            1,
+        )
+        self.assertNotIn("query_aliases", encoded_public)
+        self.assertNotIn(str(self.root), encoded_public)
 
     def test_cli_json_uses_public_onboarding_projection(self) -> None:
         private_result = {

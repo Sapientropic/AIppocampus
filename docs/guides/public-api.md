@@ -214,10 +214,13 @@ For these commands:
   consumption metrics, but it must not call a live model or expose raw source
   text, answer text, local paths, prompts, or secrets. The companion
   `query_pattern_routes.jsonl` sidecar is a trusted-local navigation cache:
-  its writer filters stale source-generation digests, invalid local aliases,
-  and privacy-blocked rows, and the prompt hook may consume matching rows as
-  hot-path `scent` only. Generated aliases are not evidence; foreground use
-  still requires source reopen before any factual claim.
+  onboarding may publish default deterministic routes from registry/import
+  metadata during sidecar refresh, its writer filters stale source-generation
+  digests, invalid local aliases, and privacy-blocked rows, and the prompt hook
+  may consume matching rows as hot-path `scent` only. Public publish reports
+  expose counts and boundary flags, not alias text or source refs. Generated
+  aliases are not evidence; foreground use still requires source reopen before
+  any factual claim.
 - `semantic_recall_gate.py --cache-report --json` is an additive trusted-local
   operator diagnostic for the exact semantic result cache. Its public-safe
   projection may include counts, telemetry counters, value-class buckets, and

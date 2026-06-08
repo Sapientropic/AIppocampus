@@ -34,23 +34,8 @@ from aippocampus_runtime.navigation.project_timeline import (
     save_project_timeline,
 )
 from aippocampus_runtime.onboarding.frontier import (
-    filter_frontier_result_for_current_state as filter_frontier_result_for_current_state,
-)
-from aippocampus_runtime.onboarding.frontier import (
     frontier_boundary_result,
     frontier_maintenance_context,
-)
-from aippocampus_runtime.onboarding.frontier import (
-    onboarding_artifacts_complete as onboarding_artifacts_complete,
-)
-from aippocampus_runtime.onboarding.frontier import (
-    sample_findings_for_frontier as sample_findings_for_frontier,
-)
-from aippocampus_runtime.onboarding.frontier import (
-    stale_completed_frontier_reason as stale_completed_frontier_reason,
-)
-from aippocampus_runtime.onboarding.frontier import (
-    write_filtered_frontier_findings as write_filtered_frontier_findings,
 )
 from aippocampus_runtime.onboarding.status import (
     clean_source_line_range as clean_source_line_range,
@@ -80,6 +65,7 @@ from aippocampus_runtime.recall.semantic_trigger_router import (
     default_seed_triggers_path,
 )
 from aippocampus_runtime.registry.api import (
+    load_registry,
     register_current_thread,
     register_rollout_thread,
     registry_paths,
@@ -90,6 +76,7 @@ from aippocampus_runtime.subconscious.jobs import (
     JOB_SPECS,
     default_jobs_output_path,
 )
+from aippocampus_runtime.warm_ambient import query_pattern_routes
 from conversation_sources import ConversationProvider
 
 ONBOARD_SCHEMA_VERSION = 1
@@ -374,6 +361,9 @@ def run_onboarding(
         output_path=default_semantic_triggers_path(registry_path=registry_path),
         seed_triggers_path=default_seed_triggers_path(),
     )
+    actions["query_pattern_routes"] = query_pattern_routes.publish_registry_query_pattern_routes(
+        load_registry(registry_path), registry_dir=registry_path.parent
+    )
 
     stats_after = registry_stats(registry_dir=registry_dir)
     ok: bool | str = True
@@ -517,6 +507,11 @@ def public_action_summaries(actions: Any) -> dict[str, Any]:
         summaries["semantic_triggers"] = {
             "trigger_count": public_count(semantic_triggers.get("trigger_count"))
         }
+
+    if isinstance(query_routes_report := actions.get("query_pattern_routes"), dict):
+        summaries["query_pattern_routes"] = (
+            query_pattern_routes.public_registry_query_pattern_routes_summary(query_routes_report)
+        )
 
     return summaries
 
