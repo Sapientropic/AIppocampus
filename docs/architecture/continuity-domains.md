@@ -190,16 +190,24 @@ Prompt hooks must not carry the domain working conclusion body. The hook should
 say "there is a source-trailed continuity route here", not "this long-term
 conclusion is true".
 
-Agent-initiated recall may pull continuity domain pointers through
-`active_recall --mode context`. This path is explicitly different from passive
-hooks: it can show route material when the agent asks for continuity, but it
-still keeps domain summaries out of factual authority.
+Agent-initiated recall may pull continuity domain pointers and matching pathlet
+pointers through `active_recall --mode context`. This path is explicitly
+different from passive hooks: it can show route material when the agent asks for
+continuity, but it still keeps domain summaries and pathlet summaries out of
+factual authority. When a domain or pathlet route matches, the context payload
+may include a small `fresh_thread_route_packet` compiled from existing route
+primitives. That packet is navigation only: exact, public, sensitive, disputed,
+or stale claims still require source reopen.
 
 MCP progressive recall reuses existing tools:
 
 - `recall_context` may return a `continuity_domain` route handle.
+- `recall_context` may return a `pathlet` route as a short-lived source-ref
+  handle when an ordered pathlet matches before broad manual search.
 - `recall_deepen` opens the domain brief and attempts to reopen representative
   clean-source refs.
+- `recall_deepen` opens pathlet handles through the carried clean-source refs;
+  there is no separate pathlet fact layer.
 - `recall_deepen` rejects blocked, stale, superseded, or retired domain handles
   even when the handle carries fresh snapshot fields.
 - If a source ref carries `thread_key`, `recall_deepen` may use the machine
@@ -210,6 +218,9 @@ MCP progressive recall reuses existing tools:
   until a later handle or clean-source reopen selects them.
 - `get_turn_context` or clean-source search remains the authority for exact
   wording and broader source context.
+- If no continuity-domain snapshot is published or readable, active recall and
+  MCP context should report the missing snapshot artifact instead of silently
+  implying there is no memory.
 
 No new MCP tool is required for Contract v1. Domain handles are short-lived and
 become stale when the caller clean source, referenced registry-thread clean
@@ -270,9 +281,11 @@ Contract v1 does not:
 - Snapshots are rebuildable and public-safe.
 - Hook rendering emits only pointer cards, not working conclusion bodies.
 - Active recall can surface continuity domain handles in
-  `working_continuity_brief`.
-- MCP `recall_context` can return a domain route and `recall_deepen` can open
-  the domain brief plus clean-source trail.
+  `working_continuity_brief`, pathlet pointers, and a navigation-only
+  `fresh_thread_route_packet`.
+- MCP `recall_context` can return domain and pathlet routes; `recall_deepen` can
+  open the domain brief plus clean-source trail or the pathlet's clean-source
+  refs.
 - MCP deepen rejects blocked/stale/superseded/retired domain handles and can
   follow registry-backed `thread_key` refs for cross-thread source reopen.
 - The explicit `aippocampus continuity-domain` CLI can produce source-ref-backed

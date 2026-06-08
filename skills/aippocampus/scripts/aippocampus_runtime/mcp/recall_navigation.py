@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
-from aippocampus_runtime.mcp.domain_handles import continuity_domain_route_handle
+from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
 from aippocampus_runtime.mcp.source_ref_registry import (
     registry_source_fingerprint_invalidations,
     source_candidate_dirs_for_ref,
@@ -35,7 +35,6 @@ from aippocampus_runtime.recall.continuity_domains import (
     continuity_domains_latest_path_for_clean_source,
     domain_brief_for_deepen,
     load_continuity_domains_snapshot,
-    match_continuity_domain_pointers,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry import api as registry
@@ -288,58 +287,6 @@ def _registry_routes(
     return routes
 
 
-def _continuity_domain_routes(
-    *,
-    intent: str,
-    clean_source_dir: Path,
-    snapshot_path: Path | None,
-    registry_dir: Path | None,
-    max_routes: int,
-) -> list[dict[str, Any]]:
-    snapshot = load_continuity_domains_snapshot(snapshot_path)
-    pointers = match_continuity_domain_pointers(
-        intent,
-        snapshot,
-        limit=max_routes,
-        clean_source_dir=clean_source_dir,
-        snapshot_path=snapshot_path,
-    )
-    routes: list[dict[str, Any]] = []
-    for pointer in pointers:
-        domain_id = str(pointer.get("domain_id") or "")
-        source_refs = [ref for ref in pointer.get("source_refs") or [] if isinstance(ref, dict)]
-        route_id = _stable_id("continuity_domain", domain_id)
-        handle = continuity_domain_route_handle(
-            source_dir=clean_source_dir,
-            snapshot_path=snapshot_path,
-            domain_id=domain_id,
-            source_refs=source_refs,
-            registry_dir=registry_dir,
-        )
-        routes.append(
-            {
-                "handle": handle,
-                "route_id": route_id,
-                "kind": "continuity_domain",
-                "title": _safe_text(pointer.get("label") or domain_id, 120),
-                "summary": _safe_text(pointer.get("why_it_may_matter_now"), 180),
-                "evidence_level": "needs_domain_deepen",
-                "support_level": "navigation",
-                "action_grammar": pointer.get("action_grammar") or "reopenable_route",
-                "source_refs": source_refs,
-                "scope_labels": [],
-                "reopenable": True,
-                "why_this_may_matter": _safe_text(pointer.get("why_it_may_matter_now"), 220),
-                "suggested_next": {
-                    "tool": "recall_deepen",
-                    "arguments": {"handle": handle},
-                },
-                "source_boundary": pointer.get("source_boundary") or _boundary(),
-            }
-        )
-    return routes
-
-
 def recall_context_packet(
     *,
     intent: str,
@@ -371,14 +318,16 @@ def recall_context_packet(
     snapshot_path = continuity_domains_snapshot_path or continuity_domains_latest_path_for_clean_source(
         clean_source_dir
     )
-    domain_routes = _continuity_domain_routes(
+    continuity_routes = continuity_routes_for_context(
         intent=clean_intent,
         clean_source_dir=clean_source_dir,
         snapshot_path=snapshot_path,
         registry_dir=registry_dir,
         max_routes=limit,
     )
-    routes = [*domain_routes, *routes]
+    domain_routes = continuity_routes["domain_routes"]
+    pathlet_routes = continuity_routes["pathlet_routes"]
+    routes = [*domain_routes, *pathlet_routes, *routes]
     if len(routes) < limit:
         routes.extend(
             _registry_routes(
@@ -387,6 +336,14 @@ def recall_context_packet(
                 max_routes=limit - len(routes),
             )
         )
+    continuity_status = continuity_routes["continuity_route_status"]
+    suggested_next = (
+        "recall_deepen"
+        if routes
+        else "publish_continuity_domains_snapshot"
+        if continuity_status["snapshot_status"] in {"missing", "unreadable"}
+        else "search_clean_source"
+    )
     return {
         "kind": "aippocampus_recall_context",
         "schema_version": NAVIGATION_SCHEMA_VERSION,
@@ -395,12 +352,14 @@ def recall_context_packet(
         "query_terms": _query_terms(clean_intent),
         "routes": routes[:limit],
         "route_count": len(routes[:limit]),
-        "suggested_next": "recall_deepen",
+        "suggested_next": suggested_next,
+        "continuity_route_status": continuity_status,
         "source_boundary": _boundary(),
         "metrics": {
             "funnel_stage": "context",
             "handle_count": len([route for route in routes[:limit] if route.get("handle")]),
             "continuity_domain_route_count": len(domain_routes),
+            "continuity_pathlet_route_count": len(pathlet_routes),
             "source_reopen_success_rate_observed": None,
             "wrong_or_stale_handle_rate_observed": None,
         },
