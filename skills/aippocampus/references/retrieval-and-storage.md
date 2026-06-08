@@ -360,10 +360,11 @@ For hundred-MB or GB threads, use segments:
   manifest.
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
 - The segment manifest records source rollout size/mtime/hash, anchor hash,
-  byte spans, line spans, message spans, turn ranges, partial-turn boundary
-  diagnostics, and index paths. The builder prefers cutting after complete
-  turns when a bounded overshoot is enough; pathological oversized turns are
-  still allowed to split and are marked as partial with a reason code.
+  byte spans, line spans, message spans, timestamp ranges, turn ranges,
+  partial-turn boundary diagnostics, and index paths. The builder prefers
+  cutting after complete turns when a bounded overshoot is enough; pathological
+  oversized turns are still allowed to split and are marked as partial with a
+  reason code.
 - `aippocampus_runtime.recall.segment_search` fans queries out to segments, optionally enforces
   `--fanout-budget` / `--max-segments` before opening SQLite shards, resolves
   the segment pointer once per query, writes a short-lived reader pin beside the
@@ -373,6 +374,11 @@ For hundred-MB or GB threads, use segments:
   stitching text, and merges global top-k with diversity penalties. Missing
   manifests or shard indexes report structured `segments_unavailable` /
   `build_required` status unless the caller explicitly asks to build segments.
+  Deterministic temporal cues such as explicit dates, `last month`, or
+  `半年前` may reorder the planned segment list before the fanout cap is
+  applied, but they must not expand `--fanout-budget` / `--max-segments`. Legacy
+  manifests without timestamp ranges fall back to recency ordering and report no
+  boosted segments.
   Old generations are rebuildable cache targets. Health/capacity/storage-gc
   dry-runs report reader-pin/TTL cleanup status, and storage GC apply may delete
   only old generation directories whose active pins are gone, TTL has elapsed,

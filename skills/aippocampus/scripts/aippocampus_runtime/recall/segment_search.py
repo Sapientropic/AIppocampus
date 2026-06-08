@@ -10,7 +10,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from aippocampus_runtime.artifacts.generation_pins import pin_resolved_generation
 from aippocampus_runtime.core import default_thread_segments_dir
@@ -36,6 +36,7 @@ from aippocampus_runtime.recall.segment_metadata import (
     empty_turn_boundary_diagnostics,
     turn_boundary_diagnostics,
 )
+from aippocampus_runtime.recall.structure_time import parse_datetime_utc, parse_temporal_cue
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 SEGMENTS_POINTER_NAME = "segments.pointer.json"
@@ -59,6 +60,7 @@ class SegmentSearchOptions:
     fanout_budget: int | None = None
     max_segments: int | None = None
     full_fanout: bool = False
+    now: str | None = None
 
 
 def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
@@ -173,11 +175,93 @@ def _empty_fanout(options: SegmentSearchOptions) -> dict:
         "budget_exhausted": False,
         "planned_segments": [],
         "skipped_segments": [],
+        "temporal_cue_parsed": False,
+        "temporal_cue_kind": "",
+        "temporal_window_start": "",
+        "temporal_window_end": "",
+        "temporal_boosted_segments": [],
     }
 
 
-def plan_segments(segments: Sequence[dict], options: SegmentSearchOptions) -> tuple[list[tuple[int, dict]], dict]:
-    ranked = sorted(enumerate(segments, start=1), key=_segment_recency_key, reverse=True)
+def _temporal_cue_for_options(options: SegmentSearchOptions) -> dict[str, Any] | None:
+    prompt = " ".join(str(item) for item in options.patterns if str(item).strip())
+    return parse_temporal_cue(prompt, now=options.now) if prompt else None
+
+
+def _segment_time_range(segment: dict) -> tuple[Any | None, Any | None]:
+    start = parse_datetime_utc(segment.get("start_timestamp"))
+    end = parse_datetime_utc(segment.get("end_timestamp"))
+    if start is None and end is None:
+        return None, None
+    if start is None:
+        start = end
+    if end is None:
+        end = start
+    if start is not None and end is not None and end < start:
+        start, end = end, start
+    return start, end
+
+
+def _segment_temporal_overlap_score(segment: dict, temporal_cue: dict[str, Any] | None) -> float:
+    if not temporal_cue:
+        return 0.0
+    window_start = parse_datetime_utc(temporal_cue.get("window_start"))
+    window_end = parse_datetime_utc(temporal_cue.get("window_end"))
+    segment_start, segment_end = _segment_time_range(segment)
+    if (
+        window_start is None
+        or window_end is None
+        or segment_start is None
+        or segment_end is None
+        or window_end <= window_start
+    ):
+        return 0.0
+    if segment_start < window_end and segment_end >= window_start:
+        confidence = max(0.0, min(1.0, float(temporal_cue.get("confidence") or 0.0)))
+        return round(confidence, 3)
+    return 0.0
+
+
+def _segment_fanout_entry(
+    segment: dict,
+    ordinal: int,
+    temporal_scores: dict[int, float],
+    *,
+    skipped_reason: str | None = None,
+) -> dict:
+    entry = {"segment_id": _segment_id(segment, ordinal), "ordinal": ordinal}
+    temporal_score = temporal_scores.get(ordinal, 0.0)
+    entry["temporal_boosted"] = temporal_score > 0.0
+    if temporal_score > 0.0:
+        entry["temporal_overlap_score"] = temporal_score
+    if skipped_reason:
+        entry["reason"] = skipped_reason
+    return entry
+
+
+def plan_segments(
+    segments: Sequence[dict],
+    options: SegmentSearchOptions,
+    temporal_cue: dict[str, Any] | None = None,
+) -> tuple[list[tuple[int, dict]], dict]:
+    if temporal_cue is None:
+        temporal_cue = _temporal_cue_for_options(options)
+    temporal_scores = {
+        ordinal: _segment_temporal_overlap_score(segment, temporal_cue)
+        for ordinal, segment in enumerate(segments, start=1)
+    }
+    if temporal_cue:
+        ranked = sorted(
+            enumerate(segments, start=1),
+            key=lambda item: (
+                temporal_scores.get(item[0], 0.0) > 0.0,
+                temporal_scores.get(item[0], 0.0),
+                *_segment_recency_key(item),
+            ),
+            reverse=True,
+        )
+    else:
+        ranked = sorted(enumerate(segments, start=1), key=_segment_recency_key, reverse=True)
     budget_values: list[int] = []
     if not options.full_fanout:
         for value in (options.fanout_budget, options.max_segments):
@@ -201,16 +285,26 @@ def plan_segments(segments: Sequence[dict], options: SegmentSearchOptions) -> tu
         "missing_index_count": 0,
         "budget_exhausted": bool(skipped),
         "planned_segments": [
-            {"segment_id": _segment_id(segment, ordinal), "ordinal": ordinal}
+            _segment_fanout_entry(segment, ordinal, temporal_scores)
             for ordinal, segment in planned
         ],
         "skipped_segments": [
-            {
-                "segment_id": _segment_id(segment, ordinal),
-                "ordinal": ordinal,
-                "reason": "fanout_budget",
-            }
+            _segment_fanout_entry(
+                segment,
+                ordinal,
+                temporal_scores,
+                skipped_reason="fanout_budget",
+            )
             for ordinal, segment in skipped
+        ],
+        "temporal_cue_parsed": bool(temporal_cue),
+        "temporal_cue_kind": str((temporal_cue or {}).get("cue_kind") or ""),
+        "temporal_window_start": str((temporal_cue or {}).get("window_start") or ""),
+        "temporal_window_end": str((temporal_cue or {}).get("window_end") or ""),
+        "temporal_boosted_segments": [
+            _segment_id(segment, ordinal)
+            for ordinal, segment in ranked
+            if temporal_scores.get(ordinal, 0.0) > 0.0
         ],
     }
     return planned, fanout
@@ -482,7 +576,8 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         segments = list(data.get("segments") or [])
         boundary_contexts = cross_boundary_turn_contexts(segments)
         boundary_diagnostics = turn_boundary_diagnostics(segments, boundary_contexts)
-        planned_segments, fanout = plan_segments(segments, options)
+        temporal_cue = _temporal_cue_for_options(options)
+        planned_segments, fanout = plan_segments(segments, options, temporal_cue=temporal_cue)
         searched_segment_count = 0
         missing_index_count = 0
         for ordinal, segment in planned_segments:
@@ -521,6 +616,7 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
                         candidate_limit=options.candidate_max,
                         snippet_chars=options.snippet_chars,
                         context_radius=options.context,
+                        temporal_cue=temporal_cue,
                     )
                 raw_results.extend(
                     annotate_segment_result(hit, segment, ordinal, boundary_contexts)
@@ -586,6 +682,7 @@ def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
         fanout_budget=args.fanout_budget,
         max_segments=args.max_segments,
         full_fanout=args.full_fanout,
+        now=args.now,
     )
 
 
@@ -622,6 +719,11 @@ def main() -> int:
         "--full-fanout",
         action="store_true",
         help="Ignore fanout caps for diagnostics and benchmark comparisons.",
+    )
+    parser.add_argument(
+        "--now",
+        default=None,
+        help="UTC ISO timestamp for deterministic relative temporal cues.",
     )
     parser.add_argument("--show-anchors", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")

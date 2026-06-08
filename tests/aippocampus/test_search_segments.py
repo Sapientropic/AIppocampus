@@ -114,6 +114,189 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertTrue(payload["fanout"]["budget_exhausted"])
         self.assertEqual(payload["matches"][0]["segment_id"], "seg-new")
 
+    def test_segment_planning_keeps_recency_order_without_temporal_cue(self) -> None:
+        segments = [
+            {
+                "id": "seg-old",
+                "start_line": 1,
+                "end_line": 10,
+                "end_global_id": 10,
+            },
+            {
+                "id": "seg-mid",
+                "start_line": 11,
+                "end_line": 20,
+                "end_global_id": 20,
+            },
+            {
+                "id": "seg-new",
+                "start_line": 21,
+                "end_line": 30,
+                "end_global_id": 30,
+            },
+        ]
+
+        planned, fanout = segment_search.plan_segments(
+            segments,
+            segment_search.SegmentSearchOptions(
+                patterns=["memory"],
+                fanout_budget=2,
+            ),
+        )
+
+        self.assertEqual([segment["id"] for _, segment in planned], ["seg-new", "seg-mid"])
+        self.assertFalse(fanout["temporal_cue_parsed"])
+        self.assertEqual(fanout["temporal_boosted_segments"], [])
+
+    def test_segment_planning_prioritizes_explicit_date_inside_budget(self) -> None:
+        segments = [
+            {
+                "id": "seg-jan",
+                "start_line": 1,
+                "end_line": 10,
+                "end_global_id": 10,
+                "start_timestamp": "2026-01-01T00:00:00Z",
+                "end_timestamp": "2026-01-31T23:59:59Z",
+            },
+            {
+                "id": "seg-feb",
+                "start_line": 11,
+                "end_line": 20,
+                "end_global_id": 20,
+                "start_timestamp": "2026-02-01T00:00:00Z",
+                "end_timestamp": "2026-02-28T23:59:59Z",
+            },
+            {
+                "id": "seg-mar",
+                "start_line": 21,
+                "end_line": 30,
+                "end_global_id": 30,
+                "start_timestamp": "2026-03-01T00:00:00Z",
+                "end_timestamp": "2026-03-31T23:59:59Z",
+            },
+        ]
+
+        planned, fanout = segment_search.plan_segments(
+            segments,
+            segment_search.SegmentSearchOptions(
+                patterns=["what did we decide on 2026-01-15"],
+                fanout_budget=1,
+            ),
+        )
+
+        self.assertEqual([segment["id"] for _, segment in planned], ["seg-jan"])
+        self.assertTrue(fanout["temporal_cue_parsed"])
+        self.assertEqual(fanout["temporal_cue_kind"], "date_exact")
+        self.assertEqual(fanout["temporal_boosted_segments"], ["seg-jan"])
+        self.assertEqual(fanout["planned_segments"][0]["segment_id"], "seg-jan")
+        self.assertTrue(fanout["planned_segments"][0]["temporal_boosted"])
+        self.assertEqual(fanout["effective_max_segments"], 1)
+
+    def test_temporal_cue_falls_back_to_recency_for_legacy_manifest_without_timestamps(self) -> None:
+        segments = [
+            {
+                "id": "seg-old",
+                "start_line": 1,
+                "end_line": 10,
+                "end_global_id": 10,
+            },
+            {
+                "id": "seg-new",
+                "start_line": 11,
+                "end_line": 20,
+                "end_global_id": 20,
+            },
+        ]
+
+        planned, fanout = segment_search.plan_segments(
+            segments,
+            segment_search.SegmentSearchOptions(
+                patterns=["what did we decide on 2026-01-15"],
+                fanout_budget=1,
+            ),
+        )
+
+        self.assertEqual([segment["id"] for _, segment in planned], ["seg-new"])
+        self.assertTrue(fanout["temporal_cue_parsed"])
+        self.assertEqual(fanout["temporal_boosted_segments"], [])
+        self.assertFalse(fanout["planned_segments"][0]["temporal_boosted"])
+
+    def test_segment_planning_prioritizes_chinese_relative_temporal_cue(self) -> None:
+        segments = [
+            {
+                "id": "seg-dec",
+                "start_line": 1,
+                "end_line": 10,
+                "end_global_id": 10,
+                "start_timestamp": "2025-12-01T00:00:00Z",
+                "end_timestamp": "2025-12-31T23:59:59Z",
+            },
+            {
+                "id": "seg-feb",
+                "start_line": 11,
+                "end_line": 20,
+                "end_global_id": 20,
+                "start_timestamp": "2026-02-01T00:00:00Z",
+                "end_timestamp": "2026-02-28T23:59:59Z",
+            },
+        ]
+
+        planned, fanout = segment_search.plan_segments(
+            segments,
+            segment_search.SegmentSearchOptions(
+                patterns=["半年前我们说了什么"],
+                fanout_budget=1,
+                now="2026-06-08T00:00:00Z",
+            ),
+        )
+
+        self.assertEqual([segment["id"] for _, segment in planned], ["seg-dec"])
+        self.assertEqual(fanout["temporal_cue_kind"], "relative_half_year")
+        self.assertEqual(fanout["temporal_boosted_segments"], ["seg-dec"])
+        self.assertEqual(fanout["skipped_segment_count"], 1)
+
+    def test_segment_planning_prioritizes_english_relative_temporal_cue(self) -> None:
+        segments = [
+            {
+                "id": "seg-apr",
+                "start_line": 1,
+                "end_line": 10,
+                "end_global_id": 10,
+                "start_timestamp": "2026-04-01T00:00:00Z",
+                "end_timestamp": "2026-04-30T23:59:59Z",
+            },
+            {
+                "id": "seg-may",
+                "start_line": 11,
+                "end_line": 20,
+                "end_global_id": 20,
+                "start_timestamp": "2026-05-01T00:00:00Z",
+                "end_timestamp": "2026-05-31T23:59:59Z",
+            },
+            {
+                "id": "seg-jun",
+                "start_line": 21,
+                "end_line": 30,
+                "end_global_id": 30,
+                "start_timestamp": "2026-06-01T00:00:00Z",
+                "end_timestamp": "2026-06-08T00:00:00Z",
+            },
+        ]
+
+        planned, fanout = segment_search.plan_segments(
+            segments,
+            segment_search.SegmentSearchOptions(
+                patterns=["what happened last month"],
+                fanout_budget=1,
+                now="2026-06-08T00:00:00Z",
+            ),
+        )
+
+        self.assertEqual([segment["id"] for _, segment in planned], ["seg-may"])
+        self.assertEqual(fanout["temporal_cue_kind"], "relative_last_month")
+        self.assertEqual(fanout["temporal_boosted_segments"], ["seg-may"])
+        self.assertTrue(fanout["budget_exhausted"])
+
     def test_full_fanout_overrides_budget_for_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
