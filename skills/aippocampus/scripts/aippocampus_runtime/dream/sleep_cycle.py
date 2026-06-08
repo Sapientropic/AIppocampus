@@ -30,6 +30,7 @@ from aippocampus_runtime.dream import input_pack as dream_input_pack
 from aippocampus_runtime.dream import precision_policy as dream_precision_policy
 from aippocampus_runtime.dream import queue as dream_queue
 from aippocampus_runtime.dream import worker as dream_worker
+from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     NO_PROVIDER_CACHE_CONTRACT,
@@ -127,6 +128,32 @@ def append_jsonl(path: Path | None, rows: Iterable[Mapping[str, Any]]) -> int:
         for row in materialized:
             fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
     return len(materialized)
+
+
+def write_working_memory_rows(
+    path: Path | None,
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    publish: bool = False,
+) -> tuple[int, dict[str, Any]]:
+    materialized = [dict(row) for row in rows]
+    if path is None:
+        return 0, {"status": "disabled", "reader_safe": False}
+    if publish:
+        pointer = working_memory_publication.publish_working_memory_snapshot(path, materialized)
+        return len(materialized), {
+            "status": "published",
+            "reader_safe": True,
+            "row_count": len(materialized),
+            "current": pointer.get("current"),
+            "last_known_good": pointer.get("last_known_good"),
+            "reader_lock_policy": "foreground_readers_do_not_wait_for_writer_lock",
+        }
+    return append_jsonl(path, materialized), {
+        "status": "legacy_append_jsonl",
+        "reader_safe": False,
+        "row_count": len(materialized),
+    }
 
 
 def write_json(path: Path | None, payload: Mapping[str, Any]) -> None:
@@ -365,6 +392,7 @@ def run_sleep_cycle(
     max_samples: int = DEFAULT_MAX_SAMPLES,
     no_write: bool = True,
     write_working_memory: bool = True,
+    publish_working_memory: bool = False,
     run_ready: bool = False,
     queue_output_path: Path | None = None,
     findings_output_path: Path | None = None,
@@ -436,6 +464,7 @@ def run_sleep_cycle(
         )
 
     written = {"queue": 0, "findings": 0, "working_memory": 0}
+    working_memory_publication_status: dict[str, Any] = {"status": "disabled", "reader_safe": False}
     if not no_write:
         active_working_memory_output = working_memory_output_path if write_working_memory else None
         lock_path = write_lock_path(
@@ -449,14 +478,22 @@ def run_sleep_cycle(
             with FileLock(lock_path):
                 written["queue"] = append_jsonl(queue_output_path, lifecycle_rows)
                 written["findings"] = append_jsonl(findings_output_path, adjudicated_findings)
-                written["working_memory"] = append_jsonl(
-                    active_working_memory_output, working_rows
+                written["working_memory"], working_memory_publication_status = (
+                    write_working_memory_rows(
+                        active_working_memory_output,
+                        working_rows,
+                        publish=publish_working_memory,
+                    )
                 )
         else:
             written["queue"] = append_jsonl(queue_output_path, lifecycle_rows)
             written["findings"] = append_jsonl(findings_output_path, adjudicated_findings)
-            written["working_memory"] = append_jsonl(
-                active_working_memory_output, working_rows
+            written["working_memory"], working_memory_publication_status = (
+                write_working_memory_rows(
+                    active_working_memory_output,
+                    working_rows,
+                    publish=publish_working_memory,
+                )
             )
 
     worker_statuses = Counter(str(run.get("status") or "") for run in worker_runs)
@@ -499,12 +536,14 @@ def run_sleep_cycle(
         "worker_statuses": dict(sorted(worker_statuses.items())),
         "failure_buckets": failure_buckets(worker_runs),
         "cache": aggregate_cache(worker_runs),
+        "working_memory_publication": working_memory_publication_status,
         "policy": {
             "foreground_model_calls_allowed": False,
             "clean_source_mutation_allowed": False,
             "default_no_write": True,
             "writes_require_explicit_write_mode": True,
             "working_memory_projection_requires_full_write": True,
+            "foreground_readers_wait_for_dream_writer_lock": False,
             "queue_state_is_not_clean_source": True,
         },
     }
@@ -534,10 +573,12 @@ def public_sleep_cycle_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
         "worker_statuses": dict(payload.get("worker_statuses") or {}),
         "failure_buckets": dict(payload.get("failure_buckets") or {}),
         "cache": dict(payload.get("cache") or {}),
+        "working_memory_publication": dict(payload.get("working_memory_publication") or {}),
         "policy": {
             "public_output_omits_private_handles": True,
             "queue_state_is_not_clean_source": True,
             "clean_source_mutation_allowed": False,
+            "foreground_readers_wait_for_dream_writer_lock": False,
         },
     }
 
@@ -653,6 +694,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Append queue lifecycle and adjudicated findings, but do not project working-memory rows.",
     )
     parser.add_argument("--write", action="store_true", help="Append lifecycle/findings/working-memory staging rows.")
+    parser.add_argument(
+        "--publish-working-memory",
+        action="store_true",
+        help="Publish working-memory rows through an atomic generation pointer instead of legacy append JSONL.",
+    )
     parser.add_argument("--summary", action="store_true", help="Emit sanitized aggregate summary only.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path)
@@ -695,6 +741,7 @@ def main(argv: list[str] | None = None) -> int:
             max_samples=args.max_samples,
             no_write=no_write,
             write_working_memory=bool(args.write),
+            publish_working_memory=bool(args.publish_working_memory and args.write),
             run_ready=args.run_ready,
             queue_output_path=default_path(root, "dream_queue.jsonl", args.queue_output),
             findings_output_path=default_path(root, "dream_findings.jsonl", args.findings_output),

@@ -17,6 +17,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.dream import working_memory_publication  # noqa: E402
 from aippocampus_runtime.subconscious import candidate_router as router  # noqa: E402
 
 
@@ -231,6 +232,71 @@ class MemoryCandidateRouterTests(unittest.TestCase):
             matched[0]["dream_hypothesis_use"]["truth_boundary"],
             "adjudicated_dream_hypothesis_not_fact",
         )
+
+    def test_load_working_memory_reports_legacy_invalid_tail_skip(self) -> None:
+        path = self.root / "working_memory.jsonl"
+        path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": router.USE_WITH_SOURCE,
+                    "title": "Reader-safe row",
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+            + '{"kind": "aippocampus_working_memory",',
+            encoding="utf-8",
+        )
+
+        rows, diagnostic = working_memory_publication.load_working_memory_with_diagnostics(path)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(diagnostic["status"], "legacy_jsonl_loaded")
+        self.assertEqual(diagnostic["diagnostics"], ["invalid_tail_skipped"])
+        self.assertEqual(diagnostic["invalid_line_count"], 1)
+
+    def test_load_working_memory_falls_back_to_last_known_good_generation(self) -> None:
+        path = self.root / "working_memory.jsonl"
+        old_row = {
+            "kind": "aippocampus_working_memory",
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "title": "Last known good",
+        }
+        new_row = {
+            **old_row,
+            "title": "Current generation",
+        }
+        working_memory_publication.publish_working_memory_snapshot(path, [old_row])
+        pointer = working_memory_publication.publish_working_memory_snapshot(path, [new_row])
+        current = self.root / pointer["current"]
+        current.write_text(current.read_text(encoding="utf-8") + "{", encoding="utf-8")
+
+        rows, diagnostic = working_memory_publication.load_working_memory_with_diagnostics(path)
+
+        self.assertEqual([row["title"] for row in rows], ["Last known good"])
+        self.assertEqual(diagnostic["status"], "last_known_good_used")
+        self.assertIn("current_generation_invalid", diagnostic["diagnostics"])
+        self.assertIn("last_known_good_used", diagnostic["diagnostics"])
+
+    def test_load_working_memory_reports_writer_in_progress_without_waiting(self) -> None:
+        path = self.root / "working_memory.jsonl"
+        row = {
+            "kind": "aippocampus_working_memory",
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "title": "Readable while writer is active",
+        }
+        working_memory_publication.publish_working_memory_snapshot(path, [row])
+        (self.root / "dream_sleep_cycle_write.lock").write_text("{}", encoding="utf-8")
+
+        rows, diagnostic = working_memory_publication.load_working_memory_with_diagnostics(path)
+
+        self.assertEqual([item["title"] for item in rows], ["Readable while writer is active"])
+        self.assertTrue(diagnostic["writer_in_progress"])
+        self.assertIn("writer_in_progress", diagnostic["diagnostics"])
 
     def test_dream_hypothesis_match_skips_invalid_trust_horizon_rows(self) -> None:
         dream_row = {
