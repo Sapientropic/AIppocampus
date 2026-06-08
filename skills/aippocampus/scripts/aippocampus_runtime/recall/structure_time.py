@@ -74,7 +74,56 @@ def iso_z(value: datetime) -> str:
     )
 
 
-def parse_temporal_cue(prompt: str) -> dict[str, Any] | None:
+def _resolve_now(now: datetime | str | None = None) -> datetime:
+    if isinstance(now, datetime):
+        parsed = now
+    elif now is not None:
+        parsed = parse_datetime_utc(now) or datetime.now(timezone.utc)
+    else:
+        parsed = datetime.now(timezone.utc)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _month_start(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def _add_months(value: datetime, months: int) -> datetime:
+    month_index = value.year * 12 + (value.month - 1) + months
+    year = month_index // 12
+    month = month_index % 12 + 1
+    return value.replace(year=year, month=month)
+
+
+def _relative_month_cue(
+    *,
+    now: datetime | str | None,
+    months_ago: int,
+    cue_kind: str,
+    confidence: float,
+    vague: bool = False,
+    span_months: int = 1,
+) -> dict[str, Any]:
+    current_month = _month_start(_resolve_now(now))
+    target = _add_months(current_month, -months_ago)
+    start = _add_months(target, -1) if vague else target
+    end = _add_months(target, span_months + (1 if vague else 0))
+    return {
+        "window_start": iso_z(start),
+        "window_end": iso_z(end),
+        "confidence": confidence,
+        "cue_kind": cue_kind,
+        "hard_filter": False,
+    }
+
+
+def parse_temporal_cue(
+    prompt: str, *, now: datetime | str | None = None
+) -> dict[str, Any] | None:
     """Parse a first deterministic subset of D6 time-window cues.
 
     Vague cues are ranking priors, not hard filters. Search lanes may add
@@ -84,6 +133,42 @@ def parse_temporal_cue(prompt: str) -> dict[str, Any] | None:
 
     match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", prompt)
     if not match:
+        low = prompt.casefold()
+        if re.search(r"\blast\s+month\b|上个月|上月", low):
+            return _relative_month_cue(
+                now=now,
+                months_ago=1,
+                cue_kind="relative_last_month",
+                confidence=0.78,
+            )
+        if re.search(r"半年前|半年之前|\bhalf\s+a\s+year\s+ago\b", low):
+            return _relative_month_cue(
+                now=now,
+                months_ago=6,
+                cue_kind="relative_half_year",
+                confidence=0.68,
+            )
+        if re.search(
+            r"\b(?:about|around|roughly|approx(?:imately)?)?\s*(?:six|6)\s+months?\s+ago\b",
+            low,
+        ):
+            vague = bool(re.search(r"\b(?:about|around|roughly|approx(?:imately)?)\b", low))
+            return _relative_month_cue(
+                now=now,
+                months_ago=6,
+                cue_kind="relative_half_year",
+                confidence=0.56 if vague else 0.68,
+                vague=vague,
+            )
+        if re.search(r"几个月前|数月前|好几个月前|\b(?:a\s+few|several)\s+months?\s+ago\b", low):
+            current_month = _month_start(_resolve_now(now))
+            return {
+                "window_start": iso_z(_add_months(current_month, -4)),
+                "window_end": iso_z(_add_months(current_month, -1)),
+                "confidence": 0.46,
+                "cue_kind": "relative_few_months",
+                "hard_filter": False,
+            }
         return None
     day = parse_datetime_utc(match.group(1))
     if day is None:

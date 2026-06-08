@@ -93,6 +93,26 @@ class BuildSegmentsTests(unittest.TestCase):
         self.assertGreater(groups[0]["budget_overshoot_messages"], 0)
         self.assertEqual(groups[0]["turn_boundary_policy"], "bounded_complete_turn")
 
+    def test_segment_groups_record_timestamp_range_for_temporal_planning(self) -> None:
+        messages = [
+            self._message(1, 1, "user"),
+            self._message(2, 1, "assistant"),
+            self._message(3, 2, "user"),
+        ]
+        offsets = {1: (0, 20), 2: (20, 40), 3: (40, 60)}
+
+        groups = build_segments.segment_groups(
+            messages,
+            offsets,
+            segment_bytes=45,
+            max_messages=2,
+        )
+
+        self.assertEqual(groups[0]["start_timestamp"], "2026-06-05T00:00:01Z")
+        self.assertEqual(groups[0]["end_timestamp"], "2026-06-05T00:00:02Z")
+        self.assertEqual(groups[1]["start_timestamp"], "2026-06-05T00:00:03Z")
+        self.assertEqual(groups[1]["end_timestamp"], "2026-06-05T00:00:03Z")
+
     def test_segment_groups_mark_pathological_oversized_turn_partial(self) -> None:
         messages = [
             self._message(1, 1, "user"),

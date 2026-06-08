@@ -30,6 +30,7 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.recall.index_builder import make_sqlite
+from aippocampus_runtime.recall.structure_time import iso_z, parse_datetime_utc
 from aippocampus_runtime.source.rollout import normalize_rollout
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
@@ -81,6 +82,16 @@ def segment_groups(
         right_turn = turn_index(right)
         return left_turn is not None and left_turn == right_turn
 
+    def timestamp_range(rows: list[dict]) -> tuple[str | None, str | None]:
+        timestamps = [
+            parsed
+            for message in rows
+            if (parsed := parse_datetime_utc(message.get("timestamp"))) is not None
+        ]
+        if not timestamps:
+            return None, None
+        return iso_z(min(timestamps)), iso_z(max(timestamps))
+
     def flush() -> None:
         nonlocal current, start_offset, last_end, start_global_id
         if not current:
@@ -104,12 +115,15 @@ def segment_groups(
         )
         raw_span_bytes = max(0, last_end - start_offset)
         partial_reason = TURN_BOUNDARY_PARTIAL_REASON if partial_turn_indices else None
+        start_timestamp, end_timestamp = timestamp_range(current)
         groups.append(
             {
                 "start_global_id": start_global_id,
                 "end_global_id": start_global_id + len(current) - 1,
                 "start_line": current[0]["line"],
                 "end_line": current[-1]["line"],
+                "start_timestamp": start_timestamp,
+                "end_timestamp": end_timestamp,
                 "start_offset": start_offset,
                 "end_offset": last_end,
                 "raw_span_bytes": raw_span_bytes,
@@ -467,6 +481,8 @@ def main(argv: list[str] | None = None) -> int:
                         "end_global_id": group["end_global_id"],
                         "start_line": group["start_line"],
                         "end_line": group["end_line"],
+                        "start_timestamp": group.get("start_timestamp"),
+                        "end_timestamp": group.get("end_timestamp"),
                         "start_offset": group["start_offset"],
                         "end_offset": group["end_offset"],
                         "raw_span_bytes": group["raw_span_bytes"],

@@ -209,6 +209,46 @@ class RecallStructureTimeFeatureTests(unittest.TestCase):
         self.assertEqual(results[0]["signals"]["temporal_cue_kind"], "date_time_of_day")
         self.assertIn("text_score", results[0]["signals"])
 
+    def test_relative_temporal_cues_parse_to_deterministic_windows(self) -> None:
+        last_month = retrieval.parse_temporal_cue(
+            "what happened last month",
+            now="2026-06-08T12:00:00Z",
+        )
+        half_year = retrieval.parse_temporal_cue(
+            "半年前我们聊过什么",
+            now="2026-06-08T12:00:00Z",
+        )
+        few_months = retrieval.parse_temporal_cue(
+            "几个月前那个方案",
+            now="2026-06-08T12:00:00Z",
+        )
+        about_six = retrieval.parse_temporal_cue(
+            "about six months ago",
+            now="2026-06-08T12:00:00Z",
+        )
+
+        self.assertIsNotNone(last_month)
+        self.assertEqual(last_month["cue_kind"], "relative_last_month")
+        self.assertEqual(last_month["window_start"], "2026-05-01T00:00:00Z")
+        self.assertEqual(last_month["window_end"], "2026-06-01T00:00:00Z")
+        self.assertFalse(last_month["hard_filter"])
+
+        self.assertIsNotNone(half_year)
+        self.assertEqual(half_year["cue_kind"], "relative_half_year")
+        self.assertEqual(half_year["window_start"], "2025-12-01T00:00:00Z")
+        self.assertEqual(half_year["window_end"], "2026-01-01T00:00:00Z")
+
+        self.assertIsNotNone(few_months)
+        self.assertEqual(few_months["cue_kind"], "relative_few_months")
+        self.assertEqual(few_months["window_start"], "2026-02-01T00:00:00Z")
+        self.assertEqual(few_months["window_end"], "2026-05-01T00:00:00Z")
+        self.assertLess(few_months["confidence"], half_year["confidence"])
+
+        self.assertIsNotNone(about_six)
+        self.assertEqual(about_six["cue_kind"], "relative_half_year")
+        self.assertEqual(about_six["window_start"], "2025-11-01T00:00:00Z")
+        self.assertEqual(about_six["window_end"], "2026-02-01T00:00:00Z")
+
     def test_text_only_search_still_works_when_structure_time_lanes_are_not_requested(self) -> None:
         results = retrieval.search_hybrid_index(
             self.index,
