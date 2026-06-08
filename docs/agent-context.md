@@ -171,8 +171,9 @@ until the original source is reopened.
 - `active_recall_ready`: MCP/progressive recall can reopen source for an agent.
 - `ambient_hooks_ready`: prompt/lifecycle hooks are installed and trusted.
 - `semantic_provider_ready`: provider-backed semantic/warm work can run.
-- `hook_provider_ready`: provider visibility has been checked for future hook
-  processes; restart Codex when environment changed after launch.
+- `hook_provider_ready`: provider visibility has been checked for the current
+  process and a child process like a future/restarted hook; use prompt-hook
+  last status to inspect recent hook behavior.
 - `dream_or_subconscious_ready`: provider-backed background work is available,
   or explicitly missing-key/disabled.
 - `agent_fallback_ready`: staging-only #752 agent fallback is active when the
