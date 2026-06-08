@@ -47,17 +47,22 @@ boundaries are defined in
 Check local provider status without writing memory artifacts:
 
 ```sh
-uvx aippocampus onboard --provider codex --status
+uvx aippocampus onboard --provider auto --status
 ```
 
-The status output is a provider-matrix readiness view. It may include other
-locally detectable providers beside Codex; do not read that as Codex-only
-provider-scoped evidence.
+The status output is a provider-matrix readiness view. It may include Codex,
+Claude Code, and generic JSONL providers when they are locally detectable; do
+not read that as Codex-only provider-scoped evidence or as consent to ingest
+every detected provider.
 
-Register local Codex history only after the user explicitly agrees:
+Register local history only after the user explicitly agrees, then choose the
+matching provider path:
 
 ```sh
 uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider claude-code --dry-run
+uvx aippocampus onboard --provider claude-code
+uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus search "a distinctive old phrase"
 ```
 
@@ -71,8 +76,11 @@ testing an unreleased main-branch snapshot.
 ## Core Hook Setup
 
 Manual onboarding and search prove that local source can be found. Prompt and
-lifecycle hooks are the core trusted setup that keeps AIppocampus from feeling
-like a manual grep tool in the next conversation.
+lifecycle hooks are the Codex trusted setup that keeps AIppocampus from feeling
+like a manual grep tool in the next Codex conversation. Claude Code currently
+uses local-history onboarding plus MCP/project-skill setup instead; see
+[`ecosystem-integration-matrix.md`](ecosystem-integration-matrix.md) and
+[`claude-code-mcp.md`](claude-code-mcp.md).
 
 Review local readiness before changing Codex hook state:
 
@@ -135,7 +143,7 @@ still feels like grep because hooks or provider visibility are not ready.
 
 | Label | What works | What does not work yet | Next check |
 | --- | --- | --- | --- |
-| `source_search_ready` | Onboarding plus clean-source search after consent. | Automatic prompt-time recall is not implied. | `aippocampus onboard --provider codex --all` |
+| `source_search_ready` | Onboarding plus clean-source search after consent. | Automatic prompt-time recall is not implied. | `aippocampus onboard --provider auto --status` |
 | `active_recall_ready` | MCP/progressive recall can let an agent reopen source. | It does not install prompt/lifecycle hooks. | `aippocampus mcp list-tools` |
 | `ambient_hooks_ready` | Prompt/lifecycle hooks can emit recall scents and refresh clean source/indexes. | Semantic lift still needs provider visibility. | `aippocampus hooks prompt status --last` |
 | `semantic_provider_ready` | Semantic lift, warm scouts, and provider-backed jobs can call the configured route. | It does not prove a previously started hook process can see the key. | `aippocampus doctor provider --json` |
@@ -328,14 +336,17 @@ ready.
 Preview provider readiness before writing:
 
 ```sh
-aippocampus onboard --status --cwd "$PWD"
+aippocampus onboard --provider auto --status --cwd "$PWD"
 ```
 
-Then register existing Codex sessions and build clean-source indexes only after
-user consent:
+Then register existing local transcript source and build clean-source indexes
+only after user consent, with an explicit provider:
 
 ```sh
 aippocampus onboard --provider codex --all
+aippocampus onboard --provider claude-code --dry-run --format json
+aippocampus onboard --provider claude-code --format json
+aippocampus import conversation --format generic-jsonl --input <path> --json
 aippocampus search "a distinctive old phrase"
 ```
 

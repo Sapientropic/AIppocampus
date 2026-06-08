@@ -104,8 +104,8 @@ Start route-first:
 Useful portable commands:
 
 - Check state before or after long work: `aippocampus health --cwd "$PWD"`.
-- Check the selected provider without writing artifacts:
-  `aippocampus onboard --provider codex --status`.
+- Check the local provider matrix without writing artifacts:
+  `aippocampus onboard --provider auto --status`.
 - Search clean source: `aippocampus search "query" --cwd "$PWD"`.
 - Run deterministic active recall for vague continuity prompts:
   `python -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
@@ -120,8 +120,16 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
   `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
 - Build or refresh the index:
   `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
-- First-install or full-machine onboarding:
+- First-install or full-machine onboarding after explicit user consent:
   `aippocampus onboard --provider codex --all --format json`.
+- Claude Code transcript onboarding uses an explicit provider; preview first,
+  then register only after consent:
+  `aippocampus onboard --provider claude-code --dry-run --format json`, then
+  `aippocampus onboard --provider claude-code --format json`.
+- For exact host boundaries, use the repository docs
+  `docs/guides/ecosystem-integration-matrix.md` and
+  `docs/guides/claude-code-mcp.md`; Claude Code onboarding does not imply
+  AIppocampus Claude hook support.
 - Register an old rollout:
   `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
 - Inspect MCP only when a plugin or agent host needs it:

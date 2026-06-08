@@ -116,24 +116,32 @@ uvx aippocampus --help
 Read-only local status/onboarding check:
 
 ```sh
-uvx aippocampus onboard --provider codex --status
+uvx aippocampus onboard --provider auto --status
 ```
 
-This is a provider-matrix readiness view and may list non-Codex providers when
-they are detectable. Treat it as read-only local readiness, not as a
+This is a provider-matrix readiness view. It may list Codex, Claude Code, and
+generic JSONL providers when they are detectable. Treat it as read-only local
+readiness, not as consent to ingest every detected provider and not as a
 Codex-only scoped-provider proof.
 
-Register local Codex history, only after user confirmation:
+Register local history only after user confirmation, and choose an explicit
+provider path:
 
 ```sh
 uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider claude-code --dry-run
+uvx aippocampus onboard --provider claude-code
+uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus search "a distinctive old phrase"
 ```
 
-This command scans local agent transcript history, registers missing source,
-builds clean-source and SQLite/RAG-lite artifacts, and refreshes navigation
-sidecars. It writes local memory artifacts, so do not run it without user
-consent.
+These commands scan selected local agent transcript history or visible-message
+exports, register missing source, build clean-source artifacts, and refresh
+navigation sidecars. They write local memory artifacts, so do not run them
+without user consent. For the exact support boundary, use
+[`ecosystem-integration-matrix.md`](guides/ecosystem-integration-matrix.md);
+for Claude Code setup, use
+[`claude-code-mcp.md`](guides/claude-code-mcp.md).
 
 For the first recall, try an exact phrase first. If the user only remembers a
 vague cue, search a project cue or a time cue and label the result as candidate
@@ -145,16 +153,16 @@ automation.
 Without prompt and lifecycle hooks, AIppocampus is still useful as manual,
 source-backed search. That is not the full ambient continuity experience.
 
-After the first source-backed recall works, offer hook setup as a core trusted
-step, never as a silent install:
+After the first source-backed recall works, offer Codex hook setup as a core
+trusted step, never as a silent install:
 
 ```sh
 aippocampus update status
 aippocampus update apply --surface hooks
 ```
 
-Use rollback commands when the user wants to remove AIppocampus-owned Codex hook
-handlers:
+Use rollback commands when the user wants to remove AIppocampus-owned Codex
+hook handlers:
 
 ```sh
 aippocampus hooks prompt uninstall
@@ -169,7 +177,7 @@ until the original source is reopened.
 
 - `source_search_ready`: onboarding/search can produce source-backed snippets.
 - `active_recall_ready`: MCP/progressive recall can reopen source for an agent.
-- `ambient_hooks_ready`: prompt/lifecycle hooks are installed and trusted.
+- `ambient_hooks_ready`: Codex prompt/lifecycle hooks are installed and trusted.
 - `semantic_provider_ready`: provider-backed semantic/warm work can run.
 - `hook_provider_ready`: provider visibility has been checked for the current
   process and a child process like a future/restarted hook; use prompt-hook

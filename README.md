@@ -48,23 +48,39 @@ read-only:
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus onboard --provider codex --status
+uvx aippocampus onboard --provider auto --status
 ```
 
-The status command is read-only. Only after you explicitly agree to register
-local Codex history, run onboarding and then search for one old source-backed
-conversation snippet:
+The status command is read-only. It reports a provider-matrix readiness view;
+`auto` may list Codex, Claude Code, and generic JSONL providers, but it does
+not silently register every provider.
+
+Only after you explicitly agree to register local history, choose the matching
+provider path and then search for one old source-backed conversation snippet:
 
 ```sh
+# Codex: local history plus the most complete hook-capable host path.
 uvx aippocampus onboard --provider codex --all
+
+# Claude Code: local transcript onboarding; no AIppocampus Claude hooks claimed.
+uvx aippocampus onboard --provider claude-code --dry-run
+uvx aippocampus onboard --provider claude-code
+
+# Generic visible-message export.
+uvx aippocampus import conversation --format generic-jsonl --input <path>
+
 uvx aippocampus search "a distinctive old phrase"
 ```
 
-Manual search proves the source substrate is there. The core continuity setup is
-the trusted hook step: prompt hooks notice recall scents as a conversation
-starts, and lifecycle hooks refresh clean source and indexes after session
-events. They are never installed silently; review status first, then install
-them only when this machine is allowed to let AIppocampus touch Codex hooks:
+Manual search proves the source substrate is there. Codex is currently the
+host with AIppocampus prompt/lifecycle hooks: prompt hooks notice recall scents
+as a conversation starts, and lifecycle hooks refresh clean source and indexes
+after session events. Claude Code currently has local-history onboarding plus
+the MCP/project-skill path, not AIppocampus Claude hook support; see the
+[Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md)
+and [Claude Code MCP guide](docs/guides/claude-code-mcp.md). Hooks are never
+installed silently; review status first, then install them only when this
+machine is allowed to let AIppocampus touch Codex hooks:
 
 ```sh
 aippocampus update status
@@ -134,13 +150,18 @@ uvx aippocampus --help
 For a read-only local onboarding/status check:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider auto --status --format json
 ```
 
-Only after the user explicitly agrees to register local Codex history, run:
+This is a read-only provider matrix, not consent to ingest every detected
+provider. Only after the user explicitly agrees to register local history, pick
+one provider-specific write path:
 
 ```sh
 uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider claude-code --dry-run --format json
+uvx aippocampus onboard --provider claude-code --format json
+uvx aippocampus import conversation --format generic-jsonl --input <path> --json
 ```
 
 For human-facing demos, omit `--format json` so onboarding and search show the
@@ -167,8 +188,9 @@ recognizable again.
 At the center, AIppocampus keeps source close enough that continuity can be
 honest instead of theatrical:
 
-- Builds clean source from Codex conversation rollouts: visible user messages
-  and assistant final answers, with summaries kept as navigation layers.
+- Builds clean source from supported local conversation providers: Codex
+  rollouts, Claude Code transcripts, or explicit generic JSONL visible-message
+  exports, with summaries kept as navigation layers.
 - Searches old conversation memory across the current thread and registered
   threads, then treats exact hits as source-backed snippets.
 - Reopens or cites source when the agent needs evidence instead of memory-like
