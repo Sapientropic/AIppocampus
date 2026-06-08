@@ -18,6 +18,7 @@ _paths.ensure_paths()
 
 import architecture_index_guard
 import evidence_index_guard
+import ia_pressure_guard
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
@@ -1280,22 +1281,13 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues: list[str] = []
     metrics: dict[str, Any] = {"repo_docs_checked": True}
 
-    docs_dir = repo_root / "docs"
-    if docs_dir.exists():
-        for path in sorted(docs_dir.glob("*.md")):
-            if path.name not in DOCS_ROOT_ALLOWED_MARKDOWN:
-                issues.append(
-                    f"docs root has unclassified markdown file: docs/{path.name}; "
-                    "move it under docs/architecture, docs/guides, docs/evidence, "
-                    "docs/planning, or docs/research"
-                )
-        for path in sorted(item for item in docs_dir.iterdir() if item.is_dir()):
-            if path.name not in DOCS_ROOT_ALLOWED_DIRECTORIES:
-                issues.append(
-                    f"docs root has unclassified directory: docs/{path.name}; "
-                    "use docs/architecture, docs/guides, docs/evidence, "
-                    "docs/planning, docs/research, or docs/archive"
-                )
+    ia_issues, ia_metrics = ia_pressure_guard.docs_health_ia_payload(
+        repo_root,
+        allowed_root_markdown=DOCS_ROOT_ALLOWED_MARKDOWN,
+        allowed_root_directories=DOCS_ROOT_ALLOWED_DIRECTORIES,
+    )
+    issues.extend(ia_issues)
+    metrics.update(ia_metrics)
 
     origin_stub = repo_root / "docs" / "origin.md"
     if origin_stub.exists():
@@ -1476,11 +1468,15 @@ def check_docs(root: Path) -> dict[str, Any]:
     root = root.resolve()
     skill_path = root / "SKILL.md"
     issues: list[str] = []
+    warnings: list[str] = []
+    diagnostics: dict[str, Any] = {}
 
     if not skill_path.exists():
         return {
             "ok": False,
             "issues": [f"missing {skill_path}"],
+            "warnings": warnings,
+            "diagnostics": diagnostics,
             "metrics": {},
         }
 
@@ -1528,6 +1524,8 @@ def check_docs(root: Path) -> dict[str, Any]:
                 issues.append(f"missing project doc: {rel_path}")
         repo_issues, repo_metrics = check_repo_docs(repo_root)
         issues.extend(repo_issues)
+        warnings.extend(repo_metrics.pop("_warnings", []))
+        diagnostics.update(repo_metrics.pop("_diagnostics", {}))
         metrics.update(repo_metrics)
     else:
         metrics["repo_docs_checked"] = False
@@ -1535,6 +1533,8 @@ def check_docs(root: Path) -> dict[str, Any]:
     return {
         "ok": not issues,
         "issues": issues,
+        "warnings": warnings,
+        "diagnostics": diagnostics,
         "metrics": metrics,
     }
 
@@ -1560,6 +1560,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{key}: {value}")
         for issue in result["issues"]:
             print(f"- {issue}")
+        for warning in result.get("warnings", []):
+            print(f"! {warning}")
     return 0 if result["ok"] else 1
 
 
