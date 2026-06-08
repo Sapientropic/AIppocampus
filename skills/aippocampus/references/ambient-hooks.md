@@ -119,6 +119,17 @@ memory contract:
   cannot be reopened, the agent should defer or report the boundary instead of
   broadening into manual search.
 
+Weak `direction_only` scent is compact in the model-visible foreground. When
+there is no evidence, no source-reopen plan, no working-memory material, and no
+available semantic bridge, render only an action cue, short route labels,
+orientation-only use guidance, and a reopen/deepen boundary. Cognitive-map,
+warm, associative, query-pattern, and other subsystem rows can still use this
+compact path when their action authority is only direction-only/navigation-only.
+Broad action grammar boilerplate, cache hit/miss counts, sidecar diagnostics,
+route ids, source-generation digests, alias-source breakdowns, and candidate-ref
+counts belong in public debug payloads, Observatory, or explicit deepen/audit
+paths, not in default `additionalContext`.
+
 The default renderer may sort already-authorized cards for brief precision
 (for example, recent issue-specific bounded evidence before older broad issue
 summaries). That sorting is not a trust promotion path: it never turns scent or
