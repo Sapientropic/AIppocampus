@@ -1,5 +1,9 @@
 # Magic Moments, Claim-Bounded
 
+Role: product and human evidence.
+Status: current claim-bounded live-use examples; not benchmark scores, release
+claims, or proof of innate model memory.
+
 AIppocampus should not make a new reader dig through benchmark caveats before
 seeing why the project exists. This page collects a few real second-user
 moments where source-backed continuity felt different from ordinary chat

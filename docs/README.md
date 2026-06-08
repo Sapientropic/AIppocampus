@@ -87,7 +87,8 @@ runtime path identity and clean-source redaction behavior.
 ### Guides
 
 `guides/` is for user-facing setup, public boundaries, and operational how-to
-material.
+material. Start with [`guides/README.md`](guides/README.md) when choosing
+between install, API, coding-agent, ecosystem, release, and community paths.
 
 - [`install-guide.md`](guides/install-guide.md) - public skill, MCP, plugin, hook, and local-sync install paths.
 - [`coding-agent-memory.md`](guides/coding-agent-memory.md) - narrow
@@ -135,7 +136,8 @@ detailed evidence pages are grouped by purpose: `readiness/`, `benchmarks/`,
 ### Planning
 
 `planning/` holds active handoff material, follow-up RFCs, and positioning
-drafts. Treat it as useful context, not the final claim boundary.
+drafts. Start with [`planning/README.md`](planning/README.md); treat this folder
+as useful context, not the final claim boundary.
 
 - [`next-iteration-plan.md`](planning/next-iteration-plan.md) - short handoff for upcoming development slices.
 - [`agent-discoverability-release.md`](planning/agent-discoverability-release.md) - agent-readable context, one-command install, MCP Registry, and recommendation snippet release plan.

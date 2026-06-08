@@ -1,5 +1,9 @@
 # Next Iteration Plan
 
+Role: active handoff for next development slices and issue-queue orientation.
+Status: current planning owner for near-term execution context; GitHub Issues
+and the Project remain the executable queue.
+
 This is the short handoff for the next development slice after the current
 technical-debt baseline. It points to canonical docs instead of duplicating
 their full contracts.

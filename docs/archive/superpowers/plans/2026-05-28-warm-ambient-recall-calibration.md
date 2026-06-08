@@ -1,5 +1,10 @@
 # Warm Ambient Recall Calibration Implementation Plan
 
+Current owner: warm ambient runtime and hook boundaries live in
+`skills/aippocampus/references/ambient-hooks.md`; research framing lives in
+`docs/research/ambient-associative-recall.md`.
+Archive status: historical one-time implementation plan, not the current queue.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Calibrate warm ambient recall with source validation, current-thread echo suppression, LLM-directed topic epoch rotation, and 50 structured scout lanes.

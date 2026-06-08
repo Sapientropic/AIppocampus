@@ -1,5 +1,9 @@
 # Community Field Reports
 
+Role: community evidence intake guide.
+Status: current curation boundary; community reports are useful signals, not
+official claims until promoted through the current evidence flow.
+
 This is the project-maintained boundary for public community evidence. It is a
 submission and curation surface, not a shortcut for turning anecdotes into
 official benchmark claims.

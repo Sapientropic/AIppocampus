@@ -1,4 +1,5 @@
 state: archived
+current_owner: "Current executable work lives in GitHub open issues / Project after checking docs/README.md, docs/roadmap.md, and the issue-linked owner docs."
 archive_note: "Historical 2026-05-31 issue-refinement handoff. Do not treat this file as the current queue; current executable work lives in GitHub open issues / Project after the relevant docs are checked. #144 package-boundary work closed through PR #318, while #104, #306, and #307 remain separate open sync/readiness owners."
 goal_anchor: "Codex Goal: refine AIppocampus open issues with Claude Code MCP live smoke, Windows binary packaging, and verified issue closeout"
 mode: Standard

@@ -1,5 +1,9 @@
 # Standalone Binary Packaging Plan
 
+Role: active handoff for optional standalone binary packaging.
+Status: current planning owner for Python-free binary claim boundaries; only
+platforms with dated artifact smoke may be claimed.
+
 This is the packaging plan and claim boundary for optional Python-free
 AIppocampus binaries. The canonical implementation remains the source-backed
 Python runtime; direct Python/script usage stays supported as the fallback.

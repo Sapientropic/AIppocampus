@@ -1,5 +1,9 @@
 # AIppocampus 技术差异化分析：底层机制层面的未开垦地
 
+Role: exploratory research and strategy hypothesis.
+Status: positioning draft, not current contract or broad competitor proof; check
+external sources and implementation owners before public claims.
+
 > 分析范围：2026 年主流 AI 记忆架构的技术盲区与海马体/认知科学的工程化差距
 > 目标：找出 3-5 个「竞品未做 + 值得做 + AIppocampus 有基础」的底层技术方向
 
