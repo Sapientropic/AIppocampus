@@ -85,13 +85,18 @@ def build_capability_ladder(
         hook_provider_status = "child_process_not_checked"
         hook_provider_next = "rerun aippocampus doctor provider --json without --no-child-check"
 
+    # The first-run card should send users to the read-only provider matrix.
+    # Actual history registration remains an explicit provider-specific consent
+    # step, so this must not collapse the public path back to Codex-only.
+    source_search_next = "aippocampus onboard --provider auto --status"
+
     return [
         {
             "id": "source_search_ready",
             "ready": core_ready,
             "status": "ready" if core_ready else "blocked",
             "what_works": "onboarding plus clean-source search after user consent",
-            "next_command": "aippocampus onboard --provider codex --all",
+            "next_command": source_search_next,
         },
         {
             "id": "active_recall_ready",
