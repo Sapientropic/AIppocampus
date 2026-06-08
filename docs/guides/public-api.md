@@ -277,10 +277,10 @@ For these commands:
 - Verbose prompt-hook debug JSON may also include `foreground_context`
   aggregate metrics such as model-visible character/line counts,
   chars-per-candidate, weak-scent budget violations, debug-only field leak
-  count, and whether Observatory/debug detail is available elsewhere. These
-  metrics describe the projection width; they must not include raw foreground
-  text, raw prompts, raw source snippets, route ids, source refs, local paths,
-  or private aliases.
+  count, direction-only foreground budget violations, and whether
+  Observatory/debug detail is available elsewhere. These metrics describe the
+  projection width; they must not include raw foreground text, raw prompts, raw
+  source snippets, route ids, source refs, local paths, or private aliases.
 - Exit code `0` means the command completed successfully. Non-zero means invalid
   arguments, missing prerequisites, failed validation, failed smoke, or another
   command-specific hard failure.
