@@ -171,6 +171,11 @@ def registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
     return Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
 
 
+def continuity_domains_snapshot_arg(arguments: dict[str, Any]) -> Path | None:
+    value = arguments.get("continuity_domains_snapshot")
+    return Path(str(value)).resolve() if value else None
+
+
 def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
     intent = str(arguments.get("intent") or arguments.get("query") or "").strip()
     if not intent:
@@ -189,6 +194,7 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             cwd=cwd_arg(arguments),
             clean_source_dir=source_dir,
             registry_dir=registry_dir_arg(arguments),
+            continuity_domains_snapshot_path=continuity_domains_snapshot_arg(arguments),
             max_routes=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
         )
     except RecallNavigationError as exc:
@@ -218,6 +224,7 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             registry_path=registry_path if registry_path.exists() else None,
             registry_dir=registry_dir,
             lock_path=lock_path,
+            continuity_domains_snapshot_path=continuity_domains_snapshot_arg(arguments),
             max_matches=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
         )
     except RecallNavigationError as exc:

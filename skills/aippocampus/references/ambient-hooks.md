@@ -69,9 +69,10 @@ Cards may include `provenance_class`, `cached_origin`,
 The allowed provenance classes are small and non-secret:
 `deterministic_cue`, `warm_scout_proposal`, `cached_warm_card`,
 `cognitive_map_route`, `working_memory_source`, `working_memory_model`, and
-`source_backed_reopen`. Provenance complements `support_level`, `visibility`,
-and `source_validation`; authority fields decide whether a card is still a
-handle (`reopen_required_before_claim`) or already bounded evidence
+`source_backed_reopen`, plus `continuity_domain_pointer` for Contract v1
+source-trailed domain handles. Provenance complements `support_level`,
+`visibility`, and `source_validation`; authority fields decide whether a card is
+still a handle (`reopen_required_before_claim`) or already bounded evidence
 (`bounded_evidence_ready`).
 
 The packet trust taxonomy is owned by
@@ -178,6 +179,13 @@ The current local projection is
 `recall_deepen` / `get_turn_context`-style clean-source reopen result, emits
 bounded evidence cards, and deliberately does not serialize the raw
 `source_window` payload.
+
+Continuity domain pointers follow the same hook rule. A default hook card may
+name the domain id/label, action grammar, pinned-boundary hints, and reopen
+plan, but it must not include `working_conclusion_short`. If that working
+conclusion matters, the foreground agent should call `recall_context` /
+`recall_deepen`, or use `active_recall --mode context`, then reopen clean source
+before making a specific claim.
 
 Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈挑个礼物",
 "我想建个网站", and a fresh coding workspace with no `AGENTS.md` may produce

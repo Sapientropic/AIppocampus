@@ -15,6 +15,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
 from aippocampus_runtime.recall.authority import with_authority_fields, with_trust_fields
+from aippocampus_runtime.recall.continuity_domains import CONTINUITY_DOMAIN_POINTER_KIND
 from aippocampus_runtime.recall.fresh_thread_scent import fresh_thread_scent_packet_from_decision
 from aippocampus_runtime.recall.nudge_policy import safe_nudge_topic
 from aippocampus_runtime.recall.query_profile import classify_query_profile
@@ -39,6 +40,7 @@ CACHED_WARM_CARD = "cached_warm_card"
 COGNITIVE_MAP_ROUTE = "cognitive_map_route"
 WORKING_MEMORY_SOURCE = "working_memory_source"
 WORKING_MEMORY_MODEL = "working_memory_model"
+CONTINUITY_DOMAIN_POINTER = CONTINUITY_DOMAIN_POINTER_KIND
 
 DEFAULT_AVOID = [
     "Do not claim innate memory.",
@@ -672,6 +674,45 @@ def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
     }, COGNITIVE_MAP_ROUTE)
 
 
+def _continuity_domain_pointer_card(item: dict[str, Any]) -> dict[str, Any]:
+    domain_id = str(item.get("domain_id") or "")
+    theme = compact_text(str(item.get("label") or item.get("theme") or domain_id), 140)
+    nudge_theme = safe_nudge_topic(theme)
+    source_boundary = dict(item.get("source_boundary") or {})
+    source_boundary.setdefault("pointer_only_not_fact", True)
+    source_boundary.setdefault("domain_summary_not_source", True)
+    source_boundary.setdefault("source_reopen_required_for_facts", True)
+    return with_card_provenance(
+        {
+            "card_id": _stable_id([CONTINUITY_DOMAIN_POINTER, domain_id, theme]),
+            "card_kind": CONTINUITY_DOMAIN_POINTER,
+            "domain_id": domain_id,
+            "theme": theme,
+            "resonance": "medium",
+            "support_level": item.get("support_level") or "source_required",
+            "visibility": ACTIVE_GENTLE_NUDGE,
+            "suggested_use": _safe_text(
+                item.get("suggested_use")
+                or "Use as continuity pointer; reopen source before factual claims.",
+                180,
+            ),
+            "nudge": f"This may connect to the continuity domain around {nudge_theme}.",
+            "key_line": "",
+            "matched_terms": _clean_terms(item.get("matched_terms") or item.get("activation_cues") or []),
+            "source_refs": [
+                ref
+                for ref in item.get("source_refs") or item.get("representative_sources") or []
+                if isinstance(ref, dict)
+            ][:6],
+            "reopen_plan": item.get("reopen_plan") or {},
+            "pinned_boundary_conditions": item.get("pinned_boundary_conditions") or [],
+            "source_boundary": source_boundary,
+            "expand_if": "Run recall_deepen on the domain handle, then reopen clean source for claims.",
+        },
+        CONTINUITY_DOMAIN_POINTER,
+    )
+
+
 def _dedupe_cards(cards: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -722,6 +763,12 @@ def ambient_recall_from_decision(
         )
     if result.get("evidence"):
         cards.extend(_evidence_card(item, deep_archival=deep_archival) for item in result.get("evidence") or [])
+    if result.get("continuity_domains"):
+        cards.extend(
+            _continuity_domain_pointer_card(item)
+            for item in result.get("continuity_domains") or []
+            if isinstance(item, dict)
+        )
     if result.get("working_memory"):
         cards.extend(_working_memory_card(item) for item in result.get("working_memory") or [])
     if not cards and result.get("cognitive_map"):

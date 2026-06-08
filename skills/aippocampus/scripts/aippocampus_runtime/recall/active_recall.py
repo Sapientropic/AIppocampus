@@ -22,6 +22,12 @@ from aippocampus_runtime.recall.active_recall_lock import (
     summarize_lock_roi,
 )
 from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
+from aippocampus_runtime.recall.continuity_domains import (
+    SNAPSHOT_DIR_NAME,
+    default_continuity_domains_latest_path,
+    load_continuity_domains_snapshot,
+    match_continuity_domain_pointers,
+)
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
     profile_recall_terms,
@@ -341,6 +347,21 @@ def _public_working_memory_cards(rows: list[dict[str, Any]], *, max_cards: int) 
     return cards
 
 
+def _continuity_domain_clean_source_dir(
+    *,
+    cwd: Path,
+    snapshot_path: Path,
+) -> Path | None:
+    if snapshot_path.parent.name == SNAPSHOT_DIR_NAME:
+        candidate = snapshot_path.parent.parent / "clean-source"
+        if (candidate / "messages.jsonl").exists():
+            return candidate
+    legacy = cwd / ".aippocampus" / "clean-source"
+    if (legacy / "messages.jsonl").exists():
+        return legacy
+    return None
+
+
 def active_recall_context(
     *,
     prompt: str,
@@ -348,6 +369,7 @@ def active_recall_context(
     registry_path: Path | None = None,
     agent_self_notes_path: Path | None = None,
     working_memory_path: Path | None = None,
+    continuity_domains_snapshot_path: Path | None = None,
     max_matches: int = 4,
 ) -> dict[str, Any]:
     """Return explicit agent-initiated continuity context.
@@ -358,7 +380,7 @@ def active_recall_context(
     returned route refs.
     """
 
-    del cwd  # The explicit context payload must not expose local workspace paths.
+    cwd_path = Path(cwd)
     notes_path = agent_self_notes_path or default_agent_self_notes_path(registry_path)
     self_note_matches = (
         search_agent_self_notes(
@@ -381,22 +403,56 @@ def active_recall_context(
         else []
     )
     working_brief = _public_working_memory_cards(working_rows, max_cards=max_matches)
+    domain_snapshot_path = continuity_domains_snapshot_path or default_continuity_domains_latest_path(cwd_path)
+    domain_snapshot = load_continuity_domains_snapshot(domain_snapshot_path)
+    domain_clean_source_dir = _continuity_domain_clean_source_dir(
+        cwd=cwd_path,
+        snapshot_path=domain_snapshot_path,
+    )
+    domain_pointers = match_continuity_domain_pointers(
+        prompt,
+        domain_snapshot,
+        limit=max_matches,
+        clean_source_dir=domain_clean_source_dir,
+        snapshot_path=domain_snapshot_path,
+    )
+    domain_brief = [
+        {
+            **pointer,
+            "active_recall_surface": "continuity_domain",
+            "retrieval_role": "working_continuity_brief",
+        }
+        for pointer in domain_pointers
+    ]
     routes = _source_reopen_routes_from_surfaces(
-        [*self_note_matches, *working_rows],
+        [*self_note_matches, *working_rows, *domain_pointers],
         limit=max_matches,
     )
+    for pointer in domain_pointers:
+        handle = ((pointer.get("reopen_plan") or {}).get("arguments") or {}).get("handle")
+        if isinstance(handle, dict):
+            routes.append(
+                {
+                    "kind": "continuity_domain",
+                    "domain_id": pointer.get("domain_id"),
+                    "handle": handle,
+                    "source_reopen_required_before_claim": True,
+                    "recommended_tool": "recall_deepen",
+                }
+            )
     dream_count = sum(1 for row in working_rows if row.get("candidate_type") == "dream_hypothesis")
     return {
         "kind": "aippocampus_agent_initiated_recall_context",
         "schema_version": 1,
-        "decision": "context" if memory_atmosphere or working_brief or routes else "empty",
+        "decision": "context" if memory_atmosphere or working_brief or domain_brief or routes else "empty",
         "agent_initiated_recall": True,
         "memory_atmosphere": memory_atmosphere,
-        "working_continuity_brief": working_brief,
+        "working_continuity_brief": [*domain_brief, *working_brief],
         "source_reopen_routes": routes,
         "surface_counts": {
             "agent_self_notes": len(memory_atmosphere),
             "working_memory": len(working_brief),
+            "continuity_domains": len(domain_brief),
             "dream": dream_count,
             "atmosphere": len(memory_atmosphere),
         },
@@ -438,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--agent-self-notes")
     parser.add_argument("--working-memory")
+    parser.add_argument("--continuity-domains-snapshot")
     parser.add_argument("--use-lock", action="store_true", dest="use_lock")
     parser.add_argument("--use-background-lock", action="store_true", dest="use_lock")
     parser.add_argument("--lock-id")
@@ -516,6 +573,9 @@ def main(argv: list[str] | None = None) -> int:
             else None,
             working_memory_path=Path(args.working_memory).resolve()
             if args.working_memory
+            else None,
+            continuity_domains_snapshot_path=Path(args.continuity_domains_snapshot).resolve()
+            if args.continuity_domains_snapshot
             else None,
             max_matches=args.max,
         )
