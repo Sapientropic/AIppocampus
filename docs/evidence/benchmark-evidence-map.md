@@ -1,8 +1,12 @@
 # Benchmark And Evidence Map
 
-This is the first-stop map for AIppocampus benchmark runners, smoke evidence,
-and dated measurement records. It is intentionally a navigation page, not
-another command ledger. Keep current numeric claims and supersession rules in
+Role: evidence navigation map.
+Status: current owner for routing readers to benchmark/evidence owners; not a
+numeric claim snapshot, command ledger, or runner priority registry.
+
+This is the first-stop map for AIppocampus benchmark evidence only after a
+reader knows what kind of evidence they need. Keep current numeric claims,
+negative-result remediation, and supersession rules in
 [`docs/evidence/current-claims.md`](current-claims.md), stage-level can-claim /
 cannot-claim status in
 [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md), proof-slice maturity in
@@ -16,6 +20,16 @@ Community reports belong in
 [`community-field-reports.md`](community-field-reports.md) until a maintainer
 promotes a public-safe result into the official evidence flow.
 
+## Start Here
+
+| Reader question | First stop | Then use |
+| --- | --- | --- |
+| What can AIppocampus currently claim, and what failed? | [`current-claims.md`](current-claims.md) | Open the source report only for the row you need. |
+| Which known benchmark result needs remediation? | [`current-claims.md#known-negative-results-and-remediation`](current-claims.md#known-negative-results-and-remediation) | Follow the linked issue before reading old dated reports. |
+| Which benchmark or smoke should I run? | [`benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md) | Use the default run profile and cannot-claim column there. |
+| Which file owns a specific dated report or runner? | [`#evidence-ownership`](#evidence-ownership) and [`#benchmark-runners`](#benchmark-runners) | Treat this page as the maintainer directory. |
+| Where are historical reports? | [`benchmarks/`](benchmarks/) plus [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md) | Historical reports stay visible but do not set current claims by themselves. |
+
 ## Folder Layout
 
 - `readiness/` holds claim-boundary snapshots and release/public-readiness
@@ -28,19 +42,22 @@ promotes a public-safe result into the official evidence flow.
 - `community-field-reports.md` defines how user-submitted reports are collected,
   labeled, and kept separate from official claims.
 
-## Reading Order
+## Reader Path
 
 1. Need current benchmark/readiness numbers and supersession rules:
    [`current-claims.md`](current-claims.md).
-2. Need to know what the repo can honestly claim by stage:
+2. Need known negative results or remediation issues before reading dated
+   history:
+   [`current-claims.md#known-negative-results-and-remediation`](current-claims.md#known-negative-results-and-remediation).
+3. Need to know what the repo can honestly claim by stage:
    [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md).
-3. Need the dated commands and summarized results behind those claims:
+4. Need the dated commands and summarized results behind those claims:
    [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md).
-4. Need to understand why the benchmarks are shaped this way:
+5. Need to understand why the benchmarks are shaped this way:
    [`benchmarks/design/benchmark-design-rationale.md`](benchmarks/design/benchmark-design-rationale.md).
-5. Need benchmark methodology, track boundaries, and diagnostic notes:
+6. Need benchmark methodology, track boundaries, and diagnostic notes:
    [`benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
-6. Need external benchmark and memory-system comparison boundaries:
+7. Need external benchmark and memory-system comparison boundaries:
    [`benchmarks/design/external-benchmark-map.md`](benchmarks/design/external-benchmark-map.md).
    For the AMemGym public `v1.base` intake, runner, source-backed overlay
    metrics, and claim limits, use
@@ -48,79 +65,86 @@ promotes a public-safe result into the official evidence flow.
    For the MemoryAgentBench feasibility decision and staged adapter boundary,
    runner, and claim limits, use
    [`benchmarks/memoryagentbench.md`](benchmarks/memoryagentbench.md).
-7. Need the multimodal memory benchmark-family map for #528:
+8. Need the multimodal memory benchmark-family map for #528:
    [`benchmarks/design/multimodal-memory-benchmark-map.md`](benchmarks/design/multimodal-memory-benchmark-map.md).
-8. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
+9. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
    recall before adapting #528:
    [`benchmarks/design/atm-bench-hard-protocol-boundary.md`](benchmarks/design/atm-bench-hard-protocol-boundary.md).
-9. Need LongMemEval source, commands, published V1 retrieval-only results, or
+10. Need LongMemEval source, commands, published V1 retrieval-only results, or
    the V2 context-mapping pilot:
    [`benchmarks/longmemeval.md`](benchmarks/longmemeval.md).
-10. Need public corpus commands and local report boundaries:
+
+## Maintainer Directory
+
+Use this directory only when the fast path above does not answer the question.
+It stays complete for maintainers, but it is not the recommended first reading
+path for reviewers trying to understand current claims.
+
+1. Need public corpus commands and local report boundaries:
    [`benchmark_corpus/README.md`](../../benchmark_corpus/README.md) and
    [`benchmark_corpus/sharegpt_manifest.json`](../../benchmark_corpus/sharegpt_manifest.json).
-11. Need the public longitudinal pseudo-user benchmark for coding implicit
+2. Need the public longitudinal pseudo-user benchmark for coding implicit
    knowledge:
    [`benchmarks/public-longitudinal-users.md`](benchmarks/public-longitudinal-users.md).
-12. Need the latest dated public-longitudinal-users measurement report:
+3. Need the latest dated public-longitudinal-users measurement report:
    [`benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
-13. Need the first real public VCS hard-event smoke:
+4. Need the first real public VCS hard-event smoke:
    [`benchmarks/react-real-vcs-smoke-2026-05-31.md`](benchmarks/react-real-vcs-smoke-2026-05-31.md).
-14. Need the 100+ gold real React VCS measurement with anti-drift negatives
+5. Need the 100+ gold real React VCS measurement with anti-drift negatives
    and counterfactual controls:
    [`benchmarks/react-real-vcs-100-gold-2026-05-31.md`](benchmarks/react-real-vcs-100-gold-2026-05-31.md).
-15. Need the sharper React VCS adversarial controls for source authority,
+6. Need the sharper React VCS adversarial controls for source authority,
    keyword drift, behavior-only support, and abstention:
    [`benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`](benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md).
-16. Need the non-oracle React VCS production-like source-disambiguation
+7. Need the non-oracle React VCS production-like source-disambiguation
    follow-up for current/effective-vs-stale source ranking:
    [`benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md`](benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md).
-17. Need public-safe memory-pain fixture evidence:
+8. Need public-safe memory-pain fixture evidence:
    [`benchmarks/memory-pain-fixture-report.md`](benchmarks/memory-pain-fixture-report.md).
-18. Need Track S no-live-judge semantic robustness diagnostics:
+9. Need Track S no-live-judge semantic robustness diagnostics:
    [`benchmarks/semantic-robustness-track-s.md`](benchmarks/semantic-robustness-track-s.md).
-19. Need public-safe multimodal corpus-style retrieval fixture evidence for
+10. Need public-safe multimodal corpus-style retrieval fixture evidence for
    #531:
    [`benchmarks/multimodal-corpus-fixture-report.md`](benchmarks/multimodal-corpus-fixture-report.md).
-20. Need public-safe conversational media-ingest recall fixture evidence for
+11. Need public-safe conversational media-ingest recall fixture evidence for
    #532:
    [`benchmarks/conversational-media-ingest-fixture-report.md`](benchmarks/conversational-media-ingest-fixture-report.md).
-21. Need public-safe NIAH-style multimodal evidence-pool fixture evidence for
+12. Need public-safe NIAH-style multimodal evidence-pool fixture evidence for
    #533:
    [`benchmarks/multimodal-niah-evidence-pool-report.md`](benchmarks/multimodal-niah-evidence-pool-report.md).
-22. Need public-safe knowledge pollution, privacy partition, and capability
+13. Need public-safe knowledge pollution, privacy partition, and capability
    contract-smoke evidence:
    [`benchmarks/knowledge-pollution-privacy-fixture-report.md`](benchmarks/knowledge-pollution-privacy-fixture-report.md).
-23. Need public-safe fresh-thread recall demo evidence:
+14. Need public-safe fresh-thread recall demo evidence:
    [`benchmarks/fresh-thread-recall-demo-2026-05-31.md`](benchmarks/fresh-thread-recall-demo-2026-05-31.md).
-24. Need sanitized real-history fresh-thread boundary evidence for #302:
+15. Need sanitized real-history fresh-thread boundary evidence for #302:
    [`benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`](benchmarks/fresh-thread-real-history-smoke-2026-06-02.md).
-25. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
+16. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
    [`benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`](benchmarks/fresh-thread-expanded-coverage-2026-06-03.md).
-26. Need public-safe H1/H2 hard-negative scoring-contract fixture evidence for
+17. Need public-safe H1/H2 hard-negative scoring-contract fixture evidence for
    #244:
    [`benchmarks/hippocampal-hard-negative-fixture-report.md`](benchmarks/hippocampal-hard-negative-fixture-report.md).
-27. Need public-safe hippocampal recall-discrimination diagnostic seed evidence
+18. Need public-safe hippocampal recall-discrimination diagnostic seed evidence
    for #229/#230/#231:
    [`benchmarks/hippocampal-recall-fixture-report.md`](benchmarks/hippocampal-recall-fixture-report.md).
-28. Need public-safe Field Continuity / magic-moment reproducibility fixture
+19. Need public-safe Field Continuity / magic-moment reproducibility fixture
    evidence for #454 and the bounded #281 fixture-quality proxy:
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
-29. Need segmented-search merge policy calibration evidence for #375:
+20. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-30. Need agency host-surface timing evidence for #763:
+21. Need agency host-surface timing evidence for #763:
    [`benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`](benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
-31. Need private real-history Dream offline and diagnostic evidence:
+22. Need private real-history Dream offline and diagnostic evidence:
    [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
    and
    [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
-32. Need explicit recall-reminder shadow A/B evidence:
+23. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-33. Need public-corpus negative-control dream shadow evidence:
+24. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-34. Need live question-extraction axis-coverage evidence for GitHub #153:
+25. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-35. Need community-submitted runs, demos, known gaps, or field-report intake:
+26. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 

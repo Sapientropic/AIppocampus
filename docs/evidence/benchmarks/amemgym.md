@@ -1,9 +1,9 @@
 # AMemGym Adapter Boundary
 
-This page is the AIppocampus evidence owner for GitHub #733. It records what
-the AMemGym adapter can inspect today, what source-backed overlay metrics mean,
-and what remains out of scope before any official or comparative score can be
-quoted.
+This page is the AIppocampus evidence owner for GitHub #733/#742 and the #958
+official-runner remediation path. It records what the AMemGym adapter can
+inspect today, what source-backed overlay metrics mean, and what remains out of
+scope before any official or comparative score can be quoted.
 
 Decision: suitable as a staged external benchmark adapter, but not as an
 official full-`v1.base` score claim yet. The repository now has a deterministic,
@@ -381,8 +381,8 @@ Cannot claim now:
 
 ## Deferred Work
 
-Full official-runner evidence needs a separate issue or follow-up slice that
-runs the full public `v1.base` fixed arms, records model/provider versions,
+Full official-runner evidence is tracked by #958. That follow-up slice should
+run the full public `v1.base` fixed arms, record model/provider versions,
 extracts cost/latency from raw local official outputs, and then decides whether
 to add Native/RAG/AWI/AWE parity arms without leaking raw rows, model outputs,
 or keys. The semantic-sidecar arm also needs a real pre-score worker materializer

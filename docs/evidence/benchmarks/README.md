@@ -1,9 +1,28 @@
 # Benchmark Evidence
 
+Role: local index for benchmark methodology notes, public-safe reports, and
+dated measurement files under `docs/evidence/benchmarks/`.
+Status: current folder owner; global claim and readiness routing lives in
+[`../benchmark-evidence-map.md`](../benchmark-evidence-map.md).
+
 This folder holds benchmark methodology notes, public-safe reports, and dated
 measurement records. It is not the current claim snapshot. Start from
 [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) when you need the
 complete runner, smoke, corpus, and evidence-owner map.
+
+For current numeric claims, supersession, known negative results, and active
+remediation issues, start from
+[`../current-claims.md`](../current-claims.md) before opening dated reports in
+this folder.
+
+## Reader Path
+
+| Reader need | Start here | Why |
+| --- | --- | --- |
+| Current claims, negative results, and remediation issues | [`../current-claims.md`](../current-claims.md) | It is the claim snapshot and links active remediation routes such as #960/#963/#958. |
+| Which runner or smoke to prioritize | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | It names priority, maturity, default run profile, and cannot-claim boundaries. |
+| Why benchmark layers are separate | [`design/README.md`](design/README.md) | It explains the benchmark philosophy without dated result noise. |
+| Full maintainer directory | [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) | It maps every runner, smoke, corpus, and evidence owner. |
 
 ## Design Hub
 
@@ -13,21 +32,16 @@ gate decisions, source retrieval, payload fidelity, compaction continuity,
 longitudinal hard events, and hippocampal recall-discrimination instead of
 collapsing them into one leaderboard.
 
-## Canonical Owners
+## Local Owners
 
 | Need | Start here | Boundary |
 | --- | --- | --- |
-| Current claim snapshot | [`../current-claims.md`](../current-claims.md) | Current numeric values, dated cohorts, supersession, and cannot-claim status for over-readable benchmark/readiness metrics. |
-| Stage readiness boundary | [`../readiness/stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md) | Stage-level can-claim / cannot-claim status only; not a dated command ledger. |
-| Proof-slice maturity | [`../readiness/proof-slice-maturity.md`](../readiness/proof-slice-maturity.md) | Compact maturity board for proof slices; not a benchmark score table. |
-| Dated verification ledger | [`../readiness/public-readiness-verification.md`](../readiness/public-readiness-verification.md) | Summarized command evidence; old entries can be historical. |
-| Full runner and smoke map | [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) | Navigation owner for benchmark and smoke entrypoints. |
 | Benchmark philosophy | [`design/benchmark-design-rationale.md`](design/benchmark-design-rationale.md) | Reader-facing rationale; no raw outputs or current-status upgrades. |
 | Benchmark priority and run profiles | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | P0/P1/P2/P3 priority, maturity, default run profile, claim-level, and cannot-claim guidance. |
 | Detailed track plan | [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md) | Track A-D runner details, profiles, diagnostics, and implementation notes. |
 | Track S semantic robustness | [`semantic-robustness-track-s.md`](semantic-robustness-track-s.md) | No-live-judge diagnostics for perturbation stability, retrieval invariance, hard negatives, and optional proxy/vector health boundaries. |
 | External benchmark comparison home | [`design/external-benchmark-map.md`](design/external-benchmark-map.md) | Analysis map and blockers; not a superiority claim. |
-| AMemGym adapter boundary | [`amemgym.md`](amemgym.md) | Public `v1.base` metadata smoke, local overlay metrics, and cannot-claim boundary for #733. |
+| AMemGym adapter boundary | [`amemgym.md`](amemgym.md) | Public `v1.base` metadata smoke, local overlay metrics, cannot-claim boundary for #733/#742, and #958 official-runner remediation path. |
 | Multimodal memory benchmark map | [`design/multimodal-memory-benchmark-map.md`](design/multimodal-memory-benchmark-map.md) | #528 source-shape routing across HippoCamp, MemLens, ATM-Bench, egocentric video, UniDoc, Persona, and conversation-memory benchmarks. |
 | ATM-Bench Hard protocol boundary | [`design/atm-bench-hard-protocol-boundary.md`](design/atm-bench-hard-protocol-boundary.md) | Verified upstream-protocol boundary for #528; no adapter, score, or privacy claim. |
 | Hippocampal private annotation protocol | [`hippocampal-private-annotation-protocol.md`](hippocampal-private-annotation-protocol.md) | Private H1/H2 real-history sampling and sanitized report rules; no committed private pack. |
