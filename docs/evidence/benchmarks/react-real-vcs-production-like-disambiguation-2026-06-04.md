@@ -13,13 +13,13 @@ production-like deterministic retrieval arm, not a live model/provider result.
 ## Command
 
 ```powershell
-python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\react-real-vcs-adversarial-v2\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --output .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-production-like-retrieval-report.json --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\react-real-vcs-adversarial-v2\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --output .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-production-like-retrieval-report-after-961.json --json
 ```
 
-The command exits nonzero under the default perfect-quality gate because this
-arm has expected false positives on one negative-control track. The full output
-is kept local under `.tmp/`; this report commits only sanitized aggregate
-metrics.
+The 2026-06-09 rerun exits zero under the default perfect-quality gate after
+explicit cue-based lexical near-miss hard-negative suppression was added. The
+full output is kept local under `.tmp/`; this report commits only sanitized
+aggregate metrics.
 
 ## Overall Result
 
@@ -27,13 +27,13 @@ metrics.
 | --- | ---: |
 | Gold events | 60 |
 | Non-flag events | 57 |
-| Predicted flags | 90 |
+| Predicted flags | 60 |
 | Recall | 100.00% |
-| Precision | 66.67% |
-| F1 | 80.00% |
+| Precision | 100.00% |
+| F1 | 100.00% |
 | False negatives | 0 |
-| False positives | 30 |
-| Anti-drift pass | 47.37% |
+| False positives | 0 |
+| Anti-drift pass | 100.00% |
 | Source-support failures | 0 |
 
 ## Source-Disambiguation Metrics
@@ -44,7 +44,9 @@ metrics.
 | `current_vs_stale_pairwise_win_rate` | 100.00% |
 | `stale_source_top_k_rate` | 0.00% |
 | `wrong_source_evidence_rate` | 0.00% |
-| `negative_false_positive_rate` | 52.63% |
+| `negative_false_positive_rate` | 0.00% |
+| `hard_negative_suppression_rate` | 100.00% |
+| Hard-negative suppressions | 30 / 30 |
 | Pairwise current-vs-stale wins | 51 / 51 |
 
 ## Track Results
@@ -56,7 +58,7 @@ metrics.
 | `family_cross_contamination` | 9 | 0 | 100.00% | 100.00% | 0.00% | n/a |
 | `behavior_only_rollout_gold` | 9 | 0 | 100.00% | 100.00% | 0.00% | n/a |
 | `adversarial_paraphrase` | 18 | 0 | 100.00% | n/a | 0.00% | n/a |
-| `lexical_near_miss_anti_drift` | 0 | 30 | n/a | n/a | n/a | 100.00% |
+| `lexical_near_miss_anti_drift` | 0 | 30 | n/a | n/a | n/a | 0.00% |
 | `behavior_narrative_negative` | 0 | 9 | n/a | n/a | n/a | 0.00% |
 | `abstention_unsupported` | 0 | 18 | n/a | n/a | n/a | 0.00% |
 
@@ -65,9 +67,9 @@ metrics.
 - The arm separates the source authority problem from the source-window oracle:
   dual-source and temporal-override cases pick the current/effective source
   over stale/public alternatives without gold source ids in the ranking input.
-- It also exposes a real hard-negative failure: lexical near-miss events still
-  over-activate, producing 30 false positives. This is a retrieval/decision
-  calibration problem, not a source-id disambiguation failure.
+- The explicit hard-negative cue layer now suppresses the 30 lexical near-miss
+  controls in this fixture without reducing the 60/60 gold current-source hits.
+  Source ids remain auditable and `required_past_source_ids` remain grading-only.
 - The source-window score from the 2026-05-31 report remains a deterministic
   oracle contract. This report is the first committed non-oracle
   production-like disambiguation slice for the same adversarial fixture.
@@ -77,6 +79,9 @@ metrics.
 - No raw PR bodies, raw search payloads, raw rollout payloads, private data, or
   local absolute paths are committed.
 - `required_past_source_ids` are used only for grading metrics.
+- The near-miss result is bounded to fixture rows that carry explicit
+  hard-negative lure cues; it is not a broad semantic near-miss understanding
+  claim.
 - This does not claim live model quality, wild VCS corpus quality, private
   real-history continuity quality, or license-safe redistribution of the local
   React fixture.

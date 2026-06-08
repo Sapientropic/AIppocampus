@@ -347,9 +347,10 @@ The first non-oracle production-like source-disambiguation follow-up is
 It reuses the adversarial V2 fixture, builds a local past-window source index,
 and ranks candidates without using `required_past_source_ids` as prediction
 input. The run picks the current/effective source on the dual-source and
-temporal-override tracks, but still over-activates all lexical near-miss
-negatives, so it is source-disambiguation evidence with an explicit
-anti-drift calibration failure.
+temporal-override tracks and, in the 2026-06-09 rerun, suppresses all 30
+explicit-cue lexical near-miss hard negatives. It remains source-disambiguation
+evidence,
+not live model quality or wild VCS corpus quality.
 
 ## Runner
 

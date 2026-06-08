@@ -25,6 +25,16 @@ import _paths
 _paths.ensure_paths()
 
 from benchmark_statistics import binomial_rate_report, lower_bound_gate
+from vcs_source_disambiguation import (
+    SOURCE_DISAMBIGUATION_INPUT_FIELDS,
+    event_has_unsupported_signal,
+    event_requests_behavior_source,
+    event_requests_current_source,
+    hard_negative_subtype_for_event,
+    retrieval_text_for_event,
+    route_actionability_for_event,
+    route_candidate_from_ranked_sources,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_DATASET = (
@@ -48,7 +58,6 @@ HARD_EVENT_KINDS = {
     "edit_reverted",
     "route_abandoned",
 }
-SUCCESSFUL_CURRENT_EVENT_KINDS = {"test_passed", "tool_call_succeeded"}
 SOURCE_DEGRADATION_STATES = {
     "full_source",
     "truncated_source",
@@ -57,17 +66,6 @@ SOURCE_DEGRADATION_STATES = {
     "partial_support",
 }
 FULL_SUPPORT_BLOCKING_DEGRADATIONS = {"missing_source_id", "partial_support"}
-SOURCE_DISAMBIGUATION_INPUT_FIELDS = [
-    "future_window.text",
-    "future_window.family",
-    "future_window.hard_event_kind",
-    "past_window.kind",
-    "past_window.text",
-    "past_window.behavior_backed",
-    "past_window.tool_name",
-    "past_window.command_class",
-    "past_window.failure_family",
-]
 TRACK_PREFIXES = {
     "adv-dual-": "dual_source_counterfactual",
     "adv-temporal-": "temporal_override_chain",
@@ -196,19 +194,6 @@ def retrieval_text_for_source(source: dict[str, Any]) -> str:
     return " ".join(str(field or "") for field in fields)
 
 
-def retrieval_text_for_event(event: dict[str, Any]) -> str:
-    # Do not include expected_signal, flag_worthy, or required_past_source_ids.
-    # The production-like arm receives the future event surface, not the grader.
-    return " ".join(
-        str(field or "")
-        for field in (
-            event.get("text"),
-            event.get("family"),
-            event.get("hard_event_kind"),
-        )
-    )
-
-
 def source_kind(source: dict[str, Any]) -> str:
     return str(source.get("kind") or "").casefold()
 
@@ -262,60 +247,6 @@ def source_is_weak_or_narrative(source: dict[str, Any]) -> bool:
     return kind in {"weak_related_source", "assistant_message"} or bool(
         source.get("behavior_backed") is False
     )
-
-
-def event_requests_current_source(event: dict[str, Any]) -> bool:
-    text = retrieval_text_for_event(event).casefold()
-    return any(
-        marker in text
-        for marker in (
-            "current",
-            "effective",
-            "override",
-            "overrides",
-            "overridden",
-            "newer",
-            "active",
-        )
-    )
-
-
-def event_requests_behavior_source(event: dict[str, Any]) -> bool:
-    text = retrieval_text_for_event(event).casefold()
-    return any(
-        marker in text
-        for marker in (
-            "behavior",
-            "failed",
-            "failure",
-            "test_failed",
-            "tool_call_failed",
-            "edit_reverted",
-            "route_abandoned",
-        )
-    )
-
-
-def event_has_unsupported_signal(event: dict[str, Any]) -> bool:
-    text = retrieval_text_for_event(event).casefold()
-    return any(
-        marker in text
-        for marker in (
-            "unsupported",
-            "no source-backed",
-            "without support",
-            "unrelated",
-            "similar surface",
-            "weak related",
-            "narrative-only",
-            "successful tool behavior",
-            "docs-only",
-        )
-    )
-
-
-def event_is_successful_current_event(event: dict[str, Any]) -> bool:
-    return str(event.get("hard_event_kind") or "").casefold() in SUCCESSFUL_CURRENT_EVENT_KINDS
 
 
 def infer_event_track(event_id: str) -> str | None:
@@ -599,74 +530,6 @@ def rank_sources_for_event(
     )
 
 
-def route_candidate_from_ranked_sources(
-    *,
-    event: dict[str, Any],
-    ranked_sources: list[dict[str, Any]],
-    min_score: float,
-) -> tuple[bool, str]:
-    if not ranked_sources:
-        return False, "no_ranked_sources"
-    top = ranked_sources[0]
-    if float(top["score"]) < min_score:
-        return False, "below_min_score"
-    if event_has_unsupported_signal(event):
-        return False, "unsupported_signal"
-    top_kind = str(top.get("kind") or "").casefold()
-    if top_kind in {"weak_related_source", "assistant_message"}:
-        return False, "weak_or_narrative_source"
-    if top.get("behavior_backed") is False and event_requests_behavior_source(event):
-        return False, "behavior_source_required"
-    return True, "route_candidate"
-
-
-def route_actionability_for_event(
-    *,
-    event: dict[str, Any],
-    route_candidate: bool,
-    candidate_reason: str,
-) -> dict[str, Any]:
-    if not route_candidate:
-        return {
-            "decision": "suppress",
-            "reason": candidate_reason,
-            "foreground_visible": False,
-        }
-    # A successful current event may still retrieve the old failed route for
-    # diagnosis. It must not become a foreground warning/action route unless a
-    # separate source-backed currentness rule says the old failure still applies.
-    if event_is_successful_current_event(event):
-        return {
-            "decision": "suppress",
-            "reason": "successful_current_event",
-            "foreground_visible": False,
-        }
-    return {
-        "decision": "flag",
-        "reason": "source_route_actionable",
-        "foreground_visible": True,
-    }
-
-
-def should_flag_from_ranked_sources(
-    *,
-    event: dict[str, Any],
-    ranked_sources: list[dict[str, Any]],
-    min_score: float,
-) -> bool:
-    route_candidate, candidate_reason = route_candidate_from_ranked_sources(
-        event=event,
-        ranked_sources=ranked_sources,
-        min_score=min_score,
-    )
-    actionability = route_actionability_for_event(
-        event=event,
-        route_candidate=route_candidate,
-        candidate_reason=candidate_reason,
-    )
-    return str(actionability["decision"]) == "flag"
-
-
 def source_disambiguation_case_rows(
     dataset: VcsFutureEventDataset,
     *,
@@ -698,6 +561,7 @@ def source_disambiguation_case_rows(
                 route_candidate=route_candidate,
                 candidate_reason=candidate_reason,
             )
+            hard_negative_subtype = hard_negative_subtype_for_event(event)
             selected = str(route_actionability["decision"]) == "flag"
             selected_source_ids = [str(source["source_id"]) for source in top_sources] if selected else []
             if selected:
@@ -757,6 +621,10 @@ def source_disambiguation_case_rows(
                 and str(route_actionability["reason"]) == "successful_current_event"
             )
             anti_drift_route_suppressed = bool(negative_route_drag and not selected)
+            hard_negative_suppressed = bool(
+                hard_negative_subtype
+                and candidate_reason == f"hard_negative:{hard_negative_subtype}"
+            )
             case_rows.append(
                 {
                     "event_id": event.get("event_id"),
@@ -772,6 +640,8 @@ def source_disambiguation_case_rows(
                     "route_candidate": route_candidate,
                     "route_candidate_reason": candidate_reason,
                     "route_actionability": route_actionability,
+                    "hard_negative_subtype": hard_negative_subtype,
+                    "hard_negative_suppressed": hard_negative_suppressed,
                     "route_chain_required": route_chain_required,
                     "route_chain_complete": route_chain_complete,
                     "negative_route_drag": negative_route_drag,
@@ -803,6 +673,10 @@ def summarize_source_disambiguation_cases(
         negatives = [row for row in rows if not row["flag_worthy"]]
         required_chain_rows = [row for row in positives if row["route_chain_required"]]
         negative_route_drag_count = sum(1 for row in negatives if row["negative_route_drag"])
+        hard_negative_rows = [row for row in negatives if row.get("hard_negative_subtype")]
+        hard_negative_suppressed_count = sum(
+            1 for row in hard_negative_rows if row.get("hard_negative_suppressed")
+        )
         anti_drift_route_suppression_count = sum(
             1 for row in negatives if row["anti_drift_route_suppressed"]
         )
@@ -835,6 +709,12 @@ def summarize_source_disambiguation_cases(
                 anti_drift_route_suppression_count,
                 negative_route_drag_count,
             ),
+            "hard_negative_event_count": len(hard_negative_rows),
+            "hard_negative_suppressed_count": hard_negative_suppressed_count,
+            "hard_negative_suppression_rate": safe_rate(
+                hard_negative_suppressed_count,
+                len(hard_negative_rows),
+            ),
             "foreground_action_false_positive_count": sum(
                 1 for row in negatives if row["negative_false_positive"]
             ),
@@ -863,6 +743,12 @@ def summarize_source_disambiguation_cases(
     for row in case_rows:
         track = str(row.get("track") or "unknown")
         by_track.setdefault(track, {"rows": []})["rows"].append(row)
+    subtype_rows: dict[str, list[dict[str, Any]]] = {}
+    for row in case_rows:
+        if row.get("flag_worthy") or not row.get("hard_negative_subtype"):
+            continue
+        subtype = str(row["hard_negative_subtype"])
+        subtype_rows.setdefault(subtype, []).append(row)
     return {
         "available": True,
         "kind": "production_like_source_disambiguation",
@@ -885,6 +771,22 @@ def summarize_source_disambiguation_cases(
         "by_track": {
             track: bucket_summary(bucket["rows"])
             for track, bucket in sorted(by_track.items())
+        },
+        "negative_subtypes": {
+            subtype: {
+                "event_count": len(rows),
+                "false_positive_count": sum(
+                    1 for row in rows if row["negative_false_positive"]
+                ),
+                "suppressed_count": sum(
+                    1 for row in rows if row.get("hard_negative_suppressed")
+                ),
+                "suppression_rate": safe_rate(
+                    sum(1 for row in rows if row.get("hard_negative_suppressed")),
+                    len(rows),
+                ),
+            }
+            for subtype, rows in sorted(subtype_rows.items())
         },
         "events": case_rows,
         "privacy_boundary": {
