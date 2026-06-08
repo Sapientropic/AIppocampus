@@ -263,6 +263,38 @@ class UpdateSyncTests(unittest.TestCase):
         )
         self.assertFalse(by_id["hook_provider_ready"]["ready"])
 
+    def test_status_marks_hook_provider_ready_when_child_process_inherits_key(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"DEEPSEEK_API_KEY": "test"}):
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--skill-target",
+                str(REPO_ROOT / "skills" / "aippocampus"),
+                "--hooks-json",
+                str(hooks_json),
+            )
+
+        self.assertEqual(code, 0)
+        by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
+        self.assertEqual(by_id["semantic_provider_ready"]["status"], "ready")
+        self.assertEqual(by_id["hook_provider_ready"]["status"], "ready")
+        self.assertTrue(by_id["hook_provider_ready"]["ready"])
+        self.assertEqual(
+            by_id["hook_provider_ready"]["next_command"],
+            "aippocampus hooks prompt status --last",
+        )
+
     def test_status_text_leads_with_core_and_magic_not_generic_needs_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)

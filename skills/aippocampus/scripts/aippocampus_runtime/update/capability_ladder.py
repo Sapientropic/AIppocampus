@@ -70,12 +70,14 @@ def build_capability_ladder(
     mcp = surfaces.get("mcp") or {}
     llm_ready = _surface_ready(llm)
     child_visible = llm.get("visible_in_child_process")
+    hook_provider_ready = False
     if not llm_ready:
         hook_provider_status = _status_or_unknown(llm)
         hook_provider_next = "aippocampus doctor provider --json"
     elif child_visible is True:
-        hook_provider_status = "restart_codex_to_confirm"
-        hook_provider_next = "restart Codex, then rerun aippocampus doctor provider --json"
+        hook_provider_ready = True
+        hook_provider_status = "ready"
+        hook_provider_next = "aippocampus hooks prompt status --last"
     elif child_visible is False:
         hook_provider_status = "not_visible_to_child_process"
         hook_provider_next = "set the provider key in the environment that launches Codex"
@@ -114,9 +116,9 @@ def build_capability_ladder(
         },
         {
             "id": "hook_provider_ready",
-            "ready": False,
+            "ready": hook_provider_ready,
             "status": hook_provider_status,
-            "what_works": "provider key visibility for future hook processes",
+            "what_works": "provider key visibility for future or restarted hook processes",
             "next_command": hook_provider_next,
         },
         {
