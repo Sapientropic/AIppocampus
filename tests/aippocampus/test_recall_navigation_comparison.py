@@ -15,6 +15,7 @@ if str(SCRIPTS) not in sys.path:
 from aippocampus_runtime.ops import (
     recall_navigation_comparison,  # noqa: E402
     recall_navigation_comparison_fixtures,  # noqa: E402
+    reopen_follow_through,  # noqa: E402
 )
 
 
@@ -25,7 +26,7 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         positive = report["cases_by_id"]["vague_magic_moment"]
 
         self.assertEqual(report["kind"], recall_navigation_comparison.COMPARISON_KIND)
-        self.assertEqual(report["schema_version"], 3)
+        self.assertEqual(report["schema_version"], 4)
         self.assertEqual(set(arms), {"direct_search", "hook_only", "progressive_recall"})
         self.assertGreaterEqual(len(report["cases"]), 2)
         self.assertTrue(report["comparison_boundary"]["deterministic_proxy_only"])
@@ -45,6 +46,13 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertTrue(progressive["source_reopen_follow_through"])
         self.assertEqual(progressive["manual_query_invention_count"], 0)
         self.assertEqual(progressive["selected_next_tool"], "recall_deepen")
+        for arm in (direct, hook, progressive):
+            self.assertIn("route_handle_present", arm)
+            self.assertIn("source_join_present", arm)
+            self.assertIn("reopen_landed", arm)
+            self.assertIn("source_reopen_follow_through_eligible", arm)
+            self.assertIn("expected_fail_closed", arm)
+            self.assertIn("failure_class", arm)
 
     def test_stale_handle_case_is_rejected_without_leaking_handle_or_source_text(self) -> None:
         report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
@@ -70,8 +78,12 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         hook = report["aggregate"]["arms"]["hook_only"]
 
         self.assertGreater(progressive["route_actionability_rate"], 0)
-        self.assertGreater(progressive["source_reopen_follow_through_rate"], 0)
-        self.assertLess(progressive["source_reopen_follow_through_rate"], 1)
+        self.assertEqual(progressive["source_reopen_follow_through_rate"], 1.0)
+        self.assertEqual(progressive["source_reopen_fail_closed_count"], 1)
+        self.assertEqual(
+            progressive["source_reopen_failure_classes"],
+            {"stale_handle_rejected_before_source_use": 1},
+        )
         self.assertGreater(progressive["wrong_route_drag_rate"], 0)
         self.assertGreater(direct["avg_manual_query_invention_count"], 0)
         self.assertGreater(hook["scent_as_fact_violation_rate"], 0)
@@ -79,12 +91,57 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertIn("source_reopen_follow_through_rate", report["metric_notes"])
         self.assertIn("wrong_route_drag_rate", report["metric_notes"])
 
+    def test_progressive_reopen_diagnostics_separate_landing_from_fail_closed(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        positive = report["cases_by_id"]["vague_magic_moment"]["arms"]["progressive_recall"]
+        stale = report["cases_by_id"]["stale_handle_fast_reject"]["arms"]["progressive_recall"]
+
+        self.assertTrue(positive["route_handle_present"])
+        self.assertTrue(positive["source_join_present"])
+        self.assertTrue(positive["source_reopen_attempted"])
+        self.assertTrue(positive["reopen_landed"])
+        self.assertTrue(positive["source_reopen_follow_through_eligible"])
+        self.assertEqual(positive["failure_class"], "")
+
+        self.assertTrue(stale["route_handle_present"])
+        self.assertTrue(stale["source_join_present"])
+        self.assertTrue(stale["source_reopen_attempted"])
+        self.assertFalse(stale["reopen_landed"])
+        self.assertFalse(stale["source_reopen_follow_through"])
+        self.assertFalse(stale["source_reopen_follow_through_eligible"])
+        self.assertTrue(stale["expected_fail_closed"])
+        self.assertEqual(stale["failure_class"], "stale_handle_rejected_before_source_use")
+
+    def test_blocked_reopen_diagnostic_is_expected_fail_closed(self) -> None:
+        diagnostic = reopen_follow_through.reopen_diagnostics(
+            route_handle_present=True,
+            source_join_present=True,
+            source_reopen_attempted=True,
+            success=False,
+            error_code="continuity_domain_blocked",
+            source_refs=[],
+        )
+
+        self.assertFalse(diagnostic["reopen_landed"])
+        self.assertFalse(diagnostic["source_reopen_follow_through_eligible"])
+        self.assertTrue(diagnostic["expected_fail_closed"])
+        self.assertEqual(
+            diagnostic["failure_class"],
+            "blocked_handle_rejected_before_source_use",
+        )
+
     def test_issue_201_readout_measures_deterministic_foreground_lift(self) -> None:
         report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
         readout = report["issue_readouts"]["github_201"]
 
         self.assertTrue(readout["route_actionability_measured"])
         self.assertTrue(readout["source_reopen_follow_through_measured"])
+        self.assertEqual(readout["source_reopen_follow_through_eligible_count"], 3)
+        self.assertEqual(readout["source_reopen_fail_closed_count"], 1)
+        self.assertEqual(
+            readout["source_reopen_failure_classes"],
+            {"stale_handle_rejected_before_source_use": 1},
+        )
         self.assertTrue(readout["foreground_lift_measured"])
         self.assertEqual(
             readout["default_foreground_first_turn_lift"],
@@ -149,6 +206,15 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertIn("packet_action_grammar", report["metric_notes"])
         self.assertTrue(report["comparison_boundary"]["cannot_claim_live_default_foreground_lift"])
         self.assertFalse(readout["closeout_eligible"])
+
+    def test_text_report_keeps_reopen_follow_through_denominator_visible(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        text = recall_navigation_comparison.render_text(report)
+
+        self.assertIn(
+            "source reopen follow-through 1.0 (3/3 eligible, 1 fail-closed)",
+            text,
+        )
 
     def test_vague_cue_candidate_funnel_tracks_sentinel_source_rejoin_boundaries(self) -> None:
         report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()

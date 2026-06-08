@@ -40,7 +40,13 @@ The report includes these metrics for each arm:
 - `manual_query_invention_count`
 - `tool_call_count`
 - `route_actionable`
+- `route_handle_present`
+- `source_join_present`
 - `source_reopen_attempted`
+- `reopen_landed`
+- `source_reopen_follow_through_eligible`
+- `expected_fail_closed`
+- `failure_class`
 - `source_reopen_follow_through`
 - `wrong_route_drag_count`
 - `scent_as_fact_violation`
@@ -54,7 +60,7 @@ The `foreground_lift` fixture also reports:
 - source reopen after consuming the foreground packet's candidate ref;
 - evidence count and source-boundary preservation.
 
-The schema v3 `vague_cue_candidate_funnel` fixture also reports:
+The schema v4 `vague_cue_candidate_funnel` fixture also reports:
 
 - `core_candidate_count`
 - `sentinel_candidate_count`
@@ -67,7 +73,7 @@ The schema v3 `vague_cue_candidate_funnel` fixture also reports:
 - `frontier_marker_helpfulness_rate`
 - `intersection_bridge_lift`
 
-The aggregate fixture run updated on 2026-06-06 showed:
+The aggregate fixture run updated on 2026-06-09 showed:
 
 - direct search: source-backed success on all 4 cases, but with manual query
   invention in the vague cases (`avg_manual_query_invention_count=1.5`);
@@ -75,8 +81,10 @@ The aggregate fixture run updated on 2026-06-06 showed:
   one wrong-route drag fixture;
 - progressive recall: actionable `recall_deepen` route on all 4 cases,
   source-backed success on the 3 non-stale cases,
-  `source_reopen_follow_through_rate=0.75`, and deterministic stale-handle
-  rejection before source use.
+  eligible `source_reopen_follow_through_rate=1.0` across the 3 eligible
+  source-reopen cases, plus `source_reopen_fail_closed_count=1` with
+  `failure_class=stale_handle_rejected_before_source_use` for the deterministic
+  stale-handle rejection before source use.
 - foreground lift: first turn emitted a navigation-only `scent` route under a
   simulated semantic timeout with `evidence_count=0`; second turn reused the
   ambient cache with `cache_status=hit`; the packet candidate ref reopened the
@@ -94,6 +102,9 @@ For #201, this smoke now measures five deterministic proxy outcomes:
 
 - `route_actionability_rate`
 - `source_reopen_follow_through_rate`
+- `source_reopen_follow_through_eligible_count`
+- `source_reopen_fail_closed_count`
+- `source_reopen_failure_classes`
 - `default_foreground_first_turn_lift`
 - `default_foreground_second_turn_lift`
 - `foreground_source_reopen_follow_through`
