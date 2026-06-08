@@ -17,6 +17,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import check_docs_health as docs_health  # noqa: E402
+import ia_pressure_guard  # noqa: E402
 
 
 def write_origin_essays(repo: Path) -> None:
@@ -95,6 +96,18 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("missing public example memory bundle", result)
         self.assertFalse(any("scope_label_policy" in issue for issue in result), result)
         self.assertFalse(any("missing scope_labels" in issue for issue in result), result)
+
+    def test_docs_health_exposes_ia_warnings_without_failing_current_repo(self) -> None:
+        result = docs_health.check_docs(ROOT)
+
+        ia = result["diagnostics"]["information_architecture"]
+        self.assertTrue(result["ok"], result["issues"])
+        self.assertEqual(ia["failures"], [])
+        self.assertEqual(
+            result["metrics"]["information_architecture_warning_count"],
+            len(ia["warnings"]),
+        )
+        self.assertIsInstance(ia["warnings"], list)
 
     def test_research_index_is_complete_for_current_repo(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
@@ -1078,6 +1091,110 @@ class DocsHealthTests(unittest.TestCase):
             "use docs/architecture, docs/guides, docs/evidence, "
             "docs/planning, docs/research, or docs/archive",
             issues,
+        )
+
+    def test_ia_diagnostics_warn_for_missing_folder_index(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            for index in range(ia_pressure_guard.MISSING_INDEX_MARKDOWN_THRESHOLD):
+                (guides / f"guide-{index}.md").write_text("# Guide\n", encoding="utf-8")
+
+            report = ia_pressure_guard.information_architecture_diagnostics(
+                repo,
+                allowed_root_markdown=docs_health.DOCS_ROOT_ALLOWED_MARKDOWN,
+                allowed_root_directories=docs_health.DOCS_ROOT_ALLOWED_DIRECTORIES,
+            )
+
+        warnings = report["warnings"]
+        self.assertTrue(
+            any(
+                warning["code"] == "docs_folder_missing_index"
+                and warning["path"] == "docs/guides"
+                for warning in warnings
+            ),
+            warnings,
+        )
+        self.assertEqual(report["failures"], [])
+
+    def test_ia_diagnostics_report_top_level_docs_sprawl_as_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            docs.mkdir(parents=True)
+            (docs / "loose-status-report.md").write_text("# Loose\n", encoding="utf-8")
+
+            report = ia_pressure_guard.information_architecture_diagnostics(
+                repo,
+                allowed_root_markdown=docs_health.DOCS_ROOT_ALLOWED_MARKDOWN,
+                allowed_root_directories=docs_health.DOCS_ROOT_ALLOWED_DIRECTORIES,
+            )
+
+        self.assertIn(
+            {
+                "severity": "failure",
+                "code": "docs_root_markdown_sprawl",
+                "path": "docs/loose-status-report.md",
+                "message": (
+                    "docs root has unclassified markdown file: docs/loose-status-report.md; "
+                    "move it under docs/architecture, docs/guides, docs/evidence, "
+                    "docs/planning, or docs/research"
+                ),
+            },
+            report["failures"],
+        )
+
+    def test_ia_diagnostics_warn_for_active_doc_missing_role_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            planning = repo / "docs" / "planning"
+            planning.mkdir(parents=True)
+            (planning / "next-slice.md").write_text(
+                "# Next Slice\n\nThis is active planning context.\n",
+                encoding="utf-8",
+            )
+
+            report = ia_pressure_guard.information_architecture_diagnostics(
+                repo,
+                allowed_root_markdown=docs_health.DOCS_ROOT_ALLOWED_MARKDOWN,
+                allowed_root_directories=docs_health.DOCS_ROOT_ALLOWED_DIRECTORIES,
+            )
+
+        warnings = report["warnings"]
+        self.assertTrue(
+            any(
+                warning["code"] == "active_doc_missing_role_status"
+                and warning["path"] == "docs/planning/next-slice.md"
+                for warning in warnings
+            ),
+            warnings,
+        )
+
+    def test_ia_diagnostics_warn_for_archive_without_current_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            archive = repo / "docs" / "archive"
+            archive.mkdir(parents=True)
+            (archive / "old-plan.md").write_text(
+                "# Old Plan\n\nHistorical notes only.\n",
+                encoding="utf-8",
+            )
+
+            report = ia_pressure_guard.information_architecture_diagnostics(
+                repo,
+                allowed_root_markdown=docs_health.DOCS_ROOT_ALLOWED_MARKDOWN,
+                allowed_root_directories=docs_health.DOCS_ROOT_ALLOWED_DIRECTORIES,
+            )
+
+        warnings = report["warnings"]
+        self.assertTrue(
+            any(
+                warning["code"] == "archive_doc_missing_current_pointer"
+                and warning["path"] == "docs/archive/old-plan.md"
+                for warning in warnings
+            ),
+            warnings,
         )
 
     def test_public_doc_command_lint_rejects_default_windows_only_blocks(self) -> None:
