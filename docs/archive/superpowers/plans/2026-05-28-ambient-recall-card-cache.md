@@ -1,5 +1,10 @@
 # Ambient Recall Card Cache Implementation Plan
 
+Current owner: ambient hook behavior lives in
+`skills/aippocampus/references/ambient-hooks.md`; research framing lives in
+`docs/research/ambient-associative-recall.md`.
+Archive status: historical one-time implementation plan, not the current queue.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the first Ambient Associative Recall slice: compact private recall cards plus a thread ambient cache, while leaving a clean warm-path boundary for later 10-scout work.

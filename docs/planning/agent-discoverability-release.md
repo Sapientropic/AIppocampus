@@ -1,5 +1,9 @@
 # Agent Discoverability Release Plan
 
+Role: active handoff for agent-discovery publication gates.
+Status: current planning owner for PyPI, MCP Registry, one-command install, and
+agent recommendation checks; not a release claim by itself.
+
 This plan tracks what remains before AIppocampus can be treated as fully
 agent-discoverable across LLM context files, one-command install, and the MCP
 Registry.

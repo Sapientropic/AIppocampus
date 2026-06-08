@@ -1,5 +1,9 @@
 # Memory-System Pain Taxonomy
 
+Role: exploratory research and fixture source map.
+Status: public issue / user-feedback taxonomy checked 2026-05-30; use as input
+for public-safe fixtures, not as a current competitor scorecard.
+
 Checked date: 2026-05-30.
 
 This note turns public Mem0, Graphiti/Zep, Letta, and Hacker News feedback into
