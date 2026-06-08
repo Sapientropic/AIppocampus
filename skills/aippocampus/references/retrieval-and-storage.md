@@ -203,6 +203,30 @@ not create domain events. Explicit producers or future background jobs must
 write events under the Contract v1 rules before active recall or MCP can
 surface domain pointers.
 
+The packaged local operator command for explicit writes is
+`aippocampus continuity-domain`. `produce --dry-run` scans registered
+clean-source history for repeated source-ref-backed candidate labels. Reviewed
+sidecars such as semantic/query-pattern, working-memory, Dream, Journey, or
+cognitive-map outputs may contribute labels only when their refs resolve back
+to clean source; the sidecar row itself is not evidence. `produce --append`
+first refreshes the existing query-pattern route sidecar, so aliases already
+generated or reviewed by the registration/onboarding path are available to the
+producer without adding a second alias pipeline. `produce --dry-run` remains
+no-write unless `--refresh-query-pattern-routes` is explicit. The command emits
+a public-safe aggregate report; `produce --append` promotes the selected
+candidates into the append-only event log, and `--publish` materializes the
+rebuildable snapshot. `append` writes one explicit event, `publish` materializes
+the rebuildable snapshot, and `report` emits the public-safety readout. These
+commands are trusted local producer/authoring surfaces, not hook paths.
+
+When a domain source ref carries `thread_key`, MCP `recall_deepen` may consult
+the machine registry to open that thread's clean-source store. Handles created
+by `recall_context` include freshness for those registry clean-source targets;
+blocked, stale, superseded, and retired domains still stay blocked at deepen
+time even if an old handle is replayed. The handle's refs define the current
+freshness/reopen set; extra refs visible in the domain brief are navigation
+until another handle or source reopen selects them.
+
 Macro tendencies in this layer are derived-only pointers. They are not
 runtime-writable facts, user profile facts, or replacements for clean source.
 

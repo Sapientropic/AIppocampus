@@ -39,6 +39,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("health", proc.stdout)
         self.assertIn("onboard", proc.stdout)
         self.assertIn("search", proc.stdout)
+        self.assertIn("continuity-domain", proc.stdout)
         self.assertIn("update status", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("smoke recall-funnel", proc.stdout)
@@ -206,6 +207,31 @@ class AippocampusCliTests(unittest.TestCase):
             self_note_append.args,
             ["append", "--current-thread", "--stdin", "--json"],
         )
+
+        continuity_domain_append = facade.resolve_command(
+            ["continuity-domain", "append", "--event-json", "{}", "--json"]
+        )
+        self.assertEqual(continuity_domain_append.command, "continuity-domain")
+        self.assertEqual(
+            continuity_domain_append.module_name,
+            "aippocampus_runtime.recall.continuity_domain_cli",
+        )
+        self.assertEqual(continuity_domain_append.script_name, "continuity_domain.py")
+        self.assertEqual(
+            continuity_domain_append.args,
+            ["append", "--event-json", "{}", "--json"],
+        )
+
+        continuity_domain_produce = facade.resolve_command(
+            ["continuity-domain", "produce", "--dry-run", "--json"]
+        )
+        self.assertEqual(continuity_domain_produce.command, "continuity-domain")
+        self.assertEqual(
+            continuity_domain_produce.module_name,
+            "aippocampus_runtime.recall.continuity_domain_cli",
+        )
+        self.assertEqual(continuity_domain_produce.script_name, "continuity_domain.py")
+        self.assertEqual(continuity_domain_produce.args, ["produce", "--dry-run", "--json"])
 
     def test_self_note_current_thread_append_round_trips_as_atmosphere(self) -> None:
         note = "future posture: move decisively, but keep source boundary explicit."

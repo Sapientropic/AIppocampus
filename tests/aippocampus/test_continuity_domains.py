@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,12 +17,17 @@ from aippocampus_runtime.recall import (  # noqa: E402
     ambient_cards,
     prompt_context_render,
 )
+from aippocampus_runtime.recall.continuity_domain_producer import (  # noqa: E402
+    propose_continuity_domain_events_from_registry,
+)
 from aippocampus_runtime.recall.continuity_domains import (  # noqa: E402
     ACTION_DIRECTION_ONLY,
     ACTION_IGNORE_OR_BLOCKED,
     DERIVED_ONLY_STATUS,
     append_continuity_domain_event,
+    continuity_domain_handle,
     continuity_domain_pointer,
+    continuity_domain_public_safety_report,
     match_continuity_domain_pointers,
     materialize_continuity_domains,
     project_situation_glyph,
@@ -77,6 +83,55 @@ def _write_clean_source(clean: Path) -> None:
                 )
                 + "\n"
             )
+
+
+def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
+    registry_dir = root / "registry"
+    clean = registry_dir / "threads" / "little-thread" / "clean-source"
+    clean.mkdir(parents=True, exist_ok=True)
+    messages = [
+        {
+            "message_id": "msg-real-a",
+            "turn_id": "turn-real-a",
+            "turn_index": 1,
+            "source_line": 2,
+            "role": "user",
+            "phase": "",
+            "text": "AIppocampus 的小海马体应该减少手搜，让 agent 可以沿着 source trail 回来。",
+        },
+        {
+            "message_id": "msg-real-b",
+            "turn_id": "turn-real-b",
+            "turn_index": 2,
+            "source_line": 4,
+            "role": "assistant",
+            "phase": "final_answer",
+            "is_final": True,
+            "text": "我理解，小海马体不是无源总结；它要让后来的 agent 少手搜，多回到源头。",
+        },
+    ]
+    with (clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
+        for row in messages:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    (clean / "turns.jsonl").write_text("", encoding="utf-8")
+    (registry_dir / "threads.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "threads": [
+                    {
+                        "thread_key": "little-thread",
+                        "title": "小海马体真实体验",
+                        "keywords": ["小海马体", "手搜", "source trail"],
+                        "paths": {"clean_source_dir": str(clean)},
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return registry_dir, clean
 
 
 def _domain_events() -> list[dict]:
@@ -211,6 +266,53 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(match_continuity_domain_pointers("continuity domain", stale_snapshot), [])
         self.assertEqual(match_continuity_domain_pointers("wrong lane continuity", negative_snapshot), [])
         self.assertEqual(len(match_continuity_domain_pointers("continuity", negative_snapshot)), 1)
+
+    def test_chinese_domain_cues_match_without_spaces(self) -> None:
+        events = [
+            {
+                "event_kind": "domain_created",
+                "domain_id": "cd-zh-continuity",
+                "title": "长期连续性抽象层",
+                "working_conclusion_short": "长期连续性需要能回到源头的抽象层。",
+                "activation_cues": ["长期连续性", "找回源头", "抽象层"],
+                "scope_labels": ["源头可追溯"],
+                "source_refs": [{"message_id": "msg-a"}],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean-source"
+            _write_clean_source(clean)
+            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+
+        matches = match_continuity_domain_pointers(
+            "我们继续聊长期连续性怎么找回源头",
+            snapshot,
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["domain_id"], "cd-zh-continuity")
+
+    def test_chinese_domain_cues_do_not_overmatch_unrelated_broad_prompt(self) -> None:
+        events = [
+            {
+                "event_kind": "domain_created",
+                "domain_id": "cd-little-hippocampus",
+                "title": "小海马体真实体验",
+                "activation_cues": ["小海马体", "手搜"],
+                "source_refs": [{"message_id": "msg-a"}],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean-source"
+            _write_clean_source(clean)
+            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+
+        matches = match_continuity_domain_pointers(
+            "今天我们先聊晚饭安排和天气变化",
+            snapshot,
+        )
+
+        self.assertEqual(matches, [])
 
     def test_hook_renders_pointer_without_working_conclusion_body(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -407,6 +509,7 @@ class ContinuityDomainTests(unittest.TestCase):
                         "arguments": {
                             "handle": handle,
                             "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
                             "continuity_domains_snapshot": str(snapshot_path),
                         },
                     },
@@ -453,6 +556,846 @@ class ContinuityDomainTests(unittest.TestCase):
 
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
+
+    def test_mcp_rejects_fresh_continuity_domain_handle_without_source_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            handle = continuity_domain_handle(
+                snapshot["domains"][0],
+                clean_source_dir=clean,
+                snapshot_path=snapshot_path,
+            )
+            handle["source_refs"] = []
+
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 941,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": handle,
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            payload = json.loads(response["result"]["content"][0]["text"])
+
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
+
+    def test_mcp_deepen_rejects_blocked_domain_handle_even_with_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            events = [
+                _domain_events()[0],
+                {
+                    "event_kind": "boundary_pinned",
+                    "domain_id": "cd-source-trailed-continuity",
+                    "boundary_kind": "privacy_boundary",
+                    "effect": "block_hook",
+                    "strength": "hard",
+                    "source_refs": [{"message_id": "msg-c"}],
+                },
+            ]
+            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            handle = continuity_domain_handle(
+                snapshot["domains"][0],
+                clean_source_dir=clean,
+                snapshot_path=snapshot_path,
+            )
+
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 931,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": handle,
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            payload = json.loads(response["result"]["content"][0]["text"])
+
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(payload["error"]["code"], "continuity_domain_blocked")
+
+    def test_mcp_deepen_rejects_inactive_domain_statuses_even_with_freshness(self) -> None:
+        for status in ("stale", "superseded", "retired"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
+                cwd = Path(tmp)
+                clean = cwd / ".aippocampus" / "clean-source"
+                _write_clean_source(clean)
+                snapshot = materialize_continuity_domains(
+                    [{**_domain_events()[0], "status": status}],
+                    clean_source_dir=clean,
+                )
+                snapshot_path = cwd / "snapshot.json"
+                snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+                handle = continuity_domain_handle(
+                    snapshot["domains"][0],
+                    clean_source_dir=clean,
+                    snapshot_path=snapshot_path,
+                )
+
+                response = mcp.handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 938,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "recall_deepen",
+                            "arguments": {
+                                "handle": handle,
+                                "cwd": str(cwd),
+                                "clean_source_dir": str(clean),
+                                "continuity_domains_snapshot": str(snapshot_path),
+                            },
+                        },
+                    }
+                )
+                payload = json.loads(response["result"]["content"][0]["text"])
+
+                self.assertTrue(response["result"]["isError"])
+                self.assertEqual(payload["error"]["code"], "continuity_domain_blocked")
+
+    def test_mcp_deepen_uses_registry_for_cross_thread_domain_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cwd = root / "workspace"
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            registry_dir = root / "registry"
+            foreign_clean = registry_dir / "threads" / "foreign-thread" / "clean-source"
+            foreign_clean.mkdir(parents=True, exist_ok=True)
+            foreign_message = {
+                "message_id": "foreign-msg",
+                "turn_id": "foreign-turn",
+                "turn_index": 8,
+                "source_line": 12,
+                "role": "user",
+                "phase": "",
+                "text": "Cross-thread source says continuity domains must reopen registry clean source.",
+            }
+            (foreign_clean / "messages.jsonl").write_text(
+                json.dumps(foreign_message, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            (foreign_clean / "turns.jsonl").write_text(
+                json.dumps(
+                    {
+                        "turn_id": "foreign-turn",
+                        "turn_index": 8,
+                        "message_ids": ["foreign-msg"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (registry_dir / "threads.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "foreign-thread",
+                                "title": "Foreign thread",
+                                "paths": {
+                                    "clean_source_dir": str(foreign_clean),
+                                    "clean_source_messages_jsonl": str(foreign_clean / "messages.jsonl"),
+                                    "clean_source_turns_jsonl": str(foreign_clean / "turns.jsonl"),
+                                },
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            snapshot = materialize_continuity_domains(
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-cross-thread",
+                        "title": "Cross-thread continuity domain",
+                        "activation_cues": ["cross-thread", "registry clean source"],
+                        "working_conclusion_short": "The route crosses thread stores.",
+                        "source_refs": [
+                            {
+                                "thread_key": "foreign-thread",
+                                "message_id": "foreign-msg",
+                            }
+                        ],
+                    }
+                ],
+            )
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+
+            context_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 932,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_context",
+                        "arguments": {
+                            "intent": "cross-thread registry clean source",
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            deepen_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 933,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": context_payload["routes"][0]["handle"],
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+
+        self.assertEqual(deepen_payload["status"], "ok")
+        self.assertEqual(deepen_payload["source_refs"][0]["thread_key"], "foreign-thread")
+        self.assertIn(
+            "registry clean source",
+            json.dumps(deepen_payload["source_window"], ensure_ascii=False),
+        )
+
+    def test_cross_thread_ref_does_not_fall_back_to_current_source_on_id_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cwd = root / "workspace"
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            current_rows = [
+                {
+                    "message_id": "same-msg",
+                    "turn_id": "current-turn",
+                    "turn_index": 9,
+                    "source_line": 14,
+                    "role": "user",
+                    "phase": "",
+                    "text": "CURRENT THREAD TEXT should not satisfy foreign-thread refs.",
+                }
+            ]
+            with (clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as fh:
+                for row in current_rows:
+                    fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+            registry_dir = root / "registry"
+            foreign_clean = registry_dir / "threads" / "foreign-thread" / "clean-source"
+            foreign_clean.mkdir(parents=True, exist_ok=True)
+            (foreign_clean / "messages.jsonl").write_text(
+                json.dumps(
+                    {
+                        "message_id": "same-msg",
+                        "turn_id": "foreign-turn",
+                        "turn_index": 8,
+                        "source_line": 12,
+                        "role": "user",
+                        "phase": "",
+                        "text": "FOREIGN THREAD TEXT is the only valid evidence.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (foreign_clean / "turns.jsonl").write_text("", encoding="utf-8")
+            (registry_dir / "threads.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "foreign-thread",
+                                "paths": {"clean_source_dir": str(foreign_clean)},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            snapshot = materialize_continuity_domains(
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-cross-thread-collision",
+                        "title": "Cross-thread collision domain",
+                        "activation_cues": ["collision domain"],
+                        "source_refs": [
+                            {
+                                "thread_key": "foreign-thread",
+                                "message_id": "same-msg",
+                            }
+                        ],
+                    }
+                ],
+            )
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            context_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 934,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_context",
+                        "arguments": {
+                            "intent": "collision domain",
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            deepen_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 935,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": context_payload["routes"][0]["handle"],
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            encoded_window = json.dumps(deepen_payload["source_window"], ensure_ascii=False)
+
+        self.assertIn("FOREIGN THREAD TEXT", encoded_window)
+        self.assertNotIn("CURRENT THREAD TEXT", encoded_window)
+
+    def test_cross_thread_domain_handle_stales_when_registry_source_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cwd = root / "workspace"
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            registry_dir = root / "registry"
+            foreign_clean = registry_dir / "threads" / "foreign-thread" / "clean-source"
+            foreign_clean.mkdir(parents=True, exist_ok=True)
+            foreign_messages = foreign_clean / "messages.jsonl"
+            foreign_messages.write_text(
+                json.dumps(
+                    {
+                        "message_id": "foreign-msg",
+                        "turn_id": "foreign-turn",
+                        "turn_index": 8,
+                        "source_line": 12,
+                        "role": "user",
+                        "phase": "",
+                        "text": "Original foreign source text.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (foreign_clean / "turns.jsonl").write_text("", encoding="utf-8")
+            (registry_dir / "threads.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "foreign-thread",
+                                "paths": {"clean_source_dir": str(foreign_clean)},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            snapshot = materialize_continuity_domains(
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-cross-thread-freshness",
+                        "title": "Cross-thread freshness domain",
+                        "activation_cues": ["freshness domain"],
+                        "source_refs": [
+                            {
+                                "thread_key": "foreign-thread",
+                                "message_id": "foreign-msg",
+                            }
+                        ],
+                    }
+                ],
+            )
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            context_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 936,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_context",
+                        "arguments": {
+                            "intent": "freshness domain",
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            foreign_messages.write_text(
+                json.dumps(
+                    {
+                        "message_id": "foreign-msg",
+                        "turn_id": "foreign-turn",
+                        "turn_index": 8,
+                        "source_line": 12,
+                        "role": "user",
+                        "phase": "",
+                        "text": "Changed foreign source text.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            deepen_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 937,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": context_payload["routes"][0]["handle"],
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            payload = json.loads(deepen_response["result"]["content"][0]["text"])
+
+        self.assertTrue(deepen_response["result"]["isError"])
+        self.assertEqual(payload["error"]["code"], "stale_recall_handle")
+        self.assertIn(
+            "registry_clean_source_fingerprint_changed",
+            payload["error"]["details"]["invalidated_by"],
+        )
+
+    def test_cross_thread_domain_deepen_validates_only_handle_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cwd = root / "workspace"
+            clean = cwd / ".aippocampus" / "clean-source"
+            _write_clean_source(clean)
+            registry_dir = root / "registry"
+            threads = []
+            source_refs = []
+            for index in range(4):
+                thread_key = f"foreign-thread-{index}"
+                foreign_clean = registry_dir / "threads" / thread_key / "clean-source"
+                foreign_clean.mkdir(parents=True, exist_ok=True)
+                (foreign_clean / "messages.jsonl").write_text(
+                    json.dumps(
+                        {
+                            "message_id": f"foreign-msg-{index}",
+                            "turn_id": f"foreign-turn-{index}",
+                            "turn_index": index + 1,
+                            "source_line": index + 2,
+                            "role": "user",
+                            "phase": "",
+                            "text": f"Foreign source text {index}.",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                (foreign_clean / "turns.jsonl").write_text("", encoding="utf-8")
+                threads.append(
+                    {
+                        "thread_key": thread_key,
+                        "paths": {"clean_source_dir": str(foreign_clean)},
+                    }
+                )
+                source_refs.append(
+                    {
+                        "thread_key": thread_key,
+                        "message_id": f"foreign-msg-{index}",
+                    }
+                )
+            (registry_dir / "threads.json").write_text(
+                json.dumps({"schema_version": 1, "threads": threads}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            snapshot = materialize_continuity_domains(
+                [
+                    {
+                        "event_kind": "domain_created",
+                        "domain_id": "cd-many-foreign-refs",
+                        "title": "Many foreign refs domain",
+                        "activation_cues": ["many foreign refs"],
+                        "source_refs": source_refs,
+                    }
+                ],
+            )
+            snapshot_path = cwd / "snapshot.json"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            context_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 939,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_context",
+                        "arguments": {
+                            "intent": "many foreign refs",
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            deepen_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 940,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "recall_deepen",
+                        "arguments": {
+                            "handle": context_payload["routes"][0]["handle"],
+                            "cwd": str(cwd),
+                            "clean_source_dir": str(clean),
+                            "registry_dir": str(registry_dir),
+                            "continuity_domains_snapshot": str(snapshot_path),
+                        },
+                    },
+                }
+            )
+            payload = json.loads(deepen_response["result"]["content"][0]["text"])
+
+        self.assertFalse(deepen_response["result"]["isError"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertLessEqual(len(payload["source_refs"]), 3)
+
+    def test_public_safety_report_counts_redactions(self) -> None:
+        snapshot = materialize_continuity_domains(
+            [
+                {
+                    "event_kind": "domain_created",
+                    "domain_id": "cd-redaction",
+                    "title": "Credential-shaped input",
+                    "working_conclusion_short": "api_key=sk-testcontinuitydomainsecret",
+                    "source_refs": [{"message_id": "msg-a"}],
+                }
+            ]
+        )
+
+        report = continuity_domain_public_safety_report(snapshot)
+
+        self.assertGreater(report["metrics"]["redaction_count"], 0)
+
+    def test_continuity_domain_cli_append_publish_round_trips(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = root / "clean-source"
+            _write_clean_source(clean)
+            events_path = clean / "continuity-domain-events.jsonl"
+            snapshot_dir = root / "continuity-domain-snapshots"
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "continuity-domain",
+                    "append",
+                    "--events-path",
+                    str(events_path),
+                    "--clean-source-dir",
+                    str(clean),
+                    "--snapshot-dir",
+                    str(snapshot_dir),
+                    "--event-json",
+                    json.dumps(_domain_events()[0]),
+                    "--publish",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            latest = json.loads((snapshot_dir / "latest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+        self.assertEqual(latest["snapshot"]["metrics"]["domain_count"], 1)
+
+    def test_continuity_domain_producer_dry_run_reports_public_safe_registry_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_registry_clean_source_fixture(root)
+
+            public_report = propose_continuity_domain_events_from_registry(
+                registry_path=registry_dir / "threads.json",
+                min_support=2,
+                include_local_detail=False,
+            )
+            local_report = propose_continuity_domain_events_from_registry(
+                registry_path=registry_dir / "threads.json",
+                min_support=2,
+                include_local_detail=True,
+            )
+            encoded_public = json.dumps(public_report, ensure_ascii=False)
+
+        self.assertTrue(public_report["ok"])
+        self.assertEqual(public_report["metrics"]["registered_thread_count"], 1)
+        self.assertGreaterEqual(public_report["metrics"]["candidate_domain_count"], 1)
+        self.assertEqual(public_report["metrics"]["privacy_suppressed_count"], 0)
+        self.assertIn("label_hash", public_report["top_domain_labels"][0])
+        self.assertNotIn("小海马体", encoded_public)
+        self.assertTrue(local_report["candidate_events"])
+        event = local_report["candidate_events"][0]
+        self.assertEqual(event["event_kind"], "domain_created")
+        self.assertTrue(event["source_refs"])
+        self.assertTrue(all(ref.get("thread_key") == "little-thread" for ref in event["source_refs"]))
+        self.assertIn("小海马体", event["activation_cues"])
+
+    def test_continuity_domain_producer_uses_signal_rows_only_as_candidate_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_registry_clean_source_fixture(root)
+            (registry_dir / "query_pattern_routes.jsonl").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_query_pattern_route",
+                        "query_aliases": ["自然召回"],
+                        "source_refs": [{"thread_key": "little-thread", "message_id": "msg-real-a"}],
+                        "output_authority": "navigation_only",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = propose_continuity_domain_events_from_registry(
+                registry_path=registry_dir / "threads.json",
+                min_support=1,
+                include_local_detail=True,
+            )
+
+        signal_events = [
+            event for event in report["candidate_events"] if event.get("title") == "自然召回"
+        ]
+        self.assertEqual(len(signal_events), 1)
+        event = signal_events[0]
+        self.assertEqual(event["source_refs"][0]["message_id"], "msg-real-a")
+        self.assertIn("Registered clean-source history", event["working_conclusion_short"])
+        self.assertNotIn("aippocampus_query_pattern_route", json.dumps(event, ensure_ascii=False))
+
+    def test_continuity_domain_producer_can_refresh_reviewed_query_pattern_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_registry_clean_source_fixture(root)
+            (registry_dir / "semantic_triggers.jsonl").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_semantic_trigger",
+                        "status": "active",
+                        "aliases": ["外置小海马"],
+                        "source_refs": [{"thread_key": "little-thread", "message_id": "msg-real-a"}],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = propose_continuity_domain_events_from_registry(
+                registry_path=registry_dir / "threads.json",
+                min_support=1,
+                include_local_detail=True,
+                refresh_query_pattern_routes=True,
+            )
+
+        refreshed_events = [
+            event for event in report["candidate_events"] if event.get("title") == "外置小海马"
+        ]
+        self.assertEqual(len(refreshed_events), 1)
+        self.assertEqual(refreshed_events[0]["source_refs"][0]["message_id"], "msg-real-a")
+        self.assertEqual(
+            report["query_pattern_refresh"]["metrics"]["alias_source_route_counts"][
+                "reviewed_semantic"
+            ],
+            1,
+        )
+
+    def test_continuity_domain_producer_append_publish_enables_real_history_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_registry_clean_source_fixture(root)
+            events_path = root / "continuity-domain-events.jsonl"
+            snapshot_dir = root / "continuity-domain-snapshots"
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "continuity-domain",
+                    "produce",
+                    "--registry-dir",
+                    str(registry_dir),
+                    "--events-path",
+                    str(events_path),
+                    "--snapshot-dir",
+                    str(snapshot_dir),
+                    "--append",
+                    "--publish",
+                    "--include-local-detail",
+                    "--min-support",
+                    "2",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            snapshot_path = snapshot_dir / "latest.json"
+            result = active_recall.active_recall_context(
+                prompt="小海马体现在到底有什么用，能不能别让我手搜？",
+                cwd=root,
+                registry_path=registry_dir / "threads.json",
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                continuity_domains_snapshot_path=snapshot_path,
+                max_matches=3,
+            )
+            raw = json.dumps(result, ensure_ascii=False)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+        self.assertGreaterEqual(result["surface_counts"]["continuity_domains"], 1)
+        self.assertEqual(result["source_reopen_routes"][-1]["kind"], "continuity_domain")
+        self.assertTrue(result["source_boundary"]["source_reopen_required_for_facts"])
+        self.assertNotIn("减少手搜", raw)
+
+    def test_continuity_domain_cli_append_auto_refreshes_query_pattern_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_registry_clean_source_fixture(root)
+            (registry_dir / "semantic_triggers.jsonl").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_semantic_trigger",
+                        "status": "active",
+                        "aliases": ["外置小海马"],
+                        "source_refs": [{"thread_key": "little-thread", "message_id": "msg-real-a"}],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            events_path = root / "continuity-domain-events.jsonl"
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "continuity-domain",
+                    "produce",
+                    "--registry-dir",
+                    str(registry_dir),
+                    "--events-path",
+                    str(events_path),
+                    "--append",
+                    "--include-local-detail",
+                    "--min-support",
+                    "1",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            payload = json.loads(proc.stdout)
+            event_rows = [
+                json.loads(line)
+                for line in events_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+        self.assertIn("query_pattern_refresh", payload)
+        self.assertTrue(any(row.get("title") == "外置小海马" for row in event_rows))
 
     def test_situation_glyph_is_direction_only_and_pathlet_order_sensitive(self) -> None:
         signals = [

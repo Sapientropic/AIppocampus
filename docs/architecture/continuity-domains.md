@@ -90,6 +90,27 @@ Event writes are append-only. Snapshot writes use the shared artifact lease and
 atomic replace pattern. Snapshot data is rebuildable; it must not mutate clean
 source and must not be treated as a source of exact wording.
 
+The explicit operator authoring path is:
+
+```text
+aippocampus continuity-domain produce --dry-run --json
+aippocampus continuity-domain produce --dry-run --refresh-query-pattern-routes --json
+aippocampus continuity-domain produce --append --publish --json
+aippocampus continuity-domain append --event-json <json> --publish --json
+aippocampus continuity-domain publish --json
+aippocampus continuity-domain report --snapshot <path> --json
+```
+
+This CLI is a trusted local producer and append/publish surface. `produce`
+scans registered clean-source history, plus reviewed signal sidecars only as
+source-ref-resolving label producers, when explicitly invoked. `--append`
+refreshes the existing query-pattern route sidecar first, so reviewed,
+local-offline, or external-model generated alias rows that were materialized by
+the registration/onboarding route can seed domain labels without becoming
+evidence. `--dry-run` stays no-write unless `--refresh-query-pattern-routes` is
+explicitly passed. Candidate events are written only with `--append`. Prompt
+hooks and default MCP recall still do not mutate durable domain state.
+
 Supported domain event families:
 
 - `domain_created`
@@ -178,11 +199,20 @@ MCP progressive recall reuses existing tools:
 - `recall_context` may return a `continuity_domain` route handle.
 - `recall_deepen` opens the domain brief and attempts to reopen representative
   clean-source refs.
+- `recall_deepen` rejects blocked, stale, superseded, or retired domain handles
+  even when the handle carries fresh snapshot fields.
+- If a source ref carries `thread_key`, `recall_deepen` may use the machine
+  registry to reopen that thread's clean-source store before falling back to
+  source-not-found.
+- `recall_deepen` validates and reopens the refs carried by the short-lived
+  handle. Additional refs in the opened domain brief remain navigation material
+  until a later handle or clean-source reopen selects them.
 - `get_turn_context` or clean-source search remains the authority for exact
   wording and broader source context.
 
 No new MCP tool is required for Contract v1. Domain handles are short-lived and
-become stale when clean source or the domain snapshot changes.
+become stale when the caller clean source, referenced registry-thread clean
+source, or the domain snapshot changes.
 
 ## Signal Producers
 
@@ -242,6 +272,11 @@ Contract v1 does not:
   `working_continuity_brief`.
 - MCP `recall_context` can return a domain route and `recall_deepen` can open
   the domain brief plus clean-source trail.
+- MCP deepen rejects blocked/stale/superseded/retired domain handles and can
+  follow registry-backed `thread_key` refs for cross-thread source reopen.
+- The explicit `aippocampus continuity-domain` CLI can produce source-ref-backed
+  registry candidates, append events, publish snapshots, and emit public-safe
+  reports.
 - Pinned boundaries override weak trends.
 - Macro tendencies are derived-only and `direction_only`.
 - Situation glyphs are direction-only, path-order-sensitive, and blocked or

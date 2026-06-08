@@ -144,6 +144,9 @@ The CLI contract applies to documented operator commands, especially:
 - Personal/default path commands: `aippocampus health|search|onboard|export|import|update`.
 - Advanced/operator commands remain public and discoverable, but they are not
   first-recall prerequisites: `aippocampus doctor|mcp|smoke|logs|storage|why-recall|why-not-recall|sync|object-sync|hooks`
+- `aippocampus continuity-domain produce|append|publish|report` as the
+  explicit local producer, authoring, and snapshot-publish path for Contract v1
+  continuity domains
 - `aippocampus import conversation --format generic-jsonl --input <path>`
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables
@@ -429,7 +432,19 @@ matches the cue; the route is still navigation only. `recall_deepen` may then
 open the domain brief and representative clean-source trail. Default context
 packets must not expose the domain working conclusion body. The current public
 surface is a runtime/read substrate: hooks and MCP read existing domain
-snapshots, but they do not automatically author durable domain events.
+snapshots, but they do not automatically author durable domain events. Durable
+event writes go through explicit trusted producers such as
+`aippocampus continuity-domain produce --append` or
+`aippocampus continuity-domain append`; `produce --dry-run` is public-safe by
+default and hashes/redacts domain labels unless local detail is explicitly
+requested. `produce --append` refreshes the existing query-pattern route
+sidecar before candidate generation; `produce --dry-run` does not write sidecars
+unless `--refresh-query-pattern-routes` is explicit. Reviewed, local-offline, or
+external-model generated aliases may supply candidate labels only when their
+source refs resolve back to registry clean source; they do not become evidence
+owners. `recall_deepen` may follow registry-backed `thread_key` refs, but
+blocked, stale, superseded, or retired domains remain non-reopenable as domain
+briefs.
 
 `recall_diagnostic` mirrors the CLI why/why-not diagnostic for agent hosts. It
 returns cue hashes, reason codes, route ids, counts, safe next action, and

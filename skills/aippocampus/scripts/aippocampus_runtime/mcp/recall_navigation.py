@@ -18,11 +18,20 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.mcp.domain_handles import continuity_domain_route_handle
+from aippocampus_runtime.mcp.source_ref_registry import (
+    registry_source_fingerprint_invalidations,
+    source_candidate_dirs_for_ref,
+)
 from aippocampus_runtime.recall.active_recall_lock import (
     default_active_recall_lock_path,
     reopen_lock_sources,
 )
 from aippocampus_runtime.recall.continuity_domains import (
+    clean_source_fingerprint as continuity_clean_source_fingerprint,
+)
+from aippocampus_runtime.recall.continuity_domains import (
+    continuity_domain_snapshot_fingerprint,
     continuity_domains_latest_path_for_clean_source,
     domain_brief_for_deepen,
     load_continuity_domains_snapshot,
@@ -76,7 +85,7 @@ def _fingerprint_paths(paths: list[Path]) -> str:
 
 
 def clean_source_fingerprint(source_dir: Path) -> str:
-    return _fingerprint_paths([source_dir / "messages.jsonl", source_dir / "turns.jsonl"])
+    return continuity_clean_source_fingerprint(source_dir)
 
 
 def _encode_handle(payload: dict[str, Any]) -> str:
@@ -167,32 +176,6 @@ def _route_handle(
             "evidence_level": evidence_level,
             "source_refs": source_refs[:MAX_HANDLE_REFS],
             "source_fingerprint": clean_source_fingerprint(source_dir),
-            "issued_unix": now,
-            "expires_unix": now + max(1, ttl_seconds),
-        }
-    )
-
-
-def _domain_route_handle(
-    *,
-    source_dir: Path,
-    snapshot_path: Path | None,
-    domain_id: str,
-    source_refs: list[dict[str, Any]],
-    ttl_seconds: int = DEFAULT_TTL_SECONDS,
-) -> str:
-    now = int(time.time())
-    fingerprint_paths = [source_dir / "messages.jsonl", source_dir / "turns.jsonl"]
-    if snapshot_path is not None:
-        fingerprint_paths.append(snapshot_path)
-    return _encode_handle(
-        {
-            "schema_version": HANDLE_SCHEMA_VERSION,
-            "kind": "continuity_domain",
-            "domain_id": domain_id,
-            "source_refs": source_refs[:MAX_HANDLE_REFS],
-            "source_fingerprint": clean_source_fingerprint(source_dir),
-            "snapshot_fingerprint": _fingerprint_paths(fingerprint_paths),
             "issued_unix": now,
             "expires_unix": now + max(1, ttl_seconds),
         }
@@ -310,6 +293,7 @@ def _continuity_domain_routes(
     intent: str,
     clean_source_dir: Path,
     snapshot_path: Path | None,
+    registry_dir: Path | None,
     max_routes: int,
 ) -> list[dict[str, Any]]:
     snapshot = load_continuity_domains_snapshot(snapshot_path)
@@ -325,11 +309,12 @@ def _continuity_domain_routes(
         domain_id = str(pointer.get("domain_id") or "")
         source_refs = [ref for ref in pointer.get("source_refs") or [] if isinstance(ref, dict)]
         route_id = _stable_id("continuity_domain", domain_id)
-        handle = _domain_route_handle(
+        handle = continuity_domain_route_handle(
             source_dir=clean_source_dir,
             snapshot_path=snapshot_path,
             domain_id=domain_id,
             source_refs=source_refs,
+            registry_dir=registry_dir,
         )
         routes.append(
             {
@@ -390,6 +375,7 @@ def recall_context_packet(
         intent=clean_intent,
         clean_source_dir=clean_source_dir,
         snapshot_path=snapshot_path,
+        registry_dir=registry_dir,
         max_routes=limit,
     )
     routes = [*domain_routes, *routes]
@@ -471,6 +457,12 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
                     "malformed_recall_handle",
                     "continuity domain handles require domain_id.",
                 )
+            refs = [_clean_ref(ref) for ref in current.get("source_refs") or [] if isinstance(ref, dict)]
+            if not refs:
+                raise RecallNavigationError(
+                    "malformed_recall_handle",
+                    "continuity domain handles require source refs.",
+                )
             if not current.get("snapshot_fingerprint") or not current.get("expires_unix"):
                 raise RecallNavigationError(
                     "malformed_recall_handle",
@@ -480,13 +472,12 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
                 "schema_version": HANDLE_SCHEMA_VERSION,
                 "kind": "continuity_domain",
                 "domain_id": str(domain_id),
-                "source_refs": [
-                    _clean_ref(ref)
-                    for ref in current.get("source_refs") or []
-                    if isinstance(ref, dict)
-                ],
+                "source_refs": refs,
                 "source_fingerprint": current.get("source_fingerprint"),
                 "snapshot_fingerprint": current.get("snapshot_fingerprint"),
+                "registry_source_fingerprints": current.get("registry_source_fingerprints")
+                if isinstance(current.get("registry_source_fingerprints"), dict)
+                else {},
                 "issued_unix": current.get("issued_unix"),
                 "expires_unix": current.get("expires_unix"),
             }
@@ -534,7 +525,12 @@ def _public_source_message(message: dict[str, Any]) -> dict[str, Any]:
     return clean
 
 
-def _source_ref_deepen_payload(handle: dict[str, Any], *, clean_source_dir: Path) -> dict[str, Any]:
+def _source_ref_deepen_payload(
+    handle: dict[str, Any],
+    *,
+    clean_source_dir: Path,
+    registry_dir: Path | None = None,
+) -> dict[str, Any]:
     expected_fingerprint = handle.get("source_fingerprint")
     current_fingerprint = clean_source_fingerprint(clean_source_dir)
     if expected_fingerprint and expected_fingerprint != current_fingerprint:
@@ -549,11 +545,25 @@ def _source_ref_deepen_payload(handle: dict[str, Any], *, clean_source_dir: Path
             "malformed_recall_handle",
             "recall_deepen could not find source refs in the handle.",
         )
-    messages = iter_clean_messages(clean_source_dir / "messages.jsonl")
     selected = None
     selected_ref = None
+    selected_messages: list[dict[str, Any]] = []
     for ref in refs:
-        selected = next((message for message in messages if _message_matches_ref(message, ref)), None)
+        candidate_dirs = source_candidate_dirs_for_ref(
+            ref,
+            clean_source_dir=clean_source_dir,
+            registry_dir=registry_dir,
+        )
+        for candidate_dir in candidate_dirs:
+            messages = iter_clean_messages(candidate_dir / "messages.jsonl")
+            selected = next(
+                (message for message in messages if _message_matches_ref(message, ref)),
+                None,
+            )
+            if not selected:
+                continue
+            selected_messages = messages
+            break
         if selected:
             selected_ref = _clean_ref({**selected, **ref})
             break
@@ -562,12 +572,15 @@ def _source_ref_deepen_payload(handle: dict[str, Any], *, clean_source_dir: Path
             "source_ref_not_found",
             "No clean-source message matched the recall navigation handle.",
         )
-    source_window = [_public_source_message(item) for item in _turn_messages(messages, selected)]
+    source_window = [
+        _public_source_message(item)
+        for item in _turn_messages(selected_messages, selected)
+    ]
     source_refs = [selected_ref or _clean_ref(selected)]
     source_ref = source_refs[0]
     reopen_args = {
         key: source_ref[key]
-        for key in ("message_id", "turn_id", "turn_index")
+        for key in ("thread_key", "message_id", "turn_id", "turn_index")
         if key in source_ref
     }
     return {
@@ -675,6 +688,7 @@ def _continuity_domain_deepen_payload(
     *,
     clean_source_dir: Path,
     snapshot_path: Path | None,
+    registry_dir: Path | None = None,
 ) -> dict[str, Any]:
     expected_source_fingerprint = handle.get("source_fingerprint")
     current_source_fingerprint = clean_source_fingerprint(clean_source_dir)
@@ -688,12 +702,9 @@ def _continuity_domain_deepen_payload(
         clean_source_dir
     )
     expected_snapshot_fingerprint = handle.get("snapshot_fingerprint")
-    current_snapshot_fingerprint = _fingerprint_paths(
-        [
-            clean_source_dir / "messages.jsonl",
-            clean_source_dir / "turns.jsonl",
-            effective_snapshot_path,
-        ]
+    current_snapshot_fingerprint = continuity_domain_snapshot_fingerprint(
+        snapshot_path=effective_snapshot_path,
+        clean_source_dir=clean_source_dir,
     )
     if expected_snapshot_fingerprint and expected_snapshot_fingerprint != current_snapshot_fingerprint:
         raise RecallNavigationError(
@@ -710,7 +721,37 @@ def _continuity_domain_deepen_payload(
             "The continuity domain handle no longer exists; rerun recall_context.",
             domain_id=domain_id,
         )
-    refs = [ref for ref in brief.get("source_refs") or [] if isinstance(ref, dict)]
+    raw_lifecycle = brief.get("lifecycle")
+    lifecycle: dict[str, Any] = raw_lifecycle if isinstance(raw_lifecycle, dict) else {}
+    raw_claim_contract = brief.get("claim_contract")
+    claim_contract: dict[str, Any] = (
+        raw_claim_contract if isinstance(raw_claim_contract, dict) else {}
+    )
+    status = str(lifecycle.get("status") or "active")
+    action = str(claim_contract.get("action_grammar") or "")
+    if status in {"blocked", "stale", "superseded", "retired"} or action == "ignore_or_blocked":
+        raise RecallNavigationError(
+            "continuity_domain_blocked",
+            "The continuity domain is blocked, stale, superseded, or retired; rerun recall_context or reopen source manually.",
+            domain_id=domain_id,
+            invalidated_by=[f"continuity_domain_{status}"],
+        )
+    refs = [ref for ref in handle.get("source_refs") or [] if isinstance(ref, dict)]
+    expected_registry_fingerprints = handle.get("registry_source_fingerprints")
+    expected_registry_fingerprints = (
+        expected_registry_fingerprints if isinstance(expected_registry_fingerprints, dict) else {}
+    )
+    registry_invalidations = registry_source_fingerprint_invalidations(
+        refs,
+        registry_dir=registry_dir,
+        expected_fingerprints=expected_registry_fingerprints,
+    )
+    if registry_invalidations:
+        raise RecallNavigationError(
+            "stale_recall_handle",
+            "The registry clean-source target changed; rerun recall_context before reopening source.",
+            invalidated_by=registry_invalidations,
+        )
     source_payload = None
     source_error_codes: list[str] = []
     for ref in refs:
@@ -723,6 +764,7 @@ def _continuity_domain_deepen_payload(
                     "source_fingerprint": current_source_fingerprint,
                 },
                 clean_source_dir=clean_source_dir,
+                registry_dir=registry_dir,
             )
             break
         except RecallNavigationError as exc:
@@ -791,7 +833,11 @@ def recall_deepen_packet(
         )
     kind = str(normalized.get("kind") or "")
     if kind == "source_ref":
-        return _source_ref_deepen_payload(normalized, clean_source_dir=clean_source_dir)
+        return _source_ref_deepen_payload(
+            normalized,
+            clean_source_dir=clean_source_dir,
+            registry_dir=registry_dir,
+        )
     if kind == "active_recall_lock":
         return _active_lock_deepen_payload(
             normalized,
@@ -805,6 +851,7 @@ def recall_deepen_packet(
             normalized,
             clean_source_dir=clean_source_dir,
             snapshot_path=continuity_domains_snapshot_path,
+            registry_dir=registry_dir,
         )
     raise RecallNavigationError(
         "malformed_recall_handle",
