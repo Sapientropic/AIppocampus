@@ -21,6 +21,10 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_HOOK_MODULE = "aippocampus_runtime.hooks.lifecycle"
 DEFAULT_TIMEOUT_SECONDS = 20
 EVENTS = ("SessionStart", "Stop", "PreCompact", "PostCompact")
+PROVIDER_BRIDGE_MARKERS = (
+    "aippocampus_provider_bridge_hook.py",
+    "aippocampus_runtime.hooks.provider_bridge",
+)
 
 
 def hooks_json_path(codex_home_path: Path | None = None) -> Path:
@@ -120,6 +124,11 @@ def is_maintenance_handler(
     )
 
 
+def is_provider_bridge_handler(handler: dict[str, Any]) -> bool:
+    command = str(handler.get("command") or "")
+    return any(marker in command for marker in PROVIDER_BRIDGE_MARKERS)
+
+
 def groups_for(data: dict[str, Any], event: str) -> list[dict[str, Any]]:
     hooks = data.setdefault("hooks", {})
     groups = hooks.setdefault(event, [])
@@ -127,6 +136,18 @@ def groups_for(data: dict[str, Any], event: str) -> list[dict[str, Any]]:
         groups = []
         hooks[event] = groups
     return groups
+
+
+def provider_bridge_commands(groups: list[dict[str, Any]]) -> list[str]:
+    commands: list[str] = []
+    for group in groups:
+        handlers = group.get("hooks") if isinstance(group, dict) else None
+        if not isinstance(handlers, list):
+            continue
+        for handler in handlers:
+            if isinstance(handler, dict) and is_provider_bridge_handler(handler):
+                commands.append(str(handler.get("command") or ""))
+    return commands
 
 
 def prune_event(
@@ -151,6 +172,11 @@ def prune_event(
             if not (
                 isinstance(handler, dict)
                 and is_maintenance_handler(handler, script, module=module)
+                and not (
+                    script is None
+                    and module == DEFAULT_HOOK_MODULE
+                    and is_provider_bridge_handler(handler)
+                )
             )
         ]
         if len(kept) != len(handlers):
@@ -175,6 +201,14 @@ def install(
     target = handler_for(script, module=module, timeout=timeout, log=log)
     for event in EVENTS:
         groups = groups_for(data, event)
+        if script is None and module == DEFAULT_HOOK_MODULE and provider_bridge_commands(groups):
+            # The bridge is already the lifecycle handler for this event and
+            # delegates back here at runtime; keep it and remove direct duplicates.
+            pruned, did_prune = prune_event(groups, script, module=module)
+            if did_prune or pruned != groups:
+                data["hooks"][event] = pruned
+                changed = True
+            continue
         pruned, did_prune = prune_event(groups, script, module=module)
         if did_prune:
             changed = True

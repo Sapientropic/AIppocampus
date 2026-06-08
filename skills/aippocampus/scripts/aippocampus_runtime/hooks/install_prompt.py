@@ -21,6 +21,10 @@ from aippocampus_runtime.hooks.host_boundary import (
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_HOOK_MODULE = "aippocampus_runtime.hooks.prompt"
 DEFAULT_HOOK_TIMEOUT_SECONDS = 5
+PROVIDER_BRIDGE_MARKERS = (
+    "aippocampus_provider_bridge_hook.py",
+    "aippocampus_runtime.hooks.provider_bridge",
+)
 # Keep the internal Python budget below the host timeout. If a future installer
 # raises the host timeout, this value can be raised deliberately; do not remove
 # it, or slow semantic/API paths will be killed by Codex before they can
@@ -137,6 +141,11 @@ def is_ambient_handler(
     )
 
 
+def is_provider_bridge_handler(handler: dict[str, Any]) -> bool:
+    command = str(handler.get("command") or "")
+    return any(marker in command for marker in PROVIDER_BRIDGE_MARKERS)
+
+
 def user_prompt_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
     hooks = data.setdefault("hooks", {})
     groups = hooks.setdefault("UserPromptSubmit", [])
@@ -144,6 +153,52 @@ def user_prompt_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
         groups = []
         hooks["UserPromptSubmit"] = groups
     return groups
+
+
+def prune_direct_prompt_handlers(
+    groups: list[dict[str, Any]],
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> tuple[list[dict[str, Any]], bool]:
+    changed = False
+    out: list[dict[str, Any]] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            out.append(group)
+            continue
+        handlers = group.get("hooks")
+        if not isinstance(handlers, list):
+            out.append(group)
+            continue
+        kept = [
+            handler
+            for handler in handlers
+            if not (
+                isinstance(handler, dict)
+                and is_ambient_handler(handler, script, module=module)
+                and not is_provider_bridge_handler(handler)
+            )
+        ]
+        if len(kept) != len(handlers):
+            changed = True
+        if kept:
+            copy = dict(group)
+            copy["hooks"] = kept
+            out.append(copy)
+    return out, changed
+
+
+def provider_bridge_commands(groups: list[dict[str, Any]]) -> list[str]:
+    commands: list[str] = []
+    for group in groups:
+        handlers = group.get("hooks") if isinstance(group, dict) else None
+        if not isinstance(handlers, list):
+            continue
+        for handler in handlers:
+            if isinstance(handler, dict) and is_provider_bridge_handler(handler):
+                commands.append(str(handler.get("command") or ""))
+    return commands
 
 
 def install(
@@ -167,6 +222,27 @@ def install(
         semantic_timeout=semantic_timeout,
     )
     changed = False
+
+    if script is None and module == DEFAULT_HOOK_MODULE:
+        bridge_commands = provider_bridge_commands(groups)
+        if bridge_commands:
+            # The provider bridge delegates to this prompt module after setting
+            # the provider env var, so a direct reinstall must keep the bridge
+            # as the effective handler and only prune duplicate direct handlers.
+            pruned, did_prune = prune_direct_prompt_handlers(groups, script, module=module)
+            if did_prune or pruned != groups:
+                data["hooks"]["UserPromptSubmit"] = pruned
+                save_hooks(path, data)
+                changed = True
+            return add_host_integration(
+                {
+                    "changed": changed,
+                    "installed": True,
+                    "path": str(path),
+                    "command": bridge_commands[0],
+                    "provider_key_bridge_installed": True,
+                }
+            )
 
     for group in groups:
         handlers = group.get("hooks") if isinstance(group, dict) else None

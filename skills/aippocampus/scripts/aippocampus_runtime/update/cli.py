@@ -378,6 +378,51 @@ def _hook_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _effective_aippocampus_hook_kind(row: dict[str, Any]) -> str:
+    command = str(row.get("command") or "")
+    event = str(row.get("event") or "")
+    if any(marker in command for marker in PROVIDER_KEY_BRIDGE_MARKERS):
+        return "bridge"
+    if event == "UserPromptSubmit" and "aippocampus_runtime.hooks.prompt" in command:
+        return "direct"
+    if event in HOOK_EVENTS and "aippocampus_runtime.hooks.lifecycle" in command:
+        return "direct"
+    return ""
+
+
+def _duplicate_effective_hooks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Count only AIppocampus handlers that would run the same logical hook.
+    # Third-party hooks can share an event; bridge+direct AIppocampus handlers cannot.
+    by_event: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        kind = _effective_aippocampus_hook_kind(row)
+        if not kind:
+            continue
+        item = {
+            "kind": kind,
+            "group_index": row.get("group_index"),
+            "handler_index": row.get("handler_index"),
+        }
+        by_event.setdefault(str(row.get("event") or ""), []).append(item)
+    duplicates: list[dict[str, Any]] = []
+    for event, handlers in sorted(by_event.items()):
+        if len(handlers) <= 1:
+            continue
+        kinds = sorted({str(handler.get("kind") or "") for handler in handlers})
+        duplicates.append(
+            {
+                "event": event,
+                "handler_count": len(handlers),
+                "handler_kinds": kinds,
+                "reason_code": "provider_bridge_and_direct_hook"
+                if {"bridge", "direct"}.issubset(set(kinds))
+                else "duplicate_aippocampus_hook_handler",
+                "handlers": handlers,
+            }
+        )
+    return duplicates
+
+
 def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[str, Any]:
     path = hooks_json or install_prompt.hooks_json_path(codex_home_path)
     data = install_prompt.load_hooks(path)
@@ -398,6 +443,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         for row in rows
         if any(name in row["command"] for name in OLD_HOOK_SCRIPT_NAMES)
     ]
+    duplicate_effective_hooks = _duplicate_effective_hooks(rows)
     prompt_current = any(
         row["event"] == "UserPromptSubmit"
         and (
@@ -436,12 +482,19 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
     }
     if stale_commands:
         status = "stale"
+    elif duplicate_effective_hooks:
+        status = "duplicate_effective_hook_execution"
     elif prompt_current and lifecycle_current:
         status = "current"
     elif prompt_any or lifecycle_any_events:
         status = "partial"
     else:
         status = "missing"
+    reason_codes = []
+    if stale_commands:
+        reason_codes.append("stale_flat_script_commands")
+    if duplicate_effective_hooks:
+        reason_codes.append("duplicate_effective_hook_execution")
     return {
         "surface": "hooks",
         "status": status,
@@ -451,6 +504,8 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "lifecycle_events": sorted(lifecycle_current_events),
         "provider_key_bridge_installed": bool(provider_key_bridge_rows),
         "provider_key_bridge_handlers": provider_key_bridge_rows,
+        "duplicate_effective_hook_execution": duplicate_effective_hooks,
+        "reason_codes": reason_codes,
         "stale_flat_script_commands": stale_commands,
         "recommended_actions": [
             "aippocampus update apply --surface hooks",
