@@ -78,6 +78,10 @@ COMMANDS = {
         "agent_self_note_cli.py",
         "aippocampus_runtime.source.agent_self_note_cli",
     ),
+    "continuity-domain": CommandSpec(
+        "continuity_domain.py",
+        "aippocampus_runtime.recall.continuity_domain_cli",
+    ),
 }
 
 SCRIPT_MODULES = {
@@ -94,6 +98,7 @@ SCRIPT_MODULES = {
     ),
     "update.py": "aippocampus_runtime.update.cli",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
+    "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
     "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
@@ -309,6 +314,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
+    print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
     print("  update status       Check personal core/magic readiness", file=target)
     print("  export              Export a portable AIppocampus bundle", file=target)
     print("  import              Import a portable AIppocampus bundle", file=target)

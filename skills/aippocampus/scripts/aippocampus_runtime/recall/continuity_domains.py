@@ -38,6 +38,7 @@ from aippocampus_runtime.recall.authority import (
     action_grammar_for_level,
     trust_contract_for_level,
 )
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.source.search import iter_clean_messages
 
 CONTINUITY_DOMAIN_SCHEMA_VERSION = 1
@@ -91,6 +92,11 @@ REOPEN_BOUNDARY_EFFECTS = {
     "redirect",
 }
 DERIVED_ONLY_STATUS = "derived_only_not_runtime_writable"
+REDACTION_MARKERS = (
+    "<local-path-redacted>",
+    "<sensitive-value-redacted>",
+    "<redacted:",
+)
 
 SIGNAL_PRODUCERS = {
     "source_texture",
@@ -863,6 +869,7 @@ def continuity_domain_public_safety_report(snapshot: Mapping[str, Any]) -> dict[
         )
         if lifecycle.get("status") in {"blocked", "superseded", "retired"}:
             suppressed_count += 1
+    encoded_snapshot = json.dumps(snapshot, ensure_ascii=False, sort_keys=True)
     return {
         "kind": "aippocampus_continuity_domain_public_safety_report",
         "schema_version": CONTINUITY_DOMAIN_SCHEMA_VERSION,
@@ -871,7 +878,7 @@ def continuity_domain_public_safety_report(snapshot: Mapping[str, Any]) -> dict[
             "event_count": int(metrics.get("event_count") or 0),
             "snapshot_count": 1 if snapshot else 0,
             "source_ref_count": source_ref_count,
-            "redaction_count": 0,
+            "redaction_count": sum(encoded_snapshot.count(marker) for marker in REDACTION_MARKERS),
             "suppressed_count": suppressed_count,
         },
         "contract": {
@@ -990,12 +997,29 @@ def continuity_domain_handle(
 
 def _terms(text: str) -> set[str]:
     out: set[str] = set()
-    for raw in str(text or "").replace("#", " #").split():
+    for raw in split_query_terms([str(text or "")]):
         token = raw.strip(".,:;!?()[]{}<>\"'`").casefold()
         if len(token) < 2:
             continue
         out.add(token)
+        for part in token.replace("#", " #").split():
+            clean = part.strip(".,:;!?()[]{}<>\"'`").casefold()
+            if len(clean) >= 2:
+                out.add(clean)
     return out
+
+
+def _overlap_score(prompt_terms: set[str], prompt_text: str, domain_terms: set[str], domain_text: str) -> int:
+    score = len(prompt_terms & domain_terms)
+    prompt_low = prompt_text.casefold()
+    domain_low = domain_text.casefold()
+    for term in domain_terms:
+        if term and term in prompt_low:
+            score += 1
+    for term in prompt_terms:
+        if term and term in domain_low:
+            score += 1
+    return score
 
 
 def match_continuity_domain_pointers(
@@ -1008,7 +1032,8 @@ def match_continuity_domain_pointers(
 ) -> list[dict[str, Any]]:
     if not isinstance(snapshot, Mapping):
         return []
-    prompt_terms = _terms(prompt)
+    prompt_text = str(prompt or "")
+    prompt_terms = _terms(prompt_text)
     if not prompt_terms:
         return []
     scored: list[tuple[int, str, dict[str, Any]]] = []
@@ -1029,8 +1054,11 @@ def match_continuity_domain_pointers(
             continue
         if action == ACTION_IGNORE_OR_BLOCKED:
             continue
-        negative_terms = _terms(" ".join(str(item) for item in domain.get("negative_cues") or []))
-        if prompt_terms & negative_terms:
+        negative_text = " ".join(str(item) for item in domain.get("negative_cues") or [])
+        negative_terms = _terms(negative_text)
+        if prompt_terms & negative_terms or any(
+            term and term in prompt_text.casefold() for term in negative_terms
+        ):
             continue
         text = " ".join(
             [
@@ -1042,7 +1070,7 @@ def match_continuity_domain_pointers(
             ]
         )
         domain_terms = _terms(text)
-        overlap = len(prompt_terms & domain_terms)
+        overlap = _overlap_score(prompt_terms, prompt_text, domain_terms, text)
         if overlap <= 0:
             continue
         status_bonus = 0 if status == "active" else -3
