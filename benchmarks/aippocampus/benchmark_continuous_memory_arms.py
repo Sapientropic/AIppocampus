@@ -19,7 +19,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from continuous_memory_preregistered_slices import build_preregistered_slices
+from continuous_memory_preregistered_slices import (
+    CONTRACT_SMOKE_RUNNER_PROFILE,
+    PREREGISTERED_REPEAT_RUNNER_PROFILE,
+    PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM,
+    build_evaluation_rows,
+    build_paired_repeat_readout,
+    build_preregistered_slices,
+    build_preregistration,
+    repeat_seed_hash,
+)
 
 SCHEMA_VERSION = 5
 BARE_CONTINUOUS_NO_MEMORY = "bare_continuous_no_memory"
@@ -627,12 +636,27 @@ def fixture_cases() -> list[AttributionCase]:
     ]
 
 
-def evaluate_case(case: AttributionCase, arm: str) -> dict[str, Any]:
+def evaluate_case(
+    case: AttributionCase,
+    arm: str,
+    *,
+    repeat_index: int = 0,
+) -> dict[str, Any]:
     spec = case.spec_for_arm(arm)
     cost = spec.cost
     harm = spec.harm
+    repeat_seed_sha256 = repeat_seed_hash(
+        case.case_family,
+        case.case_id,
+        repeat_index,
+    )
     return {
         "case_id_sha1": sha256_text(case.case_id)[:16],
+        "repeat_index": repeat_index,
+        "repeat_seed_sha256": repeat_seed_sha256,
+        "paired_task_key_sha256": sha256_text(
+            f"{case.case_id}|{repeat_index}"
+        )[:16],
         "case_family": case.case_family,
         "scenario_provenance": list(case.scenario_provenance),
         "scenario_generated_by": public_metadata_label(
@@ -688,7 +712,12 @@ def evaluate_case(case: AttributionCase, arm: str) -> dict[str, Any]:
     }
 
 
-def summarize_rows(rows: list[dict[str, Any]], *, case_count: int) -> dict[str, Any]:
+def summarize_rows(
+    rows: list[dict[str, Any]],
+    *,
+    case_count: int,
+    repeat_count_per_case_arm: int,
+) -> dict[str, Any]:
     by_arm: dict[str, dict[str, Any]] = {}
     source_reopen_obedience_by_arm: dict[str, float | None] = {}
     for arm in ARM_ORDER:
@@ -724,6 +753,8 @@ def summarize_rows(rows: list[dict[str, Any]], *, case_count: int) -> dict[str, 
     oracle = by_arm["oracle_memory"]
     return {
         "case_count": case_count,
+        "repeat_count_per_case_arm": repeat_count_per_case_arm,
+        "case_arm_trial_count": case_count * repeat_count_per_case_arm,
         "arm_count": len(ARM_ORDER),
         "row_count": len(rows),
         "by_arm": by_arm,
@@ -1459,7 +1490,7 @@ def build_cost_harm_ledger(
         )
 
     fresh_context_spec_loop, baseline_net = build_fresh_context_spec_loop_baseline(
-        int(metrics["case_count"])
+        int(metrics["case_arm_trial_count"])
     )
     host_native_baseline = host_native_baseline_metadata(
         cost_by_arm[HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS]
@@ -1584,150 +1615,50 @@ def build_cost_harm_ledger(
     }
 
 
-def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
-    net_value = cost_harm_ledger["net_value_under_equalized_cost"]
-    fair_winner = net_value["highest_net_value_fair_strategy"]
-    claim_allowed = fair_winner == "true_aippocampus_memory"
-    decision_label = (
-        "candidate continuous memory advantage"
-        if claim_allowed
-        else "no demonstrated memory advantage"
+def net_value_for_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    cost = summarize_cost_for_rows(rows)
+    harm, _ = summarize_harm_for_rows(rows)
+    return summarize_net_value(
+        success_count=cost["success_count"],
+        cost_summary=cost,
+        harm_summary=harm,
     )
-    return {
-        "id": "aippocampus-continuous-memory-v1",
-        "status": "pre_registered_design_contract",
-        "applies_to": "public_quality_continuous_memory_claims_for_#378",
-        "current_report_role": "contract_smoke_preview_not_public_quality_evidence",
-        "primary_endpoint": {
-            "name": "source_grounded_task_success_under_equalized_cost",
-            "scope": "context_loss_or_instability",
-            "does_not_apply_when": [
-                "complete_spec_short_task_current_prompt_sufficient",
-            ],
-            "why_chosen": (
-                "Combines task success with source support, equalized cost, "
-                "and severe false positives so memory cannot win by hiding "
-                "background work or stale unsafe recall."
-            ),
-            "point_estimate_field": (
-                "cost_harm_ledger.net_value_under_equalized_cost."
-                "highest_net_value_fair_strategy"
-            ),
-            "hard_gates": [
-                "privacy_breach_count == 0",
-                "raw_prompt_or_source_leak_count == 0",
-                "source_reopen_obedience_rate passes for source-required memory claims",
-                "no severe stale-memory harm gate breach",
-            ],
-        },
-        "public_quality_minimums": {
-            "scenario_families": 3,
-            "repeats_per_scenario_arm": 5,
-            "external_or_holdout_scenario_share": (
-                PUBLIC_QUALITY_MIN_EXTERNAL_OR_HOLDOUT_SHARE
-            ),
-            "arms_required": [
-                "fresh_context_spec_loop",
-                HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS,
-                "true_aippocampus_memory",
-                "sham_unrelated_memory",
-                "stale_wrong_memory",
-            ],
-            "oracle_role": "upper_bound_only_excluded_from_fair_winner",
-        },
-        "scenario_provenance_policy": {
-            "categories": list(SCENARIO_PROVENANCE_CATEGORIES),
-            "report_each_slice_separately": True,
-            "public_quality_non_self_derived_sources": list(
-                PUBLIC_QUALITY_EXTERNAL_OR_HOLDOUT_PROVENANCE
-            ),
-            "author_written_only_claim_level": "diagnostic_contract_smoke_only",
-            "scenario_scripts_record_generation_context": True,
-        },
-        "holdout_policy": {
-            "holdout_blind_prompt_threshold_tuning_role": HOLDOUT_TUNING_ROLE,
-            "holdout_used_for_prompt_or_threshold_tuning_allowed": False,
-            "blind_or_holdout_scenarios_reported_as_slices": True,
-        },
-        "negative_control_policy": {
-            "scenario_level_negative_controls_required": True,
-            "penalize_unnecessary_memory_intervention": True,
-            "examples": [
-                "memory_should_not_help",
-                "old_project_fact_pollutes_current_work",
-                "fresh_context_spec_loop_should_plausibly_win",
-            ],
-        },
-        "seed_repeat_strategy": {
-            "same_task_seed_pairs_across_arms": True,
-            "public_quality_min_repeats_per_scenario_arm": 5,
-            "seed_derivation": (
-                "sha256(preregistration_id + scenario_family + case_id + repeat_index)"
-            ),
-            "contract_smoke_seed_policy": (
-                "deterministic_public_safe_cases_no_random_seed"
-            ),
-        },
-        "confidence_rule": {
-            "primary_rule": (
-                "continuous memory advantage requires the paired lower_bound "
-                "for true_aippocampus_memory over fresh_context_spec_loop to "
-                "be greater than 0 after hard gates pass"
-            ),
-            "interval_methods": [
-                "paired_bootstrap_for_net_value_delta",
-                "wilson_lower_bound_for_binary_success_and_harm_rates",
-            ],
-            "contract_smoke_rule": "point_preview_only_no_public_quality_claim",
-        },
-        "secondary_endpoints": [
-            "memory_presence_effect",
-            "memory_correctness_effect",
-            "stale_memory_harm",
-            "oracle_headroom",
-            "source_reopen_obedience_by_arm",
-            "harm_weighted_false_positive_cost",
-            "amortized_cost_per_successful_slice",
-        ],
-        "secondary_metrics_policy": (
-            "exploratory_unless_named_in_primary_decision_rule"
-        ),
-        "multiple_comparison_handling": (
-            "secondary metrics are descriptive unless promoted before a run; "
-            "do not select a positive headline from the metric grid after seeing results"
-        ),
-        "no_advantage_rule": (
-            "If the primary endpoint does not beat the baseline under the "
-            "registered lower-bound rule, reports must say no demonstrated "
-            "memory advantage even when secondary metrics favor AIppocampus."
-        ),
-        "current_report_decision": {
-            "evaluated_as": "contract_smoke_preview",
-            "primary_endpoint_winner": fair_winner,
-            "continuous_memory_advantage_claim_allowed": bool(claim_allowed),
-            "decision_label": decision_label,
-            "reason": (
-                f"{fair_winner} wins the current fair-strategy net-value preview; "
-                "contract smoke reports cannot satisfy the public-quality lower-bound rule."
-            ),
-        },
-    }
+
+
+def fresh_context_net_for_case_count(case_count: int) -> dict[str, Any]:
+    _, net = build_fresh_context_spec_loop_baseline(case_count)
+    return net
 
 
 def run_benchmark(
     *,
     arms: Sequence[str] | None = None,
     scenario_selection_role: str = "report",
+    repeat_count_per_case_arm: int = 1,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     selected_arms = tuple(arms or ARM_ORDER)
+    runner_profile = (
+        PREREGISTERED_REPEAT_RUNNER_PROFILE
+        if repeat_count_per_case_arm > 1
+        else CONTRACT_SMOKE_RUNNER_PROFILE
+    )
     unknown = sorted(set(selected_arms) - set(ARM_ORDER))
     if unknown:
         raise ValueError(f"unknown arm(s): {', '.join(unknown)}")
     available_cases = fixture_cases()
     cases = select_cases_for_role(available_cases, scenario_selection_role)
-    rows = [evaluate_case(case, arm) for case in cases for arm in selected_arms]
-    metrics = summarize_rows(rows, case_count=len(cases))
+    rows = build_evaluation_rows(
+        cases=cases,
+        selected_arms=selected_arms,
+        repeat_count_per_case_arm=repeat_count_per_case_arm,
+        evaluate_case_fn=evaluate_case,
+    )
+    metrics = summarize_rows(
+        rows,
+        case_count=len(cases),
+        repeat_count_per_case_arm=repeat_count_per_case_arm,
+    )
     metrics.update(summarize_scenario_slices(rows))
     scenario_controls = build_scenario_controls(
         available_cases,
@@ -1736,7 +1667,17 @@ def run_benchmark(
         scenario_selection_role=scenario_selection_role,
     )
     cost_harm_ledger = build_cost_harm_ledger(rows, metrics=metrics)
-    preregistration = build_preregistration(cost_harm_ledger)
+    paired_repeat_readout = build_paired_repeat_readout(
+        rows=rows,
+        metrics=metrics,
+        repeat_count_per_case_arm=repeat_count_per_case_arm,
+        net_value_for_rows=net_value_for_rows,
+        fresh_context_net_for_case_count=fresh_context_net_for_case_count,
+    )
+    preregistration = build_preregistration(
+        cost_harm_ledger,
+        paired_repeat_readout=paired_repeat_readout,
+    )
     preregistered_slices = build_preregistered_slices(
         rows=rows,
         metrics=metrics,
@@ -1745,6 +1686,7 @@ def run_benchmark(
         preregistration=preregistration,
         selected_arms=selected_arms,
         scenario_selection_role=scenario_selection_role,
+        paired_repeat_readout=paired_repeat_readout,
     )
     required_arms_present = set(ARM_ORDER) <= set(selected_arms)
     attribution_controls_present = (
@@ -1780,6 +1722,8 @@ def run_benchmark(
         "config": {
             "scenario_family": "continuous_agent_memory_attribution",
             "scenario_selection_role": scenario_selection_role,
+            "runner_profile": runner_profile,
+            "repeat_count_per_case_arm": repeat_count_per_case_arm,
             "scenario_provenance": scenario_provenance_for_cases(cases),
             "scenario_provenance_categories": list(SCENARIO_PROVENANCE_CATEGORIES),
             "holdout_prompt_threshold_tuning_role": HOLDOUT_TUNING_ROLE,
@@ -1867,13 +1811,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             "to exclude holdouts, or holdout for blind-slice diagnostics."
         ),
     )
+    parser.add_argument(
+        "--repeat-count-per-case-arm",
+        type=int,
+        default=1,
+        help=(
+            "Run each selected case x arm this many paired repeats. Use at least "
+            f"{PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM} to evaluate the "
+            "registered public-quality lower-bound rule."
+        ),
+    )
+    parser.add_argument(
+        "--public-quality-repeat-profile",
+        action="store_true",
+        help=(
+            "Shortcut for the registered public-synthetic repeat profile "
+            f"({PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM} paired repeats)."
+        ),
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
+    repeat_count_per_case_arm = (
+        PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM
+        if args.public_quality_repeat_profile
+        else args.repeat_count_per_case_arm
+    )
 
     payload = run_benchmark(
         arms=args.arm,
         scenario_selection_role=args.scenario_selection_role,
+        repeat_count_per_case_arm=repeat_count_per_case_arm,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
