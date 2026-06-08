@@ -2,9 +2,10 @@
 
 Role: active design.
 
-Status: first deterministic sidecar and public-safe calibration report
-implemented for #575. Live hook capture, private real-history calibration, and
-host-timing quality remain future work.
+Status: first deterministic sidecar, public-safe calibration report, and
+private-history aggregate calibration runner implemented for #575. Live hook
+capture, host-timing quality, feedback-reviewed false-positive rates, and
+user-visible lift remain future work.
 
 ## Purpose
 
@@ -31,6 +32,10 @@ deterministic sidecar:
 - `build_cognitive_load_calibration_report(sidecar, ranked_candidates=...)`
   emits a no-write calibration readout separating routing weight, source truth,
   and affect/personality boundaries.
+- `cognitive_load_private_calibration.py` reads clean-source
+  `messages.jsonl` / `events.jsonl` or the local thread registry and emits a
+  public-safe private-history aggregate report. It never serializes clean-source
+  text, raw source refs, raw command text, thread ids, message ids, or paths.
 
 The E2E50 scaffold can still accept optional `cognitive_load` rows through
 `aippocampus_runtime/coding/sequence_packets.py`, but that path is a benchmark
@@ -80,9 +85,12 @@ It reports three axes separately:
 - `affect_or_personality_truth`: explicitly blocked; load signals do not infer
   stress, emotion, identity, personality, or user-trait truth.
 
-The issue readout `issue_readouts.github_575` marks this as deterministic
-public-safe evidence. It keeps live hook capture, host-timing quality, private
-real-history calibration, and user-visible recall improvement as unmeasured.
+The issue readout `issue_readouts.github_575` marks the baseline as
+deterministic public-safe evidence. When the private-history runner supplies a
+public-safe aggregate, `private_real_history_calibration` can become
+`measured_public_safe_aggregate`; live hook capture, host-timing quality,
+feedback-reviewed false-positive rates, caution-hint usefulness, and
+user-visible recall improvement still remain unmeasured.
 
 ## Projection Boundary
 
@@ -136,7 +144,14 @@ calibration before private reviewed cases exist.
 - the calibration report separates routing-weight diagnostics from blocked
   affect/personality truth;
 - caps, decay, invalidation, source authority, and metric slots remain visible.
+- the private-history aggregate runner can convert clean-source message/event
+  fixtures into load signals without leaking raw private text, source refs,
+  paths, command text, or assistant text.
 
-Future work should only wire this into a live hook or broader host policy after
-reviewed real-history calibration shows that the boost reduces repeated
-pitfalls without raising over-personalization or annoyance risk.
+The dated private-history aggregate report is
+[`docs/evidence/cognitive-load-private-history-calibration-2026-06-08.md`](../evidence/cognitive-load-private-history-calibration-2026-06-08.md).
+It scanned 100 local registry threads and marked private-history calibration as
+measured for that cohort, but it still found no reviewed false-positive or
+caution-usefulness rows. Future work should only wire this into a live hook or
+broader host policy after reviewed calibration shows that the boost reduces
+repeated pitfalls without raising over-personalization or annoyance risk.
