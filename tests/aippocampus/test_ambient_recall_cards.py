@@ -602,6 +602,39 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(card["reopenable_ref_count"], 0)
         self.assertEqual(card["source_refs"], [])
 
+    def test_cognitive_map_registry_overview_card_stays_distinct_from_route(self) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [],
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [
+                    {
+                        "kind": "cognitive_map_registry_overview",
+                        "provenance_class": "cognitive_map_registry_overview",
+                        "route_id": "cmfo-a",
+                        "region_labels": ["AIppocampus"],
+                        "matched_cues": ["心理地图"],
+                        "source_boundary": {
+                            "registry_derived_navigation_only": True,
+                            "source_reopen_required_for_claims": True,
+                        },
+                    }
+                ],
+            }
+        )
+
+        card = payload["cards"][0]
+
+        self.assertEqual(card["provenance_class"], "cognitive_map_registry_overview")
+        self.assertEqual(card["support_level"], "scent")
+        self.assertEqual(card["action_grammar"], "direction_only")
+        self.assertEqual(card["source_refs"], [])
+        self.assertTrue(card["source_boundary"]["registry_derived_navigation_only"])
+        self.assertIn("registry", card["suggested_use"])
+
     def test_candidate_nudge_does_not_echo_instruction_like_theme(self) -> None:
         payload = cards.ambient_recall_from_decision(
             {

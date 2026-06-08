@@ -117,8 +117,17 @@ def _decision_reasons(
             + ", ".join(str(item.get("term") or "") for item in association_matches[:4])
         )
     if cognitive_map_matches:
+        has_registry_overview = any(
+            item.get("provenance_class") == "cognitive_map_registry_overview"
+            or item.get("kind") == "cognitive_map_registry_overview"
+            for item in cognitive_map_matches
+        )
+        cognitive_map_reason = (
+            "cognitive map registry overview" if has_registry_overview else "cognitive map route"
+        )
         reasons.append(
-            "cognitive map route: "
+            cognitive_map_reason
+            + ": "
             + ", ".join(
                 str((item.get("landmark_labels") or item.get("matched_cues") or [""])[0])
                 for item in cognitive_map_matches[:3]

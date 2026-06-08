@@ -38,6 +38,7 @@ SOURCE_BACKED_REOPEN = "source_backed_reopen"
 WARM_SCOUT_PROPOSAL = "warm_scout_proposal"
 CACHED_WARM_CARD = "cached_warm_card"
 COGNITIVE_MAP_ROUTE = "cognitive_map_route"
+COGNITIVE_MAP_REGISTRY_OVERVIEW = "cognitive_map_registry_overview"
 WORKING_MEMORY_SOURCE = "working_memory_source"
 WORKING_MEMORY_MODEL = "working_memory_model"
 CONTINUITY_DOMAIN_POINTER = CONTINUITY_DOMAIN_POINTER_KIND
@@ -656,22 +657,37 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
-    labels = _clean_terms(item.get("landmark_labels") or item.get("matched_cues") or [], limit=4)
-    theme = compact_text(", ".join(labels) or str(item.get("title") or "cognitive map route"), 140)
+    provenance = str(item.get("provenance_class") or COGNITIVE_MAP_ROUTE)
+    is_overview = provenance == COGNITIVE_MAP_REGISTRY_OVERVIEW
+    label_source = item.get("region_labels") if is_overview else item.get("landmark_labels")
+    labels = _clean_terms(label_source or item.get("matched_cues") or [], limit=4)
+    fallback = "registry overview" if is_overview else "cognitive map route"
+    theme = compact_text(", ".join(labels) or str(item.get("title") or fallback), 140)
     nudge_theme = safe_nudge_topic(theme)
+    suggested_use = (
+        "Use as registry-derived far-view context only; reopen clean source before claims."
+        if is_overview
+        else "Use as wayfinding only; verify exact claims against clean source."
+    )
+    source_boundary = dict(item.get("source_boundary") or {})
+    if is_overview:
+        source_boundary.setdefault("registry_derived_navigation_only", True)
+        source_boundary.setdefault("not_source_backed_route", True)
+        source_boundary.setdefault("source_reopen_required_for_claims", True)
     return with_card_provenance({
         "card_id": _stable_id([SCENT, theme, item.get("route_id")]),
         "theme": theme,
         "resonance": "medium",
         "support_level": SCENT,
         "visibility": ACTIVE_GENTLE_NUDGE,
-        "suggested_use": "Use as wayfinding only; verify exact claims against clean source.",
+        "suggested_use": suggested_use,
         "nudge": f"This may follow the route around {nudge_theme}.",
         "key_line": "",
         "matched_terms": _clean_terms(item.get("matched_cues") or item.get("route_cues") or []),
         "source_refs": [],
+        "source_boundary": source_boundary,
         "expand_if": "Use clean-source search if this route would change the answer.",
-    }, COGNITIVE_MAP_ROUTE)
+    }, provenance)
 
 
 def _continuity_domain_pointer_card(item: dict[str, Any]) -> dict[str, Any]:

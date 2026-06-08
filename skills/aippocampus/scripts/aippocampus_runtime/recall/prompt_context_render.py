@@ -653,15 +653,24 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             "For working-memory exact claims, reopen clean source; bounded_evidence can guide action within its declared scope."
         )
     if result.get("cognitive_map"):
-        lines.append("Cognitive map routes (DeepSeek subconscious direction_only wayfinding):")
+        lines.append("Cognitive map routes / registry overviews (direction_only wayfinding):")
         for item in result.get("cognitive_map") or []:
+            provenance = str(item.get("provenance_class") or item.get("kind") or "")
+            label = (
+                "registry overview"
+                if provenance == "cognitive_map_registry_overview"
+                else "source-backed route"
+            )
             cues = ", ".join(item.get("matched_cues") or item.get("route_cues") or [])
             landmarks = ", ".join(item.get("landmark_labels") or [])
             lines.append(
-                f"- {landmarks or item.get('title')}: cues {cues}; "
+                f"- [{label}] {landmarks or item.get('title')}: cues {cues}; "
                 f"threads {', '.join(item.get('thread_keys') or [])}"
             )
-        lines.append("Treat these as wayfinding only; verify exact or source-sensitive claims against clean source.")
+        lines.append(
+            "Treat these as wayfinding only; registry overviews are not source-backed routes, "
+            "and exact or source-sensitive claims still require clean-source reopen."
+        )
     ambient = result.get("ambient_recall") or {}
     ambient_cards = ambient.get("cards") or []
     if ambient_cards:
@@ -687,6 +696,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 provenance_note = "warm scout proposal"
             elif provenance == "cognitive_map_route":
                 provenance_note = "wayfinding route"
+            elif provenance == "cognitive_map_registry_overview":
+                provenance_note = "registry far-view overview"
             elif provenance == "source_backed_reopen":
                 provenance_note = "source-backed reopen candidate"
             elif provenance == "continuity_domain_pointer":
