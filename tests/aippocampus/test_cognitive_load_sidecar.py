@@ -10,7 +10,12 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import cognitive_load_sidecar as sidecar  # noqa: E402
+from aippocampus_runtime.recall import (  # noqa: E402
+    cognitive_load_private_calibration as private_calibration,
+)
+from aippocampus_runtime.recall import (
+    cognitive_load_sidecar as sidecar,
+)
 
 
 class CognitiveLoadSidecarTests(unittest.TestCase):
@@ -203,6 +208,120 @@ class CognitiveLoadSidecarTests(unittest.TestCase):
         self.assertNotIn("overwhelmed", serialized)
         self.assertNotIn("anxious personality", serialized)
         self.assertNotIn("source_refs", serialized)
+
+    def test_private_history_calibration_measures_clean_source_without_leaking_text(self) -> None:
+        messages = [
+            {
+                "message_id": "msg-private-correction",
+                "turn_id": "turn-private",
+                "source_id": "src-private",
+                "source_line": 19,
+                "timestamp": "2026-06-05T00:00:00Z",
+                "role": "user",
+                "text": (
+                    "不对，不要再走 OAuth fallback 路线；请重新查 source。"
+                    "C:\\Users\\Administrator\\secret\\private.md"
+                ),
+            },
+            {
+                "message_id": "msg-private-assistant",
+                "turn_id": "turn-private",
+                "source_id": "src-private",
+                "source_line": 20,
+                "role": "assistant",
+                "text": "I will not be serialized into the calibration report.",
+            },
+        ]
+        events = [
+            {
+                "event_id": "evt-private-failed-test",
+                "source_id": "src-private",
+                "source_line": 21,
+                "timestamp": "2026-06-05T00:02:00Z",
+                "hard_event_kind": "tool_call_failed",
+                "event_kind": "tool_call_observed",
+                "command_class": "test",
+                "failure_family": "assertion_failure",
+                "status": "failed",
+                "source_ref": "C:\\Users\\Administrator\\secret\\rollout.jsonl#L21",
+                "raw_command": "python secret_test.py",
+            }
+        ]
+
+        payload = private_calibration.build_private_history_cognitive_load_calibration(
+            messages,
+            events,
+            now="2026-06-06T00:00:00Z",
+            registry_metrics={"thread_count_scanned": 1, "threads_with_signal_count": 1},
+        )
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(payload["status"], "measured_public_safe_aggregate")
+        self.assertEqual(payload["input_surface"]["thread_count_scanned"], 1)
+        self.assertEqual(payload["input_surface"]["threads_with_signal_count"], 1)
+        self.assertGreaterEqual(payload["extraction_metrics"]["signal_event_count"], 3)
+        self.assertGreater(payload["sidecar_projection"]["entry_count"], 0)
+        self.assertIn(
+            "user_correction",
+            payload["extraction_metrics"]["signal_kind_counts"],
+        )
+        self.assertIn(
+            "explicit_pitfall_marker",
+            payload["extraction_metrics"]["signal_kind_counts"],
+        )
+        self.assertIn(
+            "failed_test",
+            payload["extraction_metrics"]["signal_kind_counts"],
+        )
+        readout = payload["issue_readouts"]["github_575"]
+        self.assertEqual(
+            readout["private_real_history_calibration"],
+            "measured_public_safe_aggregate",
+        )
+        self.assertEqual(readout["live_hook_capture"], "not_run")
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertNotIn(
+            "private_real_history_calibration",
+            payload["calibration_report"]["cannot_claim"],
+        )
+        self.assertIn(
+            "user_visible_recall_improvement",
+            payload["calibration_report"]["cannot_claim"],
+        )
+
+        self.assertFalse(payload["privacy_boundary"]["raw_private_text_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["raw_source_refs_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["local_paths_emitted"])
+        self.assertNotIn("OAuth fallback", encoded)
+        self.assertNotIn("C:\\Users\\Administrator", encoded)
+        self.assertNotIn("secret_test.py", encoded)
+        self.assertNotIn("rollout.jsonl", encoded)
+        self.assertNotIn("I will not be serialized", encoded)
+
+    def test_private_history_calibration_handles_no_signal_scan_without_false_closeout(
+        self,
+    ) -> None:
+        payload = private_calibration.build_private_history_cognitive_load_calibration(
+            [
+                {
+                    "message_id": "msg-ordinary",
+                    "turn_id": "turn-ordinary",
+                    "source_id": "src-ordinary",
+                    "role": "user",
+                    "text": "Ordinary implementation update with no load marker.",
+                }
+            ],
+            [],
+            now="2026-06-06T00:00:00Z",
+            registry_metrics={"thread_count_scanned": 1},
+        )
+
+        self.assertEqual(payload["status"], "measured_no_signals")
+        self.assertEqual(payload["extraction_metrics"]["signal_event_count"], 0)
+        self.assertEqual(payload["sidecar_projection"]["entry_count"], 0)
+        readout = payload["issue_readouts"]["github_575"]
+        self.assertEqual(readout["private_real_history_calibration"], "measured_no_signals")
+        self.assertFalse(readout["closeout_eligible"])
 
 
 if __name__ == "__main__":

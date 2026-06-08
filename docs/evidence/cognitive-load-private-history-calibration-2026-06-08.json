@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_cognitive_load_private_history_calibration_evidence",
+  "local_evidence_date": "2026-06-08",
+  "status": "measured_public_safe_aggregate",
+  "checked_in_payload": "aggregate_only",
+  "privacy_boundary": {
+    "raw_private_text_emitted": false,
+    "raw_source_refs_emitted": false,
+    "local_paths_emitted": false,
+    "raw_command_text_emitted": false,
+    "raw_feedback_text_emitted": false,
+    "thread_ids_emitted": false,
+    "message_ids_emitted": false
+  },
+  "input_surface": {
+    "source": "thread_registry_clean_source",
+    "thread_count_scanned": 100,
+    "threads_with_signal_count": 76,
+    "missing_clean_source_count": 2,
+    "message_rows_scanned": 5268,
+    "event_rows_scanned": 82695,
+    "bad_jsonl_row_count": 0
+  },
+  "extraction_metrics": {
+    "signal_event_count": 26505,
+    "message_signal_event_count": 1082,
+    "behavior_signal_event_count": 25423,
+    "source_reopen_signal_count": 126,
+    "pitfall_repetition_signal_count": 469,
+    "signal_kind_counts": {
+      "explicit_pitfall_marker": 149,
+      "failed_command": 19803,
+      "failed_test": 5620,
+      "high_risk_action_repaired": 247,
+      "human_intervention": 202,
+      "rejected_route_retry": 161,
+      "source_conflict": 124,
+      "user_correction": 199
+    }
+  },
+  "sidecar_metrics": {
+    "entry_count": 26035,
+    "max_load_boost": 0.16,
+    "load_weight_decay_coverage": 1.0,
+    "high_load_source_reopen_rate": 0.004754,
+    "pitfall_repetition_rate_after_high_load_signal": 0.017695,
+    "load_weight_false_positive_rate": null,
+    "caution_hint_useful_rate": null,
+    "overpersonalization_from_load_signal_count": 0
+  },
+  "sidecar_projection": {
+    "load_bucket_counts": {
+      "high": 98,
+      "low": 25762,
+      "medium": 175
+    },
+    "reason_code_counts": {
+      "explicit_pitfall_marker": 149,
+      "failed_command": 19803,
+      "failed_test": 5620,
+      "high_risk_action_repaired": 247,
+      "human_intervention": 202,
+      "rejected_route_retry": 161,
+      "source_conflict": 124,
+      "user_correction": 199
+    }
+  },
+  "issue_readouts": {
+    "github_575": {
+      "calibration_report": "deterministic_public_safe",
+      "load_routing_weight": "measured_as_bounded_score_delta",
+      "affect_or_personality_truth": "blocked_not_inferred",
+      "live_hook_capture": "not_run",
+      "private_real_history_calibration": "measured_public_safe_aggregate",
+      "host_timing_quality": "not_measured",
+      "closeout_eligible": false
+    }
+  },
+  "cannot_claim": [
+    "live_delivered_host_timing",
+    "host_timing_quality",
+    "load_weight_false_positive_rate",
+    "caution_hint_usefulness",
+    "user_visible_recall_improvement",
+    "source_truth_from_load_signal",
+    "semantic_relevance_from_load_signal",
+    "affect_or_personality_truth_from_load_signal"
+  ]
+}

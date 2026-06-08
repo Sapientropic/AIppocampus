@@ -290,9 +290,17 @@ def build_cognitive_load_sidecar(
 def build_cognitive_load_calibration_report(
     sidecar: Mapping[str, Any],
     ranked_candidates: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    private_history_calibration: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     metrics = _as_mapping(sidecar.get("metrics"))
     privacy_boundary = _as_mapping(sidecar.get("privacy_boundary"))
+    private_history = _as_mapping(private_history_calibration)
+    private_history_status = str(private_history.get("status") or "not_measured")
+    private_history_measured = private_history_status in {
+        "measured_public_safe_aggregate",
+        "measured_no_signals",
+    }
     candidate_rows = list(ranked_candidates) if ranked_candidates is not None else []
     boosted_candidate_count = sum(
         1
@@ -311,12 +319,13 @@ def build_cognitive_load_calibration_report(
             "source_reopen_recommended"
         )
     )
-    cannot_claim = sorted(
-        {
-            *[str(item) for item in _as_list(sidecar.get("cannot_claim"))],
-            *CALIBRATION_CANNOT_CLAIM,
-        }
-    )
+    cannot_claim_values = {
+        *[str(item) for item in _as_list(sidecar.get("cannot_claim"))],
+        *CALIBRATION_CANNOT_CLAIM,
+    }
+    if private_history_measured:
+        cannot_claim_values.discard("private_real_history_calibration")
+    cannot_claim = sorted(cannot_claim_values)
 
     return {
         "schema_version": 1,
@@ -352,6 +361,16 @@ def build_cognitive_load_calibration_report(
                 ),
                 "raw_stress_narrative_stored": False,
             },
+            "private_history_calibration": {
+                "status": private_history_status,
+                "input_surface": str(private_history.get("input_surface") or "not_measured"),
+                "thread_count_scanned": int(private_history.get("thread_count_scanned") or 0),
+                "message_rows_scanned": int(private_history.get("message_rows_scanned") or 0),
+                "event_rows_scanned": int(private_history.get("event_rows_scanned") or 0),
+                "signal_event_count": int(private_history.get("signal_event_count") or 0),
+                "raw_private_text_emitted": False,
+                "local_paths_emitted": False,
+            },
         },
         "metrics": {
             "entry_count": int(metrics.get("entry_count") or 0),
@@ -379,7 +398,7 @@ def build_cognitive_load_calibration_report(
                 "load_routing_weight": "measured_as_bounded_score_delta",
                 "affect_or_personality_truth": "blocked_not_inferred",
                 "live_hook_capture": "not_run",
-                "private_real_history_calibration": "not_measured",
+                "private_real_history_calibration": private_history_status,
                 "host_timing_quality": "not_measured",
                 "closeout_eligible": False,
             }

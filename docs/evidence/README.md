@@ -40,7 +40,8 @@ provenance, but it is not the canonical status page. Prefer current claims and
 stage readiness for present-tense claims, then reopen this ledger when you need
 the dated source trail.
 
-Dated benchmark, Dream, question, security, and architecture-debt reports stay
-near their evidence family so old issue links and audit paths keep working.
-Treat `*-2026-*.md` and paired `.json` reports as historical or dated evidence
-unless the current-claims snapshot explicitly promotes them.
+Dated benchmark, Dream, question, cognitive-load, security, and
+architecture-debt reports stay near their evidence family so old issue links and
+audit paths keep working. Treat `*-2026-*.md` and paired `.json` reports as
+historical or dated evidence unless the current-claims snapshot explicitly
+promotes them.

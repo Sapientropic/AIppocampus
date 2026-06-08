@@ -291,6 +291,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/authority.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_private_calibration.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_sidecar.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_activation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_action.py",
