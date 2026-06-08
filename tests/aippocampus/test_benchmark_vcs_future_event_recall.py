@@ -656,6 +656,169 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
 
         self.assertIn("temporal_override_chain", payload["source_disambiguation"]["by_track"])
 
+    def test_source_disambiguation_suppresses_lexical_near_miss_subtypes(self) -> None:
+        rows = [
+            {
+                "dataset_id": "unit_source_disambiguation_near_miss",
+                "schema_version": 1,
+                "license": "CC0-1.0",
+                "project_id": "near-miss-subtypes",
+                "source_family": "unit_adversarial",
+                "past_window": [
+                    {
+                        "source_id": "stale-current-source",
+                        "kind": "old_decision_source",
+                        "text": "Old source says the current override was rejected earlier.",
+                    },
+                    {
+                        "source_id": "wrong-stance-source",
+                        "kind": "pull_request_metadata",
+                        "text": "Merged PR vocabulary says the route is supported.",
+                    },
+                    {
+                        "source_id": "lexical-recap-source",
+                        "kind": "assistant_message",
+                        "text": "Recap of similar route words without source-backed evidence.",
+                    },
+                ],
+                "future_window": [
+                    {
+                        "event_id": "near-miss-stale-current",
+                        "family": "reopen_condition",
+                        "hard_event_kind": "pull_request_merged",
+                        "flag_worthy": False,
+                        "text": "Stale-current near-miss: old source vocabulary is not support for a current rule.",
+                        "required_past_source_ids": [],
+                    },
+                    {
+                        "event_id": "near-miss-wrong-stance",
+                        "family": "workaround_rationale",
+                        "hard_event_kind": "pull_request_rejected",
+                        "flag_worthy": False,
+                        "text": "Wrong-stance near-miss: same token vocabulary but opposite stance, not support.",
+                        "required_past_source_ids": [],
+                    },
+                    {
+                        "event_id": "near-miss-lexical-recap",
+                        "family": "rejected_route",
+                        "hard_event_kind": "commit_reverted",
+                        "flag_worthy": False,
+                        "text": "Lexical recap near-miss: summary-like wording without source-backed condition.",
+                        "required_past_source_ids": [],
+                    },
+                ],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "source-disambiguation-near-miss.jsonl"
+            fixture.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                dataset_path=fixture,
+                production_like_retrieval=True,
+                source_disambiguation_top_k=1,
+            )
+
+        metrics = payload["source_disambiguation"]["metrics"]
+        self.assertEqual(metrics["negative_false_positive_rate"], 0.0)
+        self.assertEqual(metrics["hard_negative_suppression_rate"], 1.0)
+        self.assertEqual(
+            payload["source_disambiguation"]["negative_subtypes"],
+            {
+                "lexical_recap_lure": {
+                    "event_count": 1,
+                    "false_positive_count": 0,
+                    "suppressed_count": 1,
+                    "suppression_rate": 1.0,
+                },
+                "stale_current_lure": {
+                    "event_count": 1,
+                    "false_positive_count": 0,
+                    "suppressed_count": 1,
+                    "suppression_rate": 1.0,
+                },
+                "wrong_stance_lure": {
+                    "event_count": 1,
+                    "false_positive_count": 0,
+                    "suppressed_count": 1,
+                    "suppression_rate": 1.0,
+                },
+            },
+        )
+        by_event = {
+            row["event_id"]: row for row in payload["source_disambiguation"]["events"]
+        }
+        self.assertEqual(by_event["near-miss-stale-current"]["hard_negative_subtype"], "stale_current_lure")
+        self.assertEqual(by_event["near-miss-wrong-stance"]["hard_negative_subtype"], "wrong_stance_lure")
+        self.assertEqual(by_event["near-miss-lexical-recap"]["hard_negative_subtype"], "lexical_recap_lure")
+        for row in by_event.values():
+            self.assertEqual(row["route_actionability"]["decision"], "suppress")
+            self.assertFalse(row["negative_false_positive"])
+
+    def test_hard_negative_subtype_ignores_grader_fields(self) -> None:
+        event = {
+            "event_id": "near-miss-grader-boundary",
+            "family": "reopen_condition",
+            "hard_event_kind": "pull_request_merged",
+            "flag_worthy": False,
+            "expected_signal": "ignore_me",
+            "text": "Wrong-stance near-miss: same token vocabulary but opposite stance, not support.",
+            "required_past_source_ids": [],
+        }
+        altered = {
+            **event,
+            "flag_worthy": True,
+            "expected_signal": "different_grader_label",
+            "required_past_source_ids": ["current-source"],
+        }
+
+        self.assertEqual(
+            benchmark.hard_negative_subtype_for_event(event),
+            benchmark.hard_negative_subtype_for_event(altered),
+        )
+
+    def test_source_disambiguation_keeps_positive_near_miss_without_lure_cue(self) -> None:
+        row = {
+            "dataset_id": "unit_source_disambiguation_positive_near_miss",
+            "schema_version": 1,
+            "license": "CC0-1.0",
+            "project_id": "positive-near-miss",
+            "source_family": "unit_adversarial",
+            "past_window": [
+                {
+                    "source_id": "current-source",
+                    "kind": "current_decision",
+                    "text": "The current effective route records a near-miss follow-up as active.",
+                }
+            ],
+            "future_window": [
+                {
+                    "event_id": "positive-near-miss",
+                    "family": "reopen_condition",
+                    "hard_event_kind": "pull_request_merged",
+                    "flag_worthy": True,
+                    "text": "Near-miss follow-up keeps the current effective route active.",
+                    "required_past_source_ids": ["current-source"],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "positive-near-miss.jsonl"
+            fixture.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+            payload = benchmark.run_benchmark(
+                dataset_path=fixture,
+                production_like_retrieval=True,
+            )
+
+        self.assertTrue(payload["ok"], payload)
+        event = payload["source_disambiguation"]["events"][0]
+        self.assertEqual(event["hard_negative_subtype"], "")
+        self.assertEqual(event["route_candidate_reason"], "route_candidate")
+        self.assertEqual(event["route_actionability"]["decision"], "flag")
+
     def test_rollout_route_chain_readout_separates_retrieval_from_actionability(self) -> None:
         payload = benchmark.run_benchmark(
             dataset_path=ROLLOUT_DATASET,

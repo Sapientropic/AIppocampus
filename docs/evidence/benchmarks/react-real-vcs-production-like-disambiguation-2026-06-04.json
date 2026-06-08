@@ -2,6 +2,7 @@
   "schema_version": 1,
   "kind": "aippocampus_react_real_vcs_production_like_source_disambiguation_measurement",
   "report_date": "2026-06-04",
+  "measurement_date": "2026-06-09",
   "repository": "facebook/react",
   "repository_url": "https://github.com/facebook/react",
   "dataset_id": "react_real_vcs_adversarial_v2_2026_05_31",
@@ -9,9 +10,9 @@
   "local_artifacts": {
     "fixture_path_sha1": "2cf7f1eab91881ff",
     "event_metadata_path_sha1": "2244d31ae84b83b0",
-    "full_report_path": ".tmp/react-real-vcs-adversarial-v2/react-adversarial-v2-production-like-retrieval-report.json"
+    "full_report_path": ".tmp/react-real-vcs-adversarial-v2/react-adversarial-v2-production-like-retrieval-report-after-961.json"
   },
-  "command": "python benchmarks\\aippocampus\\benchmark_vcs_future_event_recall.py --dataset .tmp\\react-real-vcs-adversarial-v2\\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\\react-real-vcs-adversarial-v2\\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --output .tmp\\react-real-vcs-adversarial-v2\\react-adversarial-v2-production-like-retrieval-report.json --json",
+  "command": "python benchmarks\\aippocampus\\benchmark_vcs_future_event_recall.py --dataset .tmp\\react-real-vcs-adversarial-v2\\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\\react-real-vcs-adversarial-v2\\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --output .tmp\\react-real-vcs-adversarial-v2\\react-adversarial-v2-production-like-retrieval-report-after-961.json --json",
   "claim_levels": {
     "source_window_oracle_contract": {
       "available": false,
@@ -29,14 +30,14 @@
   "overall_metrics": {
     "future_event_gold_count": 60,
     "non_flag_future_event_count": 57,
-    "predicted_flag_count": 90,
+    "predicted_flag_count": 60,
     "true_positive_count": 60,
     "false_negative_count": 0,
-    "false_positive_count": 30,
+    "false_positive_count": 0,
     "future_event_flag_recall_rate": 1.0,
-    "future_event_flag_precision": 0.6667,
-    "future_event_flag_f1": 0.8,
-    "anti_drift_pass_rate": 0.4737,
+    "future_event_flag_precision": 1.0,
+    "future_event_flag_f1": 1.0,
+    "anti_drift_pass_rate": 1.0,
     "source_support_failure_count": 0
   },
   "source_disambiguation_metrics": {
@@ -49,7 +50,11 @@
     "current_vs_stale_pairwise_win_rate": 1.0,
     "stale_source_top_k_rate": 0.0,
     "wrong_source_evidence_rate": 0.0,
-    "negative_false_positive_rate": 0.5263,
+    "hard_negative_event_count": 30,
+    "hard_negative_suppressed_count": 30,
+    "hard_negative_suppression_rate": 1.0,
+    "foreground_action_false_positive_count": 0,
+    "negative_false_positive_rate": 0.0,
     "current_vs_stale_pairwise_wins": 51,
     "current_vs_stale_pairwise_comparisons": 51
   },
@@ -87,8 +92,10 @@
     },
     "lexical_near_miss_anti_drift": {
       "non_flag_event_count": 30,
-      "negative_false_positive_rate": 1.0,
-      "false_positive_count": 30
+      "negative_false_positive_rate": 0.0,
+      "false_positive_count": 0,
+      "hard_negative_suppressed_count": 30,
+      "hard_negative_suppression_rate": 1.0
     },
     "behavior_narrative_negative": {
       "non_flag_event_count": 9,
@@ -101,11 +108,20 @@
       "false_positive_count": 0
     }
   },
+  "hard_negative_subtypes": {
+    "lexical_near_miss_lure": {
+      "event_count": 30,
+      "false_positive_count": 0,
+      "suppressed_count": 30,
+      "suppression_rate": 1.0
+    }
+  },
   "failure_categories": {
-    "lexical_near_miss_false_positive_count": 30,
+    "lexical_near_miss_false_positive_count": 0,
+    "lexical_near_miss_suppressed_count": 30,
     "source_selection_failure_count": 0,
     "missed_current_source_count": 0,
-    "negative_false_positive_count": 30
+    "negative_false_positive_count": 0
   },
   "input_contract": {
     "ranking_input_fields": [
@@ -128,7 +144,6 @@
     "license_safe_redistributable_fixture_corpus",
     "private_real_history_continuity_quality",
     "wild_vcs_corpus_quality",
-    "negative_control_pass_for_lexical_near_miss_track",
     "source_window_oracle_contract_score"
   ]
 }
