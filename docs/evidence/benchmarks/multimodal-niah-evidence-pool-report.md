@@ -23,6 +23,12 @@ Each NIAH row records:
 - `ground_truth_evidence_ids`;
 - distractor evidence ids;
 - a deterministic shuffled `pool_evidence_ids` list;
+- optional `input_selected_evidence_ids` and `input_cited_source_anchor_ids`
+  when the fixture preserves a stale or weaker initial answerer choice for
+  conflict-resolution repair;
+- sanitized conflict-resolution decision fields such as `selection_decision`,
+  `currentness_decision`, `selection_reason_codes`, and
+  `needs_source_reopen`;
 - sanitized scoring-state fields for the deterministic contract smoke.
 
 The agent-visible prompt boundary excludes ground-truth ids, expected answers,
@@ -33,7 +39,7 @@ answer correctness flags, failure-mode labels, and hidden scoring metadata.
 | Query shape | What it tests |
 | --- | --- |
 | Personalized reference | The right image source must be selected from a small pool with nearby media/text distractors. |
-| Conflict resolution | The correct final-bill source is in the pool, but the fixture includes a deliberate stale-source failure. |
+| Conflict resolution | The correct final-bill source is in the pool; stale input choices must be repaired only when source metadata supports currentness, otherwise the answer should request source reopen. |
 | Cross-modal join | Calendar/location and receipt sources must both be selected from a medium pool. |
 | Unsupported detail | Related visual evidence is present, but the requested detail is unsupported, so the answer abstains. |
 
@@ -44,23 +50,29 @@ python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --json
 python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --source-reopen-mode deterministic_fixture --json
 ```
 
-Latest local deterministic run on 2026-06-03:
+Latest local deterministic run on 2026-06-09:
 
 - `status=fixture_contract_scored`
 - `ok=true`
 - `pool_ground_truth_coverage_rate=1.0`
-- `answer_correctness=0.75`
-- `source_selection_accuracy=0.75`
-- `source_anchor_citation_accuracy=0.75`
+- `answer_correctness=1.0`
+- `source_selection_accuracy=1.0`
+- `source_anchor_citation_accuracy=1.0`
 - `unsupported_claim_rate=0.0`
 - `abstention_accuracy=1.0`
-- `stale_or_conflicting_distractor_selection_rate=1.0`
+- `stale_or_conflicting_distractor_selection_rate=0.0`
+- `needs_source_reopen_rate=0.0`
+- `input_stale_or_conflicting_distractor_selection_count=1`
+- `current_source_selected_count=1`
+- `needs_source_reopen_count=0`
 
-The non-perfect answer/source-selection metrics are intentional. The fixture
-contains one expected failure where the correct final-bill source is present in
-the pool, but the deterministic answerer selects the stale conflicting source.
-That proves this slice catches reasoning/selection failures, not only missing
-retrieval.
+The conflict row preserves the old stale input choice as
+`input_selected_evidence_ids`, then runs a deterministic source-metadata
+decision step. In the final-bill case the current source is identifiable by
+captured time plus authority metadata, so the selected source becomes the final
+bill and the stale/conflicting distractor selection count drops to 0. A
+regression negative control covers the opposite boundary: when currentness is
+ambiguous, the decision step emits `needs_source_reopen` instead of guessing.
 
 This is a small-N contract smoke over four synthetic QA rows with pool sizes
 3, 4, and 5. Treat the Wilson intervals in the JSON report as uncertainty
@@ -76,6 +88,8 @@ Can claim:
 - reports separate answer correctness, source selection, source-anchor
   citation, unsupported claims, abstention, and stale/conflicting distractor
   selection;
+- conflict-resolution decisions expose the old input selection, final selected
+  source ids, currentness reason codes, and `needs_source_reopen` counts;
 - deterministic source-reopen mode verifies original source anchors without
   calling a live provider.
 
