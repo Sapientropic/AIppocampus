@@ -20,11 +20,11 @@ from typing import Any
 
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
-from aippocampus_runtime.ops import issue_route_quality
+from aippocampus_runtime.ops import issue_route_quality, reopen_follow_through
 from aippocampus_runtime.recall.authority import trust_taxonomy
 
 COMPARISON_KIND = "aippocampus_recall_navigation_comparison"
-COMPARISON_SCHEMA_VERSION = 3
+COMPARISON_SCHEMA_VERSION = 4
 ARM_DIRECT = "direct_search"
 ARM_HOOK = "hook_only"
 ARM_PROGRESSIVE = "progressive_recall"
@@ -146,6 +146,7 @@ def _run_direct_search(
         "rejection_stage": "" if success else ("search" if error_code else "no_match"),
         "time_to_first_useful_source_observed_ms": elapsed if success else None,
         "input_token_proxy": sum(len(query.split()) for query in queries[:manual_queries]),
+        **reopen_follow_through.no_reopen_diagnostics(),
     }
 
 
@@ -174,6 +175,7 @@ def _run_hook_only(case: Mapping[str, Any]) -> dict[str, Any]:
         "rejection_stage": "hook_card_only" if not has_source else "",
         "time_to_first_useful_source_observed_ms": None,
         "input_token_proxy": int(hook.get("token_proxy") or 1),
+        **reopen_follow_through.no_reopen_diagnostics(),
     }
 
 
@@ -223,6 +225,7 @@ def _run_progressive_recall(
             "rejection_stage": "context",
             "time_to_first_useful_source_observed_ms": None,
             "input_token_proxy": len(str(case.get("intent") or "").split()),
+            **reopen_follow_through.no_reopen_diagnostics("context_error"),
         }
     if selected_route is None:
         return {
@@ -244,6 +247,7 @@ def _run_progressive_recall(
             "rejection_stage": "context",
             "time_to_first_useful_source_observed_ms": None,
             "input_token_proxy": len(str(case.get("intent") or "").split()),
+            **reopen_follow_through.no_reopen_diagnostics("no_recall_deepen_route"),
         }
     if after_context is not None:
         after_context()
@@ -290,6 +294,14 @@ def _run_progressive_recall(
         "rejection_stage": "deepen" if deepen_error is not None else "",
         "time_to_first_useful_source_observed_ms": _elapsed_ms(start) if success else None,
         "input_token_proxy": len(str(case.get("intent") or "").split()),
+        **reopen_follow_through.reopen_diagnostics(
+            route_handle_present=bool(selected_route.get("handle")),
+            source_join_present=context_source_ref_count > 0,
+            source_reopen_attempted=True,
+            success=success,
+            error_code=error_code,
+            source_refs=source_refs,
+        ),
     }
 
 
@@ -309,7 +321,7 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         success_count = sum(1 for row in rows if row.get("source_backed_success"))
         actionable_count = sum(1 for row in rows if row.get("route_actionable"))
         reopen_attempt_count = sum(1 for row in rows if row.get("source_reopen_attempted"))
-        reopen_follow_count = sum(1 for row in rows if row.get("source_reopen_follow_through"))
+        reopen_stats = reopen_follow_through.aggregate_follow_through(rows)
         wrong_drag_count = sum(1 for row in rows if int(row.get("wrong_route_drag_count") or 0) > 0)
         scent_fact_count = sum(1 for row in rows if row.get("scent_as_fact_violation"))
         arms[arm] = {
@@ -318,10 +330,7 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "source_backed_success_rate": _ratio(success_count, total),
             "route_actionability_rate": _ratio(actionable_count, total),
             "source_reopen_attempt_count": reopen_attempt_count,
-            "source_reopen_follow_through_count": reopen_follow_count,
-            "source_reopen_follow_through_rate": _ratio(
-                reopen_follow_count, reopen_attempt_count
-            ),
+            **reopen_stats,
             "wrong_route_drag_count": wrong_drag_count,
             "wrong_route_drag_rate": _ratio(wrong_drag_count, total),
             "scent_as_fact_violation_count": scent_fact_count,
@@ -536,10 +545,7 @@ def _issue_readouts(
         "github_201": {
             "route_actionability_measured": True,
             "route_actionability_rate": progressive.get("route_actionability_rate", 0),
-            "source_reopen_follow_through_measured": True,
-            "source_reopen_follow_through_rate": progressive.get(
-                "source_reopen_follow_through_rate", 0
-            ),
+            **reopen_follow_through.issue_readout_fields(progressive),
             "foreground_lift_measured": foreground_measured,
             "default_foreground_first_turn_lift": foreground.get(
                 "first_turn_lift", "not_measured"
@@ -735,8 +741,9 @@ def build_recall_navigation_comparison(
                 "source-backed search result."
             ),
             "source_reopen_follow_through_rate": (
-                "Among attempted source-reopen actions from a route handle, the share that "
-                "reached the expected source-backed clean-source refs."
+                "Among eligible source-reopen actions from a route handle, the share that "
+                "reached the expected source-backed clean-source refs. Expected fail-closed "
+                "stale or blocked handles are counted separately by failure_class."
             ),
             "wrong_route_drag_rate": (
                 "Cases where stale/irrelevant routes caused verification work or were rejected "
@@ -841,7 +848,7 @@ def render_text(report: Mapping[str, Any]) -> str:
             + "; route actionable "
             + str(row.get("route_actionability_rate", 0))
             + "; source reopen follow-through "
-            + str(row.get("source_reopen_follow_through_rate", 0))
+            + reopen_follow_through.render_aggregate_summary(row)
             + "; avg manual queries "
             + str(row.get("avg_manual_query_invention_count", 0))
             + "; wrong-route drag "
