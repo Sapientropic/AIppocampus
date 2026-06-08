@@ -22,6 +22,7 @@ from aippocampus_runtime.recall.prompt_recall_budget import (
 )
 from aippocampus_runtime.recall.prompt_recall_core import EVIDENCE_LITE_MIN_PROBE_SCORE
 from aippocampus_runtime.recall.prompt_recall_evidence import collect_evidence
+from aippocampus_runtime.recall.prompt_route_blocks import memory_route_block_intent
 from aippocampus_runtime.recall.query_profile import classify_query_profile
 
 
@@ -43,6 +44,9 @@ def source_intent_evidence(
 ) -> list[dict[str, Any]]:
     semantic_wants_evidence = bool(semantic_gate_can_request_evidence(prompt, semantic_result))
     natural_wants_evidence = bool(natural_evidence or source_evidence)
+    if memory_route_block_intent(prompt):
+        reasons.append("memory route withheld: user blocked old or superseded route")
+        return []
     if negative_evidence_intent(prompt):
         reasons.append("evidence withheld: user requested scent-only context")
         return []
@@ -350,6 +354,9 @@ def _evidence_lite_continuation(
     max_elapsed_ms: int | None,
     reasons: list[str],
 ) -> list[dict[str, Any]]:
+    if memory_route_block_intent(prompt):
+        reasons.append("memory route withheld: user blocked old or superseded route")
+        return []
     if not (
         candidates
         and search_budget > 0

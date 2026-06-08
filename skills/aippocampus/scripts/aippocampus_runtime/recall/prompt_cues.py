@@ -11,6 +11,9 @@ from aippocampus_runtime.recall.life_cues import (
     LIFE_WIDE_SCOPE_LABEL_CUES,
     profile_recall_terms,
 )
+from aippocampus_runtime.recall.prompt_route_blocks import (
+    old_route_negation_has_later_source_request,
+)
 from aippocampus_runtime.recall.query_policy import RECALL_TRIGGERS, split_query_terms
 
 CONCEPT_EXPANSION_MAX_TERMS = 14
@@ -569,6 +572,8 @@ def source_evidence_intent(prompt: str) -> list[str]:
 def negative_evidence_intent(prompt: str) -> list[str]:
     text = str(prompt or "").strip()
     if not text:
+        return []
+    if old_route_negation_has_later_source_request(text):
         return []
     matches: list[str] = []
     for pattern in NEGATIVE_EVIDENCE_PATTERNS:
