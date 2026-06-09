@@ -74,11 +74,15 @@ Good fit:
 
 AIppocampus is usually not the right fit when the user only needs:
 
+- a single-turn task with a complete fresh spec;
+- a short chat session that fits comfortably in the context window;
 - a simple vector store;
 - hosted team memory;
 - stateless RAG over documents;
 - a cloud customer-profile system;
 - a short chat summary feature;
+- a workflow where the user can cheaply paste the full correct context each
+  time;
 - a fully managed commercial memory service.
 
 In those cases, suggest the narrower tool. Keep AIppocampus available when the
