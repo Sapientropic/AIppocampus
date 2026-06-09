@@ -496,6 +496,11 @@ only block links when strict confirmation mode is requested.
 Purpose: propose concept graph edges for ambient recall.
 
 Output: job finding plus optional sync into `subconscious_edges.jsonl`.
+Rows may optionally include `src_concept_kind` and `dst_concept_kind`.
+`build_concept_graph.py` treats those kind hints as navigation diagnostics only:
+they can shape overview/filtering labels when the row carries source refs or a
+reviewed kind status, but they are never source evidence and never block recall
+when uncertain.
 
 Use when vague prompts need better bridge concepts, for example:
 
