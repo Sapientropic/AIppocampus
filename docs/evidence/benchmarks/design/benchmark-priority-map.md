@@ -5,7 +5,7 @@ does not try to answer: which benchmark or smoke surface should a future agent
 prioritize, run, trust, or treat as diagnostic only?
 
 It is not a leaderboard, a numeric claim table, or another runner index. Keep
-current metric values, known negative results, remediation issues, and
+current metric values, confirmed scope boundaries, remediation issues, and
 supersession rules in [`../../current-claims.md`](../../current-claims.md),
 dated command evidence in
 [`../../readiness/public-readiness-verification.md`](../../readiness/public-readiness-verification.md),
@@ -101,7 +101,7 @@ what future agents can safely generate or compare.
 | Multimodal | `benchmark_multimodal_niah_evidence_pool.py` | supplied-pool answer-synthesis contract | implemented | P2 | full benchmark / direct runner | contract_smoke | Confusing supplied-pool synthesis with retrieval | ATM-Bench retrieval score | #533, #964 |
 | External memory benchmark | `benchmark_longmemeval.py` | LongMemEval V1 retrieval-only source/session evidence | dated_evidence | P1 | optional local with dataset download | public_safe_claim for bounded V1 retrieval | External long-memory retrieval regressions | QA answer quality, V2 quality, SOTA | #259 |
 | External memory benchmark | `benchmark_longmemeval_v2_context.py` | LongMemEval-V2 context-mapping pilot | diagnostic_only | P1 | optional local with dataset files | diagnostic_proxy | Claiming V2 score without evidence labels | R@K/MRR, LAFS, answer accuracy | #259 |
-| External memory benchmark | `benchmark_amemgym.py` / `benchmark_amemgym_official.py` | AMemGym metadata, source-backed overlay smoke, official bridge, and full `local-scripted` official-output protocol run | protocol_evidence | P1 | benchmark-smoke; optional public JSON download; optional local official bridge | diagnostic_proxy | Collapsing native accuracy, diagnosis, utilization, source fidelity, and protocol-only output values into one score | Live-model official AMemGym score or baseline parity | #733 / #742 / #958 |
+| External memory benchmark | `benchmark_amemgym.py` / `benchmark_amemgym_official.py` | AMemGym metadata, source-backed overlay smoke, official bridge, full `local-scripted` official-output protocol run, and dated live-provider blocker note | protocol_evidence_blocked_live | P1 | benchmark-smoke; optional public JSON download; optional local official bridge | diagnostic_proxy | Collapsing native accuracy, diagnosis, utilization, source fidelity, and protocol-only output values into one score | Live-model official AMemGym score or baseline parity until bounded live-provider execution and cost extraction exist | #733 / #742 |
 | External memory benchmark | `benchmark_memoryagentbench.py` | MemoryAgentBench metadata, case-pack, Stage 3 dry-run | scaffold | P1 | deterministic smoke; optional local dataset | diagnostic_proxy | Collapsing incremental memory into static retrieval | Official score or compatibility claim | #608, #614, #694 |
 | External memory benchmark | `benchmark_locomo_public_users.py` | LoCoMo same-conversation evidence retrieval control | implemented | P2 | optional local dataset | diagnostic_proxy | Same-conversation evidence-id scorer drift | Cross-thread/life-wide memory proof | none |
 | External memory benchmark | `benchmark_locomo_answer_usefulness.py` | LoCoMo answer-usefulness prototype layers | scaffold | P2 | optional local with fixed answer model | diagnostic_proxy | Blending retrieval, generation, citation, and judge layers | SOTA or broad answer quality | #400 |

@@ -1,9 +1,10 @@
 # AMemGym Adapter Boundary
 
-This page is the AIppocampus evidence owner for GitHub #733/#742 and the #958
-official-runner remediation path. It records what the AMemGym adapter can
-inspect today, what source-backed overlay metrics mean, and what remains out of
-scope before any official or comparative score can be quoted.
+This page is the AIppocampus evidence owner for GitHub #733/#742 and the
+official-runner boundary closed by the 2026-06-09 #958 blocker note. It records
+what the AMemGym adapter can inspect today, what source-backed overlay metrics
+mean, and what remains out of scope before any official or comparative score can
+be quoted.
 
 Decision: suitable as a staged external benchmark adapter, but not as an
 official full-`v1.base` score claim yet. The repository now has a deterministic,
@@ -381,12 +382,17 @@ Cannot claim now:
 
 ## Deferred Work
 
-Full official-runner evidence is tracked by #958. That follow-up slice should
-run the full public `v1.base` fixed arms, record model/provider versions,
-extracts cost/latency from raw local official outputs, and then decides whether
-to add Native/RAG/AWI/AWE parity arms without leaking raw rows, model outputs,
-or keys. The semantic-sidecar arm also needs a real pre-score worker materializer
-that writes reviewed working-memory/semantic sidecar artifacts before
+The 2026-06-09 blocker note
+[`amemgym-official-live-provider-blocker-2026-06-09.md`](amemgym-official-live-provider-blocker-2026-06-09.md)
+closes #958 as the ownerless deferred slice. Full live-provider official-runner
+evidence remains blocked until a later dated note records a bounded/resumable
+full public `v1.base` fixed arm, pinned model/provider versions, complete
+`overall` / `upperbound` / `random` outputs, sanitized cost/latency, and an
+explicit Native/RAG/AWI/AWE parity decision without leaking raw rows, model
+outputs, local paths, or keys.
+
+The semantic-sidecar arm also needs a real pre-score worker materializer that
+writes reviewed working-memory/semantic sidecar artifacts before
 `answer_question`; otherwise the official adapter must continue reporting the
 degraded clean-source boundary.
 
