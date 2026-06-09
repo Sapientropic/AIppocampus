@@ -22,8 +22,10 @@ competitor scorecard or leaderboard.
 ## What Was Demonstrated
 
 The synthetic Track A/C benchmark surface now emits a `memory_pain_fixtures`
-summary plus a `memory_hygiene_fixtures` report for #990's multi-turn
-stale/update/delete/dedup boundary. The covered public-safe families are:
+summary, an `auto_hook_pollution_fixtures` report for #986's transcript /
+write-path pollution boundary, and a `memory_hygiene_fixtures` report for
+#990's multi-turn stale/update/delete/dedup boundary. The covered public-safe
+families are:
 
 - `write_time_pollution`
 - `recalled_context_feedback_loop`
@@ -61,6 +63,13 @@ not clean-source evidence:
 - invalid structured extraction
 - incomplete compaction continuity claims
 
+The #986 auto-hook pollution report adds six synthetic transcript/write-path
+cases: boot/system text, tool traces, recalled-context echoes, empty messages
+with run ids, transient task state, and agent/host metadata. Each case is
+bounded to `direction_only` or `ignore_or_blocked`, with zero durable writes,
+zero bounded evidence, zero source-backed facts, and no raw event text in the
+default report.
+
 The #990 hygiene report adds six synthetic multi-turn rows covering current,
 stale, superseded, duplicate, suppressed, and fuzzy-navigation surfaces.
 Duplicate memories collapse in display/ranking while source provenance hashes
@@ -97,6 +106,11 @@ duplicate-collapse/provenance metrics, and `cannot_claim` boundaries, but not
 raw timeline text or source-ref values unless private debug is explicitly
 enabled.
 
+For #986, the same runner emits `auto_hook_pollution_fixtures`. It covers
+transcript/write-path and lifecycle-like envelopes while preserving the claim
+boundary that this is not a live hook-write quality measurement and not a
+competitor behavior claim.
+
 ## Reproduce
 
 Run from the repository root:
@@ -122,6 +136,9 @@ audited, provenance-linked sample.
   promoting unsupported rows to evidence.
 - Duplicate display/ranking can collapse while source provenance remains
   retained.
+- Synthetic auto-hook pollution fixtures prove boot text, tool traces,
+  recalled echoes, empty/run-id envelopes, transient task state, and host
+  metadata remain below source-backed fact/evidence authority.
 - Source-free memory-pain statements without route, source request, or
   continuation intent may be correctly skipped rather than surfaced as scent.
 - The payload layer keeps the memory-pain fixture family free of privacy
@@ -142,3 +159,6 @@ audited, provenance-linked sample.
   sidecar, or vector neighbor is source truth.
 - No live online-learning, physical source deletion, or full evidence drawer UX
   claim from the #990 synthetic hygiene report.
+- No live AgentMemory/Mem0 behavior, full lifecycle write-path filter quality,
+  or durable memory-write implementation claim from the #986 synthetic
+  auto-hook pollution report.

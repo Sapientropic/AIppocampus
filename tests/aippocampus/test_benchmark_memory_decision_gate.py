@@ -410,6 +410,48 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertTrue(hygiene["privacy_boundary"]["raw_timeline_text_emitted"])
         self.assertTrue(any("private_timeline_text" in case for case in hygiene["cases"]))
 
+    def test_synthetic_gate_benchmark_exposes_auto_hook_pollution_fixtures(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        report = payload["auto_hook_pollution_fixtures"]
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(metrics["case_count"], 6)
+        self.assertEqual(metrics["durable_memory_write_count"], 0)
+        self.assertEqual(metrics["bounded_evidence_count"], 0)
+        self.assertEqual(metrics["source_backed_fact_count"], 0)
+        self.assertEqual(metrics["recalled_echo_reextraction_count"], 0)
+        self.assertEqual(metrics["empty_message_memory_count"], 0)
+        self.assertGreaterEqual(metrics["echo_case_count"], 1)
+        self.assertGreaterEqual(metrics["empty_run_id_case_count"], 1)
+        self.assertEqual(metrics["at_most_direction_only_count"], metrics["case_count"])
+        self.assertLessEqual(
+            {
+                "boot_or_system_text",
+                "tool_trace_user_like_text",
+                "recalled_context_feedback_loop",
+                "empty_message_run_id",
+                "transient_task_state",
+                "agent_or_host_metadata",
+            },
+            set(metrics["pollution_family_counts"]),
+        )
+        self.assertFalse(report["privacy_boundary"]["raw_event_text_emitted"])
+        self.assertIn("live_agentmemory_or_mem0_behavior", payload["cannot_claim"])
+        for case in report["cases"]:
+            self.assertTrue(case["passed"], case)
+            self.assertNotIn("raw_event_text", case)
+            self.assertEqual(case["public_pain_family"], "write_time_pollution")
+            self.assertIn(case["action_grammar"], {"direction_only", "ignore_or_blocked"})
+
+    def test_auto_hook_pollution_private_event_text_is_explicit(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=True)
+        report = payload["auto_hook_pollution_fixtures"]
+
+        self.assertTrue(report["privacy_boundary"]["raw_event_text_emitted"])
+        self.assertTrue(any("raw_event_text" in case for case in report["cases"]))
+
     def test_plain_implementation_twins_do_not_use_negative_evidence_as_scent(self) -> None:
         payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
         plain_tasks = [
