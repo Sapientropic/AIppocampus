@@ -35,7 +35,7 @@ from aippocampus_runtime.registry.api import (
 )
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
-from aippocampus_runtime.source.search import iter_clean_messages, score_message
+from aippocampus_runtime.source.search import iter_clean_messages
 from aippocampus_runtime.source.semantic_scope_labels import (
     load_semantic_scope_labels,
     merged_scope_labels,
@@ -364,15 +364,31 @@ def dynamic_term_idf(corpus: list[dict[str, Any]], terms: list[str]) -> dict[str
 
 def dynamic_source_score(text_low: str, terms: list[str], idf: dict[str, float]) -> float:
     score = 0.0
-    for term in terms:
+    for term in unique_preserve([str(item) for item in terms]):
         low = str(term).casefold()
         if len(low) < 3 or low not in idf:
             continue
         count = text_low.count(low)
         if count <= 0:
             continue
-        score += idf[low] * min(3, count)
+        # Track B source-evidence prompts are built from source-derived cue
+        # terms. Repeating one cue many times should not outrank a source that
+        # covers several distinct cues; otherwise a nearby recap or decoy can
+        # push the correct source just below top-k. Keep a tiny repeat signal
+        # for genuinely emphatic source wording, but make coverage dominate.
+        score += idf[low] * (10.0 + min(len(low), 20))
+        score += idf[low] * min(2, count - 1) * 1.5
     return score
+
+
+def dynamic_source_role_bonus(message: dict[str, Any]) -> float:
+    if message.get("is_final") or message.get("phase") == "final_answer":
+        return 18.0
+    if message.get("role") == "user":
+        return 3.0
+    if message.get("phase") == "commentary":
+        return -2.0
+    return 0.0
 
 
 def search_expected_evidence_registry(
@@ -497,12 +513,15 @@ def search_expected_evidence_dynamic_source(
         # reintroduce unrelated private-context false positives.
         if not row_or_turn_scope_matches(row, labels, turn_scope_labels):
             continue
-        base_score = score_message(message, terms)
         idf_score = dynamic_source_score(str(row.get("text_low") or ""), terms, idf)
-        if base_score <= 0 and idf_score <= 0:
+        if idf_score <= 0:
             continue
         entry = dict_value(row.get("entry"))
-        score = float(base_score) + idf_score * 5.0 + entry_search_score(entry, terms) * 0.02
+        score = (
+            idf_score
+            + dynamic_source_role_bonus(message)
+            + entry_search_score(entry, terms) * 0.02
+        )
         scored_hits.append(
             {
                 "thread_key": row.get("thread_key"),
@@ -633,6 +652,60 @@ def candidate_failure_class(
     return "wrong_candidate_accepted"
 
 
+def miss_taxonomy_class(category: str, failure_class: str) -> str:
+    if failure_class == "candidate_not_generated":
+        return "candidate_not_generated"
+    if failure_class == "source_reopen_failed":
+        return "source_reopen_failed"
+    if category in {
+        "scope_term_split_across_expected_turn",
+        "expected_match_missing_scope_labels",
+    }:
+        return "scope_label_join_gap"
+    if category in {
+        "selected_prompt_terms_not_on_expected_source",
+        "no_retrievable_signal_on_expected_source",
+    }:
+        return "source_terms_sparse_or_not_on_expected"
+    if failure_class == "candidate_pruned_before_verifier":
+        return "candidate_generated_rank_below_top_k"
+    if failure_class == "candidate_seen_rejected_wrongly":
+        return "candidate_seen_rejected_wrongly"
+    if failure_class == "wrong_candidate_accepted":
+        return "nearby_or_wrong_source_outranked_expected"
+    return "unsupported_private_diagnosis"
+
+
+def remediation_hint_for_taxonomy(taxonomy: str) -> str:
+    hints = {
+        "candidate_not_generated": (
+            "Inspect cue selection and candidate generation; the expected source never entered the raw pool."
+        ),
+        "candidate_generated_rank_below_top_k": (
+            "Tune ranking with public analogues before widening top-k; the expected source exists but is pruned."
+        ),
+        "nearby_or_wrong_source_outranked_expected": (
+            "Add or reuse stale/wrong-source controls before promoting a ranking change."
+        ),
+        "source_terms_sparse_or_not_on_expected": (
+            "Treat as source-term selection or sidecar evidence sparsity unless source reopen shows otherwise."
+        ),
+        "scope_label_join_gap": (
+            "Repair source-label joins only within exact turn/source boundaries; do not widen to thread scope."
+        ),
+        "candidate_seen_rejected_wrongly": (
+            "Inspect the verifier/source-ref match contract; the gold candidate was visible but rejected."
+        ),
+        "source_reopen_failed": (
+            "Repair registry/source availability before interpreting this as a ranking miss."
+        ),
+    }
+    return hints.get(
+        taxonomy,
+        "Keep as unsupported private diagnosis until a public analogue or source-reopenable cause exists.",
+    )
+
+
 def source_evidence_failure_diagnostics(
     *,
     cases: list[dict[str, Any]],
@@ -674,21 +747,28 @@ def source_evidence_failure_diagnostics(
         "success": 0,
         "unsupported": 0,
     }
+    taxonomy_counts: dict[str, int] = {}
     failed_cases: list[dict[str, Any]] = []
     if ranking != "dynamic_source" or not corpus:
         categories["not_diagnosed_for_ranking"] = len(failed)
         failure_classes["unsupported"] = len(failed)
+        taxonomy_counts["unsupported_private_diagnosis"] = len(failed)
         return {
             "failed_count": len(failed),
             "top_k": int(top_k),
             "extended_top_k": int(extended_top_k),
             "categories": categories,
             "failure_classes": failure_classes,
+            "taxonomy_counts": taxonomy_counts,
             "failed_cases": [
                 {
                     "case_id": case.get("case_id"),
                     "category": "not_diagnosed_for_ranking",
                     "failure_class": "unsupported",
+                    "taxonomy": "unsupported_private_diagnosis",
+                    "remediation_hint": remediation_hint_for_taxonomy(
+                        "unsupported_private_diagnosis"
+                    ),
                 }
                 for case, _ in failed
             ],
@@ -748,11 +828,15 @@ def source_evidence_failure_diagnostics(
         failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
         if failure_class == "candidate_seen_rejected_wrongly":
             candidate_space["verifier_decision_for_gold"] = "rejected"
+        taxonomy = miss_taxonomy_class(category, failure_class)
+        taxonomy_counts[taxonomy] = taxonomy_counts.get(taxonomy, 0) + 1
         failed_cases.append(
             {
                 "case_id": case.get("case_id"),
                 "category": category,
                 "failure_class": failure_class,
+                "taxonomy": taxonomy,
+                "remediation_hint": remediation_hint_for_taxonomy(taxonomy),
                 "rank": result.get("rank"),
                 "extended_rank": extended_rank,
                 "candidate_space": candidate_space,
@@ -772,6 +856,7 @@ def source_evidence_failure_diagnostics(
         "extended_top_k": int(extended_top_k),
         "categories": categories,
         "failure_classes": failure_classes,
+        "taxonomy_counts": dict(sorted(taxonomy_counts.items())),
         "failed_cases": failed_cases,
     }
 

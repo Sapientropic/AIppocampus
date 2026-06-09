@@ -412,6 +412,54 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertEqual(result["rank"], 1)
 
+    def test_dynamic_source_prefers_term_coverage_over_repeated_decoy_term(
+        self,
+    ) -> None:
+        case = {
+            "case_id": "evidence:test-coverage",
+            "query_terms": ["lighthouse", "continuity", "atlas"],
+            "source_terms": ["lighthouse", "continuity", "atlas"],
+            "scope_labels": ["personal_reflection"],
+            "expected": {
+                "thread_key": "session:life",
+                "message_id": "msg_expected",
+                "turn_id": "turn_expected",
+            },
+        }
+        corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": " ".join(["lighthouse"] * 18),
+                "entry": {},
+                "message": {
+                    "message_id": "msg_decoy",
+                    "turn_id": "turn_decoy",
+                    "scope_labels": ["personal_reflection"],
+                    "source_line": 1,
+                    "text": " ".join(["lighthouse"] * 18),
+                },
+            },
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse continuity atlas",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_expected",
+                    "turn_id": "turn_expected",
+                    "scope_labels": ["personal_reflection"],
+                    "source_line": 2,
+                    "text": "lighthouse continuity atlas",
+                },
+            },
+        ]
+
+        result = recall_eval.search_expected_evidence_dynamic_source(
+            corpus, case, top_k=1
+        )
+
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["rank"], 1)
+
     def test_failure_diagnostics_classify_scope_term_split_without_private_text(self) -> None:
         case = {
             "case_id": "evidence:test-split",
@@ -578,6 +626,10 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
             "candidate_not_generated",
         )
         self.assertEqual(
+            not_generated_diagnostics["failed_cases"][0]["taxonomy"],
+            "candidate_not_generated",
+        )
+        self.assertEqual(
             not_generated_diagnostics["failed_cases"][0]["candidate_space"][
                 "gold_in_raw_candidate_pool"
             ],
@@ -586,6 +638,14 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertEqual(
             pruned_diagnostics["failed_cases"][0]["failure_class"],
             "candidate_pruned_before_verifier",
+        )
+        self.assertEqual(
+            pruned_diagnostics["taxonomy_counts"],
+            {"candidate_generated_rank_below_top_k": 1},
+        )
+        self.assertIn(
+            "Tune ranking",
+            pruned_diagnostics["failed_cases"][0]["remediation_hint"],
         )
         self.assertEqual(
             pruned_diagnostics["failed_cases"][0]["candidate_space"]["gold_raw_rank"],
@@ -597,6 +657,10 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         )
         self.assertEqual(
             verifier_diagnostics["failed_cases"][0]["failure_class"],
+            "candidate_seen_rejected_wrongly",
+        )
+        self.assertEqual(
+            verifier_diagnostics["failed_cases"][0]["taxonomy"],
             "candidate_seen_rejected_wrongly",
         )
         self.assertEqual(
