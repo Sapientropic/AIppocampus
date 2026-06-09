@@ -388,6 +388,23 @@ or settings paths. It does not claim a Claude Code configuration-mutating
 installer, real-host firing, `PostToolUse` / `PostToolBatch` payload capture, or
 compaction hook utility.
 
+### Provider Conformance Boundary
+
+The public provider conformance kit is
+`benchmarks/aippocampus/benchmark_provider_conformance.py`. It is a development
+contract for provider-normalized source behavior, not an end-user runtime API.
+The kit verifies that provider suites keep ingestion, MCP/registry access, host
+hooks, and configuration-mutating installers as separate status fields. Passing
+one surface must not imply another.
+
+For new provider integrations, the kit should pass before public docs describe
+the provider as supported. A passing suite can support claims about stable
+session/thread identity, visible user/final assistant preservation, source-ref
+presence, injected/system/tool demotion, sanitized reporting, and known
+malformed-row error classes. It does not prove live host compatibility,
+all-client drop-in behavior, AgentMemory behavior, or real cross-host continuity
+quality.
+
 ## MCP Contract
 
 The current MCP tool catalog is read-mostly and intentionally small. The public
@@ -553,6 +570,11 @@ preserved.
 Generic JSONL validation failures expose a machine-readable code, source line,
 message, and details, so import callers can report the exact malformed row
 without guessing from prose.
+
+New generic import examples should also be covered by the provider conformance
+kit before they are promoted as public support. Keep the rows public-safe: the
+kit may include fake secret/path strings to verify redaction, but the JSON
+report must not emit those strings, raw rows, or absolute locators.
 
 To register an explicit file without relying on provider discovery environment
 variables:

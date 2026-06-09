@@ -71,15 +71,27 @@ handlers.
 | `claude-code` | Yes: Claude Code transcript parser and explicit onboarding. | Yes: clean-source registration and MCP/project-skill surfaces. | Scoped: `aippocampus_runtime/hooks/claude_code.py` handles `UserPromptSubmit` and `Stop` fail-open, with synthetic smoke evidence. | No configuration-mutating installer; `aippocampus hooks claude-code dry-run` reports the handler shape without writing Claude settings. | Scoped status/dry-run/smoke only; real-host firing still needs an event log or local dogfood report. | Claude Code hook contract status: scoped handler/status/dry-run/smoke support exists for `UserPromptSubmit` and `Stop`; real-host firing, installer mutation, `PostToolUse`/`PostToolBatch`, and compaction hook utility remain cannot-claim boundaries. |
 | `generic-jsonl` | Yes: explicit visible-message import provider. | Yes: clean-source registration/import surfaces. | No host hook handler. | No host hook installer. | Import validation only. | Generic import proves transcript ingestion, not host automation. |
 
-## Provider Conformance Fixture Boundary
+## Provider Conformance Kit Boundary
 
-The public-safe child fixture for #988 lives in
+The public-safe provider conformance kit v1 for #981 lives in
 `benchmark_corpus/provider_conformance/fixture.json` and is exercised by
-`benchmarks/aippocampus/benchmark_provider_conformance.py`. It verifies
-provider/session identity, cross-provider source-reopen affordances, injected
-content demotion, and MCP source-ref metadata shape with synthetic rows. It
-does not replace the full #981 provider conformance kit and does not claim live
-host compatibility.
+`benchmarks/aippocampus/benchmark_provider_conformance.py`. It retains the #988
+synthetic authority-boundary cases and adds real normalizer suites for
+`generic-jsonl` and `claude-code`.
+
+The kit distinguishes four surfaces for every provider suite:
+
+- ingestion: visible user/final assistant rows normalize into clean source
+- MCP/registry: clean-source or registry access is available for reopenable
+  routes
+- hooks: host-specific prompt/lifecycle handlers may or may not exist
+- settings mutation: host configuration installers may or may not exist
+
+Passing the ingestion suite must not be read as hook support or settings
+mutation. Passing a scoped hook smoke must not be read as persistent MCP
+availability or real-host firing. Child issues such as #998, #1020, and #1021
+remain the place for live-host, public first-run, MCP health, hook-support, and
+settings-mutation evidence beyond this public-safe kit.
 
 ## Guardrail
 

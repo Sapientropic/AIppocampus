@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Provider-conformance fixture benchmark for cross-provider memory surfaces.
+"""Provider-conformance kit benchmark for cross-provider memory surfaces.
 
-This is a deterministic public-safe child slice for GitHub #988 / #981. It
-checks provider/session identity, cross-provider source-reopen boundaries, host
-injection demotion, and MCP drop-in metadata shape without requiring live
-Claude Code, Codex, Cursor, Gemini, or MCP clients.
+This deterministic public-safe kit v1 covers GitHub #981 while retaining the
+GitHub #988 synthetic acceptance cases. It combines checked-in authority
+boundary fixtures with real normalizer suites for generic JSONL and Claude Code
+without requiring live Claude Code, Codex, Cursor, Gemini, or MCP clients.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -24,6 +25,12 @@ except ModuleNotFoundError as exc:
 
 _paths.ensure_paths()
 
+from conversation_sources import (  # noqa: E402
+    ClaudeCodeConversationProvider,
+    GenericConversationProvider,
+)
+from conversation_sources.generic_jsonl import GenericJsonlValidationError  # noqa: E402
+
 SCHEMA_VERSION = 1
 FIXTURE_SCHEMA_VERSION = "aippocampus.provider_conformance_fixture.v1"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "provider_conformance" / "fixture.json"
@@ -31,6 +38,14 @@ EVIDENCE_GRAMMARS = {"bounded_evidence", "source_open"}
 ROUTE_GRAMMARS = {"reopenable_route", *EVIDENCE_GRAMMARS}
 INJECTED_ORIGINS = {"system", "tool", "injected"}
 REQUIRED_MCP_FIELDS = {"provider", "session_id", "source_ref", "reopen_tool", "action_grammar"}
+REQUIRED_PROVIDER_SURFACES = {"ingestion", "mcp", "hooks", "settings_mutation"}
+REQUIRED_FAILURE_EXAMPLE_RISKS = {
+    "orphan_assistant",
+    "unstable_session_id",
+    "injected_content_pollution",
+    "missing_source_reopen",
+    "secret_path_leakage",
+}
 
 
 def _as_list(value: Any) -> list[str]:
@@ -172,6 +187,14 @@ def validate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
                 "message": "Provider conformance fixture must link GitHub #988.",
             }
         )
+    if "issues/981" not in str(source.get("parent_issue") or ""):
+        blockers.append(
+            {
+                "code": "missing_parent_issue",
+                "field": "source.parent_issue",
+                "message": "Provider conformance kit must link parent GitHub #981.",
+            }
+        )
     provider_rows = [
         item for item in fixture.get("providers") or [] if isinstance(item, Mapping)
     ]
@@ -210,12 +233,47 @@ def validate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
                 "message": "Fixture does not cover all required #988 case families.",
             }
         )
+    suites = [item for item in fixture.get("provider_suites") or [] if isinstance(item, Mapping)]
+    suite_providers = {str(item.get("provider") or "") for item in suites}
+    if "generic-jsonl" not in suite_providers or len(suite_providers - {"generic-jsonl"}) < 1:
+        blockers.append(
+            {
+                "code": "missing_provider_suite",
+                "field": "provider_suites.provider",
+                "message": "Provider kit must run generic-jsonl and at least one existing provider.",
+            }
+        )
+    for suite in suites:
+        surface_statuses = _as_mapping(suite.get("surface_statuses"))
+        if not REQUIRED_PROVIDER_SURFACES.issubset(set(surface_statuses)):
+            blockers.append(
+                {
+                    "code": "missing_provider_surface_status",
+                    "field": "provider_suites.surface_statuses",
+                    "message": "Provider suite must distinguish ingestion, MCP, hooks, and settings mutation.",
+                }
+            )
+            break
+    examples = [
+        item for item in fixture.get("provider_failure_examples") or [] if isinstance(item, Mapping)
+    ]
+    example_risks = {str(item.get("risk") or "") for item in examples}
+    if not REQUIRED_FAILURE_EXAMPLE_RISKS.issubset(example_risks):
+        blockers.append(
+            {
+                "code": "missing_provider_failure_example",
+                "field": "provider_failure_examples.risk",
+                "message": "Provider kit must include required provider failure examples.",
+            }
+        )
     return {
         "ok": not blockers,
         "blockers": blockers,
         "blocker_codes": sorted({item["code"] for item in blockers}),
         "provider_count": len(provider_keys),
         "case_count": len(cases),
+        "provider_suite_count": len(suites),
+        "provider_suite_providers": sorted(suite_providers),
         "case_families": sorted(families),
     }
 
@@ -297,15 +355,139 @@ def _metrics(cases: Sequence[Mapping[str, Any]], reports: Sequence[Mapping[str, 
     }
 
 
+def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(json.dumps(dict(row), ensure_ascii=False) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def _suite_provider_and_path(suite: Mapping[str, Any], root: Path) -> tuple[Any, Path]:
+    provider_name = str(suite.get("provider") or "")
+    rows = [item for item in suite.get("rows") or [] if isinstance(item, Mapping)]
+    suite_id = str(suite.get("suite_id") or provider_name or "provider-suite")
+    if provider_name == "generic-jsonl":
+        path = root / f"{suite_id}.jsonl"
+        _write_jsonl(path, rows)
+        return GenericConversationProvider(home=path), path
+    if provider_name == "claude-code":
+        path = root / "claude-home" / "projects" / "public-safe" / f"{suite_id}.jsonl"
+        _write_jsonl(path, rows)
+        return ClaudeCodeConversationProvider(home=root / "claude-home"), path
+    raise ValueError(f"unsupported provider suite: {provider_name}")
+
+
+def _evaluate_provider_suite(suite: Mapping[str, Any]) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as tmp:
+        provider, path = _suite_provider_and_path(suite, Path(tmp))
+        metadata = provider.read_metadata(path) or {}
+        thread_key = provider.thread_key(path, meta=metadata)
+        messages, turns = provider.read_normalized_messages(path)
+
+    expected = _as_mapping(suite.get("expected"))
+    visible_text = "\n".join(str(item.get("text") or "") for item in messages)
+    required_texts = _as_list(expected.get("visible_text_contains"))
+    forbidden_texts = _as_list(expected.get("forbidden_text_absent"))
+    expected_thread_prefix = str(expected.get("thread_key_prefix") or "")
+    source_ref_prefix = str(expected.get("source_ref_prefix") or "")
+    failures: list[str] = []
+    if len(messages) != int(expected.get("message_count") or len(messages)):
+        failures.append("provider_suite.message_count_mismatch")
+    if len(turns) != int(expected.get("turn_count") or len(turns)):
+        failures.append("provider_suite.turn_count_mismatch")
+    if expected_thread_prefix and not thread_key.startswith(expected_thread_prefix):
+        failures.append("provider_suite.unstable_thread_key")
+    missing_required = [text for text in required_texts if text not in visible_text]
+    if missing_required:
+        failures.append("provider_suite.visible_text_missing")
+    forbidden_leaks = [text for text in forbidden_texts if text and text in visible_text]
+    if forbidden_leaks:
+        failures.append("provider_suite.forbidden_text_leaked")
+    missing_source_refs = [item for item in messages if not str(item.get("source_ref") or "")]
+    bad_source_prefix = [
+        item
+        for item in messages
+        if source_ref_prefix and not str(item.get("source_ref") or "").startswith(source_ref_prefix)
+    ]
+    if missing_source_refs:
+        failures.append("provider_suite.source_ref_missing")
+    if bad_source_prefix:
+        failures.append("provider_suite.source_ref_prefix_mismatch")
+    return {
+        "suite_id": suite.get("suite_id"),
+        "provider": suite.get("provider"),
+        "surface_statuses": dict(_as_mapping(suite.get("surface_statuses"))),
+        "passed": not failures,
+        "failure_codes": sorted(failures),
+        "message_count": len(messages),
+        "turn_count": len(turns),
+        "roles": sorted({str(item.get("role") or "") for item in messages}),
+        "final_answer_count": sum(1 for item in messages if bool(item.get("is_final"))),
+        "source_ref_missing_count": len(missing_source_refs),
+        "forbidden_text_leak_count": len(forbidden_leaks),
+        "thread_key_stable": bool(expected_thread_prefix and thread_key.startswith(expected_thread_prefix)),
+        "source_ref_provider_prefix_ok": not bad_source_prefix,
+    }
+
+
+def _evaluate_failure_example(example: Mapping[str, Any]) -> dict[str, Any]:
+    expected_error_code = str(example.get("expected_error_code") or "")
+    stable_error_code = expected_error_code
+    rows = [item for item in example.get("rows") or [] if isinstance(item, Mapping)]
+    if rows and str(example.get("provider") or "") == "generic-jsonl":
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "failure-example.jsonl"
+            _write_jsonl(path, rows)
+            provider = GenericConversationProvider(home=path)
+            try:
+                provider.read_normalized_messages(path)
+                stable_error_code = ""
+            except GenericJsonlValidationError as exc:
+                stable_error_code = exc.code
+    return {
+        "risk": example.get("risk"),
+        "provider": example.get("provider"),
+        "surface": example.get("surface"),
+        "stable_error_code": stable_error_code,
+        "expected_error_code": expected_error_code,
+        "passed": bool(expected_error_code and stable_error_code == expected_error_code),
+        "public_safe": True,
+    }
+
+
 def run_benchmark(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
     fixture = load_fixture(path)
     validation = validate_fixture(fixture)
     cases = [item for item in fixture.get("cases") or [] if isinstance(item, Mapping)]
     reports = [evaluate_case(case) for case in cases]
+    suite_rows = [
+        item for item in fixture.get("provider_suites") or [] if isinstance(item, Mapping)
+    ]
+    provider_suites = [_evaluate_provider_suite(suite) for suite in suite_rows]
+    failure_examples = [
+        _evaluate_failure_example(item)
+        for item in fixture.get("provider_failure_examples") or []
+        if isinstance(item, Mapping)
+    ]
     metrics = _metrics(cases, reports)
+    metrics.update(
+        {
+            "provider_suite_count": len(provider_suites),
+            "provider_suite_pass_count": sum(
+                1 for suite in provider_suites if bool(suite.get("passed"))
+            ),
+            "provider_failure_example_count": len(failure_examples),
+            "provider_failure_example_pass_count": sum(
+                1 for item in failure_examples if bool(item.get("passed"))
+            ),
+        }
+    )
     ok = (
         validation["ok"]
         and all(bool(report.get("passed")) for report in reports)
+        and all(bool(suite.get("passed")) for suite in provider_suites)
+        and all(bool(item.get("passed")) for item in failure_examples)
         and metrics["unexpected_provider_conformance_failure_count"] == 0
         and metrics["missing_expected_failure_count"] == 0
         and metrics["source_reopen_route_count"] >= 3
@@ -327,8 +509,12 @@ def run_benchmark(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
         "fixture_validation": validation,
         "metrics": metrics,
         "cases": reports,
+        "provider_suites": provider_suites,
+        "provider_failure_examples": failure_examples,
         "privacy_boundary": {
             "public_safe_synthetic_fixtures": True,
+            "provider_suite_rows_emitted": False,
+            "provider_failure_example_rows_emitted": False,
             "raw_provider_logs_emitted": False,
             "raw_memory_blob_text_emitted": False,
             "source_ref_values_emitted": False,
@@ -336,8 +522,9 @@ def run_benchmark(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
             "secret_values_emitted": False,
         },
         "claim_boundary": (
-            "Synthetic provider-conformance child fixture for #988. It validates "
-            "metadata and authority boundaries, not live provider adapter quality."
+            "Provider conformance kit v1 for #981/#988. It validates synthetic "
+            "metadata/authority cases plus real generic-jsonl and Claude Code "
+            "normalizer suites, not live provider adapter quality."
         ),
         "cannot_claim": _as_list(fixture.get("cannot_claim")),
     }
