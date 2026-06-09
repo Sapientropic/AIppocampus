@@ -391,6 +391,15 @@ For hundred-MB or GB threads, use segments:
   applied, but they must not expand `--fanout-budget` / `--max-segments`. Legacy
   manifests without timestamp ranges fall back to recency ordering and report no
   boosted segments.
+- `segment_search --deep` is an explicit deep-recall route, not prompt-hook
+  ambient behavior. Hop 0 searches the original query; later hops extract a
+  bounded set of navigation terms only from source-joined hits, rerun the same
+  planned segment fanout, dedupe by stable source join key, and stop on
+  `--deep-max-hops`, `--deep-candidate-budget`,
+  `--deep-elapsed-budget-ms`, no expansion terms, or no new source keys. JSON
+  diagnostics report `deep_recall.hops[*].query_terms`, source keys added per
+  hop, skipped expansions, and the source boundary: generated expansion terms
+  are wayfinding only until source is reopened or bounded evidence is present.
   Old generations are rebuildable cache targets. Health/capacity/storage-gc
   dry-runs report reader-pin/TTL cleanup status, and storage GC apply may delete
   only old generation directories whose active pins are gone, TTL has elapsed,
