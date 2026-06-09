@@ -456,8 +456,14 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertFalse(remediation["benchmark_thresholds_changed"])
         self.assertEqual(
             remediation["product_change_status"],
-            "candidate_identified_not_implemented",
+            "implemented_rerun",
         )
+        self.assertTrue(remediation["product_failure_mode_changed"])
+        self.assertEqual(
+            remediation["product_path_change"]["source_miss_recovery_action"],
+            "ask_light_question",
+        )
+        self.assertFalse(remediation["product_path_change"]["manual_query_invention_expected"])
         self.assertEqual(
             remediation["decision_label_preserved"],
             "no demonstrated memory advantage",
@@ -479,6 +485,12 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
                 "true_memory_abstention_count"
             ],
             5,
+        )
+        self.assertEqual(
+            families["incomplete_handoff_recovery"]["source_miss_abstention"][
+                "source_miss_recovery_action"
+            ],
+            "ask_light_question",
         )
         self.assertIn(
             "source_reopen",

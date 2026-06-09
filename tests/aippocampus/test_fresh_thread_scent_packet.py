@@ -164,6 +164,11 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertEqual(packet["reopen_plan"]["recommended_tool"], "source_ref_reopen")
         self.assertEqual(packet["reopen_plan"]["candidate_ref_count"], 1)
         self.assertEqual(packet["reopen_plan"]["reopenable_ref_count"], 0)
+        self.assertEqual(packet["reopen_plan"]["blocked_recovery_action"], "ask_light_question")
+        self.assertEqual(
+            packet["reopen_plan"]["blocked_recovery_goal"],
+            "recover_a_reopenable_source_anchor_without_guessing",
+        )
         self.assertIn("no_reopenable_source_ref", packet["reopen_plan"]["reason_codes"])
         self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
         self.assertNotIn("raw summary", json.dumps(packet, ensure_ascii=False))
