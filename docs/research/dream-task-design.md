@@ -277,6 +277,8 @@ navigation artifacts:
   `aippocampus_runtime.source.texture_consumption`
 - correction activation/outcome/adjudication rows from
   `correction_reconsolidation.py`
+- source-backed `recall_miss` / `late_reopen_recovery` feedback rows from
+  public benchmark reports or opt-in dogfood diagnostics
 - reflection feedback/adjustment rows from `aippocampus_runtime.reflection.space`
 - agency/coding tickets and decision events when they carry clean source refs
 
@@ -294,6 +296,13 @@ and must reopen source before claims. The ready pack may advertise
 `eligible_dream_functions=["compensatory", "amplification"]` plus texture-gated
 functions; this only means the source substrate is fit for those background
 workers, not that output quality has been proven.
+
+Recall-miss feedback is a compensatory trigger, not source truth. It can route
+Dream work toward material that a foreground path skipped, missed, or recovered
+late only when the row carries clean source refs; raw-prompt-only or
+source-free miss claims are rejected by the pack builder. Queue diagnostics use
+the separate `recall_miss_feedback` trigger family so miss-driven Dream work can
+be audited apart from question links, Journey residue, and correction outcomes.
 
 The pack stays out of foreground hooks and formal memory:
 
