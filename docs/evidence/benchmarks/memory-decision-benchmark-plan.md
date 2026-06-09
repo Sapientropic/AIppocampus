@@ -1315,6 +1315,8 @@ any payload is judged.
 - system/goal/status injection text such as thread budget or current-goal noise
 - false memory cues, for example "remember this function name" in a local code
   task
+- source-free public memory-pain statements that provide no route, source
+  request, old-thread deixis, or continuation intent
 - generic daily chat and generic status questions without a stable memory
   target
 - over-personalization traps where life-wide terms overlap accidentally
@@ -1384,6 +1386,9 @@ Initial targets:
 - ordinary coding prompt scent/evidence false positive rate: less than `5%`
 - `semantic_trigger_alias_ablation.exact_prompt_alias_violation_count`: `0`
   for the synthetic alias-ablation controls
+- `track_a_residual_calibration.unresolved_count`: `0` for the checked
+  residual taxonomy; additions must explain whether they are product
+  reclassification or runtime-rule repair
 
 These numbers are starting gates. Tighten them after the first real-history
 case set exposes the natural error distribution.
