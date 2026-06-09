@@ -74,6 +74,12 @@ source-trailed domain handles. Provenance complements `support_level`,
 `visibility`, and `source_validation`; authority fields decide whether a card is
 still a handle (`reopen_required_before_claim`) or already bounded evidence
 (`bounded_evidence_ready`).
+When a host or user needs a compact explanation of why a card/path surfaced and
+what can be done with it, project the existing surface through the Memory
+Evidence Drawer contract in
+`docs/architecture/memory-evidence-drawer.md`. The drawer is an opt-in
+explanation packet; default hooks should not expand every emission into a large
+drawer payload.
 
 The packet trust taxonomy is owned by
 `aippocampus_runtime.recall.authority`. Keep it small and reuse existing

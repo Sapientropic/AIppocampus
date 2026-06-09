@@ -302,6 +302,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domains.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_private_calibration.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_sidecar.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/evidence_drawer.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_activation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_action.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_demo.py",

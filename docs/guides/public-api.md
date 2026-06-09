@@ -117,6 +117,12 @@ The supported public surfaces are:
   in [public-core-boundary.md](public-core-boundary.md). These define source
   eligibility and claim promotion records, not a public knowledge-ingest,
   ranking, or answer-generation API.
+- The Memory Evidence Drawer contract documented in
+  [memory-evidence-drawer.md](../architecture/memory-evidence-drawer.md) is the
+  current contract for additive foreground explanation packets. Drawer JSON may
+  explain why a route surfaced, expose source refs/reopen affordances, and
+  declare suppress/correct/pin/deepen metadata; it is not a source-truth API,
+  memory-write API, or confidence-as-authority layer.
 - The high-risk answer gate policy documented in
   [high-risk-answer-gates.md](../architecture/high-risk-answer-gates.md) as a
   trusted local deterministic cannot-claim boundary, not as generated
