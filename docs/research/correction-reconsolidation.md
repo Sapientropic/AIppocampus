@@ -1,9 +1,11 @@
 # Correction Reconsolidation
 
-Status: deterministic runtime prototype implemented, plus first opt-in
-source-ref-gated host-event capture adapter and aggregate-only private-history
-adjudication report. Default hook writes, live semantic adjudication quality,
-and broad private real-history correction survival remain future work.
+Status: deterministic correction runtime prototype implemented, plus first
+opt-in source-ref-gated host-event capture adapter, aggregate-only
+private-history adjudication report, and a separate retrieval-lifecycle
+substrate prototype for ordinary recalled sources. Default hook writes, live
+semantic adjudication quality, general retrieval reconsolidation consumers, and
+broad private real-history correction survival remain future work.
 Origin: user/product discussion, 2026-05-28.
 Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Dream Task Design](dream-task-design.md),
@@ -163,6 +165,16 @@ It can build and append source-backed `correction_activation_event` and
 hints, and verification/tool evidence, and emit detached
 `correction_adjudication_candidate` rows. These rows remain staging evidence and
 candidate hypotheses; they are not formal memory.
+
+Ordinary recalled sources use the separate
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/retrieval_lifecycle.py`
+substrate. It records append-only retrieval/open/outcome diagnostics from
+prompt-hook, active-recall, MCP recall/deepen, and source-reopen payloads, then
+projects `retrieval_count`, `last_retrieved_at`, and post-retrieval outcome
+buckets. Those rows are not correction adjudications and do not implement
+general retrieval reconsolidation by themselves; later consumers must still join
+confirmation, correction, contradiction, or conflict evidence before proposing a
+memory revision.
 
 The #311 slice adds
 `aippocampus_runtime.reflection.host_capture.capture_host_correction_event()` as

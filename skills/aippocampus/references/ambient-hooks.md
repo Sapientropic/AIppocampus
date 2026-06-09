@@ -943,6 +943,15 @@ even the aggregate file.
 is separate from prompt recall because lifecycle events can tolerate bounded
 fixed work.
 
+Retrieval lifecycle diagnostics are a separate explicit substrate in
+`aippocampus_runtime.reflection.retrieval_lifecycle`. They can turn prompt
+recall, active recall, MCP recall/deepen, or source-reopen payloads into
+append-only rows for later analysis, but default foreground hooks must not
+write raw prompt text or treat a direction-only scent as source-confirmed
+evidence. A later reconsolidation consumer must still join source-open,
+confirmation, correction, contradiction, or conflict evidence before proposing
+any memory revision.
+
 Installed events:
 
 - `SessionStart`: refresh the global registry at most once per hour by default

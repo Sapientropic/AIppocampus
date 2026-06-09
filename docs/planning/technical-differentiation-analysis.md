@@ -68,7 +68,7 @@ external sources and implementation owners before public claims.
 | Dream runtime substrate + bounded sleep-cycle worker path | bounded runtime prototype | `aippocampus_runtime.dream.compensatory` 已能从 source-backed 单线程 extraction rows 生成 adjudication-only `dream_synthesized` 补偿性候选，并为每条 bridge claim 保留同线程 source refs；`aippocampus_runtime.dream.input_pack` 可把 source-backed question links / Journey rows 与 ambient residue 弱提示打成跨线程 dream input pack；`aippocampus_runtime.dream.working_memory` 会在后台 structural adjudication 后才允许 dream hypothesis 进入 working memory；`aippocampus_runtime.dream.real_history_eval` 已能选 real-history packs，跑 compensatory/amplification worker，并量化相对 plain rows 的结构性 recall/reflection substrate delta；`aippocampus_runtime.dream.worker` 覆盖 bounded model-backed compensatory/amplification/prospective worker 与 active-imagination sandbox 合同；`aippocampus_runtime.dream.sleep_cycle` 提供 detached background staging path。仍不能声称 live provider Dream 质量、predictive validity、active-imagination usefulness、私有真实历史 dream 质量，或用户可感知 recall/reflection lift；这些仍归 #163。 |
 | reflection-space topology/feedback MVP | first deterministic prototype | `aippocampus_runtime.reflection.space` 已能把 Journey/Waypoint/current_frontier 生成可检查拓扑，并把 recall 效果、转折点、用户纠正和 merge/revive/abandon 反馈转换为 ranking/confidence/visibility 调整；`reflection_space.py` 仅保留兼容 shim。视觉 polish、真实用户行为变化和 AAR runtime enforcement 仍未实现。 |
 | dynamic separation/completion threshold | first deterministic prototype | `aippocampus_runtime.question.tracking` 会按六轴兼容/冲突调整 strong/borderline 阈值，并跳过低信息 salience 候选；`benchmark_question_tracking_calibration.py` 覆盖 selected fixtures，并报告相对静态 strong-threshold baseline 的 missed-positive / merged-negative delta；真实语义阈值调参仍需要更多 clean-source 样本。 |
-| reconsolidation queue / retrieval-count update | proposed | `working_memory.jsonl` 和 router 提供骨架，但 hook 侧还未记录 retrieval lifecycle。 |
+| reconsolidation queue / retrieval-count update | substrate prototype | `aippocampus_runtime.reflection.retrieval_lifecycle` 可把 prompt/active/MCP/source-reopen payload 转成 append-only lifecycle rows 和 public-safe count/outcome projection；later reconsolidation consumer 仍未实现。 |
 | preplay / state-dependent routing | research | 适合 Phase 3+，必须保持 ambient scent，不直接推送用户。 |
 
 ---
@@ -199,11 +199,11 @@ candidate pair 计算 `threshold_policy`：兼容的 `what_features`、
 
 ### AIppocampus 怎么做
 
-AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_candidate_router.py` 已经提供了一个适合改造成再巩固的骨架，但 retrieval lifecycle 还没有实现：
+AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_candidate_router.py` 已经提供了一个适合改造成再巩固的骨架。#1019 补上了第一片 retrieval lifecycle substrate：`aippocampus_runtime.reflection.retrieval_lifecycle` 可以把 prompt-hook scent/evidence、active recall、MCP recall/deepen、source reopen 这类 payload 转成 append-only diagnostic rows，但还不会消费这些 rows 做 memory revision。
 
 **具体工程路径**：
 
-1. **检索标记（Deterministic cell）**：在 `aippocampus_runtime.hooks.prompt` 中，当某条 working memory 被检索并注入当前 prompt 时，记录 `last_retrieved_at`、`retrieval_count` 和当前 source turn id。不要直接原地改写正式记忆；先写 append-only activation event。
+1. **检索标记（Deterministic cell）**：显式 diagnostic/fixture consumer 可以用 `retrieval_lifecycle.py` 记录 `last_retrieved_at`、`retrieval_count` 和当前 source key/source refs。默认 foreground recall 不无条件写私有 prompt text，也不要直接原地改写正式记忆；先写 append-only diagnostic event。
 
 2. **再巩固队列（Microcircuit）**：每次 hook 运行后，被检索到的记忆进入 `reconsolidation_queue`。这是一个轻量的 append-only 列表，记录「哪些记忆在当前对话中被激活了」。
 
