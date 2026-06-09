@@ -509,6 +509,11 @@ evidence: it proves official output discovery and normalized-score calculation
 but is not a live LLM/provider memory score. Partial live-provider output
 progress is execution evidence only; do not quote a live-model `Overall`, `UB`,
 or normalized `Memory` score until that full fixed arm is complete.
+For bounded live-provider debugging, use `--max-cases`, `--resume`, and
+`--checkpoint`; the generated checkpoint reports only phase state, completed
+counts, elapsed subprocess time, hashes, and redacted labels. A bounded subset
+remains `progressive_subset_debug_only` and cannot become a full public
+`v1.base` score.
 
 Run the optional semantic second-stage line reranker over the same source
 boundary:

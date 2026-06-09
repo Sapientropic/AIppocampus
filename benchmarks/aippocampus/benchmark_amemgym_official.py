@@ -35,6 +35,18 @@ from amemgym_official_local_provider import (  # noqa: E402
     provider_plan_environment,
     provider_runtime_for_provider,
 )
+from amemgym_official_public_state import (  # noqa: E402
+    aippocampus_official_adapter_protocol,
+    build_fixed_arm_execution,
+    completed_surface_from_output,
+    env_item_ids,
+    fixed_arm_execution_status,
+    prepare_bounded_env_data,
+    random_progress,
+    safe_command_plan,
+    skipped_complete_run_result,
+    write_checkpoint_file,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"
@@ -496,19 +508,6 @@ def python_requires(pyproject_path: Path) -> str | None:
     return None
 
 
-def env_item_ids(env_data_path: Path | str) -> list[str]:
-    payload = read_json(env_data_path)
-    if not isinstance(payload, list):
-        raise ValueError("AMemGym env data must be a JSON array")
-    ids: list[str] = []
-    for index, item in enumerate(payload, start=1):
-        if isinstance(item, dict):
-            ids.append(str(item.get("id") or f"row-{index}"))
-        else:
-            ids.append(f"row-{index}")
-    return ids
-
-
 def load_metric_matrix(path: Path | str, metric: str) -> Any:
     payload = read_json(path)
     if not isinstance(payload, dict) or metric not in payload:
@@ -839,6 +838,7 @@ def score_summary(
         "random": {
             "status": "found" if files.random_metrics_path else "missing",
             "label": safe_path_label(files.random_metrics_path) if files.random_metrics_path else None,
+            "progress": random_progress(Path(random_output_file)),
         },
     }
     metrics: dict[str, Any] = {
@@ -965,92 +965,6 @@ def command_argv(
     raise ValueError(f"unknown AMemGym surface: {surface}")
 
 
-def safe_command_plan(
-    *,
-    upstream_root: Path | str,
-    env_data_path: Path | str,
-    env_config_path: Path | str,
-    agent_config_path: Path | str,
-    overall_output_dir: Path | str,
-    upperbound_output_dir: Path | str,
-    random_output_file: Path | str,
-    runner: str = "python",
-    arm: str = OFFICIAL_NATIVE_ARM,
-    provider: str = "default",
-) -> dict[str, Any]:
-    pythonpath_add = [safe_path_label(Path(upstream_root) / "src")]
-    if provider == LOCAL_SCRIPTED_PROVIDER:
-        pythonpath_add = [
-            safe_path_label(DEFAULT_PROVIDER_OVERLAY_ROOT / "local-scripted-provider"),
-            *pythonpath_add,
-        ]
-    if arm != OFFICIAL_NATIVE_ARM:
-        pythonpath_add = [
-            safe_path_label(DEFAULT_ADAPTER_OVERLAY_ROOT / "aippocampus" / "src"),
-            "benchmarks/aippocampus",
-            "skills/aippocampus/scripts",
-            *pythonpath_add,
-        ]
-    return {
-        "upstream_install": [
-            "git clone https://github.com/AGI-Eval-Official/amemgym.git .tmp/amemgym-upstream",
-            "cd .tmp/amemgym-upstream",
-            "uv sync",
-        ],
-        "entrypoints": list(ENTRYPOINTS.values()),
-        "working_directory": safe_path_label(upstream_root),
-        "environment": {
-            "pythonpath_add": pythonpath_add,
-            **provider_plan_environment(provider),
-        },
-        "arm": {
-            "selected": arm,
-            "official_factory_overlay_required": arm != OFFICIAL_NATIVE_ARM,
-        },
-        "commands": {
-            surface: public_command_argv(
-                surface,
-                env_data_path=env_data_path,
-                env_config_path=env_config_path,
-                agent_config_path=agent_config_path,
-                overall_output_dir=overall_output_dir,
-                upperbound_output_dir=upperbound_output_dir,
-                random_output_file=random_output_file,
-                runner=runner,
-            )
-            for surface in ("overall", "upperbound", "random")
-        },
-    }
-
-
-def public_command_argv(
-    surface: str,
-    *,
-    env_data_path: Path | str,
-    env_config_path: Path | str,
-    agent_config_path: Path | str,
-    overall_output_dir: Path | str,
-    upperbound_output_dir: Path | str,
-    random_output_file: Path | str,
-    runner: str = "python",
-) -> list[str]:
-    argv = command_argv(
-        surface,
-        env_data_path=safe_path_label(env_data_path),
-        env_config_path=safe_path_label(env_config_path),
-        agent_config_path=safe_path_label(agent_config_path),
-        overall_output_dir=safe_path_label(overall_output_dir),
-        upperbound_output_dir=safe_path_label(upperbound_output_dir),
-        random_output_file=safe_path_label(random_output_file),
-        runner=runner,
-    )
-    # Reports should be copyable as a shape reference, but not expose the local
-    # interpreter install path. The real runner still uses sys.executable.
-    if runner == "python":
-        argv[0] = "python"
-    return argv
-
-
 def run_official_surface(
     surface: str,
     *,
@@ -1116,75 +1030,6 @@ def run_official_surface(
     }
 
 
-def aippocampus_official_adapter_protocol() -> dict[str, Any]:
-    return {
-        "host": "official_amemgym_overall_runner",
-        "why_base_agent_is_not_enough": (
-            "A BaseAgent wrapper that only writes messages and searches files is "
-            "a clean-source retrieval baseline, not the full AIppocampus memory system."
-        ),
-        "lifecycle_surrogates": [
-            {
-                "aippocampus_phase": "host_visible_message_capture",
-                "official_runner_surface": "BaseAgent.act/add_msgs",
-                "purpose": "record AMemGym user/assistant visible turns without reading gold state",
-            },
-            {
-                "aippocampus_phase": "lifecycle_refresh",
-                "official_runner_surface": "BaseAgent.save_state at each period checkpoint",
-                "purpose": "build generic-jsonl, clean source, and source index before scoring",
-            },
-            {
-                "aippocampus_phase": "background_worker_precache",
-                "official_runner_surface": "adapter pre-score preparation inside the ignored agent state directory",
-                "purpose": (
-                    "materialize route cache, working-memory, semantic triggers, or semantic "
-                    "sidecars before answer_question; cold worker cost is reported separately"
-                ),
-            },
-            {
-                "aippocampus_phase": "foreground_recall",
-                "official_runner_surface": "BaseAgent.answer_question",
-                "purpose": "consume prepared artifacts, reopen clean-source snippets, and ask the same llm_config model",
-            },
-        ],
-        "arms": {
-            OFFICIAL_NATIVE_ARM: {
-                "official_comparable": True,
-                "memory_surface": "full AMemGym msg_history in model context",
-            },
-            AIPPOCAMPUS_CLEAN_SOURCE_ARM: {
-                "official_comparable": True,
-                "memory_surface": "generic-jsonl -> clean-source exact/source-index retrieval",
-                "claim_level": "file_retrieval_baseline",
-                "not_full_aippocampus": True,
-            },
-            AIPPOCAMPUS_SEMANTIC_SIDECAR_ARM: {
-                "official_comparable": True,
-                "memory_surface": "prepared clean source plus working-memory/semantic sidecar navigation with source reopen",
-                "claim_level": "full_arm_only_when_precache_artifacts_are_present",
-                "missing_worker_degrades_to": AIPPOCAMPUS_CLEAN_SOURCE_ARM,
-            },
-        },
-        "must_preserve_for_score_comparability": [
-            "same AMemGym overall prompt, parser, answer choices, random fallback, and metric code",
-            "same llm_config model, temperature, max_tokens, provider base URL, and credential injection shape",
-            "answer_question must not mutate memory state",
-            "adapter must not read period state, answer_choice state, required_info gold labels, or real user memory",
-            "each AMemGym item and period uses only its own ignored local agent state",
-        ],
-        "precache_claim_gate": {
-            "clean_source_only_required": ["transcript.jsonl", "clean-source/messages.jsonl", "source-index/source_index.sqlite"],
-            "semantic_sidecar_required": [
-                "clean-source/messages.jsonl",
-                "source-index/source_index.sqlite",
-                "working_memory.jsonl or semantic-scope-labels.jsonl or semantic_triggers.jsonl",
-            ],
-            "cold_start_cost": "reported separately from warmed answer quality",
-        },
-    }
-
-
 def build_official_bridge_report(
     *,
     upstream_root: Path | str = DEFAULT_UPSTREAM_ROOT,
@@ -1201,9 +1046,18 @@ def build_official_bridge_report(
     openrouter_model: str = OPENROUTER_DEFAULT_MODEL,
     reset: bool = False,
     arm: str = OFFICIAL_NATIVE_ARM,
+    max_cases: int | None = None,
+    checkpoint_path: Path | str | None = None,
+    resume: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    generated_at = now_utc()
     root = Path(upstream_root)
+    active_env_data_path, dataset_boundary = prepare_bounded_env_data(
+        env_data_path,
+        max_cases=max_cases,
+        output_dir=Path(DEFAULT_OFFICIAL_OUTPUT_ROOT) / "bounded-env",
+    )
     env_config = Path(env_config_path) if env_config_path else root / "configs" / "env" / "v1.base.json"
     source_agent_config = Path(agent_config_path) if agent_config_path else root / "configs" / "agent" / "native.json"
     agent_config = prepare_agent_config_for_provider(
@@ -1234,12 +1088,35 @@ def build_official_bridge_report(
         *adapter_runtime["pythonpath_entries"],
     ]
     if upstream["status"] == "ready" and adapter_ready and provider_ready:
+        pre_run_score_payload: dict[str, Any] | None = None
+        if resume and run_surfaces:
+            try:
+                pre_run_score_payload = score_summary(
+                    env_data_path=active_env_data_path,
+                    overall_output_dir=overall_output_dir,
+                    upperbound_output_dir=upperbound_output_dir,
+                    random_output_file=random_output_file,
+                    metric=metric,
+                    overall_agent_name=expected_overall_agent_name,
+                )
+            except Exception:
+                pre_run_score_payload = None
         for surface in run_surfaces:
+            pre_output = (
+                pre_run_score_payload.get("outputs", {}).get(surface)
+                if isinstance(pre_run_score_payload, dict)
+                and isinstance(pre_run_score_payload.get("outputs"), dict)
+                and isinstance(pre_run_score_payload.get("outputs", {}).get(surface), dict)
+                else None
+            )
+            if resume and pre_output and completed_surface_from_output(surface, pre_output):
+                run_results.append(skipped_complete_run_result(surface))
+                continue
             run_results.append(
                 run_official_surface(
                     surface,
                     upstream_root=root,
-                    env_data_path=env_data_path,
+                    env_data_path=active_env_data_path,
                     env_config_path=env_config,
                     agent_config_path=agent_config,
                     overall_output_dir=overall_output_dir,
@@ -1255,7 +1132,7 @@ def build_official_bridge_report(
     score_payload: dict[str, Any]
     try:
         score_payload = score_summary(
-            env_data_path=env_data_path,
+            env_data_path=active_env_data_path,
             overall_output_dir=overall_output_dir,
             upperbound_output_dir=upperbound_output_dir,
             random_output_file=random_output_file,
@@ -1285,12 +1162,15 @@ def build_official_bridge_report(
         isinstance(payload, dict) and payload.get("status") == "partial"
         for payload in (score_payload.get("outputs") or {}).values()
     )
+    bounded_subset = bool(dataset_boundary["bounded_subset"])
     if upstream["status"] != "ready":
         status = "upstream_missing"
     elif not adapter_ready:
         status = "adapter_overlay_missing"
     elif not provider_ready:
         status = "provider_overlay_missing"
+    elif all_scores_present and bounded_subset:
+        status = "bounded_subset_score_summary"
     elif all_scores_present:
         status = "official_score_summary"
     elif run_results or has_partial_outputs:
@@ -1319,8 +1199,12 @@ def build_official_bridge_report(
         state = score_payload.get("aippocampus_agent_state") or {}
         if state.get("semantic_worker_state") != "prepared":
             cannot_claim.append("semantic_worker_materialization_unless_agent_state_sidecars_are_present")
+    if dataset_boundary.get("status") == "env_data_unavailable":
+        cannot_claim.append("amemgym_env_data_unavailable")
     if provider == LOCAL_SCRIPTED_PROVIDER:
         cannot_claim.append("real_llm_memory_quality_or_provider_model_score_from_local_scripted_provider")
+    if bounded_subset:
+        cannot_claim.append("full_public_v1_base_fixed_arm_score_from_bounded_subset")
     cannot_claim.extend(
         [
             "source_backed_overlay_is_official_accuracy",
@@ -1329,10 +1213,71 @@ def build_official_bridge_report(
         ]
     )
 
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    official_score_claim = (
+        "bounded_subset_summary_not_full_v1_base"
+        if all_scores_present and bounded_subset
+        else "official_output_summary"
+        if all_scores_present
+        else "not_claimed"
+    )
+    executed_surface_count = sum(1 for result in run_results if result.get("status") != "skipped_complete")
+    runner_compatibility = (
+        "local_upstream_entrypoints_verified"
+        if executed_surface_count
+        else "existing_official_outputs_reused"
+        if run_results
+        else "planned_not_executed"
+    )
+    claim_boundary = {
+        "official_amemgym_score": official_score_claim,
+        "official_runner_compatibility": runner_compatibility,
+        "official_agent_adapter": "registered_overlay"
+        if arm != OFFICIAL_NATIVE_ARM and adapter_ready
+        else "not_required"
+        if arm == OFFICIAL_NATIVE_ARM
+        else "not_claimed",
+        "aippocampus_memory_layer": (
+            "clean_source_only_file_retrieval_baseline"
+            if arm == AIPPOCAMPUS_CLEAN_SOURCE_ARM
+            else "prepared_semantic_worker_required"
+            if arm == AIPPOCAMPUS_SEMANTIC_SIDECAR_ARM
+            else "not_applicable"
+        ),
+        "source_backed_overlay": "separate_not_merged",
+        "diagnosis": "not_run_by_this_summary",
+        "cost_latency": "process_elapsed_only_unless_provider_run_metadata_is_recorded",
+        "provider_score_kind": provider_env.public_status.get("score_kind", "live_or_environment_provider"),
+    }
+    fixed_arm_status = fixed_arm_execution_status(
+        all_scores_present=all_scores_present,
+        bounded_subset=bounded_subset,
+        has_partial_outputs=has_partial_outputs,
+        run_results=run_results,
+    )
+    fixed_arm_execution = build_fixed_arm_execution(
+        status=fixed_arm_status,
+        arm=arm,
+        provider=provider,
+        dataset=dataset_boundary,
+        score_payload=score_payload,
+        run_results=run_results,
+        resume=resume,
+        elapsed_ms=elapsed_ms,
+    )
+    if checkpoint_path is not None:
+        fixed_arm_execution["checkpoint"] = write_checkpoint_file(
+            checkpoint_path,
+            schema_version=SCHEMA_VERSION,
+            generated_at=generated_at,
+            fixed_arm_execution=fixed_arm_execution,
+            claim_boundary=claim_boundary,
+        )
+
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_amemgym_official_runner_bridge",
-        "generated_at": now_utc(),
+        "generated_at": generated_at,
         "status": status,
         "ok": upstream["status"] == "ready",
         "upstream": upstream,
@@ -1340,6 +1285,9 @@ def build_official_bridge_report(
             "arm": arm,
             "available_arms": list(OFFICIAL_ARM_ORDER),
             "env_data_label": safe_path_label(env_data_path),
+            "active_env_data_label": safe_path_label(active_env_data_path),
+            "max_cases": max_cases,
+            "bounded_subset": bounded_subset,
             "env_config_label": safe_path_label(env_config),
             "agent_config_label": safe_path_label(agent_config),
             "expected_overall_agent_name": expected_overall_agent_name,
@@ -1351,10 +1299,11 @@ def build_official_bridge_report(
             "runner": runner,
             "provider": provider,
             "reset": reset,
+            "resume": resume,
         },
         "runner_plan": safe_command_plan(
             upstream_root=root,
-            env_data_path=env_data_path,
+            env_data_path=active_env_data_path,
             env_config_path=env_config,
             agent_config_path=agent_config,
             overall_output_dir=overall_output_dir,
@@ -1363,6 +1312,12 @@ def build_official_bridge_report(
             runner=runner,
             arm=arm,
             provider=provider,
+            entrypoints=ENTRYPOINTS,
+            official_native_arm=OFFICIAL_NATIVE_ARM,
+            local_scripted_provider=LOCAL_SCRIPTED_PROVIDER,
+            default_provider_overlay_root=DEFAULT_PROVIDER_OVERLAY_ROOT,
+            default_adapter_overlay_root=DEFAULT_ADAPTER_OVERLAY_ROOT,
+            provider_plan_environment=provider_plan_environment,
         ),
         "provider": provider_env.public_status,
         "provider_runtime": {
@@ -1370,7 +1325,11 @@ def build_official_bridge_report(
             **provider_runtime["metadata"],
         },
         "agent": agent_public,
-        "aippocampus_official_adapter_protocol": aippocampus_official_adapter_protocol(),
+        "aippocampus_official_adapter_protocol": aippocampus_official_adapter_protocol(
+            official_native_arm=OFFICIAL_NATIVE_ARM,
+            clean_source_arm=AIPPOCAMPUS_CLEAN_SOURCE_ARM,
+            semantic_sidecar_arm=AIPPOCAMPUS_SEMANTIC_SIDECAR_ARM,
+        ),
         "aippocampus_agent_adapter": {
             "requested": arm != OFFICIAL_NATIVE_ARM,
             "status": adapter_runtime["status"],
@@ -1383,23 +1342,9 @@ def build_official_bridge_report(
         "metric_shapes": score_payload["metric_shapes"],
         "score_interpretation": score_payload.get("score_interpretation", {}),
         "run_results": run_results,
+        "fixed_arm_execution": fixed_arm_execution,
         "score_summary_error_type": score_error,
-        "claim_boundary": {
-            "official_amemgym_score": "official_output_summary" if all_scores_present else "not_claimed",
-            "official_runner_compatibility": "local_upstream_entrypoints_verified" if run_results else "planned_not_executed",
-            "official_agent_adapter": "registered_overlay" if arm != OFFICIAL_NATIVE_ARM and adapter_ready else "not_required" if arm == OFFICIAL_NATIVE_ARM else "not_claimed",
-            "aippocampus_memory_layer": (
-                "clean_source_only_file_retrieval_baseline"
-                if arm == AIPPOCAMPUS_CLEAN_SOURCE_ARM
-                else "prepared_semantic_worker_required"
-                if arm == AIPPOCAMPUS_SEMANTIC_SIDECAR_ARM
-                else "not_applicable"
-            ),
-            "source_backed_overlay": "separate_not_merged",
-            "diagnosis": "not_run_by_this_summary",
-            "cost_latency": "process_elapsed_only_unless_provider_run_metadata_is_recorded",
-            "provider_score_kind": provider_env.public_status.get("score_kind", "live_or_environment_provider"),
-        },
+        "claim_boundary": claim_boundary,
         "privacy_boundary": {
             "raw_text_emitted": False,
             "absolute_paths_emitted": False,
@@ -1413,7 +1358,7 @@ def build_official_bridge_report(
             "git_policy": "do not commit raw AMemGym rows, model outputs, API keys, or absolute local paths",
         },
         "cannot_claim": cannot_claim,
-        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        "elapsed_ms": elapsed_ms,
     }
 
 
@@ -1491,6 +1436,24 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SURFACE[,SURFACE]",
         help="Run official surfaces before summarizing. Supported: overall, upperbound, random.",
     )
+    parser.add_argument(
+        "--max-cases",
+        type=int,
+        help=(
+            "Write and run an ignored first-N env-data subset for bounded live-provider debugging. "
+            "Subset output is never treated as a full public v1.base score."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        help="Write a public-safe resumable progress checkpoint with counts, hashes, and redacted labels only.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip requested surfaces whose official summary artifacts are already complete.",
+    )
     parser.add_argument("--reset", action="store_true", help="Pass --reset to official overall runs.")
     parser.add_argument("--output", type=Path, default=DEFAULT_REPORT_OUTPUT)
     parser.add_argument("--json", dest="json_output", action="store_true")
@@ -1515,6 +1478,9 @@ def main(argv: list[str] | None = None) -> int:
         openrouter_model=args.openrouter_model,
         reset=args.reset,
         arm=args.arm,
+        max_cases=args.max_cases,
+        checkpoint_path=args.checkpoint,
+        resume=args.resume,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -54,6 +55,29 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertIn("amemgym.eval.random", payload["runner_plan"]["entrypoints"])
         self.assertIn("official_overall_missing", payload["cannot_claim"])
         self.assertNotIn("official_overall", payload["metrics"])
+
+    def test_missing_env_data_reports_blocker_without_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            missing_env_data = root / "missing-data.json"
+            agent_config = upstream / "configs" / "agent" / "native.json"
+
+            payload = benchmark.build_official_bridge_report(
+                upstream_root=upstream,
+                env_data_path=missing_env_data,
+                agent_config_path=agent_config,
+                overall_output_dir=root / "missing-overall",
+                upperbound_output_dir=root / "missing-upperbound",
+                random_output_file=root / "missing-random.json",
+            )
+
+        self.assertEqual(payload["status"], "runner_plan_ready_missing_outputs")
+        self.assertEqual(payload["score_summary_error_type"], "FileNotFoundError")
+        self.assertEqual(payload["fixed_arm_execution"]["dataset"]["status"], "env_data_unavailable")
+        self.assertIn("amemgym_env_data_unavailable", payload["cannot_claim"])
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(str(root), dumped)
 
     def test_score_summary_computes_official_compatible_memory_score_without_raw_leaks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -166,6 +190,123 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertEqual(payload["claim_boundary"]["official_amemgym_score"], "not_claimed")
         self.assertIn("official_normalized_memory_score_missing", payload["cannot_claim"])
         self.assertIn("full_local_official_runner_execution", payload["cannot_claim"])
+
+    def test_bounded_subset_report_writes_public_safe_checkpoint_without_score_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            env_data = root / "data.json"
+            self._write_env_data(env_data)
+            agent_config = upstream / "configs" / "agent" / "native.json"
+            output_root = root / "outputs" / LOCAL_PATH_SENTINEL
+            checkpoint_path = root / "private-checkpoints" / "amemgym-state.json"
+            self._write_official_outputs(output_root)
+            (output_root / "upperbound" / "openai" / "gpt-4.1-mini" / "utilization_metrics.json").write_text(
+                json.dumps({"accuracy": [[[1.0, 1.0], [1.0, 1.0]]]}),
+                encoding="utf-8",
+            )
+            (output_root / "random_metrics.json").write_text(
+                json.dumps({"accuracy": [[[0.25, 0.25], [0.25, 0.25]]]}),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(benchmark, "DEFAULT_OFFICIAL_OUTPUT_ROOT", root / "generated"):
+                payload = benchmark.build_official_bridge_report(
+                    upstream_root=upstream,
+                    env_data_path=env_data,
+                    agent_config_path=agent_config,
+                    overall_output_dir=output_root / "overall",
+                    upperbound_output_dir=output_root / "upperbound",
+                    random_output_file=output_root / "random_metrics.json",
+                    max_cases=1,
+                    checkpoint_path=checkpoint_path,
+                )
+                checkpoint_exists = checkpoint_path.exists()
+                checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["status"], "bounded_subset_score_summary")
+        self.assertEqual(
+            payload["claim_boundary"]["official_amemgym_score"],
+            "bounded_subset_summary_not_full_v1_base",
+        )
+        self.assertEqual(payload["fixed_arm_execution"]["status"], "complete_bounded_subset_outputs_not_full_v1_base")
+        self.assertEqual(payload["fixed_arm_execution"]["dataset"]["full_item_count"], 2)
+        self.assertEqual(payload["fixed_arm_execution"]["dataset"]["run_item_count"], 1)
+        self.assertTrue(payload["fixed_arm_execution"]["dataset"]["bounded_subset"])
+        self.assertIn("progressive_subset_debug_only", payload["fixed_arm_execution"]["dataset"]["boundary"])
+        self.assertEqual(
+            payload["fixed_arm_execution"]["cost_latency"]["provider_cost_status"],
+            "unavailable",
+        )
+        self.assertEqual(
+            payload["fixed_arm_execution"]["cost_latency"]["unavailable_reason"],
+            "provider_usage_metadata_not_extracted_from_official_outputs",
+        )
+        self.assertEqual(payload["fixed_arm_execution"]["checkpoint"]["status"], "written")
+        self.assertTrue(checkpoint_exists)
+        self.assertEqual(checkpoint["kind"], "aippocampus_amemgym_official_runner_checkpoint")
+        self.assertEqual(checkpoint["phase_states"]["overall"]["status"], "complete")
+        self.assertEqual(checkpoint["phase_states"]["overall"]["completed_item_count"], 1)
+        self.assertEqual(checkpoint["phase_states"]["random"]["completed_file_count"], 1)
+        self.assertEqual(checkpoint["cost_latency"]["provider_cost_status"], "unavailable")
+        dumped = json.dumps({"payload": payload, "checkpoint": checkpoint}, ensure_ascii=False)
+        for forbidden in (RAW_QUERY, LOCAL_PATH_SENTINEL, str(output_root), str(checkpoint_path), FAKE_PROVIDER_VALUE):
+            self.assertNotIn(forbidden, dumped)
+        self.assertNotIn("api_key", dumped)
+        self.assertIn("full_public_v1_base_fixed_arm_score_from_bounded_subset", payload["cannot_claim"])
+
+    def test_resume_skips_completed_surfaces_and_reports_missing_phase_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            env_data = root / "data.json"
+            self._write_env_data(env_data)
+            agent_config = upstream / "configs" / "agent" / "native.json"
+            output_root = root / "resume"
+            self._write_official_outputs(output_root)
+            shutil.rmtree(output_root / "upperbound")
+
+            def fake_run(surface: str, **_kwargs: object) -> dict[str, object]:
+                return {
+                    "surface": surface,
+                    "returncode": 0,
+                    "ok": True,
+                    "stdout_sha1": None,
+                    "stderr_sha1": None,
+                    "stdout_line_count": 0,
+                    "stderr_line_count": 0,
+                    "provider": {"provider": "default"},
+                    "elapsed_ms": 12.5,
+                }
+
+            with mock.patch.object(benchmark, "run_official_surface", side_effect=fake_run) as run_mock:
+                payload = benchmark.build_official_bridge_report(
+                    upstream_root=upstream,
+                    env_data_path=env_data,
+                    agent_config_path=agent_config,
+                    overall_output_dir=output_root / "overall",
+                    upperbound_output_dir=output_root / "upperbound",
+                    random_output_file=output_root / "random_metrics.json",
+                    run_surfaces=("overall", "upperbound", "random"),
+                    resume=True,
+                )
+
+        self.assertEqual([call.args[0] for call in run_mock.call_args_list], ["upperbound"])
+        self.assertEqual(payload["fixed_arm_execution"]["resume"]["skipped_surfaces"], ["overall", "random"])
+        self.assertEqual(payload["fixed_arm_execution"]["phase_states"]["overall"]["status"], "complete")
+        self.assertEqual(payload["fixed_arm_execution"]["phase_states"]["random"]["status"], "complete")
+        self.assertEqual(payload["fixed_arm_execution"]["phase_states"]["upperbound"]["status"], "missing")
+        self.assertEqual(
+            payload["fixed_arm_execution"]["phase_states"]["upperbound"]["incomplete_reason"],
+            "official_upperbound_output_missing",
+        )
+        self.assertEqual(payload["fixed_arm_execution"]["phase_states"]["upperbound"]["elapsed_ms"], 12.5)
+        self.assertEqual(payload["run_results"][0]["status"], "skipped_complete")
+        self.assertEqual(payload["run_results"][0]["surface"], "overall")
+        self.assertEqual(payload["run_results"][2]["surface"], "random")
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(RAW_QUERY, dumped)
+        self.assertNotIn(str(output_root), dumped)
 
     def test_run_surface_uses_python_module_from_local_upstream_without_emitting_secret_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

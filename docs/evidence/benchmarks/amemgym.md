@@ -144,6 +144,24 @@ or output discovery, but they are not evidence numbers and must not be promoted
 into public reports. Use the full public `v1.base` fixed arm before recording
 `Overall`, `UB`, `Random`, or normalized `Memory` as evidence.
 
+For bounded live-provider debugging, use `--max-cases`, `--resume`, and
+`--checkpoint` together. `--max-cases` writes an ignored first-N env-data subset
+under `.tmp/amemgym-official/v1.base/bounded-env/`; the report marks it as
+`progressive_subset_debug_only` and keeps
+`full_public_v1_base_fixed_arm_score_from_bounded_subset` in `cannot_claim`.
+`--resume` skips requested surfaces whose summary artifacts are already
+complete, and `--checkpoint` writes a public-safe state file containing only
+phase status, elapsed subprocess time, completed counts, hashes, and redacted
+labels:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider openrouter --arm official_native_full_history --run overall,upperbound,random --max-cases 1 --resume --checkpoint .tmp\amemgym-official\v1.base\live-native-checkpoint.json --output benchmark_corpus\reports\amemgym-official-bounded-native.json --json
+```
+
+The checkpoint is a recovery/audit surface, not raw official output. Provider
+cost remains `unavailable` unless a later run records a stable sanitized usage
+field from official outputs or provider metadata.
+
 The official bridge supports three arm names:
 
 | Arm | What it measures | Claim boundary |
@@ -201,9 +219,10 @@ the full fixed arm has complete `Overall`, `UB`, and `Random` outputs.
 
 This attempt proves the local official entrypoints, uv environment, provider
 wiring, and redacted summary path are real. It does not satisfy #742's full
-score acceptance criteria. The next useful engineering step is resumable /
-bounded official execution support or a cheaper documented fixed subset for
-debugging, while keeping the full public `v1.base` score boundary unclaimed.
+score acceptance criteria. The #1052 bridge update added bounded subset,
+resume-skip, and public-safe checkpoint support, but the full public `v1.base`
+score boundary remains unclaimed until a later dated run completes and reviews
+the whole fixed arm.
 
 Official-compatible local-scripted protocol run on 2026-06-07:
 
@@ -384,12 +403,13 @@ Cannot claim now:
 
 The 2026-06-09 blocker note
 [`amemgym-official-live-provider-blocker-2026-06-09.md`](amemgym-official-live-provider-blocker-2026-06-09.md)
-closes #958 as the ownerless deferred slice. Full live-provider official-runner
-evidence remains blocked until a later dated note records a bounded/resumable
-full public `v1.base` fixed arm, pinned model/provider versions, complete
-`overall` / `upperbound` / `random` outputs, sanitized cost/latency, and an
-explicit Native/RAG/AWI/AWE parity decision without leaking raw rows, model
-outputs, local paths, or keys.
+closes #958 as the ownerless deferred slice. #1052 added the bounded/resumable
+execution shell and public-safe checkpoint report, but full live-provider
+official-runner evidence remains blocked until a later dated note records a
+complete full public `v1.base` fixed arm, pinned model/provider versions,
+complete `overall` / `upperbound` / `random` outputs, sanitized cost/latency,
+and an explicit Native/RAG/AWI/AWE parity decision without leaking raw rows,
+model outputs, local paths, or keys.
 
 The semantic-sidecar arm also needs a real pre-score worker materializer that
 writes reviewed working-memory/semantic sidecar artifacts before
