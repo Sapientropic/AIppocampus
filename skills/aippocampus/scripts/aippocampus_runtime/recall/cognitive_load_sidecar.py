@@ -41,6 +41,9 @@ SIDE_CAR_CANNOT_CLAIM = [
     "private_stress_narrative_stored",
 ]
 CALIBRATION_KIND = "aippocampus_cognitive_load_calibration_report"
+PUBLIC_BEHAVIOR_TRACE_FEEDBACK_REPORT_KIND = (
+    "aippocampus_cognitive_load_public_behavior_trace_feedback_report"
+)
 CALIBRATION_CANNOT_CLAIM = [
     "private_real_history_calibration",
     "live_hook_capture_quality",
@@ -87,6 +90,11 @@ def _as_list(value: Any) -> list[Any]:
 
 def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _stable_report_id(prefix: str, *parts: Any, length: int = 14) -> str:
+    digest = hashlib.sha256(_stable_json(parts).encode("utf-8")).hexdigest()[:length]
+    return f"{prefix}_{digest}"
 
 
 def source_ref_key(source_ref: Mapping[str, Any]) -> str:
@@ -166,6 +174,7 @@ def build_cognitive_load_sidecar(
     pitfall_repetition_event_count = 0
     reviewed_load_signal_count = 0
     load_weight_false_positive_count = 0
+    irrelevant_load_drag_count = 0
     reviewed_caution_hint_count = 0
     useful_caution_hint_count = 0
     overpersonalization_from_load_signal_count = 0
@@ -186,6 +195,8 @@ def build_cognitive_load_sidecar(
             reviewed_load_signal_count += 1
             if event.get("load_weight_false_positive"):
                 load_weight_false_positive_count += 1
+            if event.get("irrelevant_load_drag"):
+                irrelevant_load_drag_count += 1
         if event.get("caution_hint_reviewed"):
             reviewed_caution_hint_count += 1
             if event.get("caution_hint_useful"):
@@ -267,6 +278,11 @@ def build_cognitive_load_sidecar(
                 load_weight_false_positive_count,
                 reviewed_load_signal_count,
             ),
+            "irrelevant_load_drag_rate": _rate(
+                irrelevant_load_drag_count,
+                reviewed_load_signal_count,
+            ),
+            "irrelevant_load_drag_count": irrelevant_load_drag_count,
             "caution_hint_useful_rate": _rate(
                 useful_caution_hint_count,
                 reviewed_caution_hint_count,
@@ -339,6 +355,7 @@ def build_cognitive_load_calibration_report(
                 "metric_source": "observable_behavior_counts_and_score_breakdown",
                 "max_load_boost": _as_float(metrics.get("max_load_boost")),
                 "load_weight_false_positive_rate": metrics.get("load_weight_false_positive_rate"),
+                "irrelevant_load_drag_rate": metrics.get("irrelevant_load_drag_rate"),
                 "load_weight_decay_coverage": metrics.get("load_weight_decay_coverage"),
                 "boosted_candidate_count": boosted_candidate_count,
                 "source_reopen_recommended_count": source_reopen_recommended_count,
@@ -380,6 +397,8 @@ def build_cognitive_load_calibration_report(
             "refresh_recommended_count": refresh_recommended_count,
             "load_weight_false_positive_rate": metrics.get("load_weight_false_positive_rate"),
             "caution_hint_useful_rate": metrics.get("caution_hint_useful_rate"),
+            "irrelevant_load_drag_count": int(metrics.get("irrelevant_load_drag_count") or 0),
+            "irrelevant_load_drag_rate": metrics.get("irrelevant_load_drag_rate"),
             "overpersonalization_from_load_signal_count": int(
                 metrics.get("overpersonalization_from_load_signal_count") or 0
             ),
@@ -404,6 +423,121 @@ def build_cognitive_load_calibration_report(
             }
         },
         "cannot_claim": cannot_claim,
+    }
+
+
+def _feedback_outcome(event: Mapping[str, Any]) -> str:
+    if event.get("overpersonalization_from_load_signal"):
+        return "overpersonalization_risk"
+    if event.get("irrelevant_load_drag") or event.get("load_weight_false_positive"):
+        return "irrelevant_load_drag"
+    if event.get("caution_hint_reviewed"):
+        return "useful_caution_hint" if event.get("caution_hint_useful") else "caution_hint_not_useful"
+    if event.get("load_weight_reviewed"):
+        return "reviewed_no_issue"
+    return "unreviewed"
+
+
+def _public_feedback_case_summary(event: Mapping[str, Any]) -> dict[str, Any]:
+    event_type = _event_type(event)
+    return {
+        "case_id": _stable_report_id(
+            "load_feedback_case",
+            event.get("public_trace_id") or event.get("event_id"),
+            event_type,
+            _feedback_outcome(event),
+        ),
+        "event_type": event_type,
+        "feedback_outcome": _feedback_outcome(event),
+        "source_ref_count": len(_as_list(event.get("source_refs"))),
+        "load_weight_reviewed": bool(event.get("load_weight_reviewed")),
+        "caution_hint_reviewed": bool(event.get("caution_hint_reviewed")),
+    }
+
+
+def build_public_behavior_trace_feedback_report(
+    events: Iterable[Mapping[str, Any]],
+    candidates: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    now: str | None = None,
+) -> dict[str, Any]:
+    """Report public behavior-trace feedback without turning load into truth.
+
+    This is the #575 public-reproducibility bridge: public fixtures can mark
+    when a load hint helped, dragged attention, or risked over-personalization.
+    The output intentionally keeps only anonymized case summaries and aggregate
+    rates, leaving raw source refs, notes, paths, and trace text out of scope.
+    """
+
+    event_rows = list(events)
+    signal_events = [
+        event for event in event_rows if _event_weight(event) > 0 and _source_keys(event.get("source_refs"))
+    ]
+    sidecar = build_cognitive_load_sidecar(signal_events, now=now)
+    ranked = apply_cognitive_load_boosts(list(candidates or []), sidecar)
+    calibration = build_cognitive_load_calibration_report(sidecar, ranked)
+    sidecar_metrics = _as_mapping(sidecar.get("metrics"))
+    calibration_metrics = _as_mapping(calibration.get("metrics"))
+    case_summaries = [_public_feedback_case_summary(event) for event in signal_events]
+    helpful_caution_hint_count = sum(
+        1 for case in case_summaries if case["feedback_outcome"] == "useful_caution_hint"
+    )
+    reviewed_feedback_case_count = sum(
+        1
+        for case in case_summaries
+        if case["load_weight_reviewed"] or case["caution_hint_reviewed"]
+    )
+
+    return {
+        "schema_version": 1,
+        "kind": PUBLIC_BEHAVIOR_TRACE_FEEDBACK_REPORT_KIND,
+        "mode": "public_behavior_trace_feedback_fixture",
+        "authority": "diagnostic_only",
+        "projection_boundary": PROJECTION_BOUNDARY,
+        "metrics": {
+            "public_behavior_trace_case_count": len(case_summaries),
+            "reviewed_feedback_case_count": reviewed_feedback_case_count,
+            "helpful_caution_hint_count": helpful_caution_hint_count,
+            "boosted_candidate_count": int(calibration_metrics.get("boosted_candidate_count") or 0),
+            "source_reopen_recommended_count": int(
+                calibration_metrics.get("source_reopen_recommended_count") or 0
+            ),
+            "load_weight_false_positive_rate": sidecar_metrics.get("load_weight_false_positive_rate"),
+            "caution_hint_useful_rate": sidecar_metrics.get("caution_hint_useful_rate"),
+            "irrelevant_load_drag_count": int(sidecar_metrics.get("irrelevant_load_drag_count") or 0),
+            "irrelevant_load_drag_rate": sidecar_metrics.get("irrelevant_load_drag_rate"),
+            "overpersonalization_from_load_signal_count": int(
+                sidecar_metrics.get("overpersonalization_from_load_signal_count") or 0
+            ),
+        },
+        "case_summaries": case_summaries,
+        "calibration_report": calibration,
+        "privacy_boundary": {
+            "raw_source_handles_emitted": False,
+            "raw_paths_emitted": False,
+            "raw_notes_emitted": False,
+            "emotion_or_personality_claims_emitted": False,
+        },
+        "issue_readouts": {
+            "github_575": {
+                "public_behavior_trace_feedback": "measured_public_fixture",
+                "false_positive_rate": sidecar_metrics.get("load_weight_false_positive_rate"),
+                "caution_hint_useful_rate": sidecar_metrics.get("caution_hint_useful_rate"),
+                "irrelevant_load_drag_rate": sidecar_metrics.get("irrelevant_load_drag_rate"),
+                "live_hook_capture": "not_run",
+                "host_timing_quality": "not_measured",
+                "user_visible_recall_improvement": "not_measured",
+                "closeout_eligible": False,
+            }
+        },
+        "cannot_claim": sorted(
+            {
+                *[str(item) for item in _as_list(calibration.get("cannot_claim"))],
+                "default_foreground_policy_quality",
+                "host_timing_quality",
+                "private_history_generality",
+            }
+        ),
     }
 
 
