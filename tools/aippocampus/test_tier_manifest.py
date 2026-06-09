@@ -234,6 +234,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_storage_capacity_report",
         "test_storage_governance",
         "test_subconscious_agent",
+        "test_subconscious_event_salience_gate",
         "test_subconscious_jobs",
         "test_subconscious_review",
         "test_subconscious_scheduler",

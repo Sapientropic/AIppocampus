@@ -29,6 +29,10 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `aippocampus_runtime.subconscious.agent`: package-owner minimal read-only
   tool loop for concept edges.
 - `aippocampus_runtime.subconscious.jobs`: multi-job background cognition runner.
+- `aippocampus_runtime.subconscious.event_salience_gate`: opt-in deterministic
+  intake gate for recent clean-source turns. It writes/rebuilds salience
+  sidecar rows only as candidate-prioritization metadata, never as formal
+  memory or source truth.
 - `aippocampus_runtime.subconscious.staging_maintenance`: dry-run maintenance reporter for
   local-private staging queues. It classifies rows and pressure, but does not
   archive, compact, or delete.
@@ -66,6 +70,10 @@ but they must not rewrite source, delete source, or directly write formal memory
   edges consumed by `aippocampus_runtime.navigation.concept_graph`.
 - `$CODEX_HOME/aippocampus-registry/subconscious_jobs.jsonl`: staging findings
   from non-edge jobs.
+- `$CODEX_HOME/aippocampus-registry/subconscious_event_salience.jsonl`:
+  optional rebuildable intake metadata from `--event-salience-gate`. Rows keep
+  compact source refs, event kind, bucket/score, reason codes, and skip reason;
+  public summaries expose only aggregate counts.
 - `$CODEX_HOME/aippocampus-registry/agent_fallback_tasks.jsonl`: no-key
   fallback work orders queued by the scheduler when an agent fallback
   capability is visible.
