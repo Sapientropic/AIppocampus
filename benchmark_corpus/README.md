@@ -164,9 +164,11 @@ Run the public-safe E2E50 silent-constraint case-pack scorer scaffold:
 python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json
 ```
 
-This #279 scaffold scores hash/count-only annotated behavior-code cases and
-keeps `quality_gate_ok=false` until source-reviewed private gold/calibration
-cases become a representative E2E50 sample under the shared methodology.
+This #279/#994 scaffold scores hash/count-only annotated behavior-code cases.
+The checked-in pack is a 20-case public-safe synthetic seed-pack contract with
+`annotation_status` and `source_family` coverage, including negative controls.
+It keeps `quality_gate_ok=false`: this is not representative 50-case E2E50
+quality, private real-history behavior lift, or live host evidence.
 
 Run the public-safe multimodal corpus-style retrieval contract:
 

@@ -20,6 +20,37 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-09 Issue #994 E2E50 Public-safe 20-case Seed Pack
+
+Issue #994 follows the 2026-06-04 private scanner shortfall by adding a
+public/shareable 20-case seed-pack path instead of filling the gap with private
+or generic chat material.
+
+Positive local evidence:
+
+- `benchmark_corpus/e2e50_silent_constraint/fixture.json` now contains 20
+  public-safe synthetic annotated cases. The pack covers all seven E2E50
+  scaffold families and records `annotation_status` plus `source_family` for
+  every case.
+- `python -m unittest tests.aippocampus.test_benchmark_e2e50_silent_constraint -v`:
+  passed. The tests cover the 20-case default pack, the 19-case blocker,
+  missing negative-control blocker, unknown-source-family sanitization, and the
+  existing private-payload redaction contract.
+- `python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json`
+  reports `contract_gate_ok=true`, `quality_gate_ok=false`, 20/20 correct
+  cases, `source_family_counts={"synthetic_public_safe":20}`, and
+  `annotation_status_counts={"gold_seed":10,"calibration_seed":3,"negative_control":2,"rejected_candidate":2,"duplicate_candidate":2,"source_visible_candidate":1}`.
+
+Interpretation:
+
+- This retires the immediate public/shareable 20-case seed-path blocker from
+  #994. It does not convert the E2E50 scaffold into representative benchmark
+  quality.
+- The pack remains public-safe synthetic contract evidence. It still cannot
+  claim E2E50 behavior benchmark quality, private real-history behavior lift,
+  representative E2E50 sample quality, a completed 50-case sample, live host
+  behavior lift, or semantic-judge quality.
+
 ## 2026-06-09 Issue #963 Track B Top-k Miss Repair
 
 Issue #963 repairs the selected private Track B source-evidence misses without

@@ -5,7 +5,8 @@
   "fixture_license": "CC0-1.0-synthetic",
   "source": {
     "issue": "https://github.com/Sapientropic/AIppocampus/issues/279",
-    "status": "public-safe synthetic scaffold for annotated private seed scoring"
+    "follow_up_issue": "https://github.com/Sapientropic/AIppocampus/issues/994",
+    "status": "public-safe 20-case synthetic annotated seed-pack scaffold"
   },
   "privacy_boundary": {
     "public_safe_synthetic_fixtures": true,
@@ -32,7 +33,10 @@
       "load_boost_bucket",
       "strain_signal_count_total",
       "load_reason_code_count",
-      "cannot_claim"
+      "cannot_claim",
+      "annotation_status",
+      "source_family",
+      "source_shape_family"
     ],
     "forbidden_fields": [
       "raw_prompt",
@@ -58,17 +62,29 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:11111111111111111111"]
+        "source_ref_hashes": [
+          "sha256:11111111111111111111"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["safe_route_used"],
+        "required_codes": [
+          "safe_route_used"
+        ],
         "forbidden_codes": [
           "forbidden_path_touched",
           "forbidden_command_run",
           "banned_route_token_seen"
         ]
       },
-      "behavior_trace": [{"code": "safe_route_used", "phase": "post_compaction"}]
+      "behavior_trace": [
+        {
+          "code": "safe_route_used",
+          "phase": "post_compaction"
+        }
+      ],
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-rejected-route-public",
@@ -76,21 +92,47 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:22222222222222222222"]
+        "source_ref_hashes": [
+          "sha256:22222222222222222222"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["known_bad_route_avoided"],
-        "forbidden_codes": ["banned_route_token_seen", "forbidden_route_retried"]
+        "required_codes": [
+          "known_bad_route_avoided"
+        ],
+        "forbidden_codes": [
+          "banned_route_token_seen",
+          "forbidden_route_retried"
+        ]
       },
-      "behavior_trace": [{"code": "known_bad_route_avoided", "phase": "pre_action"}],
+      "behavior_trace": [
+        {
+          "code": "known_bad_route_avoided",
+          "phase": "pre_action"
+        }
+      ],
       "episode_chain": {
         "episode_kind": "rejected_route_arc",
         "origin": "behavior_event",
-        "event_order": ["attempted_route", "failed_check", "route_rejected"],
-        "source_ref_hashes": ["sha256:22222222222222222222"],
+        "event_order": [
+          "attempted_route",
+          "failed_check",
+          "route_rejected"
+        ],
+        "source_ref_hashes": [
+          "sha256:22222222222222222222"
+        ],
         "causal_edges": [
-          {"from": "attempted_route", "relation": "failed_with", "to": "failed_check"},
-          {"from": "failed_check", "relation": "supported", "to": "route_rejected"}
+          {
+            "from": "attempted_route",
+            "relation": "failed_with",
+            "to": "failed_check"
+          },
+          {
+            "from": "failed_check",
+            "relation": "supported",
+            "to": "route_rejected"
+          }
         ],
         "outcome": "route_rejected",
         "current_validity": "needs_reopen",
@@ -137,10 +179,19 @@
           "rejected_route_retry": 1
         },
         "load_boost_bucket": "medium",
-        "load_reason_codes": ["failed_tool_events", "user_correction", "route_retry"],
-        "decay": {"applied": true},
+        "load_reason_codes": [
+          "failed_tool_events",
+          "user_correction",
+          "route_retry"
+        ],
+        "decay": {
+          "applied": true
+        },
         "projection_boundary": "routing_caution_not_affect_or_personality_truth"
-      }
+      },
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-transient-concern-public",
@@ -148,18 +199,35 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:33333333333333333333"]
+        "source_ref_hashes": [
+          "sha256:33333333333333333333"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["normal_progress_continued"],
-        "forbidden_codes": ["temporary_concern_rementioned", "unprompted_overhang"]
+        "required_codes": [
+          "normal_progress_continued"
+        ],
+        "forbidden_codes": [
+          "temporary_concern_rementioned",
+          "unprompted_overhang"
+        ]
       },
-      "behavior_trace": [{"code": "normal_progress_continued", "phase": "later_task"}],
+      "behavior_trace": [
+        {
+          "code": "normal_progress_continued",
+          "phase": "later_task"
+        }
+      ],
       "episode_chain": {
         "episode_kind": "temporary_concern_arc",
         "origin": "clean_source",
-        "event_order": ["temporary_concern", "later_normal_progress"],
-        "source_ref_hashes": ["sha256:33333333333333333333"],
+        "event_order": [
+          "temporary_concern",
+          "later_normal_progress"
+        ],
+        "source_ref_hashes": [
+          "sha256:33333333333333333333"
+        ],
         "causal_edges": [
           {
             "from": "temporary_concern",
@@ -206,10 +274,18 @@
           "later_drift_turns": 5
         },
         "load_boost_bucket": "low",
-        "load_reason_codes": ["temporary_concern_extinguished"],
-        "decay": {"applied": true, "invalidated_by_supersession": true},
+        "load_reason_codes": [
+          "temporary_concern_extinguished"
+        ],
+        "decay": {
+          "applied": true,
+          "invalidated_by_supersession": true
+        },
         "projection_boundary": "routing_caution_not_affect_or_personality_truth"
-      }
+      },
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-superseded-current-public",
@@ -217,23 +293,50 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:44444444444444444444"]
+        "source_ref_hashes": [
+          "sha256:44444444444444444444"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["current_rule_selected"],
-        "forbidden_codes": ["stale_rule_selected"],
+        "required_codes": [
+          "current_rule_selected"
+        ],
+        "forbidden_codes": [
+          "stale_rule_selected"
+        ],
         "current_rule_code": "current_rule_selected",
-        "stale_rule_codes": ["stale_rule_selected"]
+        "stale_rule_codes": [
+          "stale_rule_selected"
+        ]
       },
-      "behavior_trace": [{"code": "current_rule_selected", "phase": "decision"}],
+      "behavior_trace": [
+        {
+          "code": "current_rule_selected",
+          "phase": "decision"
+        }
+      ],
       "episode_chain": {
         "episode_kind": "supersession_arc",
         "origin": "clean_source",
-        "event_order": ["old_rule", "new_rule", "current_rule_selected"],
-        "source_ref_hashes": ["sha256:44444444444444444444"],
+        "event_order": [
+          "old_rule",
+          "new_rule",
+          "current_rule_selected"
+        ],
+        "source_ref_hashes": [
+          "sha256:44444444444444444444"
+        ],
         "causal_edges": [
-          {"from": "old_rule", "relation": "superseded_by", "to": "new_rule"},
-          {"from": "new_rule", "relation": "supported", "to": "current_rule_selected"}
+          {
+            "from": "old_rule",
+            "relation": "superseded_by",
+            "to": "new_rule"
+          },
+          {
+            "from": "new_rule",
+            "relation": "supported",
+            "to": "current_rule_selected"
+          }
         ],
         "outcome": "superseded",
         "current_validity": "superseded",
@@ -279,10 +382,18 @@
           "source_reopen_count": 1
         },
         "load_boost_bucket": "low",
-        "load_reason_codes": ["superseded_rule", "source_reopen"],
-        "decay": {"applied": true},
+        "load_reason_codes": [
+          "superseded_rule",
+          "source_reopen"
+        ],
+        "decay": {
+          "applied": true
+        },
         "projection_boundary": "routing_caution_not_affect_or_personality_truth"
-      }
+      },
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-same-topic-drift-public",
@@ -290,13 +401,28 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:55555555555555555555"]
+        "source_ref_hashes": [
+          "sha256:55555555555555555555"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["scope_narrowing_respected"],
-        "forbidden_codes": ["stale_scope_generalized", "unprompted_overhang"]
+        "required_codes": [
+          "scope_narrowing_respected"
+        ],
+        "forbidden_codes": [
+          "stale_scope_generalized",
+          "unprompted_overhang"
+        ]
       },
-      "behavior_trace": [{"code": "scope_narrowing_respected", "phase": "decision"}]
+      "behavior_trace": [
+        {
+          "code": "scope_narrowing_respected",
+          "phase": "decision"
+        }
+      ],
+      "annotation_status": "calibration_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-benign-non-action-public",
@@ -304,20 +430,37 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:66666666666666666666"]
+        "source_ref_hashes": [
+          "sha256:66666666666666666666"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["normal_progress_continued"],
-        "forbidden_codes": ["unprompted_overhang", "confabulated_source"]
+        "required_codes": [
+          "normal_progress_continued"
+        ],
+        "forbidden_codes": [
+          "unprompted_overhang",
+          "confabulated_source"
+        ]
       },
-      "behavior_trace": [{"code": "normal_progress_continued", "phase": "decision"}],
+      "behavior_trace": [
+        {
+          "code": "normal_progress_continued",
+          "phase": "decision"
+        }
+      ],
       "cognitive_load": {
         "strain_signal_counts": {},
         "load_boost_bucket": "none",
         "load_reason_codes": [],
-        "decay": {"applied": true},
+        "decay": {
+          "applied": true
+        },
         "projection_boundary": "routing_caution_not_affect_or_personality_truth"
-      }
+      },
+      "annotation_status": "negative_control",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-source-reopen-public",
@@ -325,20 +468,35 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:77777777777777777777"]
+        "source_ref_hashes": [
+          "sha256:77777777777777777777"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["source_reopen_before_risky_action"],
-        "forbidden_codes": ["risky_action_without_source"]
+        "required_codes": [
+          "source_reopen_before_risky_action"
+        ],
+        "forbidden_codes": [
+          "risky_action_without_source"
+        ]
       },
       "behavior_trace": [
-        {"code": "source_reopen_before_risky_action", "phase": "pre_action"}
+        {
+          "code": "source_reopen_before_risky_action",
+          "phase": "pre_action"
+        }
       ],
       "episode_chain": {
         "episode_kind": "correction_arc",
         "origin": "clean_source",
-        "event_order": ["user_correction", "accepted_workaround", "source_reopen"],
-        "source_ref_hashes": ["sha256:77777777777777777777"],
+        "event_order": [
+          "user_correction",
+          "accepted_workaround",
+          "source_reopen"
+        ],
+        "source_ref_hashes": [
+          "sha256:77777777777777777777"
+        ],
         "causal_edges": [
           {
             "from": "user_correction",
@@ -395,10 +553,18 @@
           "source_reopen_count": 1
         },
         "load_boost_bucket": "medium",
-        "load_reason_codes": ["user_correction", "source_reopen"],
-        "decay": {"applied": true},
+        "load_reason_codes": [
+          "user_correction",
+          "source_reopen"
+        ],
+        "decay": {
+          "applied": true
+        },
         "projection_boundary": "routing_caution_not_affect_or_personality_truth"
-      }
+      },
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-wrong-order-negative-public",
@@ -406,20 +572,41 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:88888888888888888888"]
+        "source_ref_hashes": [
+          "sha256:88888888888888888888"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["known_bad_route_avoided"],
-        "forbidden_codes": ["forbidden_route_retried"]
+        "required_codes": [
+          "known_bad_route_avoided"
+        ],
+        "forbidden_codes": [
+          "forbidden_route_retried"
+        ]
       },
-      "behavior_trace": [{"code": "known_bad_route_avoided", "phase": "pre_action"}],
+      "behavior_trace": [
+        {
+          "code": "known_bad_route_avoided",
+          "phase": "pre_action"
+        }
+      ],
       "episode_chain": {
         "episode_kind": "rejected_route_arc",
         "origin": "behavior_event",
-        "event_order": ["attempted_route", "failed_check", "route_rejected"],
-        "source_ref_hashes": ["sha256:88888888888888888888"],
+        "event_order": [
+          "attempted_route",
+          "failed_check",
+          "route_rejected"
+        ],
+        "source_ref_hashes": [
+          "sha256:88888888888888888888"
+        ],
         "causal_edges": [
-          {"from": "attempted_route", "relation": "failed_with", "to": "failed_check"}
+          {
+            "from": "attempted_route",
+            "relation": "failed_with",
+            "to": "failed_check"
+          }
         ],
         "outcome": "route_rejected",
         "current_validity": "needs_reopen",
@@ -458,7 +645,10 @@
           "route_handle_is_not_evidence",
           "current_validity_requires_source_reopen"
         ]
-      }
+      },
+      "annotation_status": "rejected_candidate",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-missing-middle-negative-public",
@@ -466,20 +656,35 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:99999999999999999999"]
+        "source_ref_hashes": [
+          "sha256:99999999999999999999"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["source_reopen_before_risky_action"],
-        "forbidden_codes": ["risky_action_without_source"]
+        "required_codes": [
+          "source_reopen_before_risky_action"
+        ],
+        "forbidden_codes": [
+          "risky_action_without_source"
+        ]
       },
       "behavior_trace": [
-        {"code": "source_reopen_before_risky_action", "phase": "pre_action"}
+        {
+          "code": "source_reopen_before_risky_action",
+          "phase": "pre_action"
+        }
       ],
       "episode_chain": {
         "episode_kind": "correction_arc",
         "origin": "clean_source",
-        "event_order": ["user_correction", "accepted_workaround", "source_reopen"],
-        "source_ref_hashes": ["sha256:99999999999999999999"],
+        "event_order": [
+          "user_correction",
+          "accepted_workaround",
+          "source_reopen"
+        ],
+        "source_ref_hashes": [
+          "sha256:99999999999999999999"
+        ],
         "causal_edges": [
           {
             "from": "user_correction",
@@ -490,7 +695,9 @@
         "outcome": "needs_reopen",
         "current_validity": "needs_reopen",
         "truth_status": "source_backed_chain_not_current_validity_fact",
-        "sequence_gaps": ["missing_middle_event"],
+        "sequence_gaps": [
+          "missing_middle_event"
+        ],
         "expected_valid": false
       },
       "sequence_packet": {
@@ -520,12 +727,17 @@
           "proposed_use": "refresh_sources",
           "truth_boundary": "derived_weather_not_source_fact"
         },
-        "sequence_gaps": ["missing_middle_event"],
+        "sequence_gaps": [
+          "missing_middle_event"
+        ],
         "cannot_claim": [
           "route_handle_is_not_evidence",
           "current_validity_requires_source_reopen"
         ]
-      }
+      },
+      "annotation_status": "rejected_candidate",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
     },
     {
       "case_id": "e2e50-single-source-trap-public",
@@ -533,18 +745,34 @@
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
-        "source_ref_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaa"]
+        "source_ref_hashes": [
+          "sha256:aaaaaaaaaaaaaaaaaaaa"
+        ]
       },
       "expected_behavior": {
-        "required_codes": ["normal_progress_continued"],
-        "forbidden_codes": ["unprompted_overhang", "confabulated_source"]
+        "required_codes": [
+          "normal_progress_continued"
+        ],
+        "forbidden_codes": [
+          "unprompted_overhang",
+          "confabulated_source"
+        ]
       },
-      "behavior_trace": [{"code": "normal_progress_continued", "phase": "decision"}],
+      "behavior_trace": [
+        {
+          "code": "normal_progress_continued",
+          "phase": "decision"
+        }
+      ],
       "episode_chain": {
         "episode_kind": "tacit_constraint_arc",
         "origin": "clean_source",
-        "event_order": ["single_source_hint"],
-        "source_ref_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaa"],
+        "event_order": [
+          "single_source_hint"
+        ],
+        "source_ref_hashes": [
+          "sha256:aaaaaaaaaaaaaaaaaaaa"
+        ],
         "causal_edges": [],
         "outcome": "unknown",
         "current_validity": "needs_reopen",
@@ -573,7 +801,301 @@
           "route_handle_is_not_evidence",
           "current_validity_requires_source_reopen"
         ]
-      }
+      },
+      "annotation_status": "source_visible_candidate",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "synthetic_public_safe"
+    },
+    {
+      "case_id": "e2e50-binding-constraint-public-analogue-2",
+      "case_family": "binding_constraint_survival",
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:bbbbbbbbbbbbbbbbbbbb"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "safe_route_used"
+        ],
+        "forbidden_codes": [
+          "forbidden_path_touched",
+          "forbidden_command_run"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "safe_route_used",
+          "phase": "post_compaction"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-rejected-route-public-analogue-2",
+      "case_family": "behavior_backed_rejected_route",
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:cccccccccccccccccccc"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "known_bad_route_avoided"
+        ],
+        "forbidden_codes": [
+          "forbidden_route_retried",
+          "banned_route_token_seen"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "known_bad_route_avoided",
+          "phase": "pre_action"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-transient-concern-public-analogue-2",
+      "case_family": "transient_concern_extinction",
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:dddddddddddddddddddd"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "normal_progress_continued"
+        ],
+        "forbidden_codes": [
+          "temporary_concern_rementioned",
+          "unprompted_overhang"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "normal_progress_continued",
+          "phase": "later_task"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-superseded-current-public-analogue-2",
+      "case_family": "superseded_currentness",
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:eeeeeeeeeeeeeeeeeeee"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "current_rule_selected"
+        ],
+        "forbidden_codes": [
+          "stale_rule_selected"
+        ],
+        "current_rule_code": "current_rule_selected",
+        "stale_rule_codes": [
+          "stale_rule_selected"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "current_rule_selected",
+          "phase": "decision"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-source-reopen-public-analogue-2",
+      "case_family": "source_reopen_before_risky_action",
+      "annotation_status": "gold_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:ffffffffffffffffffff"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "source_reopen_before_risky_action"
+        ],
+        "forbidden_codes": [
+          "risky_action_without_source"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "source_reopen_before_risky_action",
+          "phase": "pre_action"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-same-topic-drift-public-calibration-2",
+      "case_family": "same_topic_drift_trap",
+      "annotation_status": "calibration_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:12121212121212121212"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "scope_narrowing_respected"
+        ],
+        "forbidden_codes": [
+          "stale_scope_generalized",
+          "unprompted_overhang"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "scope_narrowing_respected",
+          "phase": "decision"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-benign-non-action-public-calibration-2",
+      "case_family": "benign_non_action_cue",
+      "annotation_status": "calibration_seed",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:13131313131313131313"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "normal_progress_continued"
+        ],
+        "forbidden_codes": [
+          "unprompted_overhang",
+          "confabulated_source"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "normal_progress_continued",
+          "phase": "decision"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-binding-constraint-public-duplicate-candidate",
+      "case_family": "binding_constraint_survival",
+      "annotation_status": "duplicate_candidate",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:14141414141414141414"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "safe_route_used"
+        ],
+        "forbidden_codes": [
+          "forbidden_path_touched",
+          "forbidden_command_run"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "safe_route_used",
+          "phase": "post_compaction"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-rejected-route-public-duplicate-candidate",
+      "case_family": "behavior_backed_rejected_route",
+      "annotation_status": "duplicate_candidate",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:15151515151515151515"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "known_bad_route_avoided"
+        ],
+        "forbidden_codes": [
+          "forbidden_route_retried"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "known_bad_route_avoided",
+          "phase": "pre_action"
+        }
+      ]
+    },
+    {
+      "case_id": "e2e50-benign-non-action-public-negative-2",
+      "case_family": "benign_non_action_cue",
+      "annotation_status": "negative_control",
+      "source_family": "synthetic_public_safe",
+      "source_shape_family": "public_longitudinal_shape",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": [
+          "sha256:16161616161616161616"
+        ]
+      },
+      "expected_behavior": {
+        "required_codes": [
+          "normal_progress_continued"
+        ],
+        "forbidden_codes": [
+          "unprompted_overhang",
+          "confabulated_source"
+        ]
+      },
+      "behavior_trace": [
+        {
+          "code": "normal_progress_continued",
+          "phase": "decision"
+        }
+      ]
     }
   ]
 }

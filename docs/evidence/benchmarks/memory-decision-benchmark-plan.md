@@ -84,15 +84,18 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   PRs keep the scanner contract alive. It does not score agent behavior, publish
   private text/paths/ids, or claim #279 benchmark quality before manually
   annotated cases and the shared benchmark methodology are ready.
-- `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` is the #279
+- `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` is the #279/#994
   public-safe annotated case-pack scorer scaffold. It consumes hash/count-only
   behavior-code cases, reports deterministic rates for silent constraint
   survival, known-bad route avoidance, transient-concern extinction,
-  superseded-currentness, and source-reopen-before-risky-action, and keeps
-  `quality_gate_ok=false` because the current checked-in fixture is synthetic
-  and not a representative 20/50-case E2E50 sample. Its deterministic unittest
-  is included in `benchmark-smoke` to keep the scorer contract alive while the
-  private 4 gold + 2 calibration seed pack remains local and source-reviewed.
+  superseded-currentness, and source-reopen-before-risky-action, and now scores
+  a checked-in 20-case public-safe synthetic seed pack with explicit
+  `annotation_status` and `source_family` coverage. It still keeps
+  `quality_gate_ok=false`: this pack retires the immediate public/shareable
+  20-case seed-path blocker, not representative 50-case E2E50 quality,
+  private-history behavior lift, or live host evidence. Its deterministic
+  unittest is included in `benchmark-smoke` to keep the scorer contract alive
+  while private seed material remains local and source-reviewed.
   The scaffold now also accepts optional `episode_chain` / `sequence_packet`
   evidence and bounded `cognitive_load` sidecars through
   `aippocampus_runtime.coding.sequence_packets`: those rows are scored as
