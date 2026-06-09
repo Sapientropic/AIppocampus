@@ -40,6 +40,7 @@ flowchart TD
     Semantic --> Model["optional external model route"]
     Ambient --> Source
     Lifecycle["aippocampus_runtime/hooks/lifecycle.py"] --> Source
+    ClaudeHook["aippocampus_runtime/hooks/claude_code.py"] -. scoped status/smoke .-> Source
     Lifecycle --> Cache["rebuildable indexes and sidecars"]
     Subconscious["subconscious jobs"] --> Source
     Subconscious --> Model
@@ -63,6 +64,10 @@ run from registry, clean source, and its rebuildable lookup sidecars.
 - Codex-only hook installer boundary: hook installers mutate Codex `hooks.json`
   only after an explicit operator command; provider support for Claude Code or
   generic JSONL does not imply host hook installation support.
+- Claude Code hook contract boundary: `aippocampus_runtime/hooks/claude_code.py`
+  owns scoped status, dry-run, synthetic smoke, and fail-open `UserPromptSubmit`
+  / `Stop` handlers. It does not mutate Claude settings, capture raw tool
+  payloads, or prove real-host firing without an event log.
 - MCP server: `aippocampus_runtime/mcp/server.py`.
 - Source truth: raw host transcripts and clean-source JSONL remain the only
   truth sources. Summaries, labels, scores, graphs, and dream/subconscious rows
@@ -88,6 +93,7 @@ behavior behind a stable contract.
 | `aippocampus_runtime/cli/facade.py` | Public `aippocampus` command facade over package-owner mains. | Public entrypoint |
 | `aippocampus_runtime/hooks/prompt.py` | Foreground Codex prompt hook with strict budget, skip/scent/evidence output, and fail-open diagnostics. | Public entrypoint |
 | `aippocampus_runtime/hooks/lifecycle.py` | Codex lifecycle hook for deterministic maintenance and detached background scheduling. | Public entrypoint |
+| `aippocampus_runtime/hooks/claude_code.py` | Claude Code hook contract status, dry-run, isolated synthetic smoke, and fail-open scoped handlers for `UserPromptSubmit` and `Stop`. It is not a configuration-mutating installer and does not claim real-host firing without observed event evidence. | Public entrypoint |
 | `aippocampus_runtime/hooks/install_prompt.py`, `aippocampus_runtime/hooks/install_lifecycle.py`, `aippocampus_runtime/hooks/diagnose.py` | Codex-only hook install/status/uninstall and stale-hook diagnostics. | Public entrypoint |
 | `aippocampus_runtime/mcp/server.py` | Read-mostly MCP server for search, recall navigation, latest-reply, health, and sync status. | Public entrypoint |
 | `aippocampus_runtime/health.py` | Runtime health report and recommended rebuild actions. | Public entrypoint |

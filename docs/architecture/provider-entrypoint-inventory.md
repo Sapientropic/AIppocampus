@@ -2,7 +2,7 @@
 
 Role: inventory.
 
-Last audited: 2026-06-05.
+Last audited: 2026-06-09.
 
 This inventory classifies runtime surfaces that mention Codex raw rollouts,
 Codex home helpers, or host hook configuration. The goal is not to erase the
@@ -68,7 +68,7 @@ handlers.
 | Host/provider | Conversation provider | Clean-source, registry, MCP surfaces | Host hook handlers | Configuration-mutating installers | Host diagnostics | Boundary |
 | --- | --- | --- | --- | --- | --- | --- |
 | `codex` | Yes: Codex rollout provider. | Yes: clean source, registry, MCP, onboarding, and current-thread maintenance paths. | Yes: `aippocampus_runtime/hooks/prompt.py` and `aippocampus_runtime/hooks/lifecycle.py` implement Codex hook handlers. | Yes: `install_prompt.py` and `install_lifecycle.py` mutate Codex `hooks.json` after explicit operator command. | Yes: `diagnose.py` inspects Codex `hooks.json` and emulates Codex hook stdin. | Codex hook install/status/uninstall remains opt-in Codex host integration, not a provider-neutral AIppocampus install. |
-| `claude-code` | Yes: Claude Code transcript parser and explicit onboarding. | Yes: clean-source registration and MCP/project-skill surfaces. | No shipped AIppocampus Claude Code hook handler. | No shipped AIppocampus Claude Code hook installer. | MCP host smokes only; no hook diagnostic claim. | Claude Code hook support: not yet claimable until a dedicated installer/status/privacy/smoke targets the official Claude Code hooks contract. |
+| `claude-code` | Yes: Claude Code transcript parser and explicit onboarding. | Yes: clean-source registration and MCP/project-skill surfaces. | Scoped: `aippocampus_runtime/hooks/claude_code.py` handles `UserPromptSubmit` and `Stop` fail-open, with synthetic smoke evidence. | No configuration-mutating installer; `aippocampus hooks claude-code dry-run` reports the handler shape without writing Claude settings. | Scoped status/dry-run/smoke only; real-host firing still needs an event log or local dogfood report. | Claude Code hook contract status: scoped handler/status/dry-run/smoke support exists for `UserPromptSubmit` and `Stop`; real-host firing, installer mutation, `PostToolUse`/`PostToolBatch`, and compaction hook utility remain cannot-claim boundaries. |
 | `generic-jsonl` | Yes: explicit visible-message import provider. | Yes: clean-source registration/import surfaces. | No host hook handler. | No host hook installer. | Import validation only. | Generic import proves transcript ingestion, not host automation. |
 
 ## Provider Conformance Fixture Boundary

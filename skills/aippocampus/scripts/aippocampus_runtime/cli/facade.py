@@ -102,6 +102,7 @@ SCRIPT_MODULES = {
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
     "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
+    "aippocampus_claude_code_hooks.py": "aippocampus_runtime.hooks.claude_code",
 }
 
 
@@ -242,6 +243,13 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             rest,
         )
     if command == "hooks":
+        if rest and rest[0] == "claude-code":
+            return CommandInvocation(
+                command,
+                "aippocampus_claude_code_hooks.py",
+                module_name_for_script("aippocampus_claude_code_hooks.py"),
+                list(rest[1:]),
+            )
         hook_kind = "prompt"
         hook_args = list(rest)
         if hook_args and hook_args[0] in {"prompt", "lifecycle"}:
@@ -335,7 +343,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
     print(
-        "  hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall",
+        "  hooks [kind]        Host hook status/install/uninstall surfaces",
         file=target,
     )
     print("", file=target)

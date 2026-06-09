@@ -926,11 +926,15 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("provider inventory missing host integration matrix", issues)
         self.assertIn("runtime script map missing Codex-only hook installer boundary", issues)
         self.assertIn(
-            "Claude Code MCP guide missing explicit no Claude Code hook installer claim",
+            "Claude Code MCP guide missing Claude hook status command",
             issues,
         )
         self.assertIn(
-            "Claude Code project skill missing no-hook-installation boundary",
+            "Claude Code MCP guide missing no configuration-mutating installer boundary",
+            issues,
+        )
+        self.assertIn(
+            "Claude Code project skill missing hook status/dry-run/smoke boundary",
             issues,
         )
         self.assertIn("public API doc missing provider-support-vs-hook-support boundary", issues)

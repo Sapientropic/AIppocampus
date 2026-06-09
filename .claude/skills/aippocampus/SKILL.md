@@ -50,7 +50,16 @@ aippocampus onboard --provider claude-code --format json
 Do not install hooks, mutate Claude Code settings, or ingest private host
 history from this skill unless the user explicitly approves that exact action.
 
-AIppocampus does not currently provide a Claude Code hook installer. The
-`aippocampus hooks ...` commands are Codex-only hook installers/status tools;
-using `--provider claude-code` for onboarding does not make host hook support
-available.
+AIppocampus provides Claude Code hook status/dry-run/smoke commands for the
+scoped `UserPromptSubmit` and `Stop` contract:
+
+```sh
+aippocampus hooks claude-code status --json
+aippocampus hooks claude-code dry-run --json
+aippocampus hooks claude-code smoke --json
+```
+
+These commands do not mutate Claude Code settings. `aippocampus hooks prompt`
+and `aippocampus hooks lifecycle` remain Codex-only installer/status tools, so
+using `--provider claude-code` for onboarding does not install Claude Code host
+hooks.

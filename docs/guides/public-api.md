@@ -377,9 +377,16 @@ They do not install, diagnose, or run host hooks.
 Codex-only hook installers are exposed through `aippocampus hooks ...` and the
 package owners under `aippocampus_runtime.hooks`.
 Their JSON/status output includes `host_integration.host = "codex"` and
-`host_integration.config_surface = "codex_hooks_json"`. Claude Code hook support
-is not a public AIppocampus claim until a dedicated Claude Code installer,
-status command, privacy note, and host smoke are documented.
+`host_integration.config_surface = "codex_hooks_json"`.
+
+Claude Code hook contract status is exposed separately through
+`aippocampus hooks claude-code status|dry-run|smoke`. That surface is non-mutating: it
+reports scoped `UserPromptSubmit` / `Stop` handler support, shows a dry-run
+Claude settings handler shape, and runs isolated synthetic Claude-shaped hook
+JSON without printing raw prompts, transcript paths, session ids, tool payloads,
+or settings paths. It does not claim a Claude Code configuration-mutating
+installer, real-host firing, `PostToolUse` / `PostToolBatch` payload capture, or
+compaction hook utility.
 
 ## MCP Contract
 

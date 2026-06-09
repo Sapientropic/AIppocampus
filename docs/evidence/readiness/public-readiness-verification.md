@@ -20,6 +20,29 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-09 Issue #1020 Claude Code Hook Contract Slice
+
+Issue #1020 narrows the old broad Claude Code hook caveat into a scoped
+contract/status/smoke claim plus event-level blockers. The dated report lives at
+[`claude-code-hooks-contract-2026-06-09.md`](claude-code-hooks-contract-2026-06-09.md).
+
+Positive evidence:
+
+- `aippocampus hooks claude-code status --json` reports the Claude Code hook
+  status vocabulary and event-level support map.
+- `aippocampus hooks claude-code dry-run --json` reports the handler shape
+  without mutating Claude Code settings.
+- `aippocampus hooks claude-code smoke --json` feeds synthetic Claude-shaped
+  `UserPromptSubmit` and `Stop` events through the handler with exit code 0 and
+  no raw prompt/session/transcript/path/tool-payload leakage in public output.
+
+Cannot claim:
+
+- real-host hook firing;
+- Claude settings mutation or a configuration-mutating installer;
+- `PostToolUse`, `PostToolBatch`, `PreCompact`, or `PostCompact` support beyond
+  event-level blocker reporting.
+
 ## 2026-06-09 - Source-review taxonomy and public shadow rerun
 
 Issue #993 resolves the unresolved operational partial failure from the older
