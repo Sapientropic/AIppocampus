@@ -93,15 +93,26 @@ def cognitive_load_calibration_summary(payload: Mapping[str, Any] | None) -> dic
 
     if not isinstance(payload, Mapping):
         return None
+    payload_metrics = _as_mapping(payload.get("metrics"))
     report = _as_mapping(payload.get("calibration_report") or payload)
     input_surface = _as_mapping(payload.get("input_surface"))
     extraction = _as_mapping(payload.get("extraction_metrics"))
-    sidecar_metrics = _as_mapping(payload.get("sidecar_metrics") or report.get("metrics"))
+    report_metrics = _as_mapping(report.get("metrics"))
+    sidecar_metrics = {
+        **report_metrics,
+        **_as_mapping(payload.get("sidecar_metrics")),
+        **payload_metrics,
+    }
     sidecar_projection = _as_mapping(payload.get("sidecar_projection"))
-    issue_readouts = _as_mapping(report.get("issue_readouts") or payload.get("issue_readouts"))
+    report_issue_readouts = _as_mapping(report.get("issue_readouts"))
+    payload_issue_readouts = _as_mapping(payload.get("issue_readouts"))
+    issue_readouts = {**report_issue_readouts, **payload_issue_readouts}
+    report_github_575 = _as_mapping(_as_mapping(report_issue_readouts.get("github_575")))
+    payload_github_575 = _as_mapping(_as_mapping(payload_issue_readouts.get("github_575")))
     github_575 = _as_mapping(issue_readouts.get("github_575"))
     status = _first_safe_token(
         payload.get("status"),
+        github_575.get("public_behavior_trace_feedback"),
         github_575.get("private_real_history_calibration"),
         default="unknown",
     )
@@ -139,6 +150,21 @@ def cognitive_load_calibration_summary(payload: Mapping[str, Any] | None) -> dic
             "caution_hint_useful_rate": _as_float_or_none(
                 sidecar_metrics.get("caution_hint_useful_rate")
             ),
+            "public_behavior_trace_case_count": _as_int(
+                sidecar_metrics.get("public_behavior_trace_case_count")
+            ),
+            "reviewed_feedback_case_count": _as_int(
+                sidecar_metrics.get("reviewed_feedback_case_count")
+            ),
+            "helpful_caution_hint_count": _as_int(
+                sidecar_metrics.get("helpful_caution_hint_count")
+            ),
+            "irrelevant_load_drag_count": _as_int(
+                sidecar_metrics.get("irrelevant_load_drag_count")
+            ),
+            "irrelevant_load_drag_rate": _as_float_or_none(
+                sidecar_metrics.get("irrelevant_load_drag_rate")
+            ),
             "overpersonalization_from_load_signal_count": _as_int(
                 sidecar_metrics.get("overpersonalization_from_load_signal_count")
             ),
@@ -147,8 +173,22 @@ def cognitive_load_calibration_summary(payload: Mapping[str, Any] | None) -> dic
         "reason_code_counts": reason_counts,
         "issue_readouts": {
             "github_575": {
+                "public_behavior_trace_feedback": _safe_token(
+                    github_575.get("public_behavior_trace_feedback"),
+                    default="not_measured",
+                ),
+                "false_positive_rate": _as_float_or_none(
+                    github_575.get("false_positive_rate")
+                ),
+                "caution_hint_useful_rate": _as_float_or_none(
+                    github_575.get("caution_hint_useful_rate")
+                ),
+                "irrelevant_load_drag_rate": _as_float_or_none(
+                    github_575.get("irrelevant_load_drag_rate")
+                ),
                 "private_real_history_calibration": _first_safe_token(
-                    github_575.get("private_real_history_calibration"),
+                    payload_github_575.get("private_real_history_calibration"),
+                    report_github_575.get("private_real_history_calibration"),
                     status,
                     default=status,
                 ),
@@ -165,7 +205,7 @@ def cognitive_load_calibration_summary(payload: Mapping[str, Any] | None) -> dic
         },
         "privacy_boundary": {
             "raw_private_text_serialized": False,
-            "raw_source_refs_serialized": False,
+            "raw_source_handles_serialized": False,
             "raw_command_text_serialized": False,
             "local_paths_serialized": False,
             "thread_ids_serialized": False,

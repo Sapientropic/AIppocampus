@@ -231,6 +231,9 @@ def cognitive_observatory_readout(
         "cognitive_load_signal_event_count": (cognitive_load or {})
         .get("metrics", {})
         .get("signal_event_count", 0),
+        "cognitive_load_public_feedback_case_count": (cognitive_load or {})
+        .get("metrics", {})
+        .get("public_behavior_trace_case_count", 0),
     }
     surfaces = ["route_readiness", "activation_authority"]
     if diagnostic:
