@@ -139,6 +139,31 @@ LOW_INFORMATION_PRODUCER_TERMS = {
     "一个",
     "一些",
 }
+UNTRUSTED_SINGLE_WORD_PRODUCER_TERMS = {
+    "activation",
+    "backstage",
+    "checklist",
+    "easy",
+    "feel",
+    "first",
+    "gentle",
+    "get",
+    "gets",
+    "got",
+    "human",
+    "know",
+    "life",
+    "like",
+    "person",
+    "persona",
+    "sound",
+    "start",
+    "stays",
+    "survey",
+    "system",
+    "visible",
+    "voice",
+}
 ENGLISH_LOW_INFORMATION_CORE_TERMS = {
     "it",
     "its",
@@ -160,6 +185,7 @@ ENGLISH_LOW_INFORMATION_CORE_TERMS = {
 }
 ENGLISH_LOW_INFORMATION_FILLER_TERMS = {
     *ENGLISH_LOW_INFORMATION_CORE_TERMS,
+    *UNTRUSTED_SINGLE_WORD_PRODUCER_TERMS,
     "a",
     "an",
     "the",
@@ -188,6 +214,7 @@ ENGLISH_LOW_INFORMATION_FILLER_TERMS = {
     "did",
     "please",
 }
+PLAIN_LATIN_SINGLE_RE = re.compile(r"^[A-Za-z][A-Za-z']*$")
 CJK_DEICTIC_ACTION_RE = re.compile(
     r"(这个|那个|这些|那些|这里|那里|这边|那边).{0,32}"
     r"(要怎么|怎么|怎样|如何|改|修改|调整|处理|做|办|弄)"
@@ -213,15 +240,30 @@ def _privacy_suppressed_term(term: str) -> bool:
     return any(marker in str(projected) for marker in REDACTION_MARKERS)
 
 
-def _low_information_producer_term(text: str) -> bool:
+def _plain_latin_single_needs_trust(text: str) -> bool:
+    return bool(PLAIN_LATIN_SINGLE_RE.fullmatch(text)) and text.islower()
+
+
+def _low_information_producer_term(
+    text: str,
+    *,
+    trusted_domain_label: bool = False,
+) -> bool:
     low = text.casefold()
     if low in LOW_INFORMATION_PRODUCER_TERMS:
         return True
+    if not trusted_domain_label and low in UNTRUSTED_SINGLE_WORD_PRODUCER_TERMS:
+        return True
     latin_tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", low)
-    if latin_tokens and len(latin_tokens) <= 5:
+    if not trusted_domain_label and latin_tokens and len(latin_tokens) <= 5:
         token_set = set(latin_tokens)
-        if token_set & ENGLISH_LOW_INFORMATION_CORE_TERMS and token_set <= ENGLISH_LOW_INFORMATION_FILLER_TERMS:
+        if token_set <= ENGLISH_LOW_INFORMATION_FILLER_TERMS:
             return True
+    # Raw clean-source prose produces many high-frequency single English words.
+    # They are useful search tokens, but not durable continuity-domain labels
+    # unless the registry or a reviewed sidecar already named them as aliases.
+    if not trusted_domain_label and _plain_latin_single_needs_trust(text):
+        return True
     # A deictic action prompt such as "这个要怎么改一下" is a useful recall
     # activator, but it is not a durable label or activation cue. Reject it
     # even when split_query_terms keeps a nearby project alias in the same
@@ -238,7 +280,11 @@ def _low_information_producer_term(text: str) -> bool:
     return False
 
 
-def _clean_candidate_term_detail(term: str) -> tuple[str, str]:
+def _clean_candidate_term_detail(
+    term: str,
+    *,
+    trusted_domain_label: bool = False,
+) -> tuple[str, str]:
     text = re.sub(r"\s+", " ", str(term or "")).strip(" \t\r\n\"'`.,;:!?，。；：！？、")
     if not text:
         return "", ""
@@ -247,7 +293,7 @@ def _clean_candidate_term_detail(term: str) -> tuple[str, str]:
     low = text.casefold()
     if low in GENERIC_PRODUCER_TERMS:
         return "", "low_information"
-    if _low_information_producer_term(text):
+    if _low_information_producer_term(text, trusted_domain_label=trusted_domain_label):
         return "", "low_information"
     if len(text) > 48:
         return "", "shape"
@@ -351,7 +397,14 @@ def _registry_terms(entry: Mapping[str, Any]) -> list[str]:
     terms: list[str] = []
     for value in values:
         terms.extend(split_query_terms([value]))
-    return unique_preserve([term for term in terms if _clean_candidate_term(term)[0]], limit=64)
+    return unique_preserve(
+        [
+            term
+            for term in terms
+            if _clean_candidate_term_detail(term, trusted_domain_label=True)[0]
+        ],
+        limit=64,
+    )
 
 
 def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -369,7 +422,11 @@ def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _signal_term_values(row: Mapping[str, Any]) -> tuple[list[str], int, int]:
+def _signal_term_values(
+    row: Mapping[str, Any],
+    *,
+    trusted_domain_label: bool = False,
+) -> tuple[list[str], int, int]:
     values: list[str] = []
     for key in SIGNAL_TEXT_KEYS:
         if row.get(key):
@@ -383,7 +440,10 @@ def _signal_term_values(row: Mapping[str, Any]) -> tuple[list[str], int, int]:
     low_information_suppressed = 0
     for value in values:
         for raw in split_query_terms([value]):
-            term, reason = _clean_candidate_term_detail(raw)
+            term, reason = _clean_candidate_term_detail(
+                raw,
+                trusted_domain_label=trusted_domain_label,
+            )
             if reason == "privacy":
                 privacy_suppressed += 1
             elif reason == "low_information":
@@ -402,15 +462,30 @@ def _refs_by_thread(refs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
     return by_thread
 
 
+def _reviewed_signal_label_source(file_name: str, row: Mapping[str, Any]) -> bool:
+    kind = str(row.get("kind") or "").casefold()
+    status = str(row.get("status") or "").casefold()
+    if status and status not in {"active", "accepted", "reviewed", "published", "ready"}:
+        return False
+    return file_name in {"semantic_triggers.jsonl", "query_pattern_routes.jsonl"} and (
+        "semantic_trigger" in kind or "query_pattern_route" in kind
+    )
+
+
 def _terms_for_message(text: str, registry_terms: list[str]) -> tuple[list[str], int, int]:
     terms: list[str] = []
     privacy_suppressed = 0
     low_information_suppressed = 0
     low_text = text.casefold()
+    registry_term_set = {term.casefold() for term in registry_terms}
     for raw in [*split_query_terms([text]), *registry_terms]:
-        if raw.casefold() not in low_text and raw not in registry_terms:
+        raw_low = raw.casefold()
+        if raw_low not in low_text and raw_low not in registry_term_set:
             continue
-        term, reason = _clean_candidate_term_detail(raw)
+        term, reason = _clean_candidate_term_detail(
+            raw,
+            trusted_domain_label=raw_low in registry_term_set,
+        )
         if reason == "privacy":
             privacy_suppressed += 1
         elif reason == "low_information":
@@ -584,7 +659,10 @@ def propose_continuity_domain_events_from_registry(
                 if safe_source_refs(raw_refs):
                     missing_source_ref_count += 1
                 continue
-            terms, suppressed_count, low_information_count = _signal_term_values(row)
+            terms, suppressed_count, low_information_count = _signal_term_values(
+                row,
+                trusted_domain_label=_reviewed_signal_label_source(file_name, row),
+            )
             privacy_suppressed_terms.update(f"signal:{file_name}:{index}" for index in range(suppressed_count))
             low_information_label_suppressed_count += low_information_count
             for thread_key, thread_refs in _refs_by_thread(refs).items():
