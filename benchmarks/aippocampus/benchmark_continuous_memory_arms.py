@@ -24,6 +24,7 @@ from continuous_memory_preregistered_slices import (
     PREREGISTERED_REPEAT_RUNNER_PROFILE,
     PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM,
     build_evaluation_rows,
+    build_expected_null_remediation,
     build_paired_repeat_readout,
     build_preregistered_slices,
     build_preregistration,
@@ -1674,6 +1675,12 @@ def run_benchmark(
         net_value_for_rows=net_value_for_rows,
         fresh_context_net_for_case_count=fresh_context_net_for_case_count,
     )
+    expected_null_remediation = build_expected_null_remediation(
+        rows=rows,
+        metrics=metrics,
+        cost_harm_ledger=cost_harm_ledger,
+        paired_repeat_readout=paired_repeat_readout,
+    )
     preregistration = build_preregistration(
         cost_harm_ledger,
         paired_repeat_readout=paired_repeat_readout,
@@ -1742,6 +1749,7 @@ def run_benchmark(
         "cost_harm_ledger": cost_harm_ledger,
         "preregistration": preregistration,
         "preregistered_slices": preregistered_slices,
+        "expected_null_remediation": expected_null_remediation,
         "rows": rows,
         "privacy_boundary": {
             "public_safe_synthetic_fixtures": True,
