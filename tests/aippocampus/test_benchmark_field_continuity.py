@@ -39,6 +39,14 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
         self.assertIn("fresh_projectless_familiarity", validation["scenario_families"])
         self.assertIn("external_state_restraint", validation["scenario_families"])
         self.assertIn("cross_thread_exact_prompt_tool_failure", validation["scenario_families"])
+        self.assertTrue(
+            {
+                "active_recall_or_source_reopen",
+                "fts_only",
+                "semantic_only",
+                "summary_first",
+            }.issubset(set(validation["arms"]))
+        )
 
     def test_validator_rejects_unsupported_fixture_schema_version(self) -> None:
         fixture = copy.deepcopy(benchmark.load_fixture())
@@ -122,6 +130,7 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
 
         self.assertTrue(payload["ok"], payload)
         self.assertEqual(payload["kind"], "aippocampus_field_continuity_benchmark")
+        self.assertIn("/issues/982", payload["source"]["design_issue"])
         metrics = payload["metrics"]
         self.assertEqual(metrics["case_count"], 5)
         self.assertEqual(metrics["scenario_family_count"], 5)
@@ -130,10 +139,30 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["progressive_route_recovery_rate"], 1.0)
         self.assertEqual(metrics["external_state_overclaim_rate"], 0.0)
         self.assertEqual(metrics["uncertainty_boundary_preserved_rate"], 1.0)
+        self.assertEqual(metrics["abstains_when_evidence_insufficient_rate"], 1.0)
         self.assertEqual(metrics["exact_prompt_or_tool_failure_recovery_rate"], 1.0)
         self.assertEqual(metrics["completion_nuance_preserved_rate"], 1.0)
         self.assertEqual(metrics["wrong_family_persistence_rate"], 0.0)
         self.assertEqual(metrics["irrelevant_memory_drag_rate"], 0.0)
+        self.assertEqual(metrics["report_leakage_rate"], 0.0)
+        self.assertEqual(metrics["latency_budget_overrun_rate"], 0.0)
+        self.assertEqual(metrics["prompt_budget_overrun_rate"], 0.0)
+        self.assertEqual(
+            metrics["by_arm"]["fts_only"]["source_reopen_success_rate"],
+            0.0,
+        )
+        self.assertEqual(
+            metrics["by_arm"]["summary_first"]["prompt_budget_overrun_rate"],
+            1.0,
+        )
+        self.assertEqual(
+            metrics["by_arm"]["semantic_only"]["latency_budget_overrun_rate"],
+            1.0,
+        )
+        self.assertEqual(
+            metrics["by_arm"]["summary_first"]["report_leakage_rate"],
+            0.2,
+        )
 
         gates = payload["quality_gates"]
         self.assertTrue(gates["field_report_linked"])

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Field Continuity / magic-moment reproducibility contract benchmark.
 
-This runner is a deterministic public-safe slice for GitHub #454. It turns the
-#428 field-report shapes into fixture contracts, negative controls, and
-claim-boundary metrics. It does not run private history, live models, or source
-search; private real-history calibration must report hashes and aggregates only.
+This runner is a deterministic public-safe slice for GitHub #454 and the #982
+Field Continuity Eval design. It turns the #428 field-report shapes into
+fixture contracts, negative controls, and claim-boundary metrics. It does not
+run private history, live models, or source search; private real-history
+calibration must report hashes and aggregates only.
 """
 
 from __future__ import annotations
@@ -24,7 +25,10 @@ DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "field_continuity" / "
 ACTIVE_ARM = "active_recall_or_source_reopen"
 REQUIRED_ARMS = {
     "no_memory",
+    "fts_only",
     "hook_only",
+    "semantic_only",
+    "summary_first",
     ACTIVE_ARM,
     "stale_wrong_route_control",
 }
@@ -58,6 +62,7 @@ PRIVATE_FORBIDDEN_FIELDS = {
     "cookie",
 }
 HIGHER_IS_BETTER = {
+    "abstains_when_evidence_insufficient",
     "source_reopen_success",
     "progressive_route_recovery",
     "uncertainty_boundary_preserved",
@@ -66,6 +71,9 @@ HIGHER_IS_BETTER = {
 }
 LOWER_IS_BETTER = {
     "external_state_overclaim",
+    "latency_budget_overrun",
+    "prompt_budget_overrun",
+    "report_leakage",
     "wrong_family_persistence",
     "irrelevant_memory_drag",
 }
@@ -226,6 +234,7 @@ def validate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
         "public_synthetic_family_count": len(public_synthetic_families),
         "required_negative_controls": REQUIRED_NEGATIVE_CONTROLS & negative_controls,
         "negative_controls": sorted(negative_controls),
+        "arms": sorted(arms),
         "private_seed_reporting_contract": contract,
         "field_report_linked": not any(
             blocker["code"] == "missing_field_report_link" for blocker in blockers
@@ -233,9 +242,10 @@ def validate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _metric_counts(
+def _metric_counts_for_arm(
     cases: Sequence[Mapping[str, Any]],
     metric: str,
+    arm_name: str,
     *,
     desired: bool,
 ) -> tuple[int, int]:
@@ -244,13 +254,35 @@ def _metric_counts(
     for case in cases:
         if metric not in _as_list(case.get("expected_metrics")):
             continue
-        arm = _as_mapping(_as_mapping(case.get("arms")).get(ACTIVE_ARM))
+        arm = _as_mapping(_as_mapping(case.get("arms")).get(arm_name))
         if metric not in arm:
             continue
         total += 1
         if bool(arm.get(metric)) is desired:
             matched += 1
     return matched, total
+
+
+def _metric_counts(
+    cases: Sequence[Mapping[str, Any]],
+    metric: str,
+    *,
+    desired: bool,
+) -> tuple[int, int]:
+    return _metric_counts_for_arm(cases, metric, ACTIVE_ARM, desired=desired)
+
+
+def _arm_metric_report(cases: Sequence[Mapping[str, Any]], arm_name: str) -> dict[str, Any]:
+    report: dict[str, Any] = {}
+    for metric in sorted(HIGHER_IS_BETTER):
+        matched, total = _metric_counts_for_arm(cases, metric, arm_name, desired=True)
+        report[f"{metric}_rate"] = _rate(matched, total)
+        report[f"{metric}_denominator"] = total
+    for metric in sorted(LOWER_IS_BETTER):
+        matched, total = _metric_counts_for_arm(cases, metric, arm_name, desired=False)
+        report[f"{metric}_rate"] = _rate(total - matched, total)
+        report[f"{metric}_denominator"] = total
+    return report
 
 
 def _active_boundary_failures(cases: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
@@ -292,6 +324,10 @@ def _metrics(cases: Sequence[Mapping[str, Any]], validation: Mapping[str, Any]) 
         matched, total = _metric_counts(cases, metric, desired=False)
         metrics[f"{metric}_rate"] = _rate(total - matched, total)
         metrics[f"{metric}_denominator"] = total
+    metrics["by_arm"] = {
+        arm_name: _arm_metric_report(cases, arm_name)
+        for arm_name in _as_list(validation.get("arms"))
+    }
     failures = _active_boundary_failures(cases)
     metrics["active_recall_or_source_reopen_boundary_failures"] = len(failures)
     return metrics
@@ -392,6 +428,7 @@ def run_benchmark(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
         },
         "source": {
             "issue": _as_mapping(fixture.get("source")).get("issue"),
+            "design_issue": _as_mapping(fixture.get("source")).get("design_issue"),
             "discussion": _as_mapping(fixture.get("source")).get("discussion"),
             "status": _as_mapping(fixture.get("source")).get("status"),
         },

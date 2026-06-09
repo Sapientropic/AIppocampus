@@ -262,11 +262,14 @@ public API stability.
 
 ### Field Continuity / Magic Moment Reproducibility Suite
 
-`benchmark_field_continuity.py` is a separate #454 contract-smoke surface. It
-does not replace Track A-D, and it does not turn community field reports into
+`benchmark_field_continuity.py` is a separate #454 contract-smoke surface and
+the executable fixture layer for the #982 Field Continuity Eval design in
+[`field-continuity-eval-design.md`](field-continuity-eval-design.md). It does
+not replace Track A-D, and it does not turn community field reports into
 official benchmark proof by itself. Its job is to make the user-visible
-"magic moment" reports reproducible as scenario contracts with controls and
-privacy-safe reporting. For #281, the same public fixture also exposes
+"magic moment" reports reproducible as scenario contracts with controls,
+baselines, and privacy-safe reporting. For #281, the same public fixture also
+exposes
 `issue_readouts.github_281` as a bounded fresh-thread progressive-recall proxy:
 it records whether the `fresh_projectless_familiarity` family is covered and
 whether source reopen, progressive route recovery, wrong-family suppression,
@@ -284,9 +287,12 @@ Scenario families:
 
 The public fixture lives in `benchmark_corpus/field_continuity/fixture.json`.
 It includes one synthetic public-safe row for each family, arms for
-`no_memory`, `hook_only`, `active_recall_or_source_reopen`, and
-`stale_wrong_route_control`, plus negative controls for overclaiming,
-wrong-family persistence, and stale-route dominance.
+`no_memory`, `fts_only`, `summary_first`, `semantic_only`, `hook_only`,
+`active_recall_or_source_reopen`, and `stale_wrong_route_control`, plus
+negative controls for overclaiming, wrong-family persistence, and stale-route
+dominance. The runner reports top-level active-arm metrics plus
+`metrics.by_arm` so baselines stay inspectable without collapsing into one
+leaderboard score.
 
 Private real-history seed runs stay outside git. Shared reports may include
 only hash/aggregate rows: `seed_hash_sha256`, `case_family`, `source_kind`,
@@ -304,15 +310,19 @@ python benchmarks\aippocampus\benchmark_field_continuity.py --json
 Required metrics mirror #454 without reducing the suite to top-k retrieval:
 `source_reopen_success`, `progressive_route_recovery`,
 `external_state_overclaim`, `uncertainty_boundary_preserved`,
+`abstains_when_evidence_insufficient`,
 `exact_prompt_or_tool_failure_recovery`, `completion_nuance_preserved`,
-`wrong_family_persistence`, and `irrelevant_memory_drag`.
+`wrong_family_persistence`, `irrelevant_memory_drag`, `report_leakage`,
+`latency_budget_overrun`, and `prompt_budget_overrun`.
 
 The first implementation proves the fixture and report contract. The #281
-readout is `public_safe_fixture_quality_proxy` only and keeps
+readout is `public_safe_fixture_quality_proxy` only. The #982 design closes the
+design/fixture/runner-contract prerequisite, while keeping
 `live_fresh_thread_quality`, `private_real_history_quality`, and private seed
 review outside the claim. It cannot claim real-history field-continuity recall
-quality, live semantic-model quality, foreground-hook-only sufficiency, or
-hosted/cross-device readiness.
+quality, live semantic-model quality, foreground-hook-only sufficiency,
+summary-first/semantic-only/FTS-only superiority, or hosted/cross-device
+readiness.
 
 ### Benchmark Suite Profiles
 
