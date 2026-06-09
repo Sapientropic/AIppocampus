@@ -452,6 +452,40 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertTrue(report["privacy_boundary"]["raw_event_text_emitted"])
         self.assertTrue(any("raw_event_text" in case for case in report["cases"]))
 
+    def test_synthetic_gate_benchmark_exposes_note_memory_drift_fixtures(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        report = payload["note_memory_drift_fixtures"]
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(metrics["case_count"], 6)
+        self.assertGreaterEqual(metrics["corrected_clean_source_preferred_count"], 2)
+        self.assertEqual(metrics["unsupported_note_evidence_count"], 0)
+        self.assertGreaterEqual(metrics["unsourced_or_unreopenable_navigation_only_count"], 2)
+        self.assertGreaterEqual(metrics["source_backed_note_reopen_route_count"], 1)
+        self.assertGreaterEqual(metrics["delete_or_edit_preserves_source_case_count"], 1)
+        self.assertEqual(metrics["note_mutation_rewrites_source_count"], 0)
+        self.assertGreaterEqual(metrics["exact_claim_requires_source_open_count"], 1)
+        self.assertFalse(report["privacy_boundary"]["raw_note_text_emitted"])
+        self.assertFalse(report["privacy_boundary"]["source_ref_values_emitted"])
+        self.assertIn("full_obsidian_or_vault_integration", payload["cannot_claim"])
+        self.assertIn("user_authored_notes_forbidden", report["cannot_claim"])
+        for case in report["cases"]:
+            self.assertTrue(case["passed"], case)
+            self.assertEqual(case["public_pain_family"], "markdown_note_memory_drift")
+            self.assertNotIn("private_note_text", case)
+            for row in case["rows"]:
+                self.assertIn("source_ref_hash", row)
+                self.assertNotIn("source_ref", row)
+
+    def test_note_memory_drift_private_note_text_is_explicit(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=True)
+        report = payload["note_memory_drift_fixtures"]
+
+        self.assertTrue(report["privacy_boundary"]["raw_note_text_emitted"])
+        self.assertTrue(any("private_note_text" in case for case in report["cases"]))
+
     def test_plain_implementation_twins_do_not_use_negative_evidence_as_scent(self) -> None:
         payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
         plain_tasks = [

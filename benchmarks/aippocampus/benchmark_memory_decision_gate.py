@@ -24,8 +24,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import auto_hook_pollution
-import memory_hygiene
+import memory_pain_companions
 import sharegpt_sampling
 from aippocampus_runtime.hooks import prompt as hook
 from aippocampus_runtime.recall.index_builder import make_sqlite
@@ -2202,19 +2201,12 @@ def run_benchmark(
                 row.update(by_id[str(row["case_id"])].to_result_stub(include_private_text=True))
     metrics = summarize_results(results)
     harder_case_bank = summarize_harder_case_bank(results) if case_set == "synthetic" else None
-    hygiene_report = (
-        memory_hygiene.run_memory_hygiene_fixture_report(
+    companion_reports = (
+        memory_pain_companions.run_memory_pain_companion_reports(
             include_private_text=include_private_text,
         )
         if case_set == "synthetic"
-        else None
-    )
-    auto_hook_report = (
-        auto_hook_pollution.run_auto_hook_pollution_fixture_report(
-            include_private_text=include_private_text,
-        )
-        if case_set == "synthetic"
-        else None
+        else {}
     )
     source_mismatch_count = int(metrics.get("evidence_source_mismatch_count") or 0)
     return {
@@ -2252,8 +2244,7 @@ def run_benchmark(
         )
         if case_set == "synthetic"
         else None,
-        "memory_hygiene_fixtures": hygiene_report,
-        "auto_hook_pollution_fixtures": auto_hook_report,
+        **companion_reports,
         "track_a_residual_calibration": summarize_track_a_residual_calibration(results)
         if case_set == "synthetic"
         else None,
@@ -2289,8 +2280,7 @@ def run_benchmark(
             "payload_fidelity",
             "external_baseline_comparison",
             "competitor_superiority",
-            *(hygiene_report.get("cannot_claim") or [] if hygiene_report else []),
-            *(auto_hook_report.get("cannot_claim") or [] if auto_hook_report else []),
+            *memory_pain_companions.companion_cannot_claim(companion_reports),
             *(
                 ["seeded_stratified_population_sampling"]
                 if case_set == "sharegpt-coding"

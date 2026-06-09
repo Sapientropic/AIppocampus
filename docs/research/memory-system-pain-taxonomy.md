@@ -30,6 +30,7 @@ about the referenced project.
 | [Letta #3279](https://github.com/letta-ai/letta/issues/3279) | Summarizer context-limit issue during compaction. | Open, updated 2026-05-25 |
 | [Letta #3116](https://github.com/letta-ai/letta/issues/3116) | Request for archival-memory deduplication and consolidation. | Open, updated 2026-05-15 |
 | [HN item 46891715](https://news.ycombinator.com/item?id=46891715) | User discussion distinguishing fact storage from learned patterns. | Live page checked 2026-05-30 |
+| [AIppocampus #987](https://github.com/Sapientropic/AIppocampus/issues/987) | Hand-edited Markdown memories, topic notes, and generated summaries can drift away from clean source. | Internal issue opened 2026-06-08 |
 
 ## Pain Categories
 
@@ -43,6 +44,7 @@ about the referenced project.
 | Invalid structured extraction | Graphiti #760 | Implemented public-safe fixture: unsupported relations and malformed/duplicate entity rows are downgraded to navigation while clean source remains the evidence route. | Keep generated graph facts advisory unless a source row is reopened. |
 | Compaction continuity failure | Letta #3270, #3242, #3279 | Partly implemented in deterministic compaction/lifecycle tests; real long-session Codex smoke remains open in #45. | Fixtures should prove correction, rejected route, accepted decision, and scope narrowing survive simulated compaction. |
 | Archival deduplication and consolidation | Letta #3116 | Implemented public-safe fixture: the memory-decision report includes stale/update/delete/dedup hygiene rows that collapse duplicate display without collapsing source provenance. | Keep deduplication as display/routing hygiene; it is not a truth source or physical source deletion mechanism. |
+| Editable note-backed memory drift | AIppocampus #987 | Implemented public-safe fixture: the memory-decision report includes Markdown/note drift rows where unsourced or unreopenable notes stay navigation-only, source-backed notes route to reopen, and later clean-source corrections outrank stale notes. | Keep hand-authored and generated notes as navigation layers unless the source trail is reopened or bounded clean-source evidence is available. |
 | Pattern learning beyond fact storage | HN item 46891715 | Research/designed: question tracking, frontier markers, and journey tracking target behavior patterns, but Phase 2 is not complete. | Do not claim learned user patterns until source-backed question tracking and correction evidence exist. |
 
 ## Negative Cases For Fixtures
@@ -59,6 +61,10 @@ These inputs look memory-like but should not become source-backed memory:
   source-backed retrieval can work.
 - Compaction summaries that omit a correction, accepted decision, or rejected
   route while still pretending continuity is complete.
+- Hand-edited Markdown notes, topic notes, or generated summaries that lack a
+  reopenable source ref.
+- Note edits or deletions that remove navigation and then accidentally rewrite
+  or delete the original clean-source trail.
 
 ## Claim Boundary
 
