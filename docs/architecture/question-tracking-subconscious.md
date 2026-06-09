@@ -92,7 +92,12 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   that obvious recurring questions still link, low-information generic
   questions stay separated, default adaptive thresholds do not regress the
   static strong-threshold baseline, and explicit calibration mode can still
-  produce auditable pending requests.
+  produce auditable pending requests. The #1059 follow-up adds a public-safe
+  six-axis threshold readout: fixed low similarity, static strong threshold,
+  and dynamic six-axis thresholds are reported separately with false-merge,
+  false-split, borderline-auto correctness, source-ref coverage, and
+  per-pair reason-code audit fields. These thresholds remain navigation /
+  pattern-separation policy, not source truth.
 - Implemented first #134 optional live/model adapter slice:
   `skills/aippocampus/scripts/aippocampus_runtime/question/confirmation_live.py` consumes pending
   request JSONL and writes explicit confirmation artifacts that the tracking
