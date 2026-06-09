@@ -837,6 +837,16 @@ review boundaries as well as top-level aliases so consumers cannot bypass the
 capsule by reading only projection rows. The detached sleep-cycle runner attaches
 `retention_policy` to adjudicated dream findings before optional staging writes.
 
+`skills/aippocampus/scripts/aippocampus_runtime/dream/utility_telemetry.py`
+adds the #940 offline utility loop for those retained, parked, or dropped
+hypotheses. It records privacy-safe outcome events and public fixture buckets
+such as retained-unused, dropped-later-useful, retained-later-refuted, and
+expired-unused, then groups them by dream function, retention decision, and
+coefficient version. This telemetry is evidence for later calibration only: it
+must not mutate `conservative_v1`, promote model self-rating to a retention
+signal, or claim causal user-visible lift without separate delivered-treatment
+evidence.
+
 ### One-Sidedness Gate For Compensation
 
 The opposite / 错卦 voice is useful because its symbolic structure is
