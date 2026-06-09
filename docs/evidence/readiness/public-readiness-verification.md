@@ -20,6 +20,38 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-09 Issue #998 Claude Code Real-Host Dogfood Refresh
+
+Issue #998 refreshes the Claude Code local-history and MCP dogfood evidence
+with a public-safe dated note at
+[`claude-code-dogfood-2026-06-09.md`](claude-code-dogfood-2026-06-09.md).
+
+Positive evidence:
+
+- Synthetic Codex-to-Claude Code and Claude Code-to-Codex clean-source
+  retrieval passed through MCP `search_memory`, with source refs preserved and
+  registry/search paths redacted.
+- Local Claude Code history parsing passed on 222 detected sessions for this
+  workspace, reporting only sample message/turn counts.
+- Claude Code onboarding dry-run passed without registry writes and planned 223
+  registrations plus three stale-index repairs for an explicit future write
+  run.
+- Provider status reported Codex, Claude Code, and generic JSONL as detected and
+  `write_enabled`; `auto` still defaults to Codex.
+- The project skill adapter was present and pointed at safe MCP/CLI surfaces.
+- A temporary strict-config live Claude Code run successfully called
+  `mcp__aippocampus__memory_health` and observed the matching tool result.
+
+Important blocker from the same dogfood run: the persistent local Claude Code
+MCP configuration currently reports `Status: Failed to connect` for
+`aippocampus`, despite zero process return codes from `claude mcp list/get`.
+The smoke now reports this as `blocked_host_config` while keeping the temporary
+strict-config tool-call path separately provable.
+
+Cannot claim from this slice: Claude Code hooks, unattended private-history
+ingestion, cross-device sync, hosted/cloud continuity, broad private-history
+quality, or that the user's persistent Claude Code MCP config is healthy.
+
 ## 2026-06-07 Issue #784 Provider-Key Bridge OS Store Smoke
 
 Issue #784 kept the provider-key bridge open after the env-only doctor and

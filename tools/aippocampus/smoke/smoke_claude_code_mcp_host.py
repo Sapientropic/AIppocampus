@@ -32,6 +32,31 @@ PROJECT_SKILL_MARKERS = (
     "aippocampus onboard --provider claude-code --dry-run",
     "Do not claim model-native memory",
 )
+HOST_FAILURE_RE = re.compile(
+    r"(?i)(status:\s*[✗x]\s*failed to connect|failed to connect|not found|no mcp server)"
+)
+
+
+def host_config_status(
+    *, list_returncode: int, get_returncode: int, get_text: str
+) -> dict[str, Any]:
+    if list_returncode != 0 or get_returncode != 0:
+        return {
+            "ok": False,
+            "status": "command_returncode_failed",
+            "reason": "claude_mcp_command_failed",
+        }
+    if HOST_FAILURE_RE.search(get_text):
+        return {
+            "ok": False,
+            "status": "host_reported_failed_connection",
+            "reason": "claude_mcp_get_reported_failed_connection",
+        }
+    return {
+        "ok": True,
+        "status": "connected",
+        "reason": "claude_mcp_commands_succeeded_without_failure_marker",
+    }
 
 
 def run_claude_mcp_probe(
@@ -72,39 +97,51 @@ def run_claude_mcp_probe(
     )
     list_text = sanitize_host_output((list_proc.stdout or list_proc.stderr or "").strip())
     get_text = sanitize_host_output((get_proc.stdout or get_proc.stderr or "").strip())
+    config_status = host_config_status(
+        list_returncode=list_proc.returncode,
+        get_returncode=get_proc.returncode,
+        get_text=get_text,
+    )
+    host_config_ok = bool(config_status["ok"])
     result: dict[str, Any] = {
-        "ok": list_proc.returncode == 0 and get_proc.returncode == 0,
-        "status": "reachable" if list_proc.returncode == 0 and get_proc.returncode == 0 else "blocked_host_config",
+        "ok": host_config_ok,
+        "status": "reachable" if host_config_ok else "blocked_host_config",
         "server_name": server_name,
         "host_version": read_claude_version(claude),
         "commands": ["claude mcp list", f"claude mcp get {server_name}"],
         "list_returncode": list_proc.returncode,
         "get_returncode": get_proc.returncode,
+        "host_config_ok": host_config_ok,
+        "host_config_status": config_status,
         "list_summary": list_text[:500],
         "get_summary": get_text[:500],
         "project_skill": inspect_project_skill(),
         "privacy": "This smoke reports command status only and does not print transcript contents.",
     }
     if call_tool:
-        if result["ok"]:
-            tool_call = run_claude_mcp_tool_call(
-                claude=claude,
-                server_name=server_name,
-                cwd=cwd,
-                max_budget_usd=max_budget_usd,
-                timeout=tool_timeout,
-                server_script=server_script,
-                server_command=server_command,
-                server_args=server_args,
+        tool_call = run_claude_mcp_tool_call(
+            claude=claude,
+            server_name=server_name,
+            cwd=cwd,
+            max_budget_usd=max_budget_usd,
+            timeout=tool_timeout,
+            server_script=server_script,
+            server_command=server_command,
+            server_args=server_args,
+        )
+        result["tool_call"] = tool_call
+        tool_ok = bool(tool_call.get("ok"))
+        result["ok"] = tool_ok
+        if tool_ok:
+            result["status"] = (
+                "tool_call_reachable"
+                if host_config_ok
+                else "tool_call_reachable_with_persistent_config_blocker"
             )
-            result["tool_call"] = tool_call
-            result["ok"] = bool(tool_call.get("ok"))
-            result["status"] = "tool_call_reachable" if result["ok"] else "blocked_tool_call"
         else:
-            result["tool_call"] = {
-                "ok": False,
-                "status": "skipped_host_not_reachable",
-            }
+            result["status"] = (
+                "blocked_tool_call" if host_config_ok else "blocked_host_config_and_tool_call"
+            )
     return result
 
 

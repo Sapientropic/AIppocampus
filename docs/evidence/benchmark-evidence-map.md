@@ -132,21 +132,23 @@ path for reviewers trying to understand current claims.
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
 20. Need public-safe provider-conformance fixture evidence for #988 / #981:
    [`benchmarks/provider-conformance-fixture-report.md`](benchmarks/provider-conformance-fixture-report.md).
-21. Need segmented-search merge policy calibration evidence for #375:
+21. Need the latest Claude Code real-host local-history / MCP dogfood boundary:
+   [`readiness/claude-code-dogfood-2026-06-09.md`](readiness/claude-code-dogfood-2026-06-09.md).
+22. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-22. Need agency host-surface timing evidence for #763:
+23. Need agency host-surface timing evidence for #763:
    [`benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`](benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
-23. Need private real-history Dream offline and diagnostic evidence:
+24. Need private real-history Dream offline and diagnostic evidence:
    [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
    and
    [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
-24. Need explicit recall-reminder shadow A/B evidence:
+25. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-25. Need public-corpus negative-control dream shadow evidence:
+26. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-26. Need live question-extraction axis-coverage evidence for GitHub #153:
+27. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-27. Need community-submitted runs, demos, known gaps, or field-report intake:
+28. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -244,6 +246,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Fresh-thread public-safe recall demo | `benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py` | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`, `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`, `docs/guides/demo-scenarios.md` |
 | Field Continuity / magic-moment reproducibility contract | `benchmarks/aippocampus/benchmark_field_continuity.py` | `docs/evidence/benchmarks/field-continuity-fixture-report.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/field_continuity/fixture.json`, #454, #281 |
 | Provider conformance contract fixture | `benchmarks/aippocampus/benchmark_provider_conformance.py` | `docs/evidence/benchmarks/provider-conformance-fixture-report.md`, `docs/architecture/provider-entrypoint-inventory.md`, `benchmark_corpus/provider_conformance/fixture.json`, #988, #981 |
+| Claude Code real-host dogfood | `tools/aippocampus/smoke/smoke_claude_code_history.py`, `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py`, `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` | `docs/evidence/readiness/claude-code-dogfood-2026-06-09.md`, `docs/guides/claude-code-mcp.md`, #998 |
 | Structured cognitive portrait | `benchmarks/aippocampus/benchmark_cognitive_portrait.py` | `docs/research/compact-activation-signals.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Question-aware real-history structural benchmark and optional answer-quality review | `benchmarks/aippocampus/benchmark_question_aware_real_history.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/evidence/question/question-aware-answer-quality-2026-06-08.md`, `docs/research/compact-activation-signals.md`, `docs/planning/next-iteration-plan.md`, `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #248 |
 | Question tracking selected-fixture calibration | `benchmarks/aippocampus/benchmark_question_tracking_calibration.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/planning/technical-differentiation-analysis.md` |
