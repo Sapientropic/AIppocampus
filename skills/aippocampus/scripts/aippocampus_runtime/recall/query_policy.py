@@ -108,6 +108,21 @@ GENERIC_ANCHOR_TERMS = {
     "记忆",
 }
 
+CJK_QUERY_SIDE_CAR_STOP = {
+    "上次",
+    "之前",
+    "那个",
+    "这个",
+    "记忆",
+    "召回",
+    "继续",
+    "说过",
+    "说的",
+    "我们",
+    "一下",
+    "不要",
+}
+
 
 def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
     seen: set[str] = set()
@@ -165,6 +180,32 @@ def split_query_terms(patterns: list[str]) -> list[str]:
             if 2 <= len(chunk) <= 12 and chunk.casefold() not in STOP_TERMS:
                 terms.append(chunk)
     return unique_preserve(terms)
+
+
+def cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
+    """Return lightweight CJK query chunks for measured local recall.
+
+    These are navigation/search terms, not semantic aliases or evidence. Keep
+    the stop-list conservative so generic deictic prompts like "之前那个记忆" do
+    not wake unrelated local rows merely because the query is written in
+    Chinese.
+    """
+
+    terms: list[str] = []
+    for chunk in re.findall(r"[\u3400-\u9fff]{2,}", query):
+        normalized = chunk
+        for stop in CJK_QUERY_SIDE_CAR_STOP:
+            normalized = normalized.replace(stop, " ")
+        for part in re.split(r"[\s的了和与、，。；：！？,.!?/|+]+", normalized):
+            part = normalize_term(part)
+            if len(part) < 2:
+                continue
+            terms.append(part)
+            for n in (2, 3, 4):
+                if len(part) < n:
+                    continue
+                terms.extend(part[i : i + n] for i in range(0, len(part) - n + 1))
+    return unique_preserve(terms, limit=limit)
 
 
 def semantic_trigger_terms(rows: list[dict], limit: int = 24) -> list[str]:

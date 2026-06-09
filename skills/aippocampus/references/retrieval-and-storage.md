@@ -331,8 +331,11 @@ and do not let activation metadata become source truth.
 Chinese and mixed-language recall is measured by the public-safe CJK local
 fixture in
 `docs/evidence/benchmarks/cjk-local-recall-fixture-report.md`. That fixture can
-compare current trigram/LIKE/RAG-lite behavior with measured-only query sidecar
-candidates, but it does not claim broad Chinese semantic search quality.
+compare current trigram/LIKE/RAG-lite behavior with measured-only
+`cjk_query_sidecar_terms()` candidates, including compact no-space CJK cues.
+The sidecar terms are search/navigation material only: they do not make
+generated aliases source truth, and the fixture does not claim broad Chinese
+semantic search quality.
 
 Segmented merge weights are calibrated by the public-safe #375 fixture runner
 `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` and documented in
