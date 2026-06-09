@@ -14,8 +14,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+# Prefer this checkout's runtime package when the script is invoked by path.
+# Otherwise a locally installed older skill can satisfy package imports and miss
+# newly split sibling modules.
+SCRIPTS_ROOT = Path(__file__).resolve().parents[2]
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.navigation.associations import (
@@ -36,6 +44,7 @@ DEFAULT_JOBS_NAME = "subconscious_jobs.jsonl"
 MIN_ROUTE_CONFIDENCE = 0.55
 MIN_ROUTE_QUALITY_BUCKETS = {"usable", "strong"}
 MAX_ROUTE_TERMS = 24
+MAP_QUERY_SCALES = {"far", "mid", "near"}
 
 GENERIC_MAP_TERMS = {
     "memory",
@@ -534,6 +543,28 @@ def match_cognitive_map(
     return matches[:limit]
 
 
+def query_cognitive_map(
+    prompt: str,
+    cognitive_map: dict[str, Any],
+    *,
+    scale: str = "near",
+    project_label: str | None = None,
+    limit: int = 4,
+) -> dict[str, Any]:
+    from aippocampus_runtime.navigation.cognitive_map_query import (
+        query_cognitive_map as _query_cognitive_map,
+    )
+
+    return _query_cognitive_map(
+        prompt,
+        cognitive_map,
+        scale=scale,
+        project_label=project_label,
+        limit=limit,
+        near_matcher=match_cognitive_map,
+    )
+
+
 def build_from_files(
     *, registry_path: Path, jobs_path: Path, output_path: Path | None = None
 ) -> dict[str, Any]:
@@ -572,6 +603,15 @@ def main() -> int:
     parser.add_argument("--jobs")
     parser.add_argument("--output")
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument("--query", help="Optional prompt to query the built cognitive map.")
+    parser.add_argument(
+        "--scale",
+        choices=sorted(MAP_QUERY_SCALES),
+        default="near",
+        help="Explicit map query scale for --query.",
+    )
+    parser.add_argument("--limit", type=int, default=4, help="Maximum rows in query output.")
+    parser.add_argument("--project-label", help="Optional project label boost for map queries.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -592,6 +632,20 @@ def main() -> int:
     result = build_cognitive_map(registry=registry, job_findings=findings)
     if not args.no_write:
         write_json(output_path, result)
+    if args.query:
+        query_result = query_cognitive_map(
+            args.query,
+            result,
+            scale=args.scale,
+            project_label=args.project_label,
+            limit=args.limit,
+        )
+        if args.json_output:
+            print(json.dumps(query_result, ensure_ascii=False, indent=2))
+        else:
+            print(f"cognitive map query scale: {query_result['scale']}")
+            print(json.dumps(query_result.get("coverage") or {}, ensure_ascii=False))
+        return 0
     result = summarize_result(result, output_path=output_path, jobs_path=jobs_path)
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

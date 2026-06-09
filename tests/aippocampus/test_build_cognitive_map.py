@@ -21,6 +21,85 @@ from aippocampus_runtime.navigation import cognitive_map as cognitive_map  # noq
 
 
 class BuildCognitiveMapTests(unittest.TestCase):
+    def build_multi_scale_fixture(self) -> dict:
+        registry = {
+            "schema_version": 1,
+            "updated_at": "2026-06-01T00:00:00Z",
+            "threads": [
+                {
+                    "thread_key": "session:map",
+                    "title": "AIppocampus cognitive map",
+                    "project_label": "AIppocampus",
+                    "updated_at": "2026-01-15T00:00:00Z",
+                    "keywords": ["cognitive map", "navigation"],
+                    "anchor_titles": ["map scale"],
+                    "summary": "Map-scale planning work.",
+                },
+                {
+                    "thread_key": "session:dream",
+                    "title": "Dream public workload",
+                    "project_label": "Dream",
+                    "updated_at": "2026-03-20T00:00:00Z",
+                    "keywords": ["Dream", "coding decision"],
+                    "anchor_titles": ["coding shadow"],
+                    "summary": "Dream workload planning.",
+                },
+                {
+                    "thread_key": "session:quiet",
+                    "title": "Quiet registry-only note",
+                    "project_label": "Private Notes",
+                    "updated_at": "2026-04-05T00:00:00Z",
+                    "keywords": ["background"],
+                    "anchor_titles": ["unrouted note"],
+                },
+            ],
+        }
+        findings = [
+            {
+                "kind": "aippocampus_subconscious_job_finding",
+                "job": "cognitive_map",
+                "finding_kind": "cognitive_map_route",
+                "title": "Cognitive map scale",
+                "summary": "Use far and near map scales without treating overview as source truth.",
+                "confidence": 0.91,
+                "landmarks": ["map scale", "source reopen"],
+                "regions": ["memory architecture"],
+                "route_cues": ["cognitive map", "far view"],
+                "target_thread_keys": ["session:map"],
+                "source_refs": [
+                    {
+                        "thread_key": "session:map",
+                        "title": "AIppocampus cognitive map",
+                        "project_label": "AIppocampus",
+                        "line": 9,
+                    }
+                ],
+                "source": "deepseek_subconscious_jobs",
+            },
+            {
+                "kind": "aippocampus_subconscious_job_finding",
+                "job": "cognitive_map",
+                "finding_kind": "cognitive_map_route",
+                "title": "Dream coding shadow",
+                "summary": "Use Dream coding traces to avoid repeated rejected routes.",
+                "confidence": 0.86,
+                "landmarks": ["coding shadow", "Dream workload"],
+                "regions": ["dream quality"],
+                "route_cues": ["Dream", "coding decision"],
+                "target_thread_keys": ["session:dream"],
+                "source_refs": [
+                    {
+                        "thread_key": "session:dream",
+                        "title": "Dream public workload",
+                        "project_label": "Dream",
+                        "line": 11,
+                    }
+                ],
+                "source": "deepseek_subconscious_jobs",
+            },
+        ]
+        return cognitive_map.build_cognitive_map(registry=registry, job_findings=findings)
+
     def test_registry_alone_does_not_create_routes(self) -> None:
         registry = {
             "schema_version": 1,
@@ -166,6 +245,56 @@ class BuildCognitiveMapTests(unittest.TestCase):
         matches = cognitive_map.match_cognitive_map("咱们继续心理地图和位置细胞这条升级", result)
         self.assertEqual(matches[0]["thread_keys"], ["session:map"])
         self.assertIn("心理地图", matches[0]["matched_cues"])
+
+    def test_query_cognitive_map_near_mode_preserves_route_packets(self) -> None:
+        result = self.build_multi_scale_fixture()
+
+        packet = cognitive_map.query_cognitive_map(
+            "continue the cognitive map far view work",
+            result,
+            scale="near",
+        )
+
+        self.assertEqual(packet["scale"], "near")
+        self.assertEqual(packet["matches"][0]["route_kind"], "association")
+        self.assertEqual(packet["matches"][0]["thread_keys"], ["session:map"])
+        self.assertEqual(
+            packet["matches"][0]["source_refs"][0]["thread_key"],
+            "session:map",
+        )
+        self.assertEqual(packet["coverage"]["route_count"], 2)
+        self.assertTrue(packet["diagnostics"]["source_reopen_required_for_claims"])
+
+    def test_query_cognitive_map_mid_mode_groups_regions_and_landmarks(self) -> None:
+        result = self.build_multi_scale_fixture()
+
+        packet = cognitive_map.query_cognitive_map("Dream coding decision work", result, scale="mid")
+
+        self.assertEqual(packet["scale"], "mid")
+        self.assertEqual(packet["regions"][0]["label"], "dream quality")
+        self.assertIn("coding shadow", packet["regions"][0]["landmark_labels"])
+        self.assertEqual(packet["regions"][0]["representative_threads"], ["session:dream"])
+        self.assertEqual(packet["coverage"]["matched_region_count"], 1)
+        self.assertTrue(packet["diagnostics"]["map_summary_is_navigation_only"])
+
+    def test_query_cognitive_map_far_mode_returns_theme_project_time_overview(self) -> None:
+        result = self.build_multi_scale_fixture()
+
+        packet = cognitive_map.query_cognitive_map(
+            "what directions did I spend time on over the last six months?",
+            result,
+            scale="far",
+        )
+
+        self.assertEqual(packet["scale"], "far")
+        self.assertGreaterEqual(packet["coverage"]["episode_count"], 3)
+        self.assertEqual(packet["coverage"]["route_count"], 2)
+        self.assertIn("AIppocampus", packet["project_distribution"])
+        self.assertIn("2026-03", packet["time_distribution"])
+        self.assertIn("memory architecture", [theme["label"] for theme in packet["themes"]])
+        self.assertIn("registry_only_episode_count", packet["coverage_gaps"])
+        self.assertNotIn("source_refs", packet["themes"][0])
+        self.assertTrue(packet["diagnostics"]["far_view_explicit_only"])
 
     def test_cli_writes_cognitive_map_from_jobs_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

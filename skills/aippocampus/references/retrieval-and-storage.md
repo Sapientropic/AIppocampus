@@ -629,6 +629,17 @@ writes a hook-safe sidecar. Prompt hooks may use route matches as scent and
 query expansion; exact claims still require clean-source, SQLite, or raw-rollout
 evidence.
 
+Explicit callers can query the sidecar through
+`query_cognitive_map(prompt, map, scale=...)` or the CLI `--query --scale`
+options. `near` preserves the existing route-packet behavior with source refs
+and reopen paths. `mid` groups regions, landmarks, representative threads, and
+route counts for map-room navigation. `far` returns theme/project/time
+distribution plus coverage gaps, and should be used only for explicit recall or
+active-recall orientation such as "what directions did I spend time on over the
+last six months?" All scales include coverage and source-boundary diagnostics;
+far/mid summaries are navigation-only and cannot support factual claims without
+following a near route or clean-source search.
+
 Question/frontier findings are not cognitive-map routes by themselves. They are
 stored as `subconscious_jobs.jsonl` findings from the `question_extraction` job
 and may later feed hook scent, boundary maps, or review workflows. A
