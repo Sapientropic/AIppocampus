@@ -16,21 +16,18 @@ import _paths
 
 _paths.ensure_paths()
 
-import architecture_index_guard
-import evidence_index_guard
 import ia_pressure_guard
+from architecture_index_guard import architecture_index_issues
+from evidence_index_guard import evidence_index_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
     public_core_product_profile_issues,
 )
 from reader_path_guard import reader_path_issues
+from source_kernel_guard import source_kernel_contract_issues
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
-
-ARCHITECTURE_INDEX_ROLES = architecture_index_guard.ARCHITECTURE_INDEX_ROLES
-architecture_index_issues = architecture_index_guard.architecture_index_issues
-evidence_index_issues = evidence_index_guard.evidence_index_issues
 
 MAX_SKILL_LINES = 220
 MAX_SKILL_WORDS = 2600
@@ -1299,6 +1296,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(current_claims_snapshot_issues(repo_root))
     issues.extend(proof_slice_maturity_board_issues(repo_root))
+    issues.extend(source_kernel_contract_issues(repo_root))
     issues.extend(hippocampal_private_annotation_protocol_issues(repo_root))
     issues.extend(legacy_alias_inventory_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))

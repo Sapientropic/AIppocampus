@@ -70,6 +70,45 @@ Model-organized outputs can point back into clean source, but they should not
 replace it. Any high-level finding that matters must remain tied to source
 refs.
 
+## Source-Backed Kernel Contract
+
+Every higher-level memory surface hangs off this kernel chain:
+
+```text
+ConversationProvider -> CleanSource -> SourceRef/Registry -> Rebuildable Index -> RecallCandidate -> RecallDecision -> SourceReopen -> BoundedEvidence
+```
+
+The names may vary at a module boundary, but the authority transition must not
+vary. Clean source is the truth substrate. Registry rows and source refs give
+portable identity and reopen handles. Indexes are rebuildable caches, not
+truth. Recall candidates and recall decisions are navigation until they lead to
+source reopen. Source reopen is the transition from route/context to
+claim-supporting evidence. Bounded evidence can support claims only within its
+declared scope; source-open evidence can support exact wording only inside its
+scope and redaction boundary.
+
+Authority rings:
+
+| Ring | Examples | Authority |
+| --- | --- | --- |
+| Truth substrate | ConversationProvider output, raw audit source, clean source | Ground for later claims; clean source is the ordinary evidence surface. |
+| Rebuildable cache | SQLite/FTS/RAG-lite indexes, segment indexes, graph indexes | Speeds lookup and ranking; can be rebuilt from source and must not become truth. |
+| Navigation sidecar | Semantic sidecars, concept edges, cognitive maps, continuity domains, route notes, Dream/Journey/subconscious findings, vault projections, Observatory diagnostics | Routes attention, proposes synthesis, or explains system state; cannot support factual claims by itself. |
+| Foreground packet | Ambient cards, Active Path Packets, MCP recall handles, evidence drawer packets | Tells the agent what action is allowed: scent, route, bounded evidence, source open, or blocked. |
+| Bounded / source-open evidence | Reopened clean-source windows, bounded evidence cards, scoped source-open context | May support answer content within scope; exact, sensitive, stale, disputed, or high-risk claims still follow source-court rules. |
+
+Dream, Journey, subconscious jobs, semantic sidecars, ambient recall, sync,
+vault, Observatory, continuity domains, cognitive maps, and future cognitive
+layers may route attention, compress interpretation, schedule review, explain
+activation, or move source-backed artifacts across devices. They must not
+replace clean source, raw audit source, or source reopen. Generated findings
+must not replace clean source; summaries can be useful maps only when they keep
+a route back to source and remain lower authority than reopened evidence.
+
+This contract is deliberately not search-only memory. Higher-level cognition is
+allowed, but its product job is to help a later agent find and use source with
+care, not to create a second memory truth layer.
+
 ## Metaphor Discipline
 
 AIppocampus uses neuroscience-adjacent language as an engineering and product

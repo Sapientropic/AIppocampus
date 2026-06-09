@@ -21,7 +21,7 @@ Roles:
 | --- | --- | --- |
 | [aar-v2-action-time-nudges.md](aar-v2-action-time-nudges.md) | current contract | AAR v2 action-time nudge authority and stale-topology boundaries. |
 | [agent-skill-capability-contracts.md](agent-skill-capability-contracts.md) | current contract | Typed agent-skill capability boundaries. |
-| [architecture-overview.md](architecture-overview.md) | current contract | High-level runtime layers, data flow, and metaphor discipline. |
+| [architecture-overview.md](architecture-overview.md) | current contract | High-level runtime layers, source-backed kernel contract, authority rings, data flow, and metaphor discipline. |
 | [clean-source-redaction-profiles.md](clean-source-redaction-profiles.md) | current contract | Optional redaction profiles without replacing raw-private clean source. |
 | [continuity-domains.md](continuity-domains.md) | current contract | Source-trailed domains, pathlets, macro derived pointers, and situation glyph boundaries. |
 | [cognitive-runtime-architecture.md](cognitive-runtime-architecture.md) | current contract | Job-circuit runtime discipline for deterministic gates and semantic workers. |

@@ -17,6 +17,13 @@ lives in `docs/evidence/benchmark-evidence-map.md`. For a compact adoption
 view across proof lines, use
 `docs/evidence/readiness/proof-slice-maturity.md`.
 
+Beta/readiness and PyPI classifier policy should treat the
+[`source-backed kernel contract`](../../architecture/architecture-overview.md#source-backed-kernel-contract)
+as a precondition: higher-level Dream, Journey, semantic, ambient, sync, vault,
+Observatory, or provider-kit slices can mature only by preserving the
+clean-source-to-source-reopen chain, not by treating generated findings as
+replacement truth.
+
 ## Can Claim Now
 
 - Stage 0 baseline has working clean-source, search, registry, hooks,

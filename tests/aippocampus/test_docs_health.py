@@ -16,6 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+import architecture_index_guard  # noqa: E402
 import check_docs_health as docs_health  # noqa: E402
 import ia_pressure_guard  # noqa: E402
 
@@ -133,6 +134,69 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
+    def test_source_kernel_contract_covers_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.source_kernel_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_source_kernel_contract_blocks_generated_findings_as_truth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            overview = repo / "docs" / "architecture" / "architecture-overview.md"
+            overview.parent.mkdir(parents=True)
+            overview.write_text(
+                "\n".join(
+                    [
+                        "## Source-Backed Kernel Contract",
+                        "ConversationProvider -> CleanSource -> SourceRef/Registry -> "
+                        "Rebuildable Index -> RecallCandidate -> RecallDecision -> "
+                        "SourceReopen -> BoundedEvidence",
+                        "Clean source is the truth substrate.",
+                        "Indexes are rebuildable caches, not truth.",
+                        "Source reopen is the transition from route/context to "
+                        "claim-supporting evidence.",
+                        "Authority rings",
+                        "Truth substrate",
+                        "Rebuildable cache",
+                        "Navigation sidecar",
+                        "Foreground packet",
+                        "Bounded / source-open evidence",
+                        "Dream, Journey, subconscious jobs, semantic sidecars, ambient recall, sync,",
+                        "vault, Observatory",
+                        "Generated findings must not replace clean source.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (repo / "docs" / "README.md").write_text(
+                "source-backed-kernel-contract\n", encoding="utf-8"
+            )
+            (repo / "docs" / "architecture" / "README.md").write_text(
+                "source-backed kernel contract\n", encoding="utf-8"
+            )
+            readiness = repo / "docs" / "evidence" / "readiness"
+            readiness.mkdir(parents=True)
+            (readiness / "stage-0-5-readiness.md").write_text(
+                "source-backed-kernel-contract\n", encoding="utf-8"
+            )
+            (readiness / "proof-slice-maturity.md").write_text(
+                "source-backed-kernel-contract\n", encoding="utf-8"
+            )
+            (repo / "docs" / "bad.md").write_text(
+                "Generated findings replace clean source.\n", encoding="utf-8"
+            )
+
+            issues = docs_health.source_kernel_contract_issues(repo)
+
+        self.assertIn(
+            "docs claim generated findings replace clean source; route them as navigation: "
+            "docs/bad.md",
+            issues,
+        )
+
     def test_architecture_index_reports_missing_doc_and_bad_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -165,7 +229,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn(
             "architecture index has unsupported role for contract.md: vague; "
             "use one of "
-            + str(sorted(docs_health.ARCHITECTURE_INDEX_ROLES)),
+            + str(sorted(architecture_index_guard.ARCHITECTURE_INDEX_ROLES)),
             issues,
         )
         self.assertIn(
