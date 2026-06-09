@@ -799,6 +799,9 @@ materialized from detached DeepSeek subconscious jobs, so a route match is
 already prior semantic work and should skip foreground DeepSeek spend. The hook
 uses those routes only as `scent`: they can add query terms and candidate
 threads, but they are never evidence by themselves.
+The ambient hook keeps this compact near-route behavior. Far/mid cognitive-map
+views are explicit query modes for recall or active-recall callers, not default
+prompt-hook material.
 
 Cue-to-evidence upgrades are intentionally two-stage. Natural requests such as
 "上次关于 X 的结论是什么" or "找一下之前说 X 的那段" may open a tiny
