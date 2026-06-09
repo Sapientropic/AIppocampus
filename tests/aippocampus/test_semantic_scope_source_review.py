@@ -243,6 +243,34 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertEqual(result["review_buckets"]["rejected"], 1)
         self.assertEqual(result["review_buckets"]["ambiguous_or_human_review"], 0)
 
+    def test_expected_unsupported_review_does_not_require_support_confidence(self) -> None:
+        case = {
+            "labels": ["personal_reflection"],
+            "expected_review_outcome": "unsupported",
+        }
+        review_payload = {
+            "unsupported_labels": ["personal_reflection"],
+            "needs_human_review": False,
+            "confidence": 0.0,
+        }
+        self.assertTrue(
+            review.review_passed(case, review_payload, min_review_confidence=0.65)
+        )
+
+    def test_expected_human_review_accepts_stale_or_blocked_escalation(self) -> None:
+        case = {
+            "labels": ["technical_work"],
+            "expected_review_outcome": "needs_human_review",
+        }
+        review_payload = {
+            "unsupported_labels": ["technical_work"],
+            "needs_human_review": True,
+            "confidence": 0.5,
+        }
+        self.assertTrue(
+            review.review_passed(case, review_payload, min_review_confidence=0.65)
+        )
+
     def test_live_missing_api_key_fails_instead_of_observe_fallback(self) -> None:
         self._write_fixture()
         os.environ.pop("FAKE_DEEPSEEK_KEY", None)
@@ -302,6 +330,103 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertEqual(calls, 2)
         self.assertEqual(result["failure_count"], 0)
+
+    def test_live_source_review_classifies_partial_failure_without_raw_error(self) -> None:
+        self._write_fixture()
+        os.environ["FAKE_DEEPSEEK_KEY"] = "present"
+
+        def failing_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+            raise TimeoutError("temporary reviewer timeout with private prompt fragment")
+
+        result = review.run_semantic_scope_source_review(
+            registry_path=self.registry,
+            live=True,
+            api_key_env="FAKE_DEEPSEEK_KEY",
+            max_cases=1,
+            min_cases=1,
+            min_pass_rate=0.0,
+            max_attempts=2,
+            chat_fn=failing_chat_fn,
+        )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "live_model_partial_failure")
+        self.assertEqual(result["failure_count"], 1)
+        self.assertEqual(result["failure_taxonomy"]["by_class"]["timeout"], 1)
+        self.assertEqual(result["failure_taxonomy"]["by_class"]["retry_exhaustion"], 1)
+        self.assertIn("retry_exhaustion", result["failure_taxonomy"]["known_classes"])
+        self.assertEqual(result["failure_taxonomy"]["retry_exhausted_count"], 1)
+        self.assertEqual(result["failure_taxonomy"]["failure_count"], 1)
+        self.assertEqual(result["cases"][0]["failure_class"], "timeout")
+        self.assertIn("selected_source_review_passed", result["cannot_claim"])
+        self.assertNotIn("private prompt fragment", rendered)
+        self.assertNotIn("temporary reviewer timeout", rendered)
+        self.assertNotIn("lighthouse", rendered)
+
+    def test_failure_taxonomy_classifies_non_provider_operational_buckets(self) -> None:
+        cases = {
+            "prompt_context_issue": RuntimeError("prompt_context payload too large"),
+            "source_open_issue": RuntimeError("inspect_review_case clean source lookup failed"),
+            "report_aggregation_bug": RuntimeError("review_buckets aggregation failed"),
+            "provider_transport_error": RuntimeError("HTTP transport connection reset"),
+            "provider_response_shape": ValueError("empty reviewer choices"),
+        }
+        for expected, exc in cases.items():
+            with self.subTest(expected=expected):
+                self.assertEqual(
+                    review.classify_review_failure(exc)["failure_class"],
+                    expected,
+                )
+
+    def test_live_source_review_classifies_response_shape_failure(self) -> None:
+        self._write_fixture()
+        os.environ["FAKE_DEEPSEEK_KEY"] = "present"
+
+        def malformed_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+            return {"choices": []}
+
+        result = review.run_semantic_scope_source_review(
+            registry_path=self.registry,
+            live=True,
+            api_key_env="FAKE_DEEPSEEK_KEY",
+            max_cases=1,
+            min_cases=1,
+            min_pass_rate=0.0,
+            max_attempts=1,
+            chat_fn=malformed_chat_fn,
+        )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failure_taxonomy"]["by_class"]["provider_response_shape"], 1)
+        self.assertEqual(result["cases"][0]["failure_class"], "provider_response_shape")
+        self.assertNotIn("lighthouse", rendered)
+        self.assertNotIn("msg_life", rendered)
+
+    def test_source_review_claim_level_keeps_broader_runs_diagnostic(self) -> None:
+        claim_level = review.source_review_claim_level(
+            public_shadow=False,
+            status="sufficient",
+            failures=0,
+            case_count=96,
+        )
+        self.assertEqual(claim_level, "broader_selected_source_review_diagnostic")
+        self.assertIn(
+            "selected_source_review_green_gate",
+            review.cannot_claim("sufficient", live=True, claim_level=claim_level),
+        )
+
+    def test_public_shadow_rejects_explicit_registry_override(self) -> None:
+        self._write_fixture()
+        with self.assertRaises(ValueError):
+            review.run_semantic_scope_source_review(
+                registry_path=self.registry,
+                public_shadow=True,
+                live=False,
+                max_cases=1,
+                min_cases=1,
+            )
 
     def test_live_source_review_fails_when_label_evidence_is_unsupported(self) -> None:
         self._write_fixture()
@@ -410,6 +535,115 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertGreaterEqual(result["cases"][0]["tool_step_count"], 1)
         self.assertNotIn("lighthouse", rendered)
         self.assertNotIn("msg_life", rendered)
+
+    def test_public_shadow_cohort_exercises_expected_source_review_cases(self) -> None:
+        os.environ["FAKE_DEEPSEEK_KEY"] = "present"
+
+        def fake_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+            payload = json.loads(messages[1]["content"])
+            labels = payload["review_case"]["labels"]
+            text = payload["review_case"]["clean_source_message"]
+            unsupported = (
+                labels
+                if "unsupported shadow label" in text or "stale note is superseded" in text
+                else []
+            )
+            supported = [] if unsupported else labels
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "supported_labels": supported,
+                                    "unsupported_labels": unsupported,
+                                    "confidence": 0.92,
+                                    "needs_human_review": False,
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+        result = review.run_semantic_scope_source_review(
+            live=True,
+            public_shadow=True,
+            api_key_env="FAKE_DEEPSEEK_KEY",
+            max_cases=8,
+            min_cases=4,
+            min_pass_rate=1.0,
+            chat_fn=fake_chat_fn,
+        )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        self.assertTrue(result["ok"], rendered)
+        self.assertEqual(result["cohort"], "public_source_review_shadow")
+        self.assertEqual(result["claim_level"], "public_shadow_source_review")
+        self.assertEqual(result["case_count"], 4)
+        self.assertEqual(result["passed_count"], 4)
+        self.assertEqual(result["review_buckets"]["expected_supported"], 2)
+        self.assertEqual(result["review_buckets"]["expected_unsupported"], 1)
+        self.assertEqual(result["review_buckets"]["expected_human_review"], 1)
+        self.assertEqual(
+            result["public_shadow_requirements"],
+            {
+                "source_open_positive": True,
+                "stale_or_superseded_source": True,
+                "unsupported_semantic_sidecar": True,
+                "multilingual_paraphrase": True,
+            },
+        )
+        self.assertNotIn("unsupported shadow label", rendered)
+        self.assertNotIn("stale note is superseded", rendered)
+        self.assertNotIn("shadow_msg_", rendered)
+
+    def test_public_shadow_requires_all_shadow_case_families_before_claiming(self) -> None:
+        os.environ["FAKE_DEEPSEEK_KEY"] = "present"
+
+        def fake_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+            payload = json.loads(messages[1]["content"])
+            labels = payload["review_case"]["labels"]
+            text = payload["review_case"]["clean_source_message"]
+            unsupported = (
+                labels
+                if "unsupported shadow label" in text or "stale note is superseded" in text
+                else []
+            )
+            supported = [] if unsupported else labels
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "supported_labels": supported,
+                                    "unsupported_labels": unsupported,
+                                    "confidence": 0.92,
+                                    "needs_human_review": False,
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+        result = review.run_semantic_scope_source_review(
+            live=True,
+            public_shadow=True,
+            api_key_env="FAKE_DEEPSEEK_KEY",
+            max_cases=3,
+            min_cases=3,
+            min_pass_rate=1.0,
+            chat_fn=fake_chat_fn,
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["status"], "public_shadow_missing_required_cases")
+        self.assertEqual(result["claim_level"], "diagnostic_only")
+        self.assertIn(False, result["public_shadow_requirements"].values())
 
 
 if __name__ == "__main__":

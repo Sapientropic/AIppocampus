@@ -313,7 +313,7 @@ pasting raw JSON into multiple docs.
 | Fresh-thread real-history boundary smoke | `tools/aippocampus/smoke/smoke_fresh_thread_real_history.py` | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`, `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` |
 | Recall navigation arm comparison smoke | `tools/aippocampus/smoke/smoke_recall_navigation_comparison.py` | `docs/evidence/benchmarks/recall-navigation-comparison-2026-06-03.md`, #201, #281, #309, #248, #465 |
 | Real-history semantic scope smoke | `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
-| Semantic sidecar source-review smoke | `tools/aippocampus/smoke/smoke_semantic_scope_source_review.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
+| Semantic sidecar source-review smoke | `tools/aippocampus/smoke/smoke_semantic_scope_source_review.py`; public shadow fixture in `tests/fixtures/semantic_scope_source_review_shadow/` | `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/readiness/public-readiness-verification.md`, #993 |
 | Selected source-evidence recall eval and candidate-space diagnostics | `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py` | `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #458 |
 | Optional live question-confirmation smoke | `tools/aippocampus/smoke/smoke_question_confirmation_live.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Question prefilter parity smoke | `tools/aippocampus/smoke/smoke_question_prefilter_parity.py` | `docs/architecture/question-tracking-subconscious.md`, #248 |

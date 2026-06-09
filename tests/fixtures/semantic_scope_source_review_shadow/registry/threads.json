@@ -1,0 +1,11 @@
+{
+  "threads": [
+    {
+      "thread_key": "public-shadow-semantic-source-review",
+      "title": "Public semantic source-review shadow",
+      "paths": {
+        "clean_source_messages_jsonl": "shadow-thread/clean-source/messages.jsonl"
+      }
+    }
+  ]
+}

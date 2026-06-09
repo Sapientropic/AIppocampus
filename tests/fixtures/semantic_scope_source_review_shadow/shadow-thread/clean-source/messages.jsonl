@@ -1,0 +1,4 @@
+{"message_id":"shadow_msg_source_open","turn_id":"shadow_turn_source_open","source_line":1,"role":"user","text":"The implementation note says the source review smoke should reopen the clean source before making a technical claim."}
+{"message_id":"shadow_msg_stale","turn_id":"shadow_turn_stale","source_line":2,"role":"user","text":"The stale note is superseded: the old importer route should not be treated as current implementation guidance; future agents should reopen the registry-first source instead."}
+{"message_id":"shadow_msg_unsupported","turn_id":"shadow_turn_unsupported","source_line":3,"role":"user","text":"This unsupported shadow label case only records a neutral meeting time."}
+{"message_id":"shadow_msg_multilingual","turn_id":"shadow_turn_multilingual","source_line":4,"role":"user","text":"这个比喻把长期记忆说成一张能回到源头的地图，而不是模型天生记住了我。"}
