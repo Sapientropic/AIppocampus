@@ -37,7 +37,7 @@ Beta readiness decision for the exact release being packaged.
 | Memory Evidence Drawer foreground contract | #980 | Open | Foreground evidence needs a user-visible contract for what an agent may claim, reopen, or treat only as orientation. |
 | Provider conformance kit | #981 | Open | Clean-source integrations need a reusable conformance path before Beta can claim provider-facing reliability. |
 | Field Continuity Eval | #982 | Open | Long-term continuity quality needs a field-shaped eval, not only local deterministic smokes. |
-| Dream/Journey/subconscious graduation gates | #983 | Open | Cognitive layers need graduation criteria so experimental surfaces do not inherit Beta authority by association. |
+| Dream/Journey/subconscious graduation gates | #983, #1018, #1019 | #983 covered by `proof-slice-maturity.md`; #1018 and #1019 remain open mechanism substrates | Cognitive layers need graduation criteria so experimental surfaces do not inherit Beta authority by association, and proposed Awake SWR / reconsolidation mechanisms must not inherit Beta authority before their event substrates exist. |
 | Docs IA and benchmark-evidence pressure | #965, #966, #967, #968 | Closed | The public reader path and evidence map are now cleaner, but they remain preconditions for honest Beta claims. |
 | Benchmark remediation | #960, #961, #962, #963, #964 | #960 and #963 open; #961, #962, and #964 closed | Negative or partial benchmark lines must be remediated or explicitly bounded before Beta can imply stronger recall quality. |
 | Narrative mesh and active-flow feedback | #949, #950, #951 | #950 open; #949 and #951 closed | Fresh-thread continuity should route narrative/domain pointers into action without depending on hook luck or ungrounded summary. |

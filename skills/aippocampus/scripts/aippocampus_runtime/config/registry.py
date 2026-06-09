@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Mapping
 
 from aippocampus_runtime.contracts import public_envelope
 
@@ -160,7 +160,7 @@ def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
     unknown_names = sorted(
         name for name in current_env if name.startswith("AIPPOCAMPUS_") and name not in CONFIG_BY_NAME
     )
-    warnings = [
+    warnings: list[dict[str, object]] = [
         {"code": "unregistered_aippocampus_env", "name": name}
         for name in unknown_names
     ]
@@ -194,8 +194,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        data = report["data"]
-        print(f"config report: status={report['status']} knobs={len(data['knobs'])} unknown={data['unknown_count']}")
+        raw_data = report.get("data")
+        data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
+        knobs = data.get("knobs") if isinstance(data, dict) else []
+        unknown_count = data.get("unknown_count") if isinstance(data, dict) else 0
+        knob_count = len(knobs) if isinstance(knobs, list) else 0
+        print(
+            f"config report: status={report['status']} "
+            f"knobs={knob_count} unknown={unknown_count}"
+        )
     return 0 if report["ok"] else 1
 
 

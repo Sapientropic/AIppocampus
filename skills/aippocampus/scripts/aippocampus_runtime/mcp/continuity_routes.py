@@ -203,7 +203,8 @@ def _route_status(
     pathlet_routes: list[dict[str, Any]],
 ) -> dict[str, Any]:
     if isinstance(snapshot, dict):
-        metrics = snapshot.get("metrics") if isinstance(snapshot.get("metrics"), dict) else {}
+        raw_metrics = snapshot.get("metrics")
+        metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
         snapshot_status = "loaded"
         missing_artifacts: list[str] = []
         snapshot_has_domains = bool(metrics.get("domain_count"))

@@ -320,6 +320,14 @@ part of the default local search path. Semantic triggers, cognitive-map routes,
 and graph neighbors are navigation hints that still require source reopen before
 exact claims.
 
+`aippocampus_runtime.recall.feedback_events` records public-safe recall and
+active-flow feedback rows for later calibration work. It can count outcomes such
+as delivered candidates, source reopen success, ignored candidates, blocked
+routes, and wrong-route drag by blend context, signal family, and route kind.
+Those rows are calibration evidence and route-context metadata only: they do
+not store raw prompts or source excerpts, do not mutate score-fusion weights,
+and do not let activation metadata become source truth.
+
 Chinese and mixed-language recall is measured by the public-safe CJK local
 fixture in
 `docs/evidence/benchmarks/cjk-local-recall-fixture-report.md`. That fixture can
