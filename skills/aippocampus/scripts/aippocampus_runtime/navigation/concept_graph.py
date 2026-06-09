@@ -23,6 +23,13 @@ from aippocampus_runtime.navigation.associations import (
     normalize_term,
     term_is_noise,
 )
+from aippocampus_runtime.navigation.concept_kinds import (
+    classify_concept_kind,
+    concept_kind_source_boundary,
+)
+from aippocampus_runtime.navigation.concept_kinds import (
+    infer_concept_kind as _infer_concept_kind,
+)
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 CONCEPT_GRAPH_SCHEMA_VERSION = 1
@@ -123,18 +130,7 @@ def concept_id_for(label: str) -> str:
 
 
 def infer_concept_kind(label: str) -> str:
-    if re_like_project(label):
-        return "project"
-    if any(ch in label for ch in "/."):
-        return "library"
-    if any(ch.isupper() for ch in label) and any(ch.islower() for ch in label):
-        return "topic"
-    return "topic"
-
-
-def re_like_project(label: str) -> bool:
-    low = label.casefold()
-    return low in {"t-sense", "aippocampus"} or low.startswith("project:")
+    return _infer_concept_kind(label)
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -157,6 +153,8 @@ def init_schema(con: sqlite3.Connection) -> None:
             label TEXT NOT NULL,
             normalized_label TEXT NOT NULL UNIQUE,
             kind TEXT NOT NULL DEFAULT 'topic',
+            kind_source TEXT NOT NULL DEFAULT 'fallback',
+            kind_confidence REAL NOT NULL DEFAULT 0.0,
             status TEXT NOT NULL DEFAULT 'staging',
             scope_key TEXT NOT NULL DEFAULT 'global',
             hit_count INTEGER NOT NULL DEFAULT 0,
@@ -186,6 +184,18 @@ def init_schema(con: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_concept_edges_dst ON concept_edges(dst_concept_id, weight DESC);
         """
     )
+    ensure_concepts_kind_columns(con)
+
+
+def ensure_concepts_kind_columns(con: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"] if isinstance(row, sqlite3.Row) else row[1])
+        for row in con.execute("PRAGMA table_info(concepts)").fetchall()
+    }
+    if "kind_source" not in columns:
+        con.execute("ALTER TABLE concepts ADD COLUMN kind_source TEXT NOT NULL DEFAULT 'fallback'")
+    if "kind_confidence" not in columns:
+        con.execute("ALTER TABLE concepts ADD COLUMN kind_confidence REAL NOT NULL DEFAULT 0.0")
 
 
 def reset_graph(con: sqlite3.Connection) -> None:
@@ -202,42 +212,78 @@ def upsert_concept(
     hit_count: int = 0,
     thread_count: int = 0,
     scope_key: str = "global",
+    supplied_kind: Any = None,
+    supplied_kind_status: Any = None,
+    source_backed_kind: bool = False,
 ) -> str | None:
     label = normalize_term(label)
     if concept_is_noise(label):
         return None
     concept_id = concept_id_for(label)
     normalized = concept_normalized(label)
+    kind = classify_concept_kind(
+        label,
+        supplied_kind=supplied_kind,
+        supplied_kind_status=supplied_kind_status,
+        source_backed_kind=source_backed_kind,
+    )
     now = now_utc()
     existing = con.execute(
-        "SELECT concept_id, status, hit_count, thread_count FROM concepts WHERE concept_id = ?",
+        """
+        SELECT concept_id, status, hit_count, thread_count, kind, kind_source, kind_confidence
+        FROM concepts
+        WHERE concept_id = ?
+        """,
         (concept_id,),
     ).fetchone()
     if existing:
         best_status = (
             "verified" if status == "verified" or existing["status"] == "verified" else "staging"
         )
+        existing_confidence = float(existing["kind_confidence"] or 0.0)
+        if float(kind["kind_confidence"]) >= existing_confidence:
+            next_kind = str(kind["kind"])
+            next_kind_source = str(kind["kind_source"])
+            next_kind_confidence = float(kind["kind_confidence"])
+        else:
+            next_kind = str(existing["kind"])
+            next_kind_source = str(existing["kind_source"])
+            next_kind_confidence = existing_confidence
         con.execute(
             """
             UPDATE concepts
-            SET label = ?, status = ?, hit_count = MAX(hit_count, ?),
+            SET label = ?, kind = ?, kind_source = ?, kind_confidence = ?,
+                status = ?, hit_count = MAX(hit_count, ?),
                 thread_count = MAX(thread_count, ?), updated_at = ?
             WHERE concept_id = ?
             """,
-            (label, best_status, int(hit_count or 0), int(thread_count or 0), now, concept_id),
+            (
+                label,
+                next_kind,
+                next_kind_source,
+                next_kind_confidence,
+                best_status,
+                int(hit_count or 0),
+                int(thread_count or 0),
+                now,
+                concept_id,
+            ),
         )
     else:
         con.execute(
             """
             INSERT INTO concepts
-            (concept_id, label, normalized_label, kind, status, scope_key, hit_count, thread_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (concept_id, label, normalized_label, kind, kind_source, kind_confidence,
+             status, scope_key, hit_count, thread_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 concept_id,
                 label,
                 normalized,
-                infer_concept_kind(label),
+                str(kind["kind"]),
+                str(kind["kind_source"]),
+                float(kind["kind_confidence"]),
                 status,
                 scope_key,
                 int(hit_count or 0),
@@ -332,6 +378,15 @@ def upsert_edge(
                 now,
             ),
         )
+
+
+def count_by_column(con: sqlite3.Connection, column: str) -> dict[str, int]:
+    if column not in {"kind", "kind_source"}:
+        return {}
+    rows = con.execute(
+        f"SELECT {column} AS value, COUNT(*) AS count FROM concepts GROUP BY {column}"
+    ).fetchall()
+    return {str(row["value"] or "unknown"): int(row["count"] or 0) for row in rows}
 
 
 def add_bidirectional_edge(
@@ -446,8 +501,27 @@ def collect_subconscious_edges(con: sqlite3.Connection, staging_path: Path | Non
             continue
         edge_type = str(item.get("edge_type") or "related")
         source_thread_key = refs[0].get("thread_key")
-        src_id = upsert_concept(con, src, status="staging", hit_count=len(refs), thread_count=1)
-        dst_id = upsert_concept(con, dst, status="staging", hit_count=len(refs), thread_count=1)
+        kind_status = item.get("concept_kind_status") or item.get("kind_status")
+        src_id = upsert_concept(
+            con,
+            src,
+            status="staging",
+            hit_count=len(refs),
+            thread_count=1,
+            supplied_kind=item.get("src_concept_kind") or item.get("source_concept_kind"),
+            supplied_kind_status=kind_status,
+            source_backed_kind=bool(refs),
+        )
+        dst_id = upsert_concept(
+            con,
+            dst,
+            status="staging",
+            hit_count=len(refs),
+            thread_count=1,
+            supplied_kind=item.get("dst_concept_kind") or item.get("target_concept_kind"),
+            supplied_kind_status=kind_status,
+            source_backed_kind=bool(refs),
+        )
         if not src_id or not dst_id:
             continue
         upsert_edge(
@@ -506,12 +580,19 @@ def build_concept_graph(
                     if source.get("thread_key")
                 ]
             )
+            supplied_kind = item.get("concept_kind")
+            supplied_kind_status = item.get("concept_kind_status") or item.get("kind_status")
             term_id = upsert_concept(
                 con,
                 term,
                 status=status,
                 hit_count=int(item.get("hit_count") or 0),
                 thread_count=len(source_threads),
+                supplied_kind=supplied_kind,
+                supplied_kind_status=supplied_kind_status,
+                source_backed_kind=bool(supplied_kind)
+                and status == "verified"
+                and bool(source_threads),
             )
             if not term_id:
                 continue
@@ -559,6 +640,9 @@ def build_concept_graph(
             "edge_count": edges,
             "timeline_edge_count": timeline_edge_count,
             "subconscious_edge_count": subconscious_edge_count,
+            "concept_kind_counts": count_by_column(con, "kind"),
+            "concept_kind_source_counts": count_by_column(con, "kind_source"),
+            "source_boundary": concept_kind_source_boundary(),
         }
     finally:
         con.close()
@@ -586,7 +670,9 @@ def edge_rows(
 ) -> list[sqlite3.Row]:
     rows = con.execute(
         """
-        SELECT e.*, c.label AS dst_label, c.normalized_label AS dst_normalized
+        SELECT e.*, c.label AS dst_label, c.normalized_label AS dst_normalized,
+               c.kind AS dst_kind, c.kind_source AS dst_kind_source,
+               c.kind_confidence AS dst_kind_confidence
         FROM concept_edges e
         JOIN concepts c ON c.concept_id = e.dst_concept_id
         WHERE e.src_concept_id = ?
@@ -662,6 +748,10 @@ def expand_concepts(
                     "path": path + [label],
                     "edge_types": edge_types + [edge["edge_type"]],
                     "status": edge["status"],
+                    "concept_kind": edge["dst_kind"],
+                    "concept_kind_source": edge["dst_kind_source"],
+                    "concept_kind_confidence": edge["dst_kind_confidence"],
+                    "source_boundary": concept_kind_source_boundary(),
                 }
                 if not existing or next_score > float(existing.get("score") or 0.0):
                     best[normalized] = row
