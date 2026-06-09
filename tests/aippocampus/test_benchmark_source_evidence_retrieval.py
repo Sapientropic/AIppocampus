@@ -353,6 +353,7 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("--allow-deterministic-labels", proc.stdout)
         self.assertIn("--only-standard-public", proc.stdout)
+        self.assertIn("--skip-graph-extraction-boundary", proc.stdout)
         normalized_help = " ".join(proc.stdout.split())
         self.assertIn("cannot claim", normalized_help)
         self.assertIn("sidecar sample coverage", normalized_help)
@@ -455,10 +456,11 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
             payload["query_origin_summary"]["source_derived"]["tracks"],
             ["fts5_source_line", "source_evidence"],
         )
-        self.assertEqual(
-            payload["query_origin_summary"]["non_source_derived"]["track_count"],
-            0,
+        self.assertIn(
+            "graph_extraction_boundary",
+            payload["query_origin_summary"]["non_source_derived"]["tracks"],
         )
+        self.assertIn("graph_sidecar_quality", payload["cannot_claim"])
         source_rates = payload["query_origin_summary"]["source_derived"]["hit_rates"]
         self.assertIn(
             {
@@ -653,7 +655,8 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(standard_run.call_args.kwargs["dataset"], "locomo")
         self.assertEqual(standard_run.call_args.kwargs["max_questions"], 2)
         non_source = payload["query_origin_summary"]["non_source_derived"]
-        self.assertEqual(non_source["tracks"], ["standard_public_retrieval_qa"])
+        self.assertIn("standard_public_retrieval_qa", non_source["tracks"])
+        self.assertIn("graph_extraction_boundary", non_source["tracks"])
         self.assertIn(
             {
                 "track": "standard_public_retrieval_qa",
@@ -731,11 +734,9 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
             payload["tracks"]["standard_public_retrieval_qa"]["query_origin"]["bucket"],
             "non_source_derived",
         )
-        self.assertEqual(
-            payload["query_origin_summary"]["non_source_derived"]["tracks"],
-            ["standard_public_retrieval_qa"],
-        )
-        self.assertEqual(payload["query_origin_summary"]["non_source_derived"]["hit_rates"], [])
+        non_source_tracks = payload["query_origin_summary"]["non_source_derived"]["tracks"]
+        self.assertIn("standard_public_retrieval_qa", non_source_tracks)
+        self.assertIn("graph_extraction_boundary", non_source_tracks)
         self.assertIn("natural_user_query_recall", payload["cannot_claim"])
         self.assertIn("semantic_generalized_memory_recall", payload["cannot_claim"])
 
