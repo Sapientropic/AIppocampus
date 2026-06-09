@@ -71,11 +71,19 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn('python-version: "3.12"', text)
         self.assertIn("tempfile.gettempdir()", text)
         self.assertIn(".resolve()", text)
-        self.assertIn("python tools/aippocampus/run_tests.py --tier pr", text)
+        self.assertIn("Focused path-identity modules on default macOS tempdir", text)
+        self.assertIn(
+            "python -m unittest tests.aippocampus.test_path_identity "
+            "tests.aippocampus.test_run_tests_tiers "
+            "tests.aippocampus.test_macos_install_smoke_workflow -v",
+            text,
+        )
+        self.assertNotIn("PR tier on default macOS tempdir", text)
         self.assertIn("#402", text)
         self.assertIn("#140", text)
         self.assertIn("#242", text)
         macos_job = text.split("macos-path-identity", 1)[1]
+        self.assertNotIn("python tools/aippocampus/run_tests.py --tier pr", macos_job)
         self.assertNotIn("TMPDIR:", macos_job)
         self.assertNotIn("TEMP:", macos_job)
         self.assertNotIn("TMP:", macos_job)

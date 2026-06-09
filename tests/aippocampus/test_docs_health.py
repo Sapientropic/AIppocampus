@@ -690,7 +690,9 @@ class DocsHealthTests(unittest.TestCase):
             )
             (repo / ".github" / "workflows").mkdir(parents=True)
             (repo / ".github" / "workflows" / "aippocampus-ci.yml").write_text(
-                'python-version: ["3.12", "3.13"]\npython-version: "3.12"\n',
+                'python-version: "3.12"\n'
+                'python-version: "3.13"\n'
+                "Python 3.13 quick compatibility tier\n",
                 encoding="utf-8",
             )
             (repo / ".github" / "workflows" / "macos-install-smoke.yml").write_text(

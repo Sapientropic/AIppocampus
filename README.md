@@ -293,8 +293,9 @@ python -m pip install -e ".[dev]"
 
 Public claims still need the maintainer lanes in
 [CONTRIBUTING.md](CONTRIBUTING.md#maintainer-shipping-lanes). The default CI
-checks Ubuntu Python lanes and a macOS default TMPDIR path-identity gate in the
-`pr` tier; Ubuntu green alone is not a cross-platform path-identity claim. The
+keeps one canonical Ubuntu Python 3.12 `pr` lane with coverage, a Python 3.13
+`quick` compatibility lane, and a focused macOS default TMPDIR path-identity
+gate; Ubuntu green alone is not a broad cross-platform path-identity claim. The
 broader boundary lives in
 [docs/architecture/path-identity.md](docs/architecture/path-identity.md).
 

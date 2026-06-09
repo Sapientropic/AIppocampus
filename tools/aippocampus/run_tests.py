@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import TypedDict
@@ -34,6 +35,14 @@ TIER_REPORT_TOP_LIMIT = 10
 class TierModuleRow(TypedDict):
     module: str
     test_count: int
+
+
+class ModuleTimingRow(TypedDict):
+    module: str
+    primary_tier: str
+    test_count: int
+    duration_seconds: float
+    ok: bool
 
 
 def discover_modules() -> list[str]:
@@ -70,6 +79,39 @@ def modules_for_tier(tier: str) -> list[str]:
             if TEST_MODULE_CLASSIFICATIONS[module].primary_tier == normalized_tier
         ]
     raise ValueError(f"unknown test tier: {tier}")
+
+
+def shard_modules(
+    modules: list[str],
+    *,
+    shard_index: int,
+    shard_total: int,
+) -> list[str]:
+    # Keep CI shards stable by module name until there is reviewed timing
+    # history. Dynamic cost balancing from one local run can hide empty-shard
+    # mistakes and makes reproduced PR failures harder to route back.
+    return [
+        module
+        for position, module in enumerate(sorted(modules))
+        if position % shard_total == shard_index
+    ]
+
+
+def normalize_shard_args(
+    shard_index: int | None,
+    shard_total: int | None,
+) -> tuple[int, int] | None:
+    if shard_index is None and shard_total is None:
+        return None
+    if shard_index is None or shard_total is None:
+        raise ValueError("shard-index and shard-total must be supplied together")
+    if shard_total <= 0:
+        raise ValueError("shard-total must be greater than zero")
+    if shard_index < 0:
+        raise ValueError("shard-index must be zero or greater")
+    if shard_index >= shard_total:
+        raise ValueError("shard-index must be less than shard-total")
+    return shard_index, shard_total
 
 
 def _ensure_repo_on_path() -> None:
@@ -168,6 +210,72 @@ def run_modules(modules: list[str], *, verbosity: int) -> bool:
     return result.wasSuccessful()
 
 
+def run_modules_with_timings(
+    modules: list[str],
+    *,
+    verbosity: int,
+) -> tuple[bool, list[ModuleTimingRow]]:
+    _ensure_repo_on_path()
+    rows: list[ModuleTimingRow] = []
+    ok = True
+    for module in modules:
+        suite = unittest.defaultTestLoader.loadTestsFromName(module)
+        test_count = suite.countTestCases()
+        started = time.perf_counter()
+        result = unittest.TextTestRunner(verbosity=verbosity).run(suite)
+        duration = time.perf_counter() - started
+        ok = ok and result.wasSuccessful()
+        classification = TEST_MODULE_CLASSIFICATIONS.get(module)
+        rows.append(
+            {
+                "module": module,
+                "primary_tier": classification.primary_tier if classification else "unknown",
+                "test_count": test_count,
+                "duration_seconds": round(duration, 6),
+                "ok": result.wasSuccessful(),
+            }
+        )
+    return ok, rows
+
+
+def build_timings_report(
+    *,
+    selected_tier: str,
+    rows: list[ModuleTimingRow],
+    shard: tuple[int, int] | None,
+) -> dict[str, object]:
+    return {
+        "kind": "aippocampus_test_module_timings",
+        "schema_version": 1,
+        "selected_tier": selected_tier,
+        "module_count": len(rows),
+        "test_count": sum(row["test_count"] for row in rows),
+        "failed_module_count": sum(1 for row in rows if not row["ok"]),
+        "elapsed_seconds": round(sum(row["duration_seconds"] for row in rows), 6),
+        "shard": {"index": shard[0], "total": shard[1]} if shard else None,
+        "modules": rows,
+    }
+
+
+def write_timings_report(
+    path: Path,
+    *,
+    selected_tier: str,
+    rows: list[ModuleTimingRow],
+    shard: tuple[int, int] | None,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            build_timings_report(selected_tier=selected_tier, rows=rows, shard=shard),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def run_benchmark_suite_profile(profile: str) -> bool:
     suite_path = REPO_ROOT / "benchmarks" / "aippocampus" / "benchmark_suite.py"
     command = [
@@ -233,17 +341,47 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print tier module/test counts as JSON without running tests.",
     )
+    parser.add_argument(
+        "--timings-json",
+        type=Path,
+        help=(
+            "Run the selected tier and write per-module timing data to this JSON "
+            "file. This runs modules one at a time so slow contributors can be "
+            "identified without changing tier membership."
+        ),
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        help="Zero-based shard index for deterministic module sharding.",
+    )
+    parser.add_argument(
+        "--shard-total",
+        type=int,
+        help="Total number of deterministic module shards.",
+    )
     parser.add_argument("-v", "--verbose", action="count", default=1)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    try:
+        shard = normalize_shard_args(args.shard_index, args.shard_total)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if args.report_json:
         json.dump(build_tier_report(), sys.stdout, ensure_ascii=False, indent=2)
         print()
         return 0
     modules = modules_for_tier(args.tier)
+    if shard is not None:
+        modules = shard_modules(
+            modules,
+            shard_index=shard[0],
+            shard_total=shard[1],
+        )
     if args.list:
         for module in modules:
             print(module)
@@ -260,6 +398,15 @@ def main(argv: list[str] | None = None) -> int:
         args.benchmark_suite_profile,
     ):
         return 1
+    if args.timings_json:
+        ok, rows = run_modules_with_timings(modules, verbosity=max(1, args.verbose))
+        write_timings_report(
+            args.timings_json,
+            selected_tier=args.tier,
+            rows=rows,
+            shard=shard,
+        )
+        return 0 if ok else 1
     return 0 if run_modules(modules, verbosity=max(1, args.verbose)) else 1
 
 

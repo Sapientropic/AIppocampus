@@ -56,6 +56,21 @@ Test tiers are explicitly classified in `tools/aippocampus/test_tier_manifest.py
 `quick` is the small local inner loop; `pr` is the broad deterministic PR lane;
 `fast` remains only as a deprecated compatibility alias for `pr`. New test
 modules must be classified in the manifest before they can enter any tier.
+During normal editing, prefer targeted module tests such as
+`python -m unittest tests.aippocampus.test_run_tests_tiers -v`, then run
+`python tools/aippocampus/run_tests.py --tier quick` as the ordinary inner
+loop. Use `python tools/aippocampus/run_tests.py --tier pr` as the broad
+pre-push gate.
+
+When the PR lane feels slow, measure before moving tests between tiers:
+
+```sh
+python tools/aippocampus/run_tests.py --tier pr --timings-json .tmp/pr-test-timings.json
+```
+
+CI may shard the same deterministic module selection with `--shard-index` and
+`--shard-total`; shards are assigned by sorted module name so a missing or empty
+shard fails loudly instead of silently weakening coverage.
 
 Run `python tools/aippocampus/run_tests.py --tier full` before release,
 public-readiness, or broad refactor claims. The `benchmark`, `slow`, `smoke`,
