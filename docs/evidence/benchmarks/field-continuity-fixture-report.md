@@ -1,7 +1,8 @@
 # Field Continuity Fixture Report
 
 Status: implemented public-safe contract-smoke fixture for GitHub #454, with
-a bounded public-safe quality-proxy readout for GitHub #281.
+the GitHub #982 Field Continuity Eval design/runner contract and a bounded
+public-safe quality-proxy readout for GitHub #281.
 
 This report records the narrow evidence boundary for
 `benchmarks/aippocampus/benchmark_field_continuity.py`. The runner turns the
@@ -23,7 +24,9 @@ proof by themselves.
 
 The default fixture includes one public-safe synthetic row for each scenario
 family. It also includes negative controls for overclaiming,
-wrong-family persistence, and stale-route dominance.
+wrong-family persistence, and stale-route dominance. The eval design lives in
+[`field-continuity-eval-design.md`](field-continuity-eval-design.md); this
+report records the concrete fixture/runner boundary.
 
 ## Private Seed Reporting
 
@@ -48,6 +51,7 @@ thread ids, session ids, credentials, cookies, or raw tool-error text.
 
 The contract exposes the issue #454 metric names without claiming live quality:
 
+- `abstains_when_evidence_insufficient_rate`
 - `source_reopen_success_rate`
 - `progressive_route_recovery_rate`
 - `external_state_overclaim_rate`
@@ -56,11 +60,17 @@ The contract exposes the issue #454 metric names without claiming live quality:
 - `completion_nuance_preserved_rate`
 - `wrong_family_persistence_rate`
 - `irrelevant_memory_drag_rate`
+- `report_leakage_rate`
+- `latency_budget_overrun_rate`
+- `prompt_budget_overrun_rate`
 
-The `active_recall_or_source_reopen` arm is the only arm expected to preserve
-all boundaries in this deterministic fixture. `hook_only` and
-`stale_wrong_route_control` remain controls, not evidence that hook-only
-continuity is sufficient.
+The default top-level metrics describe the `active_recall_or_source_reopen`
+arm. The JSON report also emits `metrics.by_arm` for `no_memory`, `fts_only`,
+`summary_first`, `semantic_only`, `hook_only`,
+`active_recall_or_source_reopen`, and `stale_wrong_route_control`. The active
+arm is the only arm expected to preserve all boundaries in this deterministic
+fixture. The other arms remain controls or baselines, not evidence that
+hook-only, summary-first, semantic-only, or FTS-only continuity is sufficient.
 
 ## GitHub #281 Readout
 
@@ -94,6 +104,7 @@ python -m unittest tests.aippocampus.test_benchmark_field_continuity
 - Runner: `benchmarks/aippocampus/benchmark_field_continuity.py`
 - Fixture: `benchmark_corpus/field_continuity/fixture.json`
 - Mirror tests: `tests/aippocampus/test_benchmark_field_continuity.py`
+- Eval design: `docs/evidence/benchmarks/field-continuity-eval-design.md`
 - Field-report surface: `docs/evidence/magic-moments.md`
 - Methodology owner:
   `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`
@@ -105,4 +116,5 @@ python -m unittest tests.aippocampus.test_benchmark_field_continuity
 - private real-history quality for GitHub #281
 - foreground-hook-only sufficiency
 - live semantic-model quality
+- broad FTS-only, summary-first, or semantic-only superiority
 - hosted-service or cross-device production readiness

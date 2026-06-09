@@ -49,7 +49,8 @@ collapsing them into one leaderboard.
 | Conversational media-ingest fixture | [`conversational-media-ingest-fixture-report.md`](conversational-media-ingest-fixture-report.md) | #532 conversational counterpart; media anchors attach to conversation turns. |
 | Multimodal NIAH evidence-pool fixture | [`multimodal-niah-evidence-pool-report.md`](multimodal-niah-evidence-pool-report.md) | #533 supplied-pool answer-synthesis contract; retrieval is not scored. |
 | Hippocampal recall diagnostic seed | [`hippocampal-recall-fixture-report.md`](hippocampal-recall-fixture-report.md) | #229/#230/#231 public-safe P1 seed for D/I matrix reporting, source-reopen failures, scent layers, and calibration categories; not full P1 quality. |
-| Field Continuity fixture | [`field-continuity-fixture-report.md`](field-continuity-fixture-report.md) | #454 magic-moment reproducibility contract; field reports are seeds, not standalone proof. |
+| Field Continuity Eval design | [`field-continuity-eval-design.md`](field-continuity-eval-design.md) | #982 design for public reproducibility tracks, baselines, schema, metrics, and Beta boundary; not a classifier decision. |
+| Field Continuity fixture | [`field-continuity-fixture-report.md`](field-continuity-fixture-report.md) | #454/#982 magic-moment reproducibility contract; field reports are seeds, not standalone proof. |
 
 ## Report Boundary
 

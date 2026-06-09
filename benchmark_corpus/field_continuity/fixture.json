@@ -4,6 +4,7 @@
   "fixture_license": "CC0-1.0-synthetic",
   "source": {
     "issue": "https://github.com/Sapientropic/AIppocampus/issues/454",
+    "design_issue": "https://github.com/Sapientropic/AIppocampus/issues/982",
     "discussion": "https://github.com/Sapientropic/AIppocampus/discussions/428",
     "status": "field reports are benchmark seeds, not official product proof by themselves"
   },
@@ -16,7 +17,10 @@
   },
   "arms": [
     "no_memory",
+    "fts_only",
     "hook_only",
+    "summary_first",
+    "semantic_only",
     "active_recall_or_source_reopen",
     "stale_wrong_route_control"
   ],
@@ -127,7 +131,10 @@
       "expected_metrics": [
         "source_reopen_success",
         "uncertainty_boundary_preserved",
-        "irrelevant_memory_drag"
+        "irrelevant_memory_drag",
+        "report_leakage",
+        "latency_budget_overrun",
+        "prompt_budget_overrun"
       ],
       "negative_control_tags": [
         "over_personalization_near_miss"
@@ -136,22 +143,58 @@
         "no_memory": {
           "source_reopen_success": false,
           "uncertainty_boundary_preserved": true,
-          "irrelevant_memory_drag": false
+          "irrelevant_memory_drag": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "fts_only": {
+          "source_reopen_success": false,
+          "uncertainty_boundary_preserved": true,
+          "irrelevant_memory_drag": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "hook_only": {
           "source_reopen_success": false,
           "uncertainty_boundary_preserved": true,
-          "irrelevant_memory_drag": true
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "summary_first": {
+          "source_reopen_success": false,
+          "uncertainty_boundary_preserved": false,
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": true
+        },
+        "semantic_only": {
+          "source_reopen_success": false,
+          "uncertainty_boundary_preserved": true,
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": true,
+          "prompt_budget_overrun": false
         },
         "active_recall_or_source_reopen": {
           "source_reopen_success": true,
           "uncertainty_boundary_preserved": true,
-          "irrelevant_memory_drag": false
+          "irrelevant_memory_drag": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "stale_wrong_route_control": {
           "source_reopen_success": false,
           "uncertainty_boundary_preserved": false,
-          "irrelevant_memory_drag": true
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         }
       }
     },
@@ -164,7 +207,10 @@
       "expected_metrics": [
         "progressive_route_recovery",
         "uncertainty_boundary_preserved",
-        "wrong_family_persistence"
+        "wrong_family_persistence",
+        "report_leakage",
+        "latency_budget_overrun",
+        "prompt_budget_overrun"
       ],
       "negative_control_tags": [
         "wrong_family_persistence",
@@ -174,22 +220,58 @@
         "no_memory": {
           "progressive_route_recovery": false,
           "uncertainty_boundary_preserved": true,
-          "wrong_family_persistence": false
+          "wrong_family_persistence": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "fts_only": {
+          "progressive_route_recovery": false,
+          "uncertainty_boundary_preserved": true,
+          "wrong_family_persistence": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "hook_only": {
           "progressive_route_recovery": false,
           "uncertainty_boundary_preserved": false,
-          "wrong_family_persistence": true
+          "wrong_family_persistence": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "summary_first": {
+          "progressive_route_recovery": false,
+          "uncertainty_boundary_preserved": false,
+          "wrong_family_persistence": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": true
+        },
+        "semantic_only": {
+          "progressive_route_recovery": false,
+          "uncertainty_boundary_preserved": false,
+          "wrong_family_persistence": true,
+          "report_leakage": false,
+          "latency_budget_overrun": true,
+          "prompt_budget_overrun": false
         },
         "active_recall_or_source_reopen": {
           "progressive_route_recovery": true,
           "uncertainty_boundary_preserved": true,
-          "wrong_family_persistence": false
+          "wrong_family_persistence": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "stale_wrong_route_control": {
           "progressive_route_recovery": false,
           "uncertainty_boundary_preserved": false,
-          "wrong_family_persistence": true
+          "wrong_family_persistence": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         }
       }
     },
@@ -202,7 +284,11 @@
       "expected_metrics": [
         "source_reopen_success",
         "external_state_overclaim",
-        "uncertainty_boundary_preserved"
+        "uncertainty_boundary_preserved",
+        "abstains_when_evidence_insufficient",
+        "report_leakage",
+        "latency_budget_overrun",
+        "prompt_budget_overrun"
       ],
       "negative_control_tags": [
         "overclaiming"
@@ -211,22 +297,65 @@
         "no_memory": {
           "source_reopen_success": false,
           "external_state_overclaim": false,
-          "uncertainty_boundary_preserved": true
+          "uncertainty_boundary_preserved": true,
+          "abstains_when_evidence_insufficient": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "fts_only": {
+          "source_reopen_success": false,
+          "external_state_overclaim": false,
+          "uncertainty_boundary_preserved": true,
+          "abstains_when_evidence_insufficient": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "hook_only": {
           "source_reopen_success": false,
           "external_state_overclaim": true,
-          "uncertainty_boundary_preserved": false
+          "uncertainty_boundary_preserved": false,
+          "abstains_when_evidence_insufficient": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "summary_first": {
+          "source_reopen_success": false,
+          "external_state_overclaim": true,
+          "uncertainty_boundary_preserved": false,
+          "abstains_when_evidence_insufficient": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": true
+        },
+        "semantic_only": {
+          "source_reopen_success": false,
+          "external_state_overclaim": true,
+          "uncertainty_boundary_preserved": false,
+          "abstains_when_evidence_insufficient": false,
+          "report_leakage": false,
+          "latency_budget_overrun": true,
+          "prompt_budget_overrun": false
         },
         "active_recall_or_source_reopen": {
           "source_reopen_success": true,
           "external_state_overclaim": false,
-          "uncertainty_boundary_preserved": true
+          "uncertainty_boundary_preserved": true,
+          "abstains_when_evidence_insufficient": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "stale_wrong_route_control": {
           "source_reopen_success": false,
           "external_state_overclaim": true,
-          "uncertainty_boundary_preserved": false
+          "uncertainty_boundary_preserved": false,
+          "abstains_when_evidence_insufficient": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         }
       }
     },
@@ -239,7 +368,10 @@
       "expected_metrics": [
         "source_reopen_success",
         "completion_nuance_preserved",
-        "irrelevant_memory_drag"
+        "irrelevant_memory_drag",
+        "report_leakage",
+        "latency_budget_overrun",
+        "prompt_budget_overrun"
       ],
       "negative_control_tags": [
         "stale_route_dominance"
@@ -248,22 +380,58 @@
         "no_memory": {
           "source_reopen_success": false,
           "completion_nuance_preserved": false,
-          "irrelevant_memory_drag": false
+          "irrelevant_memory_drag": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "fts_only": {
+          "source_reopen_success": false,
+          "completion_nuance_preserved": false,
+          "irrelevant_memory_drag": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "hook_only": {
           "source_reopen_success": false,
           "completion_nuance_preserved": false,
-          "irrelevant_memory_drag": true
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "summary_first": {
+          "source_reopen_success": false,
+          "completion_nuance_preserved": false,
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": true
+        },
+        "semantic_only": {
+          "source_reopen_success": false,
+          "completion_nuance_preserved": false,
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": true,
+          "prompt_budget_overrun": false
         },
         "active_recall_or_source_reopen": {
           "source_reopen_success": true,
           "completion_nuance_preserved": true,
-          "irrelevant_memory_drag": false
+          "irrelevant_memory_drag": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "stale_wrong_route_control": {
           "source_reopen_success": false,
           "completion_nuance_preserved": false,
-          "irrelevant_memory_drag": true
+          "irrelevant_memory_drag": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         }
       }
     },
@@ -276,7 +444,10 @@
       "expected_metrics": [
         "source_reopen_success",
         "exact_prompt_or_tool_failure_recovery",
-        "uncertainty_boundary_preserved"
+        "uncertainty_boundary_preserved",
+        "report_leakage",
+        "latency_budget_overrun",
+        "prompt_budget_overrun"
       ],
       "negative_control_tags": [
         "wrong_family_persistence"
@@ -285,22 +456,58 @@
         "no_memory": {
           "source_reopen_success": false,
           "exact_prompt_or_tool_failure_recovery": false,
-          "uncertainty_boundary_preserved": true
+          "uncertainty_boundary_preserved": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "fts_only": {
+          "source_reopen_success": false,
+          "exact_prompt_or_tool_failure_recovery": false,
+          "uncertainty_boundary_preserved": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "hook_only": {
           "source_reopen_success": false,
           "exact_prompt_or_tool_failure_recovery": false,
-          "uncertainty_boundary_preserved": false
+          "uncertainty_boundary_preserved": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
+        },
+        "summary_first": {
+          "source_reopen_success": false,
+          "exact_prompt_or_tool_failure_recovery": false,
+          "uncertainty_boundary_preserved": false,
+          "report_leakage": true,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": true
+        },
+        "semantic_only": {
+          "source_reopen_success": false,
+          "exact_prompt_or_tool_failure_recovery": false,
+          "uncertainty_boundary_preserved": false,
+          "report_leakage": false,
+          "latency_budget_overrun": true,
+          "prompt_budget_overrun": false
         },
         "active_recall_or_source_reopen": {
           "source_reopen_success": true,
           "exact_prompt_or_tool_failure_recovery": true,
-          "uncertainty_boundary_preserved": true
+          "uncertainty_boundary_preserved": true,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         },
         "stale_wrong_route_control": {
           "source_reopen_success": false,
           "exact_prompt_or_tool_failure_recovery": false,
-          "uncertainty_boundary_preserved": false
+          "uncertainty_boundary_preserved": false,
+          "report_leakage": false,
+          "latency_budget_overrun": false,
+          "prompt_budget_overrun": false
         }
       }
     }

@@ -162,6 +162,9 @@ fixture coverage is
 [#454](https://github.com/Sapientropic/AIppocampus/issues/454), with its public
 fixture report in
 [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
+The broader Field Continuity Eval design for public reproducibility tracks,
+baselines, metrics, and private-dogfood boundaries is
+[`benchmarks/field-continuity-eval-design.md`](benchmarks/field-continuity-eval-design.md).
 
 Related technical tracks: [#201](https://github.com/Sapientropic/AIppocampus/issues/201),
 [#281](https://github.com/Sapientropic/AIppocampus/issues/281),
