@@ -18,6 +18,7 @@ _paths.ensure_paths()
 
 import ia_pressure_guard
 from architecture_index_guard import architecture_index_issues
+from classifier_policy_guard import development_status_classifier_issues
 from evidence_index_guard import evidence_index_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
@@ -1304,6 +1305,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(public_core_product_profile_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))
+    issues.extend(development_status_classifier_issues(repo_root))
     issues.extend(dependency_contract_issues(repo_root))
     issues.extend(safe_environment_issues(repo_root))
     issues.extend(host_hook_boundary_issues(repo_root))

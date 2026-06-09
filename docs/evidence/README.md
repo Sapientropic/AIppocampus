@@ -15,6 +15,9 @@ for stage-level can-claim / cannot-claim status, and
 [`docs/evidence/readiness/proof-slice-maturity.md`](readiness/proof-slice-maturity.md)
 for a compact view of which proof slices are design-only, deterministic smoke,
 public-safe fixtures, second-user evidence, or release-claimable.
+Use [`docs/evidence/readiness/classifier-policy.md`](readiness/classifier-policy.md)
+for the Alpha/Beta/Stable package classifier decision and Beta prerequisite
+owner issues.
 
 ## Product And Human Evidence
 
