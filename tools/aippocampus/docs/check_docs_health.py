@@ -23,6 +23,7 @@ from cognitive_maturity_guard import (
     cognitive_mechanism_public_claim_issues,
     proof_slice_maturity_board_issues,
 )
+from current_claims_guard import current_claims_snapshot_issues
 from evidence_index_guard import evidence_index_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
@@ -213,70 +214,6 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
     "docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md": (
         "benchmark evidence map missing hippocampal private annotation protocol pointer"
     ),
-}
-
-CURRENT_CLAIMS_SNAPSHOT_DOC = "docs/evidence/current-claims.md"
-
-REQUIRED_CURRENT_CLAIMS_TERMS = {
-    "## Current Claim Snapshot": "current claims snapshot missing current snapshot section",
-    "metric_id": "current claims snapshot missing metric-id column",
-    "run_date": "current claims snapshot missing run-date column",
-    "source_report": "current claims snapshot missing source-report column",
-    "claim_level": "current claims snapshot missing claim-level column",
-    "cohort": "current claims snapshot missing cohort column",
-    "supersedes": "current claims snapshot missing supersession column",
-    "cannot_claim": "current claims snapshot missing cannot-claim column",
-    "semantic_sidecar.aggregate_materialized_rows": (
-        "current claims snapshot missing semantic sidecar aggregate metric"
-    ),
-    "semantic_sidecar.strict_survival_snapshot": (
-        "current claims snapshot missing historical strict sidecar metric"
-    ),
-    "semantic_sidecar.source_review_green_gate": (
-        "current claims snapshot missing semantic sidecar green-review metric"
-    ),
-    "semantic_sidecar.source_review_diagnostic": (
-        "current claims snapshot missing semantic sidecar diagnostic-review metric"
-    ),
-    "track_b.private_semantic_sidecar_required": (
-        "current claims snapshot missing private Track B semantic-sidecar metric"
-    ),
-    "fts5.real_history_recall_2026_05_29": (
-        "current claims snapshot missing dated FTS5 real-history metric"
-    ),
-    "demo_scenarios.claim_boundaries": (
-        "current claims snapshot missing demo scenario claim-boundary pointer"
-    ),
-}
-
-CURRENT_CLAIMS_POINTER_DOCS = {
-    "docs/evidence/readiness/stage-0-5-readiness.md": (
-        "stage readiness missing current claims snapshot pointer"
-    ),
-    "docs/guides/demo-scenarios.md": "demo scenarios missing current claims snapshot pointer",
-}
-
-# These phrase guards are intentionally narrow. They block specific stale
-# evidence claims that have already misled issue triage while avoiding broad
-# scans for ordinary identifiers such as current_thread or current_frontier.
-STALE_CURRENT_EVIDENCE_PHRASES = {
-    "docs/evidence/readiness/stage-0-5-readiness.md": {
-        "current strict sidecars at 2 threads/5 rows": (
-            "stage readiness has stale semantic sidecar current wording: "
-            "current strict sidecars at 2 threads/5 rows"
-        ),
-        "current strict materialization keeps only": (
-            "stage readiness has stale semantic sidecar current wording: "
-            "current strict materialization keeps only"
-        ),
-    },
-    "docs/evidence/readiness/public-readiness-verification.md": {
-        "current strict re-materialized sidecars intentionally contain only 5 rows across 2": (
-            "public readiness ledger has stale semantic sidecar current wording: "
-            "current strict re-materialized sidecars intentionally contain only 5 rows "
-            "across 2"
-        ),
-    },
 }
 
 HIPPOCAMPAL_PRIVATE_ANNOTATION_DOC = (
@@ -802,35 +739,6 @@ def benchmark_evidence_map_issues(repo_root: Path) -> list[str]:
     for entrypoint in benchmark_evidence_entrypoints(repo_root):
         if entrypoint not in text:
             issues.append(f"benchmark evidence map missing entrypoint: {entrypoint}")
-    return issues
-
-
-def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
-    issues: list[str] = []
-    snapshot = repo_root / CURRENT_CLAIMS_SNAPSHOT_DOC
-    if not snapshot.exists():
-        issues.append(f"missing current claims snapshot: {CURRENT_CLAIMS_SNAPSHOT_DOC}")
-    else:
-        text = snapshot.read_text(encoding="utf-8")
-        for term, issue in REQUIRED_CURRENT_CLAIMS_TERMS.items():
-            if term not in text:
-                issues.append(issue)
-
-    for rel_path, issue in CURRENT_CLAIMS_POINTER_DOCS.items():
-        path = repo_root / rel_path
-        if path.exists() and CURRENT_CLAIMS_SNAPSHOT_DOC not in path.read_text(encoding="utf-8"):
-            issues.append(issue)
-
-    for rel_path, phrases in STALE_CURRENT_EVIDENCE_PHRASES.items():
-        path = repo_root / rel_path
-        if not path.exists():
-            continue
-        text = path.read_text(encoding="utf-8")
-        normalized_text = " ".join(text.split())
-        for phrase, issue in phrases.items():
-            if phrase in text or phrase in normalized_text:
-                issues.append(issue)
-
     return issues
 
 

@@ -48,6 +48,33 @@ over-read as either product failure or product proof.
 | Track S explicit-negation/currentness failures | The current 2026-06-09 row reports `quality_gate_ok=true`, S1 false evidence 0, and S3 explicit-negation/stale-as-current/evidence-over-escalation counts all 0. | [#992](https://github.com/Sapientropic/AIppocampus/issues/992) owns this repair; the fix is reflected in the current snapshot row. | This is a public-safe deterministic hook/retrieval diagnostic, not human-level semantic understanding or broad private-history recall quality. |
 | Semantic source-review operational partial failure | The current 2026-06-09 96-case rerun has `failure_count=0` and `failure_taxonomy.by_class={}`; `preference` remains below the per-label floor as diagnostic label-quality evidence. | [#993](https://github.com/Sapientropic/AIppocampus/issues/993) owns the taxonomy/public-shadow repair; the fix is reflected in the current snapshot row. | Do not treat the broader diagnostic as human review, provider-independent quality, a green gate, or full semantic correctness. |
 
+## Cannot-Claim Owner And Retirement Ledger
+
+This table keeps testable `cannot_claim` entries from becoming permanent
+background caveats. Use the metadata shape `category`, `owner_issue`,
+`retirement_condition`, and `next_review` when adding or reviewing rows.
+
+`actionable` entries need an owner issue and a retirement condition.
+`durable_non_goal`, `research_blocked`, and `external_dependency` entries can
+remain without a direct implementation owner when a test would not honestly
+retire the caveat. Do not retire a broader caveat from a narrow smoke; add or
+update a dated claim row first.
+
+| Caveat | Category | Owner issue | Retirement condition | Next review |
+| --- | --- | --- | --- | --- |
+| Continuous-memory superiority after the preregistered repeat negative result | `actionable` | [#960](https://github.com/Sapientropic/AIppocampus/issues/960) | A later dated repeated-evidence row supersedes `continuous_memory.preregistered_repeat_profile_2026_06_08` with a passing preregistered lower-bound decision and explicit cost/harm boundary. | Before any #378 or continuous-memory public-readiness upgrade. |
+| Track B private source-evidence retrieval top-k misses | `actionable` | [#963](https://github.com/Sapientropic/AIppocampus/issues/963) | The three `rank_below_top_k` misses are taxonomized, repaired or deliberately bounded, and a later dated Track B row records the updated hit/miss state without broad semantic-completeness claims. | Before treating selected Track B as gate-quality evidence. |
+| E2E50 representative seed pack | `actionable` | [#994](https://github.com/Sapientropic/AIppocampus/issues/994) | A reviewed 20-case representative seed pack or a clearly smaller accepted slice is checked in with selection rationale, negative controls, and a dated report boundary. | Before using E2E50 evidence outside candidate-seed language. |
+| Claude Code hooks | `actionable` | [#1020](https://github.com/Sapientropic/AIppocampus/issues/1020) | Official Claude Code hook contract intake plus isolated smoke evidence proves at least the scoped hook events, with sanitized outputs and rollback/status boundaries. | Before removing the hook-support caveat from host docs. |
+| Persistent Claude Code MCP config health | `actionable` | [#1021](https://github.com/Sapientropic/AIppocampus/issues/1021) | A persistent-config diagnostic reaches `memory_health` or records a precise blocker taxonomy in a dated sanitized evidence note that supersedes the dogfood blocker. | Before claiming persistent Claude Code MCP health. |
+| CJK recall quality beyond the first public fixture | `actionable` | [#1022](https://github.com/Sapientropic/AIppocampus/issues/1022) | A public-safe expanded CJK pack reports FTS-only, lexical-structural, and any CJK-aware path separately while preserving hard-negative behavior. | Before widening Chinese recall claims beyond the current fixture. |
+| Cognitive-load false positives and usefulness | `actionable` | [#575](https://github.com/Sapientropic/AIppocampus/issues/575) | Reviewed false-positive and caution-usefulness evidence, or a dated blocker, supersedes the aggregate private-history calibration row without treating load signals as affect or personality truth. | Before enabling any default host-timing or foreground weighting claim. |
+| Episode/Arc gappy-chain overclaim risk | `actionable` | [#663](https://github.com/Sapientropic/AIppocampus/issues/663) | Richer adapter or live/private adjudication evidence shows how complete and gappy chains are used, while preserving source-reopen requirements for current validity. | Before treating Episode/Arc packets as more than navigation/read-model context. |
+| AMemGym official runner evidence | `actionable` | [#958](https://github.com/Sapientropic/AIppocampus/issues/958) | Official-runner evidence records native score, source-backed overlay, and cost/latency boundaries in a dated row without promoting protocol smoke into live score claims. | Before adding an AMemGym row to the Current Claim Snapshot. |
+| Private text disclosure in public evidence | `durable_non_goal` | - | Not retired by benchmark evidence; public reports stay aggregate, sanitized, or source-reopenable without raw private text. | Recheck only if the public/private evidence policy changes. |
+| Hosted or cloud continuity from a single local-host smoke | `external_dependency` | - | Requires a scoped cloud/sync/provider evidence issue before it becomes actionable; local host proof cannot retire hosted or cross-device caveats. | Before any hosted/cloud product claim. |
+| Broad private-history quality from selected local diagnostics | `research_blocked` | - | Requires a separately scoped private-history quality protocol with privacy-preserving review and explicit cohort limits; selected aggregates do not retire it. | Before any broad real-history quality claim. |
+
 ## Current Claim Snapshot
 
 | metric_id | current_value | run_date | source_report | claim_level | cohort | supersedes / superseded_by | cannot_claim |
