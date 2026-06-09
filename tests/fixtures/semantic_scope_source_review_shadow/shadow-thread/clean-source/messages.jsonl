@@ -2,3 +2,6 @@
 {"message_id":"shadow_msg_stale","turn_id":"shadow_turn_stale","source_line":2,"role":"user","text":"The stale note is superseded: the old importer route should not be treated as current implementation guidance; future agents should reopen the registry-first source instead."}
 {"message_id":"shadow_msg_unsupported","turn_id":"shadow_turn_unsupported","source_line":3,"role":"user","text":"This unsupported shadow label case only records a neutral meeting time."}
 {"message_id":"shadow_msg_multilingual","turn_id":"shadow_turn_multilingual","source_line":4,"role":"user","text":"这个比喻把长期记忆说成一张能回到源头的地图，而不是模型天生记住了我。"}
+{"message_id":"shadow_msg_preference_supported","turn_id":"shadow_turn_preference_supported","source_line":5,"role":"user","text":"For code review notes, I prefer concise Chinese summaries before detailed checklists."}
+{"message_id":"shadow_msg_preference_unsupported","turn_id":"shadow_turn_preference_unsupported","source_line":6,"role":"user","text":"The public shadow note only records that the build finished at noon."}
+{"message_id":"shadow_msg_preference_stale","turn_id":"shadow_turn_preference_stale","source_line":7,"role":"user","text":"The old preference is superseded: I used to prefer verbose reports, but now use concise summaries."}

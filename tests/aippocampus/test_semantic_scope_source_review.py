@@ -242,6 +242,10 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertEqual(result["review_buckets"]["accepted"], 1)
         self.assertEqual(result["review_buckets"]["rejected"], 1)
         self.assertEqual(result["review_buckets"]["ambiguous_or_human_review"], 0)
+        self.assertEqual(
+            result["label_failure_taxonomy"]["by_label"]["personal_reflection"]["by_class"],
+            {"unsupported_label": 1},
+        )
 
     def test_expected_unsupported_review_does_not_require_support_confidence(self) -> None:
         case = {
@@ -466,6 +470,165 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["passed_count"], 0)
         self.assertEqual(result["cases"][0]["unsupported_label_count"], 1)
+        self.assertEqual(result["cases"][0]["unsupported_evidence_label_count"], 1)
+        self.assertEqual(
+            result["label_failure_taxonomy"]["by_label"]["personal_reflection"]["by_class"],
+            {"unsupported_label_evidence": 1},
+        )
+
+    def test_preference_label_failures_get_sanitized_taxonomy(self) -> None:
+        clean = self.root / "thread-pref" / "clean-source"
+        clean.mkdir(parents=True)
+        (clean / "messages.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "message_id": "msg_pref_one",
+                            "turn_id": "turn_pref_one",
+                            "source_line": 1,
+                            "role": "user",
+                            "text": "I prefer short Chinese summaries before long review notes.",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "message_id": "msg_pref_two",
+                            "turn_id": "turn_pref_two",
+                            "source_line": 2,
+                            "role": "user",
+                            "text": "This old preference is superseded; now use concise summaries.",
+                        },
+                        ensure_ascii=False,
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (clean / "semantic-scope-labels.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "message_id": "msg_pref_one",
+                            "turn_id": "turn_pref_one",
+                            "scope_labels": ["preference"],
+                            "confidence": 0.91,
+                            "label_evidence": [
+                                {
+                                    "label": "preference",
+                                    "reason": "The source states a preference.",
+                                    "confidence": 0.9,
+                                }
+                            ],
+                            "source_refs": [
+                                {
+                                    "message_id": "msg_pref_one",
+                                    "turn_id": "turn_pref_one",
+                                    "source_line": 1,
+                                    "role": "user",
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "message_id": "msg_pref_two",
+                            "turn_id": "turn_pref_two",
+                            "scope_labels": ["preference"],
+                            "confidence": 0.9,
+                            "expected_review_outcome": "needs_human_review",
+                            "public_shadow_case": "preference_stale_currentness_boundary",
+                            "label_evidence": [
+                                {
+                                    "label": "preference",
+                                    "reason": "The stale preference should be treated as current.",
+                                    "confidence": 0.91,
+                                }
+                            ],
+                            "source_refs": [
+                                {
+                                    "message_id": "msg_pref_two",
+                                    "turn_id": "turn_pref_two",
+                                    "source_line": 2,
+                                    "role": "user",
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.registry.write_text(
+            json.dumps(
+                {
+                    "threads": [
+                        {
+                            "thread_key": "session:pref",
+                            "title": "Private Preference Title",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(clean / "messages.jsonl"),
+                            },
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        os.environ["FAKE_DEEPSEEK_KEY"] = "present"
+
+        def fake_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+            payload = json.loads(messages[1]["content"])
+            text = payload["review_case"]["clean_source_message"]
+            if "superseded" in text:
+                response = {
+                    "supported_labels": [],
+                    "unsupported_labels": payload["review_case"]["labels"],
+                    "confidence": 0.5,
+                    "needs_human_review": True,
+                }
+            else:
+                response = {
+                    "supported_labels": [],
+                    "unsupported_labels": payload["review_case"]["labels"],
+                    "confidence": 0.92,
+                    "needs_human_review": False,
+                }
+            return {"choices": [{"message": {"content": json.dumps(response)}}]}
+
+        result = review.run_semantic_scope_source_review(
+            registry_path=self.registry,
+            live=True,
+            api_key_env="FAKE_DEEPSEEK_KEY",
+            max_cases=2,
+            min_cases=2,
+            min_pass_rate=0.0,
+            min_label_pass_rate=0.65,
+            chat_fn=fake_chat_fn,
+        )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        preference_taxonomy = result["label_failure_taxonomy"]["by_label"]["preference"]
+
+        self.assertEqual(result["failed_label_categories"], ["preference"])
+        self.assertEqual(
+            preference_taxonomy["by_class"],
+            {
+                "stale_or_currentness_boundary": 1,
+                "unsupported_label": 1,
+            },
+        )
+        self.assertEqual(len(preference_taxonomy["public_safe_examples"]), 2)
+        self.assertNotIn("short Chinese summaries", rendered)
+        self.assertNotIn("Private Preference Title", rendered)
+        self.assertNotIn("msg_pref_", rendered)
 
     def test_agentic_source_review_uses_pro_route_and_tool_observation(self) -> None:
         self._write_fixture()
@@ -545,7 +708,10 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
             text = payload["review_case"]["clean_source_message"]
             unsupported = (
                 labels
-                if "unsupported shadow label" in text or "stale note is superseded" in text
+                if "unsupported shadow label" in text
+                or "stale note is superseded" in text
+                or "build finished at noon" in text
+                or "old preference is superseded" in text
                 else []
             )
             supported = [] if unsupported else labels
@@ -572,7 +738,7 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
             public_shadow=True,
             api_key_env="FAKE_DEEPSEEK_KEY",
             max_cases=8,
-            min_cases=4,
+            min_cases=7,
             min_pass_rate=1.0,
             chat_fn=fake_chat_fn,
         )
@@ -581,11 +747,19 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertTrue(result["ok"], rendered)
         self.assertEqual(result["cohort"], "public_source_review_shadow")
         self.assertEqual(result["claim_level"], "public_shadow_source_review")
-        self.assertEqual(result["case_count"], 4)
-        self.assertEqual(result["passed_count"], 4)
-        self.assertEqual(result["review_buckets"]["expected_supported"], 2)
-        self.assertEqual(result["review_buckets"]["expected_unsupported"], 1)
-        self.assertEqual(result["review_buckets"]["expected_human_review"], 1)
+        self.assertEqual(result["case_count"], 7)
+        self.assertEqual(result["passed_count"], 7)
+        self.assertEqual(result["review_buckets"]["expected_supported"], 3)
+        self.assertEqual(result["review_buckets"]["expected_unsupported"], 2)
+        self.assertEqual(result["review_buckets"]["expected_human_review"], 2)
+        self.assertEqual(result["per_label"]["preference"]["case_count"], 3)
+        self.assertEqual(
+            result["label_failure_taxonomy"]["by_label"]["preference"]["by_class"],
+            {
+                "stale_or_currentness_boundary": 1,
+                "unsupported_label": 1,
+            },
+        )
         self.assertEqual(
             result["public_shadow_requirements"],
             {
@@ -593,10 +767,14 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
                 "stale_or_superseded_source": True,
                 "unsupported_semantic_sidecar": True,
                 "multilingual_paraphrase": True,
+                "preference_source_open_positive": True,
+                "preference_unsupported_generic_claim": True,
+                "preference_stale_currentness_boundary": True,
             },
         )
         self.assertNotIn("unsupported shadow label", rendered)
         self.assertNotIn("stale note is superseded", rendered)
+        self.assertNotIn("concise Chinese", rendered)
         self.assertNotIn("shadow_msg_", rendered)
 
     def test_public_shadow_requires_all_shadow_case_families_before_claiming(self) -> None:
@@ -608,7 +786,10 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
             text = payload["review_case"]["clean_source_message"]
             unsupported = (
                 labels
-                if "unsupported shadow label" in text or "stale note is superseded" in text
+                if "unsupported shadow label" in text
+                or "stale note is superseded" in text
+                or "build finished at noon" in text
+                or "old preference is superseded" in text
                 else []
             )
             supported = [] if unsupported else labels
