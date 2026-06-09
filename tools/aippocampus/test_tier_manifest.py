@@ -92,6 +92,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_capture_consolidation_boundary",
         "test_checkpoint",
         "test_cli_json_contract",
+        "test_claude_code_hooks",
         "test_codex_long_session_smoke",
         "test_coding_decision_events",
         "test_coding_rejected_route_probes",
@@ -306,6 +307,7 @@ SMOKE_STEMS = frozenset(
     {
         "test_aippocampus_lifecycle_hook",
         "test_codex_long_session_smoke",
+        "test_claude_code_hooks",
         "test_cross_agent_continuity_smoke",
         "test_diagnose_hooks",
         "test_e2e50_seed_candidates",
@@ -437,6 +439,7 @@ TAG_OVERRIDES = {
     "test_aippocampus_mcp_server": ("mcp", "subprocess"),
     "test_browser_memory_companion": ("browser",),
     "test_codex_long_session_smoke": ("host", "filesystem"),
+    "test_claude_code_hooks": ("hook", "subprocess", "claude-code"),
     "test_cognitive_worker_mode": ("provider",),
     "test_cross_agent_continuity_smoke": ("cross_agent", "host"),
     "test_deepseek_model_routing": ("provider",),

@@ -47,7 +47,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("doctor config", proc.stdout)
         self.assertIn("doctor spend", proc.stdout)
         self.assertIn("why-recall", proc.stdout)
-        self.assertIn("hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall", proc.stdout)
+        self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
 
     def test_package_facade_is_the_public_python_entrypoint(self) -> None:
         from aippocampus_runtime.cli import facade
@@ -184,6 +184,20 @@ class AippocampusCliTests(unittest.TestCase):
             "install_aippocampus_prompt_hook.py",
         )
         self.assertEqual(prompt_hook_status.args, ["status", "--last", "--json"])
+
+        claude_hook_status = facade.resolve_command(
+            ["hooks", "claude-code", "status", "--json"]
+        )
+        self.assertEqual(claude_hook_status.command, "hooks")
+        self.assertEqual(
+            claude_hook_status.module_name,
+            "aippocampus_runtime.hooks.claude_code",
+        )
+        self.assertEqual(
+            claude_hook_status.script_name,
+            "aippocampus_claude_code_hooks.py",
+        )
+        self.assertEqual(claude_hook_status.args, ["status", "--json"])
 
         log_rotation = facade.resolve_command(["logs", "rotate", "--json"])
         self.assertEqual(log_rotation.command, "logs")

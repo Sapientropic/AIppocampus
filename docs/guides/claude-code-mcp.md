@@ -139,12 +139,31 @@ MCP tool results redact local paths unless a local operator explicitly requests
 
 ## Hooks
 
-AIppocampus does not ship a Claude Code hook installer. Do not reuse Codex hook
-installers as Claude Code hook support: current `aippocampus hooks ...` commands
-mutate Codex `hooks.json` and report `host_integration.host = "codex"`.
+Claude Code has its own upstream hook settings and event schemas. AIppocampus
+intakes that official Claude Code hooks contract through a scoped, non-mutating
+surface. Start with `aippocampus hooks claude-code status --json`:
 
-Claude Code does have its own upstream hook settings and event schemas; the
-official Claude Code hooks contract is the follow-up source to target if this
-project later adds Claude Code hooks. That future work needs its own opt-in
-installer, status command, privacy notes, and host smoke. This guide only claims
-MCP setup and explicit transcript onboarding.
+```sh
+aippocampus hooks claude-code status --json
+aippocampus hooks claude-code dry-run --json
+aippocampus hooks claude-code smoke --json
+```
+
+No Claude Code configuration-mutating installer ships yet. The dry-run command
+shows the `UserPromptSubmit` and `Stop` handler shape that an operator could add
+to Claude settings after explicit local approval, but it does not write
+`~/.claude/settings.json`, project settings, or local settings.
+
+The scoped handler is fail-open and privacy-first:
+
+- `UserPromptSubmit` can stay silent or emit bounded context without logging raw
+  prompt text, transcript paths, session ids, or source refs.
+- `Stop` can run as a completion lifecycle hook without blocking Claude Code
+  completion.
+- `PostToolUse`, `PostToolBatch`, `PreCompact`, and `PostCompact` remain
+  event-level cannot-claim boundaries until they have payload sanitizers,
+  summary/source-truth handling, and real-host firing evidence.
+
+Do not reuse Codex hook installers as Claude Code hook support: `aippocampus
+hooks prompt ...` and `aippocampus hooks lifecycle ...` still mutate Codex
+`hooks.json` and report `host_integration.host = "codex"`.

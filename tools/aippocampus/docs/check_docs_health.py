@@ -109,6 +109,7 @@ DOCS_ROOT_ALLOWED_DIRECTORIES = {
 REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "aippocampus_runtime/hooks/prompt.py",
     "aippocampus_runtime/hooks/lifecycle.py",
+    "aippocampus_runtime/hooks/claude_code.py",
     "aippocampus_runtime/mcp/server.py",
     "aippocampus_runtime/health.py",
     "aippocampus_runtime/source/clean_source.py",
@@ -481,8 +482,8 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
         "configuration-mutating installers": (
             "provider inventory missing configuration-mutating installer classification"
         ),
-        "Claude Code hook support: not yet claimable": (
-            "provider inventory missing Claude Code hook not-claimable boundary"
+        "Claude Code hook contract status: scoped handler/status/dry-run/smoke support": (
+            "provider inventory missing scoped Claude Code hook contract boundary"
         ),
     },
     "docs/architecture/runtime-script-map.md": {
@@ -491,16 +492,19 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
         ),
     },
     "docs/guides/claude-code-mcp.md": {
-        "AIppocampus does not ship a Claude Code hook installer": (
-            "Claude Code MCP guide missing explicit no Claude Code hook installer claim"
+        "`aippocampus hooks claude-code status --json`": (
+            "Claude Code MCP guide missing Claude hook status command"
+        ),
+        "No Claude Code configuration-mutating installer ships yet": (
+            "Claude Code MCP guide missing no configuration-mutating installer boundary"
         ),
         "official Claude Code hooks contract": (
             "Claude Code MCP guide missing official hook contract follow-up boundary"
         ),
     },
     ".claude/skills/aippocampus/SKILL.md": {
-        "AIppocampus does not currently provide a Claude Code hook installer": (
-            "Claude Code project skill missing no-hook-installation boundary"
+        "AIppocampus provides Claude Code hook status/dry-run/smoke commands": (
+            "Claude Code project skill missing hook status/dry-run/smoke boundary"
         ),
     },
     "docs/guides/public-api.md": {
@@ -509,6 +513,9 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
         ),
         "Codex-only hook installers": (
             "public API doc missing Codex-only hook installer boundary"
+        ),
+        "`aippocampus hooks claude-code status|dry-run|smoke`": (
+            "public API doc missing Claude hook status/dry-run/smoke boundary"
         ),
     },
 }
