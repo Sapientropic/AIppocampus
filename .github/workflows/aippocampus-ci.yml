@@ -6,16 +6,17 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   checks:
+    name: Checks and canonical PR coverage (Python 3.12)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
 
     steps:
       - name: Check out repository
@@ -24,7 +25,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
 
@@ -54,22 +55,44 @@ jobs:
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json
 
-      - name: PR test tier with coverage
+      - name: PR test tier with canonical coverage
         run: |
           python -m coverage run --branch --source=skills/aippocampus/scripts,tools/aippocampus,plugins/aippocampus tools/aippocampus/run_tests.py --tier pr
           python -m coverage report -m
           python -m coverage xml -o coverage.xml
 
-      - name: Upload coverage report
+      - name: Upload canonical coverage report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-${{ matrix.python-version }}
+          name: coverage-pr-canonical
           path: coverage.xml
           if-no-files-found: ignore
 
       - name: Compile Python files
         run: python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
+
+  python-compat:
+    name: Python 3.13 quick compatibility tier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install compatibility dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Python 3.13 quick compatibility tier
+        run: python tools/aippocampus/run_tests.py --tier quick
 
   benchmark-smoke:
     name: Benchmark smoke (deterministic)
@@ -146,11 +169,11 @@ jobs:
           print(f"default_tmpdir_resolved={tempdir.resolve()}")
           PY
 
-      - name: PR tier on default macOS tempdir
+      - name: Focused path-identity modules on default macOS tempdir
         shell: bash
         run: |
-          # Covers recurring #140/#242/#402 /var and /private/var path-identity regressions.
-          python tools/aippocampus/run_tests.py --tier pr
+          # Covers recurring #140/#242/#402 /var and /private/var path-identity regressions without repeating the full PR tier.
+          python -m unittest tests.aippocampus.test_path_identity tests.aippocampus.test_run_tests_tiers tests.aippocampus.test_macos_install_smoke_workflow -v
 
   full-tests:
     if: github.event_name == 'workflow_dispatch'

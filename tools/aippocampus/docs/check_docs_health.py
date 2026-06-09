@@ -383,8 +383,9 @@ PYTHON_VERSION_DOC_TERMS = {
 
 PYTHON_VERSION_WORKFLOW_TERMS = {
     ".github/workflows/aippocampus-ci.yml": (
-        'python-version: ["3.12", "3.13"]',
         'python-version: "3.12"',
+        'python-version: "3.13"',
+        "Python 3.13 quick compatibility tier",
     ),
     ".github/workflows/macos-install-smoke.yml": (
         'default: "3.12"',

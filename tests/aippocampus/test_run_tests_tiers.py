@@ -172,6 +172,123 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(payload, report)
         run_modules.assert_not_called()
 
+    def test_shard_modules_is_stable_by_sorted_module_name(self) -> None:
+        modules = [
+            "tests.aippocampus.test_zulu",
+            "tests.aippocampus.test_alpha",
+            "tests.aippocampus.test_mango",
+            "tests.aippocampus.test_beta",
+        ]
+
+        self.assertEqual(
+            run_tests.shard_modules(modules, shard_index=0, shard_total=2),
+            [
+                "tests.aippocampus.test_alpha",
+                "tests.aippocampus.test_mango",
+            ],
+        )
+        self.assertEqual(
+            run_tests.shard_modules(modules, shard_index=1, shard_total=2),
+            [
+                "tests.aippocampus.test_beta",
+                "tests.aippocampus.test_zulu",
+            ],
+        )
+
+    def test_main_applies_shard_and_writes_timings_json(self) -> None:
+        modules = [
+            "tests.aippocampus.test_zulu",
+            "tests.aippocampus.test_alpha",
+            "tests.aippocampus.test_mango",
+            "tests.aippocampus.test_beta",
+        ]
+        timing_rows = [
+            {
+                "module": "tests.aippocampus.test_beta",
+                "primary_tier": "pr",
+                "test_count": 2,
+                "duration_seconds": 0.25,
+                "ok": True,
+            },
+            {
+                "module": "tests.aippocampus.test_zulu",
+                "primary_tier": "pr",
+                "test_count": 3,
+                "duration_seconds": 0.5,
+                "ok": True,
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            timings_path = Path(tmp) / "timings.json"
+            with (
+                mock.patch.object(run_tests, "ensure_usable_tempdir", return_value=Path(".")),
+                mock.patch.object(run_tests, "modules_for_tier", return_value=modules),
+                mock.patch.object(
+                    run_tests,
+                    "run_modules_with_timings",
+                    return_value=(True, timing_rows),
+                ) as run_with_timings,
+                mock.patch.object(run_tests, "run_modules") as run_modules,
+            ):
+                exit_code = run_tests.main(
+                    [
+                        "--tier",
+                        "pr",
+                        "--shard-index",
+                        "1",
+                        "--shard-total",
+                        "2",
+                        "--timings-json",
+                        str(timings_path),
+                    ],
+                )
+            payload = json.loads(timings_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        run_with_timings.assert_called_once_with(
+            ["tests.aippocampus.test_beta", "tests.aippocampus.test_zulu"],
+            verbosity=1,
+        )
+        run_modules.assert_not_called()
+        self.assertEqual(payload["kind"], "aippocampus_test_module_timings")
+        self.assertEqual(payload["selected_tier"], "pr")
+        self.assertEqual(payload["module_count"], 2)
+        self.assertEqual(payload["test_count"], 5)
+        self.assertEqual(payload["shard"], {"index": 1, "total": 2})
+        self.assertEqual(payload["modules"], timing_rows)
+
+    def test_invalid_or_empty_shards_fail_before_running_tests(self) -> None:
+        with (
+            io.StringIO() as stderr,
+            contextlib.redirect_stderr(stderr),
+            mock.patch.object(run_tests, "run_modules") as run_modules,
+        ):
+            exit_code = run_tests.main(
+                ["--tier", "pr", "--shard-index", "0", "--shard-total", "0"],
+            )
+            error_text = stderr.getvalue()
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("shard-total must be greater than zero", error_text)
+        run_modules.assert_not_called()
+
+        with (
+            io.StringIO() as stderr,
+            contextlib.redirect_stderr(stderr),
+            mock.patch.object(run_tests, "ensure_usable_tempdir"),
+            mock.patch.object(run_tests, "modules_for_tier", return_value=["tests.fake"]),
+            mock.patch.object(run_tests, "run_modules") as run_modules,
+        ):
+            exit_code = run_tests.main(
+                ["--tier", "pr", "--shard-index", "1", "--shard-total", "2"],
+            )
+            error_text = stderr.getvalue()
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("no tests selected for tier: pr", error_text)
+        run_modules.assert_not_called()
+
     def test_benchmark_suite_profile_runner_requires_json_ok(self) -> None:
         completed = run_tests.subprocess.CompletedProcess(
             args=["python"],
@@ -312,11 +429,19 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertIn("pr", help_text)
         self.assertIn("benchmark-smoke", help_text)
         self.assertIn("--benchmark-suite-profile", help_text)
+        self.assertIn("--timings-json", help_text)
+        self.assertIn("--shard-index", help_text)
         self.assertIn("--tier pr", workflow)
+        self.assertIn("concurrency:", workflow)
+        self.assertIn("PR test tier with canonical coverage", workflow)
+        self.assertIn("Python 3.13 quick compatibility tier", workflow)
+        self.assertIn("--tier quick", workflow)
         self.assertIn(
             "--tier benchmark-smoke --benchmark-suite-profile public-fast",
             workflow,
         )
+        self.assertIn("coverage-pr-canonical", workflow)
+        self.assertNotIn("coverage-${{ matrix.python-version }}", workflow)
         self.assertNotIn("python benchmarks/aippocampus/benchmark_suite.py", workflow)
 
     def test_benchmark_extra_is_stable_contributor_install_target(self) -> None:
