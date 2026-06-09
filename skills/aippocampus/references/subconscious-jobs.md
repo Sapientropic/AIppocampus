@@ -157,6 +157,11 @@ This is diagnostic by default: cite `o*` observation refs when tool hits support
 the edge, but do not cite them merely to satisfy a metric when the initial turn
 refs are the real evidence or tools returned no useful source refs.
 
+`concept_graph` consumes staged edges into the graph-participation lifecycle
+defined in `retrieval-and-storage.md`. Subconscious jobs may emit lifecycle
+signals, but graph status is still navigation metadata: it must not rewrite
+staging JSONL, delete source refs, or become source truth.
+
 Every accepted finding also gets deterministic metadata before it is written:
 
 - `fingerprint`: stable-ish finding id for dedup/review.

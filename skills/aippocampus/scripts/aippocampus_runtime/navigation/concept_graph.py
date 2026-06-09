@@ -8,8 +8,8 @@ clean-source or raw-rollout support.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
+import importlib
 import json
 import math
 import sqlite3
@@ -18,21 +18,40 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation.associations import (
-    default_associations_path,
     load_associations,
     normalize_term,
     term_is_noise,
 )
 from aippocampus_runtime.navigation.concept_edge_utility import score_bucket
+from aippocampus_runtime.navigation.concept_graph_schema import (
+    connect,
+    init_schema,
+    reset_graph,
+)
+from aippocampus_runtime.navigation.concept_graph_schema import (
+    default_concept_graph_path as default_concept_graph_path,
+)
 from aippocampus_runtime.navigation.concept_kinds import (
     classify_concept_kind,
-    concept_kind_source_boundary,
 )
 from aippocampus_runtime.navigation.concept_kinds import (
     infer_concept_kind as _infer_concept_kind,
 )
-from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.navigation.concept_lifecycle import (
+    choose_status,
+    graph_source_boundary,
+    lifecycle_decision,
+    lifecycle_diagnostics,
+    normalize_graph_status,
+    safe_edge_type,
+    source_ref_thread_keys,
+    strongest_lifecycle_signal,
+    unique_source_refs,
+)
+from aippocampus_runtime.registry.api import unique_preserve
 
+# Public graph artifact schema. Additive rebuildable SQLite cache columns are
+# migrated in concept_graph_schema.py without changing this artifact contract.
 CONCEPT_GRAPH_SCHEMA_VERSION = 1
 DEFAULT_MAX_RELATED_PER_TERM = 10
 DEFAULT_MAX_DEGREE = 12
@@ -72,37 +91,10 @@ BIDIRECTIONAL_EDGE_TYPES = {
     "alias",
     "same_decision_space",
     "contrasts_with",
+    "co_occurs",
     "project_topic",
     "related",
 }
-
-
-def default_concept_graph_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / "concept_index.sqlite"
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / "concept_index.sqlite"
-
-
-def default_project_timeline_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / "project_timeline.json"
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / "project_timeline.json"
-
-
-def default_subconscious_edges_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / "subconscious_edges.jsonl"
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / "subconscious_edges.jsonl"
-
 
 def load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -137,82 +129,12 @@ def infer_concept_kind(label: str) -> str:
     return _infer_concept_kind(label)
 
 
-def connect(path: Path) -> sqlite3.Connection:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(path)
-    con.row_factory = sqlite3.Row
-    return con
-
-
-def init_schema(con: sqlite3.Connection) -> None:
-    con.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS concepts (
-            concept_id TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            normalized_label TEXT NOT NULL UNIQUE,
-            kind TEXT NOT NULL DEFAULT 'topic',
-            kind_source TEXT NOT NULL DEFAULT 'fallback',
-            kind_confidence REAL NOT NULL DEFAULT 0.0,
-            status TEXT NOT NULL DEFAULT 'staging',
-            scope_key TEXT NOT NULL DEFAULT 'global',
-            hit_count INTEGER NOT NULL DEFAULT 0,
-            thread_count INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT,
-            updated_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS concept_edges (
-            src_concept_id TEXT NOT NULL,
-            dst_concept_id TEXT NOT NULL,
-            edge_type TEXT NOT NULL,
-            weight REAL NOT NULL,
-            confidence REAL NOT NULL,
-            status TEXT NOT NULL DEFAULT 'staging',
-            scope_key TEXT NOT NULL DEFAULT 'global',
-            evidence_count INTEGER NOT NULL DEFAULT 0,
-            source_thread_key TEXT,
-            source_message_id TEXT,
-            first_seen_at TEXT,
-            last_seen_at TEXT,
-            PRIMARY KEY (src_concept_id, dst_concept_id, edge_type, scope_key)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_concepts_normalized ON concepts(normalized_label);
-        CREATE INDEX IF NOT EXISTS idx_concept_edges_src ON concept_edges(src_concept_id, weight DESC);
-        CREATE INDEX IF NOT EXISTS idx_concept_edges_dst ON concept_edges(dst_concept_id, weight DESC);
-        """
-    )
-    ensure_concepts_kind_columns(con)
-
-
-def ensure_concepts_kind_columns(con: sqlite3.Connection) -> None:
-    columns = {
-        str(row["name"] if isinstance(row, sqlite3.Row) else row[1])
-        for row in con.execute("PRAGMA table_info(concepts)").fetchall()
-    }
-    if "kind_source" not in columns:
-        con.execute("ALTER TABLE concepts ADD COLUMN kind_source TEXT NOT NULL DEFAULT 'fallback'")
-    if "kind_confidence" not in columns:
-        con.execute("ALTER TABLE concepts ADD COLUMN kind_confidence REAL NOT NULL DEFAULT 0.0")
-
-
-def reset_graph(con: sqlite3.Connection) -> None:
-    con.execute("DELETE FROM concept_edges")
-    con.execute("DELETE FROM concepts")
-    con.execute("DELETE FROM meta")
-
-
 def upsert_concept(
     con: sqlite3.Connection,
     label: str,
     *,
     status: str,
+    lifecycle_reason: str = "staging_default",
     hit_count: int = 0,
     thread_count: int = 0,
     scope_key: str = "global",
@@ -234,16 +156,15 @@ def upsert_concept(
     now = now_utc()
     existing = con.execute(
         """
-        SELECT concept_id, status, hit_count, thread_count, kind, kind_source, kind_confidence
+        SELECT concept_id, status, hit_count, thread_count, kind, kind_source, kind_confidence,
+               lifecycle_reason
         FROM concepts
         WHERE concept_id = ?
         """,
         (concept_id,),
     ).fetchone()
     if existing:
-        best_status = (
-            "verified" if status == "verified" or existing["status"] == "verified" else "staging"
-        )
+        best_status = choose_status(str(existing["status"]), status)
         existing_confidence = float(existing["kind_confidence"] or 0.0)
         if float(kind["kind_confidence"]) >= existing_confidence:
             next_kind = str(kind["kind"])
@@ -253,12 +174,18 @@ def upsert_concept(
             next_kind = str(existing["kind"])
             next_kind_source = str(existing["kind_source"])
             next_kind_confidence = existing_confidence
+        next_reason = (
+            lifecycle_reason
+            if best_status == normalize_graph_status(status)
+            else str(existing["lifecycle_reason"] or "staging_default")
+        )
         con.execute(
             """
             UPDATE concepts
             SET label = ?, kind = ?, kind_source = ?, kind_confidence = ?,
                 status = ?, hit_count = MAX(hit_count, ?),
-                thread_count = MAX(thread_count, ?), updated_at = ?
+                thread_count = MAX(thread_count, ?),
+                lifecycle_reason = ?, lifecycle_updated_at = ?, updated_at = ?
             WHERE concept_id = ?
             """,
             (
@@ -269,6 +196,8 @@ def upsert_concept(
                 best_status,
                 int(hit_count or 0),
                 int(thread_count or 0),
+                next_reason,
+                now,
                 now,
                 concept_id,
             ),
@@ -278,8 +207,9 @@ def upsert_concept(
             """
             INSERT INTO concepts
             (concept_id, label, normalized_label, kind, kind_source, kind_confidence,
-             status, scope_key, hit_count, thread_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             status, scope_key, hit_count, thread_count, lifecycle_reason,
+             lifecycle_updated_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 concept_id,
@@ -288,10 +218,12 @@ def upsert_concept(
                 str(kind["kind"]),
                 str(kind["kind_source"]),
                 float(kind["kind_confidence"]),
-                status,
+                normalize_graph_status(status),
                 scope_key,
                 int(hit_count or 0),
                 int(thread_count or 0),
+                lifecycle_reason,
+                now,
                 now,
                 now,
             ),
@@ -314,6 +246,8 @@ def upsert_edge(
     confidence: float,
     status: str,
     evidence_count: int,
+    lifecycle_reason: str = "staging_default",
+    thread_count: int = 0,
     scope_key: str = "global",
     source_thread_key: str | None = None,
     source_message_id: str | None = None,
@@ -324,22 +258,27 @@ def upsert_edge(
     weight = edge_weight(confidence, edge_type, evidence_count)
     existing = con.execute(
         """
-        SELECT confidence, status, evidence_count, first_seen_at
+        SELECT confidence, status, evidence_count, thread_count, first_seen_at, lifecycle_reason
         FROM concept_edges
         WHERE src_concept_id = ? AND dst_concept_id = ? AND edge_type = ? AND scope_key = ?
         """,
         (src_id, dst_id, edge_type, scope_key),
     ).fetchone()
     if existing:
-        best_status = (
-            "verified" if status == "verified" or existing["status"] == "verified" else "staging"
-        )
+        best_status = choose_status(str(existing["status"]), status)
         best_confidence = max(float(existing["confidence"] or 0.0), confidence)
         best_evidence = max(int(existing["evidence_count"] or 0), int(evidence_count or 0))
+        best_thread_count = max(int(existing["thread_count"] or 0), int(thread_count or 0))
+        next_reason = (
+            lifecycle_reason
+            if best_status == normalize_graph_status(status)
+            else str(existing["lifecycle_reason"] or "staging_default")
+        )
         con.execute(
             """
             UPDATE concept_edges
             SET weight = ?, confidence = ?, status = ?, evidence_count = ?,
+                thread_count = ?, lifecycle_reason = ?, lifecycle_updated_at = ?,
                 source_thread_key = COALESCE(source_thread_key, ?),
                 source_message_id = COALESCE(source_message_id, ?),
                 last_seen_at = ?
@@ -350,6 +289,9 @@ def upsert_edge(
                 best_confidence,
                 best_status,
                 best_evidence,
+                best_thread_count,
+                next_reason,
+                now,
                 source_thread_key,
                 source_message_id,
                 now,
@@ -364,8 +306,9 @@ def upsert_edge(
             """
             INSERT INTO concept_edges
             (src_concept_id, dst_concept_id, edge_type, weight, confidence, status, scope_key,
-             evidence_count, source_thread_key, source_message_id, first_seen_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             evidence_count, thread_count, lifecycle_reason, lifecycle_updated_at,
+             source_thread_key, source_message_id, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 src_id,
@@ -373,9 +316,12 @@ def upsert_edge(
                 edge_type,
                 weight,
                 confidence,
-                status,
+                normalize_graph_status(status),
                 scope_key,
                 int(evidence_count or 0),
+                int(thread_count or 0),
+                lifecycle_reason,
+                now,
                 source_thread_key,
                 source_message_id,
                 now,
@@ -402,10 +348,26 @@ def add_bidirectional_edge(
     confidence: float,
     status: str,
     evidence_count: int,
-    source_thread_key: str | None,
+    thread_count: int = 0,
+    lifecycle_reason: str = "staging_default",
+    source_thread_key: str | None = None,
 ) -> None:
-    a_id = upsert_concept(con, a, status=status, hit_count=evidence_count, thread_count=0)
-    b_id = upsert_concept(con, b, status=status, hit_count=evidence_count, thread_count=0)
+    a_id = upsert_concept(
+        con,
+        a,
+        status=status,
+        lifecycle_reason=lifecycle_reason,
+        hit_count=evidence_count,
+        thread_count=thread_count,
+    )
+    b_id = upsert_concept(
+        con,
+        b,
+        status=status,
+        lifecycle_reason=lifecycle_reason,
+        hit_count=evidence_count,
+        thread_count=thread_count,
+    )
     if not a_id or not b_id:
         return
     upsert_edge(
@@ -416,6 +378,8 @@ def add_bidirectional_edge(
         confidence=confidence,
         status=status,
         evidence_count=evidence_count,
+        lifecycle_reason=lifecycle_reason,
+        thread_count=thread_count,
         source_thread_key=source_thread_key,
     )
     upsert_edge(
@@ -426,6 +390,8 @@ def add_bidirectional_edge(
         confidence=confidence,
         status=status,
         evidence_count=evidence_count,
+        lifecycle_reason=lifecycle_reason,
+        thread_count=thread_count,
         source_thread_key=source_thread_key,
     )
 
@@ -487,43 +453,91 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
 def collect_subconscious_edges(con: sqlite3.Connection, staging_path: Path | None) -> int:
     if not staging_path or not staging_path.exists():
         return 0
-    inserted = 0
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
     for item in iter_jsonl(staging_path):
         if item.get("kind") != "aippocampus_subconscious_edge":
-            continue
-        if item.get("status") not in {None, "staging"}:
             continue
         src = str(item.get("src") or "")
         dst = str(item.get("dst") or "")
         if concept_is_noise(src) or concept_is_noise(dst):
             continue
         confidence = max(0.0, min(1.0, float(item.get("confidence") or 0.0)))
-        if confidence < 0.45:
-            continue
         refs = [ref for ref in item.get("source_refs") or [] if isinstance(ref, dict)]
         if not refs:
             continue
-        edge_type = str(item.get("edge_type") or "related")
-        source_thread_key = refs[0].get("thread_key")
-        kind_status = item.get("concept_kind_status") or item.get("kind_status")
+        edge_type = safe_edge_type(item.get("edge_type") or "related")
+        key = (normalize_term(src), normalize_term(dst), edge_type)
+        group = grouped.setdefault(
+            key,
+            {
+                "src": normalize_term(src),
+                "dst": normalize_term(dst),
+                "edge_type": edge_type,
+                "confidence": 0.0,
+                "refs": [],
+                "thread_keys": [],
+                "statuses": [],
+                "signals": [],
+                "src_kind": item.get("src_concept_kind") or item.get("source_concept_kind"),
+                "dst_kind": item.get("dst_concept_kind") or item.get("target_concept_kind"),
+                "kind_status": item.get("concept_kind_status") or item.get("kind_status"),
+            },
+        )
+        group["confidence"] = max(float(group["confidence"] or 0.0), confidence)
+        group["refs"] = unique_source_refs(list(group.get("refs") or []) + refs)
+        group["thread_keys"] = unique_preserve(
+            list(group.get("thread_keys") or []) + source_ref_thread_keys(refs)
+        )
+        group["statuses"].append(item.get("status") or "staging")
+        group["signals"].append(
+            item.get("lifecycle_signal")
+            or item.get("lifecycle_status")
+            or item.get("retirement_signal")
+            or item.get("status")
+            or "staging"
+        )
+        if not group.get("src_kind"):
+            group["src_kind"] = item.get("src_concept_kind") or item.get("source_concept_kind")
+        if not group.get("dst_kind"):
+            group["dst_kind"] = item.get("dst_concept_kind") or item.get("target_concept_kind")
+        if not group.get("kind_status"):
+            group["kind_status"] = item.get("concept_kind_status") or item.get("kind_status")
+    inserted = 0
+    for group in grouped.values():
+        refs = [ref for ref in group.get("refs") or [] if isinstance(ref, dict)]
+        thread_keys = [str(key) for key in group.get("thread_keys") or [] if key]
+        source_thread_key = thread_keys[0] if thread_keys else refs[0].get("thread_key")
+        status_signal = strongest_lifecycle_signal(
+            list(group.get("statuses") or []) + list(group.get("signals") or [])
+        )
+        status, lifecycle_reason = lifecycle_decision(
+            requested_status=status_signal,
+            confidence=float(group.get("confidence") or 0.0),
+            evidence_count=len(refs),
+            thread_count=len(thread_keys),
+            lifecycle_signal=status_signal,
+            source_backed=bool(refs),
+        )
         src_id = upsert_concept(
             con,
-            src,
-            status="staging",
+            str(group["src"]),
+            status=status,
+            lifecycle_reason=lifecycle_reason,
             hit_count=len(refs),
-            thread_count=1,
-            supplied_kind=item.get("src_concept_kind") or item.get("source_concept_kind"),
-            supplied_kind_status=kind_status,
+            thread_count=len(thread_keys),
+            supplied_kind=group.get("src_kind"),
+            supplied_kind_status=group.get("kind_status"),
             source_backed_kind=bool(refs),
         )
         dst_id = upsert_concept(
             con,
-            dst,
-            status="staging",
+            str(group["dst"]),
+            status=status,
+            lifecycle_reason=lifecycle_reason,
             hit_count=len(refs),
-            thread_count=1,
-            supplied_kind=item.get("dst_concept_kind") or item.get("target_concept_kind"),
-            supplied_kind_status=kind_status,
+            thread_count=len(thread_keys),
+            supplied_kind=group.get("dst_kind"),
+            supplied_kind_status=group.get("kind_status"),
             source_backed_kind=bool(refs),
         )
         if not src_id or not dst_id:
@@ -532,22 +546,26 @@ def collect_subconscious_edges(con: sqlite3.Connection, staging_path: Path | Non
             con,
             src_id,
             dst_id,
-            edge_type=edge_type,
-            confidence=confidence,
-            status="staging",
+            edge_type=str(group["edge_type"]),
+            confidence=float(group.get("confidence") or 0.0),
+            status=status,
             evidence_count=len(refs),
+            lifecycle_reason=lifecycle_reason,
+            thread_count=len(thread_keys),
             source_thread_key=source_thread_key,
         )
         inserted += 1
-        if edge_type in BIDIRECTIONAL_EDGE_TYPES:
+        if group["edge_type"] in BIDIRECTIONAL_EDGE_TYPES:
             upsert_edge(
                 con,
                 dst_id,
                 src_id,
-                edge_type=edge_type,
-                confidence=confidence,
-                status="staging",
+                edge_type=str(group["edge_type"]),
+                confidence=float(group.get("confidence") or 0.0),
+                status=status,
                 evidence_count=len(refs),
+                lifecycle_reason=lifecycle_reason,
+                thread_count=len(thread_keys),
                 source_thread_key=source_thread_key,
             )
             inserted += 1
@@ -575,6 +593,7 @@ def build_concept_graph(
             if concept_is_noise(term):
                 continue
             status = "verified" if item.get("status") == "verified" else "staging"
+            lifecycle_reason = "association_verified" if status == "verified" else "association_staging"
             confidence = float(item.get("confidence") or 0.0)
             sources = item.get("threads") or []
             source_threads = unique_preserve(
@@ -590,6 +609,7 @@ def build_concept_graph(
                 con,
                 term,
                 status=status,
+                lifecycle_reason=lifecycle_reason,
                 hit_count=int(item.get("hit_count") or 0),
                 thread_count=len(source_threads),
                 supplied_kind=supplied_kind,
@@ -611,7 +631,9 @@ def build_concept_graph(
                     edge_type=edge_type,
                     confidence=confidence,
                     status=status,
+                    lifecycle_reason=lifecycle_reason,
                     evidence_count=int(item.get("hit_count") or 0),
+                    thread_count=len(source_threads),
                     source_thread_key=source_threads[0] if source_threads else None,
                 )
         timeline_edge_count = collect_timeline_edges(con, project_timeline_path)
@@ -646,7 +668,8 @@ def build_concept_graph(
             "subconscious_edge_count": subconscious_edge_count,
             "concept_kind_counts": count_by_column(con, "kind"),
             "concept_kind_source_counts": count_by_column(con, "kind_source"),
-            "source_boundary": concept_kind_source_boundary(),
+            "lifecycle": lifecycle_diagnostics(con),
+            "source_boundary": graph_source_boundary(),
         }
     finally:
         con.close()
@@ -661,7 +684,12 @@ def concept_ids_for_terms(con: sqlite3.Connection, terms: list[str]) -> list[tup
             continue
         seen.add(normalized)
         row = con.execute(
-            "SELECT concept_id, label FROM concepts WHERE normalized_label = ?",
+            """
+            SELECT concept_id, label
+            FROM concepts
+            WHERE normalized_label = ?
+              AND status IN ('verified', 'staging')
+            """,
             (normalized,),
         ).fetchone()
         if row:
@@ -678,9 +706,12 @@ def edge_rows(
                c.kind AS dst_kind, c.kind_source AS dst_kind_source,
                c.kind_confidence AS dst_kind_confidence
         FROM concept_edges e
+        JOIN concepts sc ON sc.concept_id = e.src_concept_id
         JOIN concepts c ON c.concept_id = e.dst_concept_id
         WHERE e.src_concept_id = ?
           AND e.status IN ('verified', 'staging')
+          AND sc.status IN ('verified', 'staging')
+          AND c.status IN ('verified', 'staging')
         ORDER BY
           CASE e.status WHEN 'verified' THEN 0 ELSE 1 END,
           e.weight DESC,
@@ -756,7 +787,7 @@ def expand_concepts(
                     "concept_kind": edge["dst_kind"],
                     "concept_kind_source": edge["dst_kind_source"],
                     "concept_kind_confidence": edge["dst_kind_confidence"],
-                    "source_boundary": concept_kind_source_boundary(),
+                    "source_boundary": graph_source_boundary(),
                 }
                 if not existing or next_score > float(existing.get("score") or 0.0):
                     best[normalized] = row
@@ -785,73 +816,8 @@ def expand_concepts(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--associations")
-    parser.add_argument("--project-timeline")
-    parser.add_argument("--subconscious-edges")
-    parser.add_argument("--registry")
-    parser.add_argument("--registry-dir")
-    parser.add_argument("--output")
-    parser.add_argument("--max-related-per-term", type=int, default=DEFAULT_MAX_RELATED_PER_TERM)
-    parser.add_argument("--expand", nargs="*", help="Dry-run concept expansion for seed terms.")
-    parser.add_argument("--depth", type=int, default=2)
-    parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
-
-    registry_path = (
-        Path(args.registry).resolve()
-        if args.registry
-        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    )
-    associations_path = (
-        Path(args.associations).resolve()
-        if args.associations
-        else default_associations_path(registry_path=registry_path)
-    )
-    project_timeline_path = (
-        Path(args.project_timeline).resolve()
-        if args.project_timeline
-        else default_project_timeline_path(registry_path=registry_path)
-    )
-    subconscious_edges_path = (
-        Path(args.subconscious_edges).resolve()
-        if args.subconscious_edges
-        else default_subconscious_edges_path(registry_path=registry_path)
-    )
-    output_path = (
-        Path(args.output).resolve()
-        if args.output
-        else default_concept_graph_path(registry_path=registry_path)
-    )
-
-    if args.expand:
-        rows = expand_concepts(output_path, args.expand, depth=args.depth)
-        payload = {"concept_graph": str(output_path), "seed_terms": args.expand, "expansions": rows}
-        if args.json_output:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            for row in rows:
-                print(
-                    f"- {row['term']} | score {row['score']} | depth {row['depth']} | {' -> '.join(row['path'])}"
-                )
-        return 0
-
-    result = build_concept_graph(
-        associations_path,
-        output_path,
-        project_timeline_path=project_timeline_path if project_timeline_path.exists() else None,
-        subconscious_edges_path=subconscious_edges_path
-        if subconscious_edges_path.exists()
-        else None,
-        max_related_per_term=args.max_related_per_term,
-    )
-    if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
-        print(f"concept graph: {output_path}")
-        print(f"concepts: {result['concept_count']}")
-        print(f"edges: {result['edge_count']}")
-    return 0
+    cli = importlib.import_module("aippocampus_runtime.navigation.concept_graph_cli")
+    return int(cli.main())
 
 
 if __name__ == "__main__":

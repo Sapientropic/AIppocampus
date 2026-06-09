@@ -632,6 +632,16 @@ and injection noise should be filtered before they become triggers.
 use staging edges; depth-2 expansion is restricted to verified or
 high-confidence edges and remains scent-only.
 
+Concept graph row status is graph participation metadata, not source truth.
+`verified` rows rank ahead of `staging`, but exact claims still require source
+reopen. `parked` and `retired` rows remain in the rebuildable SQLite projection
+only as lifecycle diagnostics and are excluded from default expansion. Promotion
+is conservative and source-joined: repeated refs, cross-thread refs, reviewed
+input, or curated associations may upgrade graph participation; high model
+confidence alone may not. Parking/retirement suppresses noisy, stale,
+low-confidence, contradicted, or superseded graph hints without deleting source
+refs or writing back to clean source.
+
 `aippocampus_runtime.navigation.concept_edge_utility` records explicit,
 privacy-safe utility events for graph expansions and emits an offline aggregate
 report grouped by edge type, edge status, score bucket, and optional hashed
