@@ -23,18 +23,25 @@ boundary and names the next unblock condition.
 | Layer | Current state | Claim boundary |
 | --- | --- | --- |
 | Protocol compatibility | Complete `local-scripted` official run exists for `overall`, `upperbound`, and `random` on full public `v1.base`; normalized `Memory=1.0` is a protocol artifact. | Not a live LLM/provider score, Native baseline, or AIppocampus product-quality result. |
-| Live model/provider quality | The 2026-06-06 OpenRouter Native attempt was partial: `overall` had 6/20 items, `upperbound` had 38/882 choice evaluations and no utilization metrics, `random` completed. | Not an AMemGym score; only execution/progress evidence. |
+| Live model/provider quality | The 2026-06-06 OpenRouter Native attempt was partial: `overall` had 6/20 items, `upperbound` had 38/882 choice evaluations and no utilization metrics, `random` completed. #1052 adds bounded subset, resume-skip, phase-state, and checkpoint reporting for the next attempt. | Not an AMemGym score; only execution/progress evidence. |
 | Source-backed overlay fidelity | Local fixture overlay and official `BaseAgent` adapter arms can report source-backed boundaries, and semantic-sidecar arms require prepared worker metadata. | Overlay fidelity is separate from official accuracy, diagnosis, utilization, and leaderboard claims. |
-| Cost/latency | The bridge records subprocess elapsed time and redacts credentials. | Provider billing/token cost is not claimable until raw official outputs or provider metadata expose a stable sanitized extraction path. |
+| Cost/latency | The bridge records subprocess elapsed time and redacts credentials; #1052 checkpoints explicitly report provider cost as unavailable when no stable usage field is present. | Provider billing/token cost is not claimable until raw official outputs or provider metadata expose a stable sanitized extraction path. |
 
 ## Blocker
 
-A full live/provider official `v1.base` fixed-arm score is blocked because the
-current bridge can start the official surfaces but cannot yet make the run
-bounded, resumable, and publicly auditable:
+A full live/provider official `v1.base` fixed-arm score is still blocked even
+after the #1052 bridge update. The bridge can now make a debugging run bounded,
+resumable, and publicly auditable, but no complete live/provider fixed arm has
+been produced and reviewed yet:
 
 - The previous live OpenRouter Native attempt ran for roughly two hours and was
   stopped while `upperbound` was still running.
+- `--max-cases` can bound a debugging slice, but subset output is explicitly
+  `progressive_subset_debug_only` and cannot retire the full public `v1.base`
+  score boundary.
+- `--resume` skips complete official summary artifacts and `--checkpoint`
+  records sanitized phase state; partial upstream surfaces still require a later
+  operator continuation/review rather than an automatic score claim.
 - Provider/model identity can be pinned, but the public report cannot yet
   extract stable token/billing cost from official outputs without either raw
   local artifacts or provider-specific metadata.
