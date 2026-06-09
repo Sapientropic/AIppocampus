@@ -60,7 +60,7 @@ as opt-in, experimental, fixture-scoped, or not-yet-default.
 
 | Mechanism | Current gate | Owning issue | Cannot claim until |
 | --- | --- | --- | --- |
-| Awake SWR / online consolidation tagging | `proposed` | #1018 | A source-backed `consolidation_priority_event` contract exists, degrades safely, and is fixture-tested without raw private text. |
+| Awake SWR / online consolidation tagging | `fixture_tested` | #1018, `aippocampus_runtime.reflection.consolidation_priority` | Benchmark or private/public evidence shows these priority rows improve later review selection or user-visible continuity without promoting source truth. |
 | Dynamic separation/completion threshold | `prototype` | #248 | Broader public/private calibration shows improved question quality without over-merging or noisy default activation. |
 | Retrieval-induced reconsolidation | `substrate_prototype` | #1019, `aippocampus_runtime.reflection.retrieval_lifecycle` | Later consumers use confirmation/correction/conflict evidence without rewriting clean source; retrieval lifecycle counts alone are not memory correctness. |
 | Preplay / state-dependent routing | `metaphor` | #163, #310, #940 | Public-safe predictive/preparation fixtures show value without pushing speculative content into foreground. |

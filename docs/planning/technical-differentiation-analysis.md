@@ -117,11 +117,15 @@ AIppocampus 已经拥有实现这一机制的关键前置层：
    - 计算节省：sleep-time 处理的 token 量下降百分比
    - 噪音抑制：被标记但最终被 review 判定为 noise 的比例
 
-**当前已实现的最小片（2026-05-30）：** `question_tracking.py` 已在
+**当前已实现的最小片（2026-06-09）：** `question_tracking.py` 已在
 `question_candidate` 输入上生成 deterministic `salience` profile（score /
-tags / reasons / trackable）。这还不是 clean-source turn 级的在线队列，
-但已经能在 Phase 2 tracking 中减少低信息候选参与链接，避免把
-“How should it work?” 这类泛问题合并成伪 continuity。
+tags / reasons / trackable）。#1018 新增
+`aippocampus_runtime.reflection.consolidation_priority`，把 explicit
+correction、rejected route、source conflict、failed test/command、
+cognitive-load signal、source-joined frontier/question/theme candidate 转成
+append-only `consolidation_priority_event`，并用 capped/decayed
+public-safe projection 给 later review 排序。它仍不是 clean-source turn 级
+默认 hook 队列，也不证明 Awake SWR 行为或用户可见 lift。
 
 ---
 
