@@ -71,6 +71,16 @@ handlers.
 | `claude-code` | Yes: Claude Code transcript parser and explicit onboarding. | Yes: clean-source registration and MCP/project-skill surfaces. | No shipped AIppocampus Claude Code hook handler. | No shipped AIppocampus Claude Code hook installer. | MCP host smokes only; no hook diagnostic claim. | Claude Code hook support: not yet claimable until a dedicated installer/status/privacy/smoke targets the official Claude Code hooks contract. |
 | `generic-jsonl` | Yes: explicit visible-message import provider. | Yes: clean-source registration/import surfaces. | No host hook handler. | No host hook installer. | Import validation only. | Generic import proves transcript ingestion, not host automation. |
 
+## Provider Conformance Fixture Boundary
+
+The public-safe child fixture for #988 lives in
+`benchmark_corpus/provider_conformance/fixture.json` and is exercised by
+`benchmarks/aippocampus/benchmark_provider_conformance.py`. It verifies
+provider/session identity, cross-provider source-reopen affordances, injected
+content demotion, and MCP source-ref metadata shape with synthetic rows. It
+does not replace the full #981 provider conformance kit and does not claim live
+host compatibility.
+
 ## Guardrail
 
 Raw Codex helpers should either stay in this inventory or move behind

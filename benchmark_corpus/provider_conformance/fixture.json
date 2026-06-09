@@ -1,0 +1,229 @@
+{
+  "schema_version": "aippocampus.provider_conformance_fixture.v1",
+  "fixture_id": "cross_provider_memory_surface_v1",
+  "source": {
+    "issue": "https://github.com/Sapientropic/AIppocampus/issues/988",
+    "parent_issue": "https://github.com/Sapientropic/AIppocampus/issues/981",
+    "field_continuity_issue": "https://github.com/Sapientropic/AIppocampus/issues/982",
+    "evidence_drawer_issue": "https://github.com/Sapientropic/AIppocampus/issues/980"
+  },
+  "providers": [
+    {"provider": "codex", "host_family": "codex", "session_id": "codex-alpha-1", "project_key": "repo-alpha"},
+    {"provider": "claude-code", "host_family": "claude", "session_id": "claude-alpha-1", "project_key": "repo-alpha"},
+    {"provider": "cursor", "host_family": "cursor", "session_id": "cursor-alpha-1", "project_key": "repo-alpha"},
+    {"provider": "gemini-cli", "host_family": "gemini", "session_id": "gemini-alpha-1", "project_key": "repo-alpha"},
+    {"provider": "mcp-client", "host_family": "mcp", "session_id": "mcp-alpha-1", "project_key": "repo-alpha"}
+  ],
+  "cases": [
+    {
+      "case_id": "same_repo_same_entity_name_distinct_provider_sessions",
+      "case_family": "provider_session_identity",
+      "expectation": "pass",
+      "expected_failure_codes": [],
+      "artifacts": [
+        {
+          "artifact_id": "codex-atlas-runtime",
+          "provider": "codex",
+          "consumer_provider": "codex",
+          "session_id": "codex-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Atlas",
+          "entity_key": "atlas-runtime",
+          "artifact_kind": "clean_source",
+          "content_origin": "user_visible",
+          "role_surface": "user",
+          "route_key": "codex:codex-alpha-1:atlas-runtime",
+          "source_ref": "codex:session:codex-alpha-1:turn:1",
+          "source_reopenable": true,
+          "action_grammar": "bounded_evidence",
+          "durable_user_memory": true,
+          "mcp_metadata_fields": ["provider", "session_id", "source_ref", "reopen_tool", "action_grammar"]
+        },
+        {
+          "artifact_id": "claude-atlas-dashboard",
+          "provider": "claude-code",
+          "consumer_provider": "claude-code",
+          "session_id": "claude-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Atlas",
+          "entity_key": "atlas-dashboard",
+          "artifact_kind": "clean_source",
+          "content_origin": "user_visible",
+          "role_surface": "user",
+          "route_key": "claude-code:claude-alpha-1:atlas-dashboard",
+          "source_ref": "claude-code:session:claude-alpha-1:turn:2",
+          "source_reopenable": true,
+          "action_grammar": "bounded_evidence",
+          "durable_user_memory": true,
+          "mcp_metadata_fields": ["provider", "session_id", "source_ref", "reopen_tool", "action_grammar"]
+        }
+      ]
+    },
+    {
+      "case_id": "cross_provider_correction_reopenable_route",
+      "case_family": "cross_provider_correction",
+      "expectation": "pass",
+      "expected_failure_codes": [],
+      "artifacts": [
+        {
+          "artifact_id": "claude-correction-route-for-codex",
+          "provider": "claude-code",
+          "consumer_provider": "codex",
+          "session_id": "claude-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Library choice",
+          "entity_key": "library-correction",
+          "artifact_kind": "clean_source",
+          "content_origin": "user_visible",
+          "role_surface": "user",
+          "route_key": "claude-code:claude-alpha-1:library-correction",
+          "source_ref": "claude-code:session:claude-alpha-1:turn:5",
+          "source_reopenable": true,
+          "action_grammar": "reopenable_route",
+          "durable_user_memory": true,
+          "mcp_metadata_fields": ["provider", "session_id", "source_ref", "reopen_tool", "action_grammar"]
+        }
+      ]
+    },
+    {
+      "case_id": "provider_a_source_ref_provider_b_copied_summary",
+      "case_family": "copied_summary_boundary",
+      "expectation": "pass",
+      "expected_failure_codes": [],
+      "artifacts": [
+        {
+          "artifact_id": "codex-source-backed-decision",
+          "provider": "codex",
+          "consumer_provider": "cursor",
+          "session_id": "codex-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Runtime decision",
+          "entity_key": "runtime-decision-source",
+          "artifact_kind": "clean_source",
+          "content_origin": "user_visible",
+          "role_surface": "assistant_final",
+          "route_key": "codex:codex-alpha-1:runtime-decision-source",
+          "source_ref": "codex:session:codex-alpha-1:turn:8",
+          "source_reopenable": true,
+          "action_grammar": "reopenable_route",
+          "durable_user_memory": true,
+          "mcp_metadata_fields": ["provider", "session_id", "source_ref", "reopen_tool", "action_grammar"]
+        },
+        {
+          "artifact_id": "cursor-copied-summary",
+          "provider": "cursor",
+          "consumer_provider": "codex",
+          "session_id": "cursor-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Runtime decision",
+          "entity_key": "runtime-decision-copied-summary",
+          "artifact_kind": "copied_summary",
+          "content_origin": "summary_blob",
+          "role_surface": "memory_blob",
+          "route_key": "cursor:cursor-alpha-1:runtime-decision-copied-summary",
+          "source_ref": "",
+          "source_reopenable": false,
+          "action_grammar": "direction_only",
+          "durable_user_memory": false,
+          "mcp_metadata_fields": ["provider", "session_id", "action_grammar"]
+        }
+      ]
+    },
+    {
+      "case_id": "host_injected_system_tool_content_demoted",
+      "case_family": "injected_content_pollution",
+      "expectation": "pass",
+      "expected_failure_codes": [],
+      "artifacts": [
+        {
+          "artifact_id": "gemini-system-injection",
+          "provider": "gemini-cli",
+          "consumer_provider": "codex",
+          "session_id": "gemini-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Project rules",
+          "entity_key": "system-injected-rules",
+          "artifact_kind": "host_envelope",
+          "content_origin": "system",
+          "role_surface": "system",
+          "route_key": "gemini-cli:gemini-alpha-1:system-injected-rules",
+          "source_ref": "",
+          "source_reopenable": false,
+          "action_grammar": "ignore_or_blocked",
+          "durable_user_memory": false,
+          "mcp_metadata_fields": ["provider", "session_id", "action_grammar"]
+        },
+        {
+          "artifact_id": "cursor-tool-trace",
+          "provider": "cursor",
+          "consumer_provider": "claude-code",
+          "session_id": "cursor-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "Tool output",
+          "entity_key": "tool-trace-output",
+          "artifact_kind": "tool_trace",
+          "content_origin": "tool",
+          "role_surface": "tool",
+          "route_key": "cursor:cursor-alpha-1:tool-trace-output",
+          "source_ref": "",
+          "source_reopenable": false,
+          "action_grammar": "ignore_or_blocked",
+          "durable_user_memory": false,
+          "mcp_metadata_fields": ["provider", "session_id", "action_grammar"]
+        }
+      ]
+    },
+    {
+      "case_id": "universal_mcp_blob_requires_source_ref_affordance",
+      "case_family": "mcp_drop_in_boundary",
+      "expectation": "expected_conformance_failure",
+      "expected_failure_codes": ["provider_conformance.mcp_missing_source_ref_affordance"],
+      "artifacts": [
+        {
+          "artifact_id": "mcp-source-ref-payload",
+          "provider": "mcp-client",
+          "consumer_provider": "codex",
+          "session_id": "mcp-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "MCP route",
+          "entity_key": "mcp-source-route",
+          "artifact_kind": "mcp_tool_output",
+          "content_origin": "tool",
+          "role_surface": "mcp_result",
+          "route_key": "mcp-client:mcp-alpha-1:mcp-source-route",
+          "source_ref": "mcp-client:session:mcp-alpha-1:turn:3",
+          "source_reopenable": true,
+          "action_grammar": "reopenable_route",
+          "durable_user_memory": false,
+          "mcp_metadata_fields": ["provider", "session_id", "source_ref", "reopen_tool", "action_grammar", "source_preview_redacted"]
+        },
+        {
+          "artifact_id": "mcp-blob-only-payload",
+          "provider": "mcp-client",
+          "consumer_provider": "codex",
+          "session_id": "mcp-alpha-1",
+          "project_key": "repo-alpha",
+          "entity_label": "MCP route",
+          "entity_key": "mcp-blob-only",
+          "artifact_kind": "mcp_tool_output",
+          "content_origin": "tool",
+          "role_surface": "mcp_result",
+          "route_key": "mcp-client:mcp-alpha-1:mcp-blob-only",
+          "source_ref": "",
+          "source_reopenable": false,
+          "action_grammar": "direction_only",
+          "durable_user_memory": false,
+          "mcp_metadata_fields": ["memory_blob"]
+        }
+      ]
+    }
+  ],
+  "cannot_claim": [
+    "live_provider_adapter_quality",
+    "all_client_drop_in_support",
+    "agentmemory_behavior",
+    "full_provider_conformance_kit",
+    "real_cross_host_continuity_quality",
+    "mcp_blob_as_source_truth"
+  ]
+}
