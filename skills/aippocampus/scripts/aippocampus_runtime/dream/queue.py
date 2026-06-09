@@ -92,6 +92,8 @@ def trigger_family_for_pack(pack: Mapping[str, Any], explicit: str | None = None
     if explicit:
         return explicit
     kinds = {str(kind) for kind in pack.get("source_seed_kinds") or []}
+    if "recall_miss" in kinds:
+        return "recall_miss_feedback"
     if "correction" in kinds:
         return "correction_outcome"
     if "ambient_residue" in kinds:
@@ -105,6 +107,7 @@ def priority_for(trigger_family: str, dream_function: str) -> int:
     base = {
         "explicit_operator_request": 90,
         "correction_outcome": 70,
+        "recall_miss_feedback": 65,
         "journey_frontier": 60,
         "topic_epoch_residue": 45,
         "ready_source_pack": 40,

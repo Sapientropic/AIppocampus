@@ -61,6 +61,20 @@ def correction_row() -> dict[str, object]:
     }
 
 
+def recall_miss_row() -> dict[str, object]:
+    return {
+        "kind": "recall_feedback_event",
+        "event_type": "late_reopen_recovery",
+        "event_id": "recall-queue",
+        "query_origin": "public_benchmark_fixture",
+        "summary": "A source-backed public case recovered the source only after a second pass.",
+        "source_refs": [
+            source_ref("session:recall-a", "msg-recall-a", 32),
+            source_ref("session:recall-b", "msg-recall-b", 34),
+        ],
+    }
+
+
 def ambient_residue_row() -> dict[str, object]:
     return {
         "kind": "aippocampus_ambient_residue",
@@ -131,6 +145,18 @@ class DreamQueueTests(unittest.TestCase):
         self.assertEqual(families[residue_pack["pack_id"]], "topic_epoch_residue")
         self.assertEqual(payload["counts"]["trigger_families"]["correction_outcome"], 2)
         self.assertEqual(payload["counts"]["trigger_families"]["topic_epoch_residue"], 2)
+
+    def test_recall_miss_seed_counts_as_compensatory_trigger_family(self) -> None:
+        pack = ready_pack(recall_miss_row())
+
+        payload = dream_queue.build_dream_queue(
+            [pack],
+            now="2026-06-09T00:00:00Z",
+        )
+
+        self.assertEqual(pack["source_seed_kinds"], ["recall_miss"])
+        self.assertEqual([item["trigger_family"] for item in payload["items"]], ["recall_miss_feedback", "recall_miss_feedback"])
+        self.assertEqual(payload["counts"]["trigger_families"]["recall_miss_feedback"], 2)
 
     def test_journey_frontier_items_carry_retention_ladder_policy(self) -> None:
         journey_pack = ready_pack(journey_row())

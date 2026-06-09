@@ -136,6 +136,31 @@ def correction_row() -> dict[str, object]:
     }
 
 
+def recall_miss_row(
+    *,
+    event_type: str = "late_reopen_recovery",
+    source_backed: bool = True,
+) -> dict[str, object]:
+    row: dict[str, object] = {
+        "kind": "recall_feedback_event",
+        "event_type": event_type,
+        "event_id": f"recall-{event_type}",
+        "benchmark_case_id": "public-vcs-late-recovery-1",
+        "query_origin": "public_benchmark_fixture",
+        "route_kind": "explicit_deep_recall",
+        "miss_stage": "top_k",
+        "summary": "A public fixture missed the source on the first pass and recovered it after expansion.",
+        "diagnostic_terms": ["source miss", "late recovery", "bounded expansion"],
+        "raw_prompt": "this raw prompt must not leak",
+    }
+    if source_backed:
+        row["source_refs"] = [
+            source_ref("session:recall-miss-a", "msg-rm-a", 130),
+            source_ref("session:recall-miss-b", "msg-rm-b", 140),
+        ]
+    return row
+
+
 def texture_row(
     signal_kind: str,
     *,
@@ -249,6 +274,30 @@ class DreamInputPackTests(unittest.TestCase):
             all(item["readiness_role"] == "clean_anchor" for item in pack["source_contributions"])
         )
         self.assertGreaterEqual(pack["source_ref_audit"]["source_thread_count"], 6)
+
+    def test_source_backed_recall_miss_feedback_becomes_compensatory_seed(self) -> None:
+        pack = input_pack.build_dream_input_pack([recall_miss_row()])
+
+        self.assertEqual(pack["status"], "ready_for_dream_worker")
+        self.assertIn("recall_miss", pack["source_seed_kinds"])
+        self.assertIn("compensatory", pack["eligible_dream_functions"])
+        self.assertIn("late_reopen_recovery", pack["themes"])
+        self.assertIn("public_benchmark_fixture", pack["themes"])
+        self.assertIn("recall miss feedback is a compensatory trigger, not source truth", pack["negative_contexts"])
+        contribution = pack["source_contributions"][0]
+        self.assertEqual(contribution["seed_kind"], "recall_miss")
+        self.assertEqual(contribution["readiness_role"], "clean_anchor")
+        self.assertEqual(contribution["source_thread_count"], 2)
+        encoded = json.dumps(pack, ensure_ascii=False)
+        self.assertNotIn("raw_prompt", encoded)
+        self.assertNotIn("this raw prompt must not leak", encoded)
+
+    def test_source_free_recall_miss_feedback_is_rejected(self) -> None:
+        pack = input_pack.build_dream_input_pack([recall_miss_row(source_backed=False)])
+
+        self.assertEqual(pack["status"], "no_clean_source_refs")
+        self.assertEqual(pack["source_seed_kinds"], [])
+        self.assertEqual(pack["source_contributions"], [])
 
     def test_source_texture_changes_eligible_dream_functions_without_payload_leakage(self) -> None:
         base_rows = [question_link_row(), journey_row()]

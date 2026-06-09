@@ -434,6 +434,64 @@ def correction_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     )
 
 
+def recall_miss_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    kinds = row_types(row)
+    event_type = str(row.get("event_type") or row.get("feedback_type") or "")
+    if not (
+        kinds
+        & {
+            "recall_feedback_event",
+            "recall_miss",
+            "late_reopen_recovery",
+            "source_evidence_recall_feedback",
+        }
+        or event_type in {"recall_miss", "late_reopen_recovery"}
+    ):
+        return None
+    refs = refs_from_row(row)
+    if not refs:
+        return None
+    signal = "late_reopen_recovery" if event_type == "late_reopen_recovery" else "recall_miss"
+    themes = unique_preserve(
+        [
+            signal,
+            row.get("query_origin"),
+            row.get("route_kind"),
+            row.get("miss_stage"),
+            row.get("benchmark_family"),
+            *string_values(row.get("diagnostic_terms")),
+        ],
+        limit=12,
+    )
+    return DreamSeed(
+        seed_id=row_id(row, prefix="recallmiss"),
+        seed_kind="recall_miss",
+        title=compact_text(str(row.get("title") or f"Recall feedback: {signal}"), 160),
+        summary=compact_text(
+            str(row.get("summary") or row.get("diagnostic_summary") or row.get("outcome_summary") or ""),
+            360,
+        ),
+        source_refs=refs,
+        source_finding_ids=tuple(
+            unique_preserve(
+                [
+                    row.get("event_id"),
+                    row.get("feedback_id"),
+                    row.get("benchmark_case_id"),
+                    row.get("case_id"),
+                ],
+                limit=8,
+            )
+        ),
+        themes=tuple(themes),
+        concepts=tuple(themes),
+        negative_contexts=(
+            "recall miss feedback is a compensatory trigger, not source truth",
+            "absence of recall is not automatically a miss without source-backed recovery evidence",
+        ),
+    )
+
+
 def reflection_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     kinds = row_types(row)
     if not (kinds & {"aippocampus_reflection_adjustment", "aippocampus_reflection_feedback"}):
@@ -551,6 +609,7 @@ def seed_from_row(row: Mapping[str, Any]) -> DreamSeed | None:
         or concept_edge_seed(row)
         or theme_candidate_seed(row)
         or correction_seed(row)
+        or recall_miss_seed(row)
         or reflection_seed(row)
         or agency_or_coding_seed(row)
     )
