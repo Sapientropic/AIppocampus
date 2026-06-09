@@ -14,6 +14,13 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
+try:
+    from benchmark_entrypoints import library_only_main
+except ModuleNotFoundError as exc:
+    if exc.name != "benchmark_entrypoints":
+        raise
+    from .benchmark_entrypoints import library_only_main
+
 MEMORY_HYGIENE_CANNOT_CLAIM = [
     "online_memory_update_learning",
     "physical_source_row_deletion",
@@ -456,3 +463,13 @@ def run_memory_hygiene_fixture_report(*, include_private_text: bool = False) -> 
         ),
         "cannot_claim": MEMORY_HYGIENE_CANNOT_CLAIM,
     }
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        library_only_main(
+            module_path="benchmarks/aippocampus/memory_hygiene.py",
+            supported_runner="benchmarks/aippocampus/benchmark_memory_decision_gate.py",
+            summary="It provides #990 memory-hygiene companion fixtures.",
+        )
+    )

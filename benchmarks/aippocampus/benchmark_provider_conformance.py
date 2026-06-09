@@ -15,7 +15,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-import _paths
+try:
+    import _paths
+except ModuleNotFoundError as exc:
+    if exc.name != "_paths":
+        raise
+    from . import _paths
 
 _paths.ensure_paths()
 
