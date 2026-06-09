@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -44,8 +45,56 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertEqual(status["events"]["PostToolUse"]["status"], "unsupported_event")
         self.assertIn("no_configuration_mutating_installer", status["cannot_claim"])
         self.assertFalse(dry_run["would_write"])
+        self.assertIn("handler_command", dry_run)
+        self.assertIn("command_resolvable", dry_run["handler_command"])
+        self.assertFalse(dry_run["handler_command"]["resolved_executable_path_emitted"])
         self.assertEqual(dry_run["rollback"], "remove the displayed handlers from the selected Claude settings file")
         self.assertNotIn(str(settings), encoded)
+
+    def test_dry_run_uses_module_fallback_when_console_script_is_not_on_path(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        def fake_which(command: str) -> str | None:
+            return "/redacted/python3" if command == "python3" else None
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            claude_code.shutil,
+            "which",
+            side_effect=fake_which,
+        ):
+            settings = Path(tmp) / "settings.json"
+            dry_run = claude_code.dry_run_report(settings_path=settings)
+
+        command = dry_run["proposed_hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        encoded = json.dumps(dry_run, ensure_ascii=False)
+        self.assertEqual(
+            command,
+            "python3 -m aippocampus_runtime.cli.facade hooks claude-code handle",
+        )
+        self.assertEqual(dry_run["handler_command"]["command_kind"], "module_fallback")
+        self.assertTrue(dry_run["handler_command"]["command_resolvable"])
+        self.assertFalse(dry_run["handler_command"]["console_script_resolvable"])
+        self.assertTrue(dry_run["handler_command"]["module_fallback_available"])
+        self.assertFalse(dry_run["handler_command"]["resolved_executable_path_emitted"])
+        self.assertNotIn("/redacted/python3", encoded)
+
+    def test_dry_run_reports_operator_path_blocker_when_no_command_is_resolvable(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            claude_code.shutil,
+            "which",
+            return_value=None,
+        ):
+            settings = Path(tmp) / "settings.json"
+            dry_run = claude_code.dry_run_report(settings_path=settings)
+
+        command = dry_run["proposed_hooks"]["Stop"][0]["hooks"][0]["command"]
+        self.assertEqual(command, "aippocampus hooks claude-code handle")
+        self.assertEqual(dry_run["handler_command"]["command_kind"], "console_script_unverified")
+        self.assertFalse(dry_run["handler_command"]["command_resolvable"])
+        self.assertFalse(dry_run["handler_command"]["copy_paste_ready"])
+        self.assertIn("PATH", dry_run["next_operator_step"])
 
     def test_synthetic_smoke_handles_claude_events_without_payload_leakage(self) -> None:
         from aippocampus_runtime.hooks import claude_code
