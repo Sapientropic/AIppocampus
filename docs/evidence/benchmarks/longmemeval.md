@@ -109,7 +109,14 @@ Run the comparable LongMemEval-S retrieval slice after the S file is available:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-50.json
 ```
 
-For a larger local diagnostic:
+Run the current larger LongMemEval-S retrieval slice:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
+```
+
+For a larger local diagnostic, treat runtime as exploratory until a dated
+report exists:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
@@ -123,17 +130,49 @@ a small curated artifact with provenance and license notes.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-09T14:08:17Z` | `longmemeval-v1-small` | retrieval-only larger slice | 100 | 97.00% | 87.23% | 96.81% | 126.72s | `retrieval_sufficient` |
 | `2026-05-30T17:05:34Z` | `longmemeval-v1-small` | retrieval-only | 50 | 100.00% | 92.00% | 100.00% | 167.65s | `retrieval_sufficient` |
 | `2026-05-30T16:47:41Z` | `longmemeval-v1-oracle` | retrieval-only smoke | 50 | 100.00% | 96.00% | 100.00% | not recorded | `retrieval_sufficient` |
 
-Fresh reproduction command:
+Fresh reproduction commands:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-oracle --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-oracle-retrieval-50.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-50.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
 ```
 
-LongMemEval-S verification summary:
+LongMemEval-S larger-slice verification summary:
+
+- Dataset file: `longmemeval_s_cleaned.json`
+- Bytes: `277383467`
+- SHA-256: `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`
+- Total runner time: `126.72s`
+- Questions: `100`
+- Case mix: `70` single-session-user and `30` multi-session cases.
+- Evidence-line cases: `94`
+- Top-k: `10`
+- Evidence context radius: `5`
+- Session R@10: `97/100`, Wilson 95% CI `0.9155..0.9897`
+- Evidence-line R@10: `82/94`, Wilson 95% CI `0.7900..0.9254`
+- Context-visible evidence R@10: `91/94`, Wilson 95% CI
+  `0.9103..0.9891`
+- MRR: session `0.8749`, evidence-line `0.6481`,
+  context-visible evidence `0.8233`
+- Evidence context rescued top-10 cases: `9`
+- Evidence context improved cases: `36`
+- Warning count: `0`
+- Evaluator model / API: none; deterministic retrieval-only run.
+- Raw report location: `benchmark_corpus/reports/longmemeval-v1-small-retrieval-100.json`
+  locally, intentionally gitignored.
+
+The 2026-06-09 attempt to run a 500-question LongMemEval-S diagnostic was
+stopped after about 8 minutes without stdout, stderr, or an output report, so
+the 500-question row is not promoted as evidence yet. Use the 100-question row
+as the current larger-slice claim and keep the 500-question command as an
+exploratory runtime target.
+
+Earlier 50-question LongMemEval-S verification summary:
 
 - Dataset file: `longmemeval_s_cleaned.json`
 - Bytes: `277383467`
