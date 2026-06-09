@@ -1226,6 +1226,11 @@ boundary condition.
   endpoint, but it is not evidence that source-backed recall has no useful
   lift. It shows no demonstrated net advantage over the modeled fresh-context
   spec loop for a short complete-spec public-synthetic slice.
+- The report exposes `expected_null_remediation` as a machine-readable #960
+  ledger with `primary_endpoint_changed=false`,
+  `benchmark_thresholds_changed=false`, and
+  `product_change_status=candidate_identified_not_implemented`; this records
+  per-family hypotheses without weakening the lower-bound rule.
 - Follow-up product surfaces are route minimality, source-reopen fallback,
   abstention usefulness, no-harm hint suppression, and cost/harm accounting.
 

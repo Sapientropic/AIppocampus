@@ -672,6 +672,13 @@ independent human or live-model trials.
 The 2026-06-09 rerun used for #960 interpretation preserved the negative rule
 and reported the following per-case remediation taxonomy:
 
+The machine-readable report now exposes this under
+`expected_null_remediation`. That block is a remediation ledger, not a scoring
+layer: it keeps `primary_endpoint_changed=false`,
+`benchmark_thresholds_changed=false`, and
+`product_change_status=candidate_identified_not_implemented` until a later
+product change and rerun can supersede the expected-null boundary.
+
 | Case family | Success lift | Source-miss abstention | Fresh-context advantage | Memory cost drag / repair hypothesis |
 | --- | --- | --- | --- | --- |
 | `post_compaction_rejected_route` | True memory succeeds where `no_memory`, sham, and stale arms fail by reopening source and avoiding a rejected route. | None. | The complete-spec reset loop already carries the right rejected-route source. | Route is useful but expensive; inspect `route_packet`, `source_reopen`, and `cost_harm_accounting` for cheaper actionability. |

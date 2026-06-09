@@ -11,6 +11,71 @@ PREREGISTRATION_ID = "aippocampus-continuous-memory-v1"
 PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM = 5
 CONTRACT_SMOKE_RUNNER_PROFILE = "public_synthetic_contract_smoke"
 PREREGISTERED_REPEAT_RUNNER_PROFILE = "public_synthetic_preregistered_repeat"
+EXPECTED_NULL_INTERPRETATION_LABEL = (
+    "no demonstrated net advantage over modeled fresh-context spec loop"
+)
+DETERMINISTIC_REPEAT_BOUNDARY = (
+    "deterministic replicated lower-bound rows, not independent trials"
+)
+
+_REMEDIATION_BY_FAMILY = {
+    "post_compaction_rejected_route": {
+        "failure_mode": "useful_route_but_complete_spec_baseline_already_has_source",
+        "repair_hypothesis": (
+            "Keep the rejected-route handle source-backed, but make the route packet "
+            "cheaper and more directly actionable before changing scoring."
+        ),
+        "product_surface": ["route_packet", "source_reopen", "cost_harm_accounting"],
+        "fresh_context_advantage": (
+            "modeled reset loop already carries the rejected-route source"
+        ),
+    },
+    "post_compaction_scope_constraint": {
+        "failure_mode": "useful_constraint_but_prompt_hook_cost_drag",
+        "repair_hypothesis": (
+            "Reduce prompt-hook and route overhead for simple scope constraints; "
+            "do not add more memory text to complete-spec tasks."
+        ),
+        "product_surface": ["prompt_hook", "route_packet", "cost_harm_accounting"],
+        "fresh_context_advantage": "modeled reset loop has the full scope constraint",
+    },
+    "transient_concern_expiry": {
+        "failure_mode": "memory_silence_expected_for_expired_concern",
+        "repair_hypothesis": (
+            "Treat this as a restraint/no-op path: keep old concerns quiet unless "
+            "source reopening changes the foreground action."
+        ),
+        "product_surface": ["no_harm_hint_suppression", "stale_memory_gate"],
+        "fresh_context_advantage": "fresh context or silence is cheap and safe",
+    },
+    "incomplete_handoff_recovery": {
+        "failure_mode": "source_miss_abstention_counts_as_task_failure",
+        "repair_hypothesis": (
+            "Improve source-reopen fallback and abstention usefulness without "
+            "rewarding unsupported answers."
+        ),
+        "product_surface": ["source_reopen", "abstention_usefulness", "route_packet"],
+        "fresh_context_advantage": "modeled reset loop has the missing source",
+    },
+    "public_vcs_temporal_override": {
+        "failure_mode": "correct_memory_still_loses_net_value_to_complete_spec",
+        "repair_hypothesis": (
+            "Memory correctness is not the failure; inspect route minimality and "
+            "source-reopen cost before scoring changes."
+        ),
+        "product_surface": ["route_packet", "source_reopen", "cost_harm_accounting"],
+        "fresh_context_advantage": "modeled reset loop already has the current source",
+    },
+    "public_vcs_anti_drift_negative": {
+        "failure_mode": "irrelevant_route_suppression_must_happen_earlier",
+        "repair_hypothesis": (
+            "Suppress irrelevant hints before foreground injection and avoid charging "
+            "avoidable memory work in no-harm cases."
+        ),
+        "product_surface": ["no_harm_hint_suppression", "prompt_hook"],
+        "fresh_context_advantage": "fresh context wins by staying silent",
+    },
+}
 
 
 def sha256_text(value: str) -> str:
@@ -31,6 +96,35 @@ def repeat_seed_hash(case_family: str, case_id: str, repeat_index: int) -> str:
             )
         )
     )
+
+
+def _rate(numerator: int | float, denominator: int | float) -> float:
+    return round(float(numerator) / float(denominator), 4) if denominator else 0.0
+
+
+def _row_cost_units(row: dict[str, Any]) -> float:
+    cost = row["cost_components"]
+    foreground = (
+        float(cost["foreground_tokens"]) / 100.0
+        + float(cost["wall_clock_latency_ms"]) / 1000.0
+        + float(cost["source_reopen_count"]) * 0.25
+    )
+    background = (
+        float(cost["background_tokens"]) / 100.0
+        + float(cost["background_api_calls"]) * 2.0
+        + float(cost["indexing_maintenance_ms"]) / 1000.0
+        + float(cost["storage_growth_bytes"]) / 4096.0
+    )
+    recovery = (
+        float(cost["retry_recovery_count"]) * 1.5
+        + float(cost["human_correction_count"]) * 2.0
+        + float(cost["human_correction_minutes"]) * 0.25
+    )
+    return round(foreground + background + recovery, 4)
+
+
+def _success_rate(rows: list[dict[str, Any]]) -> float:
+    return _rate(sum(1 for row in rows if row["success"]), len(rows))
 
 
 def build_evaluation_rows(
@@ -184,11 +278,163 @@ def build_paired_repeat_readout(
             if lower_bound_passed
             else "no demonstrated memory advantage"
         ),
+        "interpretation_label": (
+            "candidate continuous memory advantage"
+            if lower_bound_passed
+            else EXPECTED_NULL_INTERPRETATION_LABEL
+        ),
+        "repeat_independence_boundary": DETERMINISTIC_REPEAT_BOUNDARY,
         "cannot_claim": [
             "live host-native cost or compaction telemetry",
             "private real-history generality",
             "public-quality continuous-memory advantage when lower_bound_units <= 0",
             "statistical power beyond deterministic public-synthetic repeated rows",
+        ],
+    }
+
+
+def build_expected_null_remediation(
+    *,
+    rows: list[dict[str, Any]],
+    metrics: dict[str, Any],
+    cost_harm_ledger: dict[str, Any],
+    paired_repeat_readout: dict[str, Any],
+) -> dict[str, Any]:
+    cost = cost_harm_ledger["cost"]
+    true_cost = cost["by_arm"]["true_aippocampus_memory"]
+    fresh_cost = cost["comparison_baselines"]["fresh_context_spec_loop"]
+    net_value = cost_harm_ledger["net_value_under_equalized_cost"]
+    per_family: list[dict[str, Any]] = []
+    for family in sorted({str(row["case_family"]) for row in rows}):
+        family_rows = [row for row in rows if row["case_family"] == family]
+        true_rows = [row for row in family_rows if row["arm"] == "true_aippocampus_memory"]
+        no_rows = [row for row in family_rows if row["arm"] == "no_memory"]
+        sham_rows = [row for row in family_rows if row["arm"] == "sham_unrelated_memory"]
+        true_success = _success_rate(true_rows)
+        no_success = _success_rate(no_rows)
+        sham_success = _success_rate(sham_rows)
+        true_success_count = sum(1 for row in true_rows if row["success"])
+        true_cost_per_success = (
+            round(sum(_row_cost_units(row) for row in true_rows) / true_success_count, 4)
+            if true_success_count
+            else None
+        )
+        remediation = _REMEDIATION_BY_FAMILY.get(
+            family,
+            {
+                "failure_mode": "unclassified_public_synthetic_case_family",
+                "repair_hypothesis": "Review source-backed behavior before changing scoring.",
+                "product_surface": ["route_packet"],
+                "fresh_context_advantage": "not classified",
+            },
+        )
+        per_family.append(
+            {
+                "case_family": family,
+                "failure_mode": remediation["failure_mode"],
+                "repair_hypothesis": remediation["repair_hypothesis"],
+                "product_surface": remediation["product_surface"],
+                "success_lift": {
+                    "true_aippocampus_memory_success_rate": true_success,
+                    "no_memory_success_rate": no_success,
+                    "sham_unrelated_memory_success_rate": sham_success,
+                    "true_over_no_memory_delta": round(true_success - no_success, 4),
+                    "true_over_sham_delta": round(true_success - sham_success, 4),
+                },
+                "source_miss_abstention": {
+                    "true_memory_abstention_count": sum(
+                        1 for row in true_rows if row["abstained_on_missing_source"]
+                    ),
+                    "true_memory_source_backed_hit_rate": _rate(
+                        sum(1 for row in true_rows if row["source_backed_hit"]),
+                        len(true_rows),
+                    ),
+                },
+                "fresh_context_advantage": remediation["fresh_context_advantage"],
+                "memory_cost_drag": {
+                    "true_memory_cost_per_successful_slice": true_cost_per_success,
+                    "fresh_context_cost_per_successful_slice": fresh_cost[
+                        "amortized_cost_per_successful_slice"
+                    ],
+                    "true_minus_fresh_cost_per_successful_slice": (
+                        round(
+                            float(true_cost_per_success)
+                            - float(fresh_cost["amortized_cost_per_successful_slice"]),
+                            4,
+                        )
+                        if true_cost_per_success is not None
+                        else None
+                    ),
+                },
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "issue": "github_960",
+        "status": "remediation_taxonomy_recorded_negative_result_preserved",
+        "claim_level": "expected_null_remediation_diagnostic",
+        "primary_endpoint_changed": False,
+        "benchmark_thresholds_changed": False,
+        "product_change_status": "candidate_identified_not_implemented",
+        "decision_label_preserved": paired_repeat_readout["decision_label"],
+        "interpretation_label": paired_repeat_readout["interpretation_label"],
+        "repeat_independence_boundary": paired_repeat_readout[
+            "repeat_independence_boundary"
+        ],
+        "original_failure_changed": False,
+        "primary_endpoint_winner": net_value["highest_net_value_fair_strategy"],
+        "overall": {
+            "true_aippocampus_memory_success_rate": metrics["by_arm"][
+                "true_aippocampus_memory"
+            ]["success_rate"],
+            "no_memory_success_rate": metrics["by_arm"]["no_memory"]["success_rate"],
+            "sham_unrelated_memory_success_rate": metrics["by_arm"][
+                "sham_unrelated_memory"
+            ]["success_rate"],
+            "host_native_success_rate": metrics["by_arm"][
+                "host_native_continuous_no_aippocampus"
+            ]["success_rate"],
+            "true_memory_net_value_units": net_value["by_arm"][
+                "true_aippocampus_memory"
+            ]["net_value_units"],
+            "fresh_context_spec_loop_net_value_units": net_value[
+                "comparison_baselines"
+            ]["fresh_context_spec_loop"]["net_value_units"],
+            "true_memory_cost_per_successful_slice": true_cost[
+                "amortized_cost_per_successful_slice"
+            ],
+            "fresh_context_cost_per_successful_slice": fresh_cost[
+                "amortized_cost_per_successful_slice"
+            ],
+        },
+        "per_case_family": per_family,
+        "secondary_user_visible_friction": {
+            "primary_endpoint_participation": False,
+            "status": "candidate_metrics_not_yet_calibrated",
+            "dimensions": [
+                "repeated_restatement_burden",
+                "manual_search_cost",
+                "context_reconstruction_time",
+                "adhd_context_switch_drag",
+            ],
+            "current_proxy_boundary": (
+                "The repeat profile models source-rebuild and memory work costs, "
+                "but it does not yet measure user-visible restatement burden or "
+                "ADHD/context-switch drag as calibrated outcome variables."
+            ),
+            "candidate_next_surface": [
+                "route_actionability",
+                "source_reopen_fallback",
+                "no_harm_hint_suppression",
+                "cost_harm_accounting",
+            ],
+        },
+        "cannot_claim": [
+            "continuous-memory advantage",
+            "product change improved the preregistered endpoint",
+            "calibrated user-visible friction reduction",
+            "independent repeat-trial statistical power",
         ],
     }
 
@@ -233,6 +479,11 @@ def build_preregistration(
         "candidate continuous memory advantage"
         if claim_allowed
         else "no demonstrated memory advantage"
+    )
+    interpretation_label = (
+        "candidate continuous memory advantage"
+        if claim_allowed
+        else EXPECTED_NULL_INTERPRETATION_LABEL
     )
     return {
         "id": PREREGISTRATION_ID,
@@ -361,6 +612,7 @@ def build_preregistration(
             "primary_endpoint_winner": fair_winner,
             "continuous_memory_advantage_claim_allowed": bool(claim_allowed),
             "decision_label": decision_label,
+            "interpretation_label": interpretation_label,
             "reason": reason,
         },
     }

@@ -427,7 +427,76 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             "public_synthetic_preregistered_repeat_readout",
         )
         self.assertEqual(decision["decision_label"], "no demonstrated memory advantage")
+        self.assertEqual(
+            decision["interpretation_label"],
+            "no demonstrated net advantage over modeled fresh-context spec loop",
+        )
         self.assertFalse(decision["continuous_memory_advantage_claim_allowed"])
+        self.assertEqual(
+            repeat["interpretation_label"],
+            "no demonstrated net advantage over modeled fresh-context spec loop",
+        )
+        self.assertEqual(
+            repeat["repeat_independence_boundary"],
+            "deterministic replicated lower-bound rows, not independent trials",
+        )
+
+    def test_expected_null_remediation_keeps_negative_result_machine_readable(self) -> None:
+        payload = benchmark.run_benchmark(repeat_count_per_case_arm=5)
+        remediation = payload["expected_null_remediation"]
+        families = {
+            item["case_family"]: item for item in remediation["per_case_family"]
+        }
+
+        self.assertEqual(
+            remediation["status"],
+            "remediation_taxonomy_recorded_negative_result_preserved",
+        )
+        self.assertFalse(remediation["primary_endpoint_changed"])
+        self.assertFalse(remediation["benchmark_thresholds_changed"])
+        self.assertEqual(
+            remediation["product_change_status"],
+            "candidate_identified_not_implemented",
+        )
+        self.assertEqual(
+            remediation["decision_label_preserved"],
+            "no demonstrated memory advantage",
+        )
+        self.assertEqual(
+            remediation["primary_endpoint_winner"],
+            "fresh_context_spec_loop",
+        )
+        self.assertEqual(
+            remediation["repeat_independence_boundary"],
+            "deterministic replicated lower-bound rows, not independent trials",
+        )
+        self.assertEqual(
+            families["incomplete_handoff_recovery"]["failure_mode"],
+            "source_miss_abstention_counts_as_task_failure",
+        )
+        self.assertEqual(
+            families["incomplete_handoff_recovery"]["source_miss_abstention"][
+                "true_memory_abstention_count"
+            ],
+            5,
+        )
+        self.assertIn(
+            "source_reopen",
+            families["incomplete_handoff_recovery"]["product_surface"],
+        )
+        self.assertGreater(
+            families["post_compaction_rejected_route"]["success_lift"][
+                "true_over_no_memory_delta"
+            ],
+            0,
+        )
+        friction = remediation["secondary_user_visible_friction"]
+        self.assertFalse(friction["primary_endpoint_participation"])
+        self.assertIn("adhd_context_switch_drag", friction["dimensions"])
+        self.assertIn(
+            "calibrated user-visible friction reduction",
+            remediation["cannot_claim"],
+        )
 
     def test_report_tracks_scenario_provenance_holdouts_and_negative_controls(self) -> None:
         payload = benchmark.run_benchmark()
