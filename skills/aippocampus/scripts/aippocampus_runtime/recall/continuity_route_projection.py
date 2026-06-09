@@ -46,7 +46,8 @@ def _inactive_pointer(pointer: dict[str, Any]) -> bool:
 
 def _snapshot_status(snapshot_path: Path, snapshot: dict[str, Any] | None) -> dict[str, Any]:
     if isinstance(snapshot, dict):
-        metrics = snapshot.get("metrics") if isinstance(snapshot.get("metrics"), dict) else {}
+        raw_metrics = snapshot.get("metrics")
+        metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
         return {
             "snapshot_status": "loaded",
             "missing_artifacts": [],

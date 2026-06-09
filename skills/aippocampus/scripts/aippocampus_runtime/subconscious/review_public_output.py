@@ -106,7 +106,8 @@ def public_quality_bucket_counts(value: Any) -> dict[str, int]:
 def public_quality_diagnostics(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
-    contract = value.get("score_contract") if isinstance(value.get("score_contract"), dict) else {}
+    raw_contract = value.get("score_contract")
+    contract: dict[str, Any] = raw_contract if isinstance(raw_contract, dict) else {}
     outcomes: dict[str, dict[str, int]] = {}
     raw_outcomes = value.get("review_outcomes_by_bucket")
     if isinstance(raw_outcomes, dict):

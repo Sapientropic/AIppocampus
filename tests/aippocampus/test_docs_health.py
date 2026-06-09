@@ -1114,6 +1114,70 @@ class DocsHealthTests(unittest.TestCase):
             issues,
         )
 
+    def test_proof_slice_maturity_board_guard_requires_cognitive_layer_gate(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        assert repo_root is not None
+
+        self.assertEqual(docs_health.proof_slice_maturity_board_issues(repo_root), [])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_origin_essays(repo)
+            readiness = repo / "docs" / "evidence" / "readiness"
+            readiness.mkdir(parents=True)
+            (readiness / "proof-slice-maturity.md").write_text(
+                "# Proof Slice Maturity\n\n"
+                "`design_only`\n"
+                "`deterministic_smoke`\n"
+                "`public_safe_fixture`\n"
+                "`second_user`\n"
+                "`release_claimable`\n"
+                "last_checked\n"
+                "Cannot claim\n"
+                "Owner / evidence\n",
+                encoding="utf-8",
+            )
+            (repo / "docs" / "README.md").write_text(
+                "proof-slice-maturity.md\n",
+                encoding="utf-8",
+            )
+            (readiness / "stage-0-5-readiness.md").write_text(
+                "proof-slice-maturity.md\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.proof_slice_maturity_board_issues(repo)
+
+        self.assertIn(
+            "proof-slice maturity board missing cognitive layer graduation ladder",
+            issues,
+        )
+        self.assertIn(
+            "proof-slice maturity board missing flagship cognitive mechanism gate",
+            issues,
+        )
+
+    def test_public_docs_cognitive_mechanism_guard_flags_premature_default_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "docs" / "guides").mkdir(parents=True)
+            (repo / "README.md").write_text(
+                "AIppocampus implements Awake SWR as default behavior.\n",
+                encoding="utf-8",
+            )
+            (repo / "docs" / "README.md").write_text("# Docs\n", encoding="utf-8")
+            (repo / "docs" / "guides" / "public-api.md").write_text(
+                "No premature claim here.\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.cognitive_mechanism_public_claim_issues(repo)
+
+        self.assertIn(
+            "README.md has premature cognitive mechanism claim: implements Awake SWR",
+            issues,
+        )
+
     def test_benchmark_evidence_map_requires_hippocampal_private_annotation_protocol(
         self,
     ) -> None:

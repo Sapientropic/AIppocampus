@@ -1,6 +1,6 @@
 # Proof-Slice Maturity Board
 
-last_checked: 2026-06-04
+last_checked: 2026-06-09
 
 This board is the public truth-navigation layer for fast-moving AIppocampus
 proof lines. It is not a roadmap database and not a release checklist. Use it
@@ -20,6 +20,50 @@ smokes, public-safe fixtures, and second-user evidence.
 Rows name the maturity of the strongest current proof slice, not the ambition of
 the whole line. A row can be useful and still have a strict `Cannot claim`
 boundary.
+
+## Cognitive Layer Graduation Ladder
+
+Higher-level cognitive layers use a stricter public-claim ladder because they
+can sound more stable than they are. These rungs govern README/public wording
+for Dream, Journey, subconscious, observatory, semantic, and route-learning
+surfaces:
+
+| Rung | Meaning | Public wording boundary |
+| --- | --- | --- |
+| `metaphor` | Research language or product intuition only. | May appear in origin/research docs, not as implemented behavior. |
+| `prototype` | Deterministic code or design slice exists, but quality is local or narrow. | Describe as experimental/internal and name cannot-claim boundaries. |
+| `fixture_tested` | Public-safe deterministic fixture or smoke covers the slice. | May claim the fixture contract, not live quality. |
+| `benchmark_supported` | Redistributable benchmark, public shadow cohort, or external public fixture supports the same failure taxonomy. | May cite benchmark support within scope. |
+| `dogfooded` | Sanitized private/local aggregate runs show useful behavior. | private dogfood evidence may support operator confidence but needs explicit cannot-claim wording. |
+| `public_contract` | Public reproducible evidence, docs, diagnostics, and release boundary support the default behavior claim. | May be advertised as stable public behavior only within the exact contract. |
+
+private dogfood evidence is valuable for realism, but public-facing proof should
+prefer public reproducible evidence whenever the claim asks outside readers to
+trust the mechanism. Below `public_contract`, cognitive layers can appear in
+architecture, research, and evidence docs; the main README must keep them framed
+as opt-in, experimental, fixture-scoped, or not-yet-default.
+
+## Cognitive Layer Board
+
+| Layer | Current rung | Evidence owner | Can claim | Cannot claim |
+| --- | --- | --- | --- | --- |
+| Dream / sleep-cycle synthesis | `dogfooded` | #163, [`dream-task-design.md`](../../research/dream-task-design.md), [`dream-private-large-history-diagnostic-2026-06-04.md`](../dream/dream-private-large-history-diagnostic-2026-06-04.md) | Source-backed Dream substrates, bounded workers, precision gates, and sanitized private structural diagnostics exist. | Live provider Dream quality, predictive validity, active-imagination usefulness, or user-visible recall/reflection lift. |
+| Journey / frontier routing | `prototype` | #310, [`journey-tracking.md`](../../research/journey-tracking.md) | Source-backed waypoint/Journey structures and conservative foreground hint timing fixtures exist. | Live default Journey quality, weekly/monthly journey review value, or future-state prediction. |
+| Subconscious question/theme surfaces | `fixture_tested` | #248, [`question-tracking-subconscious.md`](../../architecture/question-tracking-subconscious.md) | Deterministic extraction, sidecar, parity, and review-gated candidate flows exist. | Default live answer-quality lift, fully calibrated dynamic thresholds, or private-history generality. |
+| Semantic recall / source review | `fixture_tested` | #309, [`recall-navigation-comparison-2026-06-03.md`](../benchmarks/recall-navigation-comparison-2026-06-03.md), [`semantic-robustness-track-s.md`](../benchmarks/semantic-robustness-track-s.md) | Source-joined semantic/vector/graph signals can act as ranking hints after source gates. | Adaptive score fusion, universal semantic quality, or generated sidecars as evidence without reopen. |
+| Cognitive Observatory | `prototype` | #576, [`public-api.md#cognitive-observatory`](../../guides/public-api.md#cognitive-observatory), [`cognitive-runtime-architecture.md`](../../architecture/cognitive-runtime-architecture.md) | Read-only public-safe diagnostic projections can be emitted. | Control-plane authority, mutation, live quality certification, or private source disclosure. |
+| Cognitive-load sidecar | `dogfooded` | #575, [`cognitive-load-sidecar.md`](../../architecture/cognitive-load-sidecar.md) | Behavior-cost sidecars and caps/decay exist as recall weighting inputs. | Emotion/personality inference, live false-positive quality, or default hook usefulness. |
+| Episode / Arc sequence model | `dogfooded` | #663, [`episode-arc-read-models.md`](../../architecture/episode-arc-read-models.md) | Source-backed sequence read models and private aggregate adjudication exist. | Broad live host adapters, public reproducible corpus coverage, or causality without source reopen. |
+| Active-flow route feedback | `prototype` | #937, #950, `aippocampus_runtime.recall.feedback_events` | Public-safe route feedback rows and reducers can provide calibration/ranking metadata. | Online learning over private content, automatic score-weight changes, or activation metadata supporting factual claims. |
+
+## Flagship Cognitive Mechanism Gate
+
+| Mechanism | Current gate | Owning issue | Cannot claim until |
+| --- | --- | --- | --- |
+| Awake SWR / online consolidation tagging | `proposed` | #1018 | A source-backed `consolidation_priority_event` contract exists, degrades safely, and is fixture-tested without raw private text. |
+| Dynamic separation/completion threshold | `prototype` | #248 | Broader public/private calibration shows improved question quality without over-merging or noisy default activation. |
+| Retrieval-induced reconsolidation | `proposed` | #1019 | General retrieval lifecycle rows exist and later consumers use confirmation/correction/conflict evidence without rewriting clean source. |
+| Preplay / state-dependent routing | `metaphor` | #163, #310, #940 | Public-safe predictive/preparation fixtures show value without pushing speculative content into foreground. |
 
 ## Board
 

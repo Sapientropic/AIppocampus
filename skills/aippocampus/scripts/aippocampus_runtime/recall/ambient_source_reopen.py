@@ -45,7 +45,8 @@ def _reopen_reason_for_card(card: dict[str, Any]) -> str:
     cached_origin = str(card.get("cached_origin") or "").strip()
     support = str(card.get("support_level") or "").strip()
     visibility = str(card.get("visibility") or "").strip()
-    validation = card.get("source_validation") if isinstance(card.get("source_validation"), dict) else {}
+    raw_validation = card.get("source_validation")
+    validation: dict[str, Any] = raw_validation if isinstance(raw_validation, dict) else {}
     if provenance == "cached_warm_card" and (
         cached_origin == "source_backed_reopen"
         or support == "evidence"
@@ -98,7 +99,8 @@ def _reopen_card_source_payload(
         if not entry:
             errors.append({"code": "thread_not_in_registry", "thread_key": thread_key})
             continue
-        paths = entry.get("paths") if isinstance(entry.get("paths"), dict) else {}
+        raw_paths = entry.get("paths")
+        paths: dict[str, Any] = raw_paths if isinstance(raw_paths, dict) else {}
         messages_path_value = paths.get("clean_source_messages_jsonl")
         if not messages_path_value:
             errors.append({"code": "clean_source_missing", "thread_key": thread_key})

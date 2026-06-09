@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "kind": "public_route_feedback_fixture",
+  "source_family": "synthetic_public_safe",
+  "privacy_boundary": {
+    "public_replayable_events_only": true,
+    "contains_raw_prompt_text": false,
+    "contains_private_source_excerpt": false,
+    "contains_local_path": false
+  },
+  "policy_boundary": {
+    "activation_weights_are_not_source_truth": true,
+    "default_route_weighting_unchanged": true,
+    "source_reopen_required_for_claims": true
+  },
+  "events": [
+    {
+      "route_id": "public-fixture:pathlet:reopen-success",
+      "route_kind": "pathlet",
+      "signal": "source_reopen_success",
+      "source_id": "public-fixture:source:expected-route",
+      "weight_delta": 1.0,
+      "reason": "source reopen reached expected public fixture source"
+    },
+    {
+      "route_id": "public-fixture:domain:blocked-route",
+      "route_kind": "continuity_domain",
+      "signal": "blocked",
+      "source_id": "public-fixture:source:blocked",
+      "weight_delta": -1.0,
+      "reason": "public fixture route is blocked before foreground use"
+    },
+    {
+      "route_id": "public-fixture:domain:blocked-route",
+      "route_kind": "continuity_domain",
+      "signal": "wrong_route_drag",
+      "source_id": "public-fixture:source:blocked",
+      "weight_delta": -1.0,
+      "reason": "public fixture route created avoidable route drag"
+    }
+  ]
+}

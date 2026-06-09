@@ -36,6 +36,10 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   extinction, superseded currentness, and source reopen before risky action
   without committing private clean-source text, local paths, or raw behavior
   traces.
+- `route_feedback/` contains the checked-in synthetic public-safe fixture for
+  #937/#950. It exercises positive source-reopen activation and negative
+  blocked/wrong-route demotion without changing default score weights or
+  storing private live telemetry.
 - `segmented_merge_policy/` contains the checked-in synthetic public-safe
   fixture for #375. It calibrates segmented-search merge behavior over
   source-ref-shaped hits without committing private thread text.

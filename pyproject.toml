@@ -337,6 +337,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/rollout_search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/scoring_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_cue_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_gate_response.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py",
