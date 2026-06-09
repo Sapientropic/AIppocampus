@@ -591,6 +591,81 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertFalse(diagnostic["cold_semantic_shadowed"])
         self.assertNotIn("private bridge alias", json.dumps(diagnostic, ensure_ascii=False))
 
+    def test_recall_channels_mark_fast_only_local_candidate(self) -> None:
+        result = decision.assess_prompt(
+            "还记得 NeonMemory 吗？",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        channels = result["recall_channels"]
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(channels["fast"]["status"], "hit")
+        self.assertEqual(channels["fast"]["candidate_count"], 1)
+        self.assertEqual(channels["fast"]["candidates"][0]["channel"], "fast")
+        self.assertEqual(channels["fast"]["candidates"][0]["thread_key"], "session:boundary")
+        self.assertIn("registry_overlap", channels["fast"]["candidates"][0]["reason_codes"])
+        self.assertEqual(channels["deep"]["status"], "skip")
+        self.assertEqual(channels["deep"]["candidate_count"], 0)
+
+    def test_recall_channels_show_deep_timeout_without_blocking_fast_candidate(self) -> None:
+        def semantic_timeout(*args, **kwargs) -> dict:
+            return {
+                "available": False,
+                "availability_reason": "semantic_worker_timeout",
+                "diagnostic": "semantic_provider_read_timeout",
+                "error_buckets": {"read_timeout": 1},
+            }
+
+        result = decision.assess_prompt(
+            "还记得 NeonMemory 吗？",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            semantic_gate_fn=semantic_timeout,
+            search_budget=0,
+        )
+
+        channels = result["recall_channels"]
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(channels["fast"]["status"], "hit")
+        self.assertEqual(channels["deep"]["status"], "timeout")
+        self.assertIn("semantic_gate_timeout", channels["deep"]["reason_codes"])
+        self.assertFalse(channels["deep"]["blocked_fast_channel"])
+        self.assertEqual(channels["deep"]["deadline"]["status"], "degraded")
+
+    def test_recall_channels_keep_source_free_deep_route_out_of_evidence(self) -> None:
+        def semantic_source_free_evidence(*args, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.94,
+                "intent": "source_recall",
+                "query_aliases": ["NeonMemory consent gate exact quote"],
+                "reasons": ["semantic route only"],
+            }
+
+        result = decision.assess_prompt(
+            "请找一下 NeonMemory consent gate exact quote 的原话",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            semantic_gate_fn=semantic_source_free_evidence,
+            search_budget=0,
+        )
+
+        channels = result["recall_channels"]
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["evidence"], [])
+        self.assertEqual(channels["fast"]["status"], "hit")
+        self.assertEqual(channels["deep"]["status"], "hit")
+        self.assertEqual(channels["deep"]["source_free_candidate_count"], 1)
+        self.assertFalse(channels["deep"]["source_free_evidence_promotion"])
+        self.assertIn("semantic_gate_source_free_route", channels["deep"]["reason_codes"])
+
     def test_semantic_evidence_with_local_candidate_becomes_source_required_route(self) -> None:
         clean_registry = self._write_clean_source_registry()
 
