@@ -129,6 +129,40 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
         self.assertEqual(result["path"], ".claude/skills/aippocampus/SKILL.md")
         self.assertTrue(all(result["markers"].values()))
 
+    def test_claude_probe_detects_failed_persistent_mcp_config(self) -> None:
+        proc_by_command = {
+            ("mcp", "list"): "aippocampus: python server - ✓ Connected",
+            (
+                "mcp",
+                "get",
+            ): "aippocampus:\n  Status: ✗ Failed to connect\n  Command: python",
+            ("--version",): "2.1.138 (Claude Code)",
+        }
+
+        def fake_run(args: list[str], **kwargs: object) -> object:
+            command = tuple(args[1:3]) if args[1:2] == ["mcp"] else tuple(args[1:2])
+
+            class Proc:
+                returncode = 0
+                stderr = ""
+                stdout = proc_by_command.get(command, "")
+
+            return Proc()
+
+        with (
+            patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="claude"),
+            patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+        ):
+            result = smoke_claude_code_mcp_host.run_claude_mcp_probe(call_tool=False)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "blocked_host_config")
+        self.assertFalse(result["host_config_ok"])
+        self.assertEqual(
+            result["host_config_status"]["reason"],
+            "claude_mcp_get_reported_failed_connection",
+        )
+
     def test_claude_tool_call_smoke_uses_strict_temp_config_and_redacts_output(self) -> None:
         calls: list[list[str]] = []
         configs: list[dict[str, object]] = []
@@ -319,6 +353,66 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
         self.assertEqual(result["status"], "tool_call_reachable")
         self.assertEqual(result["tool_call"]["status"], "called_memory_health")
         self.assertEqual(result["project_skill"]["status"], "present")
+
+    def test_claude_probe_runs_strict_tool_call_despite_persistent_config_blocker(self) -> None:
+        def fake_run(args: list[str], **kwargs: object) -> object:
+            command = tuple(args[1:3]) if args[1:2] == ["mcp"] else tuple(args[1:2])
+            if command == ("mcp", "list"):
+                stdout = "aippocampus: python server - ✓ Connected"
+            elif command == ("mcp", "get"):
+                stdout = "aippocampus:\n  Status: ✗ Failed to connect\n  Command: python"
+            elif command == ("--version",):
+                stdout = "2.1.138 (Claude Code)"
+            else:
+                stdout = "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "assistant",
+                                "message": {
+                                    "content": [
+                                        {
+                                            "type": "tool_use",
+                                            "id": "call_1",
+                                            "name": "mcp__aippocampus__memory_health",
+                                        }
+                                    ]
+                                },
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "user",
+                                "message": {
+                                    "content": [
+                                        {"type": "tool_result", "tool_use_id": "call_1"}
+                                    ]
+                                },
+                            }
+                        ),
+                    ]
+                )
+
+            class Proc:
+                returncode = 0
+                stderr = ""
+
+            proc = Proc()
+            proc.stdout = stdout
+            return proc
+
+        with (
+            patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="claude"),
+            patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+        ):
+            result = smoke_claude_code_mcp_host.run_claude_mcp_probe(call_tool=True)
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["host_config_ok"])
+        self.assertEqual(
+            result["status"], "tool_call_reachable_with_persistent_config_blocker"
+        )
+        self.assertEqual(result["tool_call"]["status"], "called_memory_health")
 
 
 if __name__ == "__main__":
