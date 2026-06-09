@@ -34,10 +34,10 @@ from aippocampus_runtime.core import (
     now_utc,
 )
 from aippocampus_runtime.recall.index_builder import make_sqlite
+from aippocampus_runtime.recall.query_policy import cjk_query_sidecar_terms
 from aippocampus_runtime.recall.retrieval import (
     fts_query,
     message_select_columns,
-    normalize_term,
     search_hybrid_index,
     split_query_terms,
     sqlite_has_table,
@@ -86,21 +86,6 @@ STRUCTURAL_NOISE_PREFIXES = (
     "System trigger. This message stays backstage",
     "This message stays backstage and is not visible",
 )
-
-CJK_QUERY_SIDE_CAR_STOP = {
-    "上次",
-    "之前",
-    "那个",
-    "这个",
-    "记忆",
-    "召回",
-    "继续",
-    "说过",
-    "说的",
-    "我们",
-    "一下",
-    "不要",
-}
 
 
 def sha1_text(value: str) -> str:
@@ -385,6 +370,20 @@ def public_cjk_fixture_messages() -> list[dict[str, Any]]:
             "final_answer",
             "轻量分词边车只作为候选评估，不默认开启。",
         ),
+        (
+            "cjk-compact-route",
+            60,
+            "user",
+            "",
+            "复开源头路线先确认源引用，再把结论写成有界证据。",
+        ),
+        (
+            "cjk-mixed-project-symbol",
+            70,
+            "assistant",
+            "final_answer",
+            "Graphify 中文路线要走 source reopen，不把图节点当事实。",
+        ),
     ]
     return [
         {
@@ -447,6 +446,22 @@ def public_cjk_fixture_cases() -> list[PublicCjkFixtureCase]:
             expected_line_end=50,
         ),
         PublicCjkFixtureCase(
+            case_id="compact-cjk-without-spaces",
+            case_type="compact_cjk_without_spaces",
+            query="复开源头路线有界证据",
+            expected_message_id="cjk-compact-route",
+            expected_line_start=60,
+            expected_line_end=60,
+        ),
+        PublicCjkFixtureCase(
+            case_id="mixed-english-project-symbol",
+            case_type="mixed_english_project_symbol",
+            query="Graphify 中文 source reopen",
+            expected_message_id="cjk-mixed-project-symbol",
+            expected_line_start=70,
+            expected_line_end=70,
+        ),
+        PublicCjkFixtureCase(
             case_id="generic-deictic-negative",
             case_type="negative_generic_cue",
             query="之前 那个 记忆",
@@ -454,32 +469,23 @@ def public_cjk_fixture_cases() -> list[PublicCjkFixtureCase]:
             expected_line_start=None,
             expected_line_end=None,
         ),
+        PublicCjkFixtureCase(
+            case_id="project-symbol-neighbor-negative",
+            case_type="negative_project_symbol_neighbor",
+            query="Rust 借用检查器",
+            expected_message_id=None,
+            expected_line_start=None,
+            expected_line_end=None,
+        ),
+        PublicCjkFixtureCase(
+            case_id="semantic-alias-gap-negative",
+            case_type="negative_semantic_alias_gap",
+            query="语义向量数据库",
+            expected_message_id=None,
+            expected_line_start=None,
+            expected_line_end=None,
+        ),
     ]
-
-
-def candidate_cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
-    """Benchmark-only CJK query sidecar candidate.
-
-    This deliberately stays outside the default retrieval path. The fixture uses
-    it to measure whether shorter CJK query chunks would help before promoting
-    any tokenizer or sidecar behavior to production.
-    """
-
-    terms: list[str] = []
-    for chunk in re.findall(r"[\u3400-\u9fff]{2,}", query):
-        normalized = chunk
-        for stop in CJK_QUERY_SIDE_CAR_STOP:
-            normalized = normalized.replace(stop, " ")
-        for part in re.split(r"[\s的了和与、，。；：！？,.!?/|+]+", normalized):
-            part = normalize_term(part)
-            if len(part) < 2:
-                continue
-            terms.append(part)
-            for n in (2, 3, 4):
-                if len(part) < n:
-                    continue
-                terms.extend(part[i : i + n] for i in range(0, len(part) - n + 1))
-    return unique_preserve(terms, limit=limit)
 
 
 def _public_cjk_mode_result(
@@ -506,7 +512,7 @@ def evaluate_public_cjk_case(
     candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
 ) -> dict[str, Any]:
     query_terms = split_query_terms([case.query])
-    sidecar_terms = candidate_cjk_query_sidecar_terms(case.query)
+    sidecar_terms = cjk_query_sidecar_terms(case.query)
     fts_hits, warnings = search_fts5_only(
         sqlite_path,
         query_terms,
@@ -535,7 +541,7 @@ def evaluate_public_cjk_case(
         context_radius=0,
         use_rag_chunks=True,
     )
-    candidate_sidecar_hits = search_hybrid_index(
+    cjk_aware_sidecar_hits = search_hybrid_index(
         sqlite_path,
         query_terms,
         unique_preserve(query_terms + sidecar_terms, limit=36),
@@ -551,7 +557,7 @@ def evaluate_public_cjk_case(
         "case_type": case.case_type,
         "expected_positive": case.is_positive(),
         "query_terms": query_terms,
-        "candidate_cjk_sidecar_terms": sidecar_terms,
+        "cjk_query_sidecar_terms": sidecar_terms,
         "expected": {
             "message_id": case.expected_message_id,
             "line_start": case.expected_line_start,
@@ -571,8 +577,8 @@ def evaluate_public_cjk_case(
             case,
             top_k=top_k,
         ),
-        "candidate_cjk_sidecar": _public_cjk_mode_result(
-            candidate_sidecar_hits,
+        "cjk_aware_sidecar": _public_cjk_mode_result(
+            cjk_aware_sidecar_hits,
             case,
             top_k=top_k,
         ),
@@ -584,7 +590,7 @@ def summarize_public_cjk_fixture(results: list[dict[str, Any]], *, top_k: int) -
         "fts5_trigram",
         "hybrid_without_rag_chunks",
         "production_hybrid",
-        "candidate_cjk_sidecar",
+        "cjk_aware_sidecar",
     )
     positives = [case for case in results if case["expected_positive"]]
     negatives = [case for case in results if not case["expected_positive"]]
@@ -651,15 +657,34 @@ def run_public_cjk_recall_fixture(
 
     metrics = summarize_public_cjk_fixture(results, top_k=top_k)
     production = metrics["production_hybrid"]
+    cjk_aware = metrics["cjk_aware_sidecar"]
+    negative_false_positive_count = sum(
+        int(metrics[mode]["negative_false_positive_count"])
+        for mode in (
+            "fts5_trigram",
+            "hybrid_without_rag_chunks",
+            "production_hybrid",
+            "cjk_aware_sidecar",
+        )
+    )
     ok = (
-        production[f"positive_hit_top{top_k}"] == metrics["positive_case_count"]
-        and production["negative_false_positive_count"] == 0
+        cjk_aware[f"positive_hit_top{top_k}"] == metrics["positive_case_count"]
+        and negative_false_positive_count == 0
+    )
+    production_gap_count = (
+        metrics["positive_case_count"] - production[f"positive_hit_top{top_k}"]
     )
     return {
         "schema_version": 1,
         "kind": "aippocampus_public_cjk_local_recall_fixture",
         "generated_at": now_utc(),
-        "status": "fixture_passed" if ok else "fixture_diagnostic",
+        "status": (
+            "expanded_fixture_passed_with_default_gap"
+            if ok and production_gap_count
+            else "fixture_passed"
+            if ok
+            else "fixture_diagnostic"
+        ),
         "ok": ok,
         "config": {
             "top_k": top_k,
@@ -678,10 +703,13 @@ def run_public_cjk_recall_fixture(
                 "default_component": True,
                 "description": "Current lexical-structural local retrieval with RAG-lite enabled.",
             },
-            "candidate_cjk_sidecar": {
+            "cjk_aware_sidecar": {
                 "default_component": False,
                 "measured_only": True,
-                "description": "Benchmark-only lightweight CJK query chunks; not default behavior.",
+                "description": (
+                    "Measured lightweight CJK query chunks over the local hybrid "
+                    "path; not semantic evidence or default scoring weight."
+                ),
             },
         },
         "privacy_boundary": {
@@ -690,16 +718,26 @@ def run_public_cjk_recall_fixture(
             "external_vector_db_required": False,
             "embedding_model_required": False,
         },
+        "default_gap": {
+            "production_positive_miss_count": production_gap_count,
+            "status": "measured_gap" if production_gap_count else "none",
+            "boundary": (
+                "The measured CJK-aware sidecar can recover compact CJK cues "
+                "that the current production hybrid does not yet return; this "
+                "is a follow-up signal, not a broad quality claim."
+            ),
+        },
         "metrics": metrics,
         "cases": results,
         "can_claim": [
-            "public_fixture_covers_exact_short_mixed_deictic_paraphrase_and_negative_cjk_cases",
+            "expanded_public_fixture_covers_exact_short_mixed_deictic_paraphrase_compact_and_negative_cjk_cases",
             "production_hybrid_fixture_hit_behavior_is_measured_for_this_case_pack",
-            "candidate_cjk_sidecar_is_measured_without_becoming_default",
+            "cjk_aware_sidecar_is_measured_without_becoming_source_truth",
         ],
         "cannot_claim": [
             "broad_chinese_recall_quality",
             "semantic_chinese_search_from_trigram_alone",
+            "production_hybrid_handles_all_compact_cjk_cues",
             "no_dense_vector_default_claim",
             "private_history_cjk_quality",
             "heavy_tokenizer_or_embedding_requirement",

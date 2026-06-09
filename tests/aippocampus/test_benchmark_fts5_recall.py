@@ -220,16 +220,29 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
                 "mixed_cjk_code",
                 "deictic_specific_cue",
                 "mild_paraphrase",
+                "compact_cjk_without_spaces",
+                "mixed_english_project_symbol",
                 "negative_generic_cue",
+                "negative_project_symbol_neighbor",
+                "negative_semantic_alias_gap",
             },
         )
-        self.assertEqual(payload["metrics"]["positive_case_count"], 5)
-        self.assertEqual(payload["metrics"]["negative_case_count"], 1)
-        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 5)
+        self.assertGreaterEqual(payload["metrics"]["case_count"], 10)
+        self.assertEqual(payload["metrics"]["positive_case_count"], 7)
+        self.assertEqual(payload["metrics"]["negative_case_count"], 3)
+        self.assertEqual(payload["status"], "expanded_fixture_passed_with_default_gap")
+        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 6)
         self.assertEqual(payload["metrics"]["production_hybrid"]["negative_false_positive_count"], 0)
+        self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["positive_hit_top5"], 7)
+        self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["negative_false_positive_count"], 0)
+        self.assertEqual(payload["default_gap"]["production_positive_miss_count"], 1)
         self.assertEqual(payload["privacy_boundary"]["source_text"], "public_synthetic_fixture")
         self.assertIn("no_dense_vector_default_claim", payload["cannot_claim"])
-        self.assertTrue(payload["comparison_modes"]["candidate_cjk_sidecar"]["measured_only"])
+        self.assertIn(
+            "production_hybrid_handles_all_compact_cjk_cues",
+            payload["cannot_claim"],
+        )
+        self.assertTrue(payload["comparison_modes"]["cjk_aware_sidecar"]["measured_only"])
 
     def test_public_cjk_fixture_cli_outputs_json_without_private_registry(self) -> None:
         stdout = StringIO()
