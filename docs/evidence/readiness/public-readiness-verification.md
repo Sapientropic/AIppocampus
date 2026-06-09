@@ -1182,9 +1182,23 @@ registered lower-bound rule.
   `lower_bound_passed=false`,
   `primary_endpoint_winner=fresh_context_spec_loop`, and
   `decision_label=no demonstrated memory advantage`.
-- This is public-safe negative evidence for the preregistered no-advantage
-  rule. It evaluates the lower-bound gate instead of leaving it as prose, but
-  it still does not claim full #378 continuous-memory superiority.
+- This is public-safe expected-null evidence for the preregistered no-advantage
+  rule. The public interpretation is `no demonstrated net advantage over
+  modeled fresh-context spec loop`: the true-memory arm still beats `no_memory`
+  and `sham_unrelated_memory` on success rate, but loses the primary endpoint
+  because the complete-spec reset loop is modeled as perfect, lower-cost, and
+  harm-free for this short task slice.
+- The five repeats are deterministic replicated lower-bound rows, not
+  independent empirical trials. A future repeat profile should either make
+  repeat seeds drive real perturbations or keep this deterministic label
+  prominent.
+- The boundary-oriented alias is
+  `boundary_confirmed.short_task_complete_spec_synthetic_2026_06_08`; the
+  historical metric id remains
+  `continuous_memory.preregistered_repeat_profile_2026_06_08` for source
+  continuity.
+- It evaluates the lower-bound gate instead of leaving it as prose, but it
+  still does not claim full #378 continuous-memory superiority.
 - Verification commands passed during this slice:
   `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms -v`
   and the repeat-profile command above. Broader PR-lane verification is tracked
@@ -1192,6 +1206,28 @@ registered lower-bound rule.
 - This does not claim live host-native cost or compaction telemetry, private
   real-history generality, cost-weight robust continuous-memory advantage,
   answer-generation model quality, or competitor superiority.
+
+## 2026-06-09 - Continuous-memory expected-null interpretation
+
+The #960 documentation rerun keeps the 2026-06-08 no-advantage decision
+unchanged while reclassifying the public reading as a short complete-spec
+boundary condition.
+
+- Command:
+  `python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --public-quality-repeat-profile --json --output .tmp\continuous-memory-repeat-profile-960-verify.json`.
+- The run again reported `runner_profile=public_synthetic_preregistered_repeat`,
+  `repeat_count_per_case_arm=5`, `row_count=180`,
+  `true_aippocampus_memory.success_rate=0.8333`,
+  `no_memory.success_rate=0.3333`,
+  `sham_unrelated_memory.success_rate=0.3333`,
+  `host_native_continuous_no_aippocampus.success_rate=0.6667`, and
+  `primary_endpoint_winner=fresh_context_spec_loop`.
+- Interpretation: the result remains negative for the registered net-value
+  endpoint, but it is not evidence that source-backed recall has no useful
+  lift. It shows no demonstrated net advantage over the modeled fresh-context
+  spec loop for a short complete-spec public-synthetic slice.
+- Follow-up product surfaces are route minimality, source-reopen fallback,
+  abstention usefulness, no-harm hint suppression, and cost/harm accounting.
 
 ## 2026-06-03 - First-recall onboarding receipt smoke
 

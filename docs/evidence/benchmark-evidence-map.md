@@ -6,7 +6,7 @@ numeric claim snapshot, command ledger, or runner priority registry.
 
 This is the first-stop map for AIppocampus benchmark evidence only after a
 reader knows what kind of evidence they need. Keep current numeric claims,
-negative-result remediation, and supersession rules in
+scope-boundary remediation, and supersession rules in
 [`docs/evidence/current-claims.md`](current-claims.md), stage-level can-claim /
 cannot-claim status in
 [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md), proof-slice maturity in
@@ -25,7 +25,7 @@ promotes a public-safe result into the official evidence flow.
 | Reader question | First stop | Then use |
 | --- | --- | --- |
 | What can AIppocampus currently claim, and what failed? | [`current-claims.md`](current-claims.md) | Open the source report only for the row you need. |
-| Which known benchmark result needs remediation? | [`current-claims.md#known-negative-results-and-remediation`](current-claims.md#known-negative-results-and-remediation) | Follow the linked issue before reading old dated reports. |
+| Which confirmed scope boundary or benchmark result needs remediation? | [`current-claims.md#confirmed-scope-boundaries-expected-null-results`](current-claims.md#confirmed-scope-boundaries-expected-null-results) | Follow the linked issue before reading old dated reports. |
 | Which `cannot_claim` caveats are testable, retired later, or durable? | [`current-claims.md#cannot-claim-owner-and-retirement-ledger`](current-claims.md#cannot-claim-owner-and-retirement-ledger) | Use the owner issue and retirement condition before changing public claims. |
 | Which benchmark or smoke should I run? | [`benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md) | Use the default run profile and cannot-claim column there. |
 | Which file owns a specific dated report or runner? | [`#evidence-ownership`](#evidence-ownership) and [`#benchmark-runners`](#benchmark-runners) | Treat this page as the maintainer directory. |
@@ -47,9 +47,9 @@ promotes a public-safe result into the official evidence flow.
 
 1. Need current benchmark/readiness numbers and supersession rules:
    [`current-claims.md`](current-claims.md).
-2. Need known negative results or remediation issues before reading dated
+2. Need confirmed scope boundaries or remediation issues before reading dated
    history:
-   [`current-claims.md#known-negative-results-and-remediation`](current-claims.md#known-negative-results-and-remediation).
+   [`current-claims.md#confirmed-scope-boundaries-expected-null-results`](current-claims.md#confirmed-scope-boundaries-expected-null-results).
 3. Need to know what the repo can honestly claim by stage:
    [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md).
 4. Need the dated commands and summarized results behind those claims:
