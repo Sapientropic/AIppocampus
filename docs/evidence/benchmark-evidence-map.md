@@ -26,6 +26,7 @@ promotes a public-safe result into the official evidence flow.
 | --- | --- | --- |
 | What can AIppocampus currently claim, and what failed? | [`current-claims.md`](current-claims.md) | Open the source report only for the row you need. |
 | Which known benchmark result needs remediation? | [`current-claims.md#known-negative-results-and-remediation`](current-claims.md#known-negative-results-and-remediation) | Follow the linked issue before reading old dated reports. |
+| Which `cannot_claim` caveats are testable, retired later, or durable? | [`current-claims.md#cannot-claim-owner-and-retirement-ledger`](current-claims.md#cannot-claim-owner-and-retirement-ledger) | Use the owner issue and retirement condition before changing public claims. |
 | Which benchmark or smoke should I run? | [`benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md) | Use the default run profile and cannot-claim column there. |
 | Which file owns a specific dated report or runner? | [`#evidence-ownership`](#evidence-ownership) and [`#benchmark-runners`](#benchmark-runners) | Treat this page as the maintainer directory. |
 | Where are historical reports? | [`benchmarks/`](benchmarks/) plus [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md) | Historical reports stay visible but do not set current claims by themselves. |
@@ -165,7 +166,7 @@ instead of deriving priority from this directory map.
 
 | Evidence type | Canonical owner | What belongs there |
 | --- | --- | --- |
-| Current numeric claim snapshot | `docs/evidence/current-claims.md` | Current metric values, dated cohorts, claim levels, supersession, and cannot-claim boundaries for numbers that are easy to over-read. |
+| Current numeric claim snapshot | `docs/evidence/current-claims.md` | Current metric values, dated cohorts, claim levels, supersession, actionable cannot-claim owner/retirement routes, and durable cannot-claim boundaries for numbers that are easy to over-read. |
 | Stage readiness boundary | `docs/evidence/readiness/stage-0-5-readiness.md` | Stage-level can-claim / cannot-claim status and missing proof. |
 | Dated command ledger | `docs/evidence/readiness/public-readiness-verification.md` | Summarized commands, dates, pass/fail interpretation, and scope notes. |
 | Benchmark design rationale | `docs/evidence/benchmarks/design/README.md` and `docs/evidence/benchmarks/design/benchmark-design-rationale.md` | Evaluation philosophy, track-family why, evidence-layer separation, and external-comparison boundaries. |

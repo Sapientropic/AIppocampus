@@ -1074,6 +1074,46 @@ class DocsHealthTests(unittest.TestCase):
         )
         self.assertIn("demo scenarios missing current claims snapshot pointer", issues)
 
+    def test_current_claims_guard_requires_actionable_owner_and_retirement(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            evidence = repo / "docs" / "evidence"
+            evidence.mkdir(parents=True)
+            (evidence / "current-claims.md").write_text(
+                "\n".join(
+                    [
+                        "# Current Evidence Claims",
+                        "## Current Claim Snapshot",
+                        "metric_id run_date source_report claim_level cohort supersedes cannot_claim",
+                        "semantic_sidecar.aggregate_materialized_rows",
+                        "semantic_sidecar.strict_survival_snapshot",
+                        "semantic_sidecar.source_review_green_gate",
+                        "semantic_sidecar.source_review_diagnostic",
+                        "track_b.private_semantic_sidecar_required",
+                        "fts5.real_history_recall_2026_05_29",
+                        "demo_scenarios.claim_boundaries",
+                        "## Cannot-Claim Owner And Retirement Ledger",
+                        "| Caveat | Category | Owner issue | Retirement condition | Next review |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| Claude Code hooks | actionable | - | - | before Beta readiness update |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.current_claims_snapshot_issues(repo)
+
+        self.assertIn(
+            "current claims actionable cannot-claim missing owner issue: Claude Code hooks",
+            issues,
+        )
+        self.assertIn(
+            "current claims actionable cannot-claim missing retirement condition: Claude Code hooks",
+            issues,
+        )
+
     def test_proof_slice_maturity_board_guard_covers_status_vocabulary(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         assert repo_root is not None
