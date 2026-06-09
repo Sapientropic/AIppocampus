@@ -274,6 +274,21 @@ smoke uses only stdlib plus checked-in public fixtures. Live/provider-backed
 tracks need explicit environment configuration and are not part of normal
 install verification.
 
+When changing provider ingestion, import formats, source refs, MCP/registry
+affordances, host hooks, or provider-facing docs, run the provider conformance
+kit:
+
+```sh
+python benchmarks/aippocampus/benchmark_provider_conformance.py --json
+```
+
+This kit uses public-safe fixtures plus real `generic-jsonl` and `claude-code`
+normalizer suites. Passing it supports the provider-normalized source contract,
+but it does not prove live host firing, all-client drop-in support,
+AgentMemory behavior, settings mutation, or real cross-host continuity quality.
+Treat ingestion, MCP/registry, hooks, and settings mutation as separate status
+surfaces.
+
 ### Remote macOS install smoke
 
 Maintainers can trigger the fresh-clone macOS install smoke from a Windows

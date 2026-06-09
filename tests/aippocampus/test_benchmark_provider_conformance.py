@@ -45,6 +45,14 @@ class ProviderConformanceBenchmarkTests(unittest.TestCase):
 
         self.assert_fixture_blocker(fixture, "missing_source_issue")
 
+    def test_validator_rejects_missing_parent_issue(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["source"]["parent_issue"] = (
+            "https://github.com/Sapientropic/AIppocampus/issues/988"
+        )
+
+        self.assert_fixture_blocker(fixture, "missing_parent_issue")
+
     def test_validator_rejects_insufficient_provider_surface(self) -> None:
         fixture = copy.deepcopy(benchmark.load_fixture())
         fixture["providers"] = fixture["providers"][:2]
@@ -87,7 +95,50 @@ class ProviderConformanceBenchmarkTests(unittest.TestCase):
             {"provider_conformance.mcp_missing_source_ref_affordance": 1},
         )
         self.assertIn("all_client_drop_in_support", payload["cannot_claim"])
+        self.assertNotIn("full_provider_conformance_kit", payload["cannot_claim"])
+        self.assertIn("Provider conformance kit v1", payload["claim_boundary"])
         self.assertFalse(payload["config"]["uses_live_provider"])
+
+    def test_provider_suites_run_generic_jsonl_and_claude_code_normalizers(self) -> None:
+        payload = benchmark.run_benchmark()
+        metrics = payload["metrics"]
+        suites = {row["provider"]: row for row in payload["provider_suites"]}
+
+        self.assertEqual(metrics["provider_suite_count"], 2)
+        self.assertEqual(metrics["provider_suite_pass_count"], 2)
+        self.assertEqual(set(suites), {"generic-jsonl", "claude-code"})
+        for provider, suite in suites.items():
+            self.assertTrue(suite["passed"], provider)
+            self.assertEqual(suite["surface_statuses"]["ingestion"], "supported")
+            self.assertIn("mcp", suite["surface_statuses"])
+            self.assertIn("hooks", suite["surface_statuses"])
+            self.assertIn("settings_mutation", suite["surface_statuses"])
+            self.assertEqual(suite["message_count"], 2)
+            self.assertEqual(suite["turn_count"], 1)
+            self.assertEqual(suite["source_ref_missing_count"], 0)
+            self.assertEqual(suite["forbidden_text_leak_count"], 0)
+            self.assertTrue(suite["thread_key_stable"])
+
+    def test_provider_failure_examples_cover_contract_risks(self) -> None:
+        payload = benchmark.run_benchmark()
+        examples = {row["risk"]: row for row in payload["provider_failure_examples"]}
+
+        self.assertLessEqual(
+            {
+                "orphan_assistant",
+                "unstable_session_id",
+                "injected_content_pollution",
+                "missing_source_reopen",
+                "secret_path_leakage",
+            },
+            set(examples),
+        )
+        self.assertEqual(examples["orphan_assistant"]["stable_error_code"], "orphan_assistant")
+        self.assertEqual(
+            examples["unstable_session_id"]["stable_error_code"],
+            "session_id_changed",
+        )
+        self.assertTrue(all(row["public_safe"] for row in examples.values()))
 
     def test_same_name_provider_sessions_do_not_conflate_route_identity(self) -> None:
         payload = benchmark.run_benchmark()
@@ -159,6 +210,8 @@ class ProviderConformanceBenchmarkTests(unittest.TestCase):
         self.assertNotIn("codex:session:codex-alpha-1:turn:1", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)
+        self.assertNotIn("sk-live-provider-suite", serialized)
+        self.assertNotIn("private-transcript", serialized)
 
 
 if __name__ == "__main__":

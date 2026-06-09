@@ -1,14 +1,15 @@
-# Provider Conformance Fixture Report
+# Provider Conformance Kit Report
 
-Status: implemented public-safe contract-smoke fixture for GitHub #988, as a
-child slice of the provider conformance kit in GitHub #981.
+Status: implemented public-safe provider conformance kit v1 for GitHub #981,
+retaining the GitHub #988 synthetic acceptance cases.
 
-This report records the narrow evidence boundary for
+This report records the evidence boundary for
 `benchmarks/aippocampus/benchmark_provider_conformance.py`. The runner uses the
-checked-in synthetic fixture at
-`benchmark_corpus/provider_conformance/fixture.json` to exercise provider /
-session identity, cross-provider source-reopen routes, copied-summary
-downgrades, injected host content demotion, and MCP drop-in metadata shape.
+checked-in fixture at `benchmark_corpus/provider_conformance/fixture.json` to
+exercise provider/session identity, cross-provider source-reopen routes,
+copied-summary downgrades, injected host content demotion, MCP drop-in metadata
+shape, real normalizer ingestion for `generic-jsonl` and `claude-code`, and
+sanitized provider failure examples.
 
 It is not a live Claude Code, Codex, Cursor, Gemini CLI, or AgentMemory
 compatibility result.
@@ -22,6 +23,15 @@ compatibility result.
 - host system/tool content demoted below durable user memory
 - MCP output with source-ref/reopen affordance contrasted with a blob-only
   payload
+- real `generic-jsonl` normalization of user/final assistant rows, including
+  stable session/thread identity and actionable malformed-row diagnostics
+- real `claude-code` normalization of visible user/final assistant rows while
+  ignoring summary/system-like rows
+- explicit surface-status separation for ingestion, MCP/registry access, host
+  hooks, and configuration-mutating installers
+- public-safe failure examples for orphan assistant rows, unstable sessions,
+  injected-content pollution, missing source-reopen affordance, and secret/path
+  leakage
 
 The blob-only MCP case is expected to emit
 `provider_conformance.mcp_missing_source_ref_affordance`; this is a provider
@@ -38,9 +48,13 @@ The report exposes sanitized aggregate counters:
 - `mcp_evidence_drawer_ready_count`
 - `same_name_conflation_failure_count`
 - `failure_code_counts`
+- `provider_suite_count`
+- `provider_suite_pass_count`
+- `provider_failure_example_count`
+- `provider_failure_example_pass_count`
 
-Default output omits raw provider logs, raw memory blob text, source-ref
-values, absolute paths, and secret values.
+Default output omits raw provider rows, raw provider logs, raw memory blob text,
+source-ref values, absolute paths, and secret values.
 
 ## Command
 
@@ -62,6 +76,7 @@ python -m unittest tests.aippocampus.test_benchmark_provider_conformance
 - live provider adapter quality
 - all-client drop-in support
 - AgentMemory behavior
-- the full provider conformance kit
 - real cross-host continuity quality
 - MCP memory blobs as source truth
+- that ingestion support implies host hooks or settings mutation
+- that scoped hook smoke implies persistent MCP or real-host firing

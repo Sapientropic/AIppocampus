@@ -218,11 +218,164 @@
       ]
     }
   ],
+  "provider_suites": [
+    {
+      "suite_id": "generic-jsonl-visible-message-contract",
+      "provider": "generic-jsonl",
+      "surface_statuses": {
+        "ingestion": "supported",
+        "mcp": "clean_source_registry_supported",
+        "hooks": "not_applicable",
+        "settings_mutation": "not_applicable"
+      },
+      "rows": [
+        {
+          "session_id": "generic-suite-1",
+          "role": "system",
+          "text": "Injected host note with sk-live-provider-suite and C:\\private-transcript\\secret.txt",
+          "turn_id": "system"
+        },
+        {
+          "session_id": "generic-suite-1",
+          "role": "user",
+          "text": "Remember the public-safe blue notebook preference.",
+          "turn_id": "t1",
+          "timestamp": "2026-06-09T00:00:00Z",
+          "provider_metadata": {"provider": "generic-jsonl"}
+        },
+        {
+          "session_id": "generic-suite-1",
+          "role": "assistant",
+          "text": "Final answer preserved for the blue notebook preference.",
+          "turn_id": "t1",
+          "phase": "final_answer",
+          "timestamp": "2026-06-09T00:00:01Z",
+          "provider_metadata": {"provider": "generic-jsonl"}
+        }
+      ],
+      "expected": {
+        "message_count": 2,
+        "turn_count": 1,
+        "thread_key_prefix": "generic-jsonl:session:generic-suite-1",
+        "source_ref_prefix": "generic-jsonl:session:generic-suite-1#L",
+        "visible_text_contains": [
+          "Remember the public-safe blue notebook preference.",
+          "Final answer preserved for the blue notebook preference."
+        ],
+        "forbidden_text_absent": ["sk-live-provider-suite", "private-transcript"]
+      }
+    },
+    {
+      "suite_id": "claude-code-visible-message-contract",
+      "provider": "claude-code",
+      "surface_statuses": {
+        "ingestion": "supported",
+        "mcp": "clean_source_registry_supported",
+        "hooks": "scoped_status_smoke_only",
+        "settings_mutation": "not_supported"
+      },
+      "rows": [
+        {
+          "type": "summary",
+          "sessionId": "claude-suite-1",
+          "timestamp": "2026-06-09T00:00:00Z",
+          "cwd": "E:\\public-safe\\workspace",
+          "summary": "Injected summary with sk-live-provider-suite and C:\\private-transcript\\secret.txt"
+        },
+        {
+          "type": "user",
+          "sessionId": "claude-suite-1",
+          "timestamp": "2026-06-09T00:00:01Z",
+          "cwd": "E:\\public-safe\\workspace",
+          "uuid": "u1",
+          "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": "Claude visible user request survives."}]
+          }
+        },
+        {
+          "type": "assistant",
+          "sessionId": "claude-suite-1",
+          "timestamp": "2026-06-09T00:00:02Z",
+          "cwd": "E:\\public-safe\\workspace",
+          "uuid": "a1",
+          "parentUuid": "u1",
+          "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Claude final answer survives."}]
+          }
+        }
+      ],
+      "expected": {
+        "message_count": 2,
+        "turn_count": 1,
+        "thread_key_prefix": "claude-code:session:claude-suite-1",
+        "source_ref_prefix": "claude-code:session:claude-suite-1#L",
+        "visible_text_contains": [
+          "Claude visible user request survives.",
+          "Claude final answer survives."
+        ],
+        "forbidden_text_absent": ["sk-live-provider-suite", "private-transcript"]
+      }
+    }
+  ],
+  "provider_failure_examples": [
+    {
+      "risk": "orphan_assistant",
+      "provider": "generic-jsonl",
+      "surface": "ingestion",
+      "expected_error_code": "orphan_assistant",
+      "rows": [
+        {
+          "session_id": "generic-failure-orphan",
+          "role": "assistant",
+          "text": "Assistant-only rows must not become clean source."
+        }
+      ]
+    },
+    {
+      "risk": "unstable_session_id",
+      "provider": "generic-jsonl",
+      "surface": "ingestion",
+      "expected_error_code": "session_id_changed",
+      "rows": [
+        {
+          "session_id": "generic-failure-a",
+          "role": "user",
+          "text": "First session id.",
+          "turn_id": "t1"
+        },
+        {
+          "session_id": "generic-failure-b",
+          "role": "user",
+          "text": "Second session id should fail.",
+          "turn_id": "t2"
+        }
+      ]
+    },
+    {
+      "risk": "injected_content_pollution",
+      "provider": "provider-neutral",
+      "surface": "ingestion",
+      "expected_error_code": "provider_conformance.injected_content_pollution"
+    },
+    {
+      "risk": "missing_source_reopen",
+      "provider": "provider-neutral",
+      "surface": "mcp",
+      "expected_error_code": "provider_conformance.cross_provider_route_without_reopenable_source"
+    },
+    {
+      "risk": "secret_path_leakage",
+      "provider": "provider-neutral",
+      "surface": "reporting",
+      "expected_error_code": "provider_conformance.secret_path_leakage"
+    }
+  ],
   "cannot_claim": [
     "live_provider_adapter_quality",
     "all_client_drop_in_support",
     "agentmemory_behavior",
-    "full_provider_conformance_kit",
     "real_cross_host_continuity_quality",
     "mcp_blob_as_source_truth"
   ]

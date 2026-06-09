@@ -464,6 +464,11 @@ rows are migrated to the longer SHA-256 `st_...` form.
 The provider-aware `aippocampus_runtime.onboarding.facade` wrapper refreshes that sidecar during
 onboarding so a fresh registry has the data path before the foreground hook
 needs it.
+Provider-facing ingestion or source-ref changes should run the provider
+conformance kit in `benchmarks/aippocampus/benchmark_provider_conformance.py`;
+the public contract and evidence boundary live in
+`docs/guides/public-api.md` and
+`docs/evidence/benchmarks/provider-conformance-fixture-report.md`.
 
 `aippocampus_runtime.navigation.project_timeline` writes `project_timeline.json`. The `projects`
 section keeps the older project-scoped recent-turn view used by hooks and
