@@ -1,7 +1,8 @@
 # Hippocampal Hard-Negative Fixture Report
 
 Status: implemented public-safe production-like synthetic diagnostic for
-GitHub #244 and #1041, with contract controls kept visible.
+GitHub #244 and #1041, with contract controls kept visible. A separate
+LoCoMo-derived public-dialogue cohort mode now exists for GitHub #1056.
 
 This report records the narrow evidence boundary for
 `benchmarks/aippocampus/benchmark_hippocampal_hard_negatives.py`. The runner
@@ -87,10 +88,48 @@ beyond the original 4-case frozen contract smoke because it covers every family
 with multiple cases and reports source-reopen behavior, but it is still not a
 live model, semantic retriever, or private-history quality measurement.
 
+## 2026-06-09 Public-Dialogue-Derived Cohort
+
+Command after placing the ignored LoCoMo file at
+`benchmark_corpus/locomo/locomo10.json`:
+
+```powershell
+python benchmarks\aippocampus\benchmark_hippocampal_hard_negatives.py --cohort public-dialogue-derived --public-dialogue-max-samples 1 --public-dialogue-max-cases 12 --json
+```
+
+Result:
+
+| Metric | Value |
+| --- | ---: |
+| Source family | LoCoMo |
+| Raw dataset policy | ignored / external |
+| Derived cases | 12 |
+| Near-neighbor cases | 4 |
+| Said-but-unsupported cases | 4 |
+| Surface-paraphrase cases | 4 |
+| Superseded-currentness cases | 0 |
+| Major failure count | 0 |
+| Wrong-source evidence count | 0 |
+| Unsupported-as-fact count | 0 |
+| Evidence source-reopen rate | 1.000 |
+
+This is a public-dialogue source-id cohort and scorer/reporting path, not a
+live retrieval result. The default report emits case ids, query hashes, source
+ref hashes, family counts, unsupported-family reasons, and an external
+prediction field contract. It does not emit raw LoCoMo dialogue, question, or
+answer text.
+
+The `superseded_currentness_trap` family is intentionally unsupported for this
+LoCoMo slice: chronological dialogue order alone is not reliable evidence that
+an older preference, plan, or answer has been superseded. Public datasets with
+explicit correction/update labels can add that family later; until then, the
+runner reports the gap instead of fabricating currentness labels.
+
 ## Command
 
 ```powershell
 python benchmarks\aippocampus\benchmark_hippocampal_hard_negatives.py --json
+python benchmarks\aippocampus\benchmark_hippocampal_hard_negatives.py --cohort public-dialogue-derived --public-dialogue-max-samples 1 --public-dialogue-max-cases 12 --json
 python -m unittest tests.aippocampus.test_benchmark_hippocampal_hard_negatives
 ```
 
@@ -98,6 +137,8 @@ python -m unittest tests.aippocampus.test_benchmark_hippocampal_hard_negatives
 
 - Runner: `benchmarks/aippocampus/benchmark_hippocampal_hard_negatives.py`
 - Fixture: `benchmark_corpus/hippocampal_hard_negatives/fixture.json`
+- Public dialogue input policy: `benchmark_corpus/locomo/locomo10.json`
+  remains ignored / external under the LoCoMo license.
 - Mirror tests:
   `tests/aippocampus/test_benchmark_hippocampal_hard_negatives.py`
 - Methodology owner:
@@ -110,3 +151,5 @@ python -m unittest tests.aippocampus.test_benchmark_hippocampal_hard_negatives
 - the full 50-scene / 350-case hippocampal P1 matrix
 - cross-system benchmark superiority
 - broad production reliability outside the 12-case public synthetic slice
+- public currentness/supersession quality for LoCoMo families that lack
+  explicit correction/update labels

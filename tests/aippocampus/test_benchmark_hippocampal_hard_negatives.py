@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,44 @@ import benchmark_hippocampal_hard_negatives as benchmark  # noqa: E402
 
 
 class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
+    def _write_locomo_smoke_dataset(self, directory: Path) -> Path:
+        dataset_path = directory / "locomo-smoke.json"
+        payload = [
+            {
+                "sample_id": "conv-public-smoke",
+                "conversation": {
+                    "session_1_date_time": "2026-01-01",
+                    "session_1": [
+                        {
+                            "dia_id": "D1:1",
+                            "speaker": "speaker_a",
+                            "text": "The user chose the source-backed route after checking the audit packet.",
+                        },
+                        {
+                            "dia_id": "D1:2",
+                            "speaker": "speaker_b",
+                            "text": "A nearby note mentions the same audit packet but does not choose it.",
+                        },
+                        {
+                            "dia_id": "D1:3",
+                            "speaker": "speaker_a",
+                            "text": "The source-backed route phrase appears again as a distracting paraphrase.",
+                        },
+                    ],
+                },
+                "qa": [
+                    {
+                        "question": "Which route did the user choose after checking the audit packet?",
+                        "answer": "The source-backed route.",
+                        "category": "1",
+                        "evidence": ["D1:1"],
+                    }
+                ],
+            }
+        ]
+        dataset_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return dataset_path
+
     def test_fixture_contract_covers_all_hard_negative_families(self) -> None:
         fixture = benchmark.load_fixture()
         validation = benchmark.validate_fixture(fixture)
@@ -170,6 +209,53 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["raw_query_text_emitted"])
         self.assertIn("production-like synthetic", serialized)
         self.assertIn("cannot claim real-history H1/H2 quality", serialized)
+        self.assertNotIn("E:\\", serialized)
+        self.assertNotIn("C:\\", serialized)
+
+    def test_public_dialogue_cohort_derives_source_safe_cases_from_locomo_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_path = self._write_locomo_smoke_dataset(Path(tmp))
+
+            payload = benchmark.run_benchmark(
+                cohort="public-dialogue-derived",
+                public_dialogue_dataset_path=dataset_path,
+                public_dialogue_max_samples=1,
+                public_dialogue_max_cases=10,
+            )
+
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "public_dialogue_derived_cohort")
+        self.assertEqual(payload["config"]["cohort"], "public_dialogue_derived")
+        self.assertEqual(payload["dataset"]["source_family"], "LoCoMo")
+        self.assertEqual(payload["metrics"]["case_count"], 3)
+        self.assertEqual(payload["metrics"]["major_failure_count"], 0)
+        self.assertEqual(payload["metrics"]["wrong_source_evidence_count"], 0)
+        self.assertEqual(payload["metrics"]["unsupported_as_fact_count"], 0)
+        self.assertEqual(
+            payload["metrics"]["family_counts"],
+            {
+                "near_neighbor_lure": 1,
+                "said_but_unsupported": 1,
+                "superseded_currentness_trap": 0,
+                "surface_paraphrase_lure": 1,
+            },
+        )
+        self.assertEqual(
+            payload["unsupported_families"]["superseded_currentness_trap"]["reason"],
+            "locomo_has_dialogue_order_but_no_reliable_supersession_labels",
+        )
+        self.assertEqual(
+            payload["external_prediction_template"]["fields"],
+            ["case_id", "decision", "evidence_refs", "scent_refs", "source_reopened"],
+        )
+        self.assertFalse(payload["privacy_boundary"]["raw_dialogue_text_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["raw_question_text_emitted"])
+        self.assertIn("public_dialogue_derived", serialized)
+        self.assertIn("source_ref_hashes_only", serialized)
+        self.assertNotIn("source-backed route", serialized)
+        self.assertNotIn("audit packet", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)
 

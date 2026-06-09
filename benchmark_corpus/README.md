@@ -273,6 +273,21 @@ long-dialogue retrieval control, not as proof of cross-conversation user memory;
 keep temporal override, project contamination, coding tacit-constraint, and
 rejected-route claims on the VCS / rollout hard-event track.
 
+Build the H1/H2 public-dialogue hard-negative cohort from the same ignored
+LoCoMo file:
+
+```powershell
+python benchmarks\aippocampus\benchmark_hippocampal_hard_negatives.py --cohort public-dialogue-derived --public-dialogue-max-samples 1 --public-dialogue-max-cases 12 --json
+```
+
+This mode derives source-id hard-negative cases from LoCoMo QA evidence ids and
+keeps the synthetic hard-negative fixture as a separate cohort. Reports are
+sanitized by default: raw dialogue, question, and answer text are omitted; case
+ids, query hashes, source-ref hashes, family counts, unsupported-family
+reasons, and the external prediction field shape remain visible. LoCoMo does
+not provide reliable supersession/currentness labels for this purpose, so that
+family is reported as unsupported rather than forced into a weak label.
+
 Run the #400 LoCoMo answer-usefulness prototype after a system has produced
 answers from a bounded local case pack:
 
