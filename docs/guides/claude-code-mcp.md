@@ -154,6 +154,15 @@ shows the `UserPromptSubmit` and `Stop` handler shape that an operator could add
 to Claude settings after explicit local approval, but it does not write
 `~/.claude/settings.json`, project settings, or local settings.
 
+The dry-run output also validates whether the displayed handler command is
+copy-paste ready in the current environment. It prefers
+`aippocampus hooks claude-code handle` when the console script is on `PATH`; if
+the console script is missing but a Python module entrypoint is available, it
+shows a `python3 -m aippocampus_runtime.cli.facade hooks claude-code handle`
+style fallback instead. If neither command can be resolved without exposing
+local executable paths, dry-run reports that operator `PATH` setup is still
+required before copying handlers.
+
 The scoped handler is fail-open and privacy-first:
 
 - `UserPromptSubmit` can stay silent or emit bounded context without logging raw
