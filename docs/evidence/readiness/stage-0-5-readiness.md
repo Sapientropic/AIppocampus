@@ -104,13 +104,16 @@ the readiness evidence boundary.
   empty-evidence sidecar candidates, inspected clean source through a tool, and
   recovered 3 labels from the then-available 8 suppressed cases / 11
   candidate labels through the unchanged strict materializer
-  (`strict_gate_relaxed=false`). The 2026-05-30 broader 96-case source-review run
-  is diagnostic rather than a green gate: it selected enough cases and kept
-  every reviewed label category above the 0.65 per-label floor, but a live model
-  partial failure kept the run at `claim_level=diagnostic_only`. The smoke now
-  reports per-label selection floors plus accepted / rejected / human-review /
-  model-failure buckets so the old 5-row strict-survival evidence cannot be
-  mistaken for global Stage 2 correctness. The semantic real-history smoke also
+  (`strict_gate_relaxed=false`). The 2026-06-09 broader 96-case source-review
+  rerun resolves the earlier operational partial failure: it reviewed 96 cases,
+  passed 88, and reported `failure_count=0` with an empty failure taxonomy. The
+  same rerun is still broader diagnostic evidence, not the named 24-case green
+  gate, because eight reviewer outcomes were rejected or human-review cases and
+  `preference` fell below the 0.65 per-label floor. The smoke now reports a
+  failure taxonomy, a checked-in public shadow cohort, per-label selection
+  floors, and accepted / rejected / human-review / model-failure buckets so the
+  old 5-row strict-survival evidence cannot be mistaken for global Stage 2
+  correctness. The semantic real-history smoke also
   emits an aggregate-only `semantic_evidence_diagnostics` funnel
   (`selected_candidate_count -> finding_count -> materialized_row_count`),
   all-canonical-label zero counts, and observable materialization reason
@@ -249,9 +252,12 @@ above. The canonical command details live in
 `docs/evidence/readiness/public-readiness-verification.md`.
 
 - #55 adds a 24-case live source-review pass for the selected strict semantic
-  sidecar slice as of the 2026-05-30 run and records a broader 96-case diagnostic live run with strong
-  semantic pass-rate but one live model partial failure. Treat the broader run
-  as diagnostic, not as a green gate.
+  sidecar slice as of the 2026-05-30 run. #993 keeps that 24-case row as the
+  named green gate and updates the broader 96-case diagnostic with a clean
+  2026-06-09 operational rerun: 88/96 passed, `pass_rate=0.9167`,
+  `failure_count=0`, and `failed_label_categories=["preference"]`. Treat the
+  broader run as diagnostic label-quality evidence, not as human review, a
+  green gate, or global semantic correctness.
 - #55 also refreshes selected retrieval evidence across all eight canonical
   labels. That is selected retrieval/ranking quality evidence, not proof of
   full-history semantic completeness or global label correctness.

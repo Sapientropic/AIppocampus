@@ -46,6 +46,31 @@ from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
 from claim_boundary_refs import claim_boundary_ref
 
 PROMPT_KIND = "semantic_scope_label_source_review"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PUBLIC_SHADOW_REGISTRY = (
+    REPO_ROOT
+    / "tests"
+    / "fixtures"
+    / "semantic_scope_source_review_shadow"
+    / "registry"
+    / "threads.json"
+)
+PUBLIC_SHADOW_REQUIREMENT_KEYS = [
+    "source_open_positive",
+    "stale_or_superseded_source",
+    "unsupported_semantic_sidecar",
+    "multilingual_paraphrase",
+]
+REVIEW_FAILURE_CLASSES = [
+    "timeout",
+    "provider_transport_error",
+    "provider_response_shape",
+    "retry_exhaustion",
+    "prompt_context_issue",
+    "source_open_issue",
+    "report_aggregation_bug",
+    "unexpected_exception",
+]
 
 
 def evidence_hash(*values: Any) -> str:
@@ -102,6 +127,10 @@ def selected_review_cases(
                         "labels": [label],
                         "label_evidence": {label: evidence_by_label.get(label) or {}},
                         "confidence": confidence,
+                        "expected_review_outcome": row.get(
+                            "expected_review_outcome", "supported"
+                        ),
+                        "public_shadow_case": row.get("public_shadow_case"),
                         "text": compact_text(str(message.get("text") or ""), 1200),
                     }
                 )
@@ -193,6 +222,8 @@ def review_messages(case: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def parse_review_response(response: dict[str, Any], labels: list[str]) -> dict[str, Any]:
+    if not response.get("choices"):
+        raise ValueError("empty reviewer choices")
     parsed = json.loads(response_content(response))
     return parse_review_payload(parsed if isinstance(parsed, dict) else {}, labels)
 
@@ -242,6 +273,97 @@ def final_review_payload(action: dict[str, Any]) -> dict[str, Any]:
     return action
 
 
+def expected_review_outcome(case: dict[str, Any]) -> str:
+    value = str(case.get("expected_review_outcome") or "supported").strip().casefold()
+    if value in {"human_review", "needs_human_review"}:
+        return "needs_human_review"
+    return value if value in {"supported", "unsupported"} else "supported"
+
+
+def review_passed(case: dict[str, Any], review: dict[str, Any], min_review_confidence: float) -> bool:
+    labels = [label for label in case.get("labels") or [] if label in SCOPE_LABEL_ORDER]
+    unsupported = set(review.get("unsupported_labels") or [])
+    confidence_ok = float(review["confidence"]) >= min_review_confidence
+    outcome = expected_review_outcome(case)
+    if outcome == "unsupported":
+        return bool(labels) and all(label in unsupported for label in labels)
+    if outcome == "needs_human_review":
+        return bool(labels) and (
+            bool(review["needs_human_review"]) or all(label in unsupported for label in labels)
+        )
+    if review["needs_human_review"]:
+        return False
+    return confidence_ok and not unsupported
+
+
+def classify_review_failure(
+    exc: BaseException, *, retry_exhausted: bool = False
+) -> dict[str, Any]:
+    exception_type = type(exc).__name__
+    text = f"{exception_type} {exc}".casefold()
+    if isinstance(exc, TimeoutError) or "timeout" in text or "timed out" in text:
+        failure_class = "timeout"
+        failure_stage = "reviewer_call"
+    elif any(token in text for token in ("context length", "maximum context", "prompt too long", "prompt_context", "token limit", "payload too large")):
+        failure_class = "prompt_context_issue"
+        failure_stage = "prompt_context"
+    elif any(token in text for token in ("source_open", "source-open", "clean source", "source ref", "source_refs", "inspect_review_case", "source lookup", "source reopen")):
+        failure_class = "source_open_issue"
+        failure_stage = "source_open"
+    elif any(token in text for token in ("aggregation", "aggregate", "review_buckets", "failure_taxonomy", "per_label", "report row", "summary report")):
+        failure_class = "report_aggregation_bug"
+        failure_stage = "report_aggregation"
+    elif any(token in text for token in ("connection", "transport", "http", "ssl", "rate limit")):
+        failure_class = "provider_transport_error"
+        failure_stage = "reviewer_call"
+    elif isinstance(exc, (json.JSONDecodeError, ValueError, KeyError, IndexError, TypeError, AttributeError)):
+        failure_class = "provider_response_shape"
+        failure_stage = "reviewer_response_parse"
+    else:
+        failure_class = "unexpected_exception"
+        failure_stage = "reviewer_call_or_parse"
+    failure_classes = [failure_class]
+    if retry_exhausted:
+        failure_classes.append("retry_exhaustion")
+    return {
+        "failure_class": failure_class,
+        "failure_classes": failure_classes,
+        "exception_type": exception_type,
+        "failure_stage": failure_stage,
+    }
+
+
+def failure_taxonomy(review_results: list[dict[str, Any]]) -> dict[str, Any]:
+    by_class: dict[str, int] = {}
+    by_exception_type: dict[str, int] = {}
+    retry_exhausted_count = 0
+    failure_count = 0
+    for item in review_results:
+        failure_class = item.get("failure_class")
+        if not failure_class:
+            continue
+        failure_count += 1
+        classes = [str(value) for value in item.get("failure_classes") or [failure_class]]
+        for key in classes:
+            by_class[key] = by_class.get(key, 0) + 1
+        exception_type = str(item.get("exception_type") or "unknown")
+        by_exception_type[exception_type] = by_exception_type.get(exception_type, 0) + 1
+        if item.get("retry_exhausted"):
+            retry_exhausted_count += 1
+    return {
+        "known_classes": REVIEW_FAILURE_CLASSES,
+        "by_class": dict(sorted(by_class.items())),
+        "by_exception_type": dict(sorted(by_exception_type.items())),
+        "retry_exhausted_count": retry_exhausted_count,
+        "failure_count": failure_count,
+    }
+
+
+def public_shadow_requirements(cases: list[dict[str, Any]]) -> dict[str, bool]:
+    present = {str(case.get("public_shadow_case") or "") for case in cases}
+    return {key: key in present for key in PUBLIC_SHADOW_REQUIREMENT_KEYS}
+
+
 def review_case(
     case: dict[str, Any],
     *,
@@ -258,7 +380,10 @@ def review_case(
     attempts = max(1, int(max_attempts))
     last_error: BaseException | None = None
     response: dict[str, Any] | None = None
-    for _attempt in range(attempts):
+    review: dict[str, Any] | None = None
+    attempt_count = 0
+    for attempt_index in range(1, attempts + 1):
+        attempt_count = attempt_index
         try:
             response = chat_fn(
                 sanitize_external_model_payload(review_messages(case)),
@@ -269,30 +394,27 @@ def review_case(
                 timeout,
                 temperature,
             )
+            review = parse_review_response(response, list(case.get("labels") or []))
             break
         except Exception as exc:
             last_error = exc
-    if response is None:
+    if response is None or review is None:
         if last_error:
             raise last_error
         raise RuntimeError("reviewer returned no response")
-    review = parse_review_response(response, list(case.get("labels") or []))
     usage = compact_usage(response.get("usage") or {})
-    passed = (
-        not review["unsupported_labels"]
-        and not review["needs_human_review"]
-        and float(review["confidence"]) >= min_review_confidence
-    )
+    passed = review_passed(case, review, min_review_confidence)
     return {
         "case_id": case.get("case_id"),
         "prompt_kind": PROMPT_KIND,
+        "expected_review_outcome": expected_review_outcome(case),
         "labels": case.get("labels") or [],
         "passed": bool(passed),
         "supported_label_count": len(review["supported_labels"]),
         "unsupported_label_count": len(review["unsupported_labels"]),
         "needs_human_review": review["needs_human_review"],
         "review_confidence": round(float(review["confidence"]), 4),
-        "attempt_count": attempts if last_error else 1,
+        "attempt_count": attempt_count,
         "usage": usage,
         "cache": deepseek_cache_metrics_from_usage(usage),
     }
@@ -422,15 +544,12 @@ def review_case_agentic(
             "confidence": 0.0,
             "needs_human_review": True,
         }
-    passed = (
-        not review["unsupported_labels"]
-        and not review["needs_human_review"]
-        and float(review["confidence"]) >= min_review_confidence
-    )
+    passed = review_passed(case, review, min_review_confidence)
     return {
         "case_id": case.get("case_id"),
         "prompt_kind": PROMPT_KIND,
         "review_mode": "agentic",
+        "expected_review_outcome": expected_review_outcome(case),
         "labels": case.get("labels") or [],
         "passed": bool(passed),
         "supported_label_count": len(review["supported_labels"]),
@@ -482,11 +601,27 @@ def review_buckets(
     review_results: list[dict[str, Any]], *, selected_case_count: int
 ) -> dict[str, int]:
     accepted = sum(1 for item in review_results if item.get("passed"))
-    model_failure = sum(1 for item in review_results if item.get("error"))
+    model_failure = sum(
+        1 for item in review_results if item.get("error") or item.get("failure_class")
+    )
     ambiguous_or_human_review = sum(
         1
         for item in review_results
-        if not item.get("passed") and not item.get("error") and item.get("needs_human_review")
+        if not item.get("passed")
+        and not item.get("error")
+        and not item.get("failure_class")
+        and item.get("needs_human_review")
+    )
+    expected_supported = sum(
+        1 for item in review_results if item.get("expected_review_outcome") == "supported"
+    )
+    expected_unsupported = sum(
+        1 for item in review_results if item.get("expected_review_outcome") == "unsupported"
+    )
+    expected_human_review = sum(
+        1
+        for item in review_results
+        if item.get("expected_review_outcome") == "needs_human_review"
     )
     rejected = max(0, len(review_results) - accepted - ambiguous_or_human_review - model_failure)
     return {
@@ -496,6 +631,9 @@ def review_buckets(
         "model_failure": model_failure,
         "needs_human_review": ambiguous_or_human_review,
         "unreviewed": max(0, int(selected_case_count) - len(review_results)),
+        "expected_supported": expected_supported,
+        "expected_unsupported": expected_unsupported,
+        "expected_human_review": expected_human_review,
     }
 
 
@@ -531,7 +669,23 @@ def failed_label_categories(
     ]
 
 
-def cannot_claim(status: str, *, live: bool) -> list[str]:
+def source_review_claim_level(
+    *,
+    public_shadow: bool,
+    status: str,
+    failures: int,
+    case_count: int,
+) -> str:
+    if status != "sufficient" or failures > 0:
+        return "diagnostic_only"
+    if public_shadow:
+        return "public_shadow_source_review"
+    if case_count > 24:
+        return "broader_selected_source_review_diagnostic"
+    return "selected_semantic_label_source_review"
+
+
+def cannot_claim(status: str, *, live: bool, claim_level: str = "diagnostic_only") -> list[str]:
     claims = [
         "global_semantic_label_correctness",
         "human_reviewed_label_correctness",
@@ -541,12 +695,17 @@ def cannot_claim(status: str, *, live: bool) -> list[str]:
         claims.append("fresh_live_model_review")
     if status != "sufficient":
         claims.append("selected_source_review_passed")
+    if claim_level == "broader_selected_source_review_diagnostic":
+        claims.append("selected_source_review_green_gate")
+    if claim_level == "public_shadow_source_review":
+        claims.append("selected_registry_source_review_passed")
     return claims
 
 
 def run_semantic_scope_source_review(
     *,
     registry_path: str | Path | None = None,
+    public_shadow: bool = False,
     live: bool = False,
     api_key_env: str = "DEEPSEEK_API_KEY",
     max_cases: int = 16,
@@ -566,6 +725,8 @@ def run_semantic_scope_source_review(
     min_tool_steps: int = 1,
     chat_fn=None,
 ) -> dict[str, Any]:
+    if public_shadow and registry_path:
+        raise ValueError("--public-shadow cannot be combined with an explicit registry path")
     resolved_route = resolve_model_route(
         "agentic_source_review"
         if agentic_review and model_route == "default" and not model
@@ -575,9 +736,14 @@ def run_semantic_scope_source_review(
     registry = (
         Path(registry_path).resolve()
         if registry_path
+        else PUBLIC_SHADOW_REGISTRY.resolve()
+        if public_shadow
         else (aippocampus_registry_dir() / "threads.json").resolve()
     )
     cases = selected_review_cases(registry, max_cases=max_cases)
+    cohort = "public_source_review_shadow" if public_shadow else "selected_registry_source_review"
+    shadow_requirements = public_shadow_requirements(cases) if public_shadow else {}
+    shadow_ready = not public_shadow or all(shadow_requirements.values())
     privacy_boundary = {
         "raw_text_emitted": False,
         "snippets_emitted": False,
@@ -589,10 +755,11 @@ def run_semantic_scope_source_review(
         "live_mode_missing_api_key_fails": True,
     }
     if not live:
-        status = "observe_only"
+        status = "observe_only" if shadow_ready else "public_shadow_missing_required_cases"
         return {
-            "ok": len(cases) >= min_cases,
+            "ok": len(cases) >= min_cases and shadow_ready,
             "status": status,
+            "cohort": cohort,
             "claim_level": "diagnostic_only",
             "claim_boundary_ref": claim_boundary_ref(
                 "docs/evidence/readiness/stage-0-5-readiness.md"
@@ -616,6 +783,8 @@ def run_semantic_scope_source_review(
             ),
             "model_route": resolved_route.as_dict(),
             "cases": [],
+            "failure_taxonomy": failure_taxonomy([]),
+            "public_shadow_requirements": shadow_requirements,
             "privacy_boundary": privacy_boundary,
         }
     api_key = os.environ.get(api_key_env)
@@ -624,6 +793,7 @@ def run_semantic_scope_source_review(
         return {
             "ok": False,
             "status": status,
+            "cohort": cohort,
             "claim_level": "blocked_live_model",
             "claim_boundary_ref": claim_boundary_ref(
                 "docs/evidence/readiness/stage-0-5-readiness.md"
@@ -647,6 +817,8 @@ def run_semantic_scope_source_review(
             ),
             "model_route": resolved_route.as_dict(),
             "cases": [],
+            "failure_taxonomy": failure_taxonomy([]),
+            "public_shadow_requirements": shadow_requirements,
             "privacy_boundary": privacy_boundary,
         }
 
@@ -657,16 +829,22 @@ def run_semantic_scope_source_review(
     max_workers = min(max(1, int(concurrency)), max(1, len(cases)))
 
     def failed_case(case: dict[str, Any], exc: BaseException) -> dict[str, Any]:
+        retry_exhausted = not agentic_review
+        classified = classify_review_failure(exc, retry_exhausted=retry_exhausted)
         return {
             "case_id": case.get("case_id"),
             "prompt_kind": PROMPT_KIND,
+            "expected_review_outcome": expected_review_outcome(case),
             "labels": case.get("labels") or [],
             "passed": False,
             "supported_label_count": 0,
             "unsupported_label_count": len(case.get("labels") or []),
             "needs_human_review": True,
             "review_confidence": 0.0,
-            "error": compact_text(f"{type(exc).__name__}: {exc}", 180),
+            "error": "redacted_review_failure",
+            **classified,
+            "retry_exhausted": retry_exhausted,
+            "attempt_count": max(1, int(max_attempts)) if not agentic_review else None,
             "usage": {},
             "cache": deepseek_cache_metrics_from_usage({}),
         }
@@ -709,20 +887,32 @@ def run_semantic_scope_source_review(
     status = review_status(
         len(cases), passed_count, min_cases=min_cases, min_pass_rate=min_pass_rate
     )
+    final_status = (
+        "live_model_partial_failure"
+        if failures
+        else "public_shadow_missing_required_cases"
+        if not shadow_ready
+        else status
+    )
     pass_rate = round((passed_count / len(cases)) if cases else 0.0, 4)
     per_label = per_label_review_stats(
         review_results, min_label_pass_rate=min_label_pass_rate
     )
+    claim_level = source_review_claim_level(
+        public_shadow=public_shadow,
+        status=final_status,
+        failures=failures,
+        case_count=len(cases),
+    )
     return {
-        "ok": status == "sufficient" and failures == 0,
-        "status": status if failures == 0 else "live_model_partial_failure",
-        "claim_level": "selected_semantic_label_source_review"
-        if status == "sufficient" and failures == 0
-        else "diagnostic_only",
+        "ok": status == "sufficient" and failures == 0 and shadow_ready,
+        "status": final_status,
+        "cohort": cohort,
+        "claim_level": claim_level,
         "claim_boundary_ref": claim_boundary_ref(
             "docs/evidence/readiness/stage-0-5-readiness.md"
         ),
-        "cannot_claim": cannot_claim(status, live=True),
+        "cannot_claim": cannot_claim(final_status, live=True, claim_level=claim_level),
         "live_model_used": True,
         "case_count": len(cases),
         "passed_count": passed_count,
@@ -738,6 +928,7 @@ def run_semantic_scope_source_review(
         "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
         "model_route": resolved_route.as_dict(),
         "failure_count": failures,
+        "failure_taxonomy": failure_taxonomy(review_results),
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
         "per_label": per_label,
@@ -749,6 +940,7 @@ def run_semantic_scope_source_review(
             per_label, min_label_pass_rate=min_label_pass_rate
         ),
         "cases": review_results,
+        "public_shadow_requirements": shadow_requirements,
         "privacy_boundary": privacy_boundary,
         "boundary": "DeepSeek-compatible review checks selected sidecar labels against clean source; it is not human review or global correctness.",
     }
@@ -757,6 +949,11 @@ def run_semantic_scope_source_review(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry")
+    parser.add_argument(
+        "--public-shadow",
+        action="store_true",
+        help="Use the checked-in public-safe source-review shadow cohort.",
+    )
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
     parser.add_argument("--max-cases", type=int, default=16)
@@ -776,8 +973,11 @@ def main() -> int:
     parser.add_argument("--min-tool-steps", type=int, default=1)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
+    if args.public_shadow and args.registry:
+        parser.error("--public-shadow cannot be combined with --registry")
     result = run_semantic_scope_source_review(
         registry_path=args.registry,
+        public_shadow=args.public_shadow,
         live=args.live,
         api_key_env=args.api_key_env,
         max_cases=args.max_cases,

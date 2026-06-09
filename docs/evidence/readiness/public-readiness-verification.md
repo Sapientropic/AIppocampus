@@ -20,6 +20,46 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-09 - Source-review taxonomy and public shadow rerun
+
+Issue #993 resolves the unresolved operational partial failure from the older
+96-case semantic sidecar source-review diagnostic without turning that broader
+diagnostic into a global correctness claim.
+
+Positive local evidence:
+
+- `python tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --public-shadow --max-cases 4 --min-cases 4 --min-pass-rate 1.0 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 2 --json`:
+  passed against the checked-in public shadow cohort. It reviewed 4/4 public
+  synthetic cases, passed all four, and covered `source_open_positive`,
+  `stale_or_superseded_source`, `unsupported_semantic_sidecar`, and
+  `multilingual_paraphrase`. The stale/superseded case is expected to reject
+  or escalate the stale route evidence rather than support it as current. The
+  output reported aggregate fields and hashed case ids, not raw source text,
+  message ids, source refs, titles, or local paths.
+- `python tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json`:
+  passed the broader selected live diagnostic on 2026-06-09. It reviewed 96
+  selected cases, passed 88, reached `pass_rate=0.9167`, reported
+  `failed_label_categories=["preference"]`, and reported `failure_count=0`
+  with `failure_taxonomy.by_class={}` and `retry_exhausted_count=0`.
+- The source-review smoke now emits a stable failure taxonomy for operational
+  failures (`timeout`, `provider_transport_error`, `provider_response_shape`,
+  `retry_exhaustion`, `prompt_context_issue`, `source_open_issue`,
+  `report_aggregation_bug`, and `unexpected_exception`) and keeps retry
+  exhaustion separate from label-level reviewer rejection or human-review
+  outcomes.
+
+Interpretation:
+
+- The older 2026-05-30 partial failure is superseded as an operational provider
+  / parser diagnostic: the current 96-case rerun had no live model call,
+  response-shape, retry, or aggregation failure.
+- The broader 96-case run remains diagnostic label-quality evidence, not the
+  named 24-case green gate. Eight selected cases were still rejected or marked
+  as needing human review by the reviewer, and `preference` fell below the
+  0.65 per-label floor, so this does not authorize global semantic correctness,
+  human-review claims, lower materializer gates, or provider-independent
+  quality claims.
+
 ## 2026-06-09 Issue #998 Claude Code Real-Host Dogfood Refresh
 
 Issue #998 refreshes the Claude Code local-history and MCP dogfood evidence
@@ -874,11 +914,13 @@ Stage 2 #308 report-hardening update:
   `idea_seed`, `preference`, `life_context`, `technical_work`, and
   `open_question`; all remain `unreviewed` in observe-only output, and
   `strict_gate_relaxed=false`.
-- Current claim governance now distinguishes the old 5-row strict sidecar
-  survival evidence, the 24-case green live source-review slice, and the
-  broader 96-case diagnostic run with one live model partial failure. The
-  broader run is not a green gate unless rerun cleanly; the compact current
-  snapshot lives in `docs/evidence/current-claims.md`.
+- Current claim governance distinguishes the old 5-row strict sidecar survival
+  evidence, the 24-case green live source-review slice, and the broader 96-case
+  diagnostic. The 2026-05-30 broader run historically had one live model
+  partial failure; the 2026-06-09 #993 rerun supersedes that operational
+  failure while keeping the broader run diagnostic because `preference` falls
+  below the per-label floor. The compact current snapshot lives in
+  `docs/evidence/current-claims.md`.
 - Follow-up #320 tracks systematic evidence improvement for high-risk
   still-suppressed label families. That follow-up must improve source-backed
   semantic evidence or classify labels as unsafe to restore; it must not use
