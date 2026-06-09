@@ -287,6 +287,64 @@ class EpisodeArcReadModelTests(unittest.TestCase):
         self.assertIn("sequence_order_uncertain", packet["cannot_claim"])
         self.assertEqual(plan["safe_uses"], ["ask", "refresh_sources"])
 
+    def test_public_gappy_chain_calibration_report_counts_reopen_only_cases(self) -> None:
+        private_single = event("e-single", "single_source_hint", 40, episode_id="episode:single-public")
+        private_single["raw_source_text"] = "RAW_PUBLIC_GAPPY_REPORT_SENTINEL"
+        private_single["registry_path"] = r"C:\Users\Administrator\private\aippocampus\registry.jsonl"
+
+        report = episode_arcs.build_public_gappy_chain_calibration_report(
+            [
+                event("e-attempt", "attempted_route", 10, sequence_index=0, episode_id="episode:complete"),
+                event("e-failed", "failed_check", 11, sequence_index=1, episode_id="episode:complete"),
+                event("e-rejected", "route_rejected", 12, sequence_index=2, episode_id="episode:complete"),
+                event("e-missing-attempt", "attempted_route", 25, sequence_index=0, episode_id="episode:missing"),
+                event("e-missing-rejected", "rejected_route", 27, sequence_index=2, episode_id="episode:missing"),
+                event("e-wrong-failed", "failed_check", 31, episode_id="episode:wrong-order"),
+                event("e-wrong-attempt", "attempted_route", 30, episode_id="episode:wrong-order"),
+                event("e-wrong-rejected", "route_rejected", 32, episode_id="episode:wrong-order"),
+                private_single,
+                event("e-concern", "temporary_concern", 50, sequence_index=0, episode_id="episode:temporary"),
+                event(
+                    "e-normal",
+                    "later_normal_progress",
+                    51,
+                    sequence_index=1,
+                    episode_id="episode:temporary",
+                ),
+            ]
+        )
+
+        metrics = report["metrics"]
+        self.assertEqual(report["kind"], episode_arcs.PUBLIC_GAPPY_CHAIN_REPORT_KIND)
+        self.assertEqual(metrics["episode_arc_count"], 5)
+        self.assertEqual(metrics["complete_arc_count"], 2)
+        self.assertEqual(metrics["gappy_arc_count"], 3)
+        self.assertEqual(metrics["missing_middle_event_count"], 1)
+        self.assertEqual(metrics["wrong_order_arc_count"], 1)
+        self.assertEqual(metrics["single_point_arc_count"], 1)
+        self.assertEqual(metrics["temporary_concern_extinction_count"], 1)
+        self.assertEqual(metrics["gappy_reopen_only_count"], 3)
+        self.assertEqual(metrics["gappy_visible_action_overclaim_count"], 0)
+        self.assertEqual(metrics["single_point_overclaim_rate"], 0.0)
+        self.assertEqual(metrics["needs_reopen_projection_rate"], 1.0)
+
+        for summary in report["case_summaries"]:
+            if summary["sequence_gaps"]:
+                self.assertEqual(summary["proposed_use"], "refresh_sources")
+                self.assertEqual(summary["safe_uses"], ["ask", "refresh_sources"])
+            self.assertNotIn("warn", summary["safe_uses"])
+            self.assertNotIn("block", summary["safe_uses"])
+
+        readout = report["issue_readouts"]["github_663"]
+        self.assertEqual(readout["public_gappy_chain_fixture"], "measured_public_deterministic")
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertIn("live_host_behavior_lift", report["cannot_claim"])
+
+        serialized = json.dumps(report, ensure_ascii=False)
+        self.assertNotIn("RAW_PUBLIC_GAPPY_REPORT_SENTINEL", serialized)
+        self.assertNotIn(r"C:\Users\Administrator\private", serialized)
+        self.assertNotIn("thread:episode-arc-test", serialized)
+
     def test_temporary_concern_extinction_stays_local_only_without_warning(self) -> None:
         arcs = episode_arcs.build_episode_arcs(
             [

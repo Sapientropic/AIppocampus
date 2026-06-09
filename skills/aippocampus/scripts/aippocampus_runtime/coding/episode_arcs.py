@@ -20,8 +20,11 @@ from aippocampus_runtime.registry.api import unique_preserve
 EPISODE_ARC_KIND = "aippocampus_episode_arc_read_model"
 EPISODE_ARC_SCHEMA_VERSION = "aippocampus.episode_arc_read_model.v1"
 REOPEN_PLAN_KIND = "aippocampus_episode_window_reopen_plan"
+PUBLIC_GAPPY_CHAIN_REPORT_KIND = "aippocampus_episode_arc_public_gappy_chain_calibration_report"
+PUBLIC_GAPPY_CHAIN_REPORT_SCHEMA_VERSION = "aippocampus.episode_arc_public_gappy_chain_calibration_report.v1"
 
 SAFE_GAPPY_USES = ["ask", "refresh_sources"]
+VISIBLE_ACTION_USES = {"block", "remind", "warn"}
 
 _PROFILE_BY_KIND: dict[str, dict[str, Any]] = {
     "rejected_route_arc": {
@@ -442,4 +445,149 @@ def build_reopen_plan(arc: Mapping[str, Any]) -> dict[str, Any]:
             "source_window": dict(_as_mapping(arc.get("turn_range"))),
         },
         "cannot_claim": unique_preserve(_cannot_claim(arc) + ["episode_arc_is_not_current_truth"], limit=12),
+    }
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 6)
+
+
+def _has_visible_action_projection(packet: Mapping[str, Any], plan: Mapping[str, Any]) -> bool:
+    proposed_use = str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or "")
+    safe_uses = {str(value) for value in _as_list(plan.get("safe_uses"))}
+    return proposed_use in VISIBLE_ACTION_USES or bool(safe_uses & VISIBLE_ACTION_USES)
+
+
+def _public_case_summary(
+    arc: Mapping[str, Any],
+    packet: Mapping[str, Any],
+    plan: Mapping[str, Any],
+) -> dict[str, Any]:
+    event_order = [str(value) for value in _as_list(arc.get("event_order"))]
+    sequence_gaps = [str(value) for value in _as_list(arc.get("sequence_gaps"))]
+    source_event_count = len(_as_list(arc.get("source_event_ids")))
+    return {
+        "case_id": _stable_id(
+            "arc_case",
+            arc.get("episode_kind"),
+            event_order,
+            sequence_gaps,
+            source_event_count,
+            length=12,
+        ),
+        "episode_kind": str(arc.get("episode_kind") or ""),
+        "source_event_count": source_event_count,
+        "source_ref_hash_count": len(_as_list(arc.get("source_ref_hashes"))),
+        "event_order": event_order,
+        "sequence_gaps": sequence_gaps,
+        "current_validity": str(arc.get("current_validity") or ""),
+        "source_thickness": str(_as_mapping(packet.get("current_assessment")).get("source_thickness") or ""),
+        "proposed_use": str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or ""),
+        "safe_uses": [str(value) for value in _as_list(plan.get("safe_uses"))],
+    }
+
+
+def build_public_gappy_chain_calibration_report(event_rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Measure public gappy-chain behavior without serializing private source routes.
+
+    This report is deliberately an aggregate/public fixture surface. It is safe
+    for #663 evidence because it proves downgrade behavior for complete, gappy,
+    wrong-order, and single-point chains without carrying raw text, source refs,
+    event ids, thread ids, local paths, or registry paths into the output.
+    """
+
+    arcs = build_episode_arcs(event_rows)
+    case_summaries: list[dict[str, Any]] = []
+    gap_counts: dict[str, int] = {}
+    kind_counts: dict[str, int] = {}
+    complete_arc_count = 0
+    gappy_arc_count = 0
+    gappy_reopen_only_count = 0
+    gappy_visible_action_overclaim_count = 0
+    single_point_arc_count = 0
+    single_point_overclaim_count = 0
+    source_ref_chain_complete_count = 0
+    temporary_concern_extinction_count = 0
+
+    for arc in arcs:
+        packet = render_sequence_packet(arc, trigger="public_gappy_chain_calibration")
+        plan = build_reopen_plan(arc)
+        summary = _public_case_summary(arc, packet, plan)
+        case_summaries.append(summary)
+
+        episode_kind = summary["episode_kind"]
+        kind_counts[episode_kind] = kind_counts.get(episode_kind, 0) + 1
+        sequence_gaps = [str(value) for value in _as_list(summary.get("sequence_gaps"))]
+        visible_action = _has_visible_action_projection(packet, plan)
+        if sequence_gaps:
+            gappy_arc_count += 1
+        else:
+            complete_arc_count += 1
+        if summary["source_event_count"] > 0 and summary["source_ref_hash_count"] >= summary["source_event_count"]:
+            source_ref_chain_complete_count += 1
+        if episode_kind == "temporary_concern_arc" and str(arc.get("outcome") or "") == "constraint_not_current":
+            temporary_concern_extinction_count += 1
+
+        for gap in sequence_gaps:
+            gap_counts[gap] = gap_counts.get(gap, 0) + 1
+        if sequence_gaps and summary["proposed_use"] in SAFE_GAPPY_USES and summary["safe_uses"] == SAFE_GAPPY_USES:
+            gappy_reopen_only_count += 1
+        if sequence_gaps and visible_action:
+            gappy_visible_action_overclaim_count += 1
+        if "single_point_trap" in sequence_gaps:
+            single_point_arc_count += 1
+            if visible_action:
+                single_point_overclaim_count += 1
+
+    metrics = {
+        "episode_arc_count": len(arcs),
+        "complete_arc_count": complete_arc_count,
+        "gappy_arc_count": gappy_arc_count,
+        "gappy_reopen_only_count": gappy_reopen_only_count,
+        "gappy_visible_action_overclaim_count": gappy_visible_action_overclaim_count,
+        "missing_middle_event_count": gap_counts.get("missing_middle_event", 0),
+        "wrong_order_arc_count": gap_counts.get("event_order_semantic_mismatch", 0),
+        "single_point_arc_count": single_point_arc_count,
+        "temporary_concern_extinction_count": temporary_concern_extinction_count,
+        "source_ref_chain_complete_count": source_ref_chain_complete_count,
+        "source_ref_chain_coverage_rate": _rate(source_ref_chain_complete_count, len(arcs)),
+        "single_point_overclaim_rate": _rate(single_point_overclaim_count, single_point_arc_count),
+        "gappy_visible_action_overclaim_rate": _rate(gappy_visible_action_overclaim_count, gappy_arc_count),
+        "needs_reopen_projection_rate": _rate(gappy_reopen_only_count, gappy_arc_count),
+    }
+
+    return {
+        "schema_version": PUBLIC_GAPPY_CHAIN_REPORT_SCHEMA_VERSION,
+        "kind": PUBLIC_GAPPY_CHAIN_REPORT_KIND,
+        "metrics": metrics,
+        "by_episode_kind": dict(sorted(kind_counts.items())),
+        "sequence_gap_counts": dict(sorted(gap_counts.items())),
+        "case_summaries": case_summaries,
+        "can_claim": [
+            "public_fixture_distinguishes_complete_gappy_wrong_order_single_point_and_temporary_arcs",
+            "gappy_and_single_point_chains_project_to_ask_or_refresh_sources_only",
+            "report_omits_raw_source_text_source_refs_event_ids_thread_ids_local_paths_and_registry_paths",
+        ],
+        "cannot_claim": [
+            "github_663_episode_arc_owner_track_complete",
+            "live_host_behavior_lift",
+            "private_history_generality",
+            "journey_instantiation_quality",
+            "current_route_or_user_intent_validity_without_source_reopen",
+        ],
+        "issue_readouts": {
+            "github_663": {
+                "public_gappy_chain_fixture": "measured_public_deterministic",
+                "complete_chain_count": complete_arc_count,
+                "gappy_chain_count": gappy_arc_count,
+                "single_point_overclaim_rate": metrics["single_point_overclaim_rate"],
+                "needs_reopen_projection_rate": metrics["needs_reopen_projection_rate"],
+                "gappy_visible_action_overclaim_rate": metrics["gappy_visible_action_overclaim_rate"],
+                "live_host_behavior": "not_measured",
+                "private_history_generality": "not_measured_by_public_fixture",
+                "closeout_eligible": False,
+            }
+        },
     }
