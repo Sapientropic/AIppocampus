@@ -14,6 +14,7 @@ from typing import Any, Sequence
 
 from aippocampus_runtime.artifacts.generation_pins import pin_resolved_generation
 from aippocampus_runtime.core import default_thread_segments_dir
+from aippocampus_runtime.recall import segment_merge
 from aippocampus_runtime.recall.retrieval import (
     expanded_terms_from_anchors,
     graph_neighbors,
@@ -27,8 +28,17 @@ from aippocampus_runtime.recall.rollout_search import (
     resolve_anchor_path,
     search_index_literal,
 )
-from aippocampus_runtime.recall.score_fusion import source_join_key
-from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY, SegmentMergePolicy
+from aippocampus_runtime.recall.segment_deep_recall import (
+    disabled_diagnostics,
+    now_seconds,
+    run_explicit_deep_recall,
+    source_keys,
+    unavailable_diagnostics,
+)
+from aippocampus_runtime.recall.segment_merge import (
+    merge_topk_with_diagnostics,
+    segment_source_join_key,
+)
 from aippocampus_runtime.recall.segment_metadata import (
     annotate_rag_chunk,
     annotate_segment_result,
@@ -40,6 +50,7 @@ from aippocampus_runtime.recall.structure_time import parse_datetime_utc, parse_
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 SEGMENTS_POINTER_NAME = "segments.pointer.json"
+merge_topk = segment_merge.merge_topk
 
 
 @dataclass(frozen=True)
@@ -61,6 +72,11 @@ class SegmentSearchOptions:
     max_segments: int | None = None
     full_fanout: bool = False
     now: str | None = None
+    deep: bool = False
+    deep_max_hops: int = 1
+    deep_candidate_budget: int | None = None
+    deep_elapsed_budget_ms: int | None = None
+    deep_terms_per_hop: int = 8
 
 
 def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
@@ -310,178 +326,6 @@ def plan_segments(
     return planned, fanout
 
 
-def segment_sort_key(
-    result: dict,
-    policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
-) -> tuple[float, int, int]:
-    final_bonus = (
-        policy.final_answer_bonus
-        if result.get("phase") == "final_answer" or result.get("is_final")
-        else 0.0
-    )
-    commentary_penalty = (
-        policy.commentary_penalty if result.get("phase") == "commentary" else 0.0
-    )
-    return (
-        -(float(result.get("score") or 0.0) + final_bonus + commentary_penalty),
-        int(result.get("line") or 10**12),
-        int(result.get("segment_ordinal") or 10**6),
-    )
-
-
-def segment_source_join_key(result: dict) -> str:
-    """Return stable source identity when a segment hit exposes one.
-
-    Segment-local SQLite ids collide and overlapped shards can surface the same
-    clean-source row under different segment ids. Prefer the shared
-    score-fusion source join semantics; use scalar `source_ref` only as an
-    already-projected stable ref. Hits without a source key keep the legacy
-    segment-local fallback path.
-    """
-
-    key = source_join_key(result)
-    if key:
-        return f"source_join:{key}"
-    source_ref = str(result.get("source_ref") or "").strip()
-    if source_ref:
-        return f"source_ref:{source_ref}"
-    return ""
-
-
-def _dedupe_pool_by_source_key(pool: list[dict]) -> tuple[list[dict], int]:
-    deduped: list[dict] = []
-    seen: set[str] = set()
-    dedupe_count = 0
-    for item in pool:
-        key = segment_source_join_key(item)
-        if key and key in seen:
-            dedupe_count += 1
-            continue
-        deduped.append(item)
-        if key:
-            seen.add(key)
-    return deduped, dedupe_count
-
-
-def merge_topk_with_diagnostics(
-    results: list[dict],
-    limit: int,
-    policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
-) -> tuple[list[dict], dict[str, int]]:
-    """Merge hits and report compact source-key dedupe diagnostics."""
-
-    if not results:
-        return (
-            [],
-            {
-                "input_candidate_count": 0,
-                "candidate_count_after_source_key_dedupe": 0,
-                "source_key_dedupe_count": 0,
-            },
-        )
-    pool = sorted(results, key=lambda item: segment_sort_key(item, policy))
-    pool, source_key_dedupe_count = _dedupe_pool_by_source_key(pool)
-    diagnostics = {
-        "input_candidate_count": len(results),
-        "candidate_count_after_source_key_dedupe": len(pool),
-        "source_key_dedupe_count": source_key_dedupe_count,
-    }
-    if not pool:
-        return [], diagnostics
-
-    selected: list[dict] = []
-    seen: set[tuple[str, int, int]] = set()
-
-    def key(item: dict) -> tuple[str, int, int]:
-        return (str(item.get("segment_id")), int(item.get("id") or 0), int(item.get("line") or 0))
-
-    def add(item: dict | None) -> None:
-        if not item:
-            return
-        item_key = key(item)
-        if item_key in seen:
-            return
-        selected.append(item)
-        seen.add(item_key)
-
-    add(pool[0])
-    literal_hits = [item for item in pool if (item.get("signals") or {}).get("literal_hits", 0) > 0]
-    add(
-        min(
-            (item for item in literal_hits if item.get("role") == "user"),
-            key=lambda item: item.get("line") or 10**12,
-            default=None,
-        )
-    )
-    add(min(literal_hits, key=lambda item: item.get("line") or 10**12, default=None))
-    add(
-        max(
-            (item for item in pool if item.get("role") == "assistant"),
-            key=lambda item: (
-                (
-                    policy.final_answer_bonus
-                    if item.get("phase") == "final_answer" or item.get("is_final")
-                    else 0.0
-                )
-                + float(item.get("score") or 0)
-            ),
-            default=None,
-        )
-    )
-
-    while len(selected) < min(limit, len(pool)):
-        selected_segments = {str(item.get("segment_id")) for item in selected}
-        selected_lines = [int(item.get("line") or 0) for item in selected]
-        best = None
-        best_value = None
-        for item in pool:
-            if key(item) in seen:
-                continue
-            value = float(item.get("score") or 0.0)
-            if str(item.get("segment_id")) in selected_segments:
-                value -= policy.same_segment_penalty
-            if item.get("phase") == "final_answer" or item.get("is_final"):
-                value += policy.final_answer_bonus
-            if item.get("phase") == "commentary":
-                value += policy.commentary_penalty
-            line = int(item.get("line") or 0)
-            if any(
-                abs(line - other) < policy.nearby_line_window
-                for other in selected_lines
-            ):
-                value -= policy.nearby_line_penalty
-            if (item.get("signals") or {}).get("literal_hits", 0) > 0 and item.get(
-                "role"
-            ) == "user":
-                value += policy.user_literal_bonus
-            if best_value is None or value > best_value:
-                best = item
-                best_value = value
-        add(best)
-        if best is None:
-            break
-    return selected[:limit], diagnostics
-
-
-def merge_topk(
-    results: list[dict],
-    limit: int,
-    policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
-) -> list[dict]:
-    """Merge per-shard hits without letting one dense recap shard dominate.
-
-    Segment-local SQLite row ids collide, so this intentionally avoids
-    retrieval.diversify_results, whose duplicate guard assumes one monolithic
-    index. The merge keeps high-score hits first, then applies light penalties
-    for same-segment and near-line repeats so early source evidence and later
-    summaries can both surface. The optional policy argument is for deterministic
-    calibration/sensitivity tests; the CLI path uses the default named policy.
-    """
-
-    selected, _ = merge_topk_with_diagnostics(results, limit, policy=policy)
-    return selected
-
-
 def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
     patterns = list(options.patterns)
     anchor_path = resolve_anchor_path(str(cwd), str(options.anchors))
@@ -529,6 +373,7 @@ def unavailable_segments_payload(
             },
             "segment_errors": [],
             "fanout": _empty_fanout(options),
+            "deep_recall": unavailable_diagnostics(options),
             "turn_boundary_diagnostics": empty_turn_boundary_diagnostics(),
             "availability": {
                 "reason": reason,
@@ -538,6 +383,89 @@ def unavailable_segments_payload(
         }
     )
     return payload
+
+
+def _search_segment_pass(
+    *,
+    options: SegmentSearchOptions,
+    patterns: list[str],
+    query_terms: list[str],
+    expanded_terms: list[str],
+    anchors: list[dict],
+    planned_segments: list[tuple[int, dict]],
+    boundary_contexts: dict[str, dict],
+    temporal_cue: dict[str, Any] | None,
+    recall_hop: int,
+    include_rag_context: bool,
+) -> dict[str, Any]:
+    raw_results: list[dict] = []
+    rag_context: list[dict] = []
+    segment_errors: list[dict] = []
+    searched_segment_count = 0
+    missing_index_count = 0
+    for ordinal, segment in planned_segments:
+        index = Path(segment["sqlite"])
+        if not index.exists():
+            missing_index_count += 1
+            segment_errors.append(
+                {
+                    "segment_id": segment.get("id"),
+                    "error": "sqlite missing",
+                    "recall_hop": recall_hop,
+                }
+            )
+            continue
+        searched_segment_count += 1
+        try:
+            if options.mode == "literal":
+                hits = search_index_literal(
+                    index,
+                    patterns,
+                    options.per_segment,
+                    options.snippet_chars,
+                )
+            else:
+                if (
+                    include_rag_context
+                    and options.mode == "hybrid"
+                    and options.rag_context > 0
+                ):
+                    for chunk in search_rag_chunks(
+                        index,
+                        query_terms,
+                        expanded_terms,
+                        anchors,
+                        limit=max(1, options.rag_context // 2),
+                        candidate_limit=max(24, options.candidate_max // 2),
+                        snippet_chars=max(options.snippet_chars, 900),
+                    ):
+                        rag_context.append(annotate_rag_chunk(chunk, segment, ordinal))
+                hits = search_hybrid_index(
+                    index,
+                    query_terms,
+                    expanded_terms,
+                    anchors if options.mode == "hybrid" else [],
+                    limit=options.per_segment,
+                    candidate_limit=options.candidate_max,
+                    snippet_chars=options.snippet_chars,
+                    context_radius=options.context,
+                    temporal_cue=temporal_cue,
+                )
+            for hit in hits:
+                item = annotate_segment_result(hit, segment, ordinal, boundary_contexts)
+                item["recall_hop"] = recall_hop
+                raw_results.append(item)
+        except Exception as exc:
+            segment_errors.append(
+                {"segment_id": segment.get("id"), "error": str(exc), "recall_hop": recall_hop}
+            )
+    return {
+        "raw_results": raw_results,
+        "rag_context": rag_context,
+        "segment_errors": segment_errors,
+        "searched_segment_count": searched_segment_count,
+        "missing_index_count": missing_index_count,
+    }
 
 
 def search_segments_payload(options: SegmentSearchOptions) -> dict:
@@ -570,61 +498,50 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         expanded_terms = query_payload["expanded_terms"]
         anchors = query_payload["matched_anchors"]
 
-        raw_results: list[dict] = []
-        rag_context: list[dict] = []
-        segment_errors: list[dict] = []
         segments = list(data.get("segments") or [])
         boundary_contexts = cross_boundary_turn_contexts(segments)
         boundary_diagnostics = turn_boundary_diagnostics(segments, boundary_contexts)
         temporal_cue = _temporal_cue_for_options(options)
         planned_segments, fanout = plan_segments(segments, options, temporal_cue=temporal_cue)
-        searched_segment_count = 0
-        missing_index_count = 0
-        for ordinal, segment in planned_segments:
-            index = Path(segment["sqlite"])
-            if not index.exists():
-                missing_index_count += 1
-                segment_errors.append({"segment_id": segment.get("id"), "error": "sqlite missing"})
-                continue
-            searched_segment_count += 1
-            try:
-                if options.mode == "literal":
-                    hits = search_index_literal(
-                        index,
-                        patterns,
-                        options.per_segment,
-                        options.snippet_chars,
-                    )
-                else:
-                    if options.mode == "hybrid" and options.rag_context > 0:
-                        for chunk in search_rag_chunks(
-                            index,
-                            query_terms,
-                            expanded_terms,
-                            anchors,
-                            limit=max(1, options.rag_context // 2),
-                            candidate_limit=max(24, options.candidate_max // 2),
-                            snippet_chars=max(options.snippet_chars, 900),
-                        ):
-                            rag_context.append(annotate_rag_chunk(chunk, segment, ordinal))
-                    hits = search_hybrid_index(
-                        index,
-                        query_terms,
-                        expanded_terms,
-                        anchors if options.mode == "hybrid" else [],
-                        limit=options.per_segment,
-                        candidate_limit=options.candidate_max,
-                        snippet_chars=options.snippet_chars,
-                        context_radius=options.context,
-                        temporal_cue=temporal_cue,
-                    )
-                raw_results.extend(
-                    annotate_segment_result(hit, segment, ordinal, boundary_contexts)
-                    for hit in hits
-                )
-            except Exception as exc:
-                segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
-
+        started_at = now_seconds()
+        first_pass = _search_segment_pass(
+            options=options,
+            patterns=patterns,
+            query_terms=query_terms,
+            expanded_terms=expanded_terms,
+            anchors=anchors,
+            planned_segments=planned_segments,
+            boundary_contexts=boundary_contexts,
+            temporal_cue=temporal_cue,
+            recall_hop=0,
+            include_rag_context=True,
+        )
+        raw_results = list(first_pass["raw_results"])
+        rag_context = list(first_pass["rag_context"])
+        segment_errors = list(first_pass["segment_errors"])
+        searched_segment_count = int(first_pass["searched_segment_count"])
+        missing_index_count = int(first_pass["missing_index_count"])
+        deep_recall = disabled_diagnostics()
+        if options.deep:
+            initial_source_keys = source_keys(raw_results, segment_source_join_key)
+            deep_pass = run_explicit_deep_recall(
+                options=options,
+                query_terms=query_terms,
+                planned_segments=planned_segments,
+                boundary_contexts=boundary_contexts,
+                temporal_cue=temporal_cue,
+                initial_results=raw_results,
+                initial_source_keys=initial_source_keys,
+                started_at=started_at,
+                search_pass=_search_segment_pass,
+                source_key_fn=segment_source_join_key,
+            )
+            deep_recall = deep_pass["diagnostics"]
+            deep_recall["searched_segment_count"] = int(deep_pass["searched_segment_count"])
+            deep_recall["missing_index_count"] = int(deep_pass["missing_index_count"])
+            raw_results.extend(deep_pass["raw_results"])
+            rag_context.extend(deep_pass["rag_context"])
+            segment_errors.extend(deep_pass["segment_errors"])
         fanout["searched_segment_count"] = searched_segment_count
         fanout["missing_index_count"] = missing_index_count
         results, merge_diagnostics = merge_topk_with_diagnostics(
@@ -655,6 +572,7 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
             "merge_diagnostics": merge_diagnostics,
             "segment_errors": segment_errors,
             "fanout": fanout,
+            "deep_recall": deep_recall,
             "turn_boundary_diagnostics": boundary_diagnostics,
             "availability": {
                 "reason": "available" if available else "sqlite_missing",
@@ -683,6 +601,11 @@ def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
         max_segments=args.max_segments,
         full_fanout=args.full_fanout,
         now=args.now,
+        deep=args.deep,
+        deep_max_hops=args.deep_max_hops,
+        deep_candidate_budget=args.deep_candidate_budget,
+        deep_elapsed_budget_ms=args.deep_elapsed_budget_ms,
+        deep_terms_per_hop=args.deep_terms_per_hop,
     )
 
 
@@ -725,6 +648,35 @@ def main() -> int:
         default=None,
         help="UTC ISO timestamp for deterministic relative temporal cues.",
     )
+    parser.add_argument(
+        "--deep",
+        action="store_true",
+        help="Opt in to explicit bounded multi-hop recall; ambient hooks do not use this by default.",
+    )
+    parser.add_argument(
+        "--deep-max-hops",
+        type=int,
+        default=1,
+        help="Maximum extra source-joined search hops for --deep.",
+    )
+    parser.add_argument(
+        "--deep-candidate-budget",
+        type=int,
+        default=None,
+        help="Stop --deep before expansion once this many stable source keys are already found.",
+    )
+    parser.add_argument(
+        "--deep-elapsed-budget-ms",
+        type=int,
+        default=None,
+        help="Stop --deep before expansion once elapsed search time reaches this budget.",
+    )
+    parser.add_argument(
+        "--deep-terms-per-hop",
+        type=int,
+        default=8,
+        help="Maximum navigation terms extracted from source-joined hits per deep hop.",
+    )
     parser.add_argument("--show-anchors", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--max", type=int, default=30)
@@ -762,6 +714,13 @@ def main() -> int:
                 f"{fanout.get('planned_segment_count', 0)} planned, "
                 f"{fanout.get('searched_segment_count', 0)} searched, "
                 f"{fanout.get('skipped_segment_count', 0)} skipped"
+            )
+        deep_recall = payload.get("deep_recall") or {}
+        if deep_recall.get("enabled"):
+            print(
+                "deep recall: "
+                f"{deep_recall.get('completed_hops', 0)} explicit hop(s), "
+                f"stop={deep_recall.get('stop_reason')}"
             )
         if args.mode == "hybrid":
             print(f"query terms: {', '.join(query_terms) or '(none)'}")

@@ -26,6 +26,31 @@ class SegmentSearchTests(unittest.TestCase):
         )
         return segments_dir
 
+    def _source_hit(
+        self,
+        *,
+        stable_source_id: str,
+        source_ref: str,
+        snippet: str,
+        score: float,
+        line: int,
+        message_id: str | None = None,
+    ) -> dict:
+        return {
+            "id": line,
+            "line": line,
+            "timestamp": "",
+            "role": "assistant",
+            "kind": "message",
+            "score": score,
+            "stable_source_id": stable_source_id,
+            "thread_key": "session:deep",
+            "message_id": message_id or stable_source_id.rsplit(":", 1)[-1],
+            "source_ref": source_ref,
+            "snippet": snippet,
+            "signals": {},
+        }
+
     def test_missing_manifest_reports_build_required_without_surprise_build(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -678,6 +703,171 @@ class SegmentSearchTests(unittest.TestCase):
                 "stitched": False,
             },
         )
+
+    def test_explicit_deep_search_recovers_second_hop_source_joined_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old_sqlite = root / "seg-old.sqlite"
+            new_sqlite = root / "seg-new.sqlite"
+            old_sqlite.write_text("", encoding="utf-8")
+            new_sqlite.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [
+                    {"id": "seg-old", "sqlite": str(old_sqlite), "end_line": 10},
+                    {"id": "seg-new", "sqlite": str(new_sqlite), "end_line": 20},
+                ],
+            )
+
+            def fake_search(index: Path, query_terms: list[str], *args, **kwargs) -> list[dict]:
+                terms = set(query_terms)
+                if "sphinx" in terms and Path(index) == old_sqlite:
+                    return [
+                        self._source_hit(
+                            stable_source_id="clean:recovered",
+                            source_ref="source:recovered",
+                            snippet="Sphinx Atlas final decision lives in this older route.",
+                            score=8.0,
+                            line=8,
+                        )
+                    ]
+                if Path(index) == new_sqlite:
+                    return [
+                        self._source_hit(
+                            stable_source_id="clean:seed",
+                            source_ref="source:seed",
+                            snippet="The durable anchor for that forgotten project was Sphinx Atlas.",
+                            score=9.0,
+                            line=18,
+                        )
+                    ]
+                return []
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["forgotten project"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                        deep=True,
+                        deep_max_hops=1,
+                    )
+                )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(
+            [item["source_ref"] for item in payload["matches"]],
+            ["source:seed", "source:recovered"],
+        )
+        self.assertEqual(
+            {item["source_ref"]: item["recall_hop"] for item in payload["matches"]},
+            {"source:seed": 0, "source:recovered": 1},
+        )
+        deep = payload["deep_recall"]
+        self.assertTrue(deep["enabled"])
+        self.assertEqual(deep["mode"], "explicit_deep_recall")
+        self.assertEqual(deep["completed_hops"], 1)
+        self.assertEqual(deep["stop_reason"], "max_hops")
+        self.assertEqual(payload["fanout"]["searched_segment_count"], 2)
+        self.assertEqual(deep["searched_segment_count"], 2)
+        self.assertIn("sphinx", deep["hops"][1]["query_terms"])
+        self.assertEqual(deep["hops"][1]["added_source_key_count"], 1)
+
+    def test_explicit_deep_search_stops_when_second_hop_adds_no_source_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "seg.sqlite"
+            sqlite_path.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [{"id": "seg", "sqlite": str(sqlite_path), "end_line": 10}],
+            )
+            call_count = 0
+
+            def fake_search(index: Path, query_terms: list[str], *args, **kwargs) -> list[dict]:
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return [
+                        self._source_hit(
+                            stable_source_id="clean:seed",
+                            source_ref="source:seed",
+                            snippet="The route anchor was Sphinx Atlas.",
+                            score=9.0,
+                            line=4,
+                        )
+                    ]
+                return [
+                    self._source_hit(
+                        stable_source_id="clean:seed",
+                        source_ref="source:duplicate",
+                        snippet="Duplicate Sphinx Atlas overlap.",
+                        score=8.0,
+                        line=5,
+                    )
+                ]
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["forgotten project"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                        deep=True,
+                        deep_max_hops=3,
+                    )
+                )
+
+        self.assertEqual([item["source_ref"] for item in payload["matches"]], ["source:seed"])
+        self.assertEqual(payload["merge_diagnostics"]["source_key_dedupe_count"], 1)
+        deep = payload["deep_recall"]
+        self.assertEqual(deep["stop_reason"], "no_new_source_keys")
+        self.assertEqual(deep["hops"][1]["added_source_keys"], [])
+        self.assertEqual(deep["hops"][1]["added_source_key_count"], 0)
+
+    def test_explicit_deep_search_candidate_budget_stops_before_expansion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "seg.sqlite"
+            sqlite_path.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [{"id": "seg", "sqlite": str(sqlite_path), "end_line": 10}],
+            )
+            searched_terms: list[list[str]] = []
+
+            def fake_search(index: Path, query_terms: list[str], *args, **kwargs) -> list[dict]:
+                searched_terms.append(list(query_terms))
+                return [
+                    self._source_hit(
+                        stable_source_id="clean:seed",
+                        source_ref="source:seed",
+                        snippet="The route anchor was Sphinx Atlas.",
+                        score=9.0,
+                        line=4,
+                    )
+                ]
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["forgotten project"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                        deep=True,
+                        deep_max_hops=3,
+                        deep_candidate_budget=1,
+                    )
+                )
+
+        self.assertEqual(len(searched_terms), 1)
+        deep = payload["deep_recall"]
+        self.assertEqual(deep["stop_reason"], "candidate_budget")
+        self.assertEqual(deep["skipped_expansions"][0]["reason"], "candidate_budget")
+        self.assertEqual(deep["completed_hops"], 0)
 
 
 if __name__ == "__main__":
