@@ -514,6 +514,12 @@ def should_suppress(
 ) -> bool:
     secret_surface = prompt_cues.prompt_is_secret_surface(prompt)
     boundary_intent = prompt_cues.memory_boundary_context_intent(prompt)
+    if prompt_cues.memory_write_negation_intent(prompt):
+        # "Remember this variable name, not memory" and metadata round-trip
+        # prompts are write-path boundaries. Letting "记住"/"memory" wake
+        # ambient recall here teaches the hook to interrupt exactly when the
+        # user is asking it to stay out of memory creation.
+        return True
     if secret_surface and not boundary_intent:
         # Secret-adjacent surfaces are intentionally stricter than ordinary
         # code prompts. They often contain harmless placeholders in tests, but
@@ -532,6 +538,19 @@ def should_suppress(
         # Current checkout fact prompts must be answered from live files/config.
         # Historical source-backed recall may still help when the user asks for
         # prior wording, but it must not impersonate evidence for this repo.
+        return True
+    if (
+        prompt_cues.prompt_is_code_surface(prompt)
+        and not source_evidence_cue
+        and not cognitive_map_cue
+        and not semantic_memory_cue
+        and not boundary_intent
+        and not prompt_cues.semantic_trigger_context_intent(prompt)
+    ):
+        # Ordinary implementation prompts may still overlap with old registry
+        # titles or broad working-memory terms ("card", "dashboard", "mock").
+        # Keep those quiet unless the user supplies a source request, a
+        # source-backed route, or explicit continuation wording.
         return True
     if source_evidence_cue and candidates:
         # Evidence requests, including natural phrasing like "上次那个 bug

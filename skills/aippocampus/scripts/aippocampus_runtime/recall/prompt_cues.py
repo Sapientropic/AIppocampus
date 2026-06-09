@@ -238,12 +238,17 @@ CODE_SURFACE_CUES = {
     "navigation",
     "loading",
     "mobile",
+    "card",
+    "mock",
+    "spacing",
     "断点",
+    "间距",
     "视觉稿",
     "还原",
     "对齐",
     "接上",
     "测试",
+    "单测",
     "test",
     "修 bug",
     "bug",
@@ -254,6 +259,16 @@ CODE_SURFACE_CUES = {
     "实现",
     "改一下",
 }
+
+MEMORY_WRITE_NEGATION_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"(不是|并不是|不是要|不是让|别|不要|请勿).{0,16}(写|保存|记录|新增|创建|更新|生成|当成|变成|turn).{0,18}(记忆|memory)",
+        r"(不是|并不是|不是要|不是让|别|不要|请勿).{0,16}(记忆|memory).{0,18}(写入|保存|记录|新增|创建|更新|生成)",
+        r"(do not|don't|not asking|not trying).{0,32}(save|write|record|persist|remember|turn).{0,32}(memory|as memory)",
+        r"(do not|don't|not asking|not trying).{0,32}(turn).{0,32}(into memory)",
+    ]
+]
 
 SECRET_SURFACE_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
@@ -292,6 +307,8 @@ SEMANTIC_TRIGGER_CONTEXT_PATTERNS = [
         r"(只|先)?继续.{0,24}(上下文|那条线|这条线|那条|这条|线索)",
         r"(那条线|这条线|上下文|线索).{0,24}(继续|接着|推进|收口)",
         r"(那条线|这条线|上下文|线索).{0,16}(继续想|想一下|想想|想清楚|想明白)",
+        r"(边界|boundary).{0,24}(继续|接着|推进|收口|收一下|想一下|想想)",
+        r"(继续|接着).{0,24}(边界|boundary|上下文|线索)",
         r"(继续|接着)(看|想|推进|收口|处理)",
         r"(继续|接着).{0,16}(不给|不要|别|先别).{0,10}(source|evidence|原话|原文|引用|证据)",
         r"(不要|先别).{0,12}(展开实现|实现|改代码|写代码)",
@@ -399,6 +416,29 @@ def matched_terms(prompt: str, terms: set[str]) -> list[str]:
 
 def prompt_is_code_surface(prompt: str) -> bool:
     return bool(matched_terms(prompt, CODE_SURFACE_CUES))
+
+
+def memory_write_negation_intent(prompt: str) -> list[str]:
+    """Return cues where the user rejects creating or persisting memory.
+
+    This protects ordinary implementation and metadata prompts from becoming
+    ambient recall just because they contain words like "记住" or "memory".
+    It is intentionally narrower than negative evidence: "no source" can still
+    be a scent-only continuation, but "not a memory write" is a write-path
+    boundary and should keep foreground recall quiet.
+    """
+
+    text = str(prompt or "").strip()
+    if not text:
+        return []
+    if source_evidence_intent(text) or natural_evidence_intent(text):
+        return []
+    matches: list[str] = []
+    for pattern in MEMORY_WRITE_NEGATION_PATTERNS:
+        found = pattern.search(text)
+        if found:
+            matches.append(found.group(0))
+    return unique_preserve(matches, limit=4)
 
 
 def prompt_is_secret_surface(prompt: str) -> bool:
@@ -809,18 +849,25 @@ def should_run_semantic_gate(
         # a safe memory-boundary prompt may still surface scent locally, but it
         # must not be sent to an external semantic model.
         return False
+    if memory_write_negation_intent(prompt):
+        return False
     if current_checkout_live_fact_intent(prompt):
         # The current checkout boundary is a live-source problem, not a memory
         # classification problem. Let the foreground agent inspect the repo
         # files/config instead of spending semantic recall budget.
         return False
     if prompt_is_code_surface(prompt) and not (
-        explicit or associative or important or working_memory_matches
+        explicit
+        or associative
+        or important
+        or working_memory_matches
+        or semantic_trigger_context_intent(prompt)
     ):
         # This is a spend/latency brake, not the recall brain. Dynamic
         # associations can include ordinary implementation words such as
         # dashboard/hover/test; those should not make every code task call a
-        # semantic model. Source-backed working memory still gets through.
+        # semantic model. Source-backed working memory and explicit continuation
+        # wording still get through.
         return False
     if explicit and (association_matches or working_memory_matches):
         # Explicit memory cue plus local source/working-memory overlap is enough
@@ -829,6 +876,8 @@ def should_run_semantic_gate(
         # semantic only when the local cue surface is too thin.
         return False
     if explicit or associative or important or association_matches or working_memory_matches:
+        return True
+    if semantic_trigger_context_intent(prompt):
         return True
     if looks_like_multilingual_natural_language(prompt):
         return True

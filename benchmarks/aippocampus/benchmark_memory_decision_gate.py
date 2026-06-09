@@ -180,6 +180,81 @@ MEMORY_PAIN_FIXTURES: dict[str, MemoryPainFixture] = {
     ),
 }
 
+TRACK_A_RESIDUAL_CALIBRATION_CASES: dict[str, dict[str, str]] = {
+    "public_memory_pain__fabricated_profile_no_source": {
+        "resolution": "reclassified_to_skip",
+        "failure_family": "source_free_memory_pain_statement",
+        "rationale": (
+            "A fabricated profile sentence without clean-source refs or continuation "
+            "intent should stay quiet instead of becoming ambient scent."
+        ),
+    },
+    "public_memory_pain__deterministic_vs_fuzzy_memory": {
+        "resolution": "reclassified_to_skip",
+        "failure_family": "source_free_memory_pain_statement",
+        "rationale": (
+            "A concept distinction with no route, source request, or old-thread "
+            "deixis is architecture prose, not a foreground recall event."
+        ),
+    },
+    "public_memory_pain__metadata_round_trip": {
+        "resolution": "reclassified_to_skip",
+        "failure_family": "source_free_memory_write_boundary",
+        "rationale": (
+            "The prompt explicitly says not to turn metadata into memory; skip "
+            "protects the provenance boundary."
+        ),
+    },
+    "public_memory_pain__large_document_no_foreground_llm": {
+        "resolution": "reclassified_to_skip",
+        "failure_family": "source_free_memory_pain_statement",
+        "rationale": (
+            "A large-document retrieval principle is a benchmark boundary seed, "
+            "not a hook-time recall cue without continuation or source intent."
+        ),
+    },
+    "synthetic_hard_bank__atlas_copy__skip_high_overlap": {
+        "resolution": "runtime_rule_fix",
+        "failure_family": "plain_code_surface_high_overlap",
+        "rationale": (
+            "Plain UI copy work can overlap with old Atlas titles; code-surface "
+            "suppression must win unless the user asks for continuation/source."
+        ),
+    },
+    "synthetic_hard_bank__memory_cache__skip_false_cue": {
+        "resolution": "runtime_rule_fix",
+        "failure_family": "false_memory_word_inside_code_surface",
+        "rationale": (
+            "MemoryCache, mock, and unit-test wording are implementation surface "
+            "terms, not external-memory intent."
+        ),
+    },
+    "synthetic_hard_bank__atlas_other_line__scent_no_source_twin": {
+        "resolution": "runtime_rule_fix",
+        "failure_family": "source_free_same_name_continuation",
+        "rationale": (
+            "Same-name cross-project boundary wording plus continuation should "
+            "surface scent, but the overeager semantic fixture must not become evidence."
+        ),
+    },
+    "synthetic_hard_bank__remember_var__skip_plain_task": {
+        "resolution": "runtime_rule_fix",
+        "failure_family": "memory_write_negation",
+        "rationale": (
+            "The user negates memory writing; importance cues such as remember "
+            "must not wake ambient recall."
+        ),
+    },
+    "synthetic_hard_bank__bug_card_spacing__skip_plain_task": {
+        "resolution": "runtime_rule_fix",
+        "failure_family": "plain_code_surface_working_memory_overlap",
+        "rationale": (
+            "Component/card spacing work is a live implementation task; broad "
+            "working-memory terms must not override code-surface suppression."
+        ),
+    },
+}
+
 
 @dataclass(frozen=True)
 class GateCase:
@@ -802,6 +877,7 @@ def build_public_memory_pain_cases() -> list[GateCase]:
         case(
             "fabricated_profile_no_source",
             "The model thinks the user is a morning person; remember it permanently.",
+            expected="should_skip",
         ),
         case(
             "transient_task_state",
@@ -810,14 +886,17 @@ def build_public_memory_pain_cases() -> list[GateCase]:
         case(
             "deterministic_vs_fuzzy_memory",
             "A retained TypeScript preference and a fuzzy Atlas vibe are different memory surfaces.",
+            expected="should_skip",
         ),
         case(
             "metadata_round_trip",
             "Caller metadata key conversation_id must round-trip; do not turn the key into memory.",
+            expected="should_skip",
         ),
         case(
             "large_document_no_foreground_llm",
             "A 900-page canonical document should be source-searchable without foreground LLM extraction.",
+            expected="should_skip",
         ),
         case(
             "invalid_structured_extraction",
@@ -1916,6 +1995,52 @@ def summarize_memory_pain_fixtures(
     }
 
 
+def summarize_track_a_residual_calibration(results: list[dict[str, Any]]) -> dict[str, Any]:
+    rows_by_id = {str(row.get("case_id") or ""): row for row in results}
+    families: dict[str, dict[str, Any]] = {}
+    case_rows: list[dict[str, Any]] = []
+    for case_id, metadata in TRACK_A_RESIDUAL_CALIBRATION_CASES.items():
+        row = rows_by_id.get(case_id, {})
+        family = metadata["failure_family"]
+        bucket = families.setdefault(
+            family,
+            {
+                "case_count": 0,
+                "resolution_counts": {},
+                "unresolved_count": 0,
+            },
+        )
+        resolution_counts = bucket["resolution_counts"]
+        resolution = metadata["resolution"]
+        resolution_counts[resolution] = int(resolution_counts.get(resolution) or 0) + 1
+        unresolved = bool(row and not result_is_correct(row))
+        bucket["case_count"] += 1
+        if unresolved:
+            bucket["unresolved_count"] += 1
+        case_rows.append(
+            {
+                "case_id": case_id,
+                "failure_family": family,
+                "resolution": resolution,
+                "expected": row.get("expected"),
+                "actual": row.get("actual"),
+                "correct": bool(row.get("correct")) if row else False,
+                "rationale": metadata["rationale"],
+            }
+        )
+    return {
+        "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/996",
+        "case_count": len(case_rows),
+        "unresolved_count": sum(1 for row in case_rows if not row["correct"]),
+        "residual_failure_taxonomy": families,
+        "cases": case_rows,
+        "claim_boundary": (
+            "This taxonomy calibrates deterministic synthetic Track A residuals; "
+            "it does not claim live semantic-model or real-history quality."
+        ),
+    }
+
+
 def run_case(case: GateCase, fixture: SyntheticFixture) -> dict[str, Any]:
     semantic_gate_called = False
 
@@ -2109,6 +2234,9 @@ def run_benchmark(
             results,
             include_private_text=include_private_text,
         )
+        if case_set == "synthetic"
+        else None,
+        "track_a_residual_calibration": summarize_track_a_residual_calibration(results)
         if case_set == "synthetic"
         else None,
         "semantic_gate_boundary": {

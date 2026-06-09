@@ -2,6 +2,8 @@
 
 Evidence date: 2026-05-30.
 
+Calibration update: 2026-06-09.
+
 This report summarizes the public-safe fixture evidence added for #27 and used
 to satisfy #28. It is a demo/report for AIppocampus claim boundaries, not a
 competitor scorecard or leaderboard.
@@ -63,6 +65,24 @@ In the 2026-05-30 local run, the gate benchmark reported 9 memory-pain cases,
 payload benchmark reported 9 memory-pain cases, 0 privacy breaches, 0 evidence
 without source, and 0 unsupported-evidence cases for the same fixture family.
 
+On 2026-06-09, #996 recalibrated four source-free public pain prompts from
+`should_scent` to `should_skip`: fabricated profile without source,
+deterministic-vs-fuzzy memory as architecture prose, metadata round-trip with
+an explicit no-memory boundary, and large-document foreground-LLM pressure.
+The product boundary is that unsupported memory-like statements may become
+scent only when they provide a route, old-thread deixis, or continuation intent;
+otherwise the foreground hook should stay quiet. The same synthetic run
+reported 188/188 correct Track A decisions, `evidence_false_positive_count=0`,
+`over_escalation_count=0`, and
+`harder_case_bank.natural_oral_evidence_false_negative_count=0`.
+
+The gate report now emits `track_a_residual_calibration`, which groups the #996
+residuals into source-free memory-pain statement reclassification, ordinary
+code-surface suppression, false memory-word code surfaces, same-name
+continuation scent, memory-write negation, and working-memory overlap. That
+taxonomy is a deterministic synthetic calibration surface; it is not a live
+semantic-model or real-history quality claim.
+
 ## Reproduce
 
 Run from the repository root:
@@ -83,6 +103,8 @@ audited, provenance-linked sample.
   public-safe boundary fixtures.
 - Unsupported memory-like inputs are skipped or downgraded to scent-only
   instead of becoming source-backed evidence.
+- Source-free memory-pain statements without route, source request, or
+  continuation intent may be correctly skipped rather than surfaced as scent.
 - The payload layer keeps the memory-pain fixture family free of privacy
   breaches and evidence-without-source failures in the tested path.
 - Default benchmark reports are sanitized and aggregate-oriented.

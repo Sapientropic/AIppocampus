@@ -383,6 +383,58 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
             [],
         )
 
+    def test_track_a_residual_scent_boundary_cases_stay_calibrated(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+        by_id = {case["case_id"]: case for case in payload["cases"]}
+
+        expected_decisions = {
+            "public_memory_pain__fabricated_profile_no_source": ("should_skip", "skip"),
+            "public_memory_pain__deterministic_vs_fuzzy_memory": ("should_skip", "skip"),
+            "public_memory_pain__metadata_round_trip": ("should_skip", "skip"),
+            "public_memory_pain__large_document_no_foreground_llm": ("should_skip", "skip"),
+            "synthetic_hard_bank__atlas_copy__skip_high_overlap": ("should_skip", "skip"),
+            "synthetic_hard_bank__memory_cache__skip_false_cue": ("should_skip", "skip"),
+            "synthetic_hard_bank__atlas_other_line__scent_no_source_twin": (
+                "should_scent",
+                "scent",
+            ),
+            "synthetic_hard_bank__remember_var__skip_plain_task": ("should_skip", "skip"),
+            "synthetic_hard_bank__bug_card_spacing__skip_plain_task": ("should_skip", "skip"),
+        }
+
+        missing = sorted(set(expected_decisions) - set(by_id))
+        self.assertEqual(missing, [])
+        for case_id, (expected, actual) in expected_decisions.items():
+            self.assertEqual(by_id[case_id]["expected"], expected, case_id)
+            self.assertEqual(by_id[case_id]["actual"], actual, case_id)
+        self.assertEqual(
+            by_id["synthetic_hard_bank__atlas_other_line__scent_no_source_twin"][
+                "evidence_count"
+            ],
+            0,
+        )
+        self.assertEqual(payload["metrics"]["evidence_false_positive_count"], 0)
+        self.assertEqual(payload["metrics"]["over_escalation_count"], 0)
+        self.assertEqual(
+            payload["harder_case_bank"]["natural_oral_evidence_false_negative_count"],
+            0,
+        )
+        calibration = payload["track_a_residual_calibration"]
+        self.assertEqual(calibration["case_count"], len(expected_decisions))
+        self.assertEqual(calibration["unresolved_count"], 0)
+        self.assertEqual(
+            calibration["residual_failure_taxonomy"][
+                "source_free_same_name_continuation"
+            ]["resolution_counts"],
+            {"runtime_rule_fix": 1},
+        )
+        self.assertEqual(
+            calibration["residual_failure_taxonomy"][
+                "source_free_memory_pain_statement"
+            ]["resolution_counts"],
+            {"reclassified_to_skip": 3},
+        )
+
     def test_summarize_results_counts_evidence_false_negatives(self) -> None:
         results = [
             {"expected": "should_evidence", "actual": "skip", "case_type": "natural_oral"},
