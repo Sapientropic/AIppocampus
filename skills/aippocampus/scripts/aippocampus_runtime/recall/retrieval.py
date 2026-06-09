@@ -27,6 +27,7 @@ from aippocampus_runtime.recall.query_policy import (
     CONCEPT_TRIGGERS,
     RECALL_TRIGGERS,
     STOP_TERMS,
+    cjk_query_sidecar_terms,
     fts_query,
     normalize_term,
     score_anchor,
@@ -487,11 +488,19 @@ def search_hybrid_index(
     structure_cues: dict[str, bool] | None = None,
     temporal_cue: dict[str, Any] | None = None,
 ) -> list[dict]:
+    # CJK sidecar terms are default query-navigation material, not source
+    # evidence or semantic aliases. They only broaden lexical matching for
+    # no-space Chinese cues; source-backed claims still come from returned
+    # message/chunk rows.
+    default_expanded_terms = unique_preserve(
+        list(expanded_terms) + cjk_query_sidecar_terms(" ".join(query_terms)),
+        limit=64,
+    )
     con = sqlite3.connect(index)
     con.row_factory = sqlite3.Row
     try:
         candidates: dict[int, dict] = {}
-        query = fts_query(expanded_terms)
+        query = fts_query(default_expanded_terms)
         if query:
             try:
                 rows = con.execute(
@@ -519,7 +528,7 @@ def search_hybrid_index(
 
         # LIKE fallback also adds candidates that FTS missed, especially when
         # a SQLite build lacks trigram support or the query contains punctuation.
-        like_terms = unique_preserve(query_terms + expanded_terms, limit=18)
+        like_terms = unique_preserve(query_terms + default_expanded_terms, limit=18)
         if like_terms:
             where = " OR ".join(["text LIKE ?" for _ in like_terms])
             params = [f"%{term}%" for term in like_terms] + [candidate_limit]
@@ -546,7 +555,7 @@ def search_hybrid_index(
             for chunk in search_rag_chunks_connection(
                 con,
                 query_terms,
-                expanded_terms,
+                default_expanded_terms,
                 anchor_matches,
                 limit=12,
                 candidate_limit=max(24, candidate_limit // 2),
@@ -605,7 +614,7 @@ def search_hybrid_index(
             row = item["row"]
             text = row["text"]
             literal = literal_hit_count(text, query_terms)
-            expanded = literal_hit_count(text, expanded_terms)
+            expanded = literal_hit_count(text, default_expanded_terms)
             anchor_hits = anchor_hit_count(text, anchor_matches)
             signals = dict(item["signals"])
             weight = phase_weight(row)

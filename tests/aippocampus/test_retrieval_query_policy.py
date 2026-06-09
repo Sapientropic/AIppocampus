@@ -64,6 +64,16 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
             ),
         )
 
+    def test_cjk_query_sidecar_terms_expand_compact_cues_without_generic_deictics(self) -> None:
+        terms = policy.cjk_query_sidecar_terms("上次那个复开源头路线有界证据")
+
+        self.assertIn("复开源头路线有界证据", terms)
+        self.assertIn("源头路线", terms)
+        self.assertIn("证据", terms)
+        self.assertNotIn("上次", terms)
+        self.assertNotIn("那个", terms)
+        self.assertEqual(policy.cjk_query_sidecar_terms("之前 那个 记忆"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
