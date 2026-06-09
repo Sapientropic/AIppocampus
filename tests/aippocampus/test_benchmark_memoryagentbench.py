@@ -220,6 +220,59 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, dumped)
 
+    def test_stage3_apply_instrumentation_records_writes_updates_and_controls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / "memoryagentbench"
+            self._write_fixture(dataset_dir)
+
+            payload = benchmark.build_stage3_incremental_dry_run(
+                dataset_dir=dataset_dir,
+                write_update_mode="local_apply_instrumented",
+                case_limit=10,
+            )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "stage3_apply_instrumented")
+        self.assertEqual(payload["mode_fields"]["write_update_mode"], "local_apply_instrumented")
+        self.assertEqual(payload["mode_fields"]["retrieval_mode"], "local_apply_retrieve_probe")
+        self.assertEqual(payload["claim_boundary"]["write_update_instrumentation"], "local_apply_instrumented")
+        self.assertEqual(payload["claim_boundary"]["official_runner_compatibility"], "not_claimed")
+        self.assertEqual(payload["claim_boundary"]["live_model_quality"], "not_measured")
+        self.assertEqual(payload["metrics"]["stage3_case_count"], 2)
+        self.assertEqual(payload["metrics"]["apply_write_count"], 2)
+        self.assertEqual(payload["metrics"]["apply_update_count"], 2)
+        self.assertEqual(payload["metrics"]["apply_retrieval_probe_count"], 2)
+        self.assertEqual(payload["metrics"]["false_forgetting_control_count"], 2)
+        self.assertEqual(payload["metrics"]["stale_currentness_control_count"], 1)
+        self.assertEqual(payload["metrics"]["stale_currentness_pass_count"], 1)
+        self.assertTrue(payload["false_forgetting_controls"]["local_apply_checked"])
+        self.assertTrue(payload["false_forgetting_controls"]["all_cases_retained_prior_versions"])
+
+        cases_by_split = {case["split"]: case for case in payload["cases"]}
+        ttl = cases_by_split["Test_Time_Learning"]["apply_instrumentation"]
+        conflict = cases_by_split["Conflict_Resolution"]["apply_instrumentation"]
+        self.assertEqual(ttl["status"], "applied")
+        self.assertEqual(conflict["status"], "applied")
+        self.assertEqual(conflict["currentness_control"]["retrieved_version"], "current")
+        self.assertTrue(conflict["currentness_control"]["stale_version_retained"])
+        self.assertTrue(conflict["currentness_control"]["stale_version_demoted"])
+        self.assertEqual(
+            ttl["retrieval_probe"]["retrieved_memory_ref_sha1"],
+            ttl["current_memory_ref_sha1"],
+        )
+
+        dumped = json.dumps(payload, ensure_ascii=False)
+        for forbidden in (
+            RAW_CONTEXT_TTL,
+            RAW_ANSWER_TTL,
+            "SECRET CR CONTEXT",
+            "RAW CR QUESTION",
+            "RAW CR ANSWER",
+            LOCAL_PATH_SENTINEL,
+            str(dataset_dir),
+        ):
+            self.assertNotIn(forbidden, dumped)
+
     def test_parquet_files_without_optional_reader_are_not_reported_as_missing_dataset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dataset_dir = Path(tmp) / "memoryagentbench"
