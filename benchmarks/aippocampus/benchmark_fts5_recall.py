@@ -697,18 +697,25 @@ def run_public_cjk_recall_fixture(
             },
             "hybrid_without_rag_chunks": {
                 "default_component": True,
-                "description": "Current lexical FTS plus LIKE fallback without RAG-lite chunks.",
+                "description": (
+                    "Default lexical query policy plus FTS/LIKE fallback without "
+                    "RAG-lite chunks."
+                ),
             },
             "production_hybrid": {
                 "default_component": True,
-                "description": "Current lexical-structural local retrieval with RAG-lite enabled.",
+                "description": (
+                    "Default lexical-structural local retrieval with lightweight "
+                    "CJK query chunks and RAG-lite enabled."
+                ),
             },
             "cjk_aware_sidecar": {
-                "default_component": False,
-                "measured_only": True,
+                "default_component": True,
+                "explicit_comparison": True,
                 "description": (
-                    "Measured lightweight CJK query chunks over the local hybrid "
-                    "path; not semantic evidence or default scoring weight."
+                    "Explicit CJK query-chunk comparison over the local hybrid "
+                    "path; retained to verify the default path matches the "
+                    "previous measured sidecar without making chunks source truth."
                 ),
             },
         },
@@ -722,6 +729,13 @@ def run_public_cjk_recall_fixture(
             "production_positive_miss_count": production_gap_count,
             "status": "measured_gap" if production_gap_count else "none",
             "boundary": (
+                "Lightweight CJK query chunks are search/navigation material "
+                "inside the default local hybrid path; they do not make "
+                "generated chunks source truth or support broad Chinese recall "
+                "claims."
+            )
+            if not production_gap_count
+            else (
                 "The measured CJK-aware sidecar can recover compact CJK cues "
                 "that the current production hybrid does not yet return; this "
                 "is a follow-up signal, not a broad quality claim."
@@ -732,12 +746,12 @@ def run_public_cjk_recall_fixture(
         "can_claim": [
             "expanded_public_fixture_covers_exact_short_mixed_deictic_paraphrase_compact_and_negative_cjk_cases",
             "production_hybrid_fixture_hit_behavior_is_measured_for_this_case_pack",
-            "cjk_aware_sidecar_is_measured_without_becoming_source_truth",
+            "default_cjk_query_chunks_are_measured_without_becoming_source_truth",
         ],
         "cannot_claim": [
             "broad_chinese_recall_quality",
             "semantic_chinese_search_from_trigram_alone",
-            "production_hybrid_handles_all_compact_cjk_cues",
+            "production_hybrid_handles_all_compact_cjk_cues_beyond_fixture",
             "no_dense_vector_default_claim",
             "private_history_cjk_quality",
             "heavy_tokenizer_or_embedding_requirement",

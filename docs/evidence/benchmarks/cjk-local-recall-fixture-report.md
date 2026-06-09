@@ -31,14 +31,36 @@ messages and reports ten cases:
 The comparison modes are:
 
 - `fts5_trigram`: SQLite FTS5 trigram over current split query terms.
-- `hybrid_without_rag_chunks`: current lexical FTS plus LIKE fallback without
-  RAG-lite chunks.
+- `hybrid_without_rag_chunks`: default lexical query policy plus FTS/LIKE
+  fallback without RAG-lite chunks.
 - `production_hybrid`: current default lexical-structural local retrieval with
-  RAG-lite enabled.
-- `cjk_aware_sidecar`: measured-only lightweight CJK query chunks over the
-  local hybrid path. This is not semantic evidence or a default scoring weight.
+  lightweight CJK query chunks and RAG-lite enabled.
+- `cjk_aware_sidecar`: explicit CJK query-chunk comparison over the local
+  hybrid path. It is retained to verify that the default path still matches the
+  previous measured sidecar without turning chunks into source truth.
 
-## 2026-06-09 Result
+## 2026-06-09 Default-Path Follow-Up Result
+
+After #1054, lightweight CJK query chunks are part of the default local hybrid
+query-navigation path. Rerunning the checked-in fixture reports:
+
+- `production_hybrid`: 7/7 positive top-5 hits; 0 negative false positives.
+  The compact no-space CJK cue is now recovered by the default path.
+- `cjk_aware_sidecar`: 7/7 positive top-5 hits; 0 negative false positives.
+  This explicit comparison remains in the report so future changes can verify
+  default behavior against the previous measured sidecar.
+- `hybrid_without_rag_chunks`: 7/7 positive top-5 hits; 0 negative false
+  positives.
+- `fts5_trigram`: 3/7 positive top-5 hits; 0 negative false positives.
+- All three negative controls produced 0 false positives across the measured
+  modes.
+
+The default-path change is intentionally narrow: CJK query chunks are
+search/navigation terms only. They do not make generated chunks source truth,
+do not remove source-reopen requirements, and do not support broad Chinese
+semantic-search or private-history CJK claims.
+
+## 2026-06-09 Expanded Fixture Result
 
 The expanded checked-in fixture passed with an explicit default-path gap:
 
@@ -66,14 +88,15 @@ Can claim:
   public CJK fixture.
 - The fixture distinguishes exact, short-cue, mixed-code, deictic, paraphrase,
   compact no-space, mixed project-symbol, and negative-control behavior.
-- Lightweight CJK sidecar terms can recover the expanded fixture's compact
-  CJK cue as measured navigation/search terms.
+- Lightweight CJK query chunks in the default local hybrid path recover the
+  expanded fixture's compact CJK cue as navigation/search terms.
 
 Cannot claim:
 
 - broad Chinese recall quality
 - full semantic Chinese search from trigram FTS alone
-- that the current production hybrid handles every compact CJK cue
+- that the current production hybrid handles every compact CJK cue beyond this
+  fixture
 - dense vector retrieval as a default path
 - private-history CJK quality
 - a requirement for heavyweight tokenizers, embeddings, GPU, or external vector

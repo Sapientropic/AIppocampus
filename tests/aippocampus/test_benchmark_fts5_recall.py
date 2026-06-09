@@ -21,6 +21,8 @@ for _path in (
 
 import benchmark_fts5_recall as benchmark  # noqa: E402
 from aippocampus_runtime.recall.index_builder import make_sqlite  # noqa: E402
+from aippocampus_runtime.recall.query_policy import split_query_terms  # noqa: E402
+from aippocampus_runtime.recall.retrieval import search_hybrid_index  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -230,19 +232,100 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["case_count"], 10)
         self.assertEqual(payload["metrics"]["positive_case_count"], 7)
         self.assertEqual(payload["metrics"]["negative_case_count"], 3)
-        self.assertEqual(payload["status"], "expanded_fixture_passed_with_default_gap")
-        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 6)
+        self.assertEqual(payload["status"], "fixture_passed")
+        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 7)
         self.assertEqual(payload["metrics"]["production_hybrid"]["negative_false_positive_count"], 0)
         self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["positive_hit_top5"], 7)
         self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["negative_false_positive_count"], 0)
-        self.assertEqual(payload["default_gap"]["production_positive_miss_count"], 1)
+        self.assertEqual(payload["default_gap"]["production_positive_miss_count"], 0)
+        self.assertEqual(payload["default_gap"]["status"], "none")
+        self.assertEqual(
+            payload["metrics"]["by_case_type"]["compact_cjk_without_spaces"][
+                "production_hybrid_hit_top5"
+            ],
+            1,
+        )
+        self.assertEqual(
+            payload["metrics"]["by_case_type"]["mixed_english_project_symbol"][
+                "production_hybrid_hit_top5"
+            ],
+            1,
+        )
         self.assertEqual(payload["privacy_boundary"]["source_text"], "public_synthetic_fixture")
         self.assertIn("no_dense_vector_default_claim", payload["cannot_claim"])
         self.assertIn(
-            "production_hybrid_handles_all_compact_cjk_cues",
+            "production_hybrid_handles_all_compact_cjk_cues_beyond_fixture",
             payload["cannot_claim"],
         )
-        self.assertTrue(payload["comparison_modes"]["cjk_aware_sidecar"]["measured_only"])
+        self.assertTrue(payload["comparison_modes"]["cjk_aware_sidecar"]["default_component"])
+
+    def test_default_hybrid_uses_cjk_query_chunks_without_negative_wakeups(self) -> None:
+        sqlite_path = self.root / "cjk-default.sqlite"
+        make_sqlite(
+            sqlite_path,
+            [
+                {
+                    "line": 10,
+                    "timestamp": None,
+                    "role": "user",
+                    "kind": "message",
+                    "phase": "",
+                    "turn_index": 1,
+                    "is_final": False,
+                    "sha1": "sha-cjk-target",
+                    "text": "复开源头路线先确认 source_ref，再把结论写成有界证据。",
+                },
+                {
+                    "line": 20,
+                    "timestamp": None,
+                    "role": "assistant",
+                    "kind": "message",
+                    "phase": "final_answer",
+                    "turn_index": 2,
+                    "is_final": True,
+                    "sha1": "sha-cjk-mixed",
+                    "text": "Graphify 中文 source reopen 要回到源行再继续。",
+                },
+            ],
+            anchors=[],
+            turns=[],
+            publish_lock=False,
+        )
+
+        compact_terms = split_query_terms(["复开源头路线有界证据"])
+        compact_hits = search_hybrid_index(
+            sqlite_path,
+            compact_terms,
+            compact_terms,
+            [],
+            limit=5,
+            use_rag_chunks=True,
+            snippet_chars=1,
+        )
+        mixed_terms = split_query_terms(["Graphify 中文 source reopen"])
+        mixed_hits = search_hybrid_index(
+            sqlite_path,
+            mixed_terms,
+            mixed_terms,
+            [],
+            limit=5,
+            use_rag_chunks=True,
+            snippet_chars=1,
+        )
+        generic_terms = split_query_terms(["之前 那个 记忆"])
+        generic_hits = search_hybrid_index(
+            sqlite_path,
+            generic_terms,
+            generic_terms,
+            [],
+            limit=5,
+            use_rag_chunks=True,
+            snippet_chars=1,
+        )
+
+        self.assertEqual(compact_hits[0]["line"], 10)
+        self.assertEqual(mixed_hits[0]["line"], 20)
+        self.assertEqual(generic_hits, [])
 
     def test_public_cjk_fixture_cli_outputs_json_without_private_registry(self) -> None:
         stdout = StringIO()

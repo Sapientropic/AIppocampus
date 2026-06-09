@@ -296,7 +296,8 @@ active readers from expired old generations.
 Default retrieval is local lexical-structural hybrid search:
 
 - SQLite FTS5 trigram search plus LIKE fallback for Chinese, mixed prose, and
-  fuzzy literal clues.
+  fuzzy literal clues, with lightweight CJK query chunks for compact no-space
+  Chinese cues.
 - Anchor matching for durable titles, keywords, and preserved phrases.
 - RAG-lite chunks for neighborhood recall before returning to source lines.
 - Phase-aware scoring that boosts user messages and `final_answer`, while
@@ -330,12 +331,12 @@ and do not let activation metadata become source truth.
 
 Chinese and mixed-language recall is measured by the public-safe CJK local
 fixture in
-`docs/evidence/benchmarks/cjk-local-recall-fixture-report.md`. That fixture can
-compare current trigram/LIKE/RAG-lite behavior with measured-only
-`cjk_query_sidecar_terms()` candidates, including compact no-space CJK cues.
-The sidecar terms are search/navigation material only: they do not make
-generated aliases source truth, and the fixture does not claim broad Chinese
-semantic search quality.
+`docs/evidence/benchmarks/cjk-local-recall-fixture-report.md`. The default
+local hybrid path uses conservative `cjk_query_sidecar_terms()` chunks for
+query navigation, including compact no-space CJK cues, and the fixture keeps an
+explicit CJK query-chunk comparison so regressions stay visible. These chunks
+are search/navigation material only: they do not make generated aliases source
+truth, and the fixture does not claim broad Chinese semantic search quality.
 
 Segmented merge weights are calibrated by the public-safe #375 fixture runner
 `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` and documented in
