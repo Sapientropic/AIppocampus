@@ -209,6 +209,103 @@ class CognitiveLoadSidecarTests(unittest.TestCase):
         self.assertNotIn("anxious personality", serialized)
         self.assertNotIn("source_refs", serialized)
 
+    def test_public_behavior_trace_feedback_report_measures_useful_drag_and_risk(self) -> None:
+        helpful_ref = {"source_id": "public:trace-helpful", "message_id": "m-helpful", "line": 12}
+        drag_ref = {"source_id": "public:trace-drag", "message_id": "m-drag", "line": 33}
+        risk_ref = {
+            "source_id": "public:trace-risk",
+            "message_id": "m-risk",
+            "line": 44,
+            "path": r"C:\Users\Administrator\private\rollout.jsonl",
+        }
+
+        report = sidecar.build_public_behavior_trace_feedback_report(
+            [
+                {
+                    "public_trace_id": "public-coding-helpful-caution",
+                    "event_type": "user_correction",
+                    "timestamp": "2026-06-05T00:00:00Z",
+                    "source_refs": [helpful_ref],
+                    "load_weight_reviewed": True,
+                    "caution_hint_reviewed": True,
+                    "caution_hint_useful": True,
+                },
+                {
+                    "public_trace_id": "public-coding-irrelevant-drag",
+                    "event_type": "failed_command",
+                    "timestamp": "2026-06-05T00:05:00Z",
+                    "source_refs": [drag_ref],
+                    "load_weight_reviewed": True,
+                    "load_weight_false_positive": True,
+                    "irrelevant_load_drag": True,
+                    "caution_hint_reviewed": True,
+                    "caution_hint_useful": False,
+                    "raw_note": "This public fixture should not serialize the irrelevant detour note.",
+                },
+                {
+                    "public_trace_id": "public-coding-overpersonalization-risk",
+                    "event_type": "rejected_route_retry",
+                    "timestamp": "2026-06-05T00:10:00Z",
+                    "source_refs": [risk_ref],
+                    "load_weight_reviewed": True,
+                    "overpersonalization_from_load_signal": True,
+                    "raw_note": "The user is anxious and stressed.",
+                },
+            ],
+            [
+                {
+                    "candidate_id": "helpful-caution-source",
+                    "source_refs": [helpful_ref],
+                    "semantic_score": 0.74,
+                    "source_authority": 0.9,
+                },
+                {
+                    "candidate_id": "drag-source",
+                    "source_refs": [drag_ref],
+                    "semantic_score": 0.78,
+                    "source_authority": 0.88,
+                },
+            ],
+            now="2026-06-06T00:00:00Z",
+        )
+
+        self.assertEqual(
+            report["kind"],
+            sidecar.PUBLIC_BEHAVIOR_TRACE_FEEDBACK_REPORT_KIND,
+        )
+        metrics = report["metrics"]
+        self.assertEqual(metrics["public_behavior_trace_case_count"], 3)
+        self.assertEqual(metrics["reviewed_feedback_case_count"], 3)
+        self.assertEqual(metrics["helpful_caution_hint_count"], 1)
+        self.assertEqual(metrics["irrelevant_load_drag_count"], 1)
+        self.assertEqual(metrics["overpersonalization_from_load_signal_count"], 1)
+        self.assertEqual(metrics["load_weight_false_positive_rate"], 0.333333)
+        self.assertEqual(metrics["caution_hint_useful_rate"], 0.5)
+        self.assertEqual(metrics["irrelevant_load_drag_rate"], 0.333333)
+
+        outcomes = {case["feedback_outcome"] for case in report["case_summaries"]}
+        self.assertEqual(
+            outcomes,
+            {
+                "useful_caution_hint",
+                "irrelevant_load_drag",
+                "overpersonalization_risk",
+            },
+        )
+        readout = report["issue_readouts"]["github_575"]
+        self.assertEqual(readout["public_behavior_trace_feedback"], "measured_public_fixture")
+        self.assertEqual(readout["false_positive_rate"], 0.333333)
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertIn("live_hook_capture_quality", report["cannot_claim"])
+
+        serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("source_refs", serialized)
+        self.assertNotIn("public:trace", serialized)
+        self.assertNotIn("C:\\Users\\Administrator", serialized)
+        self.assertNotIn("irrelevant detour note", serialized)
+        self.assertNotIn("anxious", serialized)
+        self.assertNotIn("stressed", serialized)
+
     def test_private_history_calibration_measures_clean_source_without_leaking_text(self) -> None:
         messages = [
             {

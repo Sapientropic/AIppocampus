@@ -2,9 +2,9 @@
 
 Role: active design.
 
-Status: first deterministic sidecar, public-safe calibration report, and
-private-history aggregate calibration runner implemented for #575. Live hook
-capture, host-timing quality, feedback-reviewed false-positive rates, and
+Status: first deterministic sidecar, public-safe calibration report, public
+behavior-trace feedback fixture, and private-history aggregate calibration
+runner implemented for #575. Live hook capture, host-timing quality, and
 user-visible lift remain future work.
 
 ## Purpose
@@ -32,6 +32,10 @@ deterministic sidecar:
 - `build_cognitive_load_calibration_report(sidecar, ranked_candidates=...)`
   emits a no-write calibration readout separating routing weight, source truth,
   and affect/personality boundaries.
+- `build_public_behavior_trace_feedback_report(events, candidates, now=...)`
+  measures public fixture feedback for helpful caution hints, irrelevant load
+  drag / false positives, and over-personalization risk without serializing
+  raw source handles or notes.
 - `cognitive_load_private_calibration.py` reads clean-source
   `messages.jsonl` / `events.jsonl` or the local thread registry and emits a
   public-safe private-history aggregate report. It never serializes clean-source
@@ -92,6 +96,13 @@ public-safe aggregate, `private_real_history_calibration` can become
 feedback-reviewed false-positive rates, caution-hint usefulness, and
 user-visible recall improvement still remain unmeasured.
 
+`build_public_behavior_trace_feedback_report()` is the public reproducibility
+bridge for reviewed feedback. Public fixtures can mark a load signal as useful,
+irrelevant drag / false positive, or over-personalization risk; the report keeps
+only anonymized case ids, event kinds, feedback outcomes, counts, and rates.
+It does not make the private aggregate cohort public, and it does not prove live
+host timing or default foreground usefulness.
+
 ## Projection Boundary
 
 Model-visible and public-safe rows must use the boundary string
@@ -126,6 +137,7 @@ The first deterministic payload tracks the metric names required by #575:
 - `load_weight_false_positive_rate`
 - `load_weight_decay_coverage`
 - `caution_hint_useful_rate`
+- `irrelevant_load_drag_rate`
 - `overpersonalization_from_load_signal_count`
 
 Rates that need reviewer or outcome data return `null` until corresponding
@@ -147,11 +159,16 @@ calibration before private reviewed cases exist.
 - the private-history aggregate runner can convert clean-source message/event
   fixtures into load signals without leaking raw private text, source refs,
   paths, command text, or assistant text.
+- the public behavior-trace feedback fixture reports useful caution, irrelevant
+  drag / false positive, and over-personalization-risk outcomes without leaking
+  source refs, raw notes, or local paths.
 
 The dated private-history aggregate report is
 [`docs/evidence/cognitive-load-private-history-calibration-2026-06-08.md`](../evidence/cognitive-load-private-history-calibration-2026-06-08.md).
 It scanned 100 local registry threads and marked private-history calibration as
 measured for that cohort, but it still found no reviewed false-positive or
-caution-usefulness rows. Future work should only wire this into a live hook or
-broader host policy after reviewed calibration shows that the boost reduces
-repeated pitfalls without raising over-personalization or annoyance risk.
+caution-usefulness rows. The public behavior-trace fixture now covers selected
+reviewed outcomes, but future work should only wire this into a live hook or
+broader host policy after live/private reviewed calibration shows that the boost
+reduces repeated pitfalls without raising over-personalization or annoyance
+risk.
