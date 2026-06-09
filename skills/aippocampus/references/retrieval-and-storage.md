@@ -632,6 +632,15 @@ and injection noise should be filtered before they become triggers.
 use staging edges; depth-2 expansion is restricted to verified or
 high-confidence edges and remains scent-only.
 
+`aippocampus_runtime.navigation.concept_edge_utility` records explicit,
+privacy-safe utility events for graph expansions and emits an offline aggregate
+report grouped by edge type, edge status, score bucket, and optional hashed
+project/domain buckets. These rows are route telemetry only: they do not store
+raw prompt text, raw source excerpts, or local paths; they do not mutate
+`EDGE_TYPE_MULTIPLIER`; and they do not turn graph proximity into source
+evidence. Use the report to justify a later explicit scoring-policy change,
+not as online learning.
+
 ## Vault And Dashboard
 
 `aippocampus_runtime.vault.sync` creates a human-readable memory surface, usually under

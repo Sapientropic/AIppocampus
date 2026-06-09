@@ -68,6 +68,7 @@ class ConceptGraphTests(unittest.TestCase):
         self.assertIn("gotd", [item["term"] for item in expansions])
         gotd = next(item for item in expansions if item["term"] == "gotd")
         self.assertEqual(gotd["depth"], 2)
+        self.assertIn(gotd["score_bucket"], {"very_low", "low", "medium", "high", "very_high"})
 
     def test_build_graph_ingests_subconscious_staging_edges(self) -> None:
         self.associations.write_text(

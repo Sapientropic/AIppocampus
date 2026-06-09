@@ -23,6 +23,7 @@ from aippocampus_runtime.navigation.associations import (
     normalize_term,
     term_is_noise,
 )
+from aippocampus_runtime.navigation.concept_edge_utility import score_bucket
 from aippocampus_runtime.navigation.concept_kinds import (
     classify_concept_kind,
     concept_kind_source_boundary,
@@ -51,6 +52,9 @@ GENERIC_CONCEPT_TERMS = {
     "主题是什么",
 }
 
+# Edge multipliers are explicit ranking priors. Utility telemetry may report
+# whether these priors helped source reopen, but it must not mutate them or make
+# graph proximity count as source evidence.
 EDGE_TYPE_MULTIPLIER = {
     "alias": 1.0,
     "verified_related": 0.85,
@@ -747,6 +751,7 @@ def expand_concepts(
                     "depth": next_depth,
                     "path": path + [label],
                     "edge_types": edge_types + [edge["edge_type"]],
+                    "score_bucket": score_bucket(next_score),
                     "status": edge["status"],
                     "concept_kind": edge["dst_kind"],
                     "concept_kind_source": edge["dst_kind_source"],
