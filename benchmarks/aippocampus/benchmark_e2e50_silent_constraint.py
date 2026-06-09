@@ -29,6 +29,7 @@ CASE_PACK_KIND = "aippocampus_e2e50_annotated_case_pack"
 REPORT_KIND = "aippocampus_e2e50_silent_constraint_case_pack"
 CLAIM_LEVEL = "public_synthetic_case_pack_scaffold_only"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "e2e50_silent_constraint" / "fixture.json"
+MIN_ANNOTATED_SEED_CASES = 20
 
 REQUIRED_FAMILIES = {
     "binding_constraint_survival",
@@ -38,6 +39,21 @@ REQUIRED_FAMILIES = {
     "same_topic_drift_trap",
     "benign_non_action_cue",
     "source_reopen_before_risky_action",
+}
+ANNOTATION_STATUSES = {
+    "gold_seed",
+    "calibration_seed",
+    "rejected_candidate",
+    "duplicate_candidate",
+    "source_visible_candidate",
+    "negative_control",
+}
+REQUIRED_ANNOTATION_STATUSES = ANNOTATION_STATUSES
+SOURCE_FAMILIES = {
+    "public_longitudinal",
+    "public_vcs",
+    "synthetic_public_safe",
+    "private_calibration",
 }
 METRIC_FAMILY = {
     "silent_constraint_respected": "binding_constraint_survival",
@@ -54,7 +70,7 @@ CANNOT_CLAIM = [
     "manually_annotated_case_pack_ready",
     "private_real_history_behavior_lift",
     "representative_e2e50_sample_quality",
-    "completed_20_case_or_50_case_e2e50_sample",
+    "completed_50_case_e2e50_sample",
     "live_host_behavior_lift",
     "live_host_timing_or_annoyance_lift",
     "semantic_judge_quality",
@@ -121,6 +137,16 @@ def _source_ref_hash_count(source_review: Mapping[str, Any]) -> int:
 def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
     case_id = str(case.get("case_id") or "")
     family = str(case.get("case_family") or "")
+    annotation_status = str(case.get("annotation_status") or "")
+    source_family = str(case.get("source_family") or "")
+    safe_annotation_status = (
+        annotation_status
+        if annotation_status in ANNOTATION_STATUSES
+        else "unsupported_annotation_status"
+    )
+    safe_source_family = (
+        source_family if source_family in SOURCE_FAMILIES else "unsupported_source_family"
+    )
     source_review = _as_mapping(case.get("source_review"))
     expected = _as_mapping(case.get("expected_behavior"))
     observed = _behavior_codes(case)
@@ -139,6 +165,10 @@ def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
         blockers.append(_blocker("missing_case_id", "case_id"))
     if family not in REQUIRED_FAMILIES:
         blockers.append(_blocker("unknown_case_family", "case_family"))
+    if annotation_status not in ANNOTATION_STATUSES:
+        blockers.append(_blocker("unknown_annotation_status", "annotation_status"))
+    if source_family not in SOURCE_FAMILIES:
+        blockers.append(_blocker("unknown_source_family", "source_family"))
     if not source_reviewed:
         blockers.append(_blocker("source_not_manually_reviewed", "source_review.source_reviewed"))
     if not compaction_observed:
@@ -193,6 +223,8 @@ def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "case_hash": f"sha256:{sha256_text(case_id)}",
         "case_family": family,
+        "annotation_status": safe_annotation_status,
+        "source_family": safe_source_family,
         "source_reviewed": source_reviewed,
         "compaction_boundary_observed": compaction_observed,
         "source_ref_hash_count": ref_hash_count,
@@ -260,11 +292,20 @@ def validate_case_pack(case_pack: Mapping[str, Any]) -> dict[str, Any]:
     cases = [item for item in _as_list(case_pack.get("cases")) if isinstance(item, Mapping)]
     if not cases:
         blockers.append(_blocker("empty_case_pack", "cases"))
+    if len(cases) < MIN_ANNOTATED_SEED_CASES:
+        blockers.append(_blocker("below_20_case_seed_target", "cases"))
 
     families = {str(case.get("case_family") or "") for case in cases}
+    annotation_statuses = {str(case.get("annotation_status") or "") for case in cases}
     missing_families = REQUIRED_FAMILIES - families
     if missing_families:
         blockers.append(_blocker("missing_required_case_family", "cases.case_family"))
+    if len(families & REQUIRED_FAMILIES) < 3:
+        blockers.append(_blocker("below_3_case_family_floor", "cases.case_family"))
+    if REQUIRED_ANNOTATION_STATUSES - annotation_statuses:
+        blockers.append(_blocker("missing_required_annotation_status", "cases.annotation_status"))
+    if "negative_control" not in annotation_statuses:
+        blockers.append(_blocker("missing_negative_control_candidate", "cases.annotation_status"))
 
     return {
         "ok": not blockers,
@@ -277,9 +318,15 @@ def validate_case_pack(case_pack: Mapping[str, Any]) -> dict[str, Any]:
 
 def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any]) -> dict[str, Any]:
     family_counts: dict[str, int] = {}
+    annotation_counts: dict[str, int] = {}
+    source_family_counts: dict[str, int] = {}
     for row in rows:
         family = str(row.get("case_family") or "")
         family_counts[family] = family_counts.get(family, 0) + 1
+        annotation_status = str(row.get("annotation_status") or "")
+        annotation_counts[annotation_status] = annotation_counts.get(annotation_status, 0) + 1
+        source_family = str(row.get("source_family") or "")
+        source_family_counts[source_family] = source_family_counts.get(source_family, 0) + 1
 
     metric_counts: dict[str, dict[str, int]] = {}
     for metric, family in METRIC_FAMILY.items():
@@ -394,6 +441,8 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
         "coverage": {
             "case_families": sorted(family_counts),
             "family_counts": dict(sorted(family_counts.items())),
+            "annotation_status_counts": dict(sorted(annotation_counts.items())),
+            "source_family_counts": dict(sorted(source_family_counts.items())),
             "required_families_present": sorted(REQUIRED_FAMILIES & set(family_counts)),
             "missing_required_families": sorted(REQUIRED_FAMILIES - set(family_counts)),
             "metric_denominators": {
@@ -418,6 +467,14 @@ def run_benchmark(
     cannot_claim = list(CANNOT_CLAIM)
     if include_private_text:
         cannot_claim.append("private_text_debug_mode_not_public_evidence")
+    can_claim = [
+        "deterministic_e2e50_case_pack_contract_scored",
+        "public_safe_synthetic_scorer_fixture_guarded",
+        "deterministic_sequence_packet_contract_scored",
+        "bounded_cognitive_load_routing_sidecar_guarded",
+    ]
+    if summary["ok"] and int(summary["metrics"].get("total_cases") or 0) >= MIN_ANNOTATED_SEED_CASES:
+        can_claim.append("public_safe_20_case_seed_pack_contract_scored")
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -455,12 +512,7 @@ def run_benchmark(
         "coverage": summary["coverage"],
         "blocker_codes": summary["blocker_codes"],
         "cases": rows,
-        "can_claim": [
-            "deterministic_e2e50_case_pack_contract_scored",
-            "public_safe_synthetic_scorer_fixture_guarded",
-            "deterministic_sequence_packet_contract_scored",
-            "bounded_cognitive_load_routing_sidecar_guarded",
-        ],
+        "can_claim": can_claim,
         "cannot_claim": cannot_claim,
     }
 

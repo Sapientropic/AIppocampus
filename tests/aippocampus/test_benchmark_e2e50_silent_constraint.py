@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import unittest
@@ -29,7 +30,7 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["private_thread_ids_emitted"], False)
 
         metrics = payload["metrics"]
-        self.assertGreaterEqual(metrics["total_cases"], 7)
+        self.assertGreaterEqual(metrics["total_cases"], 20)
         self.assertEqual(metrics["silent_constraint_respected_rate"], 1.0)
         self.assertEqual(metrics["known_bad_route_avoided_rate"], 1.0)
         self.assertEqual(metrics["transient_concern_extinguished_rate"], 1.0)
@@ -63,9 +64,29 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
             },
             set(payload["coverage"]["case_families"]),
         )
+        self.assertEqual(
+            payload["coverage"]["annotation_status_counts"],
+            {
+                "calibration_seed": 3,
+                "duplicate_candidate": 2,
+                "gold_seed": 10,
+                "negative_control": 2,
+                "rejected_candidate": 2,
+                "source_visible_candidate": 1,
+            },
+        )
+        self.assertEqual(
+            payload["coverage"]["source_family_counts"],
+            {"synthetic_public_safe": 20},
+        )
+        self.assertIn(
+            "public_safe_20_case_seed_pack_contract_scored",
+            payload["can_claim"],
+        )
         self.assertIn("e2e50_behavior_benchmark_quality", payload["cannot_claim"])
         self.assertIn("private_real_history_behavior_lift", payload["cannot_claim"])
         self.assertIn("representative_e2e50_sample_quality", payload["cannot_claim"])
+        self.assertIn("completed_50_case_e2e50_sample", payload["cannot_claim"])
         self.assertIn("live_host_behavior_lift", payload["cannot_claim"])
         self.assertIn("semantic_judge_quality", payload["cannot_claim"])
         self.assertIn("episode_arc_as_truth_layer", payload["cannot_claim"])
@@ -73,6 +94,8 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
 
         for row in payload["cases"]:
             self.assertIn("case_hash", row)
+            self.assertIn("annotation_status", row)
+            self.assertIn("source_family", row)
             self.assertNotIn("case_id", row)
             self.assertNotIn("source_refs", row)
             self.assertNotIn("behavior_trace", row)
@@ -118,6 +141,44 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertIn("manually_annotated_case_pack_ready", payload["cannot_claim"])
         self.assertNotIn("PRIVATE_SENTINEL_CASE_ID", encoded)
         self.assertNotIn("forbidden_route_used", encoded)
+
+    def test_incomplete_pack_reports_20_case_blocker_without_20_case_claim(self) -> None:
+        case_pack = benchmark.load_fixture()
+        case_pack["cases"] = case_pack["cases"][:19]
+
+        payload = benchmark.run_benchmark(case_pack=case_pack)
+
+        self.assertFalse(payload["ok"])
+        self.assertIn("below_20_case_seed_target", payload["blocker_codes"])
+        self.assertNotIn(
+            "public_safe_20_case_seed_pack_contract_scored",
+            payload["can_claim"],
+        )
+
+    def test_seed_pack_requires_negative_control_status(self) -> None:
+        case_pack = benchmark.load_fixture()
+        case_pack = copy.deepcopy(case_pack)
+        for case in case_pack["cases"]:
+            if case.get("annotation_status") == "negative_control":
+                case["annotation_status"] = "calibration_seed"
+
+        payload = benchmark.run_benchmark(case_pack=case_pack)
+
+        self.assertFalse(payload["ok"])
+        self.assertIn("missing_negative_control_candidate", payload["blocker_codes"])
+        self.assertIn("missing_required_annotation_status", payload["blocker_codes"])
+
+    def test_seed_pack_requires_known_source_family_without_leaking_source_text(self) -> None:
+        case_pack = benchmark.load_fixture()
+        case_pack = copy.deepcopy(case_pack)
+        case_pack["cases"][0]["source_family"] = "private_raw_thread"
+
+        payload = benchmark.run_benchmark(case_pack=case_pack)
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertFalse(payload["ok"])
+        self.assertIn("unknown_source_family", payload["blocker_codes"])
+        self.assertNotIn("private_raw_thread", encoded)
 
     def test_sequence_and_load_overclaim_blocks_case_contract_without_leaking_events(self) -> None:
         case_pack = {
