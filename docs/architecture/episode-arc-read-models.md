@@ -6,9 +6,11 @@ Status: deterministic coding slices implemented in
 `aippocampus_runtime/coding/episode_arcs.py` and
 `aippocampus_runtime/coding/sequence_reopen.py`; aggregate private-history
 adjudication is implemented in
-`aippocampus_runtime/coding/episode_arc_private_adjudication.py`. Broader
-Episode/Arc coverage remains an active owner track and should not be claimed
-complete from these slices alone.
+`aippocampus_runtime/coding/episode_arc_private_adjudication.py`; public
+gappy-chain fixture calibration is exposed by
+`build_public_gappy_chain_calibration_report()`. Broader Episode/Arc coverage
+remains an active owner track and should not be claimed complete from these
+slices alone.
 
 Episode/Arc read-models preserve ordered local causality that is easy to lose
 in flattened memory: tried route, failed check, user correction, accepted
@@ -101,6 +103,17 @@ becomes `single_point_trap`; a chain missing an expected middle event becomes
 becomes `temporary_concern_arc` / `local_only`, not a current constraint. These
 cases should navigate the agent back to source, not make it warn or block from
 the derived arc alone.
+
+`build_public_gappy_chain_calibration_report()` is the public reproducible #663
+fixture surface for these negative controls. It accepts public-safe synthetic
+event rows, builds arcs, projects sequence packets / reopen plans, and reports
+`complete_arc_count`, `gappy_arc_count`, gap buckets, reopen-only counts,
+`single_point_overclaim_rate`, and `needs_reopen_projection_rate`. The report
+serializes case ids, event-kind order, gap labels, source-ref hash counts, and
+safe-use projections only. It must not serialize raw source text, source refs,
+event ids, thread ids, registry paths, or local machine paths. This is a
+selected deterministic fixture, not live behavior evidence or a broad public
+corpus.
 
 The sequence-packet reopen helper is intentionally stricter than the arc
 builder. A packet cannot reopen source by itself because it only carries compact

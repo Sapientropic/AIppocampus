@@ -1,6 +1,6 @@
 # Proof-Slice Maturity Board
 
-last_checked: 2026-06-09
+last_checked: 2026-06-10
 
 This board is the public truth-navigation layer for fast-moving AIppocampus
 proof lines. It is not a roadmap database and not a release checklist. Use it
@@ -53,7 +53,7 @@ as opt-in, experimental, fixture-scoped, or not-yet-default.
 | Semantic recall / source review | `fixture_tested` | #309, [`recall-navigation-comparison-2026-06-03.md`](../benchmarks/recall-navigation-comparison-2026-06-03.md), [`semantic-robustness-track-s.md`](../benchmarks/semantic-robustness-track-s.md) | Source-joined semantic/vector/graph signals can act as ranking hints after source gates. | Adaptive score fusion, universal semantic quality, or generated sidecars as evidence without reopen. |
 | Cognitive Observatory | `prototype` | #576, [`public-api.md#cognitive-observatory`](../../guides/public-api.md#cognitive-observatory), [`cognitive-runtime-architecture.md`](../../architecture/cognitive-runtime-architecture.md) | Read-only public-safe diagnostic projections can be emitted. | Control-plane authority, mutation, live quality certification, or private source disclosure. |
 | Cognitive-load sidecar | `dogfooded` | #575, [`cognitive-load-sidecar.md`](../../architecture/cognitive-load-sidecar.md) | Behavior-cost sidecars and caps/decay exist as recall weighting inputs. | Emotion/personality inference, live false-positive quality, or default hook usefulness. |
-| Episode / Arc sequence model | `dogfooded` | #663, [`episode-arc-read-models.md`](../../architecture/episode-arc-read-models.md) | Source-backed sequence read models and private aggregate adjudication exist. | Broad live host adapters, public reproducible corpus coverage, or causality without source reopen. |
+| Episode / Arc sequence model | `dogfooded` | #663, [`episode-arc-read-models.md`](../../architecture/episode-arc-read-models.md), [`current-claims.md`](current-claims.md) | Source-backed sequence read models, a public gappy-chain calibration fixture, and private aggregate adjudication exist. | Broad live host adapters, broad public corpus coverage, private-history generality, or causality without source reopen. |
 | Active-flow route feedback | `prototype` | #937, #950, `aippocampus_runtime.recall.feedback_events` | Public-safe route feedback rows and reducers can provide calibration/ranking metadata. | Online learning over private content, automatic score-weight changes, or activation metadata supporting factual claims. |
 
 ## Flagship Cognitive Mechanism Gate
