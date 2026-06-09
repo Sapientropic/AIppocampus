@@ -13,6 +13,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+if __name__ == "__main__" and __package__ in {None, ""}:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from benchmark_entrypoints import library_only_main
+
+    raise SystemExit(
+        library_only_main(
+            module_path="benchmarks/aippocampus/source_evidence/graph_extraction.py",
+            supported_runner="benchmarks/aippocampus/benchmark_source_evidence_retrieval.py",
+            summary="It provides Track B graph-extraction boundary fixtures.",
+        )
+    )
+
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import search_hybrid_index, split_query_terms
 
@@ -320,3 +334,15 @@ def run_graph_extraction_boundary_benchmark(
         },
         "cannot_claim": GRAPH_EXTRACTION_CANNOT_CLAIM,
     }
+
+
+if __name__ == "__main__":
+    from ..benchmark_entrypoints import library_only_main
+
+    raise SystemExit(
+        library_only_main(
+            module_path="benchmarks/aippocampus/source_evidence/graph_extraction.py",
+            supported_runner="benchmarks/aippocampus/benchmark_source_evidence_retrieval.py",
+            summary="It provides Track B graph-extraction boundary fixtures.",
+        )
+    )

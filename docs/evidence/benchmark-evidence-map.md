@@ -210,9 +210,17 @@ instead of deriving priority from this directory map.
 
 These repository-level runners live under `benchmarks/aippocampus/`. Every new
 benchmark runner should be added here and linked to its dated evidence owner.
+Public runner files should expose direct-script help/JSON behavior, and
+publicly documented runner files should also work through `python -m` when they
+are reasonable module targets. Track-owned helper modules may remain
+library-only, but direct execution must say so and point to the supported
+aggregate runner instead of failing with an import traceback or exiting with
+empty output. The PR-tier guard for this contract is
+`tests/aippocampus/test_benchmark_entrypoints.py`.
 
 | Surface | Entrypoint | Reads / updates |
 | --- | --- | --- |
+| Shared benchmark helper entrypoint contract | `benchmarks/aippocampus/benchmark_entrypoints.py` | Library-only helper execution contract for #1030; no benchmark score or evidence claim |
 | Shared benchmark uncertainty helper | `benchmarks/aippocampus/benchmark_statistics.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | One-command baseline suite, profile ladder, and threshold metadata | `benchmarks/aippocampus/benchmark_suite.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md` |
 | Benchmark run-history diff and regression guardrail | `benchmarks/aippocampus/benchmark_run_history_diff.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `.tmp/` or `benchmark_corpus/reports/` |

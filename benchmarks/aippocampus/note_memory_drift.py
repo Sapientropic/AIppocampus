@@ -14,6 +14,13 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+try:
+    from benchmark_entrypoints import library_only_main
+except ModuleNotFoundError as exc:
+    if exc.name != "benchmark_entrypoints":
+        raise
+    from .benchmark_entrypoints import library_only_main
+
 NOTE_DRIFT_CANNOT_CLAIM = [
     "full_obsidian_or_vault_integration",
     "user_authored_notes_forbidden",
@@ -423,3 +430,13 @@ def run_note_memory_drift_fixture_report(*, include_private_text: bool = False) 
         ),
         "cannot_claim": NOTE_DRIFT_CANNOT_CLAIM,
     }
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        library_only_main(
+            module_path="benchmarks/aippocampus/note_memory_drift.py",
+            supported_runner="benchmarks/aippocampus/benchmark_memory_decision_gate.py",
+            summary="It provides #987 note-memory-drift companion fixtures.",
+        )
+    )
