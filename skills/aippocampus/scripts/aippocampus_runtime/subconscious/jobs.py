@@ -41,6 +41,12 @@ from aippocampus_runtime.subconscious.deterministic_jobs import (
     DETERMINISTIC_RUNNERS,
     run_deterministic_job,
 )
+from aippocampus_runtime.subconscious.event_salience_gate import (
+    filter_salient_turns,
+    merge_event_salience_reports,
+    public_event_salience_summary,
+    write_event_salience_sidecar,
+)
 from aippocampus_runtime.subconscious.job_circuits import (
     JOB_SPECS,
     PROMPT_VERSION,
@@ -185,6 +191,10 @@ def public_jobs_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "output_private_artifacts": bool(result.get("jobs_output") or result.get("edges_output")),
         "output_boundary": "job_details_are_local_private_artifacts",
     }
+    if isinstance(result.get("event_salience_gate"), Mapping):
+        payload["event_salience_gate"] = public_event_salience_summary(
+            result["event_salience_gate"]
+        )
     error = public_error(result.get("error"))
     if error:
         payload["error"] = error
@@ -217,6 +227,7 @@ def run_one_job(
     concept_graph_path: Path,
     jobs_output_path: Path,
     edges_output_path: Path,
+    event_salience_output_path: Path | None = None,
     project: str | None,
     objective: str,
     max_turns: int,
@@ -235,6 +246,7 @@ def run_one_job(
     dry_run: bool = False,
     no_write: bool = False,
     defer_writes: bool = False,
+    event_salience_gate: bool = False,
     sample_index: int = 1,
     sample_count: int = 1,
 ) -> dict[str, Any]:
@@ -242,6 +254,14 @@ def run_one_job(
         raise ValueError(f"{job} is a deterministic follow-up; run it through run_jobs")
     timeline = load_json(timeline_path)
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
+    event_salience_report: dict[str, Any] = {}
+    if event_salience_gate:
+        turns, event_salience_report = filter_salient_turns(turns)
+        if event_salience_output_path and not dry_run and not no_write and not defer_writes:
+            write_event_salience_sidecar(
+                event_salience_output_path,
+                event_salience_report.get("sidecar_rows") or [],
+            )
     question_extraction_gate: dict[str, Any] = {}
     if job == "question_extraction":
         turns, question_extraction_gate = filter_question_extraction_turns(turns)
@@ -269,6 +289,10 @@ def run_one_job(
             "tool_contract_version": TOOL_CONTRACT_VERSION,
             "prompt_preview": compact_text(initial_payload, 2600),
             "question_extraction_gate": question_extraction_gate,
+            "event_salience_gate": event_salience_report,
+            "event_salience_output": str(event_salience_output_path)
+            if event_salience_output_path
+            else "",
         }
     route = route or resolve_model_route(
         model_route,
@@ -482,6 +506,10 @@ def run_one_job(
         "tool_contract_version": TOOL_CONTRACT_VERSION,
         "validation_diagnostics": validation_diagnostics,
         "question_extraction_gate": question_extraction_gate,
+        "event_salience_gate": event_salience_report,
+        "event_salience_output": str(event_salience_output_path)
+        if event_salience_output_path
+        else "",
     }
     if quality_diagnostics:
         result["quality_diagnostics"] = quality_diagnostics
@@ -496,6 +524,7 @@ def run_jobs(
     concept_graph_path: Path,
     jobs_output_path: Path,
     edges_output_path: Path,
+    event_salience_output_path: Path | None = None,
     project: str | None,
     objective: str,
     max_turns: int,
@@ -511,6 +540,7 @@ def run_jobs(
     model_route: str | None = None,
     dry_run: bool = False,
     no_write: bool = False,
+    event_salience_gate: bool = False,
     concurrency: int = DEFAULT_CONCURRENCY,
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB,
     chat_fn: ChatFn = call_chat_json,
@@ -588,6 +618,7 @@ def run_jobs(
             concept_graph_path=concept_graph_path,
             jobs_output_path=jobs_output_path,
             edges_output_path=edges_output_path,
+            event_salience_output_path=event_salience_output_path,
             project=project,
             objective=objective,
             max_turns=max_turns,
@@ -606,6 +637,7 @@ def run_jobs(
             dry_run=dry_run,
             no_write=no_write,
             defer_writes=not no_write,
+            event_salience_gate=event_salience_gate,
             sample_index=task.sample_index,
             sample_count=task.sample_count,
         )
@@ -650,6 +682,14 @@ def run_jobs(
                 )
             result["wrote"] = True
             result["deferred_write"] = False
+        if event_salience_gate and event_salience_output_path:
+            aggregate_salience = merge_event_salience_reports(
+                result.get("event_salience_gate") or {} for result in results
+            )
+            write_event_salience_sidecar(
+                event_salience_output_path,
+                aggregate_salience.get("sidecar_rows") or [],
+            )
     for deterministic_job in deterministic_jobs:
         try:
             results.append(
@@ -688,6 +728,11 @@ def run_jobs(
         (result.get("reasoning_effort") for result in results if result.get("reasoning_effort")),
         None,
     )
+    event_salience_report = (
+        merge_event_salience_reports(result.get("event_salience_gate") or {} for result in results)
+        if event_salience_gate
+        else {}
+    )
     return {
         "ok": overall_ok,
         "jobs": results,
@@ -709,6 +754,11 @@ def run_jobs(
         "cache": route_cache_metrics(route, usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
+        "dry_run": bool(dry_run),
+        "event_salience_output": str(event_salience_output_path)
+        if event_salience_output_path
+        else "",
+        "event_salience_gate": event_salience_report,
         "quality_diagnostics": [
             result["quality_diagnostics"]
             for result in results
@@ -729,6 +779,7 @@ def run_jobs_with_config(
         concept_graph_path=config.concept_graph_path,
         jobs_output_path=config.jobs_output_path,
         edges_output_path=config.edges_output_path,
+        event_salience_output_path=config.event_salience_output_path,
         project=config.project,
         objective=config.objective,
         max_turns=config.max_turns,
@@ -744,6 +795,7 @@ def run_jobs_with_config(
         model_route=config.model_route,
         dry_run=config.dry_run,
         no_write=config.no_write,
+        event_salience_gate=config.event_salience_gate,
         concurrency=config.concurrency,
         samples_per_job=config.samples_per_job,
         chat_fn=chat_fn,
@@ -758,6 +810,7 @@ def main() -> int:
     parser.add_argument("--concept-graph")
     parser.add_argument("--jobs-output")
     parser.add_argument("--edges-output")
+    parser.add_argument("--event-salience-output")
     parser.add_argument("--job", choices=["all", *JOB_SPECS.keys()], default="all")
     parser.add_argument("--project")
     parser.add_argument("--objective", default="")
@@ -773,6 +826,7 @@ def main() -> int:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     parser.add_argument("--samples-per-job", type=int, default=DEFAULT_SAMPLES_PER_JOB)
+    parser.add_argument("--event-salience-gate", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")

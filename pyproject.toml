@@ -376,6 +376,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/agent_fallback_materializer.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/agent_fallback_queue.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/deterministic_jobs.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/event_salience_gate.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/job_plan.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/job_storage.py",

@@ -1210,6 +1210,15 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   compatible `what_features`, `where_context`, `intent_orientation`,
   `phase_context`, and collaboration context lower completion thresholds,
   while orientation/context conflicts raise separation pressure.
+- Shipped #1058 event-salience intake slice:
+  `python -m aippocampus_runtime.subconscious.jobs --event-salience-gate` can
+  prefilter recent clean-source turns before model-backed subconscious jobs
+  build their payload. The optional
+  `subconscious_event_salience.jsonl` sidecar records compact source refs,
+  event kind, score/bucket, reason codes, and skip reason for reviewability.
+  This is candidate-prioritization metadata only; skipped turns remain in clean
+  source and public summaries expose aggregate counts rather than raw source
+  text or refs.
 - Shipped first #137 feedback-pressure slice: source-id-backed ambient
   dismiss/reopen events are consumed by `question_tracking.py` through
   `aippocampus_runtime.question.feedback_policy`. A dismissed same

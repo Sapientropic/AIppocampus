@@ -348,6 +348,30 @@ comparison, and each pair gets an adaptive threshold policy from compatible or
 conflicting six-axis evidence. This remains a staging/navigation layer; it does
 not turn salience scores or thresholds into memory truth.
 
+## Subconscious Event Salience Intake
+
+`aippocampus_runtime.subconscious.event_salience_gate` is the opt-in online
+intake gate before expensive subconscious job circuits. It classifies recent
+clean-source turns into compact event buckets such as explicit user correction,
+rejected route, unresolved frontier/blocker, durable preference/style,
+scope-boundary clarification, supersession/currentness, failed command/test,
+and low-information noise.
+
+The gate runs after clean-source timeline selection and before a job builds the
+model payload. With
+`python -m aippocampus_runtime.subconscious.jobs --event-salience-gate`,
+selected turns continue into the existing job runner, while low-information
+turns are skipped from model-backed candidate extraction without being removed
+from clean source. The optional `subconscious_event_salience.jsonl` sidecar is
+rebuildable navigation metadata: rows keep compact source refs, event kind,
+bucket/score, reason codes, and skip reason, but they do not promote content
+into working memory, formal memory, or source truth.
+
+This is intentionally earlier and weaker than consolidation priority events.
+Event salience decides what is worth spending subconscious model attention on;
+consolidation priority orders later review over already source-joined signals.
+Consumers must still reopen source before making factual claims.
+
 ## Consolidation Priority Events
 
 `aippocampus_runtime.reflection.consolidation_priority` is the narrow

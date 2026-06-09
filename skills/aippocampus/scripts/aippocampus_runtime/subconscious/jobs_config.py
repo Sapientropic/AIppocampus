@@ -20,6 +20,7 @@ from aippocampus_runtime.subconscious.worker import (
 )
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
+DEFAULT_EVENT_SALIENCE_OUTPUT_NAME = "subconscious_event_salience.jsonl"
 DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
 
@@ -32,6 +33,7 @@ class JobsRunConfig:
     concept_graph_path: Path
     jobs_output_path: Path
     edges_output_path: Path
+    event_salience_output_path: Path
     project: str | None
     objective: str
     max_turns: int
@@ -47,6 +49,7 @@ class JobsRunConfig:
     model_route: str | None = None
     concurrency: int = DEFAULT_CONCURRENCY
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB
+    event_salience_gate: bool = False
     dry_run: bool = False
     no_write: bool = False
 
@@ -58,6 +61,15 @@ def default_jobs_output_path(
         return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
+
+
+def default_event_salience_output_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
+    if registry_path:
+        return registry_path.resolve().parent / DEFAULT_EVENT_SALIENCE_OUTPUT_NAME
+    json_path, _ = registry_paths(registry_dir)
+    return json_path.resolve().parent / DEFAULT_EVENT_SALIENCE_OUTPUT_NAME
 
 
 def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
@@ -108,6 +120,11 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         if args.edges_output
         else default_staging_path(registry_path=registry_path)
     )
+    event_salience_output_path = (
+        Path(args.event_salience_output).resolve()
+        if getattr(args, "event_salience_output", None)
+        else default_event_salience_output_path(registry_path=registry_path)
+    )
     return JobsRunConfig(
         jobs=job_names(args.job),
         registry_path=registry_path,
@@ -115,6 +132,7 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         concept_graph_path=concept_graph_path,
         jobs_output_path=jobs_output_path,
         edges_output_path=edges_output_path,
+        event_salience_output_path=event_salience_output_path,
         project=args.project,
         objective=args.objective,
         max_turns=args.max_turns,
@@ -130,6 +148,7 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         temperature=args.temperature,
         concurrency=args.concurrency,
         samples_per_job=args.samples_per_job,
+        event_salience_gate=bool(getattr(args, "event_salience_gate", False)),
         dry_run=args.dry_run,
         no_write=args.no_write,
     )
