@@ -33,6 +33,15 @@ reports latency beside quality counters (`false_skip_rate`, `wrong_scent_rate`,
 and `source_reopen_promotion_rate`) because speed alone does not prove recall
 quality.
 
+Prompt decisions also expose `recall_channels` as a diagnostic envelope. The
+`fast` channel labels local, source-routed material such as registry overlap,
+hot-path candidates, reviewed cue refs, and clean-source probe reranks. The
+`deep` channel labels semantic-gate and concept-expansion material, including
+timeout/degradation status. Deep channel hits that have not rejoined stable
+source refs remain source-free route hints: they can explain why the hook chose
+`scent` or why a source reopen is needed, but they must not be promoted into
+`evidence`.
+
 Prompt decisions may also include `route_delivery_diagnostic`, a no-raw-prompt
 ledger for the foreground route selector. It may report controlled profile
 labels, semantic-cache reuse class, whether cached semantic evidence failed to

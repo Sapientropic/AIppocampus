@@ -34,6 +34,7 @@ from aippocampus_runtime.recall.prompt_recall_budget import (
     PROBE_MIN_REMAINING_MS,
     budget_allows,
 )
+from aippocampus_runtime.recall.prompt_recall_channels import recall_channel_envelope
 from aippocampus_runtime.recall.prompt_recall_context import build_recall_decision_context
 from aippocampus_runtime.recall.prompt_recall_core import (
     DEFAULT_SEARCH_BUDGET,
@@ -548,6 +549,14 @@ def _prompt_result(
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
         "semantic_source_reopen_route": semantic_source_reopen_route,
         "semantic_cue_cache": semantic_cue_cache,
+        "recall_channels": recall_channel_envelope(
+            candidates=candidates,
+            evidence=evidence,
+            semantic_result=semantic_result,
+            concept_expansions=concept_expansions,
+            hot_path_funnel=hot_path_funnel,
+            route_delivery_state=route_delivery_state,
+        ),
         "hot_path_funnel": hot_path_funnel,
         "route_delivery_diagnostic": resolve_route_delivery_diagnostic(state=route_delivery_state),
         "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
