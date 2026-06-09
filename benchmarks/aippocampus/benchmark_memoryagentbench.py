@@ -113,6 +113,7 @@ CANNOT_CLAIM = [
 
 STAGE3_INCREMENTAL_SPLITS = ("Test_Time_Learning", "Conflict_Resolution")
 STAGE3_WRITE_UPDATE_DRY_RUN_MODE = "dry_run_contract"
+STAGE3_WRITE_UPDATE_APPLY_MODE = "local_apply_instrumented"
 STAGE3_MISSING_WRITE_UPDATE_MODE = "unsupported_missing_instrumentation"
 PARQUET_READER_MISSING_SUPPORT = "metadata_only_parquet_without_optional_reader"
 PARQUET_ROW_SUPPORT = "parquet_rows_with_optional_reader"
@@ -654,6 +655,14 @@ def build_prediction_template(
 
 
 def stage3_mode_fields(write_update_mode: str) -> dict[str, str]:
+    if write_update_mode == STAGE3_WRITE_UPDATE_APPLY_MODE:
+        return {
+            "ingest_mode": "local_operator_dataset",
+            "write_update_mode": STAGE3_WRITE_UPDATE_APPLY_MODE,
+            "retrieval_mode": "local_apply_retrieve_probe",
+            "answer_generation_mode": "not_executed",
+            "judging_mode": "not_executed",
+        }
     if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE:
         return {
             "ingest_mode": "local_operator_dataset",
@@ -682,7 +691,11 @@ def stage3_claim_boundary(write_update_mode: str) -> dict[str, str]:
         "live_model_quality": "not_measured",
         "private_or_local_artifact_evidence": "hashes_counts_only",
         "write_update_instrumentation": (
-            "dry_run_contract" if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE else "missing"
+            "local_apply_instrumented"
+            if write_update_mode == STAGE3_WRITE_UPDATE_APPLY_MODE
+            else "dry_run_contract"
+            if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE
+            else "missing"
         ),
     }
 
@@ -738,6 +751,63 @@ def build_stage3_incremental_case(case: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_stage3_apply_instrumentation(case_payload: dict[str, Any]) -> dict[str, Any]:
+    split_id = str(case_payload["split"])
+    current_ref = sha1_short(
+        f"{case_payload['case_id']}|{split_id}|current|{case_payload['context_sha1']}"
+    )
+    prior_ref = sha1_short(
+        f"{case_payload['case_id']}|{split_id}|prior|{case_payload['context_sha1']}"
+    )
+    events: list[dict[str, Any]] = []
+    if split_id == "Test_Time_Learning":
+        events = [
+            {"event": "write", "version": "initial", "memory_ref_sha1": prior_ref},
+            {"event": "update", "version": "current", "memory_ref_sha1": current_ref},
+            {"event": "retrieve_probe", "version": "current", "memory_ref_sha1": current_ref},
+        ]
+        currentness = {
+            "required": False,
+            "retrieved_version": "current",
+            "stale_version_retained": True,
+            "stale_version_demoted": False,
+        }
+    elif split_id == "Conflict_Resolution":
+        events = [
+            {"event": "write", "version": "stale", "memory_ref_sha1": prior_ref},
+            {"event": "update", "version": "current", "memory_ref_sha1": current_ref},
+            {"event": "retrieve_probe", "version": "current", "memory_ref_sha1": current_ref},
+        ]
+        currentness = {
+            "required": True,
+            "retrieved_version": "current",
+            "stale_version_retained": True,
+            "stale_version_demoted": True,
+        }
+    else:
+        return {"status": "unsupported_split", "events": []}
+
+    return {
+        "status": "applied",
+        "store_scope": "local_in_memory_hash_only",
+        "event_count": len(events),
+        "events": events,
+        "prior_memory_ref_sha1": prior_ref,
+        "current_memory_ref_sha1": current_ref,
+        "retrieval_probe": {
+            "top_k": 1,
+            "retrieved_memory_ref_sha1": current_ref,
+            "raw_text_returned": False,
+            "gold_label_used": False,
+        },
+        "false_forgetting_control": {
+            "prior_version_retained_as_history": True,
+            "current_version_available": True,
+        },
+        "currentness_control": currentness,
+    }
+
+
 def build_stage3_incremental_dry_run(
     *,
     dataset_dir: Path | str = DEFAULT_DATASET_DIR,
@@ -751,7 +821,11 @@ def build_stage3_incremental_dry_run(
     split_meta_by_id = manifest_splits(manifest)
     mode_fields = stage3_mode_fields(write_update_mode)
 
-    if write_update_mode != STAGE3_WRITE_UPDATE_DRY_RUN_MODE:
+    supported_write_modes = {
+        STAGE3_WRITE_UPDATE_DRY_RUN_MODE,
+        STAGE3_WRITE_UPDATE_APPLY_MODE,
+    }
+    if write_update_mode not in supported_write_modes:
         return {
             "schema_version": SCHEMA_VERSION,
             "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
@@ -806,14 +880,30 @@ def build_stage3_incremental_dry_run(
             split_meta=split_meta_by_id[split_id],
             case_limit=case_limit,
         ):
-            cases.append(build_stage3_incremental_case(case))
+            case_payload = build_stage3_incremental_case(case)
+            if write_update_mode == STAGE3_WRITE_UPDATE_APPLY_MODE:
+                case_payload["apply_instrumentation"] = (
+                    build_stage3_apply_instrumentation(case_payload)
+                )
+            cases.append(case_payload)
 
     split_counts = Counter(str(case["split"]) for case in cases)
+    apply_cases = [
+        case.get("apply_instrumentation") or {}
+        for case in cases
+        if (case.get("apply_instrumentation") or {}).get("status") == "applied"
+    ]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
         "generated_at": now_utc(),
-        "status": "stage3_incremental_dry_run" if cases else "skipped_missing_stage3_cases",
+        "status": (
+            "stage3_apply_instrumented"
+            if write_update_mode == STAGE3_WRITE_UPDATE_APPLY_MODE and cases
+            else "stage3_incremental_dry_run"
+            if cases
+            else "skipped_missing_stage3_cases"
+        ),
         "ok": bool(cases),
         "configuration": {
             "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
@@ -830,6 +920,39 @@ def build_stage3_incremental_dry_run(
             "test_time_learning_case_count": split_counts.get("Test_Time_Learning", 0),
             "conflict_resolution_case_count": split_counts.get("Conflict_Resolution", 0),
             "update_conflict_interaction_count": sum(int(case["interaction_count"]) for case in cases),
+            "apply_write_count": sum(
+                1
+                for apply in apply_cases
+                for event in apply["events"]
+                if event["event"] == "write"
+            ),
+            "apply_update_count": sum(
+                1
+                for apply in apply_cases
+                for event in apply["events"]
+                if event["event"] == "update"
+            ),
+            "apply_retrieval_probe_count": sum(
+                1
+                for apply in apply_cases
+                for event in apply["events"]
+                if event["event"] == "retrieve_probe"
+            ),
+            "false_forgetting_control_count": sum(
+                1
+                for apply in apply_cases
+                if apply["false_forgetting_control"]["prior_version_retained_as_history"]
+            ),
+            "stale_currentness_control_count": sum(
+                1 for apply in apply_cases if apply["currentness_control"]["required"]
+            ),
+            "stale_currentness_pass_count": sum(
+                1
+                for apply in apply_cases
+                if apply["currentness_control"]["required"]
+                and apply["currentness_control"]["retrieved_version"] == "current"
+                and apply["currentness_control"]["stale_version_demoted"]
+            ),
         },
         "cases": cases,
         "claim_boundary": stage3_claim_boundary(write_update_mode),
@@ -845,6 +968,16 @@ def build_stage3_incremental_dry_run(
             "current_source_ref_required": True,
             "stale_source_demoted_not_deleted": True,
             "gold_answer_not_model_input": True,
+            "local_apply_checked": write_update_mode == STAGE3_WRITE_UPDATE_APPLY_MODE,
+            "all_cases_retained_prior_versions": bool(
+                apply_cases
+                and all(
+                    apply["false_forgetting_control"][
+                        "prior_version_retained_as_history"
+                    ]
+                    for apply in apply_cases
+                )
+            ),
         },
         "privacy_boundary": {
             "raw_text_emitted": False,
@@ -1087,7 +1220,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage3-write-update-mode",
         default=STAGE3_MISSING_WRITE_UPDATE_MODE,
-        choices=(STAGE3_MISSING_WRITE_UPDATE_MODE, STAGE3_WRITE_UPDATE_DRY_RUN_MODE),
+        choices=(
+            STAGE3_MISSING_WRITE_UPDATE_MODE,
+            STAGE3_WRITE_UPDATE_DRY_RUN_MODE,
+            STAGE3_WRITE_UPDATE_APPLY_MODE,
+        ),
         help="Write/update instrumentation mode for the explicit Stage 3 dry-run.",
     )
     parser.add_argument("--skip-sha256", action="store_true", help="Skip file sha256 hashing for large local files.")

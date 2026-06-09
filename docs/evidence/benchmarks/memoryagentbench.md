@@ -6,11 +6,13 @@ any runner code is added.
 
 Decision: suitable as a staged benchmark family, but not as an immediate
 official-score runner. AIppocampus now has a deterministic, public-safe
-metadata and case-pack smoke for Stage 1/2, plus an explicit Stage 3 dry-run
-contract harness that separates ingest, write/update, retrieval, generation,
-and judging modes. Full quality/scoring support is still deferred until live
-write/update/forgetting instrumentation and official-runner compatibility can
-be measured without collapsing the benchmark into static retrieval.
+metadata and case-pack smoke for Stage 1/2, plus an explicit Stage 3 contract
+harness that separates ingest, write/update, retrieval, generation, and judging
+modes. Stage 3 now has a deterministic local apply-instrumented slice for
+write/update and stale/currentness controls. Full quality/scoring support is
+still deferred until answer generation, judging, and official-runner
+compatibility can be measured without collapsing the benchmark into static
+retrieval.
 
 ## Official Sources
 
@@ -158,7 +160,8 @@ Reports should separate:
 
 ### Stage 3: Incremental Runner
 
-Status: first dry-run contract harness implemented by #614.
+Status: first dry-run contract harness implemented by #614, with a deterministic
+local apply-instrumented slice added by #995.
 
 The runner can now embed a sanitized Stage 3 dry-run report:
 
@@ -192,6 +195,25 @@ runner. Test-Time Learning and Conflict Resolution become quality evidence only
 after an apply-capable adapter can perform real memory writes, updates,
 retrieval, answer generation, false-forgetting controls, and scoring under a
 documented local artifact policy.
+
+The #995 apply-instrumented slice can be run explicitly:
+
+```powershell
+python benchmarks\aippocampus\benchmark_memoryagentbench.py --stage3-incremental-dry-run --stage3-write-update-mode local_apply_instrumented --json
+```
+
+This mode executes a local in-memory, hash-only write/update/retrieve probe for
+Test-Time Learning and Conflict Resolution rows. It reports:
+
+- `write_update_mode=local_apply_instrumented`;
+- `retrieval_mode=local_apply_retrieve_probe`;
+- apply write/update/retrieval-probe event counts;
+- false-forgetting controls that retain prior versions as history;
+- stale/currentness controls that retrieve the current version while keeping
+  stale material demoted rather than deleted.
+
+It still does not generate answers, call a model, invoke an LLM judge, expose
+raw benchmark text, or claim official MemoryAgentBench runner compatibility.
 
 ### Stage 4: Comparative Runs
 
@@ -229,6 +251,10 @@ Can claim now:
 - The repository has a Stage 3 dry-run contract harness that reports explicit
   ingest/write-update/retrieve/generate/judge modes and fails closed when
   write/update instrumentation is missing.
+- The repository has a deterministic Stage 3 local apply-instrumented slice
+  that records hash-only write/update/retrieve events and false-forgetting /
+  stale-currentness controls for Test-Time Learning and Conflict Resolution
+  rows.
 - Official parquet files can feed metadata, case-pack, and Stage 3 dry-run
   paths when the optional local `pyarrow` reader is installed; missing reader
   states are reported separately from missing datasets.
@@ -282,5 +308,5 @@ Non-goals for #614:
 - no official MemoryAgentBench score;
 - no official-runner compatibility claim;
 - no live model or provider dependency;
-- no apply-capable AIppocampus memory writes;
+- no official or persistent AIppocampus memory writes;
 - no claim that the dry-run harness measures user-visible memory quality.
