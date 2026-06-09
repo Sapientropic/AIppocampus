@@ -116,11 +116,17 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 ```
 
 For a larger local diagnostic, treat runtime as exploratory until a dated
-report exists:
+report exists. Keep progress and checkpoint output enabled so a stopped run
+still leaves a sanitized partial diagnostic instead of disappearing silently:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 ```
+
+`--progress-every` emits sanitized JSONL progress to stderr. `--partial-output`
+writes a sanitized checkpoint/partial diagnostic with hashed local-path
+identity, phase, built/evaluated counts, elapsed time, and claim boundaries; it
+does not include raw LongMemEval questions, answers, snippets, or local paths.
 
 Generated dataset files and reports stay ignored by default. Do not commit full
 LongMemEval downloads or generated JSON reports unless a future change promotes
@@ -167,10 +173,12 @@ LongMemEval-S larger-slice verification summary:
   locally, intentionally gitignored.
 
 The 2026-06-09 attempt to run a 500-question LongMemEval-S diagnostic was
-stopped after about 8 minutes without stdout, stderr, or an output report, so
-the 500-question row is not promoted as evidence yet. Use the 100-question row
-as the current larger-slice claim and keep the 500-question command as an
-exploratory runtime target.
+stopped after about 8 minutes without stdout, stderr, or an output report. Treat
+that as an incomplete missing-artifact run, not proof that 500 questions are
+technically impossible. A future 500-question attempt should use the progress
+and partial-output options above and may be promoted only after a dated
+completed report exists. Until then, the 100-question row is the current
+larger-slice claim.
 
 Earlier 50-question LongMemEval-S verification summary:
 

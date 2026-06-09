@@ -11,12 +11,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 import time
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import _paths
 
@@ -225,9 +226,83 @@ def cannot_claim(status: str) -> list[str]:
         "longmemeval_v2_score",
         "sota_or_external_baseline_superiority",
     }
-    if status.startswith("skipped_"):
+    if status.startswith("skipped_") or status.startswith("partial_"):
         claims.add("longmemeval_retrieval_score")
     return sorted(claims)
+
+
+def progress_metrics(progress_events: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "question_count": max(
+            [int(event.get("cases_evaluated") or 0) for event in progress_events]
+            or [0]
+        ),
+        "cases_built": max(
+            [int(event.get("cases_built") or 0) for event in progress_events] or [0]
+        ),
+        "cases_evaluated": max(
+            [int(event.get("cases_evaluated") or 0) for event in progress_events]
+            or [0]
+        ),
+    }
+
+
+def progress_snapshot(progress_events: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "event_count": len(progress_events),
+        "last_event": progress_events[-1] if progress_events else {},
+        "recent_events": progress_events[-10:],
+    }
+
+
+def partial_diagnostic_payload(
+    *,
+    split: LongMemEvalSplit,
+    data_path: Path,
+    verification: dict[str, Any],
+    started: float,
+    max_questions: int,
+    min_questions: int,
+    top_k: int,
+    status: str,
+    reason: str,
+    progress_events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_longmemeval_benchmark",
+        "generated_at": now_utc(),
+        "status": status,
+        "ok": False,
+        "benchmark": benchmark_metadata(split, data_path, verification),
+        "evaluation": evaluation_metadata(
+            max_questions=max_questions,
+            min_questions=min_questions,
+            top_k=top_k,
+        ),
+        "metrics": progress_metrics(progress_events),
+        "cases": [],
+        "standard_adapter": {"status": "incomplete", "config": {}, "corpus": {}},
+        "progress": progress_snapshot(progress_events),
+        "partial_diagnostic": {
+            "reason": reason,
+            "promotable_retrieval_evidence": False,
+        },
+        "privacy_boundary": privacy_boundary(),
+        "claim_boundary_ref": claim_boundary_ref(
+            "docs/evidence/benchmarks/design/benchmark-priority-map.md"
+        ),
+        "cannot_claim": cannot_claim(status),
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
+def write_json_payload(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def run_longmemeval_benchmark(
@@ -241,10 +316,15 @@ def run_longmemeval_benchmark(
     candidate_limit: int = retrieval_benchmark.fts5_benchmark.DEFAULT_CANDIDATE_LIMIT,
     context_radius: int = retrieval_benchmark.DEFAULT_STANDARD_QA_CONTEXT_RADIUS,
     min_session_hit_rate: float = DEFAULT_MIN_SESSION_HIT_RATE,
+    progress_every: int = 0,
+    partial_output: Path | str | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     split = LONGMEMEVAL_SPLITS[split_name]
     data_path = Path(data_file).resolve() if data_file else default_data_path(split)
+    partial_path = Path(partial_output).resolve() if partial_output else None
+    progress_events: list[dict[str, Any]] = []
     verification = download_dataset(data_path, split) if download else verify_dataset_file(data_path, split)
     if not verification["ok"]:
         reason = (
@@ -263,18 +343,81 @@ def run_longmemeval_benchmark(
             top_k=top_k,
         )
 
-    retrieval = retrieval_benchmark.run_standard_retrieval_qa_benchmark(
-        dataset=split.dataset,
-        corpus_path=data_path,
-        max_questions=max_questions,
-        min_questions=min_questions,
-        top_k=top_k,
-        candidate_limit=candidate_limit,
-        context_radius=context_radius,
-        min_session_hit_rate=min_session_hit_rate,
+    def handle_progress(event: dict[str, Any]) -> None:
+        long_event = {
+            "kind": "aippocampus_longmemeval_progress",
+            "generated_at": now_utc(),
+            "split": split.dataset,
+            "phase": event.get("phase"),
+            "cases_built": int(event.get("cases_built") or 0),
+            "cases_evaluated": int(event.get("cases_evaluated") or 0),
+            "elapsed_ms": float(event.get("elapsed_ms") or 0.0),
+        }
+        for key in (
+            "total_cases",
+            "max_questions",
+            "average_seconds_per_case",
+            "corpus",
+        ):
+            if key in event:
+                long_event[key] = event[key]
+        progress_events.append(long_event)
+        if partial_path is not None:
+            write_json_payload(
+                partial_path,
+                partial_diagnostic_payload(
+                    split=split,
+                    data_path=data_path,
+                    verification=verification,
+                    started=started,
+                    max_questions=max_questions,
+                    min_questions=min_questions,
+                    top_k=top_k,
+                    status="partial_diagnostic_running",
+                    reason="checkpoint",
+                    progress_events=progress_events,
+                ),
+            )
+        if progress_callback is not None:
+            progress_callback(long_event)
+
+    track_progress = (
+        int(progress_every) > 0
+        or progress_callback is not None
+        or partial_path is not None
     )
+    try:
+        retrieval = retrieval_benchmark.run_standard_retrieval_qa_benchmark(
+            dataset=split.dataset,
+            corpus_path=data_path,
+            max_questions=max_questions,
+            min_questions=min_questions,
+            top_k=top_k,
+            candidate_limit=candidate_limit,
+            context_radius=context_radius,
+            min_session_hit_rate=min_session_hit_rate,
+            progress_every=progress_every,
+            progress_callback=handle_progress if track_progress else None,
+        )
+    except KeyboardInterrupt:
+        if partial_path is None:
+            raise
+        payload = partial_diagnostic_payload(
+            split=split,
+            data_path=data_path,
+            verification=verification,
+            started=started,
+            max_questions=max_questions,
+            min_questions=min_questions,
+            top_k=top_k,
+            status="partial_diagnostic_interrupted",
+            reason="keyboard_interrupt",
+            progress_events=progress_events,
+        )
+        write_json_payload(partial_path, payload)
+        return payload
     status = "retrieval_sufficient" if retrieval.get("ok") else "retrieval_diagnostic"
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_longmemeval_benchmark",
         "generated_at": now_utc(),
@@ -300,6 +443,11 @@ def run_longmemeval_benchmark(
         "cannot_claim": sorted(set(cannot_claim(status)) | set(retrieval.get("cannot_claim") or [])),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+    if progress_events:
+        payload["progress"] = progress_snapshot(progress_events)
+    if partial_path is not None:
+        write_json_payload(partial_path, payload)
+    return payload
 
 
 def print_human_summary(payload: dict[str, Any]) -> None:
@@ -340,12 +488,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-session-hit-rate", type=float, default=DEFAULT_MIN_SESSION_HIT_RATE)
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=0,
+        help="Emit sanitized JSONL progress to stderr every N evaluated cases.",
+    )
+    parser.add_argument(
+        "--partial-output",
+        type=Path,
+        default=None,
+        help="Write a sanitized checkpoint/partial diagnostic JSON file during the run.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
 
 def main() -> int:
     args = build_arg_parser().parse_args()
+
+    def stderr_progress(event: dict[str, Any]) -> None:
+        print(json.dumps(event, ensure_ascii=False), file=sys.stderr, flush=True)
+
     payload = run_longmemeval_benchmark(
         split_name=args.split,
         data_file=args.data_file,
@@ -356,13 +520,12 @@ def main() -> int:
         candidate_limit=args.candidate_limit,
         context_radius=args.context_radius,
         min_session_hit_rate=args.min_session_hit_rate,
+        progress_every=args.progress_every,
+        partial_output=args.partial_output,
+        progress_callback=stderr_progress if int(args.progress_every) > 0 else None,
     )
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        write_json_payload(args.output, payload)
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
