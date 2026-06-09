@@ -132,6 +132,13 @@ python tools\aippocampus\smoke\smoke_repo_familiarity.py --json
 
 ## Evidence Drawer
 
+The foreground explanation contract for recall packets lives in
+[`memory-evidence-drawer.md`](../architecture/memory-evidence-drawer.md). Use
+that contract when you need to inspect why a recall surfaced, what is only
+navigation, what can be used as bounded evidence, and which suppress / correct /
+pin / deepen affordances are available. The table below is product evidence for
+the coding-agent lane, not the drawer schema itself.
+
 Read these in order:
 
 | Evidence | What it supports | What it does not prove |

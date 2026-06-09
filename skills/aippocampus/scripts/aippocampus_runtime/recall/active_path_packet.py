@@ -507,6 +507,7 @@ def build_active_path_packet(
     route_readiness: Any = None,
     route_notes: Any = None,
     max_paths: int = DEFAULT_MAX_PATHS,
+    include_drawer: bool = False,
 ) -> dict[str, Any]:
     """Select a few existing source-backed navigation paths for the foreground.
 
@@ -524,7 +525,7 @@ def build_active_path_packet(
         *_route_readiness_paths(route_notes, origin="route_note"),
     ]
     selected = _trim_paths(candidates, max(max_paths, MIN_MAX_PATHS))
-    return {
+    packet = {
         "kind": PACKET_KIND,
         "schema_version": PACKET_SCHEMA_VERSION,
         "purpose": "pre_action_orientation",
@@ -560,3 +561,8 @@ def build_active_path_packet(
         "metrics": _metrics(selected, len(candidates)),
         "no_write": True,
     }
+    if include_drawer:
+        from aippocampus_runtime.recall.evidence_drawer import build_memory_evidence_drawer
+
+        packet["evidence_drawer"] = build_memory_evidence_drawer(active_path_packet=packet)
+    return packet

@@ -29,6 +29,7 @@ Roles:
 | [encrypted-sync-v1.md](encrypted-sync-v1.md) | current contract | First encrypted sync design and compatibility boundary. |
 | [high-risk-answer-gates.md](high-risk-answer-gates.md) | current contract | High-risk answer gating and source authority boundary. |
 | [knowledge-source-lifecycle.md](knowledge-source-lifecycle.md) | current contract | Knowledge source lifecycle, eligibility, and claim promotion boundary. |
+| [memory-evidence-drawer.md](memory-evidence-drawer.md) | current contract | Foreground recall explanation packet, action grammar, and source-reopen affordance boundary. |
 | [multimodal-answer-gate.md](multimodal-answer-gate.md) | current contract | Multimodal answer source and gate contract. |
 | [multimodal-provider-routing.md](multimodal-provider-routing.md) | current contract | Provider capability-routing contract and public-safe fixture boundary. |
 | [multimodal-source-manifests.md](multimodal-source-manifests.md) | current contract | Multimodal source manifest fields and provenance boundary. |
