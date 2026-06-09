@@ -22,7 +22,8 @@ competitor scorecard or leaderboard.
 ## What Was Demonstrated
 
 The synthetic Track A/C benchmark surface now emits a `memory_pain_fixtures`
-summary. The covered public-safe families are:
+summary plus a `memory_hygiene_fixtures` report for #990's multi-turn
+stale/update/delete/dedup boundary. The covered public-safe families are:
 
 - `write_time_pollution`
 - `recalled_context_feedback_loop`
@@ -60,6 +61,13 @@ not clean-source evidence:
 - invalid structured extraction
 - incomplete compaction continuity claims
 
+The #990 hygiene report adds six synthetic multi-turn rows covering current,
+stale, superseded, duplicate, suppressed, and fuzzy-navigation surfaces.
+Duplicate memories collapse in display/ranking while source provenance hashes
+remain retained; stale or superseded rows do not outrank a later source-backed
+correction as evidence; deleting/suppressing a note does not claim to delete
+the original clean-source trail.
+
 In the 2026-05-30 local run, the gate benchmark reported 9 memory-pain cases,
 0 unsupported-evidence false positives, and `live_llm_required=false`. The
 payload benchmark reported 9 memory-pain cases, 0 privacy breaches, 0 evidence
@@ -83,6 +91,12 @@ continuation scent, memory-write negation, and working-memory overlap. That
 taxonomy is a deterministic synthetic calibration surface; it is not a live
 semantic-model or real-history quality claim.
 
+For #990, the same runner emits `memory_hygiene_fixtures`. The fixture report is
+sanitized by default: it exposes status counts, selected evidence row ids,
+duplicate-collapse/provenance metrics, and `cannot_claim` boundaries, but not
+raw timeline text or source-ref values unless private debug is explicitly
+enabled.
+
 ## Reproduce
 
 Run from the repository root:
@@ -103,6 +117,11 @@ audited, provenance-linked sample.
   public-safe boundary fixtures.
 - Unsupported memory-like inputs are skipped or downgraded to scent-only
   instead of becoming source-backed evidence.
+- Synthetic multi-turn hygiene fixtures distinguish current, stale,
+  superseded, duplicate, suppressed, and fuzzy-navigation rows without
+  promoting unsupported rows to evidence.
+- Duplicate display/ranking can collapse while source provenance remains
+  retained.
 - Source-free memory-pain statements without route, source request, or
   continuation intent may be correctly skipped rather than surfaced as scent.
 - The payload layer keeps the memory-pain fixture family free of privacy
@@ -121,3 +140,5 @@ audited, provenance-linked sample.
   decision, and scope narrowing all survive a real compaction pipeline.
 - No guarantee that every future generated summary, graph node, semantic
   sidecar, or vector neighbor is source truth.
+- No live online-learning, physical source deletion, or full evidence drawer UX
+  claim from the #990 synthetic hygiene report.

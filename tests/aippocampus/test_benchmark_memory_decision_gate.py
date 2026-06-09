@@ -368,6 +368,48 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
             ]
         )
 
+    def test_synthetic_gate_benchmark_exposes_memory_hygiene_fixtures(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        hygiene = payload["memory_hygiene_fixtures"]
+        metrics = hygiene["metrics"]
+
+        self.assertTrue(hygiene["ok"], hygiene)
+        self.assertEqual(metrics["case_count"], 6)
+        self.assertGreaterEqual(metrics["multi_turn_case_count"], 5)
+        self.assertEqual(metrics["stale_or_superseded_evidence_dominance_failures"], 0)
+        self.assertEqual(metrics["unsupported_evidence_row_count"], 0)
+        self.assertGreaterEqual(metrics["duplicate_display_collapse_count"], 1)
+        self.assertGreaterEqual(metrics["duplicate_provenance_retained_case_count"], 1)
+        self.assertGreaterEqual(metrics["suppressed_or_pinned_boundary_case_count"], 1)
+        self.assertGreaterEqual(metrics["source_provenance_intact_case_count"], 6)
+        self.assertTrue(metrics["required_statuses_covered"])
+        self.assertLessEqual(
+            {
+                "current",
+                "stale",
+                "superseded",
+                "duplicate",
+                "suppressed",
+                "fuzzy_navigation",
+            },
+            set(metrics["status_counts"]),
+        )
+        self.assertFalse(hygiene["privacy_boundary"]["raw_timeline_text_emitted"])
+        self.assertIn("online_memory_update_learning", payload["cannot_claim"])
+        self.assertIn("similarity_dedup_as_truth_source", hygiene["cannot_claim"])
+        for case in hygiene["cases"]:
+            self.assertTrue(case["passed"], case)
+            self.assertNotIn("private_timeline_text", case)
+            self.assertEqual(case["public_pain_family"], "stale_update_delete_dedup")
+
+    def test_memory_hygiene_private_timeline_text_is_explicit(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=True)
+        hygiene = payload["memory_hygiene_fixtures"]
+
+        self.assertTrue(hygiene["privacy_boundary"]["raw_timeline_text_emitted"])
+        self.assertTrue(any("private_timeline_text" in case for case in hygiene["cases"]))
+
     def test_plain_implementation_twins_do_not_use_negative_evidence_as_scent(self) -> None:
         payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
         plain_tasks = [
