@@ -115,11 +115,14 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
 
     def test_claude_host_smoke_sanitizes_posix_local_paths(self) -> None:
         text = smoke_claude_code_mcp_host.sanitize_host_output(
-            "server: node /Users/name/.claude/mcp.js and /home/name/.config/tool"
+            "server: node /Users/name/.claude/mcp.js and /home/name/.config/tool "
+            "plus /var/folders/8d/private/T/file and /private/var/folders/8d/private/T/file"
         )
 
         self.assertNotIn("/Users/name", text)
         self.assertNotIn("/home/name", text)
+        self.assertNotIn("/var/folders/8d", text)
+        self.assertNotIn("/private/var/folders/8d", text)
         self.assertIn("<local-path-redacted>", text)
 
     def test_claude_project_skill_adapter_points_at_safe_surfaces(self) -> None:
@@ -162,6 +165,173 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
             result["host_config_status"]["reason"],
             "claude_mcp_get_reported_failed_connection",
         )
+
+    def test_claude_persistent_diagnostic_classifies_missing_script_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing" / "aippocampus_mcp_server.py"
+            get_text = (
+                "aippocampus:\n"
+                "  Status: ✗ Failed to connect\n"
+                "  Type: stdio\n"
+                "  Command: python\n"
+                f"  Args: {missing}\n"
+                "  Environment:\n"
+            )
+            with patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="python"):
+                result = smoke_claude_code_mcp_host.run_persistent_config_diagnostic(
+                    get_text=get_text,
+                    cwd=tmp,
+                )
+
+            encoded = json.dumps(result, ensure_ascii=False)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "bad_command_path")
+        self.assertEqual(result["path_check"], "configured_arg_path_missing")
+        self.assertEqual(result["missing_arg_count"], 1)
+        self.assertIn("bad_command_path", result["taxonomy"])
+        self.assertNotIn(str(missing), encoded)
+
+    def test_claude_persistent_diagnostic_classifies_runtime_import_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "server.py"
+            script.write_text("raise SystemExit(1)\n", encoding="utf-8")
+            get_text = (
+                "aippocampus:\n"
+                "  Type: stdio\n"
+                "  Command: python\n"
+                f"  Args: {script}\n"
+                "  Environment:\n"
+            )
+
+            def fake_run(args: list[str], **kwargs: object) -> object:
+                class Proc:
+                    returncode = 1
+                    stdout = ""
+                    stderr = "ModuleNotFoundError: No module named 'aippocampus_runtime'"
+
+                return Proc()
+
+            with (
+                patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="python"),
+                patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+            ):
+                result = smoke_claude_code_mcp_host.run_persistent_config_diagnostic(
+                    get_text=get_text,
+                    cwd=tmp,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "runtime_import_failure")
+        self.assertEqual(result["returncode"], 1)
+
+    def test_claude_persistent_diagnostic_classifies_missing_memory_health_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "server.py"
+            script.write_text("pass\n", encoding="utf-8")
+            get_text = (
+                "aippocampus:\n"
+                "  Type: stdio\n"
+                "  Command: python\n"
+                f"  Args: {script}\n"
+                "  Environment:\n"
+            )
+
+            def fake_run(args: list[str], **kwargs: object) -> object:
+                class Proc:
+                    returncode = 0
+                    stdout = "\n".join(
+                        [
+                            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}),
+                            json.dumps(
+                                {
+                                    "jsonrpc": "2.0",
+                                    "id": 2,
+                                    "result": {"tools": [{"name": "search_memory"}]},
+                                }
+                            ),
+                            json.dumps({"jsonrpc": "2.0", "id": 3, "result": {}}),
+                        ]
+                    )
+                    stderr = ""
+
+                return Proc()
+
+            with (
+                patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="python"),
+                patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+            ):
+                result = smoke_claude_code_mcp_host.run_persistent_config_diagnostic(
+                    get_text=get_text,
+                    cwd=tmp,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "tool_schema_failure")
+        self.assertFalse(result["memory_health_listed"])
+
+    def test_claude_persistent_diagnostic_reaches_memory_health(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "server.py"
+            script.write_text("pass\n", encoding="utf-8")
+            get_text = (
+                "aippocampus:\n"
+                "  Type: stdio\n"
+                "  Command: python\n"
+                f"  Args: {script}\n"
+                "  Environment:\n"
+            )
+            calls: list[list[str]] = []
+
+            def fake_run(args: list[str], **kwargs: object) -> object:
+                calls.append(args)
+
+                class Proc:
+                    returncode = 0
+                    stdout = "\n".join(
+                        [
+                            json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}),
+                            json.dumps(
+                                {
+                                    "jsonrpc": "2.0",
+                                    "id": 2,
+                                    "result": {"tools": [{"name": "memory_health"}]},
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "jsonrpc": "2.0",
+                                    "id": 3,
+                                    "result": {
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": json.dumps({"recommended_actions": []}),
+                                            }
+                                        ],
+                                        "isError": False,
+                                    },
+                                }
+                            ),
+                        ]
+                    )
+                    stderr = ""
+
+                return Proc()
+
+            with (
+                patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="python"),
+                patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+            ):
+                result = smoke_claude_code_mcp_host.run_persistent_config_diagnostic(
+                    get_text=get_text,
+                    cwd=tmp,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "healthy")
+        self.assertTrue(result["memory_health_listed"])
+        self.assertEqual(calls[0], ["python", str(script)])
 
     def test_claude_tool_call_smoke_uses_strict_temp_config_and_redacts_output(self) -> None:
         calls: list[list[str]] = []

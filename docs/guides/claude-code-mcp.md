@@ -38,6 +38,34 @@ If the `claude` CLI is missing or the server is not configured, the smoke
 returns a concrete blocker. That blocker is evidence of host setup state, not a
 failure of the core clean-source runtime.
 
+For a persistent-config diagnostic that does not mutate Claude settings or
+spend model budget, add `--persistent-diagnostic`:
+
+```sh
+python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --persistent-diagnostic --cwd "$PWD"
+```
+
+This parses `claude mcp get aippocampus`, redacts local paths and secret-like
+values, then runs a minimal stdio JSON-RPC `memory_health` call against the
+configured persistent server. Keep this result separate from the temporary
+strict-config proof below. The diagnostic reports one of:
+`missing_config`, `bad_command_path`, `runtime_import_failure`,
+`server_start_failure`, `tool_schema_failure`, `tool_call_failure`, or
+`healthy`.
+
+Common manual repairs:
+
+- `missing_config`: run `claude mcp add aippocampus -- aippocampus mcp`.
+- `bad_command_path`: remove the stale entry with
+  `claude mcp remove "aippocampus" -s local`, then add the current command
+  again.
+- `runtime_import_failure`: reinstall or run the command from the Python
+  environment that contains AIppocampus.
+- `tool_schema_failure`: verify the configured server is the AIppocampus MCP
+  server and exposes `memory_health`.
+- `tool_call_failure`: run `aippocampus health` and repair local artifacts
+  before claiming persistent MCP health.
+
 For an opt-in live Claude Code tool-call proof, run:
 
 ```sh
