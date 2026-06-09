@@ -20,6 +20,46 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-09 Issue #963 Track B Top-k Miss Repair
+
+Issue #963 repairs the selected private Track B source-evidence misses without
+turning that private selected slice into a broad product-quality claim.
+
+Positive local evidence:
+
+- `python -m unittest tests.aippocampus.test_source_evidence_recall_eval -v`:
+  passed, including the new public deterministic analogue where a repeated
+  single cue previously outranked the correct source that covered multiple
+  source-derived cue terms.
+- The same evaluator behind
+  `python tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 100 --min-cases 50 --top-k 5 --min-hit-rate 0.95 --json`
+  was rerun for the 100-case selected slice, with only summarized aggregate
+  results retained in this evidence note. Before the ranking repair on current
+  main, this selected private slice reported
+  95/100 top-5 hits and 5 failures. All five were sanitized
+  `candidate_pruned_before_verifier` misses: the gold source was present in
+  the raw candidate pool but was below top-5, with raw ranks 6, 22, 24, 30,
+  and 93.
+- After the repair, the same selected private slice reported `case_count=100`,
+  `passed_count=100`, `failed_count=0`, `top_k_hit_rate=1.0`,
+  `failure_diagnostics.categories` all zero, `failure_classes` all zero, and
+  an empty sanitized `taxonomy_counts` map. The report emitted only aggregate
+  fields, hashed case ids, ranks, and taxonomy classes; it did not emit raw
+  private text, snippets, titles, source refs, message ids, thread ids, or
+  local paths.
+
+Interpretation:
+
+- The repair is deliberately local to the Track B `dynamic_source` diagnostic
+  ranking path. It bounds repeated cue-term scoring and rewards distinct
+  source-derived cue coverage, so a nearby recap or repeated-term decoy cannot
+  win only by repeating one cue many times.
+- The current selected private semantic-sidecar-required Track B row now
+  supersedes the 2026-05-29 97/100 row for this local selected slice. It still
+  cannot claim public benchmark score, broad real-user gate quality, full
+  semantic completeness, live semantic-model quality, or private-text
+  disclosure safety beyond the sanitized report contract.
+
 ## 2026-06-09 Issue #1053 Preference Source-review Floor And Taxonomy Slice
 
 Issue #1053 follows the #993 operational cleanup by separating label-level

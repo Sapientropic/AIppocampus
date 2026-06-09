@@ -1167,12 +1167,25 @@ Current smoke and diagnostic results from 2026-05-27:
 - Track B selected source-evidence track, semantic-sidecar-required slice after
   the bounded 2026-05-29 private sidecar refresh:
   sufficient, 100 selected cases, 97/100 top-5 hits, 0.97 hit rate. The 3 misses
-  are all `rank_below_top_k` with extended ranks 6, 8, and 10. This fixes the
+  were all `rank_below_top_k` with extended ranks 6, 8, and 10. This fixed the
   earlier sparse-pool problem without weakening the sidecar validator: accepted
   semantic labels still require exact message refs and per-label evidence.
   `benchmark_corpus/` can feed public Track B retrieval baselines, but it should
   not be counted into this private real-history slice unless it is reported as a
   separate bounded public semantic-sidecar track.
+- #963 Track B selected private rerun and repair:
+  a same-day pre-repair rerun on current main observed 100 selected cases,
+  95/100 top-5 hits, and 5 sanitized misses. All five had the gold source in
+  the raw candidate pool but below top-5, so the miss taxonomy was
+  `candidate_pruned_before_verifier` / `candidate_generated_rank_below_top_k`,
+  not candidate generation failure or source reopen failure. A public
+  deterministic analogue now covers the actionable class where repeated use of
+  one cue term outranks the correct source that covers several source-derived
+  cues. After bounding repeat scoring and preferring distinct source-term
+  coverage in the local `dynamic_source` diagnostic ranking path, the selected
+  private rerun reports 100/100 top-5 hits, `top_k_hit_rate=1.0`,
+  `failed_count=0`, and an empty sanitized taxonomy. This supersedes the
+  97/100 selected-private Track B row only for this bounded slice.
 - Track B public semantic-sidecar track:
   implemented as a separate optional wrapper track. Current 2026-05-29 pilot
   uses a bounded ShareGPT public registry subset with generated/reviewed
@@ -1196,11 +1209,11 @@ coding conversations before AIppocampus finishes its next upgrades. The first B
 fixes removed two evaluator weaknesses: source labels and query terms split
 across sibling clean-source rows in the same turn, and generic fuzzy-prompt
 frame terms dominating the source-derived cue terms. The latest private
-semantic-sidecar refresh removed the sparse-pool blocker; the remaining B
-weakness is narrower: a few expected sources have lexical/scope signal but still
-rank below top-5. These results do not yet prove real-history gate quality, live
-semantic-model quality, full semantic completeness, or end-to-end payload
-fidelity on private real-history prompts.
+semantic-sidecar refresh removed the sparse-pool blocker, and #963 removed the
+current selected-slice top-k pruning misses by preventing repeated single-cue
+decoys from outranking broader source-term coverage. These results do not yet
+prove real-history gate quality, live semantic-model quality, full semantic
+completeness, or end-to-end payload fidelity on private real-history prompts.
 
 - #400 LoCoMo answer-usefulness prototype:
   `benchmark_locomo_answer_usefulness.py` adds a second-stage public
