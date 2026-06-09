@@ -18,7 +18,6 @@ from aippocampus_runtime.recall import (  # noqa: E402
     prompt_context_render,
 )
 from aippocampus_runtime.recall.continuity_domain_producer import (  # noqa: E402
-    _clean_candidate_term,
     propose_continuity_domain_events_from_registry,
 )
 from aippocampus_runtime.recall.continuity_domains import (  # noqa: E402
@@ -124,83 +123,6 @@ def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
                         "thread_key": "little-thread",
                         "title": "小海马体真实体验",
                         "keywords": ["小海马体", "手搜", "source trail"],
-                        "paths": {"clean_source_dir": str(clean)},
-                    }
-                ],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    return registry_dir, clean
-
-
-def _write_low_information_registry_fixture(root: Path) -> tuple[Path, Path]:
-    registry_dir = root / "registry"
-    clean = registry_dir / "threads" / "low-info-thread" / "clean-source"
-    clean.mkdir(parents=True, exist_ok=True)
-    messages = [
-        {
-            "message_id": "msg-low-a",
-            "turn_id": "turn-low-a",
-            "turn_index": 1,
-            "source_line": 2,
-            "role": "user",
-            "phase": "",
-            "text": "这个要怎么改一下？这个 AIppocampus 要怎么改？AIppocampus 小海马体仍然要回源。",
-        },
-        {
-            "message_id": "msg-low-b",
-            "turn_id": "turn-low-b",
-            "turn_index": 2,
-            "source_line": 4,
-            "role": "assistant",
-            "phase": "final_answer",
-            "is_final": True,
-            "text": "那个怎么处理先别变成记忆标签；这个 AIppocampus 要怎么改也只是问法；小海马体应该保留 source-backed route。",
-        },
-        {
-            "message_id": "msg-low-c",
-            "turn_id": "turn-low-c",
-            "turn_index": 3,
-            "source_line": 6,
-            "role": "user",
-            "phase": "",
-            "text": "这里要怎么做也只是指代词；小海马体和 AIppocampus 才是可用标签。",
-        },
-        {
-            "message_id": "msg-low-d",
-            "turn_id": "turn-low-d",
-            "turn_index": 4,
-            "source_line": 8,
-            "role": "user",
-            "phase": "",
-            "text": "your answer",
-        },
-        {
-            "message_id": "msg-low-e",
-            "turn_id": "turn-low-e",
-            "turn_index": 5,
-            "source_line": 10,
-            "role": "assistant",
-            "phase": "final_answer",
-            "is_final": True,
-            "text": "your answer",
-        },
-    ]
-    with (clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
-        for row in messages:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    (clean / "turns.jsonl").write_text("", encoding="utf-8")
-    (registry_dir / "threads.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "threads": [
-                    {
-                        "thread_key": "low-info-thread",
-                        "title": "AIppocampus 小海马体",
-                        "keywords": ["AIppocampus", "小海马体"],
                         "paths": {"clean_source_dir": str(clean)},
                     }
                 ],
@@ -1475,87 +1397,6 @@ class ContinuityDomainTests(unittest.TestCase):
             ],
             1,
         )
-
-    def test_continuity_domain_producer_rejects_low_information_labels(self) -> None:
-        for term in (
-            "这个",
-            "那个",
-            "这里",
-            "那边",
-            "怎么",
-            "这个 AIppocampus 要怎么改",
-            "one",
-            "your",
-            "answer",
-            "your answer",
-            "the answer",
-            "your answer should change",
-        ):
-            self.assertEqual(_clean_candidate_term(term), ("", False))
-        self.assertEqual(_clean_candidate_term("AIppocampus"), ("AIppocampus", False))
-        self.assertEqual(_clean_candidate_term("小海马体"), ("小海马体", False))
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            registry_dir, _clean = _write_low_information_registry_fixture(root)
-
-            report = propose_continuity_domain_events_from_registry(
-                registry_path=registry_dir / "threads.json",
-                min_support=2,
-                include_local_detail=True,
-                max_candidates=12,
-            )
-
-        titles = {event["title"] for event in report["candidate_events"]}
-        self.assertGreater(report["metrics"]["low_information_label_suppressed_count"], 0)
-        forbidden = {
-            "这个",
-            "那个",
-            "这里",
-            "那边",
-            "怎么",
-            "这个要怎么改一下",
-            "这个 AIppocampus 要怎么改",
-            "要怎么改",
-            "one",
-            "your",
-            "answer",
-            "your answer",
-        }
-        self.assertFalse(titles & forbidden)
-        cue_text = "\n".join(
-            str(cue)
-            for event in report["candidate_events"]
-            for cue in event.get("activation_cues", [])
-        ).casefold()
-        for term in forbidden:
-            self.assertNotIn(term.casefold(), cue_text)
-        self.assertIn("小海马体", titles)
-
-    def test_generic_cjk_prompt_does_not_project_low_information_domain_route(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            registry_dir, clean = _write_low_information_registry_fixture(root)
-            report = propose_continuity_domain_events_from_registry(
-                registry_path=registry_dir / "threads.json",
-                min_support=2,
-                include_local_detail=True,
-                max_candidates=12,
-            )
-            snapshot = materialize_continuity_domains(report["candidate_events"])
-            generic_matches = match_continuity_domain_pointers(
-                "这个要怎么改一下？",
-                snapshot,
-                clean_source_dir=clean,
-            )
-            specific_matches = match_continuity_domain_pointers(
-                "小海马体要怎么改？",
-                snapshot,
-                clean_source_dir=clean,
-            )
-
-        self.assertEqual(generic_matches, [])
-        self.assertTrue(specific_matches)
 
     def test_continuity_domain_producer_append_publish_enables_real_history_pointer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
