@@ -1,7 +1,8 @@
 # Claude Code Real-Host Dogfood Refresh
 
 Role: dated public-safe evidence note.
-Status: current #998 dogfood report for the 2026-06-09 Windows operator host.
+Status: current #998 / #1021 dogfood report for the 2026-06-09 Windows
+operator host.
 
 This note records a sanitized Claude Code local-history and MCP dogfood run for
 AIppocampus. It separates local-history parsing, dry-run onboarding, clean-source
@@ -15,6 +16,7 @@ server names, or private configuration shape.
 - `python tools\aippocampus\smoke\smoke_cross_agent_continuity.py --json`
 - `python tools\aippocampus\smoke\smoke_claude_code_history.py --json`
 - `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json`
+- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --persistent-diagnostic --cwd . --diagnostic-timeout 30`
 - `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --call-tool --cwd . --max-budget-usd 0.20 --tool-timeout 180`
 - `python -m aippocampus_runtime.cli.facade onboard --provider claude-code --dry-run --format json --cwd .`
 - `python -m aippocampus_runtime.cli.facade onboard --status --format json --cwd .`
@@ -50,9 +52,16 @@ and lists other providers separately.
 
 The persistent Claude Code MCP configuration is not currently healthy on this
 host. `claude mcp get aippocampus` returned a zero process status but reported
-`Status: Failed to connect`, so the smoke now returns
-`status=blocked_host_config`, `host_config_ok=false`, and
+`Status: Failed to connect`, so the smoke returns `host_config_ok=false` and
 `reason=claude_mcp_get_reported_failed_connection`.
+
+The #1021 persistent-config diagnostic narrowed the blocker. It parsed the
+configured stdio command without mutating Claude settings, redacted the local
+path-bearing argument, and returned `status=persistent_config_bad_command_path`
+with `persistent_config_status=bad_command_path`,
+`command_resolved=true`, and `path_check=configured_arg_path_missing`. The
+diagnostic did not attempt a server startup after detecting that the configured
+script path was missing.
 
 The opt-in strict-config live MCP tool-call smoke passed. It used a temporary
 strict MCP config instead of the persistent Claude Code MCP config, called
@@ -71,6 +80,12 @@ The smoke now parses the sanitized `claude mcp get` text for failed-connection
 markers, returns `blocked_host_config` for the persistent configuration, and
 still allows `--call-tool` to prove the temporary strict-config path separately.
 
+The follow-up diagnostic adds a persistent-config-only taxonomy:
+`missing_config`, `bad_command_path`, `runtime_import_failure`,
+`server_start_failure`, `tool_schema_failure`, `tool_call_failure`, and
+`healthy`. On this host the current blocker is `bad_command_path`, not a
+runtime import failure, MCP schema gap, or `memory_health` tool-call failure.
+
 ## Cannot Claim
 
 This slice does not claim Claude Code prompt or lifecycle hook support,
@@ -83,4 +98,5 @@ shape over public-safe fixtures. The local-history smoke proves local parser
 reachability and counts only. The strict-config live tool-call smoke proves a
 minimal Claude Code host can call AIppocampus MCP through a temporary config;
 it does not prove the user's persistent Claude Code MCP configuration is
-healthy.
+healthy. The #1021 persistent diagnostic proves the remaining local blocker is
+a stale/missing configured command path, not persistent MCP health.
