@@ -23,6 +23,9 @@ as a precondition: higher-level Dream, Journey, semantic, ambient, sync, vault,
 Observatory, or provider-kit slices can mature only by preserving the
 clean-source-to-source-reopen chain, not by treating generated findings as
 replacement truth.
+The package classifier decision itself lives in
+[`classifier-policy.md`](classifier-policy.md); this snapshot only explains
+the readiness evidence boundary.
 
 ## Can Claim Now
 

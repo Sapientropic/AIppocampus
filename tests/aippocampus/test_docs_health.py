@@ -18,6 +18,7 @@ for _path in (
 
 import architecture_index_guard  # noqa: E402
 import check_docs_health as docs_health  # noqa: E402
+import classifier_policy_guard  # noqa: E402
 import ia_pressure_guard  # noqa: E402
 
 
@@ -30,6 +31,65 @@ def write_origin_essays(repo: Path) -> None:
     )
     (docs / "the-unfinished-map.md").write_text(
         "What else can life become, and can I still be myself after the change?",
+        encoding="utf-8",
+    )
+
+
+def write_development_status_pyproject(
+    repo: Path,
+    classifier: str = classifier_policy_guard.ALPHA_CLASSIFIER,
+    version: str = "0.2.0",
+) -> None:
+    (repo / "pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                f'version = "{version}"',
+                "classifiers = [",
+                f'    "{classifier}",',
+                "]",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_classifier_policy(repo: Path) -> None:
+    path = repo / "docs" / "evidence" / "readiness" / "classifier-policy.md"
+    path.parent.mkdir(parents=True)
+    required_terms = "\n".join(
+        [
+            *classifier_policy_guard.CLASSIFIER_POLICY_REQUIRED_TERMS,
+            *classifier_policy_guard.CURRENT_ALPHA_POLICY_TERMS,
+        ]
+    )
+    path.write_text(
+        "\n".join(
+            [
+                "# Alpha/Beta/Stable Classifier Policy",
+                "",
+                "```text",
+                "current_classifier: Development Status :: 3 - Alpha",
+                "beta_readiness_decision: not_approved",
+                "earliest_beta_classifier_release: 0.3.0 or later",
+                "approved_classifier_release: none",
+                "decision_date: none",
+                "```",
+                "",
+                required_terms,
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_classifier_release_checklist(repo: Path) -> None:
+    path = repo / "docs" / "guides" / "release-checklist.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "\n".join(classifier_policy_guard.CLASSIFIER_RELEASE_CHECKLIST_TERMS) + "\n",
         encoding="utf-8",
     )
 
@@ -671,6 +731,53 @@ class DocsHealthTests(unittest.TestCase):
         )
         self.assertIn(
             "CONTRIBUTING.md must not advertise Python 3.10/3.11 as supported",
+            issues,
+        )
+
+    def test_development_status_classifier_contract_covers_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.development_status_classifier_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_development_status_classifier_contract_requires_policy_doc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_development_status_pyproject(repo)
+            write_classifier_release_checklist(repo)
+
+            issues = docs_health.development_status_classifier_issues(repo)
+
+        self.assertIn(
+            "missing classifier policy doc: docs/evidence/readiness/classifier-policy.md",
+            issues,
+        )
+
+    def test_development_status_classifier_contract_blocks_unapproved_beta(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_development_status_pyproject(
+                repo,
+                classifier=classifier_policy_guard.BETA_CLASSIFIER,
+                version="0.3.0",
+            )
+            write_classifier_policy(repo)
+            write_classifier_release_checklist(repo)
+
+            issues = docs_health.development_status_classifier_issues(repo)
+
+        self.assertIn(
+            "pyproject.toml cannot advertise Development Status :: 4 - Beta without "
+            "approved dated Beta readiness decision in "
+            "docs/evidence/readiness/classifier-policy.md",
+            issues,
+        )
+        self.assertIn("classifier policy must include a dated Beta readiness decision", issues)
+        self.assertIn(
+            "classifier policy must approve the exact pyproject release version before "
+            "advertising Development Status :: 4 - Beta",
             issues,
         )
 

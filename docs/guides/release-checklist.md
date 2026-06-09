@@ -16,6 +16,11 @@ route them through a maintainer light lane only because the diff is small.
 - Confirm the release notes distinguish shipped behavior from roadmap work.
 - Confirm `pyproject.toml`, plugin metadata, README claims, and public API docs
   describe the same supported surface.
+- Confirm the package classifier, README claims, public API docs, release
+  notes, and dated readiness decision in
+  [`classifier-policy.md`](../evidence/readiness/classifier-policy.md) agree.
+  Do not change the development-status classifier without an approved dated
+  decision for the exact release.
 - Link any known limitations to active issues rather than burying them in the
   release notes.
 
