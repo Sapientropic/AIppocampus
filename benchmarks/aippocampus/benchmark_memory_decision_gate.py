@@ -24,6 +24,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import auto_hook_pollution
 import memory_hygiene
 import sharegpt_sampling
 from aippocampus_runtime.hooks import prompt as hook
@@ -2208,6 +2209,13 @@ def run_benchmark(
         if case_set == "synthetic"
         else None
     )
+    auto_hook_report = (
+        auto_hook_pollution.run_auto_hook_pollution_fixture_report(
+            include_private_text=include_private_text,
+        )
+        if case_set == "synthetic"
+        else None
+    )
     source_mismatch_count = int(metrics.get("evidence_source_mismatch_count") or 0)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -2245,6 +2253,7 @@ def run_benchmark(
         if case_set == "synthetic"
         else None,
         "memory_hygiene_fixtures": hygiene_report,
+        "auto_hook_pollution_fixtures": auto_hook_report,
         "track_a_residual_calibration": summarize_track_a_residual_calibration(results)
         if case_set == "synthetic"
         else None,
@@ -2281,6 +2290,7 @@ def run_benchmark(
             "external_baseline_comparison",
             "competitor_superiority",
             *(hygiene_report.get("cannot_claim") or [] if hygiene_report else []),
+            *(auto_hook_report.get("cannot_claim") or [] if auto_hook_report else []),
             *(
                 ["seeded_stratified_population_sampling"]
                 if case_set == "sharegpt-coding"

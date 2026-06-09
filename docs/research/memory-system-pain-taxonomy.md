@@ -35,7 +35,7 @@ about the referenced project.
 
 | Pain category | Public evidence | AIppocampus status | Validation implication |
 |---|---|---|---|
-| Write-time pollution | Mem0 #4573, #4099 | Implemented boundary: clean source remains truth; generated memories/labels are navigation layers. | Negative fixtures should prove boot prompts, empty messages, transient task state, and recalled-context echoes do not become source-backed memory. |
+| Write-time pollution | Mem0 #4573, #4099 | Implemented public-safe fixture: prompt-only and auto-hook pollution reports keep boot text, tool traces, empty/run-id messages, transient task state, and recalled-context echoes below source evidence. | Keep transcript/write-path pollution fixtures as authority-boundary checks, not live competitor or full lifecycle write-path claims. |
 | Extraction omission or inconsistency | Mem0 #3009 | Designed/partly implemented: source-backed recall can still open clean source when extraction misses. | Benchmarks should separate extraction quality from retrieval over source rows. |
 | Deterministic memory vs fuzzy recall | Mem0 #4926, HN discussion | Implemented boundary: retained durable summaries, ambient scent, and source-backed evidence are separate surfaces. | Fixtures should check deterministic/persistent preferences are not merged with fuzzy contextual hints. |
 | Metadata/provenance round-trip | Mem0 #5055 | Implemented principle: stable source ids and privacy boundaries are required in reports; not every route is fully covered. | Tests should reject outputs that lose source ids or mutate caller-defined metadata semantics. |
