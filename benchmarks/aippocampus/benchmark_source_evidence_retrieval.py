@@ -70,6 +70,10 @@ from source_evidence.defaults import (
     PublicSemanticLabelerFn,
 )
 from source_evidence.fts5_source_line import sanitize_fts5_case, summarize_fts5_payload
+from source_evidence.graph_extraction import (
+    run_graph_extraction_boundary_benchmark,
+    summarize_graph_extraction_payload,
+)
 from source_evidence.public_semantic import (
     public_semantic_candidate_messages,
     public_semantic_claim_level,
@@ -219,6 +223,7 @@ __all__ = [
     "rank_line",
     "rank_turn",
     "ranked_unique_lines",
+    "run_graph_extraction_boundary_benchmark",
     "run_public_semantic_labeler",
     "run_public_semantic_sidecar_benchmark",
     "run_semantic_line_reranker",
@@ -240,6 +245,7 @@ __all__ = [
     "standard_message_for_sqlite",
     "standard_retrieval_status",
     "summarize_fts5_payload",
+    "summarize_graph_extraction_payload",
     "summarize_public_semantic_source_payload",
     "summarize_sharegpt_public_payload",
     "summarize_sharegpt_public_results",
@@ -256,6 +262,7 @@ def cannot_claim(
     sharegpt_public_payload: dict[str, Any] | None = None,
     standard_public_payload: dict[str, Any] | None = None,
     public_semantic_sidecar_payload: dict[str, Any] | None = None,
+    graph_extraction_payload: dict[str, Any] | None = None,
 ) -> list[str]:
     claims = [
         "real_history_gate_quality",
@@ -294,6 +301,10 @@ def cannot_claim(
             public_semantic_sidecar_payload.get("status") or ""
         ).startswith("skipped_"):
             claims.append("public_semantic_sidecar_source_evidence")
+    if graph_extraction_payload:
+        claims.extend(str(item) for item in graph_extraction_payload.get("cannot_claim") or [])
+        if not graph_extraction_payload.get("ok"):
+            claims.append("graph_extraction_boundary_source_evidence")
     return sorted(set(claims))
 
 
@@ -353,6 +364,8 @@ def run_source_evidence_retrieval_benchmark(
     public_semantic_min_confidence: float = DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
     public_semantic_timeout: int = DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
     public_semantic_max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+    include_graph_extraction_boundary: bool = True,
+    graph_extraction_top_k: int = 3,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if only_standard_public:
@@ -524,6 +537,12 @@ def run_source_evidence_retrieval_benchmark(
             max_tokens=public_semantic_max_tokens,
             include_private_text=include_private_text,
         )
+    graph_extraction_payload = None
+    if include_graph_extraction_boundary:
+        graph_extraction_payload = run_graph_extraction_boundary_benchmark(
+            top_k=graph_extraction_top_k,
+            include_private_text=include_private_text,
+        )
     sharegpt_public_ok = (
         True
         if not sharegpt_public_payload
@@ -542,12 +561,16 @@ def run_source_evidence_retrieval_benchmark(
         else bool(public_semantic_sidecar_payload.get("ok"))
         or str(public_semantic_sidecar_payload.get("status") or "").startswith("skipped_")
     )
+    graph_extraction_ok = (
+        True if not graph_extraction_payload else bool(graph_extraction_payload.get("ok"))
+    )
     ok = (
         bool(fts5_payload.get("ok"))
         and bool(source_payload.get("ok"))
         and sharegpt_public_ok
         and standard_public_ok
         and public_semantic_ok
+        and graph_extraction_ok
     )
     status = "sufficient" if ok else "diagnostic_only"
     fts5_cases_payload = [
@@ -611,6 +634,8 @@ def run_source_evidence_retrieval_benchmark(
             "public_semantic_min_confidence": float(public_semantic_min_confidence),
             "public_semantic_timeout": int(public_semantic_timeout),
             "public_semantic_max_tokens": int(public_semantic_max_tokens),
+            "include_graph_extraction_boundary": bool(include_graph_extraction_boundary),
+            "graph_extraction_top_k": int(graph_extraction_top_k),
         },
         "tracks": {
             "fts5_source_line": summarize_fts5_payload(fts5_payload, top_k=fts5_top_k),
@@ -638,6 +663,7 @@ def run_source_evidence_retrieval_benchmark(
             sharegpt_public_payload=sharegpt_public_payload,
             standard_public_payload=standard_public_payload,
             public_semantic_sidecar_payload=public_semantic_sidecar_payload,
+            graph_extraction_payload=graph_extraction_payload,
         ),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -668,6 +694,15 @@ def run_source_evidence_retrieval_benchmark(
             for case in public_semantic_sidecar_payload.get("cases") or []
             if isinstance(case, dict)
         ]
+    if graph_extraction_payload:
+        payload["tracks"]["graph_extraction_boundary"] = (
+            summarize_graph_extraction_payload(graph_extraction_payload)
+        )
+        payload["cases"]["graph_extraction_boundary"] = [
+            dict(case)
+            for case in graph_extraction_payload.get("cases") or []
+            if isinstance(case, dict)
+        ]
     payload["query_origin_summary"] = query_origin_summary(payload["tracks"])
     source_guidance = source_evidence_validation_guidance(
         source_payload,
@@ -689,6 +724,10 @@ def run_source_evidence_retrieval_benchmark(
         if public_semantic_sidecar_payload:
             payload["private_debug_payloads"]["public_semantic_sidecar"] = (
                 public_semantic_sidecar_payload
+            )
+        if graph_extraction_payload:
+            payload["private_debug_payloads"]["graph_extraction_boundary"] = (
+                graph_extraction_payload
             )
     return payload
 
@@ -768,6 +807,14 @@ def print_human_summary(payload: dict[str, Any]) -> None:
             f"({metrics.get('top_k_hit_rate', 0.0):.2%}); "
             f"sidecar rows {artifacts.get('reviewed_sidecar_row_count', 0)}; "
             f"claim {public_semantic.get('claim_level') or 'unknown'}"
+        )
+    graph_boundary = payload["tracks"].get("graph_extraction_boundary")
+    if graph_boundary:
+        metrics = graph_boundary.get("metrics") or {}
+        print(
+            "- graph extraction boundary: "
+            f"{metrics.get('passed_count', 0)} hit / {metrics.get('failed_count', 0)} miss; "
+            f"statuses {metrics.get('graph_sidecar_status_counts') or {}}"
         )
     guidance = (payload.get("validation_guidance") or {}).get("track_b_source_evidence")
     if isinstance(guidance, dict):
@@ -980,6 +1027,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
     )
+    parser.add_argument(
+        "--skip-graph-extraction-boundary",
+        action="store_false",
+        dest="include_graph_extraction_boundary",
+        help=(
+            "Skip the #991 synthetic graph-extraction boundary track. By default "
+            "the benchmark records skipped/timeout/advisory graph sidecars as "
+            "navigation-only and verifies local source-index fallback."
+        ),
+    )
+    parser.add_argument("--graph-extraction-top-k", type=int, default=3)
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path, default=None)
@@ -1040,6 +1098,8 @@ def main() -> int:
         public_semantic_min_confidence=args.public_semantic_min_confidence,
         public_semantic_timeout=args.public_semantic_timeout,
         public_semantic_max_tokens=args.public_semantic_max_tokens,
+        include_graph_extraction_boundary=args.include_graph_extraction_boundary,
+        graph_extraction_top_k=args.graph_extraction_top_k,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
