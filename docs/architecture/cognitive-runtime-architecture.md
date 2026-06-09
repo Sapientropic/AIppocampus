@@ -348,6 +348,38 @@ comparison, and each pair gets an adaptive threshold policy from compatible or
 conflicting six-axis evidence. This remains a staging/navigation layer; it does
 not turn salience scores or thresholds into memory truth.
 
+## Consolidation Priority Events
+
+`aippocampus_runtime.reflection.consolidation_priority` is the narrow
+source-backed event layer for high-value awake moments. It is a deterministic
+cell/microcircuit substrate: producers can turn explicit corrections,
+superseding decisions, rejected routes, source conflicts, failed tests or
+commands, rollback signals, cognitive-load sidecar signals, and source-joined
+question/frontier/theme candidates into append-only
+`consolidation_priority_event` rows.
+
+The source key is derived from compact source refs or behavior-event ids. The
+private row may keep sanitized source refs for local joins, while the public
+projection exposes only source keys, producer counts, priority reasons,
+effective scores, degraded counts, and queue ordering. Public reports must not
+include raw prompt text, raw source text, raw source refs, local paths, or
+secret-shaped strings.
+
+Priority scoring is capped and decayed: each row keeps at most eight signal
+contributions, caps the score at `1.0`, uses a minimum review threshold, and
+applies a half-life decay. Missing, stale, superseded, or blocked source states
+set the effective priority to `0.0` and keep the row out of the review queue.
+This protects future consumers from treating stale scent as a consolidation
+request.
+
+Consumers may use these rows only to order later subconscious/Dream review.
+They must not promote content into working memory, formal memory, source truth,
+or foreground evidence merely because a priority event exists. Any later
+consolidation worker still has to reopen source and join confirmation,
+correction, contradiction, conflict, or review evidence before proposing a
+memory revision. This is a fixture-tested substrate, not a biological SWR
+claim and not default Awake SWR behavior.
+
 ## Relationship To Dream Tasks
 
 `aippocampus_runtime.dream.compensatory` is the first implemented integrative worker. It is a
