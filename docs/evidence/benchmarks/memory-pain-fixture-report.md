@@ -24,8 +24,9 @@ competitor scorecard or leaderboard.
 The synthetic Track A/C benchmark surface now emits a `memory_pain_fixtures`
 summary, an `auto_hook_pollution_fixtures` report for #986's transcript /
 write-path pollution boundary, and a `memory_hygiene_fixtures` report for
-#990's multi-turn stale/update/delete/dedup boundary. The covered public-safe
-families are:
+#990's multi-turn stale/update/delete/dedup boundary. It also emits
+`note_memory_drift_fixtures` for #987's hand-edited/generated Markdown memory
+drift boundary. The covered public-safe families are:
 
 - `write_time_pollution`
 - `recalled_context_feedback_loop`
@@ -36,6 +37,7 @@ families are:
 - `large_document_no_foreground_llm`
 - `invalid_structured_extraction`
 - `compaction_continuity`
+- `markdown_note_memory_drift`
 
 The fixture prompts are synthetic and default reports do not emit raw prompt
 text, raw context, snippets, registry exports, local paths, tokens, or cookies.
@@ -77,6 +79,14 @@ remain retained; stale or superseded rows do not outrank a later source-backed
 correction as evidence; deleting/suppressing a note does not claim to delete
 the original clean-source trail.
 
+The #987 note-drift report adds six synthetic Markdown/note-backed cases:
+stale `MEMORY.md` preference corrected by later clean source, unsourced
+hand-edited topic notes, generated same-name summary merge, deleted/edited note
+navigation with preserved clean source, source-backed note route to reopen, and
+broken source-ref note. Unsourced or unreopenable notes stay navigation-only;
+source-backed notes may route reopening but do not become exact evidence by
+themselves.
+
 In the 2026-05-30 local run, the gate benchmark reported 9 memory-pain cases,
 0 unsupported-evidence false positives, and `live_llm_required=false`. The
 payload benchmark reported 9 memory-pain cases, 0 privacy breaches, 0 evidence
@@ -111,6 +121,11 @@ transcript/write-path and lifecycle-like envelopes while preserving the claim
 boundary that this is not a live hook-write quality measurement and not a
 competitor behavior claim.
 
+For #987, the same runner emits `note_memory_drift_fixtures`. The report is
+sanitized by default: source refs are hashed, raw note/source text and local
+paths are omitted, and private note text appears only when `--include-private-text`
+is explicitly enabled.
+
 ## Reproduce
 
 Run from the repository root:
@@ -139,6 +154,9 @@ audited, provenance-linked sample.
 - Synthetic auto-hook pollution fixtures prove boot text, tool traces,
   recalled echoes, empty/run-id envelopes, transient task state, and host
   metadata remain below source-backed fact/evidence authority.
+- Synthetic Markdown/note drift fixtures prove hand-edited or generated notes
+  remain navigation-only without reopenable source support, and later clean
+  source corrections outrank stale note summaries as evidence.
 - Source-free memory-pain statements without route, source request, or
   continuation intent may be correctly skipped rather than surfaced as scent.
 - The payload layer keeps the memory-pain fixture family free of privacy
@@ -162,3 +180,6 @@ audited, provenance-linked sample.
 - No live AgentMemory/Mem0 behavior, full lifecycle write-path filter quality,
   or durable memory-write implementation claim from the #986 synthetic
   auto-hook pollution report.
+- No full Obsidian/vault integration, no ban on user-authored notes, no claim
+  that every note is exact evidence, and no live Markdown memory-quality claim
+  from the #987 synthetic note-drift report.
