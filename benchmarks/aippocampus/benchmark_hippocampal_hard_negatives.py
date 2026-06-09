@@ -30,6 +30,7 @@ REQUIRED_FAMILIES = {
     "superseded_currentness_trap",
     "surface_paraphrase_lure",
 }
+PRODUCTION_LIKE_MIN_CASES_PER_FAMILY = 3
 OUTCOME_CATEGORIES = (
     "correct_evidence",
     "honest_scent",
@@ -131,6 +132,7 @@ def validate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
         )
 
     cases = [case for case in fixture.get("cases") or [] if isinstance(case, Mapping)]
+    family_counts = _family_counts(cases)
     case_ids = [str(case.get("case_id") or "") for case in cases]
     if len(set(case_ids)) != len(case_ids):
         blockers.append(
@@ -205,6 +207,7 @@ def validate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
         "blockers": blockers,
         "blocker_codes": sorted({item["code"] for item in blockers}),
         "case_count": len(cases),
+        "family_counts": family_counts,
         "families_present": families_present,
         "missing_families": missing_families,
         "missing_required_fields": missing_required_fields,
@@ -236,6 +239,15 @@ def _has_stale_current_evidence(case: Mapping[str, Any], evidence_refs: set[str]
     )
 
 
+def _family_counts(cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    counts = {family: 0 for family in sorted(REQUIRED_FAMILIES)}
+    for case in cases:
+        family = str(case.get("family") or "")
+        if family:
+            counts[family] = counts.get(family, 0) + 1
+    return counts
+
+
 def _score_payload(outcome: str, *, reasons: Sequence[str], matched_refs: set[str]) -> dict[str, Any]:
     return {
         "outcome": outcome,
@@ -254,6 +266,7 @@ def score_response(case: Mapping[str, Any], response: Mapping[str, Any]) -> dict
     distractor_refs = set(_as_list(case.get("distractor_source_refs")))
     unsupported_refs = set(_as_list(case.get("unsupported_source_refs")))
     acceptable_uncertainty = set(_as_list(case.get("acceptable_uncertainty")))
+    source_reopened = bool(response.get("source_reopened"))
 
     if _claim_hits_forbidden(case, response):
         return _score_payload(
@@ -278,6 +291,12 @@ def score_response(case: Mapping[str, Any], response: Mapping[str, Any]) -> dict
             "wrong_source_evidence",
             reasons=["evidence_selects_distractor_without_target_ref"],
             matched_refs=evidence_refs & distractor_refs,
+        )
+    if decision == "evidence" and evidence_refs and not source_reopened:
+        return _score_payload(
+            "unsupported_as_fact",
+            reasons=["evidence_answer_without_successful_source_reopen"],
+            matched_refs=evidence_refs,
         )
     if decision == "evidence" and evidence_refs & target_refs:
         return _score_payload(
@@ -330,6 +349,7 @@ def _sanitized_case_result(
         "interference_level": case.get("interference_level"),
         "expected_decision": case.get("expected_decision"),
         "actual_decision": example.get("decision"),
+        "source_reopened": bool(example.get("source_reopened")),
         "outcome": score.get("outcome"),
         "score": score.get("score"),
         "query_sha1": sha1_text(query)[:16],
@@ -345,6 +365,10 @@ def _quality_gates(validation: Mapping[str, Any], outcome_counts: Mapping[str, i
     return {
         "fixture_valid": bool(validation.get("ok")),
         "all_required_families_present": not bool(validation.get("missing_families")),
+        "production_like_family_floor_met": all(
+            count >= PRODUCTION_LIKE_MIN_CASES_PER_FAMILY
+            for count in _as_mapping(validation.get("family_counts")).values()
+        ),
         "all_outcome_categories_reported": set(outcome_counts) == set(OUTCOME_CATEGORIES),
         "asymmetric_penalty_contract": (
             OUTCOME_WEIGHTS["honest_skip"] > OUTCOME_WEIGHTS["wrong_source_evidence"]
@@ -356,18 +380,25 @@ def _quality_gates(validation: Mapping[str, Any], outcome_counts: Mapping[str, i
     }
 
 
-def run_benchmark(
+def _score_example_set(
+    examples: Sequence[Any],
+    cases: Mapping[str, Mapping[str, Any]],
     *,
-    fixture_path: str | Path = DEFAULT_FIXTURE,
-    include_private_text: bool = False,
+    include_private_text: bool,
 ) -> dict[str, Any]:
-    fixture = load_fixture(fixture_path)
-    validation = validate_fixture(fixture)
-    cases = cases_by_id(fixture)
     outcome_counts = {outcome: 0 for outcome in OUTCOME_CATEGORIES}
+    outcome_counts_by_family = {
+        family: {outcome: 0 for outcome in OUTCOME_CATEGORIES}
+        for family in sorted(REQUIRED_FAMILIES)
+    }
+    scored_examples_by_family = {family: 0 for family in sorted(REQUIRED_FAMILIES)}
     case_results: list[dict[str, Any]] = []
     discipline_score = 0.0
-    for example in fixture.get("scorer_examples") or []:
+    evidence_decision_count = 0
+    source_reopen_count = 0
+    evidence_without_reopen_count = 0
+    target_source_reopen_count = 0
+    for example in examples:
         if not isinstance(example, Mapping):
             continue
         case = cases.get(str(example.get("case_id") or ""))
@@ -375,7 +406,23 @@ def run_benchmark(
             continue
         score = score_response(case, example)
         outcome = str(score["outcome"])
+        family = str(case.get("family") or "")
         outcome_counts[outcome] += 1
+        if family:
+            scored_examples_by_family[family] = scored_examples_by_family.get(family, 0) + 1
+            if family not in outcome_counts_by_family:
+                outcome_counts_by_family[family] = {
+                    item: 0 for item in OUTCOME_CATEGORIES
+                }
+            outcome_counts_by_family[family][outcome] += 1
+        if str(example.get("decision") or "") == "evidence":
+            evidence_decision_count += 1
+            if bool(example.get("source_reopened")):
+                source_reopen_count += 1
+            else:
+                evidence_without_reopen_count += 1
+        if outcome == "correct_evidence" and bool(example.get("source_reopened")):
+            target_source_reopen_count += 1
         discipline_score += float(score["score"])
         case_results.append(
             _sanitized_case_result(
@@ -386,25 +433,79 @@ def run_benchmark(
             )
         )
 
+    return {
+        "outcome_counts": outcome_counts,
+        "outcome_counts_by_family": outcome_counts_by_family,
+        "metrics": {
+            "scored_example_count": len(case_results),
+            "scored_examples_by_family": scored_examples_by_family,
+            "outcome_counts_by_family": outcome_counts_by_family,
+            "discipline_score": round(discipline_score, 6),
+            "major_failure_count": sum(outcome_counts[item] for item in MAJOR_FAILURE_OUTCOMES),
+            "wrong_source_evidence_count": outcome_counts["wrong_source_evidence"],
+            "stale_as_current_count": outcome_counts["stale_as_current"],
+            "unsupported_as_fact_count": outcome_counts["unsupported_as_fact"],
+            "confabulation_count": outcome_counts["confabulation"],
+            "honest_scent_count": outcome_counts["honest_scent"],
+            "honest_skip_count": outcome_counts["honest_skip"],
+            "honest_uncertainty_count": outcome_counts["honest_scent"] + outcome_counts["honest_skip"],
+            "correct_evidence_count": outcome_counts["correct_evidence"],
+            "evidence_decision_count": evidence_decision_count,
+            "source_reopen_count": source_reopen_count,
+            "target_source_reopen_count": target_source_reopen_count,
+            "evidence_without_reopen_count": evidence_without_reopen_count,
+            "evidence_source_reopen_rate": (
+                round(source_reopen_count / evidence_decision_count, 6)
+                if evidence_decision_count
+                else 0.0
+            ),
+        },
+        "cases": case_results,
+    }
+
+
+def run_benchmark(
+    *,
+    fixture_path: str | Path = DEFAULT_FIXTURE,
+    include_private_text: bool = False,
+) -> dict[str, Any]:
+    fixture = load_fixture(fixture_path)
+    validation = validate_fixture(fixture)
+    cases = cases_by_id(fixture)
+    case_family_counts = _family_counts(list(cases.values()))
+    contract_slice = _score_example_set(
+        fixture.get("scorer_examples") or [],
+        cases,
+        include_private_text=include_private_text,
+    )
+    production_slice = _score_example_set(
+        fixture.get("production_outputs") or [],
+        cases,
+        include_private_text=include_private_text,
+    )
+    outcome_counts = contract_slice["outcome_counts"]
     metrics = {
         "case_count": int(validation.get("case_count") or 0),
-        "scored_example_count": len(case_results),
-        "discipline_score": round(discipline_score, 6),
-        "major_failure_count": sum(outcome_counts[item] for item in MAJOR_FAILURE_OUTCOMES),
-        "honest_uncertainty_count": outcome_counts["honest_scent"] + outcome_counts["honest_skip"],
-        "correct_evidence_count": outcome_counts["correct_evidence"],
+        "scored_example_count": contract_slice["metrics"]["scored_example_count"],
+        "family_counts": case_family_counts,
+        **contract_slice["metrics"],
+        "production_slice": {
+            **production_slice["metrics"],
+            "case_count": int(validation.get("case_count") or 0),
+            "family_counts": case_family_counts,
+        },
     }
     quality_gates = _quality_gates(validation, outcome_counts)
     ok = all(bool(value) for value in quality_gates.values())
     cannot_claim = [
-        "contract smoke only; cannot claim real-history H1/H2 quality",
+        "public production-like synthetic slice only; cannot claim real-history H1/H2 quality",
         "does not run a live model, semantic retriever, or private registry",
         "does not prove the full 50-scene / 350-case hippocampal P1 matrix",
     ]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_hippocampal_hard_negative_benchmark",
-        "status": "contract_smoke" if ok else "failed_contract_smoke",
+        "status": "production_like_public_synthetic_slice" if ok else "failed_contract_smoke",
         "ok": ok,
         "generated_at": now_utc(),
         "config": {
@@ -412,10 +513,13 @@ def run_benchmark(
             "uses_model_judge": False,
             "uses_private_history": False,
             "include_private_text": include_private_text,
+            "claim_surface": _as_mapping(fixture.get("config")).get("claim_surface"),
+            "production_like_min_cases_per_family": PRODUCTION_LIKE_MIN_CASES_PER_FAMILY,
         },
         "fixture_validation": {
             "ok": bool(validation.get("ok")),
             "case_count": validation.get("case_count"),
+            "family_counts": validation.get("family_counts"),
             "families_present": sorted(validation.get("families_present") or []),
             "missing_families": sorted(validation.get("missing_families") or []),
             "blocker_codes": validation.get("blocker_codes") or [],
@@ -425,7 +529,18 @@ def run_benchmark(
         "outcome_counts": outcome_counts,
         "metrics": metrics,
         "quality_gates": quality_gates,
-        "cases": case_results,
+        "cases": contract_slice["cases"],
+        "production_slice": {
+            "claim_level": "public_production_like_synthetic_diagnostic",
+            "outcome_counts": production_slice["outcome_counts"],
+            "metrics": metrics["production_slice"],
+            "cases": production_slice["cases"],
+            "cannot_claim": [
+                "real_history_h1_h2_recall_discrimination_quality",
+                "live_model_or_semantic_retriever_quality",
+                "full_50_scene_350_case_p1_matrix",
+            ],
+        },
         "privacy_boundary": {
             "raw_query_text_emitted": include_private_text,
             "raw_source_text_emitted": False,

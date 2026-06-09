@@ -10,6 +10,12 @@ local benchmark arms on H1 degraded-cue recall, H2 interference/separation,
 source reopen, calibration/confabulation, D5/D6 exploratory cells, and H5
 before/after consolidation deltas.
 
+Supersession note: the 2026-06-09 #1040 D5/D6 gate in
+[`hippocampal-recall-fixture-report.md`](hippocampal-recall-fixture-report.md#2026-06-09-d5d6-gate)
+supersedes this report only for current `full_query` D5/D6 sample size and gate
+status. The rows below remain the historical 2026-06-04 cross-arm comparison
+for baseline arms, H5 controls, and missing external adapters.
+
 This is not a leaderboard. External adapters are visible as missing-config or
 not-implemented rows until runnable, licensed, source-backed adapters exist.
 

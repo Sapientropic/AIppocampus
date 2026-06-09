@@ -34,6 +34,14 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(validation["case_count"], 10)
         self.assertTrue(validation["public_safety"]["synthetic_public_safe"])
         self.assertFalse(validation["public_safety"]["uses_private_history"])
+        self.assertGreaterEqual(
+            sum(1 for row in rows if row["degradation_level"] == "D5"),
+            3,
+        )
+        self.assertGreaterEqual(
+            sum(1 for row in rows if row["degradation_level"] == "D6"),
+            3,
+        )
         self.assertFalse(validation["coverage"]["full_p1_matrix_claim"])
         self.assertGreater(validation["coverage"]["diagnostic_only_cell_count"], 0)
         self.assertIn("D0/I0", validation["cell_density"])
@@ -145,6 +153,17 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
         )
         self.assertFalse(payload["reproducibility"]["requires_private_registry"])
         self.assertIn("scent_precision", payload["views"]["aggregate"])
+        self.assertIn("d5_d6_gate", payload)
+        self.assertEqual(
+            payload["d5_d6_gate"]["status"],
+            "gated_diagnostic_passed",
+        )
+        self.assertTrue(payload["d5_d6_gate"]["ok"])
+        self.assertEqual(payload["d5_d6_gate"]["by_level"]["D5"]["case_count"], 3)
+        self.assertEqual(payload["d5_d6_gate"]["by_level"]["D6"]["case_count"], 3)
+        self.assertEqual(payload["d5_d6_gate"]["combined"]["wrong_source_or_twin_count"], 0)
+        self.assertEqual(payload["d5_d6_gate"]["combined"]["confabulation_count"], 0)
+        self.assertIn("source_reopen_rate", payload["d5_d6_gate"]["combined"])
         self.assertIn("calibration", payload["views"])
         self.assertFalse(payload["config"]["uses_private_history"])
         self.assertFalse(payload["privacy_boundary"]["raw_query_text_emitted"])
@@ -297,6 +316,10 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
         self.assertEqual(keyword["claim_level"], "synthetic_public_result")
         self.assertGreater(keyword["h1_h2_sample_size"], 0)
         self.assertGreater(keyword["d5_d6_sample_size"], 0)
+        self.assertIn("d5_accuracy", keyword)
+        self.assertIn("d6_accuracy", keyword)
+        self.assertGreater(keyword["d5_sample_size"], 0)
+        self.assertGreater(keyword["d6_sample_size"], 0)
         self.assertIn("h1_degraded_drop_from_d0", keyword)
         self.assertIn("h2_separation_accuracy", keyword)
         self.assertIn("source_reopen_success", keyword)

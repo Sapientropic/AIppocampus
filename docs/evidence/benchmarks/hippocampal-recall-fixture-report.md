@@ -1,7 +1,8 @@
 # Hippocampal Recall Fixture Report
 
 Status: implemented public-safe diagnostic seed for GitHub #229, #230, #231,
-#233, #237, and the first #239 structure/time retrieval slice.
+#233, #237, the first #239 structure/time retrieval slice, and the 2026-06-09
+#1040 D5/D6 gated diagnostic.
 
 This report records the narrow evidence boundary for
 `benchmarks/aippocampus/benchmark_hippocampal_recall.py`. The runner validates a
@@ -43,6 +44,11 @@ private registry.
   deterministic `message_features` sidecar, and hybrid retrieval can expose
   separate text, structure, and temporal diagnostics when explicit cues are
   supplied.
+- D5/D6 gated diagnostic for #1040: the checked-in fixture now has 16 cases,
+  including 3 D5 structure-only cases and 3 D6 time-window cases. The
+  `d5_d6_gate` readout gates only the `full_query` AIppocampus diagnostic arm;
+  baseline arms remain comparative and do not determine whether D5/D6 enter
+  this narrow gated-diagnostic state.
 
 ## Scoring Contract
 
@@ -97,6 +103,46 @@ Structure/time retrieval exposes `message_features`, `structure_match_score`,
 These are retrieval diagnostics over source-backed message projections, not
 claims that D5/D6 benchmark quality is solved.
 
+## 2026-06-09 D5/D6 Gate
+
+Command:
+
+```powershell
+python benchmarks\aippocampus\build_hippocampal_fixture.py --json
+python benchmarks\aippocampus\benchmark_hippocampal_recall.py --json
+```
+
+Result:
+
+| Field | Value |
+| --- | ---: |
+| Fixture cases | 16 |
+| D5 cases | 3 |
+| D6 cases | 3 |
+| Gate arm | `full_query` |
+| D5 accuracy | 1.000 |
+| D6 accuracy | 1.000 |
+| Combined D5/D6 accuracy | 1.000 |
+| Combined D5/D6 source reopen count | 4 / 6 |
+| Combined D5/D6 source reopen rate | 0.666667 |
+| Wrong-source / wrong-twin count | 0 |
+| Source-reopen failure count | 0 |
+| Confabulation count | 0 |
+| Gate status | `gated_diagnostic_passed` |
+
+Thresholds:
+
+- D5 and D6 must each have at least 3 public-safe synthetic cases.
+- D5 and D6 must each reach accuracy >= 0.8 in the `full_query` diagnostic arm.
+- D5 and D6 must each have separation accuracy 1.0.
+- Wrong-source / wrong-twin, source-reopen failure, and confabulation counts
+  must be 0.
+
+This supersedes the old 12-case D5/D6 readout only for the narrow public
+synthetic `full_query` D5/D6 gated diagnostic. It does not supersede the
+historical 2026-06-04 cross-system comparison table for baseline arms, H5
+controls, external-adapter availability, or broader P1 coverage.
+
 ## Canonical Files
 
 - Schema: `benchmarks/aippocampus/hippocampal_fixture_schema.py`
@@ -114,14 +160,13 @@ claims that D5/D6 benchmark quality is solved.
 - dense independent metrics for every D/I cell
 - real-history H1/H2 recall-discrimination quality
 - live semantic-retriever or model quality
-- D4-D6 quality gates beyond exploratory diagnostic coverage
+- D4 quality gates beyond exploratory diagnostic coverage
 - bucketed calibration error without calibrated confidence bins
 - external memory-system scores or cross-system superiority
 - live provider quality from missing-config diagnostic adapters
 - user-visible Dream benefit or predictive validity from synthetic H5 deltas
 - private real-history consolidation quality
 - AIppocampus-specific consolidation lift without live controls
-- full D5/D6 recall quality from the first deterministic structure/time index
-  slice
-- publication-grade comparison or confidence intervals from the 12-case
+- full D5/D6 recall quality from the public synthetic `full_query` gate
+- publication-grade comparison or confidence intervals from the 16-case
   diagnostic seed

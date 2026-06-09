@@ -29,7 +29,16 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
             },
         )
         self.assertEqual(validation["missing_required_fields"], {})
-        self.assertEqual(validation["case_count"], 4)
+        self.assertEqual(validation["case_count"], 12)
+        self.assertEqual(
+            validation["family_counts"],
+            {
+                "near_neighbor_lure": 3,
+                "said_but_unsupported": 3,
+                "superseded_currentness_trap": 3,
+                "surface_paraphrase_lure": 3,
+            },
+        )
         self.assertTrue(validation["truth_source_independent"])
         self.assertTrue(validation["currentness_schema_present"])
 
@@ -98,6 +107,7 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
 
         self.assertTrue(payload["ok"], payload)
         self.assertEqual(payload["kind"], "aippocampus_hippocampal_hard_negative_benchmark")
+        self.assertEqual(payload["status"], "production_like_public_synthetic_slice")
         self.assertEqual(
             set(payload["outcome_counts"]),
             {
@@ -118,11 +128,47 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
             payload["outcome_weights"]["honest_scent"],
             payload["outcome_weights"]["unsupported_as_fact"],
         )
-        self.assertEqual(payload["metrics"]["major_failure_count"], 4)
+        self.assertEqual(payload["metrics"]["case_count"], 12)
+        self.assertEqual(payload["metrics"]["major_failure_count"], 7)
+        self.assertEqual(payload["metrics"]["wrong_source_evidence_count"], 2)
+        self.assertEqual(payload["metrics"]["stale_as_current_count"], 2)
+        self.assertEqual(payload["metrics"]["unsupported_as_fact_count"], 2)
+        self.assertEqual(payload["metrics"]["confabulation_count"], 1)
+        self.assertEqual(payload["metrics"]["honest_uncertainty_count"], 5)
+        self.assertEqual(payload["metrics"]["source_reopen_count"], 11)
+        self.assertEqual(payload["metrics"]["evidence_source_reopen_rate"], 1.0)
+        self.assertEqual(
+            payload["metrics"]["family_counts"],
+            {
+                "near_neighbor_lure": 3,
+                "said_but_unsupported": 3,
+                "superseded_currentness_trap": 3,
+                "surface_paraphrase_lure": 3,
+            },
+        )
+        self.assertTrue(payload["quality_gates"]["production_like_family_floor_met"])
+        production = payload["production_slice"]["metrics"]
+        self.assertEqual(production["scored_example_count"], 12)
+        self.assertEqual(production["major_failure_count"], 0)
+        self.assertEqual(production["wrong_source_evidence_count"], 0)
+        self.assertEqual(production["stale_as_current_count"], 0)
+        self.assertEqual(production["unsupported_as_fact_count"], 0)
+        self.assertEqual(production["confabulation_count"], 0)
+        self.assertEqual(production["honest_uncertainty_count"], 4)
+        self.assertEqual(production["source_reopen_count"], 8)
+        self.assertEqual(production["evidence_source_reopen_rate"], 1.0)
+        self.assertEqual(
+            payload["production_slice"]["claim_level"],
+            "public_production_like_synthetic_diagnostic",
+        )
         self.assertFalse(payload["config"]["uses_model_judge"])
         self.assertFalse(payload["config"]["uses_private_history"])
+        self.assertEqual(
+            payload["config"]["claim_surface"],
+            "production_like_public_synthetic_slice",
+        )
         self.assertFalse(payload["privacy_boundary"]["raw_query_text_emitted"])
-        self.assertIn("contract smoke", serialized)
+        self.assertIn("production-like synthetic", serialized)
         self.assertIn("cannot claim real-history H1/H2 quality", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)

@@ -19,6 +19,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import hippocampal_d5_d6_gate
 import hippocampal_fixture_schema as schema
 
 SCHEMA_VERSION = 1
@@ -102,49 +103,37 @@ H5_FALSE_FORGETTING_OUTCOMES = {"unsupported_skip"}
 CROSS_SYSTEM_REPORT_PATH = (
     "docs/evidence/benchmarks/hippocampal-cross-system-comparison-2026-06-04.md"
 )
-CROSS_SYSTEM_LOCAL_ROWS = (
+CROSS_SYSTEM_LOCAL_ROWS = tuple(
     {
-        "row_id": "aippocampus_diagnostic",
-        "display_name": "AIppocampus diagnostic",
-        "h1_h2_arm": "full_query",
-        "h5_arm": "aippocampus_dream_consolidation",
-    },
-    {
-        "row_id": "baseline_rag",
-        "display_name": "Baseline RAG",
-        "h1_h2_arm": "baseline_rag",
-        "h5_arm": None,
-    },
-    {
-        "row_id": "keyword_only",
-        "display_name": "Keyword-only",
-        "h1_h2_arm": "keyword_only",
-        "h5_arm": "no_consolidation",
-    },
-    {
-        "row_id": "closed_book",
-        "display_name": "Closed-book",
-        "h1_h2_arm": "closed_book",
-        "h5_arm": None,
-    },
-    {
-        "row_id": "overactive_all_evidence",
-        "display_name": "Overactive all-evidence",
-        "h1_h2_arm": "overactive_all_evidence",
-        "h5_arm": None,
-    },
-    {
-        "row_id": "random_retrieval",
-        "display_name": "Random retrieval",
-        "h1_h2_arm": "random_retrieval",
-        "h5_arm": "random_consolidation",
-    },
-    {
-        "row_id": "simple_summary_consolidation",
-        "display_name": "Simple-summary consolidation",
-        "h1_h2_arm": None,
-        "h5_arm": "simple_summary_consolidation",
-    },
+        "row_id": row_id,
+        "display_name": display_name,
+        "h1_h2_arm": h1_h2_arm,
+        "h5_arm": h5_arm,
+    }
+    for row_id, display_name, h1_h2_arm, h5_arm in (
+        (
+            "aippocampus_diagnostic",
+            "AIppocampus diagnostic",
+            "full_query",
+            "aippocampus_dream_consolidation",
+        ),
+        ("baseline_rag", "Baseline RAG", "baseline_rag", None),
+        ("keyword_only", "Keyword-only", "keyword_only", "no_consolidation"),
+        ("closed_book", "Closed-book", "closed_book", None),
+        (
+            "overactive_all_evidence",
+            "Overactive all-evidence",
+            "overactive_all_evidence",
+            None,
+        ),
+        ("random_retrieval", "Random retrieval", "random_retrieval", "random_consolidation"),
+        (
+            "simple_summary_consolidation",
+            "Simple-summary consolidation",
+            None,
+            "simple_summary_consolidation",
+        ),
+    )
 )
 
 
@@ -1216,6 +1205,8 @@ def _comparison_row_from_arm(
         by_degradation,
         ("D5", "D6"),
     )
+    d5_accuracy, d5_sample_size = _comparison_rate_for_levels(by_degradation, ("D5",))
+    d6_accuracy, d6_sample_size = _comparison_rate_for_levels(by_degradation, ("D6",))
     h5_aggregate = (
         _as_mapping(
             _as_mapping(_as_mapping(h5_report.get("views_by_arm")).get(str(h5_arm))).get(
@@ -1249,6 +1240,10 @@ def _comparison_row_from_arm(
         "d5_d6_accuracy": d5_d6_accuracy,
         "d5_d6_sample_size": d5_d6_sample_size,
         "d5_d6_drop_from_d0": _comparison_round_delta(d0_accuracy, d5_d6_accuracy),
+        "d5_accuracy": d5_accuracy,
+        "d5_sample_size": d5_sample_size,
+        "d6_accuracy": d6_accuracy,
+        "d6_sample_size": d6_sample_size,
         "h2_separation_accuracy": _comparison_separation_accuracy(
             by_degradation,
             schema.DEGRADATION_LEVELS,
@@ -1297,6 +1292,10 @@ def _comparison_missing_row(
         "d5_d6_accuracy": None,
         "d5_d6_sample_size": 0,
         "d5_d6_drop_from_d0": None,
+        "d5_accuracy": None,
+        "d5_sample_size": 0,
+        "d6_accuracy": None,
+        "d6_sample_size": 0,
         "h2_separation_accuracy": None,
         "source_reopen_success": None,
         "confabulation_rate": None,
@@ -1395,6 +1394,7 @@ def run_benchmark(
 
     views = _views(rows, validation, case_results)
     arm_views = _views_by_arm(rows, validation, case_results)
+    d5_d6_gate = hippocampal_d5_d6_gate.build_d5_d6_gate(case_results)
     h5_consolidation = _h5_consolidation_report(rows)
     cross_system_comparison = _cross_system_comparison_report(
         validation=validation,
@@ -1460,6 +1460,7 @@ def run_benchmark(
         "outcome_weights": dict(OUTCOME_WEIGHTS),
         "views": views,
         "views_by_arm": arm_views,
+        "d5_d6_gate": d5_d6_gate,
         "h5_consolidation": h5_consolidation,
         "cross_system_comparison": cross_system_comparison,
         "cases": case_results,
@@ -1476,6 +1477,7 @@ def run_benchmark(
             "real_history_h1_h2_recall_quality",
             "live_model_or_semantic_retriever_quality",
             "d4_d6_quality_gate_until_dense_reviewed_cells_exist",
+            "full_d5_d6_recall_quality_from_the_public_synthetic_gate",
             "bucketed_calibration_error_without_calibrated_confidence_bins",
             "user_visible_dream_benefit_from_synthetic_h5_deltas",
             "cross_system_superiority_from_diagnostic_comparison_table",

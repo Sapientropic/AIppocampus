@@ -15,7 +15,7 @@
   "config": {
     "uses_model_judge": false,
     "uses_private_history": false,
-    "claim_surface": "contract_smoke"
+    "claim_surface": "production_like_public_synthetic_slice"
   },
   "currentness_schema": {
     "memory_event_type": [
@@ -84,6 +84,96 @@
       }
     },
     {
+      "case_id": "near_neighbor_lure__d3_i4",
+      "family": "near_neighbor_lure",
+      "degradation_level": "D3",
+      "interference_level": "I4",
+      "query": "The route decision where the quiet-mode note, not the similar title, was the target",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent",
+        "skip"
+      ],
+      "target_source_refs": [
+        "source:near_neighbor_quiet:target"
+      ],
+      "acceptable_scent_refs": [
+        "source:near_neighbor_quiet:target"
+      ],
+      "distractor_source_refs": [
+        "source:near_neighbor_quiet:similar_title"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The similar title note was the durable quiet-mode route."
+      ],
+      "ambiguity_policy": "source_required",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:near_neighbor_quiet:target": "current",
+          "source:near_neighbor_quiet:similar_title": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:near_neighbor_quiet:target": "normal",
+          "source:near_neighbor_quiet:similar_title": "normal"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
+      "case_id": "near_neighbor_lure__d5_i3",
+      "family": "near_neighbor_lure",
+      "degradation_level": "D5",
+      "interference_level": "I3",
+      "query": "The answer shaped like a checklist but not the checklist with the same labels",
+      "expected_decision": "scent",
+      "acceptable_uncertainty": [
+        "scent",
+        "skip"
+      ],
+      "target_source_refs": [
+        "source:near_neighbor_checklist:target"
+      ],
+      "acceptable_scent_refs": [
+        "source:near_neighbor_checklist:target"
+      ],
+      "distractor_source_refs": [
+        "source:near_neighbor_checklist:wrong_labels"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The checklist with the same labels proves the target answer."
+      ],
+      "ambiguity_policy": "source_required",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:near_neighbor_checklist:target": "current",
+          "source:near_neighbor_checklist:wrong_labels": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:near_neighbor_checklist:target": "normal",
+          "source:near_neighbor_checklist:wrong_labels": "normal"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
       "case_id": "said_but_unsupported__d2_i1",
       "family": "said_but_unsupported",
       "degradation_level": "D2",
@@ -122,6 +212,96 @@
         "source_ref_visibility_policy": {
           "source:unsupported:mention": "scent_only",
           "source:unsupported:hypothesis_only": "hidden_from_default_recall"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
+      "case_id": "said_but_unsupported__d3_i2",
+      "family": "said_but_unsupported",
+      "degradation_level": "D3",
+      "interference_level": "I2",
+      "query": "The possible preference we discussed but never adopted",
+      "expected_decision": "scent",
+      "acceptable_uncertainty": [
+        "scent",
+        "skip"
+      ],
+      "target_source_refs": [
+        "source:unsupported_preference:mention"
+      ],
+      "acceptable_scent_refs": [
+        "source:unsupported_preference:mention"
+      ],
+      "distractor_source_refs": [],
+      "unsupported_source_refs": [
+        "source:unsupported_preference:trial_balloon"
+      ],
+      "forbidden_claims": [
+        "The possible preference was adopted as a standing preference."
+      ],
+      "ambiguity_policy": "unsupported_skip",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:unsupported_preference:mention": "historical_only",
+          "source:unsupported_preference:trial_balloon": "historical_only"
+        },
+        "source_ref_visibility_policy": {
+          "source:unsupported_preference:mention": "scent_only",
+          "source:unsupported_preference:trial_balloon": "hidden_from_default_recall"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
+      "case_id": "said_but_unsupported__d5_i2",
+      "family": "said_but_unsupported",
+      "degradation_level": "D5",
+      "interference_level": "I2",
+      "query": "The bullet list that sounded like a policy but was only a brainstorm",
+      "expected_decision": "skip",
+      "acceptable_uncertainty": [
+        "scent",
+        "skip"
+      ],
+      "target_source_refs": [
+        "source:unsupported_policy:brainstorm"
+      ],
+      "acceptable_scent_refs": [
+        "source:unsupported_policy:brainstorm"
+      ],
+      "distractor_source_refs": [],
+      "unsupported_source_refs": [
+        "source:unsupported_policy:promoted_summary"
+      ],
+      "forbidden_claims": [
+        "The brainstorm bullet list became an adopted policy."
+      ],
+      "ambiguity_policy": "unsupported_skip",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:unsupported_policy:brainstorm": "historical_only",
+          "source:unsupported_policy:promoted_summary": "historical_only"
+        },
+        "source_ref_visibility_policy": {
+          "source:unsupported_policy:brainstorm": "scent_only",
+          "source:unsupported_policy:promoted_summary": "hidden_from_default_recall"
         },
         "memory_event_type": "assertion",
         "supersedes_source_refs": [],
@@ -178,6 +358,104 @@
       }
     },
     {
+      "case_id": "superseded_currentness_trap__d6_i5",
+      "family": "superseded_currentness_trap",
+      "degradation_level": "D6",
+      "interference_level": "I5",
+      "query": "The evening answer that replaced the morning guidance",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent"
+      ],
+      "target_source_refs": [
+        "source:superseded_time:evening"
+      ],
+      "acceptable_scent_refs": [
+        "source:superseded_time:morning",
+        "source:superseded_time:evening"
+      ],
+      "distractor_source_refs": [
+        "source:superseded_time:morning"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The morning guidance remains the current answer."
+      ],
+      "ambiguity_policy": "single_target",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:superseded_time:morning": "superseded",
+          "source:superseded_time:evening": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:superseded_time:morning": "demote",
+          "source:superseded_time:evening": "normal"
+        },
+        "memory_event_type": "supersession",
+        "supersedes_source_refs": [
+          "source:superseded_time:morning"
+        ],
+        "superseded_by_source_refs": [
+          "source:superseded_time:evening"
+        ]
+      }
+    },
+    {
+      "case_id": "superseded_currentness_trap__d3_i4",
+      "family": "superseded_currentness_trap",
+      "degradation_level": "D3",
+      "interference_level": "I4",
+      "query": "The correction where the first stance should only be historical context",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent"
+      ],
+      "target_source_refs": [
+        "source:superseded_correction:current"
+      ],
+      "acceptable_scent_refs": [
+        "source:superseded_correction:old",
+        "source:superseded_correction:current"
+      ],
+      "distractor_source_refs": [
+        "source:superseded_correction:old"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The first stance is still the current correction outcome."
+      ],
+      "ambiguity_policy": "single_target",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:superseded_correction:old": "superseded",
+          "source:superseded_correction:current": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:superseded_correction:old": "demote",
+          "source:superseded_correction:current": "normal"
+        },
+        "memory_event_type": "correction",
+        "supersedes_source_refs": [
+          "source:superseded_correction:old"
+        ],
+        "superseded_by_source_refs": [
+          "source:superseded_correction:current"
+        ]
+      }
+    },
+    {
       "case_id": "surface_paraphrase_lure__d4_i4",
       "family": "surface_paraphrase_lure",
       "degradation_level": "D4",
@@ -220,6 +498,254 @@
         "supersedes_source_refs": [],
         "superseded_by_source_refs": []
       }
+    },
+    {
+      "case_id": "surface_paraphrase_lure__d2_i3",
+      "family": "surface_paraphrase_lure",
+      "degradation_level": "D2",
+      "interference_level": "I3",
+      "query": "The source whose wording looked different but carried the exact boundary",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent"
+      ],
+      "target_source_refs": [
+        "source:paraphrase_boundary:target"
+      ],
+      "acceptable_scent_refs": [
+        "source:paraphrase_boundary:target"
+      ],
+      "distractor_source_refs": [
+        "source:paraphrase_boundary:surface_match"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The surface-nearest wording carries the exact boundary."
+      ],
+      "ambiguity_policy": "single_target",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:paraphrase_boundary:target": "current",
+          "source:paraphrase_boundary:surface_match": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:paraphrase_boundary:target": "normal",
+          "source:paraphrase_boundary:surface_match": "normal"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
+      "case_id": "surface_paraphrase_lure__d5_i4",
+      "family": "surface_paraphrase_lure",
+      "degradation_level": "D5",
+      "interference_level": "I4",
+      "query": "The heading looked like the answer, but the real source was the table note",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent"
+      ],
+      "target_source_refs": [
+        "source:paraphrase_table:target"
+      ],
+      "acceptable_scent_refs": [
+        "source:paraphrase_table:target"
+      ],
+      "distractor_source_refs": [
+        "source:paraphrase_table:heading_match"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The matching heading is enough without the table note."
+      ],
+      "ambiguity_policy": "source_required",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:paraphrase_table:target": "current",
+          "source:paraphrase_table:heading_match": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:paraphrase_table:target": "normal",
+          "source:paraphrase_table:heading_match": "normal"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    }
+  ],
+  "production_outputs": [
+    {
+      "example_id": "production_near_neighbor_target",
+      "case_id": "near_neighbor_lure__d2_i2",
+      "decision": "evidence",
+      "confidence": 0.78,
+      "evidence_refs": [
+        "source:near_neighbor:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The reopened target source supports the durable target."
+      ]
+    },
+    {
+      "example_id": "production_near_neighbor_quiet",
+      "case_id": "near_neighbor_lure__d3_i4",
+      "decision": "evidence",
+      "confidence": 0.8,
+      "evidence_refs": [
+        "source:near_neighbor_quiet:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The quiet-mode target source is reopened."
+      ]
+    },
+    {
+      "example_id": "production_near_neighbor_checklist_scent",
+      "case_id": "near_neighbor_lure__d5_i3",
+      "decision": "scent",
+      "confidence": 0.47,
+      "evidence_refs": [],
+      "scent_refs": [
+        "source:near_neighbor_checklist:target"
+      ],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "production_unsupported_mention_scent",
+      "case_id": "said_but_unsupported__d2_i1",
+      "decision": "scent",
+      "confidence": 0.44,
+      "evidence_refs": [],
+      "scent_refs": [
+        "source:unsupported:mention"
+      ],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "production_unsupported_preference_scent",
+      "case_id": "said_but_unsupported__d3_i2",
+      "decision": "scent",
+      "confidence": 0.46,
+      "evidence_refs": [],
+      "scent_refs": [
+        "source:unsupported_preference:mention"
+      ],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "production_unsupported_policy_skip",
+      "case_id": "said_but_unsupported__d5_i2",
+      "decision": "skip",
+      "confidence": 0.2,
+      "evidence_refs": [],
+      "scent_refs": [],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "production_superseded_current",
+      "case_id": "superseded_currentness_trap__d1_i5",
+      "decision": "evidence",
+      "confidence": 0.79,
+      "evidence_refs": [
+        "source:superseded:new_decision"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The reopened new source is current."
+      ]
+    },
+    {
+      "example_id": "production_superseded_evening",
+      "case_id": "superseded_currentness_trap__d6_i5",
+      "decision": "evidence",
+      "confidence": 0.81,
+      "evidence_refs": [
+        "source:superseded_time:evening"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The evening source supersedes the morning source."
+      ]
+    },
+    {
+      "example_id": "production_superseded_correction",
+      "case_id": "superseded_currentness_trap__d3_i4",
+      "decision": "evidence",
+      "confidence": 0.8,
+      "evidence_refs": [
+        "source:superseded_correction:current"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The current correction source is reopened."
+      ]
+    },
+    {
+      "example_id": "production_paraphrase_target",
+      "case_id": "surface_paraphrase_lure__d4_i4",
+      "decision": "evidence",
+      "confidence": 0.78,
+      "evidence_refs": [
+        "source:paraphrase:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The reopened paraphrase target supports the answer."
+      ]
+    },
+    {
+      "example_id": "production_paraphrase_boundary",
+      "case_id": "surface_paraphrase_lure__d2_i3",
+      "decision": "evidence",
+      "confidence": 0.79,
+      "evidence_refs": [
+        "source:paraphrase_boundary:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The reopened boundary source carries the exact rule."
+      ]
+    },
+    {
+      "example_id": "production_paraphrase_table",
+      "case_id": "surface_paraphrase_lure__d5_i4",
+      "decision": "evidence",
+      "confidence": 0.78,
+      "evidence_refs": [
+        "source:paraphrase_table:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The table note source is reopened."
+      ]
     }
   ],
   "scorer_examples": [
@@ -232,6 +758,7 @@
         "source:paraphrase:target"
       ],
       "scent_refs": [],
+      "source_reopened": true,
       "claims": [
         "The reopened target source supports the answer."
       ]
@@ -246,6 +773,7 @@
         "source:superseded:old_decision",
         "source:superseded:new_decision"
       ],
+      "source_reopened": false,
       "claims": []
     },
     {
@@ -255,6 +783,7 @@
       "confidence": 0.2,
       "evidence_refs": [],
       "scent_refs": [],
+      "source_reopened": false,
       "claims": []
     },
     {
@@ -266,6 +795,7 @@
         "source:near_neighbor:frequent_distractor"
       ],
       "scent_refs": [],
+      "source_reopened": true,
       "claims": [
         "The frequent distractor is the target memory."
       ]
@@ -279,6 +809,7 @@
         "source:superseded:old_decision"
       ],
       "scent_refs": [],
+      "source_reopened": true,
       "claims": [
         "The old answer is the current decision."
       ]
@@ -292,6 +823,7 @@
         "source:unsupported:hypothesis_only"
       ],
       "scent_refs": [],
+      "source_reopened": true,
       "claims": [
         "The hypothesis became an accepted fact."
       ]
@@ -305,8 +837,127 @@
         "source:paraphrase:target"
       ],
       "scent_refs": [],
+      "source_reopened": true,
       "claims": [
         "The surface-nearest paraphrase is enough without source reopen."
+      ]
+    },
+    {
+      "example_id": "correct_quiet_route_reopen",
+      "case_id": "near_neighbor_lure__d3_i4",
+      "decision": "evidence",
+      "confidence": 0.82,
+      "evidence_refs": [
+        "source:near_neighbor_quiet:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The reopened quiet-mode source is the target."
+      ]
+    },
+    {
+      "example_id": "honest_checklist_scent",
+      "case_id": "near_neighbor_lure__d5_i3",
+      "decision": "scent",
+      "confidence": 0.48,
+      "evidence_refs": [],
+      "scent_refs": [
+        "source:near_neighbor_checklist:target"
+      ],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "unsupported_preference_honest_scent",
+      "case_id": "said_but_unsupported__d3_i2",
+      "decision": "scent",
+      "confidence": 0.45,
+      "evidence_refs": [],
+      "scent_refs": [
+        "source:unsupported_preference:mention"
+      ],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "unsupported_policy_honest_skip",
+      "case_id": "said_but_unsupported__d5_i2",
+      "decision": "skip",
+      "confidence": 0.22,
+      "evidence_refs": [],
+      "scent_refs": [],
+      "source_reopened": false,
+      "claims": []
+    },
+    {
+      "example_id": "unsupported_policy_as_fact",
+      "case_id": "said_but_unsupported__d5_i2",
+      "decision": "evidence",
+      "confidence": 0.85,
+      "evidence_refs": [
+        "source:unsupported_policy:promoted_summary"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The promoted summary supports adopting the brainstorm policy."
+      ]
+    },
+    {
+      "example_id": "correct_evening_reopen",
+      "case_id": "superseded_currentness_trap__d6_i5",
+      "decision": "evidence",
+      "confidence": 0.83,
+      "evidence_refs": [
+        "source:superseded_time:evening"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The evening source supersedes the morning guidance."
+      ]
+    },
+    {
+      "example_id": "stale_correction_as_current",
+      "case_id": "superseded_currentness_trap__d3_i4",
+      "decision": "evidence",
+      "confidence": 0.86,
+      "evidence_refs": [
+        "source:superseded_correction:old"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The old correction source supports the current outcome."
+      ]
+    },
+    {
+      "example_id": "correct_boundary_reopen",
+      "case_id": "surface_paraphrase_lure__d2_i3",
+      "decision": "evidence",
+      "confidence": 0.81,
+      "evidence_refs": [
+        "source:paraphrase_boundary:target"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The reopened boundary source carries the exact rule."
+      ]
+    },
+    {
+      "example_id": "wrong_paraphrase_heading",
+      "case_id": "surface_paraphrase_lure__d5_i4",
+      "decision": "evidence",
+      "confidence": 0.89,
+      "evidence_refs": [
+        "source:paraphrase_table:heading_match"
+      ],
+      "scent_refs": [],
+      "source_reopened": true,
+      "claims": [
+        "The matching heading source supports the answer."
       ]
     }
   ]
