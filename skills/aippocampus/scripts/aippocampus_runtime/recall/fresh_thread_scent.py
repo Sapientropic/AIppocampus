@@ -175,6 +175,13 @@ def source_reopen_plan_from_refs(
     }
     if primary_ref:
         plan["primary_ref"] = primary_ref
+    else:
+        plan["blocked_recovery_action"] = "ask_light_question"
+        plan["blocked_recovery_goal"] = "recover_a_reopenable_source_anchor_without_guessing"
+        plan["blocked_recovery_boundary"] = (
+            "Ask for a minimal source anchor or permission to search; do not answer "
+            "from the packet and do not invent manual query terms from private scent."
+        )
     return plan
 
 

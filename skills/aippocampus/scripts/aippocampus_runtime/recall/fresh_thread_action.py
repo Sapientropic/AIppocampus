@@ -227,15 +227,19 @@ def _base_result(
     active_recall_lock: dict[str, Any] | None,
     specific_memory_claim: bool,
 ) -> dict[str, Any]:
-    requires_source_reopen = action == SOURCE_REOPEN or specific_memory_claim
-    expose_refs = action in {ACTIVE_RECALL, SOURCE_REOPEN}
-    candidate_refs = _candidate_refs(packet, expose=expose_refs)
     support_level = _bucket(packet.get("support_level"), SUPPORT_LEVELS, "silent_scent")
     plan_support_level = (
         "source_required"
         if support_level == "source_required" or specific_memory_claim
         else support_level
     )
+    requires_source_reopen = (
+        action == SOURCE_REOPEN
+        or specific_memory_claim
+        or plan_support_level == "source_required"
+    )
+    expose_refs = action in {ACTIVE_RECALL, SOURCE_REOPEN}
+    candidate_refs = _candidate_refs(packet, expose=expose_refs)
     reopen_plan = source_reopen_plan_from_refs(
         support_level=plan_support_level,
         candidate_refs=_candidate_refs(packet, expose=True),
@@ -398,8 +402,8 @@ def fresh_thread_action_from_packet(
 
     if specific_memory_claim and refs and not has_reopenable_refs:
         return _base_result(
-            action=IGNORE,
-            reason="specific_memory_claim_has_no_reopenable_source_ref",
+            action=ASK_LIGHT_QUESTION,
+            reason="specific_memory_claim_needs_source_anchor_before_answer",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,
@@ -428,8 +432,8 @@ def fresh_thread_action_from_packet(
 
     if support_level == "source_required" and refs and not has_reopenable_refs:
         return _base_result(
-            action=IGNORE,
-            reason="source_required_packet_has_no_reopenable_source_ref",
+            action=ASK_LIGHT_QUESTION,
+            reason="source_required_packet_needs_source_anchor_before_answer",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,

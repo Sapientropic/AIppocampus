@@ -338,7 +338,7 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
             ],
         )
 
-    def test_source_required_without_reopenable_refs_blocks_manual_query_invention(self) -> None:
+    def test_source_required_without_reopenable_refs_asks_for_anchor_without_guessing(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(
             {
                 "decision": "evidence",
@@ -352,8 +352,11 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
             task_context={"specific_memory_claim": True},
         )
 
-        self.assertEqual(action["agent_action"], "ignore")
-        self.assertEqual(action["reason"], "specific_memory_claim_has_no_reopenable_source_ref")
+        self.assertEqual(action["agent_action"], "ask_light_question")
+        self.assertEqual(
+            action["reason"],
+            "specific_memory_claim_needs_source_anchor_before_answer",
+        )
         self.assertTrue(action["requires_source_reopen"])
         self.assertFalse(action["source_refs_allowed"])
         self.assertFalse(action["should_call_active_recall"])
@@ -361,6 +364,7 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
         self.assertEqual(action["manual_query_invention_count"], 0)
         self.assertFalse(action["manual_query_invention_expected"])
         self.assertEqual(action["reopen_plan"]["status"], "blocked")
+        self.assertEqual(action["reopen_plan"]["blocked_recovery_action"], "ask_light_question")
         self.assertIn("no_reopenable_source_ref", action["reopen_plan"]["reason_codes"])
         self.assertIn("source_missing", action["reopen_plan"]["failure_reason_codes"])
 

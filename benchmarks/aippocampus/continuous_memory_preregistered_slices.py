@@ -299,11 +299,26 @@ def build_expected_null_remediation(
     metrics: dict[str, Any],
     cost_harm_ledger: dict[str, Any],
     paired_repeat_readout: dict[str, Any],
+    product_path_change: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cost = cost_harm_ledger["cost"]
     true_cost = cost["by_arm"]["true_aippocampus_memory"]
     fresh_cost = cost["comparison_baselines"]["fresh_context_spec_loop"]
     net_value = cost_harm_ledger["net_value_under_equalized_cost"]
+    product_change = product_path_change or {}
+    product_change_implemented = (
+        product_change.get("status") == "implemented_source_miss_recovery_action"
+    )
+    product_change_status = (
+        "implemented_rerun"
+        if product_change_implemented
+        and paired_repeat_readout.get("lower_bound_rule_evaluated")
+        else (
+            "implemented_contract_probe"
+            if product_change_implemented
+            else "candidate_identified_not_implemented"
+        )
+    )
     per_family: list[dict[str, Any]] = []
     for family in sorted({str(row["case_family"]) for row in rows}):
         family_rows = [row for row in rows if row["case_family"] == family]
@@ -328,6 +343,33 @@ def build_expected_null_remediation(
                 "fresh_context_advantage": "not classified",
             },
         )
+        source_miss_abstention = {
+            "true_memory_abstention_count": sum(
+                1 for row in true_rows if row["abstained_on_missing_source"]
+            ),
+            "true_memory_source_backed_hit_rate": _rate(
+                sum(1 for row in true_rows if row["source_backed_hit"]),
+                len(true_rows),
+            ),
+        }
+        if family == "incomplete_handoff_recovery" and product_change:
+            source_miss_abstention.update(
+                {
+                    "source_miss_recovery_action": product_change.get(
+                        "source_miss_recovery_action"
+                    ),
+                    "source_miss_recovery_reason": product_change.get(
+                        "source_miss_recovery_reason"
+                    ),
+                    "reopen_plan_status": product_change.get("reopen_plan_status"),
+                    "manual_query_invention_expected": bool(
+                        product_change.get("manual_query_invention_expected")
+                    ),
+                    "answer_from_packet_allowed": bool(
+                        product_change.get("answer_from_packet_allowed")
+                    ),
+                }
+            )
         per_family.append(
             {
                 "case_family": family,
@@ -341,15 +383,7 @@ def build_expected_null_remediation(
                     "true_over_no_memory_delta": round(true_success - no_success, 4),
                     "true_over_sham_delta": round(true_success - sham_success, 4),
                 },
-                "source_miss_abstention": {
-                    "true_memory_abstention_count": sum(
-                        1 for row in true_rows if row["abstained_on_missing_source"]
-                    ),
-                    "true_memory_source_backed_hit_rate": _rate(
-                        sum(1 for row in true_rows if row["source_backed_hit"]),
-                        len(true_rows),
-                    ),
-                },
+                "source_miss_abstention": source_miss_abstention,
                 "fresh_context_advantage": remediation["fresh_context_advantage"],
                 "memory_cost_drag": {
                     "true_memory_cost_per_successful_slice": true_cost_per_success,
@@ -376,13 +410,15 @@ def build_expected_null_remediation(
         "claim_level": "expected_null_remediation_diagnostic",
         "primary_endpoint_changed": False,
         "benchmark_thresholds_changed": False,
-        "product_change_status": "candidate_identified_not_implemented",
+        "product_change_status": product_change_status,
+        "product_failure_mode_changed": product_change_implemented,
+        "product_path_change": product_change,
         "decision_label_preserved": paired_repeat_readout["decision_label"],
         "interpretation_label": paired_repeat_readout["interpretation_label"],
         "repeat_independence_boundary": paired_repeat_readout[
             "repeat_independence_boundary"
         ],
-        "original_failure_changed": False,
+        "original_failure_changed": product_change_implemented,
         "primary_endpoint_winner": net_value["highest_net_value_fair_strategy"],
         "overall": {
             "true_aippocampus_memory_success_rate": metrics["by_arm"][

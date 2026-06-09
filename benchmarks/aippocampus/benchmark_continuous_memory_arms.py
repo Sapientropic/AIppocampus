@@ -13,11 +13,16 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
+
+SKILL_SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
+if str(SKILL_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from continuous_memory_preregistered_slices import (
     CONTRACT_SMOKE_RUNNER_PROFILE,
@@ -1631,6 +1636,43 @@ def fresh_context_net_for_case_count(case_count: int) -> dict[str, Any]:
     return net
 
 
+def build_source_miss_product_remediation_probe() -> dict[str, Any]:
+    from aippocampus_runtime.recall import fresh_thread_action, fresh_thread_scent
+
+    ask_light_question = fresh_thread_action.ASK_LIGHT_QUESTION
+    packet = fresh_thread_scent.fresh_thread_scent_packet_from_decision({
+        "decision": "evidence",
+        "confidence": "high",
+        "evidence": [{"source_id": "clean:orphaned-summary"}],
+    })
+    action = fresh_thread_action.fresh_thread_action_from_packet(packet, task_context={"specific_memory_claim": True})
+    raw_plan = action.get("reopen_plan")
+    reopen_plan = raw_plan if isinstance(raw_plan, dict) else {}
+    manual_query_expected = bool(reopen_plan.get("manual_query_invention_expected"))
+    implemented = (
+        action.get("agent_action") == ask_light_question
+        and reopen_plan.get("status") == "blocked"
+        and reopen_plan.get("blocked_recovery_action") == ask_light_question
+        and not manual_query_expected
+        and bool(action.get("requires_source_reopen"))
+        and not bool(action.get("source_refs_allowed"))
+    )
+    return {
+        "status": "implemented_source_miss_recovery_action" if implemented else "candidate_identified_not_implemented",
+        "product_surface": ["source_reopen", "abstention_usefulness", "route_packet"],
+        "source_miss_recovery_action": action.get("agent_action"),
+        "source_miss_recovery_reason": action.get("reason"),
+        "reopen_plan_status": reopen_plan.get("status"),
+        "blocked_recovery_action": reopen_plan.get("blocked_recovery_action"),
+        "blocked_recovery_goal": reopen_plan.get("blocked_recovery_goal"),
+        "manual_query_invention_expected": manual_query_expected,
+        "source_refs_allowed": bool(action.get("source_refs_allowed")),
+        "requires_source_reopen": bool(action.get("requires_source_reopen")),
+        "answer_from_packet_allowed": False,
+        "probe_boundary": "public synthetic source-miss policy probe; verifies the product action path, not live user-visible quality or benchmark advantage",
+    }
+
+
 def run_benchmark(
     *,
     arms: Sequence[str] | None = None,
@@ -1675,11 +1717,13 @@ def run_benchmark(
         net_value_for_rows=net_value_for_rows,
         fresh_context_net_for_case_count=fresh_context_net_for_case_count,
     )
+    source_miss_product_remediation = build_source_miss_product_remediation_probe()
     expected_null_remediation = build_expected_null_remediation(
         rows=rows,
         metrics=metrics,
         cost_harm_ledger=cost_harm_ledger,
         paired_repeat_readout=paired_repeat_readout,
+        product_path_change=source_miss_product_remediation,
     )
     preregistration = build_preregistration(
         cost_harm_ledger,

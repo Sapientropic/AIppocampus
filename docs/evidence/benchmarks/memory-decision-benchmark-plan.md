@@ -672,28 +672,34 @@ short tasks where the right source can be cheaply rebuilt. The repeat rows are
 deterministic replicated lower-bound rows for the registered gate; they are not
 independent human or live-model trials.
 
-The 2026-06-09 rerun used for #960 interpretation preserved the negative rule
-and reported the following per-case remediation taxonomy:
+The 2026-06-09 #960 product-remediation rerun preserved the negative rule and
+reported the following per-case remediation taxonomy. The product change was
+narrow: source-required fresh-thread packets with no reopenable source ref now
+ask for a minimal source anchor instead of silently ignoring the route or
+inventing manual query terms.
 
 The machine-readable report now exposes this under
 `expected_null_remediation`. That block is a remediation ledger, not a scoring
 layer: it keeps `primary_endpoint_changed=false`,
 `benchmark_thresholds_changed=false`, and
-`product_change_status=candidate_identified_not_implemented` until a later
-product change and rerun can supersede the expected-null boundary.
+`product_change_status=implemented_rerun`; it also records
+`source_miss_recovery_action=ask_light_question` and
+`manual_query_invention_expected=false`. The expected-null boundary remains
+because the registered lower-bound result is still negative:
+`lower_bound_units=-27.7675`.
 
 | Case family | Success lift | Source-miss abstention | Fresh-context advantage | Memory cost drag / repair hypothesis |
 | --- | --- | --- | --- | --- |
 | `post_compaction_rejected_route` | True memory succeeds where `no_memory`, sham, and stale arms fail by reopening source and avoiding a rejected route. | None. | The complete-spec reset loop already carries the right rejected-route source. | Route is useful but expensive; inspect `route_packet`, `source_reopen`, and `cost_harm_accounting` for cheaper actionability. |
 | `post_compaction_scope_constraint` | True memory succeeds where `no_memory`, sham, and stale arms fail by carrying the scope constraint forward. | None. | The reset loop has the full scope constraint in prompt. | Reduce prompt-hook/route overhead before changing scoring. |
 | `transient_concern_expiry` | True memory succeeds and stale wrong memory fails; `no_memory` and sham also succeed because silence is enough for this negative-control-like slice. | None. | Fresh context or memory silence is expected to be cheap and safe. | Product target is restraint: avoid unnecessary foreground hints and keep old concerns quiet unless source reopening changes action. |
-| `incomplete_handoff_recovery` | No task-success lift: true memory fails like `no_memory` and sham because the source is missing. | True memory source-checks and abstains; this is safer than hallucinating but still a task failure. | The modeled reset loop has the missing source, so it is expected to win. | Improve source-reopen fallback and abstention usefulness without rewarding unsupported answers. |
+| `incomplete_handoff_recovery` | No task-success lift: true memory fails like `no_memory` and sham because the source is missing. | True memory source-checks, abstains, and now uses the product source-miss recovery action `ask_light_question` to recover a minimal source anchor without guessing. | The modeled reset loop has the missing source, so it is expected to win. | Source-reopen fallback is improved for safety and usefulness, but the primary endpoint still does not reward unsupported answers. |
 | `public_vcs_temporal_override` | True memory succeeds where `no_memory`, sham, and stale arms fail by following the current counterfactual source. | None. | The reset loop already has the current source, with lower modeled cost. | Memory correctness is not the failure; net-value drag is. Inspect route minimality and source-reopen cost. |
 | `public_vcs_anti_drift_negative` | True memory succeeds like `no_memory` and sham by suppressing unrelated same-token memory; stale wrong memory fails. | True memory source-checks/abstains on the irrelevant route. | Fresh context wins by staying silent without doing memory work. | Treat as a no-harm gate: suppress irrelevant hints earlier and avoid charging avoidable memory work. |
 
-This table is a remediation hypothesis ledger, not a benchmark rewrite. Future
-product changes should reduce memory drag or improve cheap actionability before
-any scoring or threshold change. The row still does not claim full #378
+This table is a remediation ledger, not a benchmark rewrite. The #960 source-miss
+fallback is implemented and rerun, but future work still needs measured user
+friction or net-value lift before any scoring or threshold change. The row still does not claim full #378
 continuous-memory superiority, live host-native cost or compaction telemetry,
 private real-history generality, or cost-weight robust continuous-memory
 advantage.
