@@ -130,21 +130,23 @@ path for reviewers trying to understand current claims.
 19. Need public-safe Field Continuity / magic-moment reproducibility fixture
    evidence for #454 and the bounded #281 fixture-quality proxy:
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
-20. Need segmented-search merge policy calibration evidence for #375:
+20. Need public-safe provider-conformance fixture evidence for #988 / #981:
+   [`benchmarks/provider-conformance-fixture-report.md`](benchmarks/provider-conformance-fixture-report.md).
+21. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-21. Need agency host-surface timing evidence for #763:
+22. Need agency host-surface timing evidence for #763:
    [`benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`](benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
-22. Need private real-history Dream offline and diagnostic evidence:
+23. Need private real-history Dream offline and diagnostic evidence:
    [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
    and
    [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
-23. Need explicit recall-reminder shadow A/B evidence:
+24. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-24. Need public-corpus negative-control dream shadow evidence:
+25. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-25. Need live question-extraction axis-coverage evidence for GitHub #153:
+26. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-26. Need community-submitted runs, demos, known gaps, or field-report intake:
+27. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -190,6 +192,7 @@ instead of deriving priority from this directory map.
 | Query-pattern routes fixture | `aippocampus_runtime.warm_ambient.query_pattern_enrichment --fixture --json`, `aippocampus_runtime.warm_ambient.query_pattern_routes`, `tests/aippocampus/test_query_pattern_enrichment.py`, `tests/aippocampus/test_prompt_hot_path_funnel.py`, `tests/aippocampus/test_onboard_codex.py`, and `tests/aippocampus/test_aippocampus_prompt_hook.py` | Public-safe #574 registry/import planning plus deterministic sidecar writer/reader, default onboarding registry-metadata and reviewed-semantic-trigger route publication, alias-source diagnostics, and hot-path scent consumption; covers changed-generation work items, cache reuse, idempotent existing work, digest invalidation, provider/privacy suppression, stale sidecar filtering, no-live-LLM foreground packets, registry-only nickname misses, reviewed/generated natural multilingual alias hits, and public reports that omit alias text/local paths. Not live DeepSeek quality, scheduler adoption, or latency savings. |
 | Fresh-thread real-history boundary smoke | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Sanitized real-history boundary smoke for ready-lock reopenability, thread-only lock suppression, current-repo fact negative control, and #490 multi-ref aggregate coverage; not a recall-quality benchmark. |
 | Field Continuity fixture report | `docs/evidence/benchmarks/field-continuity-fixture-report.md` and `benchmark_corpus/field_continuity/fixture.json` | Public-safe #454 scenario-family contract for second-user magic-moment reports from Discussion #428; includes a bounded #281 `issue_readouts.github_281` fixture-quality proxy, two-plus public synthetic families, private seed hash/aggregate rules, and overclaim/wrong-family/stale-route controls without live or private-history quality claims. |
+| Provider conformance fixture report | `docs/evidence/benchmarks/provider-conformance-fixture-report.md` and `benchmark_corpus/provider_conformance/fixture.json` | Public-safe #988 / #981 child fixture for provider/session identity, cross-provider source-reopen affordances, copied-summary downgrade, injected host content demotion, and MCP source-ref metadata shape; not live multi-client support or the full provider conformance kit. |
 | Segmented merge policy fixture report | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md` and `benchmark_corpus/segmented_merge_policy/fixture.json` | Public-safe #375/#853 calibration fixture for `SEGMENT_MERGE_POLICY` and stable source-key dedupe over cross-segment diversity, adjacent-turn pairing, duplicate nearby recap suppression, stable source join overlap, and stale/superseded currentness; not source-evidence retrieval or real long-thread recall quality. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Agency host-surface replay evidence | `docs/evidence/benchmarks/agency-host-surface-codex-desktop-2026-06-05.md` | Public-safe #763 Codex Desktop hidden-route lifecycle replay for show/hold/suppress timing, source-visible suppression, duplicate suppression, recent negative feedback, and usefulness/annoyance/correction ledger boundaries. |
@@ -240,6 +243,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Prompt hook local hot-path funnel | `benchmarks/aippocampus/benchmark_prompt_hot_path_funnel.py` | `skills/aippocampus/references/ambient-hooks.md`, #602 |
 | Fresh-thread public-safe recall demo | `benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py` | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`, `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`, `docs/guides/demo-scenarios.md` |
 | Field Continuity / magic-moment reproducibility contract | `benchmarks/aippocampus/benchmark_field_continuity.py` | `docs/evidence/benchmarks/field-continuity-fixture-report.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/field_continuity/fixture.json`, #454, #281 |
+| Provider conformance contract fixture | `benchmarks/aippocampus/benchmark_provider_conformance.py` | `docs/evidence/benchmarks/provider-conformance-fixture-report.md`, `docs/architecture/provider-entrypoint-inventory.md`, `benchmark_corpus/provider_conformance/fixture.json`, #988, #981 |
 | Structured cognitive portrait | `benchmarks/aippocampus/benchmark_cognitive_portrait.py` | `docs/research/compact-activation-signals.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Question-aware real-history structural benchmark and optional answer-quality review | `benchmarks/aippocampus/benchmark_question_aware_real_history.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/evidence/question/question-aware-answer-quality-2026-06-08.md`, `docs/research/compact-activation-signals.md`, `docs/planning/next-iteration-plan.md`, `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #248 |
 | Question tracking selected-fixture calibration | `benchmarks/aippocampus/benchmark_question_tracking_calibration.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/planning/technical-differentiation-analysis.md` |
