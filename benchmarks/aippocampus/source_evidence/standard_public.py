@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import benchmark_fts5_recall as fts5_benchmark
 from aippocampus_runtime.core import compact_text
@@ -223,6 +223,7 @@ def build_locomo_standard_cases(
     *,
     corpus_path: Path,
     max_questions: int,
+    case_progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cases: list[dict[str, Any]] = []
     corpus: dict[str, Any] = {
@@ -272,6 +273,8 @@ def build_locomo_standard_cases(
                 include_answerable_line_metric=True,
             )
             corpus["eligible_questions"] += 1
+            if case_progress_callback is not None:
+                case_progress_callback(len(cases), corpus)
     return cases, corpus
 
 
@@ -322,6 +325,7 @@ def build_longmemeval_v1_standard_cases(
     dataset: str,
     corpus_path: Path,
     max_questions: int,
+    case_progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cases: list[dict[str, Any]] = []
     corpus: dict[str, Any] = {
@@ -364,6 +368,8 @@ def build_longmemeval_v1_standard_cases(
             include_answerable_line_metric=bool(answer_lines),
         )
         corpus["eligible_questions"] += 1
+        if case_progress_callback is not None:
+            case_progress_callback(len(cases), corpus)
     return cases, corpus
 
 
@@ -1154,6 +1160,55 @@ def skipped_standard_retrieval_payload(
     }
 
 
+def should_emit_progress(count: int, total: int, every: int) -> bool:
+    if int(every) <= 0:
+        return False
+    return int(count) == int(total) or int(count) % int(every) == 0
+
+
+def emit_standard_progress(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    *,
+    started: float,
+    phase: str,
+    config: dict[str, Any],
+    cases_built: int = 0,
+    cases_evaluated: int = 0,
+    total_cases: int | None = None,
+    corpus: dict[str, Any] | None = None,
+) -> None:
+    if progress_callback is None:
+        return
+    elapsed_seconds = max(0.0, time.perf_counter() - started)
+    event: dict[str, Any] = {
+        "kind": "standard_public_retrieval_progress",
+        "generated_at": now_utc(),
+        "dataset": config["dataset"],
+        "phase": phase,
+        "corpus_path_sha1": config["corpus_path_sha1"],
+        "max_questions": int(config["max_questions"]),
+        "cases_built": int(cases_built),
+        "cases_evaluated": int(cases_evaluated),
+        "elapsed_ms": round(elapsed_seconds * 1000, 2),
+    }
+    if total_cases is not None:
+        event["total_cases"] = int(total_cases)
+    if int(cases_evaluated) > 0:
+        event["average_seconds_per_case"] = round(
+            elapsed_seconds / int(cases_evaluated),
+            4,
+        )
+    if corpus:
+        event["corpus"] = {
+            key: int(value)
+            for key, value in corpus.items()
+            if key.endswith("_scanned")
+            or key in {"eligible_questions", "session_count", "samples_scanned"}
+            if isinstance(value, int)
+        }
+    progress_callback(event)
+
+
 def run_standard_retrieval_qa_benchmark(
     *,
     dataset: str = DEFAULT_STANDARD_DATASET,
@@ -1172,6 +1227,8 @@ def run_standard_retrieval_qa_benchmark(
     line_reranker_timeout: int = DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
     line_reranker_max_tokens: int = DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
     line_reranker_workers: int = DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
+    progress_every: int = 0,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if dataset not in STANDARD_DATASET_PATHS:
@@ -1220,12 +1277,32 @@ def run_standard_retrieval_qa_benchmark(
             reason="skipped_missing_standard_corpus",
             config=config,
         )
+    emit_standard_progress(
+        progress_callback,
+        started=started,
+        phase="dataset_verified",
+        config=config,
+    )
+
+    def emit_case_building_progress(count: int, corpus: dict[str, Any]) -> None:
+        if should_emit_progress(count, int(max_questions), progress_every):
+            emit_standard_progress(
+                progress_callback,
+                started=started,
+                phase="cases_building",
+                config=config,
+                cases_built=count,
+                total_cases=int(max_questions),
+                corpus=corpus,
+            )
+
     with tempfile.TemporaryDirectory(prefix="aippocampus-standard-track-b-") as tmp:
         if dataset == "locomo":
             cases, corpus = build_locomo_standard_cases(
                 Path(tmp),
                 corpus_path=resolved_path,
                 max_questions=max_questions,
+                case_progress_callback=emit_case_building_progress,
             )
         else:
             cases, corpus = build_longmemeval_v1_standard_cases(
@@ -1233,7 +1310,18 @@ def run_standard_retrieval_qa_benchmark(
                 dataset=dataset,
                 corpus_path=resolved_path,
                 max_questions=max_questions,
+                case_progress_callback=emit_case_building_progress,
             )
+        emit_standard_progress(
+            progress_callback,
+            started=started,
+            phase="cases_built",
+            config=config,
+            cases_built=len(cases),
+            total_cases=len(cases),
+            corpus=corpus,
+        )
+
         def evaluate(case: dict[str, Any]) -> dict[str, Any]:
             return evaluate_standard_retrieval_case(
                 case,
@@ -1250,12 +1338,47 @@ def run_standard_retrieval_qa_benchmark(
             )
 
         if resolved_line_reranker_mode != "off" and resolved_reranker_workers > 1:
+            indexed_results: list[dict[str, Any] | None] = [None] * len(cases)
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=resolved_reranker_workers
             ) as executor:
-                results = list(executor.map(evaluate, cases))
+                future_to_index = {
+                    executor.submit(evaluate, case): index
+                    for index, case in enumerate(cases)
+                }
+                for completed, future in enumerate(
+                    concurrent.futures.as_completed(future_to_index),
+                    start=1,
+                ):
+                    index = future_to_index[future]
+                    indexed_results[index] = future.result()
+                    if should_emit_progress(completed, len(cases), progress_every):
+                        emit_standard_progress(
+                            progress_callback,
+                            started=started,
+                            phase="cases_evaluated",
+                            config=config,
+                            cases_built=len(cases),
+                            cases_evaluated=completed,
+                            total_cases=len(cases),
+                            corpus=corpus,
+                        )
+                results = [row for row in indexed_results if row is not None]
         else:
-            results = [evaluate(case) for case in cases]
+            results = []
+            for completed, case in enumerate(cases, start=1):
+                results.append(evaluate(case))
+                if should_emit_progress(completed, len(cases), progress_every):
+                    emit_standard_progress(
+                        progress_callback,
+                        started=started,
+                        phase="cases_evaluated",
+                        config=config,
+                        cases_built=len(cases),
+                        cases_evaluated=completed,
+                        total_cases=len(cases),
+                        corpus=corpus,
+                    )
     metrics = summarize_standard_retrieval_results(
         results,
         top_k=top_k,
