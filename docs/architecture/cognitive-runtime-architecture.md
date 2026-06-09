@@ -491,12 +491,13 @@ local paths.
 
 Cognitive-load calibration can also appear in the Observatory as a summary-only
 surface. `aippocampus_runtime.ops.observatory_cognitive_load` accepts the #575
-private-history calibration JSON and projects only status, counts, rates,
-bucket/reason-code counts, issue readouts, and cannot-claim boundaries. It does
-not pass through source-ref hash samples, private text, raw command text, local
-paths, thread ids, or message ids. The summary is still routing metadata only:
-it cannot prove source truth, semantic relevance, host-timing quality,
-affect/personality truth, or user-visible lift.
+private-history calibration JSON and the public behavior-trace feedback report,
+then projects only status, counts, rates, bucket/reason-code counts, issue
+readouts, and cannot-claim boundaries. It does not pass through source-ref hash
+samples, private text, raw command text, trace text, local paths, thread ids, or
+message ids. The summary is still routing metadata only: it cannot prove source
+truth, semantic relevance, host-timing quality, affect/personality truth, or
+user-visible lift.
 
 ## Anti-Patterns
 

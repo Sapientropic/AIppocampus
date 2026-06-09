@@ -13,6 +13,7 @@ if str(SCRIPTS) not in sys.path:
 from aippocampus_runtime.cli import facade  # noqa: E402
 from aippocampus_runtime.ops import cognitive_observatory  # noqa: E402
 from aippocampus_runtime.ops.route_readiness import route_readiness_report  # noqa: E402
+from aippocampus_runtime.recall import cognitive_load_sidecar as sidecar  # noqa: E402
 
 
 class RouteReadinessObservatoryTests(unittest.TestCase):
@@ -347,6 +348,73 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertNotIn("PRIVATE REASON TEXT MUST NOT SURFACE", encoded)
         self.assertNotIn("PRIVATE_LIVE_HOOK_TEXT_MUST_NOT_SURFACE", encoded)
         self.assertNotIn("PRIVATE_CANNOT_CLAIM_TEXT_MUST_NOT_SURFACE", encoded)
+        self.assertNotIn("E:\\", encoded)
+        self.assertNotIn("source.jsonl", encoded)
+
+    def test_observatory_reports_public_cognitive_load_feedback_without_trace_text(
+        self,
+    ) -> None:
+        ref = {
+            "source_id": "public:trace:load-feedback",
+            "message_id": "m-feedback",
+            "line": 9,
+            "path": "E:\\private\\load-feedback\\source.jsonl",
+        }
+        feedback = sidecar.build_public_behavior_trace_feedback_report(
+            [
+                {
+                    "public_trace_id": "public-feedback-helpful",
+                    "event_type": "user_correction",
+                    "timestamp": "2026-06-05T00:00:00Z",
+                    "source_refs": [ref],
+                    "load_weight_reviewed": True,
+                    "caution_hint_reviewed": True,
+                    "caution_hint_useful": True,
+                    "raw_note": "PRIVATE_PUBLIC_FEEDBACK_NOTE_MUST_NOT_SURFACE",
+                },
+                {
+                    "public_trace_id": "public-feedback-drag",
+                    "event_type": "failed_command",
+                    "timestamp": "2026-06-05T00:05:00Z",
+                    "source_refs": [ref],
+                    "load_weight_reviewed": True,
+                    "load_weight_false_positive": True,
+                    "irrelevant_load_drag": True,
+                },
+            ],
+            now="2026-06-06T00:00:00Z",
+        )
+
+        report = cognitive_observatory.cognitive_observatory_readout(
+            cognitive_load_calibration=feedback
+        )
+        load = report["cognitive_load_calibration"]
+        load_encoded = json.dumps(load, ensure_ascii=False, sort_keys=True)
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("cognitive_load_calibration", report["surfaces"])
+        self.assertEqual(
+            load["source_kind"],
+            sidecar.PUBLIC_BEHAVIOR_TRACE_FEEDBACK_REPORT_KIND,
+        )
+        self.assertEqual(load["metrics"]["public_behavior_trace_case_count"], 2)
+        self.assertEqual(load["metrics"]["reviewed_feedback_case_count"], 2)
+        self.assertEqual(load["metrics"]["helpful_caution_hint_count"], 1)
+        self.assertEqual(load["metrics"]["irrelevant_load_drag_count"], 1)
+        self.assertEqual(report["metrics"]["cognitive_load_public_feedback_case_count"], 2)
+        self.assertEqual(
+            load["issue_readouts"]["github_575"]["public_behavior_trace_feedback"],
+            "measured_public_fixture",
+        )
+        self.assertFalse(load["issue_readouts"]["github_575"]["closeout_eligible"])
+        self.assertTrue(load["contract"]["load_is_routing_metadata_only"])
+        self.assertIn(
+            "cognitive_load_summary_is_host_timing_quality",
+            load["cannot_claim"],
+        )
+        self.assertNotIn("source_refs", load_encoded)
+        self.assertNotIn("public:trace:load-feedback", encoded)
+        self.assertNotIn("PRIVATE_PUBLIC_FEEDBACK_NOTE_MUST_NOT_SURFACE", encoded)
         self.assertNotIn("E:\\", encoded)
         self.assertNotIn("source.jsonl", encoded)
 

@@ -262,8 +262,11 @@ For these commands:
   sleep-cycle public summaries. A `--query-pattern-routes <json-or-jsonl>`
   input may add query-pattern route counts and active/suppressed buckets without
   emitting alias text. A `--cognitive-load-calibration <json>` input may add a
-  #575 cognitive-load calibration summary with counts/rates only; source-ref
-  hash samples, private text, command text, and paths are not passed through.
+  #575 cognitive-load calibration summary with counts/rates only; both the
+  private-history aggregate report and the public behavior-trace feedback
+  fixture are projected as diagnostic metadata, not source truth. Source-ref
+  hash samples, private text, command text, trace text, and paths are not passed
+  through.
   Route-readiness, query-pattern, and cognitive-load rows are
   `navigation_only`; they can justify reopening source but cannot support
   factual claims, mutate owner surfaces, or control foreground hooks. The
