@@ -60,6 +60,9 @@ PUBLIC_SHADOW_REQUIREMENT_KEYS = [
     "stale_or_superseded_source",
     "unsupported_semantic_sidecar",
     "multilingual_paraphrase",
+    "preference_source_open_positive",
+    "preference_unsupported_generic_claim",
+    "preference_stale_currentness_boundary",
 ]
 REVIEW_FAILURE_CLASSES = [
     "timeout",
@@ -70,6 +73,14 @@ REVIEW_FAILURE_CLASSES = [
     "source_open_issue",
     "report_aggregation_bug",
     "unexpected_exception",
+]
+LABEL_FAILURE_CLASSES = [
+    "unsupported_label",
+    "unsupported_label_evidence",
+    "stale_or_currentness_boundary",
+    "human_review_boundary",
+    "low_review_confidence",
+    "operational_failure",
 ]
 
 
@@ -255,6 +266,7 @@ def parse_review_payload(parsed: dict[str, Any], labels: list[str]) -> dict[str,
     return {
         "supported_labels": supported,
         "unsupported_labels": unsupported,
+        "unsupported_evidence_labels": unsupported_evidence,
         "confidence": max(0.0, min(1.0, confidence)),
         "needs_human_review": bool(parsed.get("needs_human_review")),
     }
@@ -359,6 +371,90 @@ def failure_taxonomy(review_results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def label_failure_class(
+    item: dict[str, Any], label: str, *, min_review_confidence: float = 0.65
+) -> str:
+    if item.get("failure_class"):
+        return "operational_failure"
+    shadow_case = str(item.get("public_shadow_case") or "").casefold()
+    expected = str(item.get("expected_review_outcome") or "").casefold()
+    if (
+        "stale" in shadow_case
+        or "superseded" in shadow_case
+        or "currentness" in shadow_case
+        or (expected == "needs_human_review" and label in (item.get("unsupported_labels") or []))
+    ):
+        return "stale_or_currentness_boundary"
+    if label in (item.get("unsupported_evidence_labels") or []):
+        return "unsupported_label_evidence"
+    if item.get("needs_human_review") or expected == "needs_human_review":
+        return "human_review_boundary"
+    if label in (item.get("unsupported_labels") or []):
+        return "unsupported_label"
+    if float(item.get("review_confidence") or 0.0) < float(min_review_confidence):
+        return "low_review_confidence"
+    return "unsupported_label"
+
+
+def label_failure_taxonomy(
+    review_results: list[dict[str, Any]], *, min_review_confidence: float = 0.65
+) -> dict[str, Any]:
+    by_label: dict[str, dict[str, Any]] = {}
+    by_class: dict[str, int] = {}
+    for item in review_results:
+        # Public shadow cohorts intentionally contain unsupported and stale
+        # cases that may pass because the expected outcome is a safe rejection
+        # or human-review boundary. Keep them in this diagnostic taxonomy so a
+        # green shadow run still explains which label boundaries were exercised;
+        # `ok` and `failed_label_categories` remain the gate signals.
+        if item.get("passed") and expected_review_outcome(item) == "supported":
+            continue
+        labels = [label for label in item.get("labels") or [] if label in SCOPE_LABEL_ORDER]
+        if not labels:
+            continue
+        for label in labels:
+            failure_class = label_failure_class(
+                item, label, min_review_confidence=min_review_confidence
+            )
+            by_class[failure_class] = by_class.get(failure_class, 0) + 1
+            label_bucket = by_label.setdefault(
+                label,
+                {
+                    "failed_count": 0,
+                    "by_class": {},
+                    "public_safe_examples": [],
+                },
+            )
+            label_bucket["failed_count"] += 1
+            label_bucket["by_class"][failure_class] = (
+                label_bucket["by_class"].get(failure_class, 0) + 1
+            )
+            example = {
+                "case_id": str(item.get("case_id") or ""),
+                "failure_class": failure_class,
+                "expected_review_outcome": expected_review_outcome(item),
+            }
+            public_shadow_case = str(item.get("public_shadow_case") or "")
+            if public_shadow_case:
+                example["public_shadow_case"] = public_shadow_case
+            label_bucket["public_safe_examples"].append(example)
+    for label_bucket in by_label.values():
+        label_bucket["by_class"] = dict(sorted(label_bucket["by_class"].items()))
+        label_bucket["public_safe_examples"] = sorted(
+            label_bucket["public_safe_examples"],
+            key=lambda item: (
+                str(item.get("failure_class") or ""),
+                str(item.get("case_id") or ""),
+            ),
+        )
+    return {
+        "known_classes": LABEL_FAILURE_CLASSES,
+        "by_label": {label: by_label[label] for label in sorted(by_label)},
+        "by_class": dict(sorted(by_class.items())),
+        "failure_count": sum(int(item.get("failed_count") or 0) for item in by_label.values()),
+    }
+
+
 def public_shadow_requirements(cases: list[dict[str, Any]]) -> dict[str, bool]:
     present = {str(case.get("public_shadow_case") or "") for case in cases}
     return {key: key in present for key in PUBLIC_SHADOW_REQUIREMENT_KEYS}
@@ -408,10 +504,13 @@ def review_case(
         "case_id": case.get("case_id"),
         "prompt_kind": PROMPT_KIND,
         "expected_review_outcome": expected_review_outcome(case),
+        "public_shadow_case": case.get("public_shadow_case"),
         "labels": case.get("labels") or [],
         "passed": bool(passed),
         "supported_label_count": len(review["supported_labels"]),
         "unsupported_label_count": len(review["unsupported_labels"]),
+        "unsupported_evidence_label_count": len(review["unsupported_evidence_labels"]),
+        "unsupported_evidence_labels": review["unsupported_evidence_labels"],
         "needs_human_review": review["needs_human_review"],
         "review_confidence": round(float(review["confidence"]), 4),
         "attempt_count": attempt_count,
@@ -541,6 +640,7 @@ def review_case_agentic(
             "unsupported_labels": [
                 label for label in case.get("labels") or [] if label in SCOPE_LABEL_ORDER
             ],
+            "unsupported_evidence_labels": [],
             "confidence": 0.0,
             "needs_human_review": True,
         }
@@ -550,10 +650,13 @@ def review_case_agentic(
         "prompt_kind": PROMPT_KIND,
         "review_mode": "agentic",
         "expected_review_outcome": expected_review_outcome(case),
+        "public_shadow_case": case.get("public_shadow_case"),
         "labels": case.get("labels") or [],
         "passed": bool(passed),
         "supported_label_count": len(review["supported_labels"]),
         "unsupported_label_count": len(review["unsupported_labels"]),
+        "unsupported_evidence_label_count": len(review["unsupported_evidence_labels"]),
+        "unsupported_evidence_labels": review["unsupported_evidence_labels"],
         "needs_human_review": review["needs_human_review"],
         "review_confidence": round(float(review["confidence"]), 4),
         "tool_step_count": tool_step_count,
@@ -784,6 +887,7 @@ def run_semantic_scope_source_review(
             "model_route": resolved_route.as_dict(),
             "cases": [],
             "failure_taxonomy": failure_taxonomy([]),
+            "label_failure_taxonomy": label_failure_taxonomy([]),
             "public_shadow_requirements": shadow_requirements,
             "privacy_boundary": privacy_boundary,
         }
@@ -818,6 +922,7 @@ def run_semantic_scope_source_review(
             "model_route": resolved_route.as_dict(),
             "cases": [],
             "failure_taxonomy": failure_taxonomy([]),
+            "label_failure_taxonomy": label_failure_taxonomy([]),
             "public_shadow_requirements": shadow_requirements,
             "privacy_boundary": privacy_boundary,
         }
@@ -835,10 +940,13 @@ def run_semantic_scope_source_review(
             "case_id": case.get("case_id"),
             "prompt_kind": PROMPT_KIND,
             "expected_review_outcome": expected_review_outcome(case),
+            "public_shadow_case": case.get("public_shadow_case"),
             "labels": case.get("labels") or [],
             "passed": False,
             "supported_label_count": 0,
             "unsupported_label_count": len(case.get("labels") or []),
+            "unsupported_evidence_label_count": 0,
+            "unsupported_evidence_labels": [],
             "needs_human_review": True,
             "review_confidence": 0.0,
             "error": "redacted_review_failure",
@@ -929,6 +1037,9 @@ def run_semantic_scope_source_review(
         "model_route": resolved_route.as_dict(),
         "failure_count": failures,
         "failure_taxonomy": failure_taxonomy(review_results),
+        "label_failure_taxonomy": label_failure_taxonomy(
+            review_results, min_review_confidence=min_review_confidence
+        ),
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
         "per_label": per_label,

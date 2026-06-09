@@ -20,6 +20,52 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-09 Issue #1053 Preference Source-review Floor And Taxonomy Slice
+
+Issue #1053 follows the #993 operational cleanup by separating label-level
+source-review outcomes from provider/parser failure taxonomy, adding
+public-safe preference analogues, and rerunning the broader selected diagnostic
+with the preference per-label floor visible.
+
+Positive local evidence:
+
+- `python tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --public-shadow --max-cases 8 --min-cases 7 --min-pass-rate 1.0 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 2 --json`:
+  passed the expanded checked-in public shadow cohort. It reviewed 7/7 public
+  synthetic cases, passed all seven, and covered the original
+  `source_open_positive`, `stale_or_superseded_source`,
+  `unsupported_semantic_sidecar`, and `multilingual_paraphrase` families plus
+  `preference_source_open_positive`, `preference_unsupported_generic_claim`,
+  and `preference_stale_currentness_boundary`.
+- `python tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 1 --timeout 240 --max-attempts 4 --json`:
+  passed the broader selected live diagnostic on 2026-06-09. It reviewed 96
+  selected cases, passed 89, reached `pass_rate=0.9271`, reported
+  `failed_label_categories=[]`, and reported `failure_count=0` with
+  `failure_taxonomy.by_class={}` and `retry_exhausted_count=0`. The `preference`
+  label had 9 selected cases, 6 passed, `pass_rate=0.6667`, and therefore met
+  the `0.65` per-label floor.
+- The same 96-case run reported a sanitized `label_failure_taxonomy` separate
+  from operational failures: `label_failure_taxonomy.by_class` was
+  `{"unsupported_label_evidence": 7}` overall, including 3 preference examples.
+  The taxonomy emits labels, hashed case ids, expected outcomes, and public
+  shadow family names only; it does not emit raw source text, titles, message
+  ids, source refs, or local paths.
+- A first same-day 96-case run at `--concurrency 2 --timeout 200 --max-attempts
+  3` observed one provider response-shape failure after retries. The lower
+  concurrency rerun above is the current dated claim row; the transient partial
+  failure remains useful provider-stability context, not the claim source.
+
+Interpretation:
+
+- This supersedes the same-day #993 broader diagnostic for the selected
+  96-case source-review row: the preference per-label floor is now met in the
+  recorded low-concurrency rerun, and operational provider/parser failures are
+  still zero in the current row.
+- The 96-case run remains broader selected diagnostic evidence, not the named
+  24-case green gate. The residual label-level taxonomy shows reviewer concern
+  about label evidence specificity; it does not authorize human-review claims,
+  global semantic correctness, lower materializer gates, provider-independent
+  quality, or private-text disclosure.
+
 ## 2026-06-09 Issue #1020 Claude Code Hook Contract Slice
 
 Issue #1020 narrows the old broad Claude Code hook caveat into a scoped
@@ -76,12 +122,9 @@ Interpretation:
 - The older 2026-05-30 partial failure is superseded as an operational provider
   / parser diagnostic: the current 96-case rerun had no live model call,
   response-shape, retry, or aggregation failure.
-- The broader 96-case run remains diagnostic label-quality evidence, not the
-  named 24-case green gate. Eight selected cases were still rejected or marked
-  as needing human review by the reviewer, and `preference` fell below the
-  0.65 per-label floor, so this does not authorize global semantic correctness,
-  human-review claims, lower materializer gates, or provider-independent
-  quality claims.
+- The broader 96-case numbers in this #993 row are superseded by the later
+  same-day #1053 rerun above. The #993 row remains historical evidence for the
+  operational taxonomy cleanup and the original 4-case public shadow cohort.
 
 ## 2026-06-09 Issue #998 Claude Code Real-Host Dogfood Refresh
 

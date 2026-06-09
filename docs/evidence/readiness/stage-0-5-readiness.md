@@ -253,11 +253,11 @@ above. The canonical command details live in
 
 - #55 adds a 24-case live source-review pass for the selected strict semantic
   sidecar slice as of the 2026-05-30 run. #993 keeps that 24-case row as the
-  named green gate and updates the broader 96-case diagnostic with a clean
-  2026-06-09 operational rerun: 88/96 passed, `pass_rate=0.9167`,
-  `failure_count=0`, and `failed_label_categories=["preference"]`. Treat the
-  broader run as diagnostic label-quality evidence, not as human review, a
-  green gate, or global semantic correctness.
+  named green gate, and #1053 updates the broader 96-case diagnostic with a
+  later 2026-06-09 low-concurrency rerun: 89/96 passed, `pass_rate=0.9271`,
+  `failure_count=0`, `failed_label_categories=[]`, and `preference` passed 6/9
+  at `pass_rate=0.6667`. Treat the broader run as diagnostic label-quality
+  evidence, not as human review, a green gate, or global semantic correctness.
 - #55 also refreshes selected retrieval evidence across all eight canonical
   labels. That is selected retrieval/ranking quality evidence, not proof of
   full-history semantic completeness or global label correctness.
