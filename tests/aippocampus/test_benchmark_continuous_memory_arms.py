@@ -18,6 +18,13 @@ sys.path.insert(0, str(BENCHMARKS))
 import benchmark_continuous_memory_arms as benchmark  # noqa: E402
 
 
+def slice_by_id(payload: dict, slice_id: str) -> dict:
+    for readout in payload["preregistered_slices"]:
+        if readout["slice_id"] == slice_id:
+            return readout
+    raise AssertionError(f"missing preregistered slice {slice_id}")
+
+
 class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
     def test_common_specs_uses_typed_config_instead_of_wide_kwargs(self) -> None:
         signature = inspect.signature(benchmark._common_specs)
@@ -91,7 +98,9 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertGreater(metrics["memory_correctness_effect"], 0.0)
         self.assertGreater(metrics["stale_memory_harm"], 0.0)
         self.assertGreater(metrics["oracle_headroom"], 0.0)
-        self.assertEqual(by_arm["sham_unrelated_memory"]["success_rate"], by_arm["no_memory"]["success_rate"])
+        self.assertEqual(
+            by_arm["sham_unrelated_memory"]["success_rate"], by_arm["no_memory"]["success_rate"]
+        )
         self.assertGreater(
             by_arm["true_aippocampus_memory"]["success_rate"],
             by_arm["sham_unrelated_memory"]["success_rate"],
@@ -269,7 +278,9 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             framing["baseline_arms"]["oracle_fresh_context_spec_loop"]["role"],
             "upper_bound_no_harm_control",
         )
-        self.assertFalse(framing["baseline_arms"]["oracle_fresh_context_spec_loop"]["primary_opponent"])
+        self.assertFalse(
+            framing["baseline_arms"]["oracle_fresh_context_spec_loop"]["primary_opponent"]
+        )
         self.assertEqual(fresh_context["framing_role"], "realistic_fresh_context_handoff_loop")
         self.assertFalse(fresh_context["complete_spec_upper_bound"])
         self.assertEqual(primary["scope"], "context_loss_or_instability")
@@ -359,8 +370,11 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         payload = benchmark.run_benchmark()
         slices = payload["preregistered_slices"]
 
-        self.assertEqual(len(slices), 1)
-        readout = slices[0]
+        self.assertEqual(len(slices), 2)
+        readout = slice_by_id(
+            payload,
+            "github_378_continuous_memory_public_synthetic_v1",
+        )
         self.assertEqual(readout["issue"], "github_378")
         self.assertEqual(
             readout["slice_id"],
@@ -380,9 +394,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             readout["decision"]["primary_endpoint_winner"],
             "fresh_context_spec_loop",
         )
-        self.assertFalse(
-            readout["decision"]["continuous_memory_advantage_claim_allowed"]
-        )
+        self.assertFalse(readout["decision"]["continuous_memory_advantage_claim_allowed"])
         self.assertFalse(readout["public_quality_gates"]["lower_bound_rule_evaluated"])
         self.assertFalse(readout["public_quality_gates"]["paired_repeat_power_gate_passed"])
         self.assertFalse(readout["public_quality_gates"]["public_quality_claim_ready"])
@@ -396,13 +408,105 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             readout["cannot_claim"],
         )
 
+    def test_context_loss_slice_preserves_expected_null_and_separates_metrics(self) -> None:
+        payload = benchmark.run_benchmark()
+        readout = slice_by_id(
+            payload,
+            "github_1153_context_loss_public_continuity_v1",
+        )
+        metrics = readout["metrics"]
+        task = metrics["task_success_by_strategy"]
+
+        self.assertEqual(readout["issue"], "github_1153")
+        self.assertEqual(
+            readout["claim_level"],
+            "preregistered_context_loss_diagnostic_slice",
+        )
+        self.assertTrue(readout["stable_slice_id"])
+        self.assertTrue(readout["contract_gate_ok"])
+        self.assertFalse(readout["quality_gate_ok"])
+        self.assertEqual(
+            readout["expected_null_preservation"]["historical_row_id"],
+            "continuous_memory.preregistered_repeat_profile_2026_06_08",
+        )
+        self.assertFalse(readout["expected_null_preservation"]["supersedes_historical_row"])
+        self.assertEqual(readout["scenario_families"]["missing"], [])
+        self.assertIn(
+            "incomplete_handoff_recovery",
+            readout["scenario_families"]["required"],
+        )
+        self.assertEqual(
+            readout["arms"]["fresh_missing_context"]["report_arm"],
+            "no_memory",
+        )
+        self.assertEqual(
+            readout["arms"]["summary_only_host_native"]["report_arm"],
+            "host_native_continuous_no_aippocampus",
+        )
+        self.assertEqual(
+            readout["arms"]["aippocampus_route_packet"]["report_arm"],
+            "true_aippocampus_memory",
+        )
+        self.assertFalse(
+            readout["arms"]["fresh_context_spec_loop_complete_spec"][
+                "primary_context_loss_opponent"
+            ]
+        )
+        self.assertGreater(
+            task["aippocampus_route_packet"]["success_rate"],
+            task["fresh_missing_context"]["success_rate"],
+        )
+        self.assertGreater(
+            task["aippocampus_route_packet"]["success_rate"],
+            task["sham_unrelated_memory"]["success_rate"],
+        )
+        self.assertEqual(task["oracle_full_context"]["success_rate"], 1.0)
+        self.assertEqual(
+            metrics["source_reopen_behavior"]["aippocampus_source_reopen_obedience_rate"],
+            1.0,
+        )
+        self.assertGreater(
+            metrics["memory_drag"]["aippocampus_minus_fresh_missing_context_total_cost_units"],
+            0,
+        )
+        self.assertEqual(
+            metrics["stale_revival"]["stale_wrong_memory_false_positive_rate"],
+            1.0,
+        )
+        self.assertGreater(
+            metrics["manual_restatement_context_rebuild_cost"][
+                "aippocampus_success_delta_vs_fresh_missing_context"
+            ],
+            0,
+        )
+        self.assertFalse(
+            metrics["manual_restatement_context_rebuild_cost"]["user_minutes_calibrated"]
+        )
+        self.assertEqual(
+            metrics["no_remember_controls"]["aippocampus_no_remember_precision"],
+            1.0,
+        )
+        self.assertIn(
+            "public long-dialogue continuity quality from LoCoMo without a scored prediction run",
+            readout["cannot_claim"],
+        )
+        self.assertIn(
+            "superseding continuous_memory.preregistered_repeat_profile_2026_06_08",
+            readout["cannot_claim"],
+        )
+
     def test_public_quality_repeat_profile_evaluates_lower_bound_without_claim(self) -> None:
         payload = benchmark.run_benchmark(repeat_count_per_case_arm=5)
-        readout = payload["preregistered_slices"][0]
+        readout = slice_by_id(
+            payload,
+            "github_378_continuous_memory_public_synthetic_v1",
+        )
         repeat = readout["paired_repeat_readout"]
         decision = payload["preregistration"]["current_report_decision"]
 
-        self.assertEqual(payload["config"]["runner_profile"], "public_synthetic_preregistered_repeat")
+        self.assertEqual(
+            payload["config"]["runner_profile"], "public_synthetic_preregistered_repeat"
+        )
         self.assertEqual(payload["config"]["repeat_count_per_case_arm"], 5)
         self.assertEqual(payload["metrics"]["case_count"], 6)
         self.assertEqual(payload["metrics"]["case_arm_trial_count"], 30)
@@ -417,9 +521,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             len(repeat["paired_net_value_deltas_by_repeat"]),
             5,
         )
-        self.assertTrue(
-            readout["public_quality_gates"]["paired_repeat_power_gate_passed"]
-        )
+        self.assertTrue(readout["public_quality_gates"]["paired_repeat_power_gate_passed"])
         self.assertTrue(readout["public_quality_gates"]["lower_bound_rule_evaluated"])
         self.assertFalse(readout["public_quality_gates"]["public_quality_claim_ready"])
         self.assertEqual(
@@ -444,9 +546,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
     def test_expected_null_remediation_keeps_negative_result_machine_readable(self) -> None:
         payload = benchmark.run_benchmark(repeat_count_per_case_arm=5)
         remediation = payload["expected_null_remediation"]
-        families = {
-            item["case_family"]: item for item in remediation["per_case_family"]
-        }
+        families = {item["case_family"]: item for item in remediation["per_case_family"]}
 
         self.assertEqual(
             remediation["status"],
@@ -497,9 +597,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             families["incomplete_handoff_recovery"]["product_surface"],
         )
         self.assertGreater(
-            families["post_compaction_rejected_route"]["success_lift"][
-                "true_over_no_memory_delta"
-            ],
+            families["post_compaction_rejected_route"]["success_lift"]["true_over_no_memory_delta"],
             0,
         )
         friction = remediation["secondary_user_visible_friction"]
@@ -529,15 +627,11 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         )
         self.assertGreaterEqual(controls["negative_control_case_count"], 2)
         self.assertGreater(
-            controls["negative_control_unnecessary_intervention_by_arm"][
-                "stale_wrong_memory"
-            ],
+            controls["negative_control_unnecessary_intervention_by_arm"]["stale_wrong_memory"],
             0,
         )
         self.assertEqual(
-            controls["negative_control_unnecessary_intervention_by_arm"][
-                "true_aippocampus_memory"
-            ],
+            controls["negative_control_unnecessary_intervention_by_arm"]["true_aippocampus_memory"],
             0,
         )
         self.assertEqual(
@@ -545,15 +639,11 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             0,
         )
         self.assertEqual(
-            controls["negative_control_memory_intervention_by_arm"][
-                "sham_unrelated_memory"
-            ],
+            controls["negative_control_memory_intervention_by_arm"]["sham_unrelated_memory"],
             0,
         )
         self.assertGreater(
-            controls["negative_control_memory_intervention_by_arm"][
-                "true_aippocampus_memory"
-            ],
+            controls["negative_control_memory_intervention_by_arm"]["true_aippocampus_memory"],
             0,
         )
         self.assertIn(
@@ -562,9 +652,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         )
 
     def test_prompt_threshold_tuning_selection_excludes_holdouts(self) -> None:
-        payload = benchmark.run_benchmark(
-            scenario_selection_role="prompt_threshold_tuning"
-        )
+        payload = benchmark.run_benchmark(scenario_selection_role="prompt_threshold_tuning")
         controls = payload["scenario_controls"]
 
         self.assertTrue(payload["ok"])
@@ -594,9 +682,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
     def test_rows_record_scenario_generation_and_tuning_visibility(self) -> None:
         payload = benchmark.run_benchmark()
         rows = payload["rows"]
-        holdout_rows = [
-            row for row in rows if "holdout_blind" in row["scenario_provenance"]
-        ]
+        holdout_rows = [row for row in rows if "holdout_blind" in row["scenario_provenance"]]
 
         self.assertGreater(len(holdout_rows), 0)
         for row in rows:
@@ -606,10 +692,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             self.assertIn("prompt_threshold_tuning_role", row)
             self.assertNotIn("\\", row["scenario_source_material"])
         self.assertTrue(
-            all(
-                row["prompt_threshold_tuning_role"] == "holdout_excluded"
-                for row in holdout_rows
-            )
+            all(row["prompt_threshold_tuning_role"] == "holdout_excluded" for row in holdout_rows)
         )
 
     def test_docs_register_runner_and_claim_boundary(self) -> None:
@@ -637,12 +720,16 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("holdout_excluded", benchmark_plan)
         self.assertIn("preregistered_slices", benchmark_plan)
         self.assertIn("github_378_continuous_memory_public_synthetic_v1", benchmark_plan)
+        self.assertIn("github_1153_context_loss_public_continuity_v1", benchmark_plan)
+        self.assertIn("fresh_missing_context", benchmark_plan)
+        self.assertIn("summary_only_host_native", benchmark_plan)
         self.assertIn("public_synthetic_preregistered_repeat", benchmark_plan)
         self.assertIn("lower_bound_units=-27.7675", benchmark_plan)
         self.assertIn("source_grounded_task_success_under_equalized_cost", benchmark_plan)
         self.assertIn("no demonstrated memory advantage", benchmark_plan)
         self.assertIn("not a public superiority claim", benchmark_plan)
         self.assertIn("public_synthetic_preregistered_repeat", evidence_map)
+        self.assertIn("github_1153_context_loss_public_continuity_v1", evidence_map)
 
     def test_cli_emits_json_and_can_write_report(self) -> None:
         output = REPO_ROOT / ".tmp" / "test-continuous-memory-arms.json"

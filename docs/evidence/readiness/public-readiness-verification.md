@@ -1343,6 +1343,35 @@ The #378 runner now extends `cost_harm_ledger` with
   public-quality #378 superiority, live host-native cost telemetry, private
   real-history generality, or competitor superiority.
 
+## 2026-06-10 - Context-loss continuous-memory diagnostic slice
+
+The #1153 readout adds a stable missing-context / incomplete-handoff slice to
+the existing continuous-memory attribution runner.
+
+- Command:
+  `python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --json --output .tmp\continuous-memory-1153-smoke.json`.
+- The report now includes
+  `github_1153_context_loss_public_continuity_v1` under
+  `preregistered_slices`.
+- It preserves
+  `continuous_memory.preregistered_repeat_profile_2026_06_08` as the old
+  short complete-spec expected-null row and sets
+  `supersedes_historical_row=false`.
+- The 2026-06-10 smoke reports `contract_gate_ok=true` and
+  `quality_gate_ok=false`.
+- Strategy success rates are separated: `fresh_missing_context=2/6`,
+  `summary_only_host_native=4/6`, `aippocampus_route_packet=5/6`,
+  `sham_unrelated_memory=2/6`, `stale_wrong_memory=0/6`, and
+  `oracle_full_context=6/6`.
+- Source reopen, stale revival, memory drag, manual restatement /
+  context-rebuild proxy, token / latency cost, and no-remember controls are
+  separate fields rather than one flattering aggregate.
+- LoCoMo-style public dialogue remains an optional same-dialogue evidence-id
+  control path. This slice does not claim LoCoMo continuity quality, private
+  real-history generality, live host-native behavior, calibrated restatement
+  burden reduction, answer-generation quality, or public-quality continuous
+  memory advantage.
+
 ## 2026-06-08 - Continuous-memory preregistered repeat readout
 
 The #378 runner now has an explicit public-synthetic repeat profile for the

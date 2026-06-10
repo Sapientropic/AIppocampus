@@ -648,14 +648,43 @@ contract smoke has enough power:
   `no demonstrated memory advantage` even when secondary metrics favor
   AIppocampus.
 
-The `preregistered_slices` block records which narrow #378 slice this report
-actually ran. The current slice is
-`github_378_continuous_memory_public_synthetic_v1`. The default runner profile
-remains a deterministic public-synthetic contract smoke over the six
-attribution-arm fixtures: it freezes a sanitized case-manifest digest,
+The `preregistered_slices` block records which narrow #378 / #1153 slices this
+report actually ran. The original #378 slice remains
+`github_378_continuous_memory_public_synthetic_v1`. The #1153 context-loss
+slice is `github_1153_context_loss_public_continuity_v1`. The default runner
+profile remains a deterministic public-synthetic contract smoke over the six
+attribution-arm fixtures: it freezes sanitized case-manifest inputs,
 scenario-selection role, required fair strategies, primary endpoint, decision
-preview, and public-quality gates, but it has only one deterministic repeat per
-case/arm.
+preview, context-loss readouts, and public-quality gates, but it has only one
+deterministic repeat per case/arm.
+
+The #1153 readout deliberately separates the missing-context condition from the
+old complete-spec expected-null row. Its strategy map is:
+
+- `fresh_missing_context` -> `no_memory`
+- `summary_only_host_native` -> `host_native_continuous_no_aippocampus`
+- `aippocampus_route_packet` -> `true_aippocampus_memory`
+- `sham_unrelated_memory` -> `sham_unrelated_memory`
+- `stale_wrong_memory` -> `stale_wrong_memory`
+- `oracle_full_context` -> `oracle_memory`
+- `fresh_context_spec_loop_complete_spec` -> historical boundary reference
+  only, not the primary context-loss opponent.
+
+The readout exposes separate metrics for task success, source-reopen behavior,
+memory drag, stale revival, manual restatement / context-rebuild proxy cost,
+token / latency cost, and no-remember controls. The 2026-06-10 smoke reports
+`contract_gate_ok=true` and `quality_gate_ok=false`: selected public-safe
+context-loss cases are now executable and machine-readable, but this is not a
+public-quality continuous-memory advantage claim. It preserves
+`continuous_memory.preregistered_repeat_profile_2026_06_08` as the short
+complete-spec expected-null row.
+
+The public-dialogue suggestion for #1153 is recorded as a control path, not as
+a broad claim: LoCoMo-style same-dialogue evidence-id scoring remains useful
+through `benchmark_locomo_public_users.py` / `benchmark_locomo_qa.py`, but it
+must not be read as cross-thread, cross-conversation, private-history, or
+life-wide continuity quality without a separate scored prediction run and
+claim boundary.
 
 For the registered repeat readout, run:
 
