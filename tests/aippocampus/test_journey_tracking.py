@@ -271,24 +271,52 @@ class JourneyTrackingTests(unittest.TestCase):
         self.assertTrue(payload["ok"], json.dumps(payload, ensure_ascii=False, indent=2))
         self.assertEqual(payload["kind"], "aippocampus_public_journey_time_sliced_replay")
         self.assertEqual(payload["issue_readouts"]["github_310"], "public_time_sliced_replay_fixture")
-        self.assertEqual(payload["metrics"]["case_count"], 1)
-        self.assertEqual(payload["metrics"]["journey_created_count"], 1)
-        self.assertEqual(payload["metrics"]["future_row_excluded_count"], 1)
+        self.assertEqual(payload["metrics"]["case_count"], 4)
+        self.assertEqual(payload["metrics"]["journey_created_count"], 4)
+        self.assertEqual(payload["metrics"]["future_row_excluded_count"], 4)
         self.assertEqual(payload["metrics"]["positive_hint_count"], 1)
-        self.assertEqual(payload["metrics"]["negative_control_suppressed_count"], 2)
+        self.assertEqual(payload["metrics"]["negative_control_suppressed_count"], 12)
         self.assertEqual(payload["metrics"]["future_leakage_count"], 0)
+        self.assertEqual(payload["metrics"]["expected_relevant_decision_pass_count"], 4)
+        self.assertEqual(payload["metrics"]["false_foreground_hint_count"], 0)
+        self.assertEqual(
+            payload["metrics"]["taxonomy_case_counts"],
+            {
+                "active_hint": 1,
+                "resolved_frontier": 1,
+                "stale_frontier_demotion": 1,
+                "wrong_route_suppression": 1,
+            },
+        )
         self.assertFalse(payload["privacy_boundary"]["raw_source_text_emitted"])
         self.assertFalse(payload["privacy_boundary"]["source_refs_emitted"])
         self.assertFalse(payload["privacy_boundary"]["private_route_handles_emitted"])
         self.assertIn("private_real_history_journey_quality", payload["cannot_claim"])
 
-        case = payload["cases"][0]
-        self.assertEqual(case["case_id"], "public_vcs_workaround_supersession")
-        self.assertEqual(case["status"], "journey_candidate_created")
-        self.assertEqual(case["hint_timing"]["relevant_prompt"], "agent_visible_hint")
-        self.assertEqual(case["hint_timing"]["source_visible_control"], "silent")
-        self.assertEqual(case["hint_timing"]["unrelated_prompt_control"], "backstage_only")
-        self.assertTrue(case["claim_boundary"]["journey_hint_is_navigation"])
+        by_id = {case["case_id"]: case for case in payload["cases"]}
+        self.assertEqual(
+            by_id["public_vcs_workaround_supersession"]["hint_timing"]["relevant_prompt"],
+            "agent_visible_hint",
+        )
+        self.assertEqual(
+            by_id["public_agent_resolved_frontier"]["hint_timing"]["relevant_prompt"],
+            "backstage_only",
+        )
+        self.assertEqual(
+            by_id["public_long_dialogue_stale_frontier"]["hint_timing"]["relevant_prompt"],
+            "backstage_only",
+        )
+        self.assertEqual(
+            by_id["public_field_continuity_wrong_route"]["hint_timing"]["relevant_prompt"],
+            "backstage_only",
+        )
+        for case in payload["cases"]:
+            self.assertEqual(case["status"], "journey_candidate_created")
+            self.assertTrue(case["hint_timing"]["relevant_prompt_matches_expected"])
+            self.assertEqual(case["hint_timing"]["source_visible_control"], "silent")
+            self.assertEqual(case["hint_timing"]["unrelated_prompt_control"], "backstage_only")
+            self.assertEqual(case["hint_timing"]["high_risk_control"], "source_reopen_required")
+            self.assertTrue(case["claim_boundary"]["journey_hint_is_navigation"])
 
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("PUBLIC_RAW_ROW_SENTINEL", encoded)

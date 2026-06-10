@@ -185,14 +185,14 @@ def build_foreground_journey_hint(
     }
     if not journey_row:
         return {**base, "decision": "backstage_only", "reason": "missing_journey"}
-    if journey_row.get("status") in {"arrived", "abandoned"}:
-        return {**base, "decision": "backstage_only", "reason": "terminal_journey_status"}
     if not journey_row.get("source_refs"):
         return {**base, "decision": "source_reopen_required", "reason": "missing_source_refs"}
     if high_risk_claim:
         return {**base, "decision": "source_reopen_required", "reason": "high_risk_claim"}
     if source_visible:
         return {**base, "decision": "silent", "reason": "source_or_equivalent_hint_already_visible"}
+    if journey_row.get("status") in {"arrived", "abandoned"}:
+        return {**base, "decision": "backstage_only", "reason": "terminal_journey_status"}
     if not _prompt_overlaps_journey(prompt, journey_row):
         return {**base, "decision": "backstage_only", "reason": "prompt_not_journey_relevant"}
     return {
@@ -329,11 +329,80 @@ def run_live_journey_time_sliced_replay_fixture(
     }
 
 
+def _public_time_sliced_rows(
+    *,
+    key: str,
+    theme: str,
+    question: str,
+    frontier: str,
+    future_theme: str,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "kind": "theme_candidate",
+            "theme": theme,
+            "moment": f"PUBLIC_RAW_ROW_SENTINEL public replay theme for {theme}.",
+            "thread_id": f"public-journey-310-{key}-a",
+            "timestamp": "2026-06-01T00:00:00Z",
+            "source_refs": [
+                {
+                    "thread_key": f"public-journey-310-{key}-a",
+                    "message_id": f"public-msg-310-{key}-a",
+                }
+            ],
+            "frontier_hint": frontier,
+        },
+        {
+            "kind": "question_candidate",
+            "question": question,
+            "moment": f"PUBLIC_RAW_ROW_SENTINEL public replay question for {theme}.",
+            "thread_id": f"public-journey-310-{key}-b",
+            "timestamp": "2026-06-02T00:00:00Z",
+            "source_refs": [
+                {
+                    "thread_key": f"public-journey-310-{key}-b",
+                    "message_id": f"public-msg-310-{key}-b",
+                }
+            ],
+        },
+        {
+            "kind": "frontier_marker",
+            "frontier": frontier,
+            "moment": f"PUBLIC_RAW_ROW_SENTINEL public replay frontier for {theme}.",
+            "thread_id": f"public-journey-310-{key}-c",
+            "timestamp": "2026-06-03T00:00:00Z",
+            "source_refs": [
+                {
+                    "thread_key": f"public-journey-310-{key}-c",
+                    "message_id": f"public-msg-310-{key}-c",
+                }
+            ],
+        },
+        {
+            "kind": "theme_candidate",
+            "theme": future_theme,
+            "moment": (
+                "FUTURE_PUBLIC_JOURNEY_SENTINEL later source state must not shape "
+                "the earlier replay."
+            ),
+            "thread_id": f"public-journey-310-{key}-future",
+            "timestamp": "2026-06-05T00:00:00Z",
+            "source_refs": [
+                {
+                    "thread_key": f"public-journey-310-{key}-future",
+                    "message_id": f"public-msg-310-{key}-future",
+                }
+            ],
+        },
+    ]
+
+
 def fixture_public_time_sliced_journey_replay_cases() -> list[dict[str, Any]]:
     return [
         {
             "case_id": "public_vcs_workaround_supersession",
             "source_family": "public_vcs_hard_event_window",
+            "taxonomy": "active_hint",
             "path_label": "workaround supersession route",
             "core_inquiry": (
                 "When should a workaround route be reopened after a later source changes?"
@@ -341,74 +410,72 @@ def fixture_public_time_sliced_journey_replay_cases() -> list[dict[str, Any]]:
             "as_of": "2026-06-03T23:59:00Z",
             "relevant_prompt": "Should we reopen the workaround supersession route?",
             "unrelated_prompt": "Please summarize this unrelated formatting request.",
-            "rows": [
-                {
-                    "kind": "theme_candidate",
-                    "theme": "workaround supersession",
-                    "moment": (
-                        "PUBLIC_RAW_ROW_SENTINEL workaround stayed local while the "
-                        "upstream route was still failing."
-                    ),
-                    "thread_id": "public-journey-310-a",
-                    "timestamp": "2026-06-01T00:00:00Z",
-                    "source_refs": [
-                        {
-                            "thread_key": "public-journey-310-a",
-                            "message_id": "public-msg-310-a",
-                        }
-                    ],
-                    "frontier_hint": "Treat the workaround as local until later source changes.",
-                },
-                {
-                    "kind": "question_candidate",
-                    "question": "When does the old workaround stop being the right route?",
-                    "moment": (
-                        "PUBLIC_RAW_ROW_SENTINEL question narrowed the replay to "
-                        "stale workaround currentness."
-                    ),
-                    "thread_id": "public-journey-310-b",
-                    "timestamp": "2026-06-02T00:00:00Z",
-                    "source_refs": [
-                        {
-                            "thread_key": "public-journey-310-b",
-                            "message_id": "public-msg-310-b",
-                        }
-                    ],
-                },
-                {
-                    "kind": "frontier_marker",
-                    "frontier": "Reopen source before reviving the workaround route.",
-                    "moment": (
-                        "PUBLIC_RAW_ROW_SENTINEL frontier paused at source reopen, "
-                        "not foreground warning."
-                    ),
-                    "thread_id": "public-journey-310-c",
-                    "timestamp": "2026-06-03T00:00:00Z",
-                    "source_refs": [
-                        {
-                            "thread_key": "public-journey-310-c",
-                            "message_id": "public-msg-310-c",
-                        }
-                    ],
-                },
-                {
-                    "kind": "theme_candidate",
-                    "theme": "FUTURE_PUBLIC_JOURNEY_SENTINEL",
-                    "moment": (
-                        "FUTURE_PUBLIC_JOURNEY_SENTINEL later reland outcome must "
-                        "not shape the earlier replay."
-                    ),
-                    "thread_id": "public-journey-310-future",
-                    "timestamp": "2026-06-05T00:00:00Z",
-                    "source_refs": [
-                        {
-                            "thread_key": "public-journey-310-future",
-                            "message_id": "public-msg-310-future",
-                        }
-                    ],
-                },
-            ],
-        }
+            "expected_relevant_prompt_decision": "agent_visible_hint",
+            "rows": _public_time_sliced_rows(
+                key="workaround",
+                theme="workaround supersession",
+                question="When does the old workaround stop being the right route?",
+                frontier="Reopen source before reviving the workaround route.",
+                future_theme="FUTURE_PUBLIC_JOURNEY_SENTINEL",
+            ),
+        },
+        {
+            "case_id": "public_agent_resolved_frontier",
+            "source_family": "public_agent_trajectory",
+            "taxonomy": "resolved_frontier",
+            "path_label": "resolved issue route",
+            "core_inquiry": "How should a resolved issue route stay quiet after arrival?",
+            "as_of": "2026-06-03T23:59:00Z",
+            "relevant_prompt": "Should we resume the resolved issue route?",
+            "unrelated_prompt": "Please summarize this unrelated formatting request.",
+            "replay_status": "arrived",
+            "expected_relevant_prompt_decision": "backstage_only",
+            "rows": _public_time_sliced_rows(
+                key="resolved",
+                theme="resolved issue route",
+                question="When should the issue route stop foregrounding after it is resolved?",
+                frontier="The public issue route has arrived; keep future hints backstage.",
+                future_theme="FUTURE_PUBLIC_JOURNEY_SENTINEL",
+            ),
+        },
+        {
+            "case_id": "public_long_dialogue_stale_frontier",
+            "source_family": "public_long_dialogue_control",
+            "taxonomy": "stale_frontier_demotion",
+            "path_label": "stale frontier route",
+            "core_inquiry": "How should an aging frontier demote itself before foreground hints?",
+            "as_of": "2026-06-03T23:59:00Z",
+            "relevant_prompt": "Should we resume the stale frontier route?",
+            "unrelated_prompt": "Please summarize this unrelated formatting request.",
+            "replay_status": "abandoned",
+            "expected_relevant_prompt_decision": "backstage_only",
+            "rows": _public_time_sliced_rows(
+                key="stale",
+                theme="stale frontier route",
+                question="When should a stale frontier become a source-reopen task instead of a hint?",
+                frontier="The stale frontier should refresh sources before any foreground nudge.",
+                future_theme="FUTURE_PUBLIC_JOURNEY_SENTINEL",
+            ),
+        },
+        {
+            "case_id": "public_field_continuity_wrong_route",
+            "source_family": "public_field_continuity_control",
+            "taxonomy": "wrong_route_suppression",
+            "path_label": "wrong route suppression",
+            "core_inquiry": "How should an explicitly rejected route stay out of foreground hints?",
+            "as_of": "2026-06-03T23:59:00Z",
+            "relevant_prompt": "Should we resume the wrong route suppression path?",
+            "unrelated_prompt": "Please summarize this unrelated formatting request.",
+            "replay_status": "abandoned",
+            "expected_relevant_prompt_decision": "backstage_only",
+            "rows": _public_time_sliced_rows(
+                key="wrong-route",
+                theme="wrong route suppression",
+                question="When should a wrong route remain suppressed instead of revived?",
+                frontier="The wrong route should stay abandoned unless source evidence changes.",
+                future_theme="FUTURE_PUBLIC_JOURNEY_SENTINEL",
+            ),
+        },
     ]
 
 
@@ -420,8 +487,14 @@ def _public_replay_case_result(case: Mapping[str, Any]) -> dict[str, Any]:
         as_of=str(case.get("as_of") or ""),
     )
     journey_row = result.get("journey") or {}
+    replay_status = str(case.get("replay_status") or "").strip()
+    if journey_row and replay_status in {"arrived", "abandoned"}:
+        # Public fixtures model a replay-horizon outcome without emitting the
+        # raw later row that made the Journey terminal.
+        journey_row = {**journey_row, "status": replay_status}
     material = json.dumps(journey_row, ensure_ascii=False, sort_keys=True)
     future_leakage = "FUTURE_PUBLIC_JOURNEY_SENTINEL" in material
+    expected_relevant = str(case.get("expected_relevant_prompt_decision") or "agent_visible_hint")
     positive = build_foreground_journey_hint(
         journey=journey_row,
         prompt=str(case.get("relevant_prompt") or ""),
@@ -435,12 +508,20 @@ def _public_replay_case_result(case: Mapping[str, Any]) -> dict[str, Any]:
         journey=journey_row,
         prompt=str(case.get("unrelated_prompt") or ""),
     )
+    high_risk = build_foreground_journey_hint(
+        journey=journey_row,
+        prompt=str(case.get("high_risk_prompt") or "State the exact old claim from this Journey."),
+        high_risk_claim=True,
+    )
+    relevant_decision = str(positive.get("decision") or "")
+    relevant_matches_expected = relevant_decision == expected_relevant
     status = "journey_candidate_created" if result.get("created") and not future_leakage else str(
         result.get("reason") or "failed"
     )
     return {
         "case_id": compact_text(case.get("case_id") or "", 80),
         "source_family": compact_text(case.get("source_family") or "", 80),
+        "taxonomy": compact_text(case.get("taxonomy") or "unspecified", 80),
         "status": status,
         "as_of": str(case.get("as_of") or ""),
         "metrics": {
@@ -451,11 +532,19 @@ def _public_replay_case_result(case: Mapping[str, Any]) -> dict[str, Any]:
                 (result.get("metrics") or {}).get("source_backed_waypoint_count") or 0
             ),
             "future_leakage_detected": future_leakage,
+            "expected_relevant_decision_passed": relevant_matches_expected,
+            "false_foreground_hint": (
+                expected_relevant != "agent_visible_hint"
+                and relevant_decision == "agent_visible_hint"
+            ),
         },
         "hint_timing": {
-            "relevant_prompt": positive.get("decision"),
+            "relevant_prompt": relevant_decision,
+            "expected_relevant_prompt": expected_relevant,
+            "relevant_prompt_matches_expected": relevant_matches_expected,
             "source_visible_control": source_visible.get("decision"),
             "unrelated_prompt_control": unrelated.get("decision"),
+            "high_risk_control": high_risk.get("decision"),
         },
         "claim_boundary": {
             "journey_hint_is_navigation": True,
@@ -487,7 +576,7 @@ def build_public_time_sliced_journey_replay_report(
     negative_control_suppressed_count = sum(
         1
         for case in case_results
-        for key in ("source_visible_control", "unrelated_prompt_control")
+        for key in ("source_visible_control", "unrelated_prompt_control", "high_risk_control")
         if (case.get("hint_timing") or {}).get(key) != "agent_visible_hint"
     )
     future_leakage_count = sum(
@@ -498,7 +587,27 @@ def build_public_time_sliced_journey_replay_report(
     journey_created_count = sum(
         1 for case in case_results if case.get("status") == "journey_candidate_created"
     )
-    ok = bool(case_results) and journey_created_count == len(case_results) and future_leakage_count == 0
+    expected_pass_count = sum(
+        1
+        for case in case_results
+        if bool((case.get("metrics") or {}).get("expected_relevant_decision_passed"))
+    )
+    false_foreground_hint_count = sum(
+        1
+        for case in case_results
+        if bool((case.get("metrics") or {}).get("false_foreground_hint"))
+    )
+    taxonomy_case_counts: dict[str, int] = {}
+    for case in case_results:
+        taxonomy = str(case.get("taxonomy") or "unspecified")
+        taxonomy_case_counts[taxonomy] = taxonomy_case_counts.get(taxonomy, 0) + 1
+    ok = (
+        bool(case_results)
+        and journey_created_count == len(case_results)
+        and future_leakage_count == 0
+        and expected_pass_count == len(case_results)
+        and false_foreground_hint_count == 0
+    )
     return {
         "schema_version": tracking.SCHEMA_VERSION,
         "kind": PUBLIC_TIME_SLICED_REPLAY_KIND,
@@ -512,6 +621,9 @@ def build_public_time_sliced_journey_replay_report(
             "positive_hint_count": positive_hint_count,
             "negative_control_suppressed_count": negative_control_suppressed_count,
             "future_leakage_count": future_leakage_count,
+            "expected_relevant_decision_pass_count": expected_pass_count,
+            "false_foreground_hint_count": false_foreground_hint_count,
+            "taxonomy_case_counts": taxonomy_case_counts,
         },
         "issue_readouts": {
             "github_310": "public_time_sliced_replay_fixture",

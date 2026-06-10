@@ -42,10 +42,12 @@ Current code implements the source-backed P1-P3 Journey core in
   agent-visible hint.
 - #310 public replay slice:
   `build_public_time_sliced_journey_replay_report()` adds a public-safe,
-  replayable VCS hard-event style fixture for the same time-sliced and hint
-  timing taxonomy. It reports counts and decisions only, excludes future rows
-  before the horizon, and does not serialize raw row text, source refs, message
-  ids, future rows, or private route handles. See
+  replayable cohort for the same time-sliced and hint timing taxonomy. It
+  covers one active-hint case plus resolved-frontier, stale-frontier, and
+  wrong-route suppression cases, with source-visible, unrelated-prompt, and
+  high-risk exact-claim controls. It reports counts and decisions only, excludes
+  future rows before the horizon, and does not serialize raw row text, source
+  refs, message ids, future rows, or private route handles. See
   [`journey-public-time-sliced-replay.md`](../evidence/benchmarks/journey-public-time-sliced-replay.md).
 - #834 frontier-probe slice:
   `skills/aippocampus/scripts/aippocampus_runtime/navigation/frontier_probe.py`
