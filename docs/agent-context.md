@@ -31,6 +31,10 @@ orientation, let `working_continuity_brief` guide the next action, and reserve
 `source_court` for exact wording, sensitive facts, stale/conflicting claims, and
 high-risk escalation. The detailed contract lives in
 [`skills/aippocampus/references/ambient-hooks.md`](../skills/aippocampus/references/ambient-hooks.md).
+For attention-style routing, use
+[`docs/architecture/source-backed-attention-router.md`](architecture/source-backed-attention-router.md):
+attention may choose where to look, but reopened source decides what can be
+claimed.
 
 For quick product-shaped evidence, read
 [`docs/evidence/magic-moments.md`](evidence/magic-moments.md). It shows real
