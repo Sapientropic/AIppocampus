@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "kind": "question_aware_public_shadow_fixture",
+  "metadata": {
+    "id": "question_aware_public_shadow_v1",
+    "public_case_count": 4,
+    "source_family_counts": {
+      "public_vcs_style_fixture": 2,
+      "public_agent_trajectory_fixture": 2
+    },
+    "case_family_counts": {
+      "question_aware_source_reopen_lift": 2,
+      "multilingual_noise_drop": 1,
+      "code_noise_drop": 1
+    }
+  },
+  "rows_per_pack": 8,
+  "max_packs": 1,
+  "job_rows": [
+    {
+      "kind": "aippocampus_subconscious_job_finding",
+      "created_at": "2026-06-01T00:00:00Z",
+      "finding_kind": "question_candidate",
+      "fingerprint": "public_shadow_question_1",
+      "question_text": "PUBLIC_SOURCE_TEXT_SENTINEL question text omitted from reports.",
+      "question_short": "rollback source boundary",
+      "summary": "PUBLIC_SOURCE_TEXT_SENTINEL summary omitted from reports.",
+      "confidence": 0.88,
+      "source_refs": [
+        {
+          "thread_key": "public-vcs-shadow",
+          "message_id": "public-msg-1",
+          "turn_id": "public-turn-1",
+          "source_line": 10
+        }
+      ],
+      "what_features": [
+        "rollback route",
+        "source reopen"
+      ],
+      "phase_context": "implementation_review",
+      "intent_orientation": "implementation",
+      "concepts": [
+        "deployment continuity"
+      ]
+    },
+    {
+      "kind": "aippocampus_subconscious_job_finding",
+      "created_at": "2026-06-01T00:01:00Z",
+      "finding_kind": "frontier_marker",
+      "fingerprint": "public_shadow_frontier_1",
+      "frontier_type": "blocked",
+      "linked_question_short": "rollback source boundary",
+      "boundary_reason": "Source reopen is required before treating the old rollback route as current.",
+      "confidence": 0.82,
+      "source_refs": [
+        {
+          "thread_key": "public-vcs-shadow",
+          "message_id": "public-msg-2",
+          "turn_id": "public-turn-2",
+          "source_line": 20
+        }
+      ],
+      "concepts": [
+        "deployment continuity"
+      ]
+    },
+    {
+      "kind": "aippocampus_subconscious_job_finding",
+      "created_at": "2026-06-01T00:02:00Z",
+      "finding_kind": "question_link",
+      "question_cluster_id": "public_shadow_link_1",
+      "linked_question_short": "rollback source boundary",
+      "question_count": 2,
+      "source_thread_count": 2,
+      "link_type": "recurring",
+      "summary": "PUBLIC_SOURCE_TEXT_SENTINEL link summary omitted from reports.",
+      "confidence": 0.86,
+      "source_refs": [
+        {
+          "thread_key": "public-vcs-shadow",
+          "message_id": "public-msg-1",
+          "turn_id": "public-turn-1",
+          "source_line": 10
+        },
+        {
+          "thread_key": "public-vcs-shadow",
+          "message_id": "public-msg-2",
+          "turn_id": "public-turn-2",
+          "source_line": 20
+        }
+      ],
+      "concepts": [
+        "deployment continuity"
+      ],
+      "linked_questions": [
+        {
+          "source_finding_id": "public_shadow_question_1",
+          "question_short": "rollback source boundary",
+          "phase_context": "implementation_review",
+          "intent_orientation": "implementation"
+        }
+      ]
+    },
+    {
+      "kind": "aippocampus_subconscious_job_finding",
+      "created_at": "2026-06-01T00:03:00Z",
+      "finding_kind": "theme_candidate",
+      "theme_cluster_id": "public_shadow_theme_1",
+      "theme_label": "Recurring public fixture theme: source reopen before rollback",
+      "theme_short": "source reopen before rollback",
+      "cluster_method": "public_fixture",
+      "shared_concepts": [
+        "deployment continuity",
+        "source reopen"
+      ],
+      "confidence": 0.8,
+      "source_refs": [
+        {
+          "thread_key": "public-vcs-shadow",
+          "message_id": "public-msg-3",
+          "turn_id": "public-turn-3",
+          "source_line": 30
+        }
+      ]
+    }
+  ],
+  "answer_quality_review_rows": [
+    {
+      "kind": "question_aware_answer_quality_review",
+      "case_id": "public-shadow-case-1",
+      "arm": "plain_baseline",
+      "source_reopened": false,
+      "answer_supported": false,
+      "citation_correct": false,
+      "answer_useful": false,
+      "wrong_hint": true,
+      "extra_verification_steps": 2,
+      "answer_text": "PUBLIC_SOURCE_TEXT_SENTINEL answer omitted from reports.",
+      "source_text": "PUBLIC_SOURCE_TEXT_SENTINEL source omitted from reports."
+    },
+    {
+      "kind": "question_aware_answer_quality_review",
+      "case_id": "public-shadow-case-1",
+      "arm": "question_aware_source_reopen",
+      "source_reopened": true,
+      "answer_supported": true,
+      "citation_correct": true,
+      "answer_useful": true,
+      "wrong_hint": false,
+      "extra_verification_steps": 0,
+      "answer_text": "PUBLIC_SOURCE_TEXT_SENTINEL answer omitted from reports.",
+      "source_text": "PUBLIC_SOURCE_TEXT_SENTINEL source omitted from reports."
+    },
+    {
+      "kind": "question_aware_answer_quality_review",
+      "case_id": "public-shadow-case-2",
+      "arm": "plain_baseline",
+      "source_reopened": false,
+      "answer_supported": false,
+      "citation_correct": false,
+      "answer_useful": false,
+      "wrong_hint": false,
+      "extra_verification_steps": 1
+    },
+    {
+      "kind": "question_aware_answer_quality_review",
+      "case_id": "public-shadow-case-2",
+      "arm": "question_aware_source_reopen",
+      "source_reopened": true,
+      "answer_supported": true,
+      "citation_correct": true,
+      "answer_useful": true,
+      "wrong_hint": false,
+      "extra_verification_steps": 0
+    }
+  ],
+  "negative_controls": [
+    {
+      "case_id": "public-shadow-negative-multilingual-noise",
+      "kind": "multilingual_noise_drop",
+      "expected_behavior": "drop_or_skip_without_question_link",
+      "expected_skip_reason": "noise",
+      "turn": {
+        "thread_key": "public-shadow-negative",
+        "turn_index": 1,
+        "user": "继续",
+        "assistant": "收到。"
+      }
+    },
+    {
+      "case_id": "public-shadow-negative-code-noise",
+      "kind": "code_noise_drop",
+      "expected_behavior": "drop_or_skip_without_theme_materialization",
+      "expected_skip_reason": "code_heavy",
+      "turn": {
+        "thread_key": "public-shadow-negative",
+        "turn_index": 2,
+        "user": "```python\nprint('x')\nprint('y')\nprint('z')\n```\nOK?",
+        "assistant": "This should not become a durable question."
+      }
+    }
+  ]
+}

@@ -20,11 +20,19 @@ import _paths
 _paths.ensure_paths()
 
 import benchmark_cognitive_portrait as portrait  # noqa: E402
+import benchmark_question_tracking_calibration as calibration  # noqa: E402
 from aippocampus_runtime.registry.api import registry_paths  # noqa: E402
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path  # noqa: E402
+from aippocampus_runtime.subconscious.question_extraction_gate import (  # noqa: E402
+    question_extraction_skip_reason,
+)
 
 SCHEMA_VERSION = 1
 BENCHMARK_KIND = "aippocampus_question_aware_real_history_benchmark"
+PUBLIC_SHADOW_KIND = "aippocampus_question_aware_public_shadow_benchmark"
+DEFAULT_PUBLIC_SHADOW_FIXTURE = (
+    _paths.REPO_ROOT / "benchmark_corpus" / "question_aware_public_shadow" / "fixture.json"
+)
 SOURCE_FINDING_KINDS = {
     "question_candidate",
     "frontier_marker",
@@ -1077,6 +1085,163 @@ def run_question_aware_real_history_benchmark(
     }
 
 
+def read_public_shadow_fixture(path: Path | None = None) -> dict[str, Any]:
+    fixture_path = path or DEFAULT_PUBLIC_SHADOW_FIXTURE
+    data = json.loads(fixture_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{fixture_path} must contain a JSON object")
+    return data
+
+
+def public_shadow_threshold_readout() -> dict[str, Any]:
+    report = calibration.run_question_tracking_calibration()
+    modes = (
+        report.get("metrics", {})
+        .get("six_axis_dynamic_thresholds", {})
+        .get("comparison_modes", {})
+    )
+    return {
+        "source": "benchmark_question_tracking_calibration.selected_fixture_scenarios",
+        "fixed_similarity_threshold": modes.get("fixed_similarity_threshold", {}),
+        "static_strong_threshold": modes.get("static_strong_threshold", {}),
+        "dynamic_six_axis_threshold": modes.get("dynamic_six_axis_threshold", {}),
+        "claim_boundary": "navigation_policy_calibration_not_source_truth",
+    }
+
+
+def public_shadow_negative_control_readout(
+    negative_controls: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    readout: list[dict[str, Any]] = []
+    for index, item in enumerate(negative_controls, start=1):
+        turn = item.get("turn") if isinstance(item.get("turn"), Mapping) else {}
+        observed_reason = question_extraction_skip_reason(turn)
+        expected_reason = str(item.get("expected_skip_reason") or "").strip()
+        passed = bool(observed_reason) and (
+            not expected_reason or observed_reason == expected_reason
+        )
+        readout.append(
+            {
+                "case_hash": public_digest(item.get("case_id") or index, prefix="neg"),
+                "kind": item.get("kind"),
+                "expected_behavior": item.get("expected_behavior"),
+                "expected_skip_reason": expected_reason or None,
+                "observed_skip_reason": observed_reason or "selected",
+                "passed": passed,
+            }
+        )
+    return readout
+
+
+def run_question_aware_public_shadow_benchmark(
+    *,
+    fixture_path: Path | None = None,
+) -> dict[str, Any]:
+    fixture = read_public_shadow_fixture(fixture_path)
+    rows = [row for row in fixture.get("job_rows") or [] if isinstance(row, Mapping)]
+    review_rows = [
+        row for row in fixture.get("answer_quality_review_rows") or [] if isinstance(row, Mapping)
+    ]
+    structural = run_question_aware_real_history_benchmark(
+        job_rows=rows,
+        answer_quality_review_rows=review_rows,
+        max_packs=int(fixture.get("max_packs") or 1),
+        min_packs=1,
+        rows_per_pack=int(fixture.get("rows_per_pack") or max(1, len(rows))),
+    )
+    threshold_readout = public_shadow_threshold_readout()
+    review_metrics = structural["answer_quality_review"]["metrics"]
+    manual_query_reduction_delta = round(
+        -float(review_metrics.get("mean_extra_verification_steps_delta") or 0.0),
+        4,
+    )
+    metadata = fixture.get("metadata") if isinstance(fixture.get("metadata"), Mapping) else {}
+    negative_controls = [
+        item for item in fixture.get("negative_controls") or [] if isinstance(item, Mapping)
+    ]
+    negative_control_readout = public_shadow_negative_control_readout(negative_controls)
+    public_case_count = int(
+        metadata.get("public_case_count")
+        or len({str(row.get("case_id") or "") for row in review_rows if row.get("case_id")})
+        + len(negative_controls)
+    )
+    metrics = {
+        "public_case_count": public_case_count,
+        "negative_control_count": len(negative_controls),
+        "pack_count": structural["metrics"]["pack_count"],
+        "source_ref_fidelity_rate": structural["metrics"]["source_ref_fidelity_rate"],
+        "plain_term_coverage": structural["metrics"]["plain_term_coverage"],
+        "question_blind_term_coverage": structural["metrics"]["question_blind_term_coverage"],
+        "question_aware_term_coverage": structural["metrics"]["question_aware_term_coverage"],
+        "question_aware_over_question_blind_delta": structural["metrics"][
+            "question_aware_over_question_blind_delta"
+        ],
+        "answer_usefulness_delta": review_metrics.get("answer_usefulness_delta"),
+        "manual_query_reduction_delta": manual_query_reduction_delta,
+        "question_aware_wrong_hint_rate": review_metrics.get("question_aware_wrong_hint_rate"),
+        "negative_control_pass_count": sum(1 for item in negative_control_readout if item["passed"]),
+        "threshold_dynamic_false_split_count": threshold_readout["dynamic_six_axis_threshold"].get(
+            "false_split_count"
+        ),
+        "threshold_dynamic_false_merge_count": threshold_readout["dynamic_six_axis_threshold"].get(
+            "false_merge_count"
+        ),
+    }
+    status = (
+        "public_shadow_ready"
+        if structural["status"].startswith("structural_proxy_ready")
+        and structural["answer_quality_review"]["status"]
+        == "selected_source_reopened_answer_quality_review_ready"
+        and all(item["passed"] for item in negative_control_readout)
+        and int(metrics["threshold_dynamic_false_split_count"] or 0) == 0
+        and int(metrics["threshold_dynamic_false_merge_count"] or 0) == 0
+        else "public_shadow_needs_review"
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": PUBLIC_SHADOW_KIND,
+        "created_at": portrait.now_utc(),
+        "status": status,
+        "claim_level": "public_replayable_shadow_fixture",
+        "fixture": {
+            "id": metadata.get("id", "question_aware_public_shadow_v1"),
+            "source_family_counts": metadata.get("source_family_counts", {}),
+            "case_family_counts": metadata.get("case_family_counts", {}),
+        },
+        "metrics": metrics,
+        "threshold_readout": threshold_readout,
+        "structural_readout": {
+            "status": structural["status"],
+            "pack_selection": structural["pack_selection"],
+            "evaluation_design": structural["evaluation_design"],
+            "known_failure_modes": structural["known_failure_modes"],
+        },
+        "answer_quality_review": structural["answer_quality_review"],
+        "negative_controls": negative_control_readout,
+        "privacy": {
+            "raw_source_text_emitted": False,
+            "raw_answer_text_emitted": False,
+            "local_path_emitted": False,
+            "source_refs_emitted": False,
+            "fixture_path_emitted": False,
+        },
+        "can_claim": [
+            "public_shadow_question_aware_source_reopen_comparison_recorded",
+            "public_shadow_threshold_readout_recorded",
+            "public_shadow_negative_controls_recorded",
+        ],
+        "cannot_claim": [
+            "private_real_history_answer_quality",
+            "live_user_visible_recall_improvement",
+            "theme_resonance_calibration",
+            "default_prefilter_adoption",
+            "source_truth_from_question_theme_rows",
+            "broad_question_tracking_quality",
+            "issue_248_closeout",
+        ],
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run private real-history question-aware recall structural benchmark."
@@ -1095,6 +1260,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--include-private-text", action="store_true")
+    parser.add_argument(
+        "--public-shadow",
+        action="store_true",
+        help="Run the public replayable #248 question-aware shadow fixture.",
+    )
+    parser.add_argument(
+        "--public-shadow-fixture",
+        type=Path,
+        default=DEFAULT_PUBLIC_SHADOW_FIXTURE,
+    )
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
     parser.add_argument("--output", type=Path)
     return parser
@@ -1102,21 +1277,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    payload = run_question_aware_real_history_benchmark(
-        registry_dir=args.registry_dir,
-        jobs_path=args.jobs,
-        max_packs=args.max_packs,
-        min_packs=args.min_packs,
-        rows_per_pack=args.rows_per_pack,
-        answer_quality_review_path=args.answer_quality_review,
-        include_private_text=args.include_private_text,
-    )
+    if args.public_shadow:
+        payload = run_question_aware_public_shadow_benchmark(
+            fixture_path=args.public_shadow_fixture,
+        )
+    else:
+        payload = run_question_aware_real_history_benchmark(
+            registry_dir=args.registry_dir,
+            jobs_path=args.jobs,
+            max_packs=args.max_packs,
+            min_packs=args.min_packs,
+            rows_per_pack=args.rows_per_pack,
+            answer_quality_review_path=args.answer_quality_review,
+            include_private_text=args.include_private_text,
+        )
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text + "\n", encoding="utf-8")
     print(text)
-    return 0 if str(payload.get("status") or "").startswith("structural_proxy_ready") else 1
+    status = str(payload.get("status") or "")
+    return 0 if status.startswith("structural_proxy_ready") or status == "public_shadow_ready" else 1
 
 
 if __name__ == "__main__":
