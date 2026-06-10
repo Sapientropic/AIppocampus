@@ -92,7 +92,10 @@ promotes a public-safe result into the official evidence flow.
 13. Need audited attention score-fusion calibration over sanitized feature rows
     before changing router weights:
     [`benchmarks/attention-score-fusion-calibration.md`](benchmarks/attention-score-fusion-calibration.md).
-14. Need map-rot lifecycle-debt evidence for stale, challenged, quarantined,
+14. Need the public-safe integrated continuity loop across semantic warming,
+    hot routing, facade packets, AIppo, deepen/explain, and budgets:
+    [`benchmarks/agent-continuity-loop.md`](benchmarks/agent-continuity-loop.md).
+15. Need map-rot lifecycle-debt evidence for stale, challenged, quarantined,
     superseded, missing-middle, deleted/no-recall, dead-lettered, or
     repeated-wrong cold navigation-map objects:
     [`benchmarks/map-rot-lifecycle-debt.md`](benchmarks/map-rot-lifecycle-debt.md).
@@ -210,6 +213,7 @@ instead of deriving priority from this directory map.
 | Public reliability gauntlet | `docs/evidence/benchmarks/public-reliability-gauntlet.md`, `docs/evidence/benchmarks/public-reliability-gauntlet-2026-06-10.json`, and `benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py` | Public-safe #1102 aggregate gate over runtime stability, mis-recall quality, and pollution hygiene; keeps LongMemEval-S aggregate metrics, synthetic scale/fanout stress, hard-negative diagnostics, and pollution fixtures separate, with no single reliability score. |
 | Attention navigation quality | `docs/evidence/benchmarks/attention-navigation-quality.md` and `benchmarks/aippocampus/benchmark_attention_navigation_quality.py` | Public-safe #1111 route-quality gate over positive routes, hard masks, stale/currentness, conflict, action-time, anti-nag, bounded-evidence, and wrong-source controls; hard red lines stay separate from route averages. |
 | Attention score-fusion calibration | `docs/evidence/benchmarks/attention-score-fusion-calibration.md` and `benchmarks/aippocampus/benchmark_attention_score_fusion_calibration.py` | Public-safe #1112 calibration diagnostic over sanitized attention feature rows; compares current deterministic weights to a calibrated rule grid without raw text, private history, or learnable hard masks. |
+| Agent continuity loop gate | `docs/evidence/benchmarks/agent-continuity-loop.md` and `benchmarks/aippocampus/benchmark_agent_continuity_loop.py` | Public-safe #1163 integration gate across semantic warming, hot routing, facade packets, AIppo working contracts, source-reopen budget, foreground budget, deepen/explain, blocked/stale/conflict, and anti-nag cases; red lines stay separate from case success. |
 | Map-rot lifecycle-debt benchmark | `docs/evidence/benchmarks/map-rot-lifecycle-debt.md` and `benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py` | Public-safe #1126 fixture guard for stale, challenged, quarantined, superseded, missing-middle, deleted/no-recall, dead-lettered, and repeated-wrong cold navigation-map objects; tracks red-line route leaks, challenged backlog age, review-needed count, warnings, silence, refresh, and prune/decay candidates without claiming automatic cleanup. |
 | Multimodal corpus fixture report | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md` and `benchmark_corpus/public_multimodal_corpus/fixture.json` | Public-safe ATM-Bench-inspired corpus-style multimodal retrieval contract for #531; not conversational media upload recall, ATM-Bench score, or product privacy proof. |
 | Conversational media-ingest fixture report | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md` and `benchmark_corpus/conversational_media_ingest/fixture.json` | Public-safe conversational media-ingest recall contract for #532; media anchors attach to user turns and text hints cannot replace visual source reopen. |
@@ -262,6 +266,7 @@ empty output. The PR-tier guard for this contract is
 | Public reliability gauntlet | `benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py` | `docs/evidence/benchmarks/public-reliability-gauntlet.md`, `docs/evidence/benchmarks/public-reliability-gauntlet-2026-06-10.json`, #1102 |
 | Attention navigation quality | `benchmarks/aippocampus/benchmark_attention_navigation_quality.py` | `docs/evidence/benchmarks/attention-navigation-quality.md`, #1111 |
 | Attention score-fusion calibration | `benchmarks/aippocampus/benchmark_attention_score_fusion_calibration.py` | `docs/evidence/benchmarks/attention-score-fusion-calibration.md`, #1112 |
+| Agent continuity loop gate | `benchmarks/aippocampus/benchmark_agent_continuity_loop.py` | `docs/evidence/benchmarks/agent-continuity-loop.md`, #1163 |
 | Map-rot lifecycle-debt benchmark | `benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py` | `docs/evidence/benchmarks/map-rot-lifecycle-debt.md`, #1126 |
 | Multimodal corpus-style retrieval contract | `benchmarks/aippocampus/benchmark_multimodal_corpus_retrieval.py` | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/public_multimodal_corpus/fixture.json`, #531 |
 | Conversational media-ingest recall contract | `benchmarks/aippocampus/benchmark_conversational_media_ingest_recall.py` | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/conversational_media_ingest/fixture.json`, #532 |
