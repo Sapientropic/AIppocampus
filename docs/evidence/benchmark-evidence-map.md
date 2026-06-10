@@ -69,6 +69,9 @@ promotes a public-safe result into the official evidence flow.
    For the STATE-Bench Agent Learning Track feasibility decision, train-only
    adapter path, and no-score claim boundary, use
    [`benchmarks/state-bench-agent-learning.md`](benchmarks/state-bench-agent-learning.md).
+   For the #310 Journey public time-sliced replay fixture and no-live-quality
+   claim boundary, use
+   [`benchmarks/journey-public-time-sliced-replay.md`](benchmarks/journey-public-time-sliced-replay.md).
 8. Need the multimodal memory benchmark-family map for #528:
    [`benchmarks/design/multimodal-memory-benchmark-map.md`](benchmarks/design/multimodal-memory-benchmark-map.md).
 9. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
@@ -135,25 +138,28 @@ path for reviewers trying to understand current claims.
 19. Need public-safe Field Continuity / magic-moment reproducibility fixture
    evidence for #454 and the bounded #281 fixture-quality proxy:
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
-20. Need public-safe provider-conformance kit evidence for #981 / #988:
+20. Need public-safe Journey time-sliced replay and foreground hint timing
+   fixture evidence for #310:
+   [`benchmarks/journey-public-time-sliced-replay.md`](benchmarks/journey-public-time-sliced-replay.md).
+21. Need public-safe provider-conformance kit evidence for #981 / #988:
    [`benchmarks/provider-conformance-fixture-report.md`](benchmarks/provider-conformance-fixture-report.md).
-21. Need the latest Claude Code real-host local-history / MCP dogfood boundary:
+22. Need the latest Claude Code real-host local-history / MCP dogfood boundary:
    [`readiness/claude-code-dogfood-2026-06-09.md`](readiness/claude-code-dogfood-2026-06-09.md).
-22. Need segmented-search merge policy calibration evidence for #375:
+23. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-23. Need agency host-surface timing evidence for #763:
+24. Need agency host-surface timing evidence for #763:
    [`benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`](benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
-24. Need private real-history Dream offline and diagnostic evidence:
+25. Need private real-history Dream offline and diagnostic evidence:
    [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
    and
    [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
-25. Need explicit recall-reminder shadow A/B evidence:
+26. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-26. Need public-corpus negative-control dream shadow evidence:
+27. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-27. Need live question-extraction axis-coverage evidence for GitHub #153:
+28. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-28. Need community-submitted runs, demos, known gaps, or field-report intake:
+29. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
