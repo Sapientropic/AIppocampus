@@ -81,6 +81,26 @@ language for future low-friction controls, not a claim of complete CLI coverage.
 | Cross-device transfer | Documented local-folder, object-storage, and encrypted sync commands | Documented command names, flags, sync manifests, privacy refusal rules, and `AIPPOCAMPUS_*` configuration names | Raw plaintext rollout sync, provider credentials in logs, or managed hosted-service behavior |
 | Research or roadmap work | Roadmap, evidence docs, benchmarks, and research notes | Evidence for the current implementation or design direction only | Public API stability for Dream, subconscious jobs, semantic caches, benchmark cache files, or cognitive-map artifacts |
 
+## Copyable Agent Gesture
+
+Agent hosts that want one minimal source-backed continuity move should copy the
+`source_backed_continuity_gesture_v1` workflow from
+[`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md):
+
+```text
+detect continuity-sensitive task
+  -> recall(query, context)
+  -> use one compact MemoryPacket / AIppo activation packet
+  -> deepen(route_id) before exact, public, disputed, stale/currentness,
+     sensitive, or high-risk claims
+  -> record lightweight outcome feedback
+```
+
+This is an agent behavior contract over existing local read tools, not a new
+network API. Negative and anti-nag controls are part of the gesture: do not call
+AIppocampus every turn, and do not treat AIppo activation or bounded summaries
+as source evidence.
+
 ## Stability Model
 
 AIppocampus uses additive public contracts:
