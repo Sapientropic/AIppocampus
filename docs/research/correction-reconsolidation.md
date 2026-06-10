@@ -171,10 +171,24 @@ Ordinary recalled sources use the separate
 substrate. It records append-only retrieval/open/outcome diagnostics from
 prompt-hook, active-recall, MCP recall/deepen, and source-reopen payloads, then
 projects `retrieval_count`, `last_retrieved_at`, and post-retrieval outcome
-buckets. Those rows are not correction adjudications and do not implement
-general retrieval reconsolidation by themselves; later consumers must still join
-confirmation, correction, contradiction, or conflict evidence before proposing a
-memory revision.
+buckets. The #1081 slice adds the narrow retrieval-triggered review window:
+when a retrieved source later gets a source-backed `superseded`, `refuted`,
+`conflicted`, or `still_current` outcome, the substrate can project a staging
+`retrieval_reconsolidation_candidate` through
+`aippocampus_runtime.reflection.retrieval_reconsolidation`. That candidate
+reuses the correction reconsolidation route/status vocabulary (`superseded`,
+`refuted`, `valid_adopted`, or `uncertain`), but it is still review evidence
+only. It does not update clean source, raw rollout, or formal memory.
+
+The no-write review command is:
+
+```powershell
+python -m aippocampus_runtime.reflection.retrieval_lifecycle --events-input <retrieval-lifecycle.jsonl> --reconsolidation-review --no-write --json
+```
+
+Use an `--output` path only for explicit local staging candidate JSONL writes.
+Reports publish aggregate counts for activated, used, ignored, conflicted,
+superseded, refuted, still-current, and source-missing-blocked rows.
 
 The #311 slice adds
 `aippocampus_runtime.reflection.host_capture.capture_host_correction_event()` as

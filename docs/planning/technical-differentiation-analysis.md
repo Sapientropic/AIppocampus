@@ -203,7 +203,7 @@ candidate pair 计算 `threshold_policy`：兼容的 `what_features`、
 
 ### AIppocampus 怎么做
 
-AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_candidate_router.py` 已经提供了一个适合改造成再巩固的骨架。#1019 补上了第一片 retrieval lifecycle substrate：`aippocampus_runtime.reflection.retrieval_lifecycle` 可以把 prompt-hook scent/evidence、active recall、MCP recall/deepen、source reopen 这类 payload 转成 append-only diagnostic rows，但还不会消费这些 rows 做 memory revision。
+AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_candidate_router.py` 已经提供了一个适合改造成再巩固的骨架。#1019 补上了第一片 retrieval lifecycle substrate：`aippocampus_runtime.reflection.retrieval_lifecycle` 可以把 prompt-hook scent/evidence、active recall、MCP recall/deepen、source reopen 这类 payload 转成 append-only diagnostic rows。#1081 在 `aippocampus_runtime.reflection.retrieval_reconsolidation` 补了窄的 review-window 投射：当后续 source-backed outcome 显示 retrieved source 被 supersede、refute、conflict，或仍然 current 时，只生成 staging review candidate，不直接更新正式记忆。
 
 **具体工程路径**：
 

@@ -33,7 +33,8 @@ PROMPT_VERSION = "aippocampus-retrieval-lifecycle-v1"
 
 RETRIEVAL_KIND = "retrieval_lifecycle_event"
 OUTCOME_KIND = "retrieval_lifecycle_outcome_event"
-EVENT_KINDS = {RETRIEVAL_KIND, OUTCOME_KIND}
+RECONSOLIDATION_CANDIDATE_KIND = "retrieval_reconsolidation_candidate"
+EVENT_KINDS = {RETRIEVAL_KIND, OUTCOME_KIND, RECONSOLIDATION_CANDIDATE_KIND}
 
 RETRIEVAL_ROUTES = {
     "ambient_scent",
@@ -61,13 +62,35 @@ OUTCOME_CATEGORIES = {
     "opened",
     "ignored",
     "corrected",
+    "conflicted",
     "contradicted",
     "pinned",
+    "refuted",
     "superseded",
     "blocked",
     "stale",
+    "still_current",
     "unclear",
 }
+RECONSOLIDATION_OUTCOME_CATEGORIES = {
+    "conflicted",
+    "contradicted",
+    "corrected",
+    "pinned",
+    "refuted",
+    "stale",
+    "still_current",
+    "superseded",
+}
+CONFLICT_OUTCOME_CATEGORIES = {
+    "conflicted",
+    "contradicted",
+    "corrected",
+    "refuted",
+    "stale",
+    "superseded",
+}
+USED_OUTCOME_CATEGORIES = {"opened", "pinned", "still_current"}
 
 LOCAL_PATH_RE = re.compile(
     r"(?i)(^[a-z]:[\\/])|(^/(Users|home|root|tmp|var|mnt|Volumes|private)/)|(^~[\\/])"
@@ -630,10 +653,28 @@ def events_from_mcp_recall_result(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--events-input", required=True)
+    parser.add_argument("--output")
+    parser.add_argument("--no-write", action="store_true")
+    parser.add_argument(
+        "--reconsolidation-review",
+        action="store_true",
+        help="Project retrieval lifecycle rows into source-backed review candidates.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
     try:
-        report = lifecycle_report(events_path=Path(args.events_input).resolve())
+        events_path = Path(args.events_input).resolve()
+        if args.reconsolidation_review:
+            from aippocampus_runtime.reflection import retrieval_reconsolidation
+
+            output_path = Path(args.output).resolve() if args.output else None
+            report = retrieval_reconsolidation.run_reconsolidation_review(
+                events_path=events_path,
+                output_path=output_path,
+                no_write=args.no_write,
+            )
+        else:
+            report = lifecycle_report(events_path=events_path)
     except Exception as exc:
         if not args.json_output:
             raise
@@ -643,9 +684,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print(f"sources: {report['source_count']}")
-        print(f"retrieval events: {report['retrieval_event_count']}")
-        print(f"outcome events: {report['outcome_event_count']}")
+        if args.reconsolidation_review:
+            print(f"reconsolidation candidates: {report['candidate_count']}")
+            print(f"wrote: {report['wrote_count']}")
+        else:
+            print(f"sources: {report['source_count']}")
+            print(f"retrieval events: {report['retrieval_event_count']}")
+            print(f"outcome events: {report['outcome_event_count']}")
     return 0
 
 

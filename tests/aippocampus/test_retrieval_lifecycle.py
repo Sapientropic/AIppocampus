@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -14,6 +16,7 @@ sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.reflection import retrieval_lifecycle as lifecycle  # noqa: E402
+from aippocampus_runtime.reflection import retrieval_reconsolidation as recon  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_SECRET_VALUE,
@@ -212,6 +215,193 @@ class RetrievalLifecycleTests(unittest.TestCase):
         self.assertNotIn("raw prompt should not leak", encoded)
         self.assertNotIn(FAKE_TEST_SECRET_VALUE, encoded)
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
+
+    def test_retrieval_reconsolidation_candidates_are_reviewable_not_memory_updates(self) -> None:
+        superseded_retrieval = lifecycle.build_retrieval_event(
+            event_id="retr_old_preference",
+            thread_id="session:retrieval-test",
+            workspace="AIppocampus",
+            route="active_recall",
+            action_grammar="reopenable_route",
+            source_refs=[source_ref(60)],
+        )
+        refuted_retrieval = lifecycle.build_retrieval_event(
+            event_id="retr_old_route",
+            thread_id="session:retrieval-test",
+            workspace="AIppocampus",
+            route="prompt_hook_evidence",
+            action_grammar="bounded_evidence",
+            source_refs=[source_ref(70)],
+            source_opened=True,
+        )
+        current_retrieval = lifecycle.build_retrieval_event(
+            event_id="retr_current_constraint",
+            thread_id="session:retrieval-test",
+            workspace="AIppocampus",
+            route="recall_deepen",
+            action_grammar="source_open",
+            source_refs=[source_ref(80)],
+            source_opened=True,
+        )
+        events = [
+            superseded_retrieval,
+            lifecycle.build_outcome_event(
+                retrieval_event_id="retr_old_preference",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                source_refs=[source_ref(61)],
+                outcome_category="superseded",
+            ),
+            refuted_retrieval,
+            lifecycle.build_outcome_event(
+                retrieval_event_id="retr_old_route",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                source_refs=[source_ref(71)],
+                outcome_category="refuted",
+            ),
+            current_retrieval,
+            lifecycle.build_outcome_event(
+                retrieval_event_id="retr_current_constraint",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                source_refs=[source_ref(81)],
+                outcome_category="still_current",
+            ),
+        ]
+
+        candidates = recon.build_reconsolidation_candidates(events)
+        report = recon.reconsolidation_projection(events)
+
+        self.assertEqual(
+            {candidate["candidate_type"] for candidate in candidates},
+            {
+                "supersession_candidate",
+                "refuted_recall_candidate",
+                "still_current_candidate",
+            },
+        )
+        self.assertEqual(report["reconsolidation_counts"]["activated"], 3)
+        self.assertEqual(report["reconsolidation_counts"]["used"], 1)
+        self.assertEqual(report["reconsolidation_counts"]["conflicted"], 2)
+        self.assertEqual(report["reconsolidation_counts"]["superseded"], 1)
+        self.assertEqual(report["reconsolidation_counts"]["refuted"], 1)
+        self.assertEqual(report["reconsolidation_counts"]["still_current"], 1)
+        for candidate in candidates:
+            self.assertEqual(candidate["kind"], recon.RECONSOLIDATION_CANDIDATE_KIND)
+            self.assertEqual(candidate["review_state"], "staging")
+            self.assertEqual(candidate["truth_status"], "reviewable_candidate_not_memory_truth")
+            self.assertEqual(candidate["formal_memory_promoted"], False)
+            self.assertEqual(candidate["source_update_performed"], False)
+            self.assertEqual(candidate["clean_source_mutated"], False)
+            self.assertEqual(candidate["raw_rollout_mutated"], False)
+            self.assertTrue(candidate["source_refs"])
+
+    def test_revision_candidate_is_emitted_for_conflicted_old_recall(self) -> None:
+        events = [
+            lifecycle.build_retrieval_event(
+                event_id="retr_stale_constraint",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                route="ambient_scent",
+                action_grammar="direction_with_ref",
+                source_refs=[source_ref(90)],
+            ),
+            lifecycle.build_outcome_event(
+                retrieval_event_id="retr_stale_constraint",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                source_refs=[source_ref(91)],
+                outcome_category="conflicted",
+            ),
+        ]
+
+        [candidate] = recon.build_reconsolidation_candidates(events)
+
+        self.assertEqual(candidate["candidate_type"], "revision_candidate")
+        self.assertEqual(candidate["correction_adjudication_status"], "uncertain")
+        self.assertEqual(candidate["correction_route"], "confirm_when_relevant")
+        self.assertIn("retrieval_conflict_observed", candidate["reason_codes"])
+        self.assertEqual(candidate["source_update_performed"], False)
+
+    def test_reconsolidation_no_write_report_counts_without_writing_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            events_path = root / "retrieval-lifecycle.jsonl"
+            output_path = root / "retrieval-reconsolidation-candidates.jsonl"
+            events = [
+                lifecycle.build_retrieval_event(
+                    event_id="retr_superseded",
+                    thread_id="session:retrieval-test",
+                    workspace="AIppocampus",
+                    route="active_recall",
+                    action_grammar="reopenable_route",
+                    source_refs=[source_ref(100)],
+                ),
+                lifecycle.build_outcome_event(
+                    retrieval_event_id="retr_superseded",
+                    thread_id="session:retrieval-test",
+                    workspace="AIppocampus",
+                    source_refs=[source_ref(101)],
+                    outcome_category="superseded",
+                ),
+            ]
+            lifecycle.append_events(events_path, events)
+
+            report = recon.run_reconsolidation_review(
+                events_path=events_path,
+                output_path=output_path,
+                no_write=True,
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = lifecycle.main(
+                    [
+                        "--events-input",
+                        str(events_path),
+                        "--output",
+                        str(output_path),
+                        "--reconsolidation-review",
+                        "--no-write",
+                        "--json",
+                    ]
+                )
+
+        self.assertEqual(report["candidate_count"], 1)
+        self.assertEqual(report["wrote_count"], 0)
+        self.assertEqual(report["no_write"], True)
+        self.assertFalse(output_path.exists())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["reconsolidation_counts"]["superseded"], 1)
+        self.assertIn("retrieval_reconsolidation_does_not_update_source_truth", report["cannot_claim"])
+
+    def test_reconsolidation_candidates_require_source_refs_even_when_source_key_exists(self) -> None:
+        events = [
+            lifecycle.build_retrieval_event(
+                event_id="retr_source_key_only",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                route="active_recall",
+                action_grammar="reopenable_route",
+                source_refs=[],
+                source_key="source-key-only",
+            ),
+            lifecycle.build_outcome_event(
+                retrieval_event_id="retr_source_key_only",
+                thread_id="session:retrieval-test",
+                workspace="AIppocampus",
+                source_refs=[],
+                source_key="source-key-only",
+                outcome_category="superseded",
+            ),
+        ]
+
+        candidates = recon.build_reconsolidation_candidates(events)
+        report = recon.reconsolidation_projection(events)
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(report["candidate_count"], 0)
+        self.assertEqual(report["reconsolidation_counts"]["blocked_missing_source_refs"], 1)
 
 
 if __name__ == "__main__":
