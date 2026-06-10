@@ -49,6 +49,11 @@ The drawer reuses the existing action grammar from `recall.authority`:
 `bounded_evidence`, `source_open`, and `ignore_or_blocked`. Do not add a second
 authority taxonomy or treat route strength as truth.
 
+Attention-style route selection must follow the same authority boundary. The
+canonical hard-mask and route-packet contract is
+[`source-backed-attention-router.md`](source-backed-attention-router.md); it may
+choose where to look, but it cannot turn a route score into evidence.
+
 ## Authority Boundary
 
 The drawer is lower authority than reopened source. It may tell a foreground

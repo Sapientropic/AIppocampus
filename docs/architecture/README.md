@@ -37,6 +37,7 @@ Roles:
 | [product-profiles.md](product-profiles.md) | current contract | Personal default, power-user optional, and enterprise-governed profiles. |
 | [runtime-envelope-and-failure-taxonomy.md](runtime-envelope-and-failure-taxonomy.md) | current contract | Public runtime envelope, failure families, and config registry boundary. |
 | [schema-field-profiles.md](schema-field-profiles.md) | current contract | Field-budget and projection discipline for runtime surfaces. |
+| [source-backed-attention-router.md](source-backed-attention-router.md) | current contract | Hard-mask, route-packet, output-level, and claim-permission boundaries for attention-style navigation. |
 | [topology-anchor-policy.md](topology-anchor-policy.md) | current contract | Topology anchor weighting as lifecycle pressure, not source truth. |
 
 ## Implementation Maps
