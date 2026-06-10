@@ -23,9 +23,10 @@ max total foreground bytes: 1800
 max hints: 4
 ```
 
-These are foreground projection limits, not source-reopen limits. #1124 owns
-latency/cost budgets for hot/warm/cold reopen paths. #1129 owns the
-agent-native recall/deepen/explain facade shape.
+These are foreground projection limits, not source-reopen limits.
+[`source-reopen-budget.md`](source-reopen-budget.md) owns latency/cost budgets
+for hot/warm/cold reopen paths. #1129 owns the agent-native recall/deepen/explain
+facade shape.
 
 ## Packet Families
 
@@ -86,6 +87,8 @@ memory.
 
 - [`agent-native-recall-facade.md`](agent-native-recall-facade.md) owns the
   recall/deepen/explain packet shape.
+- [`source-reopen-budget.md`](source-reopen-budget.md) owns hot/warm/cold
+  reopen policy and timeout fail-open behavior.
 - [`source-backed-attention-router.md`](source-backed-attention-router.md) owns
   route-packet authority and hard masks.
 - [`schema-field-profiles.md`](schema-field-profiles.md) owns broader

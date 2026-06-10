@@ -471,6 +471,11 @@ surfaces instead of dumping them into every foreground packet.
 The foreground size, no-profile-dump, review-needed, and anti-nag budget for
 those packets lives in
 [`foreground-memory-ux-budget.md`](../architecture/foreground-memory-ux-budget.md).
+The companion source-reopen budget lives in
+[`source-reopen-budget.md`](../architecture/source-reopen-budget.md); it
+separates hot bounded-route orientation, warm selected-span verification, and
+cold source-court reopen work, and keeps foreground timeout behavior
+fail-open-without-claim.
 
 Contract v1 continuity domains use this same progressive path. `recall_context`
 may return a `continuity_domain` route when a source-trailed working conclusion
