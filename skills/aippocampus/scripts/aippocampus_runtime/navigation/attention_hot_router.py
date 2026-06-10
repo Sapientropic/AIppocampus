@@ -94,6 +94,11 @@ def _source_handles(token: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [dict(handle) for handle in token.get("source_handles") or [] if isinstance(handle, Mapping)]
 
 
+def _bounded_summary(token: Mapping[str, Any]) -> dict[str, Any] | None:
+    summary = token.get("bounded_summary")
+    return dict(summary) if isinstance(summary, Mapping) else None
+
+
 def _score_overlap(query_terms: set[str], token_terms: set[str]) -> float:
     if not query_terms or not token_terms:
         return 0.0
@@ -268,6 +273,12 @@ def route_attention(
                 "hard_masks": masks,
                 "head_votes": votes,
                 "source_handles": handles,
+                # Bounded summaries are still route material, not evidence.
+                # Only pass them to the route-packet contract after relevance
+                # gates and anti-nag suppression have allowed ordinary emission.
+                "bounded_summary": _bounded_summary(token)
+                if handles and not masks and token_id not in anti_nag_ids
+                else None,
                 "source_open": token_id in source_open_ids,
                 "bounded_scope": token_id in bounded_scope_ids,
             }
