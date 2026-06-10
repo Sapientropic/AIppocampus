@@ -702,6 +702,7 @@ def inspect_aippocampus_agent_states(agent_dir: Path | None) -> dict[str, Any]:
     surface_counts: dict[str, dict[str, int]] = {}
     semantic_missing = 0
     semantic_prepared = 0
+    semantic_clean_source_only = 0
     clean_source_failures = 0
     source_index_failures = 0
     for path in metadata_paths:
@@ -733,8 +734,12 @@ def inspect_aippocampus_agent_states(agent_dir: Path | None) -> dict[str, Any]:
             semantic_prepared += 1
         elif worker_status == "missing_degraded_to_clean_source":
             semantic_missing += 1
+        elif worker_status == "clean_source_only":
+            semantic_clean_source_only += 1
     if not metadata_paths:
         semantic_state = "not_observed"
+    elif semantic_clean_source_only == len(metadata_paths):
+        semantic_state = "clean_source_only"
     elif semantic_prepared and not semantic_missing:
         semantic_state = "prepared"
     elif semantic_prepared:

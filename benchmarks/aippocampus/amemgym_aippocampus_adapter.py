@@ -15,8 +15,10 @@ reproduce.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -47,6 +49,30 @@ DEFAULT_SNIPPET_CHARS = 900
 WORKING_MEMORY_FILENAME = "working_memory.jsonl"
 SEMANTIC_TRIGGERS_FILENAME = "semantic_triggers.jsonl"
 SEMANTIC_CUES_FILENAME = "semantic_cues.jsonl"
+AMEMGYM_WORKER_ROUTE = "amemgym_prepared_visible_state"
+AMEMGYM_PROJECT_LABEL = "AMemGym"
+GENERIC_TERMS = {
+    "about",
+    "acknowledged",
+    "adapter",
+    "adapters",
+    "agent",
+    "assistant",
+    "become",
+    "clean",
+    "debugging",
+    "message",
+    "messages",
+    "noted",
+    "only",
+    "source",
+    "state",
+    "that",
+    "this",
+    "user",
+    "visible",
+    "when",
+}
 
 
 def _now_utc() -> str:
@@ -59,6 +85,65 @@ def _safe_int(value: Any, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return parsed if parsed >= 0 else default
+
+
+def _compact_text(value: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _unique_preserve(values: list[str], *, limit: int) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        clean = str(value or "").strip()
+        key = clean.casefold()
+        if not clean or key in seen:
+            continue
+        seen.add(key)
+        out.append(clean)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _terms_for_text(text: str, *, limit: int = 18) -> list[str]:
+    terms: list[str] = []
+    for term in re.findall(r"[\w\u4e00-\u9fff]+", str(text or ""), flags=re.UNICODE):
+        clean = term.strip(" _").casefold()
+        if not clean or clean in GENERIC_TERMS:
+            continue
+        if len(clean) < 3 and not re.search(r"\d", clean):
+            continue
+        terms.append(clean)
+    return _unique_preserve(terms, limit=limit)
+
+
+def _cue_id(cue: str) -> str:
+    material = f"{AMEMGYM_WORKER_ROUTE}\n{cue.casefold()}"
+    return "sc_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:18]
+
+
+def _jsonl_row_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    count = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                count += 1
+    return count
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    tmp.replace(path)
 
 
 class AIppocampusAMemGymAgent(BaseAgent):
@@ -117,6 +202,14 @@ class AIppocampusAMemGymAgent(BaseAgent):
     @property
     def working_memory_path(self) -> Path:
         return self.local_mem_dir / WORKING_MEMORY_FILENAME
+
+    @property
+    def semantic_triggers_path(self) -> Path:
+        return self.local_mem_dir / SEMANTIC_TRIGGERS_FILENAME
+
+    @property
+    def semantic_cues_path(self) -> Path:
+        return self.local_mem_dir / SEMANTIC_CUES_FILENAME
 
     def act(self, obs: str) -> str:
         new_msg = {"role": "user", "content": obs}
@@ -202,7 +295,12 @@ class AIppocampusAMemGymAgent(BaseAgent):
             self.last_artifact_status["working_memory_error"] = type(exc).__name__
             return ""
         rows = load_working_memory(self.working_memory_path)
-        matches = match_working_memory(query, rows, limit=min(self.top_k, 4))
+        matches = match_working_memory(
+            query,
+            rows,
+            project_label=AMEMGYM_PROJECT_LABEL,
+            limit=min(self.top_k, 4),
+        )
         if not matches:
             return ""
         lines = [
@@ -246,15 +344,36 @@ class AIppocampusAMemGymAgent(BaseAgent):
         return "\n".join(lines)
 
     def _prepare_memory_artifacts(self) -> None:
-        if not self._artifacts_dirty and (self.clean_source_dir / "messages.jsonl").exists():
+        if (
+            not self._artifacts_dirty
+            and (self.clean_source_dir / "messages.jsonl").exists()
+            and (
+                not self.semantic_sidecar_required
+                or self._semantic_worker_surfaces_exist()
+            )
+        ):
             return
         self.local_mem_dir.mkdir(parents=True, exist_ok=True)
         save_json(str(self.local_mem_dir / "msg_history.json"), self.msg_history)
         self._write_generic_transcript()
+        materializer_status = self._materialize_semantic_worker_surfaces()
         artifact_status = self._build_clean_source_and_index()
+        if materializer_status:
+            artifact_status["semantic_worker_materializer"] = materializer_status
         self.last_artifact_status = artifact_status
         self._write_metadata(artifact_status)
         self._artifacts_dirty = False
+
+    def _semantic_worker_surfaces_exist(self) -> bool:
+        return any(
+            path.exists()
+            for path in (
+                self.working_memory_path,
+                self.semantic_triggers_path,
+                self.semantic_cues_path,
+                self.clean_source_dir / "semantic-scope-labels.jsonl",
+            )
+        )
 
     def _write_generic_transcript(self) -> None:
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
@@ -284,6 +403,157 @@ class AIppocampusAMemGymAgent(BaseAgent):
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
+    def _visible_message_source_ref(self, index: int, msg: dict[str, str]) -> dict[str, Any]:
+        return {
+            "thread_key": "amemgym-official-agent",
+            "message_id": f"amemgym-visible-{index:04d}",
+            "turn_index": index,
+            "source_line": index,
+            "role": msg.get("role"),
+            "project_label": AMEMGYM_PROJECT_LABEL,
+        }
+
+    def _materialize_semantic_worker_surfaces(self) -> dict[str, Any]:
+        if not self.semantic_sidecar_required:
+            return {"status": "clean_source_only"}
+        if not self.msg_history:
+            return {
+                "status": "missing",
+                "reason": "empty_message_history",
+                "prepared_worker_surfaces": [],
+            }
+        now = _now_utc()
+        working_rows: list[dict[str, Any]] = []
+        trigger_rows: list[dict[str, Any]] = []
+        cue_rows: list[dict[str, Any]] = []
+        seen_cues: set[str] = set()
+        for index, msg in enumerate(self.msg_history, start=1):
+            text = str(msg.get("content") or "")
+            terms = _terms_for_text(text, limit=18)
+            if not terms:
+                continue
+            ref = self._visible_message_source_ref(index, msg)
+            title = _compact_text(text, 90)
+            summary = _compact_text(text, 520)
+            key_material = f"{index}\n{msg.get('role')}\n{text}"
+            candidate_key = "amemgym_wm_" + hashlib.sha1(
+                key_material.encode("utf-8")
+            ).hexdigest()[:18]
+            working_rows.append(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_working_memory",
+                    "created_at": now,
+                    "status": "active",
+                    "route": "use_with_source",
+                    "ask_policy": "source_required",
+                    "risk": "low",
+                    "route_reason": "amemgym_prescore_visible_state_materializer",
+                    "candidate_key": candidate_key,
+                    "candidate_type": "amemgym_visible_state",
+                    "title": title,
+                    "summary": summary,
+                    "recommendation": (
+                        "Use as navigation only; reopen clean-source snippets before "
+                        "making factual claims."
+                    ),
+                    "confidence": 0.7,
+                    "project_label": AMEMGYM_PROJECT_LABEL,
+                    "trigger_terms": terms,
+                    "activation_cues": terms[:8],
+                    "concepts": terms[:12],
+                    "source_refs": [ref],
+                    "source_strength": {
+                        "level": "visible_source",
+                        "score": 1.0,
+                        "source_ref_count": 1,
+                    },
+                }
+            )
+            trigger_rows.append(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "created_at": now,
+                    "trigger_id": "amemgym_trigger_"
+                    + hashlib.sha1(key_material.encode("utf-8")).hexdigest()[:18],
+                    "title": title,
+                    "aliases": terms[:12],
+                    "activation_cues": terms[:8],
+                    "trigger_terms": terms,
+                    "when_to_use": (
+                        "Route to AMemGym visible state; clean source must be "
+                        "reopened before factual claims."
+                    ),
+                    "when_not_to_use": (
+                        "Do not treat this trigger or its summary as evidence truth."
+                    ),
+                    "confidence": 0.7,
+                    "project_label": AMEMGYM_PROJECT_LABEL,
+                    "source_refs": [ref],
+                }
+            )
+            for cue in terms[:6]:
+                cue_key = cue.casefold()
+                if cue_key in seen_cues:
+                    continue
+                seen_cues.add(cue_key)
+                cue_rows.append(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_semantic_cue",
+                        "cue_id": _cue_id(cue),
+                        "cue": cue,
+                        "route": AMEMGYM_WORKER_ROUTE,
+                        "script": "Zyyy",
+                        "language": "und",
+                        "status": "active",
+                        "created_at": now,
+                        "updated_at": now,
+                        "last_seen_at": now,
+                        "hit_count": 2,
+                        "false_positive_count": 0,
+                        "confidence": 0.7,
+                        "source_refs": [ref],
+                        "prompt_hashes": [],
+                        "when_to_use": (
+                            "Use as an AMemGym prepared visible-state route only; "
+                            "search source before presenting facts."
+                        ),
+                        "when_not_to_use": (
+                            "Do not treat the cue itself as evidence or live semantic "
+                            "model output."
+                        ),
+                    }
+                )
+        if not working_rows and not trigger_rows and not cue_rows:
+            return {
+                "status": "missing",
+                "reason": "no_materializable_terms",
+                "prepared_worker_surfaces": [],
+            }
+        _write_jsonl(self.working_memory_path, working_rows)
+        _write_jsonl(self.semantic_triggers_path, trigger_rows)
+        _write_jsonl(self.semantic_cues_path, cue_rows)
+        return {
+            "status": "prepared",
+            "prepared_worker_surfaces": [
+                name
+                for name, rows in (
+                    ("working_memory", working_rows),
+                    ("semantic_triggers", trigger_rows),
+                    ("semantic_cues", cue_rows),
+                )
+                if rows
+            ],
+            "working_memory_row_count": len(working_rows),
+            "semantic_triggers_row_count": len(trigger_rows),
+            "semantic_cues_row_count": len(cue_rows),
+            "source": "visible_amemgym_messages",
+            "truth_boundary": "navigation_only_clean_source_required",
+        }
+
     def _build_clean_source_and_index(self) -> dict[str, Any]:
         status: dict[str, Any] = {
             "mode": self.mode,
@@ -293,13 +563,18 @@ class AIppocampusAMemGymAgent(BaseAgent):
             "semantic_sidecar": "not_required" if not self.semantic_sidecar_required else "missing",
             "working_memory": "present" if self.working_memory_path.exists() else "missing",
             "semantic_triggers": "present"
-            if (self.local_mem_dir / SEMANTIC_TRIGGERS_FILENAME).exists()
+            if self.semantic_triggers_path.exists()
             else "missing",
             "semantic_cues": "present"
-            if (self.local_mem_dir / SEMANTIC_CUES_FILENAME).exists()
+            if self.semantic_cues_path.exists()
             else "missing",
             "built_at": _now_utc(),
         }
+        status["working_memory_row_count"] = _jsonl_row_count(self.working_memory_path)
+        status["semantic_triggers_row_count"] = _jsonl_row_count(
+            self.semantic_triggers_path
+        )
+        status["semantic_cues_row_count"] = _jsonl_row_count(self.semantic_cues_path)
         try:
             from aippocampus_runtime.source.clean_source import build_clean_source
 
@@ -354,7 +629,7 @@ class AIppocampusAMemGymAgent(BaseAgent):
         elif self.semantic_sidecar_required:
             status["semantic_worker_status"] = "prepared"
         else:
-            status["semantic_worker_status"] = "not_required"
+            status["semantic_worker_status"] = "clean_source_only"
         return status
 
     def _read_metadata(self) -> dict[str, Any]:

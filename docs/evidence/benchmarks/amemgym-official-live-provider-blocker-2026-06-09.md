@@ -24,7 +24,7 @@ boundary and names the next unblock condition.
 | --- | --- | --- |
 | Protocol compatibility | Complete `local-scripted` official run exists for `overall`, `upperbound`, and `random` on full public `v1.base`; normalized `Memory=1.0` is a protocol artifact. | Not a live LLM/provider score, Native baseline, or AIppocampus product-quality result. |
 | Live model/provider quality | The 2026-06-06 OpenRouter Native attempt was partial: `overall` had 6/20 items, `upperbound` had 38/882 choice evaluations and no utilization metrics, `random` completed. #1052 adds bounded subset, resume-skip, phase-state, and checkpoint reporting for the next attempt. | Not an AMemGym score; only execution/progress evidence. |
-| Source-backed overlay fidelity | Local fixture overlay and official `BaseAgent` adapter arms can report source-backed boundaries, and semantic-sidecar arms require prepared worker metadata. | Overlay fidelity is separate from official accuracy, diagnosis, utilization, and leaderboard claims. |
+| Source-backed overlay fidelity | Local fixture overlay and official `BaseAgent` adapter arms can report source-backed boundaries, and semantic-sidecar arms require prepared worker metadata. The 2026-06-10 #1084 adapter prep adds a deterministic visible-message materializer for working-memory / semantic-trigger / semantic-cue navigation surfaces. | Overlay fidelity is separate from official accuracy, diagnosis, utilization, and leaderboard claims. |
 | Cost/latency | The bridge records subprocess elapsed time and redacts credentials; #1052 checkpoints explicitly report provider cost as unavailable when no stable usage field is present. | Provider billing/token cost is not claimable until raw official outputs or provider metadata expose a stable sanitized extraction path. |
 
 ## Blocker
@@ -50,10 +50,10 @@ been produced and reviewed yet:
 - Native/RAG/AWI/AWE parity arms should remain deferred until at least one
   bounded live fixed arm is complete and reviewed; otherwise parity would
   multiply cost and artifact-risk without improving claim quality.
-- The AIppocampus semantic-sidecar official arm remains blocked for claimable
-  semantic-worker evidence until a pre-score materializer writes reviewed
-  working-memory / semantic sidecar artifacts and `adapter_metadata.json` proves
-  those surfaces were present.
+- The AIppocampus semantic-sidecar official arm now has a local pre-score
+  materializer for visible-message navigation surfaces, but live/provider
+  semantic-worker results remain unclaimable until a full fixed-arm run records
+  complete official outputs and reviewed public-safe reports.
 
 ## Next Unblock Condition
 
