@@ -44,6 +44,52 @@ def _feature_terms(token: Mapping[str, Any]) -> set[str]:
     )
 
 
+def extract_action_query_features(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract public-safe action-time query features from a pending action.
+
+    The extractor emits normalized terms and ids only. Raw tool args and command
+    text stay out of the report so synthetic fixtures can exercise action-time
+    routing without becoming a tool-argument leak path.
+    """
+
+    tool_args = payload.get("tool_args")
+    args = tool_args if isinstance(tool_args, Mapping) else {}
+    file_paths = [str(path) for path in args.get("file_paths") or args.get("paths") or []]
+    issue_ids = [str(issue).lstrip("#") for issue in args.get("issue_ids") or []]
+    command_terms = _terms(args.get("command_terms") or args.get("command_family"))
+    branch_terms = _terms(args.get("branch") or args.get("branch_name"))
+    test_terms = _terms(args.get("test_name") or args.get("test_names"))
+    path_terms = set()
+    for path in file_paths:
+        path_terms.update(_terms(path.replace("/", " ").replace("\\", " ")))
+    issue_terms = {f"issue{issue}" for issue in issue_ids} | set(issue_ids)
+    terms = (
+        _terms(payload.get("prompt") or payload.get("intent"))
+        | _terms(payload.get("tool_name"))
+        | path_terms
+        | issue_terms
+        | command_terms
+        | branch_terms
+        | test_terms
+    )
+    return {
+        "phase": str(payload.get("phase") or ""),
+        "tool_name": str(payload.get("tool_name") or ""),
+        "file_paths": file_paths[:8],
+        "issue_ids": issue_ids[:8],
+        "topic_epoch": str(payload.get("topic_epoch") or ""),
+        "active_recall_locks": [str(lock) for lock in payload.get("active_recall_locks") or []],
+        "anti_nag_token_ids": [str(token) for token in payload.get("anti_nag_token_ids") or []],
+        "risk": str(payload.get("risk") or ""),
+        "terms": sorted(terms),
+        "privacy_boundary": {
+            "raw_tool_args_emitted": False,
+            "raw_command_text_emitted": False,
+            "private_text_emitted": False,
+        },
+    }
+
+
 def _source_handles(token: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [dict(handle) for handle in token.get("source_handles") or [] if isinstance(handle, Mapping)]
 
@@ -88,9 +134,12 @@ def _adaptive_threshold(query_state: Mapping[str, Any], token: Mapping[str, Any]
 
 def _head_votes(query_state: Mapping[str, Any], token: Mapping[str, Any]) -> list[dict[str, Any]]:
     query_terms = _terms(query_state.get("query_terms") or query_state.get("query"))
+    action_features = query_state.get("action_features")
     token_terms = _feature_terms(token)
     metadata = _metadata(token)
     lexical = _score_overlap(query_terms, token_terms)
+    action_score = _action_score(action_features, token)
+    action_reason = _action_reason_code(action_features, token) if action_score > 0 else "no_action_match"
     semantic = float((token.get("route_features") or {}).get("semantic_score") or 0.0)
     scope = 1.0 if token.get("scope") and token.get("scope") == query_state.get("scope") else 0.4
     salience = _level_score(metadata.get("salience"), {"high": 0.9, "medium": 0.6, "low": 0.3}, 0.45)
@@ -104,6 +153,7 @@ def _head_votes(query_state: Mapping[str, Any], token: Mapping[str, Any]) -> lis
     abstention = 1.0 - max(lexical, semantic, salience)
     return [
         {"head": "lexical_head", "score": round(lexical, 3), "reason_code": "term_overlap"},
+        {"head": "action_head", "score": round(action_score, 3), "reason_code": action_reason},
         {"head": "semantic_head", "score": round(semantic, 3), "reason_code": "provided_sidecar_score"},
         {"head": "scope_head", "score": round(scope, 3), "reason_code": "scope_match"},
         {"head": "salience_head", "score": round(salience, 3), "reason_code": "token_salience"},
@@ -117,6 +167,7 @@ def _head_votes(query_state: Mapping[str, Any], token: Mapping[str, Any]) -> lis
 def _combined_score(votes: Iterable[Mapping[str, Any]]) -> float:
     weights = {
         "lexical_head": 0.24,
+        "action_head": 0.24,
         "semantic_head": 0.18,
         "scope_head": 0.12,
         "salience_head": 0.14,
@@ -131,6 +182,46 @@ def _combined_score(votes: Iterable[Mapping[str, Any]]) -> float:
     return max(0.0, min(1.0, round(total, 3)))
 
 
+def _action_score(action_features: Any, token: Mapping[str, Any]) -> float:
+    if not isinstance(action_features, Mapping):
+        return 0.0
+    score = 0.0
+    token_terms = _feature_terms(token)
+    for path in action_features.get("file_paths") or []:
+        if _terms(str(path).replace("/", " ").replace("\\", " ")) & token_terms:
+            score += 0.45
+            break
+    for issue in action_features.get("issue_ids") or []:
+        if str(issue) in token_terms or f"issue{issue}" in token_terms:
+            score += 0.35
+            break
+    if {"test", "pytest", "ruff", "mypy"} & _terms(action_features.get("terms")) & token_terms:
+        score += 0.20
+    if score == 0.0 and _terms(action_features.get("terms")) & token_terms:
+        score = 0.35
+    return min(1.0, round(score, 3))
+
+
+def _action_reason_code(action_features: Any, token: Mapping[str, Any]) -> str:
+    if not isinstance(action_features, Mapping):
+        return "no_action_payload"
+    reasons = []
+    token_terms = _feature_terms(token)
+    for path in action_features.get("file_paths") or []:
+        if _terms(str(path).replace("/", " ").replace("\\", " ")) & token_terms:
+            reasons.append("pending_path_match")
+            break
+    for issue in action_features.get("issue_ids") or []:
+        if str(issue) in token_terms or f"issue{issue}" in token_terms:
+            reasons.append("issue_id_match")
+            break
+    if {"test", "pytest", "ruff", "mypy"} & _terms(action_features.get("terms")) & token_terms:
+        reasons.append("command_failure_chain")
+    if not reasons:
+        reasons.append("pre_tool_constraint")
+    return "+".join(reasons)
+
+
 def route_attention(
     query_state: Mapping[str, Any],
     route_tokens: Iterable[Mapping[str, Any]],
@@ -138,6 +229,10 @@ def route_attention(
     packets = []
     source_open_ids = set(query_state.get("source_open_token_ids") or [])
     bounded_scope_ids = set(query_state.get("bounded_scope_token_ids") or [])
+    anti_nag_ids = set(query_state.get("anti_nag_token_ids") or [])
+    action_features = query_state.get("action_features")
+    if isinstance(action_features, Mapping):
+        anti_nag_ids.update(str(token) for token in action_features.get("anti_nag_token_ids") or [])
     for token in route_tokens:
         token_id = str(token.get("token_id") or "")
         masks = _hard_masks(query_state, token)
@@ -150,6 +245,13 @@ def route_attention(
             reason_codes.append("hard_mask_applied")
         if score < threshold:
             reason_codes.append("below_adaptive_threshold")
+            handles = []
+        action_vote = next((vote for vote in votes if vote.get("head") == "action_head"), None)
+        lexical_vote = next((vote for vote in votes if vote.get("head") == "lexical_head"), None)
+        if action_vote and lexical_vote and action_vote["score"] > 0.75 and lexical_vote["score"] < 0.5:
+            reason_codes.append("action_cue_lift")
+        if token_id in anti_nag_ids:
+            reason_codes.append("anti_nag_suppressed")
             handles = []
         metadata = _metadata(token)
         if metadata.get("currentness") in {"stale", "needs_reopen"} or metadata.get("conflict") not in {
@@ -224,6 +326,82 @@ def build_hot_router_fixture_report() -> dict[str, Any]:
     }
 
 
+def build_action_head_fixture_report() -> dict[str, Any]:
+    action_features = extract_action_query_features(
+        {
+            "prompt": "please handle the next small fix",
+            "phase": "implementation",
+            "tool_name": "edit",
+            "tool_args": {
+                "file_paths": [
+                    "skills/aippocampus/scripts/aippocampus_runtime/navigation/attention_hot_router.py"
+                ],
+                "issue_ids": ["1109"],
+                "command_family": "pytest",
+                "raw_command": "PRIVATE_TOOL_ARG_SENTINEL",
+            },
+            "topic_epoch": "attention-router",
+            "anti_nag_token_ids": ["action_repeated_hint_token"],
+            "risk": "low",
+        }
+    )
+    query_state = {
+        "query": "please handle the next small fix",
+        "query_terms": ["please", "handle", "small", "fix"],
+        "scope": "project:AIppocampus",
+        "risk": "low",
+        "privacy_domain": "public",
+        "action_features": action_features,
+    }
+    tokens = fixture_action_route_tokens()
+    packets = route_attention(query_state, tokens)
+    cases: list[dict[str, Any]] = [
+        {"case_id": str(token.get("fixture_case_id") or token.get("token_id")), "packet": packet}
+        for token, packet in zip(tokens, packets, strict=True)
+    ]
+    action_cue_lift_over_prompt_only_count = 0
+    anti_nag_suppressed_count = 0
+    masked_action_match_emission_count = 0
+    for case in cases:
+        packet = case["packet"]
+        votes = {str(vote["head"]): vote for vote in packet["head_votes"]}
+        if (
+            votes.get("action_head", {}).get("score", 0) > 0.75
+            and votes.get("lexical_head", {}).get("score", 1) < 0.5
+            and packet["output_mode"] == "reopenable_route"
+            and not packet["masks_applied"]
+            and "anti_nag_suppressed" not in packet["router_diagnostics"]["reason_codes"]
+        ):
+            action_cue_lift_over_prompt_only_count += 1
+        if "anti_nag_suppressed" in packet["router_diagnostics"]["reason_codes"]:
+            anti_nag_suppressed_count += 1
+        if (
+            packet["masks_applied"]
+            and votes.get("action_head", {}).get("score", 0) > 0.75
+            and packet["emitted"]
+        ):
+            masked_action_match_emission_count += 1
+    return {
+        "kind": "aippocampus_attention_action_head_fixture",
+        "schema_version": "attention-hot-router-v0",
+        "ok": masked_action_match_emission_count == 0,
+        "action_features": action_features,
+        "cases": cases,
+        "metrics": {
+            "case_count": len(cases),
+            "action_cue_lift_over_prompt_only_count": action_cue_lift_over_prompt_only_count,
+            "anti_nag_suppressed_count": anti_nag_suppressed_count,
+            "masked_action_match_emission_count": masked_action_match_emission_count,
+        },
+        "cannot_claim": [
+            "live_hook_behavior_lift",
+            "default_foreground_action_routing",
+            "private_tool_argument_quality",
+            "e2e50_behavior_lift",
+        ],
+    }
+
+
 def fixture_route_tokens() -> list[dict[str, Any]]:
     base = attention_route_tokens.build_route_token_fixture_report()["tokens"]
     positive = dict(base[1])
@@ -286,3 +464,50 @@ def fixture_route_tokens() -> list[dict[str, Any]]:
         "route_features": {"terms": ["unrelated"], "semantic_score": 0.0},
     }
     return [positive, masked, stale, abstain]
+
+
+def fixture_action_route_tokens() -> list[dict[str, Any]]:
+    source_handle = {
+        "source_id": "clean:attention-router",
+        "segment_id": "msg-action",
+        "reopen_required": True,
+        "line_range": [10, 18],
+    }
+    base = {
+        "kind": "aippocampus_attention_route_token",
+        "route_token_level": "source_span_token",
+        "scope": "project:AIppocampus",
+        "source_handles": [source_handle],
+        "route_metadata": {
+            "salience": "high",
+            "currentness": "current",
+            "privacy": "public",
+            "conflict": "none",
+        },
+    }
+    action_match = {
+        **base,
+        "token_id": "action_path_issue_token",
+        "fixture_case_id": "action_path_issue_match",
+        "route_features": {
+            "terms": ["attention", "hot", "router", "issue1109", "1109", "pytest"],
+            "semantic_score": 0.35,
+        },
+    }
+    private_mask = {
+        **action_match,
+        "token_id": "action_private_mask_token",
+        "fixture_case_id": "action_matched_private_mask",
+        "route_metadata": {
+            "salience": "high",
+            "currentness": "current",
+            "privacy": "private",
+            "conflict": "none",
+        },
+    }
+    repeated = {
+        **action_match,
+        "token_id": "action_repeated_hint_token",
+        "fixture_case_id": "action_repeated_hint_suppressed",
+    }
+    return [action_match, private_mask, repeated]

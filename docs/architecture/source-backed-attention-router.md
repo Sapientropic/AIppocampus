@@ -214,6 +214,20 @@ currentness, salience, and scope. It is not calibrated model attention and must
 not be treated as learned score fusion. Masked candidates may retain high
 diagnostic scores, but they still emit `silence`.
 
+## Action-Time Query Features
+
+`attention_hot_router.extract_action_query_features()` projects synthetic
+pending-action payloads into public-safe query features: tool name, normalized
+file-path terms, issue ids, command/test/branch terms, topic epoch, active locks,
+anti-nag token ids, and risk mode. It does not emit raw tool args or raw command
+text.
+
+The router consumes these features through `action_head`. Action cues can lift a
+route when the prompt is too vague but the pending action reveals a matching
+path, issue id, test, or command-failure chain. This remains diagnostic routing:
+hard masks run first, anti-nag suppression can force `direction_only`, and
+action-matched packets still carry `no_claim_before_reopen`.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in
@@ -227,6 +241,8 @@ diagnostic scores, but they still emit `silence`.
   shape for future router heads.
 - The deterministic hot router is the V0 scoring prototype over route tokens;
   it does not replace recall/search paths by default.
+- Action-time features add pending-tool context to the query surface, but they
+  do not mutate hooks, settings, or live foreground behavior by default.
 - Source-open and high-risk claim gates remain separate answer-time authority
   checks; see [`high-risk-answer-gates.md`](high-risk-answer-gates.md).
 
