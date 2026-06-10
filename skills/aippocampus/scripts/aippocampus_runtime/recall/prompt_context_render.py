@@ -23,6 +23,12 @@ from aippocampus_runtime.recall.prompt_foreground_budget import (
     truncate_preserving_lines,
 )
 from aippocampus_runtime.recall.prompt_recall_hot_path_debug import hot_path_debug_summary
+from aippocampus_runtime.recall.semantic_gate_response import (
+    public_count,
+    public_error_buckets,
+    public_partial_failure_reasons,
+    public_semantic_budget,
+)
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
@@ -328,10 +334,18 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
             "diagnostic": raw_semantic_gate.get("diagnostic"),
             "elapsed_ms": raw_semantic_gate.get("elapsed_ms"),
             "timeout": raw_semantic_gate.get("timeout"),
-            "budget": raw_semantic_gate.get("budget"),
-            "error_buckets": raw_semantic_gate.get("error_buckets") or {},
+            "budget": public_semantic_budget(raw_semantic_gate.get("budget")),
+            "error_buckets": public_error_buckets(raw_semantic_gate.get("error_buckets")),
             "worker_count": raw_semantic_gate.get("worker_count")
             or len(raw_semantic_gate.get("workers") or []),
+            "successful_worker_count": public_count(
+                raw_semantic_gate.get("successful_worker_count")
+            ),
+            "failed_worker_count": public_count(raw_semantic_gate.get("failed_worker_count")),
+            "partial_success": bool(raw_semantic_gate.get("partial_success")),
+            "partial_failure_reasons": public_partial_failure_reasons(
+                raw_semantic_gate.get("partial_failure_reasons")
+            ),
         }
     hot_path = hot_path_debug_summary(result.get("hot_path_funnel"))
     if hot_path is not None:

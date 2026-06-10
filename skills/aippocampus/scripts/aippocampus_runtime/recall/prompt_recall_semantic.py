@@ -9,6 +9,9 @@ from typing import Any, Callable
 from aippocampus_runtime.recall.prompt_cues import should_run_semantic_gate
 from aippocampus_runtime.recall.prompt_recall_budget import (
     POST_SEMANTIC_RESERVE_MS,
+    SEMANTIC_BUDGET_CLIP_REASON,
+    SEMANTIC_EFFECTIVE_TIMEOUT_POLICY,
+    SEMANTIC_SOCKET_TIMEOUT_REASON,
     budget_allows,
     semantic_budget_result,
     semantic_timeout_for_budget,
@@ -113,6 +116,12 @@ def run_semantic_gate_for_prompt(
             "overall_deadline_seconds": float(budgeted_timeout),
             "max_elapsed_ms": max_elapsed_ms,
             "budget_clipped": float(budgeted_timeout) != float(semantic_timeout),
+            "effective_timeout_policy": SEMANTIC_EFFECTIVE_TIMEOUT_POLICY,
+            "budget_clip_reason": (
+                SEMANTIC_BUDGET_CLIP_REASON
+                if float(budgeted_timeout) != float(semantic_timeout)
+                else SEMANTIC_SOCKET_TIMEOUT_REASON
+            ),
         }
         try:
             result = gate(

@@ -351,15 +351,32 @@ def status(
 ) -> dict[str, Any]:
     data = load_hooks(path)
     groups = (data.get("hooks") or {}).get("UserPromptSubmit") or []
-    installed = False
     commands: list[str] = []
+    bridge_commands = (
+        provider_bridge_commands(groups)
+        if script is None and module == DEFAULT_HOOK_MODULE and isinstance(groups, list)
+        else []
+    )
     for group in groups if isinstance(groups, list) else []:
         for handler in group.get("hooks", []) if isinstance(group, dict) else []:
             if isinstance(handler, dict) and is_ambient_handler(handler, script, module=module):
-                installed = True
                 commands.append(str(handler.get("command") or ""))
+    for command in bridge_commands:
+        if command not in commands:
+            commands.append(command)
+    # Provider bridge wrappers are the effective default prompt hook: they set
+    # provider credentials in the hook process and then delegate to this module.
+    # Status must therefore match install/update readiness semantics instead of
+    # reporting a healthy bridge-only setup as missing.
+    installed = bool(commands)
     result: dict[str, Any] = add_host_integration(
-        {"installed": installed, "path": str(path), "commands": commands}
+        {
+            "installed": installed,
+            "path": str(path),
+            "commands": commands,
+            "provider_key_bridge_installed": bool(bridge_commands),
+            "installed_via_provider_bridge": installed and bool(bridge_commands),
+        }
     )
     if include_last:
         result["path"] = path.name

@@ -296,6 +296,50 @@ def public_error_buckets(buckets: Any) -> dict[str, int]:
     }
 
 
+def public_float(value: Any) -> float | None:
+    try:
+        return round(float(value), 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def public_semantic_budget(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    allowed_reasons = {
+        "foreground_post_semantic_reserve",
+        "worker_socket_timeout_policy",
+    }
+    allowed_policies = {"worker_socket_timeout_half_of_overall_deadline"}
+    result: dict[str, Any] = {
+        "requested_timeout": public_float(value.get("requested_timeout")),
+        "effective_timeout": public_float(value.get("effective_timeout")),
+        "overall_deadline_seconds": public_float(value.get("overall_deadline_seconds")),
+        "max_elapsed_ms": public_float(value.get("max_elapsed_ms")),
+        "budget_clipped": bool(value.get("budget_clipped")),
+    }
+    policy = str(value.get("effective_timeout_policy") or "")
+    if policy in allowed_policies:
+        result["effective_timeout_policy"] = policy
+    reason = str(value.get("budget_clip_reason") or "")
+    if reason in allowed_reasons:
+        result["budget_clip_reason"] = reason
+    return {key: item for key, item in result.items() if item is not None}
+
+
+def public_partial_failure_reasons(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    allowed = {
+        "auth_error",
+        "foreground_budget",
+        "read_timeout",
+        "overall_deadline",
+        "semantic_worker_error",
+    }
+    return [str(item) for item in value if str(item) in allowed]
+
+
 def public_semantic_gate_payload(result: Mapping[str, Any]) -> dict[str, Any]:
     workers_value = result.get("workers")
     workers = workers_value if isinstance(workers_value, list) else []
@@ -312,6 +356,13 @@ def public_semantic_gate_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "diagnostic": str(result.get("diagnostic") or "") if result.get("diagnostic") else None,
         "error_buckets": public_error_buckets(result.get("error_buckets")),
         "worker_count": public_count(result.get("worker_count") or len(workers)),
+        "successful_worker_count": public_count(result.get("successful_worker_count")),
+        "failed_worker_count": public_count(result.get("failed_worker_count")),
+        "partial_success": bool(result.get("partial_success")),
+        "partial_failure_reasons": public_partial_failure_reasons(
+            result.get("partial_failure_reasons")
+        ),
+        "budget": public_semantic_budget(result.get("budget")),
         "cache": public_cache(result.get("cache")),
         "cache_diagnostics": public_cache_diagnostics(result.get("cache_diagnostics")),
         "model_route": public_model_route(result.get("model_route")),

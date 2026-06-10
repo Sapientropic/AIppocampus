@@ -216,6 +216,13 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
     )
     semantic_source_reopen_route = bool(state.get("semantic_source_reopen_route"))
     semantic_source_candidate_count = len(candidates) if semantic_source_reopen_route else 0
+    semantic_partial_failure = bool(
+        semantic_result.get("partial_success")
+        or (
+            semantic_result.get("available")
+            and semantic_result.get("error_buckets")
+        )
+    )
     foreground_profile = "explicit_recall" if semantic_mode == "on" else "ambient_hot_path"
     return {
         "foreground_profile": foreground_profile,
@@ -241,6 +248,7 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
         "semantic_reuse_source": reuse_source,
         "semantic_waited": reuse_source
         in {"cold_semantic_attempted", "semantic_provider_timeout"},
+        "semantic_partial_failure": semantic_partial_failure,
         "cold_semantic_shadowed": cold_shadowed,
         "background_scheduled": False,
         "hot_path_candidates_after_merge": sum(

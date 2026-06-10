@@ -26,6 +26,7 @@ from aippocampus_runtime.hooks.debug_log import (  # noqa: E402
     write_debug_log,
     write_prompt_hook_audit_status,
 )
+from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
 
 
 class InstallAmbientRecallHookTests(unittest.TestCase):
@@ -120,6 +121,30 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
                 "unsupported_hosts": ["claude-code", "generic-jsonl"],
             },
         )
+
+    def test_status_treats_provider_bridge_wrapper_as_installed(self) -> None:
+        dotenv = Path(self.tmp.name) / "provider.env"
+        provider_env_var = "PROVIDER_PROMPT_STATUS_BRIDGE"
+        fixture_value = "sk-FAKE_TEST_PROMPT_STATUS_BRIDGE_1234567890"
+        dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
+
+        provider_key_bridge.apply_provider_key_bridge(
+            target="codex-hooks",
+            source="explicit-dotenv",
+            provider_env_var=provider_env_var,
+            credential_dotenv=dotenv,
+            codex_home_path=self.codex_home,
+        )
+        result = installer.status(self.hooks_json, include_last=True)
+        encoded = json.dumps(result, ensure_ascii=False)
+
+        self.assertTrue(result["installed"])
+        self.assertTrue(result["provider_key_bridge_installed"])
+        self.assertTrue(result["installed_via_provider_bridge"])
+        self.assertEqual(result["path"], "hooks.json")
+        self.assertEqual(result["commands"], ["<redacted:hook-command>"])
+        self.assertTrue(result["commands_redacted"])
+        self.assertNotIn(fixture_value, encoded)
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
         installer.install(self.hooks_json, timeout=5)

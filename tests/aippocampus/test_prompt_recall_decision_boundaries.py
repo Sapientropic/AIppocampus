@@ -772,6 +772,23 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                 True,
             ),
             (
+                "provider_partial_timeout",
+                {
+                    **base_state,
+                    "semantic_gate_mode": "auto",
+                    "semantic_result": {
+                        "available": True,
+                        "decision": "scent",
+                        "error_buckets": {"read_timeout": 1},
+                        "partial_success": True,
+                        "successful_worker_count": 1,
+                        "failed_worker_count": 1,
+                    },
+                },
+                "semantic_provider_timeout",
+                True,
+            ),
+            (
                 "cold_attempted",
                 {
                     **base_state,
@@ -804,6 +821,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                 diagnostic = projection.route_delivery_diagnostic(state=state)
                 self.assertEqual(diagnostic["semantic_reuse_source"], expected_source)
                 self.assertEqual(diagnostic["semantic_waited"], expected_waited)
+                self.assertEqual(
+                    diagnostic["semantic_partial_failure"],
+                    label == "provider_partial_timeout",
+                )
                 encoded = json.dumps(diagnostic, ensure_ascii=False)
                 self.assertNotIn("auth_error", encoded)
                 self.assertNotIn("workers", encoded)

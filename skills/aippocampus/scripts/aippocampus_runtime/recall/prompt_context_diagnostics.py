@@ -118,6 +118,7 @@ def route_delivery_debug_summary(raw: Any) -> dict[str, Any] | None:
         )
         or "none",
         "semantic_waited": bool(raw.get("semantic_waited")),
+        "semantic_partial_failure": bool(raw.get("semantic_partial_failure")),
         "cold_semantic_shadowed": bool(raw.get("cold_semantic_shadowed")),
         "background_scheduled": bool(raw.get("background_scheduled")),
         "hot_path_candidates_after_merge": _count(

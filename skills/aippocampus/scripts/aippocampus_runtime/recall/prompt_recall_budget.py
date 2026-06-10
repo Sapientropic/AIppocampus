@@ -10,6 +10,9 @@ POST_SEMANTIC_RESERVE_MS = 1200.0
 SEMANTIC_MIN_TIMEOUT_SECONDS = 0.5
 PROBE_MIN_REMAINING_MS = 700.0
 EVIDENCE_MIN_REMAINING_MS = 900.0
+SEMANTIC_EFFECTIVE_TIMEOUT_POLICY = "worker_socket_timeout_half_of_overall_deadline"
+SEMANTIC_BUDGET_CLIP_REASON = "foreground_post_semantic_reserve"
+SEMANTIC_SOCKET_TIMEOUT_REASON = "worker_socket_timeout_policy"
 
 
 def remaining_ms(start: float, max_elapsed_ms: int | None) -> float | None:
@@ -76,5 +79,9 @@ def semantic_budget_result(
             "effective_timeout": effective_timeout,
             "max_elapsed_ms": max_elapsed_ms,
             "budget_clipped": budget_clipped,
+            "effective_timeout_policy": SEMANTIC_EFFECTIVE_TIMEOUT_POLICY,
+            "budget_clip_reason": (
+                SEMANTIC_BUDGET_CLIP_REASON if budget_clipped else SEMANTIC_SOCKET_TIMEOUT_REASON
+            ),
         },
     }
