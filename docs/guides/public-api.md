@@ -459,6 +459,16 @@ opens the next source-backed layer when the handle is still fresh and
 reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
 instead of silently becoming evidence.
 
+The minimal agent-native shape over these tools is documented in
+[`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md):
+`recall(query, context) -> MemoryPacket[]`,
+`deepen(route_id) -> SourceRoute | SourceBackedEvidence | Blocked | CannotVerify`,
+and `explain(route_id) -> WhyRecall | WhyNotRecall`. This is a small
+host-facing contract proposal and fixture-backed architecture boundary, not a
+public TypeScript/Python SDK, network API, or hosted-service promise. It keeps
+full source refs, masks, votes, and proofs behind explicit deepen/explain
+surfaces instead of dumping them into every foreground packet.
+
 Contract v1 continuity domains use this same progressive path. `recall_context`
 may return a `continuity_domain` route when a source-trailed working conclusion
 matches the cue; the route is still navigation only. `recall_deepen` may then
