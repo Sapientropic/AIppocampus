@@ -18,6 +18,9 @@ Dated command evidence belongs in
 - [`benchmark-priority-map.md`](benchmark-priority-map.md) explains which
   benchmark and smoke surfaces are P0/P1/P2/P3, what to run when, and which
   claim boundaries each surface must not cross.
+- [`benchmark-maturity-gates.md`](benchmark-maturity-gates.md) owns the
+  maturity ladder, sample-size fields, and promotion gates that keep small
+  deterministic fixtures useful without reading them as public-quality cohorts.
 - [`external-benchmark-map.md`](external-benchmark-map.md) gives external
   benchmark and memory-system comparison paths, with explicit blockers and
   claim boundaries.

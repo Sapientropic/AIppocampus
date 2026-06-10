@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
@@ -18,6 +19,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import benchmark_maturity
 from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.navigation import attention_hot_router, semantic_warm_route_producer
 from aippocampus_runtime.recall import (
@@ -481,15 +483,31 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
     ok = all(int(value) == 0 for value in red_lines.values()) and all(
         bool(case.get("passed")) for case in projected_cases
     )
+    success_count = sum(1 for case in projected_cases if case.get("passed"))
+    maturity = benchmark_maturity.build_benchmark_maturity_report(
+        benchmark_maturity_level="contract_smoke",
+        case_count=len(projected_cases),
+        passed_case_count=success_count,
+        per_family_case_counts=Counter(str(case["family"]) for case in projected_cases),
+        minimum_family_case_floor=30,
+        external_or_public_cohort_case_count=0,
+        holdout_case_count=0,
+        holdout_used_for_tuning_count=0,
+        contract_gate_ok=ok,
+        next_promotion_target="public_cohort_candidate",
+    )
     return {
         "kind": "aippocampus_agent_continuity_loop_fixture",
         "schema_version": SCHEMA_VERSION,
         "ok": ok,
+        "contract_gate_ok": ok,
+        "quality_gate_ok": maturity["quality_gate_ok"],
+        "benchmark_maturity": maturity,
         "cases": projected_cases,
         "foreground_packets": foreground_packets,
         "metrics": {
             "integrated_loop_case_count": len(projected_cases),
-            "integrated_loop_success_count": sum(1 for case in projected_cases if case.get("passed")),
+            "integrated_loop_success_count": success_count,
             "agent_packet_budget_violation_count": packet_budget_violations,
             "foreground_forbidden_key_count": red_lines["foreground_forbidden_key_leak"],
             "deepen_required_follow_through_count": _deepen_follow_through_count(projected_cases),
@@ -512,6 +530,19 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
             "local_paths_emitted": False,
             "private_sentinels_emitted": False,
             "foreground_packets_include_provenance_dump": False,
+        },
+        "quality_gate": {
+            "red_lines_must_be_zero": True,
+            "contract_gate_ok": ok,
+            "quality_gate_ok": maturity["quality_gate_ok"],
+            "benchmark_maturity_level": maturity["benchmark_maturity_level"],
+            "status": (
+                "quality_gate_passed"
+                if maturity["quality_gate_ok"]
+                else "contract_gate_passed_quality_gate_not_promoted"
+                if ok
+                else "contract_gate_failed"
+            ),
         },
         "cannot_claim": [
             "live_host_behavior_lift",

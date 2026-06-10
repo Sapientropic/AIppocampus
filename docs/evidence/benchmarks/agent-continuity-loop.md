@@ -47,6 +47,20 @@ Current deterministic result:
 - `foreground_forbidden_key_count = 0`
 - all red-line counters `0`
 
+Maturity metadata:
+
+- `benchmark_maturity_level = contract_smoke`
+- `contract_gate_ok = true`
+- `quality_gate_ok = false`
+- `minimum_family_case_floor = 30`
+- `sample_floor_met = false`
+- `next_promotion_target = public_cohort_candidate`
+
+The contract gate says the currently checked integration loop still composes
+without red-line drift. It is not representative public-quality evidence until
+a later public/external cohort, sample-floor, uncertainty, holdout, and
+no-tuning-leak promotion explicitly passes.
+
 Red lines are separate from success counts:
 
 - `privacy_bypass_count`
