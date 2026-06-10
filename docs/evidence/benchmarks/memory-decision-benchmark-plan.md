@@ -84,6 +84,10 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   PRs keep the scanner contract alive. It does not score agent behavior, publish
   private text/paths/ids, or claim #279 benchmark quality before manually
   annotated cases and the shared benchmark methodology are ready.
+  The 2026-06-10 #1086 follow-up adds an annotation-summary path for ignored
+  private/local review artifacts and records the current blocker in
+  `e2e50-private-local-seed-followup-2026-06-10.md`: wide candidate discovery
+  reaches 23/20, but retained/control annotation remains 7/20.
 - `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` is the #279/#994
   public-safe annotated case-pack scorer scaffold. It consumes hash/count-only
   behavior-code cases, reports deterministic rates for silent constraint

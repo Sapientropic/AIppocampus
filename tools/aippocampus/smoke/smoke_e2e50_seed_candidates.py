@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,55 @@ DEFAULT_MAX_TURNS = 70
 DEFAULT_EARLY_TURNS = 15
 DEFAULT_LATER_START_TURN = 40
 DEFAULT_MAX_CANDIDATES = 12
+DEFAULT_MIN_RETAINED_CASES = 20
+DEFAULT_MIN_NEGATIVE_CONTROLS = 1
+
+ANNOTATION_CATEGORIES = (
+    "gold",
+    "calibration",
+    "negative_control",
+    "source_visible_no_op",
+    "duplicate",
+    "rejected",
+    "blocker",
+    "unknown",
+)
+RETAINED_ANNOTATION_CATEGORIES = {
+    "gold",
+    "calibration",
+    "negative_control",
+    "source_visible_no_op",
+}
+ANNOTATION_LABEL_MAP = {
+    "gold": "gold",
+    "gold_seed": "gold",
+    "gold_seed_candidate": "gold",
+    "calibration": "calibration",
+    "calibration_seed": "calibration",
+    "weak_seed": "calibration",
+    "negative": "negative_control",
+    "negative_control": "negative_control",
+    "no_remember_negative": "negative_control",
+    "source_visible": "source_visible_no_op",
+    "source_visible_candidate": "source_visible_no_op",
+    "source_visible_no_op": "source_visible_no_op",
+    "source-visible/no-op": "source_visible_no_op",
+    "duplicate": "duplicate",
+    "reject_duplicate": "duplicate",
+    "duplicate_candidate": "duplicate",
+    "reject": "rejected",
+    "rejected": "rejected",
+    "rejected_candidate": "rejected",
+    "blocker": "blocker",
+    "blocked": "blocker",
+}
+SAFE_REVIEW_STATUS_TOKENS = {
+    "all_candidates_locally_reopened_and_agent_annotated",
+    "local_annotation_summary",
+    "manual_annotation_incomplete",
+    "private_annotation_blocked",
+    "private_annotation_retained",
+}
 
 BINDING_TERMS = (
     "do not",
@@ -261,6 +311,126 @@ def case_family_guesses(
     return guesses
 
 
+def annotation_category(label: object) -> str:
+    key = str(label or "").strip().casefold().replace("-", "_").replace("/", "_")
+    if key == "source_visible_no_op":
+        return "source_visible_no_op"
+    return ANNOTATION_LABEL_MAP.get(key, "unknown")
+
+
+def annotation_blocker_class(category: str, reason: object) -> str:
+    if category in {"gold", "calibration"}:
+        return "retained_candidate"
+    if category == "negative_control":
+        return "negative_control"
+    if category == "source_visible_no_op":
+        return "source_visible_no_op"
+    if category == "duplicate":
+        return "duplicate_candidate"
+    text = str(reason or "").casefold()
+    if "subagent" in text or "goal_context" in text or "issue_intake" in text:
+        return "subagent_or_goal_context_noise"
+    if "duplicate" in text:
+        return "duplicate_candidate"
+    if "source_visible" in text or "browser_report" in text:
+        return "source_visible_no_op"
+    if "high_later_remention" in text or "rementioned" in text or "remention" in text:
+        return "high_later_remention"
+    if "conceptual" in text or "domain_drift" in text:
+        return "conceptual_drift"
+    if "staging" in text or "quality_iteration" in text:
+        return "quality_iteration_staging_risk"
+    return "other_rejection_or_blocker"
+
+
+def safe_status_token(value: object, default: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9_.:-]+", "_", str(value or "").strip())[:80].strip("_")
+    return token if token in SAFE_REVIEW_STATUS_TOKENS else default
+
+
+def summarize_annotation_pack(
+    annotation: dict[str, Any],
+    *,
+    min_retained_cases: int = DEFAULT_MIN_RETAINED_CASES,
+    min_negative_controls: int = DEFAULT_MIN_NEGATIVE_CONTROLS,
+) -> dict[str, Any]:
+    """Summarize local/manual E2E50 annotation without exposing row material.
+
+    The input may live in ignored private-history folders. Only aggregate
+    counts leave this function; case hashes, source hashes, reasons, thread ids,
+    and raw refs are deliberately not copied into the output.
+    """
+
+    category_counts: Counter[str] = Counter({category: 0 for category in ANNOTATION_CATEGORIES})
+    blocker_counts: Counter[str] = Counter()
+    annotations = [row for row in list_value(annotation.get("annotations")) if isinstance(row, dict)]
+    for row in annotations:
+        category = annotation_category(row.get("label") or row.get("annotation_category"))
+        category_counts[category] += 1
+        blocker_counts[annotation_blocker_class(category, row.get("reason") or row.get("blocker_class"))] += 1
+    retained_count = sum(category_counts[category] for category in RETAINED_ANNOTATION_CATEGORIES)
+    behavior_seed_count = category_counts["gold"] + category_counts["calibration"]
+    negative_control_count = category_counts["negative_control"]
+    retained_shortfall = max(0, min_retained_cases - retained_count)
+    negative_shortfall = max(0, min_negative_controls - negative_control_count)
+    status = (
+        "private_annotation_retained"
+        if retained_shortfall == 0 and negative_shortfall == 0
+        else "private_annotation_blocked"
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_e2e50_private_annotation_summary",
+        "created_at": now_utc(),
+        "status": status,
+        "privacy": PRIVACY_BOUNDARY,
+        "review_status": safe_status_token(
+            annotation.get("review_status"),
+            "local_annotation_summary",
+        ),
+        "private_text_exported": bool(annotation.get("private_text_exported") or False),
+        "reviewed_candidate_count": len(annotations),
+        "retained_case_count": retained_count,
+        "behavior_seed_count": behavior_seed_count,
+        "annotation_category_counts": {
+            category: category_counts.get(category, 0) for category in ANNOTATION_CATEGORIES
+        },
+        "blocker_class_counts": dict(sorted(blocker_counts.items())),
+        "blocker_status": {
+            "min_retained_cases": min_retained_cases,
+            "retained_case_shortfall": retained_shortfall,
+            "min_negative_controls": min_negative_controls,
+            "negative_control_shortfall": negative_shortfall,
+        },
+        "can_claim": [
+            "private_local_e2e50_annotation_reviewed_with_sanitized_category_counts"
+        ],
+        "cannot_claim": [
+            "private_history_behavior_lift",
+            "completed_private_history_20_case_pack"
+            if retained_shortfall
+            else "private_history_behavior_lift_from_seed_pack_alone",
+            "completed_50_case_e2e50_sample",
+            "representative_e2e50_sample_quality",
+            "live_host_behavior_lift",
+        ],
+    }
+
+
+def summarize_annotation_file(
+    path: Path,
+    *,
+    min_retained_cases: int = DEFAULT_MIN_RETAINED_CASES,
+    min_negative_controls: int = DEFAULT_MIN_NEGATIVE_CONTROLS,
+) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return summarize_annotation_pack(
+        dict(data) if isinstance(data, dict) else {},
+        min_retained_cases=min_retained_cases,
+        min_negative_controls=min_negative_controls,
+    )
+
+
 def reviewer_checklist_for(guesses: list[str]) -> list[str]:
     checklist = [
         "confirm compaction boundary evidence independently",
@@ -439,12 +609,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Scan for sanitized #279 E2E50 candidate seeds.")
     parser.add_argument("--registry", type=Path)
     parser.add_argument("--registry-dir", type=Path)
+    parser.add_argument("--annotation", type=Path)
     parser.add_argument("--min-turns", type=int, default=DEFAULT_MIN_TURNS)
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
     parser.add_argument("--early-turns", type=int, default=DEFAULT_EARLY_TURNS)
     parser.add_argument("--later-start-turn", type=int, default=DEFAULT_LATER_START_TURN)
     parser.add_argument("--max-candidates", type=int, default=DEFAULT_MAX_CANDIDATES)
     parser.add_argument("--min-candidates", type=int, default=2)
+    parser.add_argument("--min-retained-cases", type=int, default=DEFAULT_MIN_RETAINED_CASES)
+    parser.add_argument("--min-negative-controls", type=int, default=DEFAULT_MIN_NEGATIVE_CONTROLS)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     return parser
@@ -462,11 +635,19 @@ def main(argv: list[str] | None = None) -> int:
         max_candidates=args.max_candidates,
         min_candidates=args.min_candidates,
     )
+    if args.annotation:
+        payload["annotation_summary"] = summarize_annotation_file(
+            args.annotation,
+            min_retained_cases=args.min_retained_cases,
+            min_negative_controls=args.min_negative_controls,
+        )
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text + "\n", encoding="utf-8")
     print(text)
+    if args.annotation:
+        return 0
     return 0 if payload.get("ok") else 1
 
 
