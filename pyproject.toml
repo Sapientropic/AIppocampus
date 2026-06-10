@@ -186,6 +186,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/associations.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/attention_route_tokens.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/attention_hot_router.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/attention_router_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map_query.py",

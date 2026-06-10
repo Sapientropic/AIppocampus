@@ -63,6 +63,43 @@ class AttentionHotRouterTests(unittest.TestCase):
         self.assertIn("adaptive_threshold", positive)
         self.assertIn("adaptive_threshold", stale)
 
+    def test_action_query_features_can_outperform_prompt_only(self) -> None:
+        report = router.build_action_head_fixture_report()
+        by_id = {case["case_id"]: case for case in report["cases"]}
+
+        action = by_id["action_path_issue_match"]["packet"]
+        action_vote = {vote["head"]: vote for vote in action["head_votes"]}["action_head"]
+
+        self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
+        self.assertEqual(action["output_mode"], "reopenable_route")
+        self.assertEqual(action["claim_permission"], "no_claim_before_reopen")
+        self.assertGreater(action_vote["score"], 0.8)
+        self.assertIn("pending_path_match", action_vote["reason_code"])
+        self.assertIn("issue_id_match", action_vote["reason_code"])
+        self.assertIn("action_cue_lift", action["router_diagnostics"]["reason_codes"])
+        self.assertEqual(report["metrics"]["action_cue_lift_over_prompt_only_count"], 1)
+
+    def test_action_head_respects_masks_and_anti_nag(self) -> None:
+        report = router.build_action_head_fixture_report()
+        by_id = {case["case_id"]: case for case in report["cases"]}
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        masked = by_id["action_matched_private_mask"]["packet"]
+        suppressed = by_id["action_repeated_hint_suppressed"]["packet"]
+
+        self.assertEqual(masked["output_mode"], "silence")
+        self.assertIn("privacy_domain", masked["masks_applied"])
+        self.assertGreater(
+            {vote["head"]: vote for vote in masked["head_votes"]}["action_head"]["score"],
+            0.8,
+        )
+
+        self.assertEqual(suppressed["output_mode"], "direction_only")
+        self.assertIn("anti_nag_suppressed", suppressed["router_diagnostics"]["reason_codes"])
+        self.assertEqual(report["metrics"]["anti_nag_suppressed_count"], 1)
+        self.assertEqual(report["metrics"]["masked_action_match_emission_count"], 0)
+        self.assertNotIn("PRIVATE_TOOL_ARG_SENTINEL", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()
