@@ -122,6 +122,12 @@ The contract deliberately keeps agency separate from memory. AIppocampus can
 say "this action appears available and relevant"; the host decides whether it
 is allowed, safe, timely, and worth surfacing.
 
+AIppo working-contract clauses may feed agency tickets as source-backed working
+posture, but they do not grant execution authority. A ripe clause can shape
+`why_now`, `do_not_do`, or a low-risk proposed action; stale, challenged, or
+gappy clauses should become `state_check`, `warning`, or source-reopen work
+rather than autonomous action.
+
 ## Intervention Levels
 
 AIppocampus should prefer small interventions. A useful ladder:

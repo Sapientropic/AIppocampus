@@ -78,6 +78,7 @@ language for future low-friction controls, not a claim of complete CLI coverage.
 | Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
+| Agent-native fixture proposals | Linked architecture contracts such as `aippocampus_runtime.recall.agent_facade_contract`, `aippocampus_runtime.recall.agent_pull_gesture`, and `aippocampus_runtime.aippo.working_contract` | Current fixture-backed behavior and public-safe schema direction for trusted host experiments | Public SDK stability, hosted network endpoints, broad package internals, or claim-ready memory facts |
 | Cross-device transfer | Documented local-folder, object-storage, and encrypted sync commands | Documented command names, flags, sync manifests, privacy refusal rules, and `AIPPOCAMPUS_*` configuration names | Raw plaintext rollout sync, provider credentials in logs, or managed hosted-service behavior |
 | Research or roadmap work | Roadmap, evidence docs, benchmarks, and research notes | Evidence for the current implementation or design direction only | Public API stability for Dream, subconscious jobs, semantic caches, benchmark cache files, or cognitive-map artifacts |
 
@@ -100,6 +101,14 @@ This is an agent behavior contract over existing local read tools, not a new
 network API. Negative and anti-nag controls are part of the gesture: do not call
 AIppocampus every turn, and do not treat AIppo activation or bounded summaries
 as source evidence.
+
+The first executable AIppo working-contract fixture lives at
+`aippocampus_runtime.aippo.working_contract`. It is a host-facing proposal for
+trusted local experiments: a compact activation packet may guide low-risk
+planning, patch shape, and review posture, while source refs, support ledgers,
+candidate provenance, and suppressed clauses remain behind deepen/explain. It
+is not a public Python/TypeScript SDK, network API, or stable marketplace
+format.
 
 ## Stability Model
 
@@ -492,6 +501,9 @@ host-facing contract proposal and fixture-backed architecture boundary, not a
 public TypeScript/Python SDK, network API, or hosted-service promise. It keeps
 full source refs, masks, votes, and proofs behind explicit deepen/explain
 surfaces instead of dumping them into every foreground packet.
+The sibling AIppo working-contract fixture uses the same boundary: foreground
+activation is working posture only, not evidence, and exact/public/disputed or
+high-risk claims still go through source reopen.
 The foreground size, no-profile-dump, review-needed, and anti-nag budget for
 those packets lives in
 [`foreground-memory-ux-budget.md`](../architecture/foreground-memory-ux-budget.md).

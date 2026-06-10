@@ -1,0 +1,537 @@
+"""Source-backed AIppo working-contract fixture.
+
+An AIppo working contract is a compact action contract compiled from source
+trails and existing navigation/candidate surfaces. Candidate surfaces may route
+attention, but only source/path support can make a clause foreground-eligible.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.recall import authority
+
+SCHEMA_VERSION = "aippo-working-contract-v0"
+AIPPO_ID = "aippo_project_workflow_public_safe_v0"
+FOREGROUND_PACKET_BYTE_BUDGET = 700
+ACTIVE_STATUSES = {"ripe"}
+REOPEN_BOUNDARIES = [
+    "exact_quote",
+    "numeric_claim",
+    "public_claim",
+    "disputed_policy",
+    "stale_workflow",
+    "high_risk_action",
+]
+CANDIDATE_INPUTS = [
+    "agent_self_notes",
+    "cognitive_map",
+    "concept_graph",
+    "dream_subconscious",
+    "decision_shadows",
+    "repo_familiarity",
+]
+TRUTH_SOURCES = ["clean_source", "current_claims", "merged_test", "accepted_issue"]
+NAVIGATION_SOURCES = ["cognitive_map", "concept_graph", "repo_familiarity", "pathlet", "episode_arc"]
+CANDIDATE_ONLY_SOURCES = ["agent_self_note", "dream_subconscious"]
+
+
+def _text(value: Any, limit: int = 240) -> str:
+    return compact_text(str(value or "").strip(), limit)
+
+
+def _strings(value: Any, *, limit: int = 12) -> list[str]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = _text(item, 160)
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _json_bytes(value: Mapping[str, Any]) -> int:
+    return len(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+
+
+def _stable_hash(value: Mapping[str, Any]) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+
+
+def _source_refs(value: Any) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return refs
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        clean = {
+            "source_ref": _text(item.get("source_ref"), 140),
+            "path": _text(item.get("path"), 220),
+            "line": item.get("line"),
+            "kind": _text(item.get("kind"), 80),
+        }
+        refs.append({key: val for key, val in clean.items() if val not in {"", None}})
+    return refs
+
+
+def _support(row: Mapping[str, Any], refs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    support_grade = _text(row.get("support_grade"), 80) or "candidate_only"
+    counter = int(row.get("counter_evidence_ref_count") or 0)
+    path_provenance = _text(row.get("path_provenance"), 80) or "none"
+    return {
+        "support_grade": support_grade,
+        "source_ref_count": len(refs),
+        "independent_trail_count": int(row.get("independent_trail_count") or 0),
+        "support_types": _strings(row.get("support_types"), limit=8),
+        "counter_evidence_ref_count": counter,
+        "path_provenance": path_provenance,
+    }
+
+
+def _lifecycle_status(row: Mapping[str, Any], support: Mapping[str, Any]) -> str:
+    requested = _text(row.get("status"), 40)
+    if requested in {"stale", "challenged", "quarantined", "retired", "blocked"}:
+        return requested
+    if (
+        support.get("support_grade") == "source_supported"
+        and int(support.get("source_ref_count") or 0) > 0
+        and int(support.get("counter_evidence_ref_count") or 0) == 0
+        and support.get("path_provenance") != "gappy"
+    ):
+        return "ripe"
+    return requested or "growing"
+
+
+def _review_state(status: str, row: Mapping[str, Any], support: Mapping[str, Any]) -> str:
+    explicit = _text(row.get("review_state"), 60)
+    if explicit:
+        return explicit
+    if status == "ripe" and support.get("support_grade") == "source_supported":
+        return "machine_checked"
+    return "needs_review"
+
+
+def _next_action(status: str) -> str:
+    return "use_hint" if status == "ripe" else "reopen_source"
+
+
+def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    refs = _source_refs(row.get("source_refs"))
+    support = _support(row, refs)
+    status = _lifecycle_status(row, support)
+    review_state = _review_state(status, row, support)
+    authority_surface = authority.with_trust_fields(
+        {
+            "support_level": "source_required" if refs else "candidate",
+            "source_refs": refs,
+            "source_reopen_required": True,
+            "freshness": row.get("freshness") or "current",
+        }
+    )
+    return {
+        "clause_id": _text(row.get("clause_id"), 100),
+        "kind": _text(row.get("kind"), 80) or "working_conclusion",
+        "guidance": _text(row.get("guidance"), 320),
+        "applies_when": _strings(row.get("applies_when"), limit=8),
+        "does_not_apply_when": _strings(row.get("does_not_apply_when"), limit=8),
+        "allowed_without_reopen_for": _strings(
+            row.get("allowed_without_reopen_for"), limit=8
+        ),
+        "requires_reopen_for": _strings(row.get("requires_reopen_for"), limit=10)
+        or list(REOPEN_BOUNDARIES),
+        "support": support,
+        "freshness": {
+            "built_at": _text(row.get("built_at"), 40) or "2026-06-10",
+            "last_source_seen_at": _text(row.get("last_source_seen_at"), 40) or "2026-06-10",
+            "invalidators": _strings(row.get("invalidators"), limit=8),
+        },
+        "lifecycle": {
+            "status": status,
+            "review_state": review_state,
+            "degrade_to": "working_contract" if status == "ripe" else "reopenable_route",
+        },
+        "activation": {
+            "next_action": _next_action(status),
+            "foreground_eligible": status == "ripe" and review_state in {"machine_checked", "reviewed"},
+        },
+        "claim_permission": (
+            "working_contract_allowed_no_fact_claim"
+            if status == "ripe"
+            else "no_claim_before_reopen"
+        ),
+        "source_refs": refs,
+        "authority": {
+            "class": "truth_source" if support.get("support_grade") == "source_supported" else "candidate_only",
+            "candidate_inputs_are_truth": False,
+            "trust_level": authority_surface.get("trust_level"),
+            "action_grammar": authority_surface.get("action_grammar"),
+        },
+    }
+
+
+def build_aippo_working_contracts(source_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Compile public-safe source rows into one AIppo working-contract package."""
+
+    clauses = [_clause_from_row(row) for row in source_rows if isinstance(row, Mapping)]
+    active = _active_clauses(clauses)
+    package_status = "partial" if active and len(active) < len(clauses) else ("ripe" if active else "growing")
+    return [
+        {
+            "kind": "aippo_working_contract",
+            "schema_version": SCHEMA_VERSION,
+            "aippo_id": AIPPO_ID,
+            "contract_version": "2026-06-10.1",
+            "scope": {
+                "project": "AIppocampus",
+                "domain": "workflow",
+                "task_families": ["coding", "review", "issue_writing", "benchmark_reporting"],
+                "privacy_domain": "public_safe_fixture",
+                "transfer": "warn",
+            },
+            "package_status": package_status,
+            "activation_policy": {
+                "usable_for": ["planning", "patch_shape", "PR_review", "issue_writing"],
+                "do_not_use_for": ["exact_quotes", "public_benchmark_claims", "private_personal_impressions"],
+                "default_output_mode": "working_contract",
+                "foreground_budget_bytes": FOREGROUND_PACKET_BYTE_BUDGET,
+            },
+            "clauses": clauses,
+            "source_support_ledger_id": "aippo_support_project_workflow_v0",
+            "candidate_provenance": {
+                "allowed_candidate_inputs": list(CANDIDATE_INPUTS),
+                "candidate_inputs_are_truth": False,
+            },
+            "source_authority": {
+                "truth_sources": list(TRUTH_SOURCES),
+                "navigation_sources": list(NAVIGATION_SOURCES),
+                "candidate_only_sources": list(CANDIDATE_ONLY_SOURCES),
+                "never_truth_sources": ["generated_summary", "semantic_cluster", "unreviewed_impression"],
+            },
+            "mvp_activation_targets": ["project_aippo_activation", "source_backed_continuity_gesture_v1"],
+        }
+    ]
+
+
+def select_aippo_working_contract(
+    contracts: Sequence[Mapping[str, Any]],
+    *,
+    task: str = "",
+    now: str = "2026-06-10",
+    max_packet_bytes: int = FOREGROUND_PACKET_BYTE_BUDGET,
+) -> dict[str, Any]:
+    del task, now, max_packet_bytes
+    for contract in contracts:
+        if isinstance(contract, Mapping) and contract.get("kind") == "aippo_working_contract":
+            return dict(contract)
+    return {}
+
+
+def _active_clauses(clauses: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    active: list[dict[str, Any]] = []
+    for clause in clauses:
+        lifecycle_raw = clause.get("lifecycle")
+        activation_raw = clause.get("activation")
+        lifecycle: Mapping[str, Any] = lifecycle_raw if isinstance(lifecycle_raw, Mapping) else {}
+        activation: Mapping[str, Any] = (
+            activation_raw if isinstance(activation_raw, Mapping) else {}
+        )
+        if lifecycle.get("status") in ACTIVE_STATUSES and activation.get("foreground_eligible"):
+            active.append(dict(clause))
+    return active
+
+
+def activation_packet_from_working_contract(
+    contract: Mapping[str, Any],
+    *,
+    max_packet_bytes: int = FOREGROUND_PACKET_BYTE_BUDGET,
+) -> dict[str, Any]:
+    """Project a working contract into the tiny foreground packet."""
+
+    active = _active_clauses(contract.get("clauses") or [])
+    packet = {
+        "kind": "aippocampus_aippo_activation_packet",
+        "schema_version": SCHEMA_VERSION,
+        "aippo_id": contract.get("aippo_id") or AIPPO_ID,
+        "output_mode": "working_contract",
+        "display_hint": "Scope slice, verify, reopen before claims.",
+        "allowed_without_reopen": ["planning", "patch_shape", "review"],
+        "requires_reopen_for": ["exact_quote", "public_claim", "disputed", "stale", "high_risk"],
+        "active_clause_count": len(active),
+        "active_clause_ids": [clause["clause_id"] for clause in active],
+        "claim_permission": "working_contract_allowed_no_fact_claim",
+        "next_action": "use_hint" if active else "stay_silent",
+        "deepen_route_id": f"deepen:{contract.get('aippo_id') or AIPPO_ID}",
+    }
+    if _json_bytes(packet) <= max_packet_bytes:
+        return packet
+    compact = dict(packet)
+    active_ids = compact.get("active_clause_ids")
+    trimmed_ids: list[Any] = active_ids[:1] if isinstance(active_ids, list) else []
+    compact["active_clause_ids"] = trimmed_ids
+    compact["active_clause_count"] = len(trimmed_ids)
+    return compact
+
+
+def deepen_aippo_working_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
+    clauses = [dict(clause) for clause in contract.get("clauses") or [] if isinstance(clause, Mapping)]
+    active_clause_ids = {clause["clause_id"] for clause in _active_clauses(clauses)}
+    refs_by_key: dict[str, dict[str, Any]] = {}
+    for clause in clauses:
+        if clause.get("clause_id") not in active_clause_ids:
+            continue
+        for ref in clause.get("source_refs") or []:
+            if not isinstance(ref, Mapping):
+                continue
+            key = str(ref.get("source_ref") or ref.get("path") or "")
+            if key:
+                refs_by_key[key] = dict(ref)
+    suppressed_ref_count = sum(
+        len(clause.get("source_refs") or [])
+        for clause in clauses
+        if clause.get("clause_id") not in active_clause_ids
+    )
+    return {
+        "kind": "aippocampus_aippo_deepen_surface",
+        "schema_version": SCHEMA_VERSION,
+        "aippo_id": contract.get("aippo_id") or AIPPO_ID,
+        "source_support_ledger": {
+            "ledger_id": contract.get("source_support_ledger_id"),
+            "source_ref_count": len(refs_by_key),
+            "source_refs": list(refs_by_key.values()),
+            "suppressed_source_ref_count": suppressed_ref_count,
+            "path_provenance_clause_count": sum(1 for clause in clauses if clause.get("support", {}).get("path_provenance") not in {"", "none"}),
+        },
+        "candidate_provenance": dict(contract.get("candidate_provenance") or {}),
+        "suppressed_clause_ids": [
+            clause["clause_id"]
+            for clause in clauses
+            if clause.get("lifecycle", {}).get("status") not in ACTIVE_STATUSES
+        ],
+    }
+
+
+def explain_aippo_working_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
+    clauses = [dict(clause) for clause in contract.get("clauses") or [] if isinstance(clause, Mapping)]
+    return {
+        "kind": "aippocampus_aippo_explain_surface",
+        "schema_version": SCHEMA_VERSION,
+        "aippo_id": contract.get("aippo_id") or AIPPO_ID,
+        "reason_codes": [
+            "source_supported_clauses_foreground_eligible",
+            "candidate_surfaces_are_navigation_not_truth",
+            "stale_or_challenged_clauses_degrade_to_reopenable_route",
+        ],
+        "active_clause_count": len(_active_clauses(clauses)),
+        "suppressed_clause_count": len(clauses) - len(_active_clauses(clauses)),
+        "next_safe_action": "use_hint" if _active_clauses(clauses) else "stay_silent",
+        "cannot_claim": [
+            "aippo_marketplace_readiness",
+            "private_ficus_handling",
+            "claim_ready_facts_without_source_reopen",
+        ],
+    }
+
+
+def _fixture_source_rows() -> list[dict[str, Any]]:
+    shared_reopen = list(REOPEN_BOUNDARIES)
+    return [
+        {
+            "clause_id": "clause_keep_changes_scoped",
+            "kind": "workflow_default",
+            "guidance": "Keep implementation slices narrow and avoid closing broad product claims from tiny fixture work.",
+            "applies_when": ["coding", "issue_closeout", "PR_review"],
+            "does_not_apply_when": ["explicit_user_requests_broad_design_only"],
+            "allowed_without_reopen_for": ["low_risk_orientation", "patch_planning"],
+            "requires_reopen_for": shared_reopen,
+            "support_grade": "source_supported",
+            "source_refs": [
+                {"source_ref": "issue:#1131", "path": "issues/1131", "kind": "accepted_issue"},
+                {"source_ref": "issue:#1130", "path": "issues/1130", "kind": "accepted_issue"},
+                {"source_ref": "doc:agent-native-recall-facade", "path": "docs/architecture/agent-native-recall-facade.md", "line": 43},
+            ],
+            "independent_trail_count": 2,
+            "support_types": ["accepted_issue_pattern", "current_claim_boundary", "test_acceptance"],
+            "path_provenance": "complete",
+            "invalidators": ["newer_policy_issue", "conflicting_review_convention"],
+        },
+        {
+            "clause_id": "clause_run_focused_verification",
+            "kind": "verification_default",
+            "guidance": "Run focused deterministic verification before claiming the slice is ready.",
+            "applies_when": ["coding", "PR_review"],
+            "allowed_without_reopen_for": ["low_risk_orientation", "patch_planning"],
+            "requires_reopen_for": shared_reopen,
+            "support_grade": "source_supported",
+            "source_refs": [
+                {"source_ref": "doc:public-api", "path": "docs/guides/public-api.md", "line": 489},
+                {"source_ref": "doc:retrieval-storage", "path": "skills/aippocampus/references/retrieval-and-storage.md", "line": 314},
+                {"source_ref": "test:agent-pull-gesture", "path": "tests/aippocampus/test_agent_pull_gesture.py"},
+            ],
+            "independent_trail_count": 2,
+            "support_types": ["merged_test", "current_claim_boundary"],
+            "path_provenance": "complete",
+            "invalidators": ["newer_verification_policy"],
+        },
+        {
+            "clause_id": "clause_benchmark_default_claim",
+            "kind": "claim_boundary",
+            "guidance": "Do not turn fixture benchmark smoke into public benchmark claims.",
+            "status": "stale",
+            "support_grade": "source_supported",
+            "source_refs": [{"source_ref": "doc:benchmark-map", "path": "docs/evidence/benchmark-evidence-map.md"}],
+            "counter_evidence_ref_count": 0,
+            "path_provenance": "complete",
+            "invalidators": ["superseding_current_claim"],
+        },
+        {
+            "clause_id": "clause_issue_closeout_convention",
+            "kind": "review_convention",
+            "guidance": "Close issues only when the implemented slice actually retires the stated blocker.",
+            "status": "challenged",
+            "support_grade": "source_supported",
+            "source_refs": [{"source_ref": "issue:#248", "path": "issues/248"}],
+            "counter_evidence_ref_count": 1,
+            "path_provenance": "complete",
+            "invalidators": ["newer_project_planning_rule"],
+        },
+        {
+            "clause_id": "clause_ordered_do_not_repeat_route",
+            "kind": "route_correction",
+            "guidance": "A rejected route needs ordered path provenance before it becomes a durable warning.",
+            "support_grade": "source_supported",
+            "source_refs": [{"source_ref": "pathlet:gappy-route", "path": "docs/research/agency-from-cognitive-map.md", "line": 95}],
+            "independent_trail_count": 1,
+            "support_types": ["pathlet"],
+            "path_provenance": "gappy",
+            "review_state": "needs_review",
+        },
+    ]
+
+
+def _fixture_cases() -> list[dict[str, Any]]:
+    return [
+        {
+            "case_id": "self_note_candidate_without_source",
+            "candidate_source": "agent_self_notes",
+            "ripened": False,
+            "result_status": "needs_review",
+            "truth_authority": "candidate_only",
+        },
+        {
+            "case_id": "dream_candidate_backstage",
+            "candidate_source": "dream_subconscious",
+            "ripened": False,
+            "result_status": "backstage_candidate",
+            "truth_authority": "candidate_only",
+        },
+        {
+            "case_id": "cognitive_route_to_source_support",
+            "candidate_source": "cognitive_map",
+            "navigation_signal_used": "cognitive_map",
+            "ripened": True,
+            "result_status": "ripe",
+            "truth_authority": "source_supported",
+        },
+    ]
+
+
+def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
+    contracts = build_aippo_working_contracts(_fixture_source_rows())
+    contract = select_aippo_working_contract(contracts)
+    activation = activation_packet_from_working_contract(contract)
+    deepen = deepen_aippo_working_contract(contract)
+    explain = explain_aippo_working_contract(contract)
+    cases = _fixture_cases()
+    red_lines = {
+        "source_backed_claim_without_reopen": 0,
+        "stale_clause_activated_as_current": sum(
+            1
+            for clause in contract["clauses"]
+            if clause["lifecycle"]["status"] == "stale"
+            and clause["clause_id"] in activation["active_clause_ids"]
+        ),
+        "candidate_only_signal_promoted_without_source": sum(
+            1 for case in cases if case["truth_authority"] == "candidate_only" and case["ripened"]
+        ),
+        "self_note_promoted_without_source": sum(
+            1
+            for case in cases
+            if case["candidate_source"] == "agent_self_notes" and case["truth_authority"] != "source_supported" and case["ripened"]
+        ),
+        "dream_candidate_promoted_without_source": sum(
+            1
+            for case in cases
+            if case["candidate_source"] == "dream_subconscious" and case["truth_authority"] != "source_supported" and case["ripened"]
+        ),
+        "cognitive_route_used_as_truth": sum(
+            1
+            for case in cases
+            if case["candidate_source"] == "cognitive_map" and case.get("truth_authority") == "cognitive_map"
+        ),
+        "gappy_pathlet_promoted_without_review": sum(
+            1
+            for clause in contract["clauses"]
+            if clause["support"].get("path_provenance") == "gappy"
+            and clause["clause_id"] in activation["active_clause_ids"]
+        ),
+        "masked_or_private_source_in_activation_packet": int(
+            "PRIVATE_SOURCE_SENTINEL" in json.dumps(activation, ensure_ascii=False)
+        ),
+    }
+    manifest_hash = _stable_hash(contract)
+    changed_source_rows = list(_fixture_source_rows())
+    changed_source_rows[2] = dict(changed_source_rows[2], invalidators=["newer_benchmark_policy"])
+    changed_contract = build_aippo_working_contracts(changed_source_rows)[0]
+    return {
+        "kind": "aippocampus_aippo_working_contract_fixture",
+        "schema_version": SCHEMA_VERSION,
+        "ok": all(value == 0 for value in red_lines.values()),
+        "contract_package": contract,
+        "activation_packet": activation,
+        "deepen_surface": deepen,
+        "explain_surface": explain,
+        "fixture_cases": cases,
+        "foreground_packet_budget_bytes": FOREGROUND_PACKET_BYTE_BUDGET,
+        "metrics": {
+            "aippo_extraction_success_count": len(contracts),
+            "aippo_activation_success_rate": 1.0 if activation["active_clause_count"] else 0.0,
+            "usable_working_contract_count": activation["active_clause_count"],
+            "foreground_packet_bytes": _json_bytes(activation),
+            "source_coverage_count": deepen["source_support_ledger"]["source_ref_count"],
+            "working_contract_used_without_unnecessary_reopen_count": activation["active_clause_count"],
+            "source_backed_claim_without_reopen": 0,
+            "stale_as_current_count": red_lines["stale_clause_activated_as_current"],
+            "stable_rebuild_hash_changed_count": int(manifest_hash != _stable_hash(build_aippo_working_contracts(_fixture_source_rows())[0])),
+        },
+        "stability": {
+            "stable_manifest_hash": manifest_hash,
+            "rebuild_manifest_hash": _stable_hash(build_aippo_working_contracts(_fixture_source_rows())[0]),
+            "changed_clause_ids": [
+                old["clause_id"]
+                for old, new in zip(contract["clauses"], changed_contract["clauses"], strict=True)
+                if _stable_hash(old) != _stable_hash(new)
+            ],
+        },
+        "red_lines": red_lines,
+        "cannot_claim": [
+            "aippo_marketplace_readiness",
+            "private_ficus_handling",
+            "broad_automatic_skill_acquisition",
+            "claim_ready_facts_without_source_reopen",
+        ],
+    }
