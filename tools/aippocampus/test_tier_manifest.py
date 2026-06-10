@@ -8,6 +8,16 @@ class TestModuleClassification(NamedTuple):
     tags: tuple[str, ...] = ()
 
 
+PR_STEMS = frozenset(
+    {
+        # Benchmark-shaped architecture guards can still belong to the broad PR
+        # lane when they are local-safe contract checks rather than full
+        # benchmark mirrors. Keep the explicit override small so benchmark
+        # naming does not silently hide PR coverage.
+        "test_benchmark_graph_extraction_boundary",
+    }
+)
+
 TEST_MODULE_STEMS = frozenset(
     {
         "test_aar_v2_action_time_nudges",
@@ -294,7 +304,6 @@ QUICK_STEMS = frozenset(
         "test_ambient_recall_cards",
         "test_architecture_boundaries",
         "test_build_clean_source",
-        "test_build_index",
         "test_capture_consolidation_boundary",
         "test_cli_json_contract",
         "test_cognitive_load_sidecar",
@@ -302,12 +311,9 @@ QUICK_STEMS = frozenset(
         "test_concept_edge_utility",
         "test_consolidation_priority",
         "test_continuity_domain_producer",
-        "test_continuity_domains",
         "test_cross_agent_isolation",
-        "test_docs_health",
         "test_dream_delivery_eligibility",
         "test_benchmark_entrypoints",
-        "test_benchmark_graph_extraction_boundary",
         "test_magic_activation_policy",
         "test_memory_evidence_drawer",
         "test_navigation_potential",
@@ -322,11 +328,9 @@ QUICK_STEMS = frozenset(
         "test_query_pattern_routes_prompt_hook",
         "test_query_profile",
         "test_recall_feedback_events",
-        "test_recall_why_diagnostics",
         "test_retrieval_lifecycle",
         "test_runtime_contracts_and_config_registry",
         "test_run_tests_tiers",
-        "test_semantic_recall_gate",
         "test_semantic_warm_route_producer",
         "test_source_intake_health",
         "test_source_reopen_budget",
@@ -568,6 +572,8 @@ TIER_DESCRIPTIONS = {
 def _primary_tier_for_stem(stem: str) -> str:
     if stem in QUICK_STEMS:
         return "quick"
+    if stem in PR_STEMS:
+        return "pr"
     if stem in SMOKE_STEMS:
         return "smoke"
     if stem in INTEGRATION_STEMS:

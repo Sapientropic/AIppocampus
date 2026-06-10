@@ -42,6 +42,15 @@ BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
     "tests.aippocampus.test_e2e50_seed_candidates",
 }
 
+QUICK_TO_PR_INNER_LOOP_SPLITS = {
+    "tests.aippocampus.test_benchmark_graph_extraction_boundary",
+    "tests.aippocampus.test_build_index",
+    "tests.aippocampus.test_continuity_domains",
+    "tests.aippocampus.test_docs_health",
+    "tests.aippocampus.test_recall_why_diagnostics",
+    "tests.aippocampus.test_semantic_recall_gate",
+}
+
 
 class RunTestsTierTests(unittest.TestCase):
     def test_main_preflights_tempdir_before_loading_tests(self) -> None:
@@ -145,6 +154,11 @@ class RunTestsTierTests(unittest.TestCase):
             ],
         )
         self.assertEqual(report["tier_aliases"]["fast"], "pr")
+        self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_target"], 46)
+        self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_target"], 330)
+        self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_status"], "within_target")
+        self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_status"], "within_target")
+        self.assertEqual(report["tiers"]["pr"]["budget"], None)
         self.assertTrue(
             any(
                 "compatibility alias" in limitation
@@ -257,6 +271,32 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(payload["test_count"], 5)
         self.assertEqual(payload["shard"], {"index": 1, "total": 2})
         self.assertEqual(payload["modules"], timing_rows)
+        self.assertEqual(payload["budget"], None)
+
+    def test_quick_timings_report_exposes_inner_loop_drift_without_failing(self) -> None:
+        rows = [
+            {
+                "module": "tests.aippocampus.test_alpha",
+                "primary_tier": "quick",
+                "test_count": 2,
+                "duration_seconds": 20.0,
+                "ok": True,
+            },
+            {
+                "module": "tests.aippocampus.test_beta",
+                "primary_tier": "quick",
+                "test_count": 3,
+                "duration_seconds": 11.0,
+                "ok": True,
+            },
+        ]
+
+        report = run_tests.build_timings_report(selected_tier="quick", rows=rows, shard=None)
+
+        self.assertEqual(report["elapsed_seconds"], 31.0)
+        self.assertEqual(report["budget"]["elapsed_seconds_target"], 30.0)
+        self.assertEqual(report["budget"]["elapsed_seconds_status"], "over_target")
+        self.assertIn("drift", report["budget"]["note"])
 
     def test_invalid_or_empty_shards_fail_before_running_tests(self) -> None:
         with (
@@ -376,6 +416,8 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(unexpected, [])
         self.assertLess(quick, pr)
         self.assertLess(len(quick) * 4, len(pr))
+        self.assertTrue(QUICK_TO_PR_INNER_LOOP_SPLITS.isdisjoint(quick))
+        self.assertLessEqual(QUICK_TO_PR_INNER_LOOP_SPLITS, pr)
 
     def test_fast_is_compatibility_alias_for_pr(self) -> None:
         self.assertEqual(run_tests.modules_for_tier("fast"), run_tests.modules_for_tier("pr"))
@@ -430,6 +472,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertIn("benchmark-smoke", help_text)
         self.assertIn("--benchmark-suite-profile", help_text)
         self.assertIn("--timings-json", help_text)
+        self.assertIn("quick target", help_text.lower())
         self.assertIn("--shard-index", help_text)
         self.assertIn("--tier pr", workflow)
         self.assertIn("concurrency:", workflow)

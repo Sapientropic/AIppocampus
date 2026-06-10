@@ -30,6 +30,11 @@ TEMP_ENV_NAMES = ("TMPDIR", "TEMP", "TMP")
 TEMP_PROBE_PREFIX = "aippocampus-test-runner-"
 
 TIER_REPORT_TOP_LIMIT = 10
+QUICK_BUDGET = {
+    "module_count_target": 46,
+    "test_count_target": 330,
+    "elapsed_seconds_target": 30.0,
+}
 
 
 class TierModuleRow(TypedDict):
@@ -43,6 +48,43 @@ class ModuleTimingRow(TypedDict):
     test_count: int
     duration_seconds: float
     ok: bool
+
+
+def _target_status(actual: int | float, target: int | float) -> str:
+    return "within_target" if actual <= target else "over_target"
+
+
+def quick_count_budget(*, module_count: int, test_count: int) -> dict[str, object]:
+    return {
+        "module_count_target": QUICK_BUDGET["module_count_target"],
+        "test_count_target": QUICK_BUDGET["test_count_target"],
+        "module_count_status": _target_status(
+            module_count,
+            QUICK_BUDGET["module_count_target"],
+        ),
+        "test_count_status": _target_status(
+            test_count,
+            QUICK_BUDGET["test_count_target"],
+        ),
+        "note": (
+            "Quick targets are drift indicators for the local inner loop, not "
+            "portable performance SLAs."
+        ),
+    }
+
+
+def timing_budget_for_tier(selected_tier: str, *, elapsed_seconds: float) -> dict[str, object] | None:
+    if TIER_ALIASES.get(selected_tier, selected_tier) != "quick":
+        return None
+    target = QUICK_BUDGET["elapsed_seconds_target"]
+    return {
+        "elapsed_seconds_target": target,
+        "elapsed_seconds_status": _target_status(elapsed_seconds, target),
+        "note": (
+            "Use this quick timing budget to spot drift. It is not a hard "
+            "cross-machine SLA."
+        ),
+    }
 
 
 def discover_modules() -> list[str]:
@@ -149,6 +191,14 @@ def build_tier_report(
             "module_count": len(modules),
             "test_count": sum(row["test_count"] for row in module_rows),
             "top_modules": top_modules,
+            "budget": (
+                quick_count_budget(
+                    module_count=len(modules),
+                    test_count=sum(row["test_count"] for row in module_rows),
+                )
+                if TIER_ALIASES.get(tier, tier) == "quick"
+                else None
+            ),
         }
 
     return {
@@ -244,6 +294,7 @@ def build_timings_report(
     rows: list[ModuleTimingRow],
     shard: tuple[int, int] | None,
 ) -> dict[str, object]:
+    elapsed_seconds = round(sum(row["duration_seconds"] for row in rows), 6)
     return {
         "kind": "aippocampus_test_module_timings",
         "schema_version": 1,
@@ -251,7 +302,8 @@ def build_timings_report(
         "module_count": len(rows),
         "test_count": sum(row["test_count"] for row in rows),
         "failed_module_count": sum(1 for row in rows if not row["ok"]),
-        "elapsed_seconds": round(sum(row["duration_seconds"] for row in rows), 6),
+        "elapsed_seconds": elapsed_seconds,
+        "budget": timing_budget_for_tier(selected_tier, elapsed_seconds=elapsed_seconds),
         "shard": {"index": shard[0], "total": shard[1]} if shard else None,
         "modules": rows,
     }
@@ -323,8 +375,10 @@ def build_parser() -> argparse.ArgumentParser:
         default="pr",
         help=(
             "Test tier to run. Default is the broad deterministic PR lane. "
-            "quick is the small local inner loop; pr is the broad deterministic "
-            "PR lane; fast is a deprecated alias for pr."
+            "quick is the small local inner loop with a quick target of about "
+            "46 modules, 330 tests, and 30s timing-report elapsed on current "
+            "local hardware; pr is the broad deterministic PR lane; fast is a "
+            "deprecated alias for pr."
         ),
     )
     parser.add_argument(
@@ -347,7 +401,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Run the selected tier and write per-module timing data to this JSON "
             "file. This runs modules one at a time so slow contributors can be "
-            "identified without changing tier membership."
+            "identified without changing tier membership; quick timing reports "
+            "include budget drift fields."
         ),
     )
     parser.add_argument(
