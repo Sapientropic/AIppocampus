@@ -1,0 +1,11 @@
+# Broad public handoff routing. Keep this coarse: it tells contributors and
+# agents which surfaces need maintainer eyes without pretending subteam
+# ownership exists.
+* @Sapientropic
+
+/docs/ @Sapientropic
+/skills/aippocampus/ @Sapientropic
+/tests/aippocampus/ @Sapientropic
+/.github/workflows/ @Sapientropic
+/plugins/aippocampus/ @Sapientropic
+/examples/ @Sapientropic

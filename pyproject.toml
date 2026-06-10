@@ -63,6 +63,8 @@ openai-agents = ["openai-agents>=0.17.4,<1"]
 openai-agents-smoke = ["openai-agents==0.17.4"]
 
 [tool.setuptools]
+# The installable runtime intentionally lives under skills/aippocampus/scripts
+# so the Codex skill bundle and PyPI package share one source tree.
 package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
     "aippocampus_runtime",

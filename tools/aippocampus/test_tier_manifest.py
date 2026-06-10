@@ -198,6 +198,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_provider_doctor",
         "test_provider_key_bridge",
         "test_public_output",
+        "test_public_handoff_hygiene",
         "test_question_confirmation_live",
         "test_question_confirmation_live_smoke",
         "test_question_feedback_policy",
