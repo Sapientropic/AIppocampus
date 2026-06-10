@@ -37,7 +37,7 @@ from today.
 | It keeps generated summaries and route hints below source reopen. | Source-discipline rows in [`current-claims.md`](current-claims.md), especially Track S, hard-negative, multimodal evidence-pool, and attention-router rows. | Not human-level semantic understanding or high-risk answer certification. |
 | It has public-safe benchmark fixtures and external adapter paths. | [`benchmark-evidence-map.md`](benchmark-evidence-map.md) and [`benchmarks/README.md`](benchmarks/README.md). | Adapter feasibility and contract fixtures are not official benchmark superiority. |
 | It has real product-shaped second-user evidence. | [`magic-moments.md`](magic-moments.md) and [`community-field-reports.md`](community-field-reports.md). | Field reports are not broad statistical proof until promoted. |
-| It has an agent-native route/facade/AIppo packet contract. | [`benchmarks/agent-continuity-loop.md`](benchmarks/agent-continuity-loop.md), [#1129](https://github.com/Sapientropic/AIppocampus/issues/1129), and [#1131](https://github.com/Sapientropic/AIppocampus/issues/1131). | The usable opt-in path remains #1162 until that wiring lands. |
+| It has an opt-in agent-native recall/AIppo path. | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, and [`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md). | Explicit pull path only; not default hooks, every-turn recall, hosted API, public SDK stability, or source truth without deepen. |
 | It has a claim-governance trail for both wins and expected-null results. | [`current-claims.md`](current-claims.md), [`benchmarks/design/benchmark-maturity-gates.md`](benchmarks/design/benchmark-maturity-gates.md), and [`can-claim-ladder.md`](can-claim-ladder.md). | Careful caveats should not be read as "nothing works yet." |
 
 ## Concept And Architecture Provenance
@@ -59,6 +59,7 @@ source of truth.
 | 2026-06-10 | Ficus / familiarity and bounded summaries as route material | [#1115](https://github.com/Sapientropic/AIppocampus/issues/1115), [#1116](https://github.com/Sapientropic/AIppocampus/issues/1116), and [`source-backed-attention-router.md`](../architecture/source-backed-attention-router.md) | Familiarity and summaries can orient attention without becoming facts. |
 | 2026-06-10 | Agent-native recall/deepen/explain facade | [#1129](https://github.com/Sapientropic/AIppocampus/issues/1129) and [`docs/architecture/agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md) | Agents have a compact packet grammar with provenance behind deepen/explain. |
 | 2026-06-10 | AIppo working-contract package | [#1131](https://github.com/Sapientropic/AIppocampus/issues/1131), [`docs/guides/public-api.md`](../guides/public-api.md), and [`agent-continuity-loop.md`](benchmarks/agent-continuity-loop.md) | Low-risk workflow guidance can be used as working contract, not source fact. |
+| 2026-06-10 | Opt-in agent continuity CLI path | [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162), [`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md), and [`public-api.md`](../guides/public-api.md) | `aippocampus agent ...` wires compact recall, AIppo activation, deepen/explain, and low-authority feedback. |
 | 2026-06-10 | Benchmark maturity and sample-size gates | [#1165](https://github.com/Sapientropic/AIppocampus/issues/1165) and [`benchmarks/design/benchmark-maturity-gates.md`](benchmarks/design/benchmark-maturity-gates.md) | Small deterministic fixtures can stay useful without being over-read as quality proof. |
 
 ## Reproducible First Path
@@ -75,6 +76,7 @@ After explicit consent to register selected local history:
 ```sh
 uvx aippocampus onboard --provider codex --all --format json
 uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "a continuity-sensitive cue" --json
 uvx aippocampus mcp list-tools
 ```
 
@@ -107,7 +109,7 @@ evidence correctly.
 
 | Gate | Status | Blocks |
 | --- | --- | --- |
-| [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) opt-in agent continuity path | Open | Claiming one practical foreground agent path beyond fixtures. |
+| [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) opt-in agent continuity path | Closing with `aippocampus agent ...` runtime wiring | Claiming one practical foreground agent path beyond fixtures. |
 | [#1153](https://github.com/Sapientropic/AIppocampus/issues/1153) context-loss continuous-memory slice | Open | Stronger public long-dialogue continuity behavior claim. |
 | [#1157](https://github.com/Sapientropic/AIppocampus/issues/1157) LongMemEval-S answer/latency harness | Open | End-to-end answer/latency claim on top of verified retrieval. |
 | [#1158](https://github.com/Sapientropic/AIppocampus/issues/1158) LoCoMo text-QA harness | Open | Mainstream long-conversation QA comparison. |

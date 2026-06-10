@@ -423,6 +423,22 @@ def _fixture_source_rows() -> list[dict[str, Any]]:
     ]
 
 
+def project_workflow_public_safe_source_rows() -> list[dict[str, Any]]:
+    """Return public-safe source rows for the first project/workflow AIppo.
+
+    This is still a narrow bundled working contract, not a general AIppo
+    marketplace. Keeping a named runtime helper avoids making callers depend on
+    the fixture function while preserving the same source-supported boundary.
+    """
+
+    return _fixture_source_rows()
+
+
+def build_project_workflow_public_safe_contract() -> dict[str, Any]:
+    contracts = build_aippo_working_contracts(project_workflow_public_safe_source_rows())
+    return select_aippo_working_contract(contracts)
+
+
 def _fixture_cases() -> list[dict[str, Any]]:
     return [
         {

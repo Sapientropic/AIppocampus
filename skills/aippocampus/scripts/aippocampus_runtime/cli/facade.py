@@ -46,6 +46,7 @@ COMMANDS = {
     "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
     "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
+    "agent": CommandSpec("agent_continuity.py", "aippocampus_runtime.recall.agent_continuity"),
     "export": CommandSpec("export_bundle.py", "aippocampus_runtime.artifacts.export_bundle"),
     "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
     "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.provider_doctor"),
@@ -99,6 +100,7 @@ SCRIPT_MODULES = {
     "update.py": "aippocampus_runtime.update.cli",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
+    "agent_continuity.py": "aippocampus_runtime.recall.agent_continuity",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
     "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
@@ -321,6 +323,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  health              Run runtime health checks", file=target)
     print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
+    print("  agent recall        Opt-in agent recall/AIppo/deepen/explain path", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
     print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
     print("  update status       Check personal core/magic readiness", file=target)
