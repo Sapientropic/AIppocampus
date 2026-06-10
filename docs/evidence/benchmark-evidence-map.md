@@ -78,7 +78,7 @@ promotes a public-safe result into the official evidence flow.
 9. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
    recall before adapting #528:
    [`benchmarks/design/atm-bench-hard-protocol-boundary.md`](benchmarks/design/atm-bench-hard-protocol-boundary.md).
-10. Need LongMemEval source, commands, the current 100-question V1
+10. Need LongMemEval source, commands, the current 500-question V1
    retrieval-only slice, historical 50-question smoke rows, or the V2
    context-mapping pilot:
    [`benchmarks/longmemeval.md`](benchmarks/longmemeval.md).
@@ -188,7 +188,7 @@ instead of deriving priority from this directory map.
 | STATE-Bench Agent Learning feasibility | `docs/evidence/benchmarks/state-bench-agent-learning.md` | Official source snapshot, train-only learning extraction boundary, read-only `retrieve_learnings` adapter scaffold, local ignored artifact policy, and no-score/no-lift claim boundaries for #1043. |
 | Multimodal memory benchmark map | `docs/evidence/benchmarks/design/multimodal-memory-benchmark-map.md` | Source-shape routing for #528 across conversation, corpus, personal filesystem, egocentric video, document/knowledge-source, and personalization benchmark families. |
 | ATM-Bench Hard protocol boundary | `docs/evidence/benchmarks/design/atm-bench-hard-protocol-boundary.md` | Verified upstream-protocol intake for #528 multimodal source-backed recall, including corpus-style, conversational media-ingest, Oracle, and NIAH slice boundaries. |
-| LongMemEval evidence | `docs/evidence/benchmarks/longmemeval.md` and `benchmark_corpus/longmemeval_manifest.json` | Official sources, dataset checksums, dedicated runner commands, the dated 100-question LongMemEval-S V1 retrieval-only slice, historical 50-question smoke rows, V2 context-mapping pilot decision, and claim boundaries. |
+| LongMemEval evidence | `docs/evidence/benchmarks/longmemeval.md` and `benchmark_corpus/longmemeval_manifest.json` | Official sources, dataset checksums, dedicated runner commands, the dated 500-question LongMemEval-S V1 retrieval-only slice, historical 100/50-question rows, V2 context-mapping pilot decision, and claim boundaries. |
 | Public longitudinal user evidence | `docs/evidence/benchmarks/public-longitudinal-users.md`, `docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-smoke-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md`, `benchmark_corpus/public_longitudinal_users/`, and `benchmark_corpus/locomo_manifest.json` | Public synthetic coding implicit-knowledge scoring-contract smoke, LoCoMo same-conversation control users, LoCoMo answer-usefulness prototype, deterministic scorers, VCS future-event recall roadmap, dated measurements, real public VCS hard-event smoke, 100+ gold React VCS measurement with anti-drift/counterfactual controls, sharper React VCS adversarial controls, non-oracle production-like source disambiguation, and external-prediction contracts. |
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/benchmarks/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
