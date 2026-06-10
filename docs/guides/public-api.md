@@ -468,6 +468,9 @@ host-facing contract proposal and fixture-backed architecture boundary, not a
 public TypeScript/Python SDK, network API, or hosted-service promise. It keeps
 full source refs, masks, votes, and proofs behind explicit deepen/explain
 surfaces instead of dumping them into every foreground packet.
+The foreground size, no-profile-dump, review-needed, and anti-nag budget for
+those packets lives in
+[`foreground-memory-ux-budget.md`](../architecture/foreground-memory-ux-budget.md).
 
 Contract v1 continuity domains use this same progressive path. `recall_context`
 may return a `continuity_domain` route when a source-trailed working conclusion

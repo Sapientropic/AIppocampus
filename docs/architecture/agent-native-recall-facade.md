@@ -151,6 +151,8 @@ agent adoption.
 
 - The route packet authority mapping lives in
   [`source-backed-attention-router.md`](source-backed-attention-router.md).
+- The foreground packet width, review-needed, and anti-nag budget lives in
+  [`foreground-memory-ux-budget.md`](foreground-memory-ux-budget.md).
 - The current public API boundary lives in
   [`../guides/public-api.md`](../guides/public-api.md).
 - The coding-agent product lane lives in

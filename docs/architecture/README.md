@@ -28,6 +28,7 @@ Roles:
 | [cognitive-runtime-architecture.md](cognitive-runtime-architecture.md) | current contract | Job-circuit runtime discipline for deterministic gates and semantic workers. |
 | [edge-capture-consolidation-boundary.md](edge-capture-consolidation-boundary.md) | current contract | Edge capture vs asynchronous consolidation lane ownership. |
 | [encrypted-sync-v1.md](encrypted-sync-v1.md) | current contract | First encrypted sync design and compatibility boundary. |
+| [foreground-memory-ux-budget.md](foreground-memory-ux-budget.md) | current contract | Foreground memory packet size, review-needed, anti-nag, and no-profile-dump budget. |
 | [high-risk-answer-gates.md](high-risk-answer-gates.md) | current contract | High-risk answer gating and source authority boundary. |
 | [knowledge-source-lifecycle.md](knowledge-source-lifecycle.md) | current contract | Knowledge source lifecycle, eligibility, and claim promotion boundary. |
 | [memory-evidence-drawer.md](memory-evidence-drawer.md) | current contract | Foreground recall explanation packet, action grammar, and source-reopen affordance boundary. |

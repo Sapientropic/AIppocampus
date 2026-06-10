@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
@@ -32,6 +33,32 @@ HIGHER_AUTHORITY_ACTIONS = {
     "reopenable_route",
     "direction_with_ref",
     "ignore_or_blocked",
+}
+MEMORY_PACKET_MAX_BYTES = 480
+MEMORY_PACKET_TOTAL_MAX_BYTES = 1800
+MEMORY_PACKET_MAX_HINTS = 4
+PROFILE_LIKE_MARKERS = (
+    "adhd",
+    "anxiety",
+    "identity",
+    "personality",
+    "profile",
+    "ficus",
+    "private impression",
+    "dislikes",
+    "hates",
+)
+FOREGROUND_PACKET_ALLOWED_KEYS = {
+    "kind",
+    "schema_version",
+    "route_id",
+    "output_mode",
+    "display_hint",
+    "claim_permission",
+    "next_action",
+    "deepen_route_id",
+    "review_needed",
+    "suppression_reason",
 }
 
 
@@ -243,3 +270,234 @@ def foreground_context_debug_summary(
             or result.get("route_delivery_diagnostic")
         ),
     }
+
+
+def _packet_bytes(packet: dict[str, Any]) -> int:
+    return len(json.dumps(packet, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+
+
+def _contains_profile_like_detail(text: str) -> bool:
+    folded = text.casefold()
+    return any(marker in folded for marker in PROFILE_LIKE_MARKERS)
+
+
+def _allowed_packet_fields(packet: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in packet.items() if key in FOREGROUND_PACKET_ALLOWED_KEYS}
+
+
+def _review_needed_packet(packet: dict[str, Any], *, reason: str) -> dict[str, Any]:
+    route_id = str(packet.get("route_id") or "route:unknown")
+    return {
+        "kind": "aippocampus_memory_packet",
+        "schema_version": str(packet.get("schema_version") or "foreground-memory-budget-v0"),
+        "route_id": route_id,
+        "output_mode": "direction_only",
+        "display_hint": "Memory route needs review before foreground use.",
+        "claim_permission": "no_claim_before_reopen",
+        "next_action": "ask_light_question",
+        "deepen_route_id": str(packet.get("deepen_route_id") or f"deepen:{route_id}"),
+        "review_needed": True,
+        "suppression_reason": reason,
+    }
+
+
+def _normalize_memory_packet(packet: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
+    metrics = {
+        "profile_like_suppressed_count": 0,
+        "unnecessary_reopen_prevented_count": 0,
+    }
+    clean = _allowed_packet_fields(packet)
+    hint = str(clean.get("display_hint") or "")
+    if _contains_profile_like_detail(hint):
+        metrics["profile_like_suppressed_count"] = 1
+        return _review_needed_packet(clean, reason="profile_like_detail"), metrics
+
+    if (
+        clean.get("output_mode") == "bounded_summary_as_route"
+        and clean.get("claim_permission") == "no_claim_before_reopen"
+        and clean.get("next_action") == "reopen_source"
+    ):
+        clean["next_action"] = "use_hint"
+        metrics["unnecessary_reopen_prevented_count"] = 1
+    return clean, metrics
+
+
+def project_memory_packets_for_foreground(
+    packets: list[dict[str, Any]],
+    *,
+    dismissed_route_ids: set[str] | None = None,
+    max_hints: int = MEMORY_PACKET_MAX_HINTS,
+) -> dict[str, Any]:
+    """Apply #1125 foreground UX budget and anti-nag rules to memory packets.
+
+    This projection is intentionally stricter than the lower route contracts:
+    ordinary foreground output gets small hints only. Source handles, profile
+    impressions, head votes, and proof ledgers stay behind deepen/explain or a
+    review surface.
+    """
+
+    dismissed = dismissed_route_ids or set()
+    foreground: list[dict[str, Any]] = []
+    suppressed_recent = 0
+    profile_suppressed = 0
+    reopen_prevented = 0
+    for packet in packets:
+        route_id = str(packet.get("route_id") or "")
+        if route_id in dismissed:
+            suppressed_recent += 1
+            continue
+        clean, packet_metrics = _normalize_memory_packet(packet)
+        profile_suppressed += packet_metrics["profile_like_suppressed_count"]
+        reopen_prevented += packet_metrics["unnecessary_reopen_prevented_count"]
+        if len(foreground) < max_hints:
+            foreground.append(clean)
+
+    encoded = json.dumps(foreground, ensure_ascii=False, sort_keys=True)
+    packet_sizes = [_packet_bytes(packet) for packet in foreground]
+    total_bytes = sum(packet_sizes)
+    false_personalization_count = sum(
+        1
+        for packet in foreground
+        if _contains_profile_like_detail(str(packet.get("display_hint") or ""))
+    )
+    over_cautious_abstention_count = sum(
+        1
+        for packet in foreground
+        if packet.get("output_mode") == "bounded_summary_as_route"
+        and packet.get("next_action") == "reopen_source"
+    )
+    source_backed_claim_without_reopen = sum(
+        1
+        for packet in foreground
+        if packet.get("claim_permission") == "bounded_claim_allowed"
+        and packet.get("output_mode") != "bounded_evidence"
+    )
+    metrics = {
+        "foreground_hint_count": len(foreground),
+        "foreground_packet_bytes": total_bytes,
+        "foreground_packet_max_bytes": max(packet_sizes) if packet_sizes else 0,
+        "foreground_packet_budget_violation_count": int(
+            total_bytes > MEMORY_PACKET_TOTAL_MAX_BYTES
+            or any(size > MEMORY_PACKET_MAX_BYTES for size in packet_sizes)
+        ),
+        "unnecessary_reopen_count": over_cautious_abstention_count,
+        "unnecessary_reopen_prevented_count": reopen_prevented,
+        "over_cautious_abstention_count": over_cautious_abstention_count,
+        "false_personalization_count": false_personalization_count,
+        "profile_like_suppressed_count": profile_suppressed,
+        "anti_nag_suppressed_count": suppressed_recent,
+        "anti_nag_violation_count": int(any(route in encoded for route in dismissed)),
+        "source_backed_claim_without_reopen": source_backed_claim_without_reopen,
+        "debug_or_source_field_leak_count": sum(
+            1
+            for marker in (
+                "source_handles",
+                "source_id",
+                "head_votes",
+                "masks_applied",
+                "PRIVATE_PROFILE_SENTINEL",
+            )
+            if marker in encoded
+        ),
+    }
+    red_lines = {
+        "foreground_packet_budget_violation_count": metrics[
+            "foreground_packet_budget_violation_count"
+        ],
+        "unnecessary_reopen_count": metrics["unnecessary_reopen_count"],
+        "false_personalization_count": metrics["false_personalization_count"],
+        "anti_nag_violation_count": metrics["anti_nag_violation_count"],
+        "source_backed_claim_without_reopen": metrics["source_backed_claim_without_reopen"],
+        "debug_or_source_field_leak_count": metrics["debug_or_source_field_leak_count"],
+    }
+    return {
+        "kind": "aippocampus_foreground_memory_budget_projection",
+        "schema_version": "foreground-memory-budget-v0",
+        "ok": all(value == 0 for value in red_lines.values()),
+        "foreground_packets": foreground,
+        "metrics": metrics,
+        "red_lines": red_lines,
+        "budget": {
+            "max_packet_bytes": MEMORY_PACKET_MAX_BYTES,
+            "max_total_bytes": MEMORY_PACKET_TOTAL_MAX_BYTES,
+            "max_hints": max_hints,
+        },
+        "privacy_boundary": {
+            "ordinary_packets_include_profile_like_detail": False,
+            "ordinary_packets_include_source_handles": False,
+            "raw_private_text_emitted": False,
+        },
+    }
+
+
+def foreground_memory_budget_fixture_packets() -> list[dict[str, Any]]:
+    return [
+        {
+            "kind": "aippocampus_memory_packet",
+            "schema_version": "agent-native-recall-facade-v0",
+            "route_id": "route_tiny_orientation",
+            "output_mode": "direction_only",
+            "display_hint": "Style route: keep the patch small and source-backed.",
+            "claim_permission": "no_claim_before_reopen",
+            "next_action": "use_hint",
+            "deepen_route_id": "deepen:route_tiny_orientation",
+        },
+        {
+            "kind": "aippocampus_memory_packet",
+            "schema_version": "agent-native-recall-facade-v0",
+            "route_id": "route_bounded_summary",
+            "output_mode": "bounded_summary_as_route",
+            "display_hint": "Project route: use the scoped summary for planning; reopen before claims.",
+            "claim_permission": "no_claim_before_reopen",
+            "next_action": "reopen_source",
+            "deepen_route_id": "deepen:route_bounded_summary",
+        },
+        {
+            "kind": "aippocampus_memory_packet",
+            "schema_version": "agent-native-recall-facade-v0",
+            "route_id": "route_reopenable",
+            "output_mode": "reopenable_route",
+            "display_hint": "Old decision route may matter; reopen source before using the detail.",
+            "claim_permission": "no_claim_before_reopen",
+            "next_action": "reopen_source",
+            "deepen_route_id": "deepen:route_reopenable",
+        },
+        {
+            "kind": "aippocampus_memory_packet",
+            "schema_version": "agent-native-recall-facade-v0",
+            "route_id": "route_profile_like",
+            "output_mode": "direction_only",
+            "display_hint": "User profile: ADHD, hates abstractions. PRIVATE_PROFILE_SENTINEL",
+            "claim_permission": "no_claim_before_reopen",
+            "next_action": "use_hint",
+            "deepen_route_id": "deepen:route_profile_like",
+            "source_handles": [{"source_id": "src_private"}],
+        },
+        {
+            "kind": "aippocampus_memory_packet",
+            "schema_version": "agent-native-recall-facade-v0",
+            "route_id": "route_recently_dismissed",
+            "output_mode": "direction_only",
+            "display_hint": "Dismissed route should not repeat in ordinary foreground output.",
+            "claim_permission": "no_claim_before_reopen",
+            "next_action": "use_hint",
+            "deepen_route_id": "deepen:route_recently_dismissed",
+        },
+    ]
+
+
+def build_foreground_memory_budget_fixture_report() -> dict[str, Any]:
+    """Return the public-safe #1125 foreground memory UX budget fixture."""
+
+    projection = project_memory_packets_for_foreground(
+        foreground_memory_budget_fixture_packets(),
+        dismissed_route_ids={"route_recently_dismissed"},
+    )
+    projection["cannot_claim"] = [
+        "default_hook_adoption",
+        "private_ficus_quality",
+        "profile_memory_safety",
+        "live_user_annoyance_rate",
+        "broad_foreground_lift",
+    ]
+    return projection
