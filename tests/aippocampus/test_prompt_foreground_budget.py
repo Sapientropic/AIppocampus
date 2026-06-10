@@ -9,6 +9,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
+from aippocampus_runtime.recall import prompt_foreground_budget as budget  # noqa: E402
 
 
 class PromptForegroundBudgetTests(unittest.TestCase):
@@ -184,6 +185,49 @@ class PromptForegroundBudgetTests(unittest.TestCase):
             public["foreground_context"]["direction_only_foreground_budget_violation_count"],
             0,
         )
+
+    def test_memory_packet_budget_keeps_foreground_useful_without_profile_dump(self) -> None:
+        report = budget.build_foreground_memory_budget_fixture_report()
+        packets = report["foreground_packets"]
+        by_id = {packet["route_id"]: packet for packet in packets}
+        encoded = str(packets)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["metrics"]["foreground_hint_count"], 4)
+        self.assertEqual(report["metrics"]["foreground_packet_budget_violation_count"], 0)
+        self.assertEqual(report["metrics"]["false_personalization_count"], 0)
+        self.assertEqual(report["metrics"]["profile_like_suppressed_count"], 1)
+        self.assertEqual(report["metrics"]["debug_or_source_field_leak_count"], 0)
+        self.assertNotIn("PRIVATE_PROFILE_SENTINEL", encoded)
+        self.assertNotIn("source_handles", encoded)
+        self.assertNotIn("src_private", encoded)
+
+        self.assertEqual(by_id["route_tiny_orientation"]["next_action"], "use_hint")
+        self.assertEqual(by_id["route_bounded_summary"]["output_mode"], "bounded_summary_as_route")
+        self.assertEqual(by_id["route_bounded_summary"]["next_action"], "use_hint")
+        self.assertEqual(report["metrics"]["unnecessary_reopen_prevented_count"], 1)
+        self.assertEqual(by_id["route_reopenable"]["next_action"], "reopen_source")
+
+        review = by_id["route_profile_like"]
+        self.assertTrue(review["review_needed"])
+        self.assertEqual(review["next_action"], "ask_light_question")
+        self.assertEqual(review["suppression_reason"], "profile_like_detail")
+        self.assertIn("default_hook_adoption", report["cannot_claim"])
+
+    def test_memory_packet_budget_honors_recent_dismissal_anti_nag(self) -> None:
+        packets = budget.foreground_memory_budget_fixture_packets()
+        report = budget.project_memory_packets_for_foreground(
+            packets,
+            dismissed_route_ids={"route_recently_dismissed", "route_tiny_orientation"},
+        )
+        route_ids = {packet["route_id"] for packet in report["foreground_packets"]}
+
+        self.assertTrue(report["ok"], report)
+        self.assertNotIn("route_recently_dismissed", route_ids)
+        self.assertNotIn("route_tiny_orientation", route_ids)
+        self.assertEqual(report["metrics"]["anti_nag_suppressed_count"], 2)
+        self.assertEqual(report["metrics"]["anti_nag_violation_count"], 0)
+        self.assertEqual(report["red_lines"]["anti_nag_violation_count"], 0)
 
 
 if __name__ == "__main__":
