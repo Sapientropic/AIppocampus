@@ -85,6 +85,10 @@ promotes a public-safe result into the official evidence flow.
 11. Need the public reliability gauntlet that separates runtime pressure,
     mis-recall diagnostics, and pollution hygiene for #1102:
     [`benchmarks/public-reliability-gauntlet.md`](benchmarks/public-reliability-gauntlet.md).
+12. Need the attention-router navigation-quality gate for route precision,
+    masks, stale/currentness, conflict, action-time, anti-nag, and bounded
+    evidence red lines:
+    [`benchmarks/attention-navigation-quality.md`](benchmarks/attention-navigation-quality.md).
 
 ## Maintainer Directory
 
@@ -197,6 +201,7 @@ instead of deriving priority from this directory map.
 | Demo fixture report | `docs/evidence/benchmarks/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
 | Track S semantic robustness diagnostics | `docs/evidence/benchmarks/semantic-robustness-track-s.md` and `benchmarks/aippocampus/benchmark_semantic_robustness.py` | No-live-judge semantic perturbation, equivalent-query retrieval invariance, and hard-negative/negation diagnostics for #747; not human-level semantic understanding or a Track A/B replacement. |
 | Public reliability gauntlet | `docs/evidence/benchmarks/public-reliability-gauntlet.md`, `docs/evidence/benchmarks/public-reliability-gauntlet-2026-06-10.json`, and `benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py` | Public-safe #1102 aggregate gate over runtime stability, mis-recall quality, and pollution hygiene; keeps LongMemEval-S aggregate metrics, synthetic scale/fanout stress, hard-negative diagnostics, and pollution fixtures separate, with no single reliability score. |
+| Attention navigation quality | `docs/evidence/benchmarks/attention-navigation-quality.md` and `benchmarks/aippocampus/benchmark_attention_navigation_quality.py` | Public-safe #1111 route-quality gate over positive routes, hard masks, stale/currentness, conflict, action-time, anti-nag, bounded-evidence, and wrong-source controls; hard red lines stay separate from route averages. |
 | Multimodal corpus fixture report | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md` and `benchmark_corpus/public_multimodal_corpus/fixture.json` | Public-safe ATM-Bench-inspired corpus-style multimodal retrieval contract for #531; not conversational media upload recall, ATM-Bench score, or product privacy proof. |
 | Conversational media-ingest fixture report | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md` and `benchmark_corpus/conversational_media_ingest/fixture.json` | Public-safe conversational media-ingest recall contract for #532; media anchors attach to user turns and text hints cannot replace visual source reopen. |
 | Multimodal NIAH evidence-pool fixture report | `docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md` and `benchmark_corpus/multimodal_niah_evidence_pool/fixture.json` | Public-safe NIAH-style supplied-pool answer-synthesis contract for #533; not retrieval quality, ATM-Bench score, or live vision-model quality. |
@@ -246,6 +251,7 @@ empty output. The PR-tier guard for this contract is
 | Track B source-evidence retrieval wrapper | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` facade with track-owned helpers in `benchmarks/aippocampus/source_evidence/` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md`; includes #309 diagnostic `semantic_bridge_lift` / wrong-stance source-joined reranker metrics, not default vector behavior |
 | Track S semantic robustness diagnostics | `benchmarks/aippocampus/benchmark_semantic_robustness.py` | `docs/evidence/benchmarks/semantic-robustness-track-s.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #747 |
 | Public reliability gauntlet | `benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py` | `docs/evidence/benchmarks/public-reliability-gauntlet.md`, `docs/evidence/benchmarks/public-reliability-gauntlet-2026-06-10.json`, #1102 |
+| Attention navigation quality | `benchmarks/aippocampus/benchmark_attention_navigation_quality.py` | `docs/evidence/benchmarks/attention-navigation-quality.md`, #1111 |
 | Multimodal corpus-style retrieval contract | `benchmarks/aippocampus/benchmark_multimodal_corpus_retrieval.py` | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/public_multimodal_corpus/fixture.json`, #531 |
 | Conversational media-ingest recall contract | `benchmarks/aippocampus/benchmark_conversational_media_ingest_recall.py` | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/conversational_media_ingest/fixture.json`, #532 |
 | Multimodal NIAH evidence-pool contract | `benchmarks/aippocampus/benchmark_multimodal_niah_evidence_pool.py` | `docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/multimodal_niah_evidence_pool/fixture.json`, `benchmark_corpus/public_multimodal_corpus/fixture.json`, #533 |
