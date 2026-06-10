@@ -14,6 +14,7 @@ for _path in (BENCHMARKS, REPO_ROOT / "tools" / "aippocampus" / "smoke"):
     sys.path.insert(0, str(_path))
 
 import benchmark_longmemeval as benchmark  # noqa: E402
+from source_evidence import standard_public  # noqa: E402
 
 
 def write_oracle_fixture(path: Path, *, question_count: int = 1) -> None:
@@ -49,6 +50,35 @@ def write_oracle_fixture(path: Path, *, question_count: int = 1) -> None:
                 ],
             }
         )
+    path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+
+
+def write_context_visible_miss_fixture(path: Path) -> None:
+    fixture = [
+        {
+            "question_id": "q-context-visible",
+            "question_type": "single-session-user",
+            "question": "Where did the blue badge note say to look?",
+            "answer": "drawer nine",
+            "question_date": "2023/05/30 (Tue) 23:40",
+            "haystack_dates": ["2023/05/20 (Sat) 02:21"],
+            "haystack_session_ids": ["answer-session"],
+            "answer_session_ids": ["answer-session"],
+            "haystack_sessions": [
+                [
+                    {
+                        "role": "user",
+                        "content": "The blue badge note continues in the next line.",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "The object is in drawer nine.",
+                        "has_answer": True,
+                    },
+                ]
+            ],
+        }
+    ]
     path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
 
 
@@ -112,9 +142,94 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["question_count"], 1)
         self.assertEqual(payload["metrics"]["session_hit_rate_top5"], 1.0)
         self.assertEqual(payload["metrics"]["evidence_hit_rate_top5"], 1.0)
+        self.assertEqual(payload["metrics"]["evidence_line_recall_by_k"]["1"]["hit"], 1)
+        self.assertEqual(payload["metrics"]["evidence_rank_bucket_counts"]["rank_1"], 1)
+        self.assertEqual(
+            payload["metrics"]["evidence_line_taxonomy_counts"]["exact_line_found_top_k"],
+            1,
+        )
+        self.assertEqual(payload["metrics"]["evidence_miss_taxonomy_counts"], {})
+        self.assertEqual(payload["cases"][0]["evidence_rank_bucket"], "rank_1")
+        self.assertEqual(payload["cases"][0]["evidence_miss_category"], "exact_line_found_top_k")
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("secret fixture answer marker", dumped)
         self.assertIn("longmemeval_qa_score", payload["cannot_claim"])
+
+    def test_context_visible_exact_line_miss_is_sanitized_and_categorized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "longmemeval_oracle.json"
+            write_context_visible_miss_fixture(path)
+            with patched_oracle_split(path):
+                payload = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=1,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["metrics"]["session_hit_rate_top1"], 1.0)
+        self.assertEqual(payload["metrics"]["evidence_hit_rate_top1"], 0.0)
+        self.assertEqual(payload["metrics"]["evidence_context_hit_rate_top1"], 1.0)
+        self.assertEqual(
+            payload["metrics"]["evidence_miss_taxonomy_counts"][
+                "context_visible_exact_line_miss"
+            ],
+            1,
+        )
+        self.assertEqual(
+            payload["metrics"]["evidence_context_rescue_distance_counts_top1"][
+                "distance_1"
+            ],
+            1,
+        )
+        self.assertEqual(payload["cases"][0]["evidence_rank_bucket"], "rank_2_3")
+        self.assertTrue(payload["cases"][0]["gold_line_near_miss_top1_to_20"])
+        self.assertEqual(
+            payload["cases"][0]["evidence_miss_category"],
+            "context_visible_exact_line_miss",
+        )
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("drawer nine", dumped)
+        self.assertNotIn("blue badge note continues", dumped)
+
+    def test_fixed_evidence_rank_buckets_cover_near_miss_diagnostics(self) -> None:
+        self.assertEqual(standard_public.evidence_rank_bucket(1), "rank_1")
+        self.assertEqual(standard_public.evidence_rank_bucket(4), "rank_4_5")
+        self.assertEqual(standard_public.evidence_rank_bucket(12), "rank_11_20")
+        self.assertEqual(standard_public.evidence_rank_bucket(34), "rank_21_50")
+        self.assertEqual(standard_public.evidence_rank_bucket(None), "not_retrieved")
+
+    def test_evidence_miss_category_distinguishes_partial_and_source_window_misses(
+        self,
+    ) -> None:
+        partial_row = {
+            "has_line_evidence": True,
+            "expected_line_count": 2,
+            "expected_lines_found_top10": 1,
+            "evidence_hit_top10": True,
+            "evidence_context_hit_top10": True,
+            "session_hit_top10": True,
+        }
+        self.assertEqual(
+            standard_public.evidence_miss_category(partial_row, top_k=10),
+            "multi_evidence_partial_hit",
+        )
+        source_window_miss = {
+            "has_line_evidence": True,
+            "expected_line_count": 1,
+            "expected_lines_found_top10": 0,
+            "evidence_hit_top10": False,
+            "evidence_context_hit_top10": False,
+            "session_hit_top10": False,
+            "evidence_rank": None,
+            "session_rank": None,
+        }
+        self.assertEqual(
+            standard_public.evidence_miss_category(source_window_miss, top_k=10),
+            "source_window_not_recovered",
+        )
 
     def test_progress_callback_reports_sanitized_phase_events(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
