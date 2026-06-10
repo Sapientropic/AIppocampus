@@ -160,6 +160,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_knowledge_capability_conflicts",
         "test_knowledge_capability_manifest",
         "test_knowledge_source_schema",
+        "test_knowledge_runtime_boundary",
         "test_legacy_aliases",
         "test_life_wide_registry_smoke",
         "test_living_cue_cache",

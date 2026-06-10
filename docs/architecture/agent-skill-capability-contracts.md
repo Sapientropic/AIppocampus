@@ -168,6 +168,10 @@ High-risk answer gates:
 capability manifests may require `high_risk_answer_gate`, but they do not
 replace it. The gate still owns source reopen, applicability, lifecycle,
 conflict, privacy, and cannot-claim output states.
+Live versus staged answer-gate adoption is owned by
+[`high-risk-answer-gates.md#adoption-status`](high-risk-answer-gates.md#adoption-status);
+capability manifests must not imply default foreground enforcement before that
+runtime caller exists.
 
 Policy and safety:
 privacy partitions, external-tool redaction, source-text export policy, and

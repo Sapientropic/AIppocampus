@@ -154,8 +154,9 @@ The supported public surfaces are:
   memory-write API, or confidence-as-authority layer.
 - The high-risk answer gate policy documented in
   [high-risk-answer-gates.md](../architecture/high-risk-answer-gates.md) as a
-  trusted local deterministic cannot-claim boundary, not as generated
-  professional advice or a public answer API.
+  staged deterministic contract prototype and trusted local cannot-claim
+  boundary, not as default foreground behavior, generated professional advice,
+  or a public answer API.
 - The Codex plugin package source under `plugins/aippocampus/`, including its
   MCP config and packaged skill surface.
 - The documented local-folder, HTTP object-storage, and encrypted sync commands.
@@ -836,6 +837,9 @@ These are internal, experimental, or best-effort unless promoted elsewhere:
   `aippocampus_runtime.knowledge.capability_types`; their fixture and tests
   prove the current internal execution-boundary prototype, not a public
   capability-manifest schema.
+- High-risk answer-gate helpers under
+  `aippocampus_runtime.knowledge.answer_gate`; their fixture and tests prove the
+  staged deterministic contract prototype, not live high-risk answer coverage.
 - Semantic result-cache and semantic-cue-cache reports are trusted-local
   diagnostics. They may be public-safe in content, but their helper-level field
   shapes are additive implementation details unless a facade command documents
