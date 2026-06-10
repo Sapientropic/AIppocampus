@@ -250,6 +250,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/sync/encrypted/migration.py",
     "skills/aippocampus/scripts/aippocampus_runtime/sync/encrypted/object_storage.py",
     "skills/aippocampus/scripts/aippocampus_runtime/journey/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/journey/live.py",
     "skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py",
     "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/__init__.py",

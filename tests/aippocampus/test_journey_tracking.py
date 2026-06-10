@@ -265,6 +265,37 @@ class JourneyTrackingTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SENTINEL_ROUTE_HANDLE", encoded)
         self.assertNotIn("msg-live-a", live["positive"]["agent_visible"].get("frontier", ""))
 
+    def test_public_time_sliced_journey_replay_report_keeps_public_boundary(self) -> None:
+        payload = journey_live.build_public_time_sliced_journey_replay_report()
+
+        self.assertTrue(payload["ok"], json.dumps(payload, ensure_ascii=False, indent=2))
+        self.assertEqual(payload["kind"], "aippocampus_public_journey_time_sliced_replay")
+        self.assertEqual(payload["issue_readouts"]["github_310"], "public_time_sliced_replay_fixture")
+        self.assertEqual(payload["metrics"]["case_count"], 1)
+        self.assertEqual(payload["metrics"]["journey_created_count"], 1)
+        self.assertEqual(payload["metrics"]["future_row_excluded_count"], 1)
+        self.assertEqual(payload["metrics"]["positive_hint_count"], 1)
+        self.assertEqual(payload["metrics"]["negative_control_suppressed_count"], 2)
+        self.assertEqual(payload["metrics"]["future_leakage_count"], 0)
+        self.assertFalse(payload["privacy_boundary"]["raw_source_text_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["source_refs_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["private_route_handles_emitted"])
+        self.assertIn("private_real_history_journey_quality", payload["cannot_claim"])
+
+        case = payload["cases"][0]
+        self.assertEqual(case["case_id"], "public_vcs_workaround_supersession")
+        self.assertEqual(case["status"], "journey_candidate_created")
+        self.assertEqual(case["hint_timing"]["relevant_prompt"], "agent_visible_hint")
+        self.assertEqual(case["hint_timing"]["source_visible_control"], "silent")
+        self.assertEqual(case["hint_timing"]["unrelated_prompt_control"], "backstage_only")
+        self.assertTrue(case["claim_boundary"]["journey_hint_is_navigation"])
+
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("PUBLIC_RAW_ROW_SENTINEL", encoded)
+        self.assertNotIn("FUTURE_PUBLIC_JOURNEY_SENTINEL", encoded)
+        self.assertNotIn("public-msg-310-a", encoded)
+        self.assertNotIn("journey_route:", encoded)
+
     def test_content_light_cross_project_resonance_outputs_hypothesis_without_private_payload(self) -> None:
         current = journey.create_journey(
             path_label="PRIVATE_SENTINEL_CURRENT_PROJECT_GENERATED_ARTIFACTS",
@@ -334,13 +365,19 @@ class JourneyTrackingTests(unittest.TestCase):
         )
         self.assertTrue(current.created, current.reason)
         self.assertTrue(candidate.created, candidate.reason)
+        self.assertIsNotNone(current.journey)
+        self.assertIsNotNone(candidate.journey)
+        current_journey = current.journey
+        candidate_journey = candidate.journey
+        assert current_journey is not None
+        assert candidate_journey is not None
 
         payload = journey.build_content_light_resonance(
-            current_journey=journey.journey_to_dict(current.journey),
+            current_journey=journey.journey_to_dict(current_journey),
             candidate_journeys=[
                 {
                     "project_key": "repo://PRIVATE_SENTINEL_OLD_PROJECT",
-                    "journey": journey.journey_to_dict(candidate.journey),
+                    "journey": journey.journey_to_dict(candidate_journey),
                     "source_free_patterns": [
                         "stale_generated_artifact",
                         "rejected_route",

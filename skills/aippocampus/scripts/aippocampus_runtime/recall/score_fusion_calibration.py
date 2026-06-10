@@ -39,7 +39,8 @@ def _public_case_row(
     wrong_stance_source_id = str(case.get("wrong_stance_source_id") or "")
     top_source_id = str(top.get("source_id") or "")
     wrong_stance_rank = _rank_for_source(ranked, wrong_stance_source_id)
-    weights = payload.get("weights") if isinstance(payload.get("weights"), Mapping) else {}
+    raw_weights = payload.get("weights")
+    weights = dict(raw_weights) if isinstance(raw_weights, Mapping) else {}
     exact_text_guard_applied = bool(
         isinstance(top.get("score_components"), Mapping)
         and "exact_text_guard" in top["score_components"]
