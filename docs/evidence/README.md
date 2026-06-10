@@ -4,6 +4,10 @@ This folder keeps AIppocampus claims source-reopenable without making ordinary
 readers walk through every dated report first. Start here to choose the right
 evidence lane.
 
+Use [`docs/evidence/can-claim-ladder.md`](can-claim-ladder.md) when you need
+the short positive map first: what is already proven, what is field-tested, and
+where the boundary starts.
+
 ## Current Claim Snapshot
 
 Use [`docs/evidence/current-claims.md`](current-claims.md) for current benchmark

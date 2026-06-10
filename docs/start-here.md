@@ -50,11 +50,13 @@ what has been verified, not what the runtime should do next.
 Goal: check what AIppocampus can honestly claim.
 
 1. Start with [Evidence Index](evidence/README.md).
-2. Use [Current Claims](evidence/current-claims.md) for present-tense benchmark
+2. Use [Can-Claim Ladder](evidence/can-claim-ladder.md) when you need the
+   positive proof map before the caveat ledger.
+3. Use [Current Claims](evidence/current-claims.md) for present-tense benchmark
    and readiness numbers.
-3. Use [Benchmark And Evidence Map](evidence/benchmark-evidence-map.md) when
+4. Use [Benchmark And Evidence Map](evidence/benchmark-evidence-map.md) when
    you need runner, corpus, smoke, or dated-result owners.
-4. Use [Public Readiness Verification](evidence/readiness/public-readiness-verification.md)
+5. Use [Public Readiness Verification](evidence/readiness/public-readiness-verification.md)
    only when you need dated command evidence.
 
 Community reports and magic moments are useful product signals. They do not
