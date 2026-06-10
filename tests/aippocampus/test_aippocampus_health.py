@@ -345,6 +345,52 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(texture["consumer_boundary"], "interpretation_input_only")
         self.assertNotIn("build_clean_source", [item["id"] for item in payload["recommended_actions"]])
 
+    def test_health_reports_source_intake_quality_without_private_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+            clean = paths["clean_source_dir"]
+            manifest_path = clean / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update(
+                {
+                    "registry_entry_count": 2,
+                    "materialized_source_count": 1,
+                    "derived_summary_count": 1,
+                    "user_facing_summary_count": 0,
+                    "source_refs": [{"source_ref_hash": "ref_broken", "reopenable": False}],
+                    "source_intake": {
+                        "hook": {"available": False, "version_status": "stale_versioned_path"},
+                        "restart_durability_status": "degraded",
+                    },
+                }
+            )
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            (clean / "messages.jsonl").write_text(
+                json.dumps({"message_id": "m1", "tool_payload": {"secret": "sk-health123456"}})
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
+
+        source_intake = payload["clean_source"]["source_intake"]
+        encoded = json.dumps(source_intake, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(source_intake["source_quality_status"], "degraded")
+        self.assertEqual(source_intake["metrics"]["hook_available"], False)
+        self.assertEqual(source_intake["metrics"]["stale_hook_path_count"], 1)
+        self.assertEqual(source_intake["metrics"]["registry_clean_source_mismatch_count"], 1)
+        self.assertEqual(source_intake["metrics"]["derived_summary_mismatch_count"], 1)
+        self.assertEqual(source_intake["metrics"]["unreopenable_handle_count"], 1)
+        self.assertEqual(source_intake["metrics"]["polluted_source_event_count"], 1)
+        self.assertNotIn("sk-health123456", encoded)
+        self.assertFalse(source_intake["privacy_boundary"]["raw_tool_payload_emitted"])
+
     def test_health_reports_oversized_logs_without_log_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

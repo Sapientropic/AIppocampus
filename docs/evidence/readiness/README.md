@@ -13,6 +13,8 @@ specific dated report only when you need the evidence behind a row.
   cannot-claim snapshot.
 - [`public-readiness-verification.md`](public-readiness-verification.md):
   dated command ledger and release/public-readiness evidence summaries.
+- [`source-intake-health-2026-06-10.md`](source-intake-health-2026-06-10.md):
+  fixture evidence for source-intake health and fallback diagnostics.
 - [`proof-slice-maturity.md`](proof-slice-maturity.md): proof-slice maturity
   and remaining evidence gaps.
 - [`claude-code-dogfood-2026-06-09.md`](claude-code-dogfood-2026-06-09.md):
