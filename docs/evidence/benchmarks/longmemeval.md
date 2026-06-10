@@ -143,6 +143,14 @@ reported by the chat-completions response:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 ```
 
+Analyze a generated semantic reranker report without re-running the provider
+call. This emits only aggregate ladder/taxonomy/projection fields and keeps the
+input report path local:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --json
+```
+
 `--progress-every` emits sanitized JSONL progress to stderr. `--partial-output`
 writes a sanitized checkpoint/partial diagnostic with hashed local-path
 identity, phase, built/evaluated counts, elapsed time, and claim boundaries; it
@@ -258,6 +266,20 @@ Optional semantic LLM line-reranker pilot for #1092:
 - Semantic-only evidence-line R@10: `24/25`; fused reranked evidence-line R@10:
   `25/25`; fused evidence-line MRR `1.0000`, up `0.3652` over first-stage
   evidence-line MRR `0.6348`.
+- Sanitized analysis report:
+  [`longmemeval-semantic-rerank-analysis-2026-06-10.json`](longmemeval-semantic-rerank-analysis-2026-06-10.json).
+- Reranked evidence-line ladder from the analysis report: R@1/R@3/R@5/R@10/R@20/R@50
+  all `25/25 = 1.0000`. Baseline ladder for the same 25 cases was R@1
+  `12/25 = 0.4800`, R@3 `18/25 = 0.7200`, R@5 `21/25 = 0.8400`, R@10
+  `23/25 = 0.9200`, R@20 `24/25 = 0.9600`, and R@50 `24/25 = 0.9600`.
+- Context-visible rescue conversion: `2/2`; same-session wrong-line reduction:
+  `2/2`; top-10 rerank regression count: `0`.
+- Gold-rank bucket movement: not retrieved to rank 1 `1`, rank 11-20 to rank 1
+  `1`, rank 6-10 to rank 1 `2`, rank 4-5 to rank 1 `3`, rank 2-3 to rank 1
+  `6`, and rank 1 stayed rank 1 `12`.
+- Per-case-type coverage in this pilot is narrow: all `25` cases are
+  `longmemeval_single-session-user`. That is useful for debugging the arm, but
+  it is not enough to claim per-type quality across the full LongMemEval-S mix.
 - Source-joined bridge lifts: `2`; reranker candidate evidence coverage:
   `25/25`; average candidate count: `54.32`.
 - Reranker availability: `24/25`; one case timed out; warning count `0`.
@@ -267,13 +289,22 @@ Optional semantic LLM line-reranker pilot for #1092:
   average `7156.27ms`, max `29434.87ms`.
 - Provider dollar cost: unavailable in the chat-completions response; the
   report records usage/cache/latency instead.
+- 500-question projection from the 25Q pilot: about `4503400` total tokens,
+  `1507840` projected prompt-cache hit tokens, `2741800` projected prompt-cache
+  miss tokens, and `59.64` single-worker minutes at the observed average
+  available-call latency. Because provider dollar cost is not reported and the
+  arm sends public benchmark question/candidate source text to an external
+  model, the full 500Q semantic run is explicit opt-in only. Required before a
+  full run: operator budget approval, a provider cost model or ceiling, privacy
+  review for external candidate source text, and a gitignored partial-output
+  path.
 - Raw report location:
   `benchmark_corpus/reports/longmemeval-v1-small-semantic-pilot-25.json`
   locally, intentionally gitignored.
-- Decision: promising as a pilot, but not adopted as the default reranker and
-  not a 500-question claim. A larger run should happen only after deciding that
-  the latency/token budget is worth spending against the still-open exact-line
-  ranking gap.
+- Decision: the semantic arm remains useful and reproducible, but the full
+  500Q LLM rerank is not run by default. The current #1092 result is a bounded
+  pilot plus explicit budget/latency/privacy boundary, not a 500-question LLM
+  quality claim.
 
 This retires the 2026-06-09 incomplete 500-question missing-artifact attempt:
 the current blocker is no longer completion. The remaining LongMemEval gap is

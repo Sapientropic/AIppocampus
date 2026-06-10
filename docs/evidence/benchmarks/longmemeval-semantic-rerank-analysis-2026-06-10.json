@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_longmemeval_rerank_analysis",
+  "generated_at": "2026-06-10T10:00:08Z",
+  "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1092",
+  "source_report": {
+    "kind": "aippocampus_longmemeval_benchmark",
+    "status": "retrieval_sufficient",
+    "generated_at": "2026-06-10T07:26:53Z",
+    "input_report_sha1": "f5a90965bc207ec1",
+    "local_path_emitted": false
+  },
+  "status": "pilot_analyzed_full_run_not_default",
+  "ok": true,
+  "benchmark": {
+    "name": "LongMemEval",
+    "split": "longmemeval-v1-small",
+    "dataset_version": "longmemeval-cleaned 2025-09"
+  },
+  "reranker_metadata": {
+    "line_reranker_mode": "semantic",
+    "arm": "llm_window_to_line_rerank",
+    "prompt_version": "llm-window-to-line-rerank-v1",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "cost_status": "provider_cost_not_reported",
+    "input_boundary": {
+      "visible_to_model": [
+        "question_text",
+        "candidate_line_number",
+        "candidate_role",
+        "candidate_session_rank",
+        "candidate_nearest_hit_rank",
+        "candidate_context_distance",
+        "candidate_source_text"
+      ],
+      "withheld_from_model": [
+        "gold_answer",
+        "expected_lines",
+        "expected_sessions",
+        "has_answer_labels",
+        "judge_labels",
+        "miss_taxonomy",
+        "raw_report_cases"
+      ]
+    },
+    "output_boundary": {
+      "ranked_lines_filtered_to_candidate_set": true,
+      "question_answering_allowed": false,
+      "raw_model_response_persisted": false
+    }
+  },
+  "metrics": {
+    "question_count": 25,
+    "evidence_line_case_count": 25,
+    "baseline_evidence_recall_by_k": {
+      "r_at_1": {
+        "numerator": 12,
+        "denominator": 25,
+        "rate": 0.48
+      },
+      "r_at_3": {
+        "numerator": 18,
+        "denominator": 25,
+        "rate": 0.72
+      },
+      "r_at_5": {
+        "numerator": 21,
+        "denominator": 25,
+        "rate": 0.84
+      },
+      "r_at_10": {
+        "numerator": 23,
+        "denominator": 25,
+        "rate": 0.92
+      },
+      "r_at_20": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      },
+      "r_at_50": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      }
+    },
+    "reranked_evidence_recall_by_k": {
+      "r_at_1": {
+        "numerator": 25,
+        "denominator": 25,
+        "rate": 1.0
+      },
+      "r_at_3": {
+        "numerator": 25,
+        "denominator": 25,
+        "rate": 1.0
+      },
+      "r_at_5": {
+        "numerator": 25,
+        "denominator": 25,
+        "rate": 1.0
+      },
+      "r_at_10": {
+        "numerator": 25,
+        "denominator": 25,
+        "rate": 1.0
+      },
+      "r_at_20": {
+        "numerator": 25,
+        "denominator": 25,
+        "rate": 1.0
+      },
+      "r_at_50": {
+        "numerator": 25,
+        "denominator": 25,
+        "rate": 1.0
+      }
+    },
+    "semantic_only_evidence_recall_by_k": {
+      "r_at_1": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      },
+      "r_at_3": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      },
+      "r_at_5": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      },
+      "r_at_10": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      },
+      "r_at_20": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      },
+      "r_at_50": {
+        "numerator": 24,
+        "denominator": 25,
+        "rate": 0.96
+      }
+    },
+    "baseline_evidence_mrr": 0.6348,
+    "reranked_evidence_mrr": 1.0,
+    "semantic_only_evidence_mrr": 0.96,
+    "semantic_bridge_lift_top10": 2,
+    "rerank_regression_count_top10": 0,
+    "context_visible_rescue_count": 2,
+    "context_visible_rescue_conversion_count": 2,
+    "context_visible_rescue_conversion_rate": 1.0,
+    "same_session_wrong_line_count": 2,
+    "same_session_wrong_line_reduction_count": 2,
+    "same_session_wrong_line_reduction_rate": 1.0,
+    "rank_bucket_movement_counts": {
+      "not_retrieved->rank_1": 1,
+      "rank_1->rank_1": 12,
+      "rank_11_20->rank_1": 1,
+      "rank_2_3->rank_1": 6,
+      "rank_4_5->rank_1": 3,
+      "rank_6_10->rank_1": 2
+    },
+    "line_reranker_attempted_count": 25,
+    "line_reranker_available_count": 24,
+    "line_reranker_error_count": 1,
+    "line_reranker_error_kind_counts": {
+      "timeout": 1
+    },
+    "line_reranker_usage": {
+      "prompt_tokens": 212482,
+      "completion_tokens": 12688,
+      "total_tokens": 225170,
+      "prompt_tokens_details": {
+        "cached_tokens": 75392
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 11470
+      },
+      "prompt_cache_hit_tokens": 75392,
+      "prompt_cache_miss_tokens": 137090
+    },
+    "line_reranker_latency_ms": {
+      "count": 24,
+      "avg": 7156.27,
+      "max": 29434.87
+    },
+    "line_reranker_cache": {
+      "available_count": 24,
+      "kind_counts": {
+        "deepseek_prefix_v1": 24
+      },
+      "hit_tokens": 75392,
+      "miss_tokens": 137090,
+      "hit_rate": 0.3548
+    },
+    "per_case_type": {
+      "longmemeval_single-session-user": {
+        "case_count": 25,
+        "baseline_evidence_hit_top10": 23,
+        "baseline_evidence_hit_rate_top10": 0.92,
+        "reranked_evidence_hit_top10": 25,
+        "reranked_evidence_hit_rate_top10": 1.0,
+        "reranked_evidence_mrr": 1.0,
+        "semantic_bridge_lift_top10": 2,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 1
+      }
+    },
+    "reranked_reported_hit_top_k": 25
+  },
+  "full_500_projection": {
+    "basis_question_count": 25,
+    "target_question_count": 500,
+    "projected_total_tokens": 4503400,
+    "projected_prompt_cache_hit_tokens": 1507840,
+    "projected_prompt_cache_miss_tokens": 2741800,
+    "projected_single_worker_seconds": 3578.14,
+    "projected_single_worker_minutes": 59.64,
+    "average_available_call_latency_ms": 7156.27,
+    "cache_hit_rate": 0.3548,
+    "cost_status": "provider_cost_not_reported",
+    "decision": "not_run_by_default",
+    "decision_reason": "The semantic rerank arm is external-model-assisted, cost is not reported by the provider response, and the pilot already projects material token/latency spend at 500 questions. Run the full arm only when it answers a named claim-boundary question.",
+    "required_before_full_run": [
+      "explicit_operator_budget_approval",
+      "provider_cost_model_or_cost_ceiling",
+      "privacy_review_for_external_candidate_source_text",
+      "partial_output_path_kept_gitignored"
+    ]
+  },
+  "commands": {
+    "pilot": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25.json",
+    "full_500_explicit_opt_in": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 25 --partial-output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-500.partial.json --output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-500.json",
+    "analysis": "python benchmarks\\aippocampus\\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25.json --json"
+  },
+  "privacy_boundary": {
+    "raw_text_emitted": false,
+    "snippets_emitted": false,
+    "case_ids_emitted": false,
+    "local_paths_emitted": false,
+    "absolute_paths_emitted": false,
+    "dataset_url_emitted": false,
+    "input_report_path_emitted": false,
+    "external_model_raw_response_emitted": false,
+    "output_shape": "sanitized_rerank_aggregate_analysis"
+  },
+  "claim_boundary": "This is an external-model-assisted retrieval-only rerank analysis over candidate lines. It is separate from deterministic retrieval and does not score answer generation or judge-model QA.",
+  "cannot_claim": [
+    "answer_generation_quality",
+    "broad_reranker_safety",
+    "cross_dataset_model_comparison_without_matching_protocol",
+    "decision_gate_quality",
+    "default_exact_line_citation_quality",
+    "full_500_llm_reranker_quality",
+    "judge_model_score",
+    "longmemeval_qa_score",
+    "longmemeval_v2_score",
+    "provider_independent_quality",
+    "sota_or_external_baseline_superiority"
+  ],
+  "elapsed_ms": 1.31
+}
