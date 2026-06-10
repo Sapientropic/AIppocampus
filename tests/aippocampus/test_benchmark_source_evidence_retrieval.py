@@ -1414,6 +1414,61 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["semantic_only_evidence_hit_rate_top1"], 0.0)
         self.assertEqual(metrics["reranked_evidence_hit_rate_top1"], 1.0)
 
+    def test_lexical_line_reranker_promotes_context_visible_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_path = Path(tmp) / "source_index.sqlite"
+            messages = [
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=1,
+                    role="assistant",
+                    text="The blue badge location question was discussed in the notes.",
+                ),
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=2,
+                    role="user",
+                    text="Look in drawer nine for the blue badge.",
+                ),
+            ]
+            benchmark.make_sqlite(sqlite_path, messages, anchors=[], turns=[])
+            case = {
+                "case_id": "lexical-context-rescue",
+                "dataset": "synthetic",
+                "case_type": "context_visible_exact_line_miss",
+                "source_id_sha1": "source",
+                "question_id_sha1": "question",
+                "query": "Where should I look for the blue badge?",
+                "query_sha1": "query",
+                "query_terms": ["blue", "badge", "location"],
+                "sqlite_path": sqlite_path,
+                "expected": {
+                    "lines": [2],
+                    "sessions": ["D1"],
+                    "line_to_session": {"1": "D1", "2": "D1"},
+                    "has_line_evidence": True,
+                },
+            }
+
+            row = benchmark.evaluate_standard_retrieval_case(
+                case,
+                top_k=1,
+                candidate_limit=8,
+                context_radius=1,
+                include_private_text=False,
+                line_reranker_mode="lexical",
+                line_reranker_top_sessions=0,
+                line_reranker_max_candidates=8,
+            )
+
+        self.assertFalse(row["evidence_hit_top1"])
+        self.assertTrue(row["evidence_context_hit_top1"])
+        self.assertTrue(row["semantic_only_evidence_hit_top1"])
+        self.assertTrue(row["semantic_bridge_lift_top1"])
+        self.assertTrue(row["reranked_evidence_hit_top1"])
+        self.assertEqual(row["line_reranker_mode"], "lexical")
+        self.assertEqual(row["line_reranker_error_count"], 0)
+
     def test_standard_content_query_terms_remove_generic_question_words(self) -> None:
         terms = benchmark.standard_content_query_terms(
             "When did Caroline go to the LGBTQ support group?"
