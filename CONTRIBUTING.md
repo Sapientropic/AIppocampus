@@ -64,8 +64,16 @@ modules must be classified in the manifest before they can enter any tier.
 During normal editing, prefer targeted module tests such as
 `python -m unittest tests.aippocampus.test_run_tests_tiers -v`, then run
 `python tools/aippocampus/run_tests.py --tier quick` as the ordinary inner
-loop. Use `python tools/aippocampus/run_tests.py --tier pr` as the broad
-pre-push gate.
+loop. The quick target is roughly 46 modules, 330 tests, and 30 seconds of
+timing-report elapsed on current local hardware; treat it as drift visibility,
+not a cross-machine SLA. Use `python tools/aippocampus/run_tests.py --tier pr`
+as the broad pre-push gate.
+
+When the quick lane feels slow, measure before moving tests between tiers:
+
+```sh
+python tools/aippocampus/run_tests.py --tier quick --timings-json .tmp/quick-test-timings.json
+```
 
 When the PR lane feels slow, measure before moving tests between tiers:
 
