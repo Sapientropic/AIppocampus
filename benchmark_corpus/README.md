@@ -36,6 +36,11 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   extinction, superseded currentness, and source reopen before risky action
   without committing private clean-source text, local paths, or raw behavior
   traces.
+- `question_aware_public_shadow/` contains the checked-in public-safe #248
+  shadow fixture for question-aware source reopen, answer-review deltas,
+  adaptive-threshold readout, and multilingual/noise plus code negative
+  controls. It is selected fixture evidence, not private-history quality, live
+  user-visible lift, or default prefilter adoption.
 - `route_feedback/` contains the checked-in synthetic public-safe fixture for
   #937/#950. It exercises positive source-reopen activation and negative
   blocked/wrong-route demotion without changing default score weights or

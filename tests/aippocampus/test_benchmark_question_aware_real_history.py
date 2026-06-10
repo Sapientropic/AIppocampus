@@ -485,6 +485,59 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["private_text_emitted"])
         self.assertIn("debug_contexts", payload["packs"][0])
 
+    def test_public_shadow_fixture_compares_question_aware_source_reopen(self) -> None:
+        payload = benchmark.run_question_aware_public_shadow_benchmark(
+            fixture_path=REPO_ROOT
+            / "benchmark_corpus"
+            / "question_aware_public_shadow"
+            / "fixture.json",
+        )
+        rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(
+            payload["kind"],
+            "aippocampus_question_aware_public_shadow_benchmark",
+        )
+        self.assertEqual(payload["status"], "public_shadow_ready")
+        self.assertEqual(payload["claim_level"], "public_replayable_shadow_fixture")
+        self.assertGreaterEqual(payload["metrics"]["public_case_count"], 4)
+        self.assertGreaterEqual(payload["metrics"]["negative_control_count"], 2)
+        self.assertEqual(payload["metrics"]["negative_control_pass_count"], 2)
+        self.assertEqual(
+            {item["observed_skip_reason"] for item in payload["negative_controls"]},
+            {"code_heavy", "noise"},
+        )
+        self.assertGreater(
+            payload["metrics"]["question_aware_over_question_blind_delta"],
+            0.0,
+        )
+        self.assertGreater(
+            payload["metrics"]["answer_usefulness_delta"],
+            0.0,
+        )
+        self.assertGreater(
+            payload["metrics"]["manual_query_reduction_delta"],
+            0.0,
+        )
+        self.assertEqual(
+            payload["threshold_readout"]["dynamic_six_axis_threshold"]["false_merge_count"],
+            0,
+        )
+        self.assertEqual(
+            payload["threshold_readout"]["dynamic_six_axis_threshold"]["false_split_count"],
+            0,
+        )
+        self.assertIn(
+            "public_shadow_question_aware_source_reopen_comparison_recorded",
+            payload["can_claim"],
+        )
+        self.assertIn("private_real_history_answer_quality", payload["cannot_claim"])
+        self.assertIn("live_user_visible_recall_improvement", payload["cannot_claim"])
+        self.assertFalse(payload["privacy"]["raw_source_text_emitted"])
+        self.assertFalse(payload["privacy"]["local_path_emitted"])
+        self.assertNotIn("PUBLIC_SOURCE_TEXT_SENTINEL", rendered)
+        self.assertNotIn(str(REPO_ROOT), rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
