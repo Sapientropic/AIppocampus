@@ -30,6 +30,10 @@ Rules:
   boundaries stay in
   [`docs/evidence/benchmarks/amemgym.md`](benchmarks/amemgym.md) until a dated
   result owner upgrades a claim.
+- STATE-Bench Agent Learning feasibility currently has no Current Claim
+  Snapshot row; adapter/readiness evidence stays in
+  [`docs/evidence/benchmarks/state-bench-agent-learning.md`](benchmarks/state-bench-agent-learning.md)
+  until a matched no-memory task run produces bounded metrics.
 
 ## Confirmed Scope Boundaries (Expected Null Results)
 
