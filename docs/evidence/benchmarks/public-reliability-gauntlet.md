@@ -25,6 +25,13 @@ The axes are deliberately separate. Runtime pressure, exact-line citation
 quality, and pollution hygiene fail in different ways; a single aggregate
 number would make those failures harder to see.
 
+Related gate: the #1111
+[`attention-navigation-quality.md`](attention-navigation-quality.md) benchmark
+separately covers route precision, hard masks, stale/currentness, conflict,
+action-time, anti-nag, and bounded-evidence red lines for the attention router.
+It can inform future gauntlet discussions, but it is not folded into the three
+axes above or any single aggregate score.
+
 ## Current Dated Result
 
 The current report is:
