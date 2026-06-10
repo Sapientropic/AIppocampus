@@ -125,6 +125,7 @@ def _domain_row(candidate: Mapping[str, Any], readiness_row: Mapping[str, Any]) 
         "status": status,
         "readiness_class": readiness_row.get("readiness_class") or "silent",
         "navigation_only": True,
+        "action_grammar": "reopenable_route" if ready else "direction_only",
         "next_action": "source_reopen" if ready else "stay_silent",
         "source_refs": refs,
         "source_ref_count": len(refs),

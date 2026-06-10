@@ -114,6 +114,7 @@ class PrewarmPlannerTests(unittest.TestCase):
 
         ready = next(row for row in report["predicted_domains"] if row["status"] == "ready")
         self.assertEqual(ready["next_action"], "source_reopen")
+        self.assertEqual(ready["action_grammar"], "reopenable_route")
         self.assertEqual(ready["readiness_class"], "source_reopen_ready")
         self.assertEqual(ready["source_refs"][0]["message_id"], "msg-1")
         self.assertEqual(ready["query_aliases"], ["active path packet", "prewarm route"])
@@ -122,6 +123,7 @@ class PrewarmPlannerTests(unittest.TestCase):
         suppressed = [row for row in report["predicted_domains"] if row["status"] == "suppressed"]
         self.assertEqual(len(suppressed), 3)
         self.assertTrue(all(row["next_action"] == "stay_silent" for row in suppressed))
+        self.assertTrue(all(row["action_grammar"] == "direction_only" for row in suppressed))
         self.assertTrue(all(row["navigation_only"] for row in suppressed))
 
         route_readiness = report["route_readiness"]

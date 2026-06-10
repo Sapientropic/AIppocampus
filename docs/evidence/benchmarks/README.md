@@ -52,6 +52,7 @@ collapsing them into one leaderboard.
 | Hippocampal recall diagnostic seed | [`hippocampal-recall-fixture-report.md`](hippocampal-recall-fixture-report.md) | #229/#230/#231 public-safe P1 seed for D/I matrix reporting, source-reopen failures, scent layers, and calibration categories; not full P1 quality. |
 | Field Continuity Eval design | [`field-continuity-eval-design.md`](field-continuity-eval-design.md) | #982 design for public reproducibility tracks, baselines, schema, metrics, and Beta boundary; not a classifier decision. |
 | Field Continuity fixture | [`field-continuity-fixture-report.md`](field-continuity-fixture-report.md) | #454/#982 magic-moment reproducibility contract; field reports are seeds, not standalone proof. |
+| State-dependent preactivation fixture | [`state-dependent-preactivation-2026-06-10.md`](state-dependent-preactivation-2026-06-10.md) | #1082 public-safe warm ambient preactivation fixture; not live foreground preactivation or proactive memory truth. |
 
 ## Report Boundary
 
