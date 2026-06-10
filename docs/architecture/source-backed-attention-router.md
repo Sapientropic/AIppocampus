@@ -228,6 +228,27 @@ path, issue id, test, or command-failure chain. This remains diagnostic routing:
 hard masks run first, anti-nag suppression can force `direction_only`, and
 action-matched packets still carry `no_claim_before_reopen`.
 
+## Evidence Packaging Head
+
+`aippocampus_runtime.navigation.attention_evidence_packager` is the #1110
+diagnostic layer between source-window routing and exact source-span support. It
+preserves the first-stage retrieval window separately, then packages compact
+span handles, candidate counts, selected span rank, window radius,
+currentness/conflict flags, and optional counter-evidence handles.
+
+This head exists because source-window routing can be strong while exact-line
+ranking remains weaker. It may tighten the next source handle to reopen, but it
+does not make reranker or packaging output true. `bounded_evidence` is allowed
+only when the selected span is already source-open, bounded to a declared scope,
+current, and unconflicted. Stale, superseded, conflicted, hard-masked, or
+wrong-source spans must stay reopenable/navigation-only or be rejected with an
+auditable reason code.
+
+The public fixture mirrors the LongMemEval-style distinction: a context-visible
+span can become a tighter packet, while wrong-source, stale, and conflicted
+controls cannot become claim-ready support. The report omits raw source text,
+gold answers, and miss taxonomy.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in
@@ -243,6 +264,9 @@ action-matched packets still carry `no_claim_before_reopen`.
   it does not replace recall/search paths by default.
 - Action-time features add pending-tool context to the query surface, but they
   do not mutate hooks, settings, or live foreground behavior by default.
+- Evidence packaging can narrow a source window to source-span handles, but it
+  does not retire exact-line retrieval quality work or make source-window
+  evidence equivalent to final citations.
 - Source-open and high-risk claim gates remain separate answer-time authority
   checks; see [`high-risk-answer-gates.md`](high-risk-answer-gates.md).
 

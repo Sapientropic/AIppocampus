@@ -58,6 +58,10 @@ def _compact_source_handle(handle: Mapping[str, Any]) -> dict[str, Any]:
     turn_range = handle.get("turn_range")
     if isinstance(turn_range, (list, tuple)) and len(turn_range) == 2:
         result["turn_range"] = [int(turn_range[0]), int(turn_range[1])]
+    for range_key in ("line_range", "char_range"):
+        span_range = handle.get(range_key)
+        if isinstance(span_range, (list, tuple)) and len(span_range) == 2:
+            result[range_key] = [int(span_range[0]), int(span_range[1])]
     return result
 
 
