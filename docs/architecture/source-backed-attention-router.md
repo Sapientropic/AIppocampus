@@ -254,6 +254,9 @@ gold answers, and miss taxonomy.
 - The stable action grammar lives in
   [`../agent-context.md`](../agent-context.md) and
   [`../../skills/aippocampus/references/ambient-hooks.md`](../../skills/aippocampus/references/ambient-hooks.md).
+- The agent-native recall/deepen/explain facade is the small foreground
+  projection over route packets; see
+  [`agent-native-recall-facade.md`](agent-native-recall-facade.md).
 - The Memory Evidence Drawer explains surfaced recall routes without becoming a
   truth layer; see [`memory-evidence-drawer.md`](memory-evidence-drawer.md).
 - The Source-Backed Familiarity Map is the current cold-sidecar owner; see

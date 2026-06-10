@@ -20,6 +20,7 @@ Roles:
 | File | Role | Use |
 | --- | --- | --- |
 | [aar-v2-action-time-nudges.md](aar-v2-action-time-nudges.md) | current contract | AAR v2 action-time nudge authority and stale-topology boundaries. |
+| [agent-native-recall-facade.md](agent-native-recall-facade.md) | current contract | Minimal recall/deepen/explain facade over route packets for agent hosts. |
 | [agent-skill-capability-contracts.md](agent-skill-capability-contracts.md) | current contract | Typed agent-skill capability boundaries. |
 | [architecture-overview.md](architecture-overview.md) | current contract | High-level runtime layers, source-backed kernel contract, authority rings, data flow, and metaphor discipline. |
 | [clean-source-redaction-profiles.md](clean-source-redaction-profiles.md) | current contract | Optional redaction profiles without replacing raw-private clean source. |

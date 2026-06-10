@@ -72,6 +72,12 @@ ambient cards, Active Path Packets, active locks, `recall_context`,
 `recall_deepen`, `get_turn_context`, or clean-source search before broad manual
 search. Deepen only when a candidate route can change the work.
 
+Agent hosts that want a smaller mental model can treat
+[`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md)
+as the recall/deepen/explain front door: foreground packets orient action,
+`deepen` exposes source routes or bounded evidence, and `explain` reports why a
+route did or did not surface without making route metadata source truth.
+
 When a hook or MCP response already renders a layered brief, treat
 `memory_atmosphere` as orientation, `working_continuity_brief` as action
 continuity, and `source_court` as the escalation lane for exact, sensitive,
