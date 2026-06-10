@@ -40,6 +40,10 @@ Rules:
   preflight generated both matched adapters and commands but stopped before task
   execution because the locked GPT-5.4 evaluation client endpoint/deployments
   were not configured.
+- PersonaMem / PersonaMem-v2 currently has no Current Claim Snapshot row and
+  should not be run as a retrieval-only quality claim. The readiness boundary
+  stays in [`docs/evidence/benchmarks/personamem-readiness.md`](benchmarks/personamem-readiness.md)
+  until AIppo/Ficus profile-readiness exists.
 
 ## Confirmed Scope Boundaries (Expected Null Results)
 
