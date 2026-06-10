@@ -34,6 +34,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_ambient_recall_policy",
         "test_ambient_source_reopen",
         "test_ambient_thread_cache",
+        "test_attention_hot_router",
         "test_attention_route_tokens",
         "test_attention_router_contract",
         "test_architecture_boundaries",
