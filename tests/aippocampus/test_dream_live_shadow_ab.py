@@ -19,10 +19,38 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.dream import live_shadow_ab as shadow  # noqa: E402
+from aippocampus_runtime.dream import public_shadow_report  # noqa: E402
 from aippocampus_runtime.model.client import ChatClientConfig  # noqa: E402
 
 
 class DreamLiveShadowABTests(unittest.TestCase):
+    def test_public_dream_vs_baseline_report_tracks_user_visible_axes(self) -> None:
+        report = public_shadow_report.build_public_dream_vs_baseline_shadow_report()
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        readout = report["issue_readouts"]["github_163"]
+
+        self.assertEqual(report["kind"], "aippocampus_public_dream_vs_baseline_shadow_report")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["metrics"]["case_count"], 4)
+        self.assertEqual(report["metrics"]["dream_route_lift_count"], 2)
+        self.assertEqual(report["metrics"]["dream_action_delta_useful_count"], 2)
+        self.assertEqual(report["metrics"]["suppressed_wrong_hint_count"], 1)
+        self.assertEqual(report["metrics"]["dream_wrong_hint_count"], 0)
+        self.assertEqual(report["metrics"]["dream_wrong_hint_rate"], 0.0)
+        self.assertEqual(report["metrics"]["dream_no_harm_count"], 2)
+        self.assertLess(report["metrics"]["dream_verification_cost_delta_total"], 0)
+        self.assertTrue(readout["public_dream_vs_baseline_shadow_measured"])
+        self.assertEqual(readout["dream_route_lift_count"], 2)
+        self.assertEqual(readout["dream_wrong_hint_rate"], 0.0)
+        self.assertFalse(readout["live_delivered_quality_measured"])
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertTrue(report["policy_boundary"]["source_reopen_required_for_claims"])
+        self.assertFalse(report["privacy"]["raw_case_text_serialized"])
+        self.assertFalse(report["privacy"]["raw_source_refs_serialized"])
+        self.assertFalse(report["privacy"]["absolute_paths_serialized"])
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn("C:\\", encoded)
+
     def test_live_shadow_model_config_uses_deepseek_thinking_contract(self) -> None:
         class Args:
             model_route = None
