@@ -234,6 +234,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_source_evidence_recall_eval",
         "test_source_texture",
         "test_stage_0_5_smoke",
+        "test_standard_line_reranker_contract",
         "test_storage_capacity_report",
         "test_storage_governance",
         "test_subconscious_agent",
@@ -305,6 +306,7 @@ QUICK_STEMS = frozenset(
         "test_run_tests_tiers",
         "test_semantic_recall_gate",
         "test_source_texture",
+        "test_standard_line_reranker_contract",
         "test_topology_anchor_policy",
     }
 )

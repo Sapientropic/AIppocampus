@@ -131,6 +131,18 @@ promoted without using answer labels or an external model:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
 ```
 
+Run the optional LLM exact-line reranker pilot. This sends the public benchmark
+question text and bounded candidate source-line text to the configured external
+chat provider, but it withholds gold answers, expected lines/sessions,
+`has_answer` labels, judge labels, miss taxonomy, and raw report cases. The
+report records the provider, model, prompt version, candidate pool, token
+usage, cache telemetry, latency, and failures; provider dollar cost is not
+reported by the chat-completions response:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
+```
+
 `--progress-every` emits sanitized JSONL progress to stderr. `--partial-output`
 writes a sanitized checkpoint/partial diagnostic with hashed local-path
 identity, phase, built/evaluated counts, elapsed time, and claim boundaries; it
@@ -144,6 +156,7 @@ a small curated artifact with provenance and license notes.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-10T07:26:53Z` | `longmemeval-v1-small` | retrieval-only + optional semantic LLM line reranker pilot | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 239.15s | `retrieval_sufficient` pilot |
 | `2026-06-10T04:15:44Z` | `longmemeval-v1-small` | retrieval-only + optional lexical line reranker | 500 | 95.80% | 85.18% | 87.47% | 94.36% | 737.84s | `retrieval_sufficient` |
 | `2026-06-10T03:33:49Z` | `longmemeval-v1-small` | retrieval-only larger slice | 500 | 95.80% | 85.18% | - | 94.36% | 803.10s | `retrieval_sufficient` |
 | `2026-06-09T14:08:17Z` | `longmemeval-v1-small` | retrieval-only larger slice | 100 | 97.00% | 87.23% | - | 96.81% | 126.72s | `retrieval_sufficient` |
@@ -158,6 +171,7 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 ```
 
 LongMemEval-S 500-question verification summary:
@@ -225,6 +239,41 @@ Optional lexical line-reranker 500-question follow-up for #1087:
 - Raw report location:
   `benchmark_corpus/reports/longmemeval-v1-small-lexical-500.json` locally,
   intentionally gitignored.
+
+Optional semantic LLM line-reranker pilot for #1092:
+
+- Run date: `2026-06-10T07:26:53Z`
+- Command: first 25 LongMemEval-S questions, top-k `10`, with
+  `--line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30`.
+- Prompt / arm: `llm_window_to_line_rerank`,
+  `llm-window-to-line-rerank-v1`.
+- Provider/model: DeepSeek-compatible chat API, `deepseek-v4-flash`.
+- Input boundary: the external model saw question text plus bounded candidate
+  line number, role, session rank, nearest-hit rank, context distance, and
+  candidate source text. It did not receive gold answers, expected
+  lines/sessions, `has_answer` labels, judge labels, miss taxonomy, or raw
+  report cases.
+- The first-stage retrieval baseline in the same run: session R@10 `25/25`,
+  exact evidence-line R@10 `23/25`, and context-visible evidence R@10 `25/25`.
+- Semantic-only evidence-line R@10: `24/25`; fused reranked evidence-line R@10:
+  `25/25`; fused evidence-line MRR `1.0000`, up `0.3652` over first-stage
+  evidence-line MRR `0.6348`.
+- Source-joined bridge lifts: `2`; reranker candidate evidence coverage:
+  `25/25`; average candidate count: `54.32`.
+- Reranker availability: `24/25`; one case timed out; warning count `0`.
+- Token / latency / cache telemetry: `225170` total tokens
+  (`212482` prompt, `12688` completion); DeepSeek prefix-cache hit tokens
+  `75392`, miss tokens `137090`, hit rate `0.3548`; latency count `24`,
+  average `7156.27ms`, max `29434.87ms`.
+- Provider dollar cost: unavailable in the chat-completions response; the
+  report records usage/cache/latency instead.
+- Raw report location:
+  `benchmark_corpus/reports/longmemeval-v1-small-semantic-pilot-25.json`
+  locally, intentionally gitignored.
+- Decision: promising as a pilot, but not adopted as the default reranker and
+  not a 500-question claim. A larger run should happen only after deciding that
+  the latency/token budget is worth spending against the still-open exact-line
+  ranking gap.
 
 This retires the 2026-06-09 incomplete 500-question missing-artifact attempt:
 the current blocker is no longer completion. The remaining LongMemEval gap is

@@ -145,6 +145,11 @@ def skipped_payload(
     max_questions: int,
     min_questions: int,
     top_k: int,
+    line_reranker_mode: str = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE,
+    line_reranker_timeout: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
+    line_reranker_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS
+    ),
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -157,6 +162,9 @@ def skipped_payload(
             max_questions=max_questions,
             min_questions=min_questions,
             top_k=top_k,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
         ),
         "metrics": {"question_count": 0},
         "cases": [],
@@ -192,8 +200,17 @@ def benchmark_metadata(
     }
 
 
-def evaluation_metadata(*, max_questions: int, min_questions: int, top_k: int) -> dict[str, Any]:
-    return {
+def evaluation_metadata(
+    *,
+    max_questions: int,
+    min_questions: int,
+    top_k: int,
+    line_reranker_mode: str = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE,
+    line_reranker_timeout: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
+    line_reranker_max_tokens: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
+) -> dict[str, Any]:
+    resolved_line_reranker_mode = line_reranker_mode.strip().casefold()
+    metadata = {
         "mode": "retrieval_only",
         "retrieval_metric_scope": "session and source-line recall",
         "qa_generation": "not_run",
@@ -201,11 +218,20 @@ def evaluation_metadata(*, max_questions: int, min_questions: int, top_k: int) -
         "max_questions": int(max_questions),
         "min_questions": int(min_questions),
         "top_k": int(top_k),
+        "line_reranker_mode": resolved_line_reranker_mode,
         "runner": "benchmarks/aippocampus/benchmark_longmemeval.py",
         "underlying_adapter": (
             "benchmarks/aippocampus/benchmark_source_evidence_retrieval.py"
         ),
     }
+    if resolved_line_reranker_mode == "semantic":
+        metadata["llm_rerank_arm"] = (
+            retrieval_benchmark.semantic_line_reranker_public_contract(
+                timeout=line_reranker_timeout,
+                max_tokens=line_reranker_max_tokens,
+            )
+        )
+    return metadata
 
 
 def privacy_boundary() -> dict[str, Any]:
@@ -267,6 +293,11 @@ def partial_diagnostic_payload(
     status: str,
     reason: str,
     progress_events: list[dict[str, Any]],
+    line_reranker_mode: str = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE,
+    line_reranker_timeout: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
+    line_reranker_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS
+    ),
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -279,6 +310,9 @@ def partial_diagnostic_payload(
             max_questions=max_questions,
             min_questions=min_questions,
             top_k=top_k,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
         ),
         "metrics": progress_metrics(progress_events),
         "cases": [],
@@ -353,6 +387,9 @@ def run_longmemeval_benchmark(
             max_questions=max_questions,
             min_questions=min_questions,
             top_k=top_k,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
         )
 
     def handle_progress(event: dict[str, Any]) -> None:
@@ -388,6 +425,9 @@ def run_longmemeval_benchmark(
                     status="partial_diagnostic_running",
                     reason="checkpoint",
                     progress_events=progress_events,
+                    line_reranker_mode=line_reranker_mode,
+                    line_reranker_timeout=line_reranker_timeout,
+                    line_reranker_max_tokens=line_reranker_max_tokens,
                 ),
             )
         if progress_callback is not None:
@@ -431,6 +471,9 @@ def run_longmemeval_benchmark(
             status="partial_diagnostic_interrupted",
             reason="keyboard_interrupt",
             progress_events=progress_events,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
         )
         write_json_payload(partial_path, payload)
         return payload
@@ -446,6 +489,9 @@ def run_longmemeval_benchmark(
             max_questions=max_questions,
             min_questions=min_questions,
             top_k=top_k,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
         ),
         "metrics": retrieval.get("metrics") or {},
         "cases": retrieval.get("cases") or [],
