@@ -10,17 +10,20 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.hooks.debug_log import (
+from aippocampus_runtime.hooks.prompt_fallbacks import (
+    fallback_payload,
+    load_dream_delivery_module,
     prompt_hook_audit_status,
     write_debug_log,
     write_prompt_hook_audit_status,
+    write_skip_telemetry,
 )
-from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry
 
 __all__ = [
     "prompt_hook_audit_status",
     "write_debug_log",
     "write_prompt_hook_audit_status",
+    "write_skip_telemetry",
 ]
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
@@ -33,10 +36,10 @@ _RUNTIME_EXPORTS = set(
 )
 _RUNTIME_CACHE: dict[str, Any] | None = None
 
+
 def _add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
-    try:
-        from aippocampus_runtime.dream import delivery_policy as dream_delivery  # noqa: PLC0415
-    except Exception:
+    dream_delivery, _reason = load_dream_delivery_module()
+    if dream_delivery is None:
         parser.add_argument("--dream-shadow-ab", action="store_true")
         parser.add_argument("--dream-shadow-log")
         parser.add_argument("--dream-shadow-salt", default=os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT"))
@@ -46,10 +49,15 @@ def _add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
         dream_delivery.add_dream_delivery_arguments(parser)
 
 def _prepare_dream_delivery(*, prompt: str, hook_input: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
-    try:
-        from aippocampus_runtime.dream import delivery_policy as dream_delivery  # noqa: PLC0415
-    except Exception:
-        return {"mode": "off", "event": None, "allow_dream": False, "dream_hypothesis_limit": 0, "reason": "policy_unavailable"}
+    dream_delivery, reason = load_dream_delivery_module()
+    if dream_delivery is None:
+        return {
+            "mode": "off",
+            "event": None,
+            "allow_dream": False,
+            "dream_hypothesis_limit": 0,
+            "reason": reason or "policy_unavailable",
+        }
     return dream_delivery.prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
 
 def _load_runtime() -> dict[str, Any]:
@@ -210,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
                 hook_total_ms=round((time.perf_counter() - main_start) * 1000, 2),
             )
         except Exception:
+            if args.strict:
+                raise
             pass
         if not args.no_audit_status:
             try:
@@ -218,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
                     status_path=Path(args.audit_status_path) if args.audit_status_path else None,
                 )
             except Exception:
+                if args.strict:
+                    raise
                 pass
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
@@ -232,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.strict:
             raise
         if args.json_output:
-            print(json.dumps({"decision": "skip", "error": str(exc)}, ensure_ascii=False, indent=2))
+            print(json.dumps(fallback_payload(exc), ensure_ascii=False, indent=2))
         return 0
 
 
