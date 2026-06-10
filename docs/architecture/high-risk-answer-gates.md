@@ -17,6 +17,26 @@ safety-critical, regulated, team, or similarly high-impact conclusions. They
 are not baseline ceremony for ordinary `personal_default` clean-source search
 or first recall.
 
+## Adoption Status
+
+This document is the canonical adoption-status statement for the knowledge
+answer gate. The current package is a staged deterministic contract prototype:
+`aippocampus_runtime.knowledge` ships pure local validators and gate helpers,
+but there is no default foreground caller from personal recall, prompt hooks,
+CLI answer generation, MCP answer generation, or agent activation.
+
+That means the gate is a current architecture and test contract, not live
+product coverage and not live high-risk answer coverage. A live
+`enterprise_governed` caller must explicitly opt in, reopen source spans,
+provide the domain context the gate requires, and preserve privacy, lifecycle,
+conflict, and human-review boundaries before a governed claim can reach
+`answer_with_cited_bounds`.
+
+Public docs and release notes should describe this as a source-backed boundary
+prototype until a real runtime caller exists with negative fixtures for
+source-reopen, privacy, stale/conflict, and high-risk behavior. Do not imply
+that ordinary first recall or foreground hooks enforce this gate by default.
+
 ## Decision
 
 High-risk answer formation must pass through
