@@ -1,0 +1,635 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_public_reliability_gauntlet",
+  "generated_at": "2026-06-10T09:37:26Z",
+  "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1102",
+  "status": "public_safe_gauntlet_passed_with_boundaries",
+  "ok": true,
+  "axis_names": [
+    "runtime_stability",
+    "mis_recall_quality",
+    "pollution_hygiene"
+  ],
+  "axes": {
+    "runtime_stability": {
+      "status": "passed_with_warnings",
+      "ok": true,
+      "claim_boundary": "Runtime axis combines a published LongMemEval-S 500Q aggregate and public-safe synthetic scale/fanout smokes. Synthetic rows are pressure models, not real GB/TB registry runtime proof.",
+      "metrics": {
+        "longmemeval_question_count": 500,
+        "longmemeval_runtime_seconds": 803.1,
+        "longmemeval_warning_count": 0,
+        "synthetic_clean_source_bytes": 4294967296,
+        "synthetic_segment_count": 64,
+        "synthetic_worst_case_sqlite_handles": 192,
+        "synthetic_planned_sqlite_handles": 64,
+        "warning_count": 3,
+        "blocker_count": 0,
+        "warnings": [
+          "clean_source_gb_scale",
+          "sync_policy_bytes",
+          "query_fanout"
+        ],
+        "blockers": [],
+        "question_tracking_candidate_count": 48,
+        "question_tracking_all_pair_count": 1128,
+        "question_tracking_sidecar_pair_count": 1128
+      },
+      "components": {
+        "longmemeval_s_500_reference": {
+          "status": "referenced_published_aggregate",
+          "source_report": "docs/evidence/benchmarks/longmemeval.md#current-published-result",
+          "reproduce_commands": "docs/evidence/benchmarks/longmemeval.md#commands",
+          "dataset": {
+            "split": "longmemeval-v1-small",
+            "dataset_version": "longmemeval-cleaned 2025-09",
+            "dataset_bytes": 277383467,
+            "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442"
+          },
+          "evaluation": {
+            "mode": "retrieval_only",
+            "question_count": 500,
+            "top_k": 10,
+            "evidence_context_radius": 5,
+            "runtime_seconds": 803.1,
+            "warning_count": 0,
+            "progress_checkpoints": "completed",
+            "partial_output_behavior": "final_partial_output_completed_not_blocked",
+            "raw_report_storage": "benchmark_corpus/reports local gitignored aggregate only"
+          },
+          "metrics": {
+            "question_count": 500,
+            "evidence_line_case_count": 479,
+            "session_recall_at_10": {
+              "numerator": 479,
+              "denominator": 500,
+              "rate": 0.958
+            },
+            "evidence_line_recall_at_10": {
+              "numerator": 408,
+              "denominator": 479,
+              "rate": 0.8518
+            },
+            "context_visible_evidence_recall_at_10": {
+              "numerator": 452,
+              "denominator": 479,
+              "rate": 0.9436
+            },
+            "session_mrr": 0.8809,
+            "evidence_line_mrr": 0.6309,
+            "context_visible_evidence_mrr": 0.8086,
+            "evidence_recall_ladder": {
+              "r_at_1": {
+                "numerator": 240,
+                "denominator": 479,
+                "rate": 0.501
+              },
+              "r_at_3": {
+                "numerator": 349,
+                "denominator": 479,
+                "rate": 0.7286
+              },
+              "r_at_5": {
+                "numerator": 380,
+                "denominator": 479,
+                "rate": 0.7933
+              },
+              "r_at_10": {
+                "numerator": 408,
+                "denominator": 479,
+                "rate": 0.8518
+              },
+              "r_at_20": {
+                "numerator": 429,
+                "denominator": 479,
+                "rate": 0.8956
+              },
+              "r_at_50": {
+                "numerator": 450,
+                "denominator": 479,
+                "rate": 0.9395
+              }
+            },
+            "exact_line_miss_taxonomy": {
+              "context_visible_exact_line_miss": 44,
+              "session_found_below_top_k": 9,
+              "same_session_wrong_line_top_k": 9,
+              "gold_line_low_ranked_21_to_50": 5,
+              "gold_line_below_rank_50": 3,
+              "gold_line_near_miss_rank_11_to_20": 1
+            },
+            "context_visible_rescue_count": 44,
+            "context_visible_rescue_distance": {
+              "distance_1": 29,
+              "distance_2_to_context_radius": 15
+            }
+          },
+          "privacy_boundary": {
+            "raw_text_emitted": false,
+            "snippets_emitted": false,
+            "case_ids_emitted": false,
+            "absolute_paths_emitted": false,
+            "source_report_is_aggregate": true
+          },
+          "cannot_claim": [
+            "longmemeval_qa_score",
+            "answer_generation_quality",
+            "judge_model_score",
+            "longmemeval_v2_score",
+            "sota_or_external_baseline_superiority",
+            "exact_line_citation_quality_solved",
+            "broad_memory_superiority"
+          ]
+        },
+        "synthetic_scale_capacity": {
+          "status": "simulated_with_warnings",
+          "ok": true,
+          "metrics": {
+            "canonical_clean_source_bytes": 4294967296,
+            "generated_index_bytes": 2576980377,
+            "index_amplification_ratio": 0.6,
+            "sync_policy_bytes": 1503238553,
+            "segment_count": 64,
+            "worst_case_sqlite_handles": 192,
+            "planned_sqlite_handles": 64,
+            "estimated_rebuild_work_units": 64
+          },
+          "thresholds": {
+            "clean_source_gb_scale": {
+              "state": "warning",
+              "warning_at_bytes": 1073741824,
+              "meaning": "warning: prefer chunked manifests, delta sync, and fanout planning"
+            },
+            "generated_index_amplification": {
+              "state": "pass",
+              "warning_at_ratio": 1.0,
+              "blocker_at_ratio": 3.0,
+              "meaning": "warning/blocker: generated caches must stay rebuildable and explainable"
+            },
+            "sync_policy_bytes": {
+              "state": "warning",
+              "warning_at_bytes": 1073741824,
+              "meaning": "warning: default sync should move source chunks and manifests, not large caches"
+            },
+            "query_fanout": {
+              "state": "warning",
+              "fanout_budget": 64,
+              "meaning": "warning: registry planner should narrow candidates before opening indexes"
+            }
+          },
+          "warnings": [
+            "clean_source_gb_scale",
+            "sync_policy_bytes",
+            "query_fanout"
+          ],
+          "blockers": [],
+          "privacy_boundary": {
+            "reads_private_registry": false,
+            "creates_large_files": false,
+            "reads_clean_source_message_bodies": false,
+            "emits_absolute_paths": false,
+            "output_shape": "synthetic_aggregate_capacity_model"
+          },
+          "cannot_claim": [
+            "real_gb_registry_runtime",
+            "real_tb_registry_runtime",
+            "windows_interrupted_rebuild_recovery"
+          ]
+        },
+        "question_tracking_scale": {
+          "status": "synthetic_scale_smoke",
+          "ok": true,
+          "metrics": {
+            "candidate_count": 48,
+            "group_count": 6,
+            "all_pair_count": 1128,
+            "baseline_elapsed_ms": 87,
+            "sidecar_elapsed_ms": 600,
+            "sidecar_pair_count": 1128,
+            "source_joined_pair_count": 1128,
+            "source_ref_key_mismatch_count": 0,
+            "baseline_strong_pair_coverage": 1.0
+          },
+          "warnings": [],
+          "privacy_boundary": {
+            "reads_private_registry": false,
+            "writes_formal_jobs": false,
+            "raw_private_text_emitted": false
+          },
+          "cannot_claim": [
+            "real_registry_runtime_performance",
+            "default_question_index_prefilter_is_safe",
+            "vector_neighbors_are_truth",
+            "private_history_question_recall_quality"
+          ]
+        },
+        "long_thread_segment_soak": {
+          "status": "skipped_by_default_enable_with_segment_soak",
+          "ok": true,
+          "metrics": {},
+          "privacy_boundary": {
+            "raw_private_text_emitted": false,
+            "absolute_paths_emitted": false
+          },
+          "cannot_claim": [
+            "real_file_segment_soak_runtime_from_this_default_run",
+            "windows_interrupted_rebuild_recovery"
+          ]
+        }
+      },
+      "cannot_claim": [
+        "answer_generation_quality",
+        "broad_memory_superiority",
+        "default_question_index_prefilter_is_safe",
+        "exact_line_citation_quality_solved",
+        "judge_model_score",
+        "live_hook_write_path_quality",
+        "longmemeval_qa_score",
+        "longmemeval_v2_score",
+        "private_history_question_recall_quality",
+        "private_history_runtime",
+        "real_file_segment_soak_runtime_from_this_default_run",
+        "real_gb_registry_runtime",
+        "real_registry_runtime_performance",
+        "real_tb_registry_runtime",
+        "sota_or_external_baseline_superiority",
+        "vector_neighbors_are_truth",
+        "windows_interrupted_rebuild_recovery"
+      ]
+    },
+    "mis_recall_quality": {
+      "status": "diagnostic_passed",
+      "ok": true,
+      "claim_boundary": "Mis-recall axis distinguishes source-window routing from exact-line citation quality and pairs LongMemEval-S aggregate metrics with a public hard-negative/false-evidence suppression diagnostic.",
+      "metrics": {
+        "session_recall_at_10": {
+          "numerator": 479,
+          "denominator": 500,
+          "rate": 0.958
+        },
+        "evidence_line_recall_at_10": {
+          "numerator": 408,
+          "denominator": 479,
+          "rate": 0.8518
+        },
+        "context_visible_evidence_recall_at_10": {
+          "numerator": 452,
+          "denominator": 479,
+          "rate": 0.9436
+        },
+        "session_mrr": 0.8809,
+        "evidence_line_mrr": 0.6309,
+        "context_visible_evidence_mrr": 0.8086,
+        "evidence_recall_ladder": {
+          "r_at_1": {
+            "numerator": 240,
+            "denominator": 479,
+            "rate": 0.501
+          },
+          "r_at_3": {
+            "numerator": 349,
+            "denominator": 479,
+            "rate": 0.7286
+          },
+          "r_at_5": {
+            "numerator": 380,
+            "denominator": 479,
+            "rate": 0.7933
+          },
+          "r_at_10": {
+            "numerator": 408,
+            "denominator": 479,
+            "rate": 0.8518
+          },
+          "r_at_20": {
+            "numerator": 429,
+            "denominator": 479,
+            "rate": 0.8956
+          },
+          "r_at_50": {
+            "numerator": 450,
+            "denominator": 479,
+            "rate": 0.9395
+          }
+        },
+        "exact_line_miss_taxonomy": {
+          "context_visible_exact_line_miss": 44,
+          "session_found_below_top_k": 9,
+          "same_session_wrong_line_top_k": 9,
+          "gold_line_low_ranked_21_to_50": 5,
+          "gold_line_below_rank_50": 3,
+          "gold_line_near_miss_rank_11_to_20": 1
+        },
+        "hard_negative_suppression": {
+          "rate": 1.0,
+          "source_evidence_over_escalation_count": 0,
+          "explicit_negation_violation_count": 0
+        },
+        "false_positive_proxy": {
+          "false_evidence_escalation_count": 0,
+          "source_evidence_over_escalation_count": 0
+        }
+      },
+      "components": {
+        "longmemeval_s_500_reference": {
+          "status": "referenced_published_aggregate",
+          "source_report": "docs/evidence/benchmarks/longmemeval.md#current-published-result",
+          "metrics": {
+            "question_count": 500,
+            "session_recall_at_10": {
+              "numerator": 479,
+              "denominator": 500,
+              "rate": 0.958
+            },
+            "evidence_line_recall_at_10": {
+              "numerator": 408,
+              "denominator": 479,
+              "rate": 0.8518
+            },
+            "context_visible_evidence_recall_at_10": {
+              "numerator": 452,
+              "denominator": 479,
+              "rate": 0.9436
+            },
+            "evidence_line_mrr": 0.6309,
+            "exact_line_miss_taxonomy": {
+              "context_visible_exact_line_miss": 44,
+              "session_found_below_top_k": 9,
+              "same_session_wrong_line_top_k": 9,
+              "gold_line_low_ranked_21_to_50": 5,
+              "gold_line_below_rank_50": 3,
+              "gold_line_near_miss_rank_11_to_20": 1
+            }
+          },
+          "privacy_boundary": {
+            "raw_text_emitted": false,
+            "snippets_emitted": false,
+            "case_ids_emitted": false,
+            "absolute_paths_emitted": false,
+            "source_report_is_aggregate": true
+          },
+          "cannot_claim": [
+            "longmemeval_qa_score",
+            "answer_generation_quality",
+            "judge_model_score",
+            "longmemeval_v2_score",
+            "sota_or_external_baseline_superiority",
+            "exact_line_citation_quality_solved",
+            "broad_memory_superiority"
+          ]
+        },
+        "semantic_robustness_track_s": {
+          "status": "diagnostic_only",
+          "ok": true,
+          "quality_gate_ok": true,
+          "metrics": {
+            "false_evidence_escalation_count": 0,
+            "retrieval_invariance_top_k_survival_rate": 1.0,
+            "hard_negative_suppression_rate": 1.0,
+            "explicit_negation_violation_count": 0,
+            "source_evidence_over_escalation_count": 0,
+            "stale_as_current_count": 0
+          },
+          "privacy_boundary": {
+            "raw_prompt_or_query_text_emitted": false,
+            "snippets_emitted": false,
+            "source_reference_details_emitted": false,
+            "absolute_paths_emitted": false,
+            "case_ids_are_hashed": false,
+            "output_shape": "sanitized_track_s_semantic_robustness_diagnostics"
+          },
+          "cannot_claim": [
+            "human_level_semantic_understanding",
+            "track_a_b_product_quality_replacement",
+            "live_llm_judge_quality",
+            "proxy_model_agreement_as_source_truth",
+            "broad_real_history_semantic_robustness",
+            "embedding_topology_as_understanding_proof"
+          ]
+        }
+      },
+      "cannot_claim": [
+        "answer_generation_quality",
+        "broad_memory_superiority",
+        "broad_real_history_semantic_robustness",
+        "embedding_topology_as_understanding_proof",
+        "exact_line_citation_quality_solved",
+        "human_level_semantic_understanding",
+        "judge_model_score",
+        "live_answer_quality",
+        "live_llm_judge_quality",
+        "longmemeval_qa_score",
+        "longmemeval_v2_score",
+        "private_history_quality",
+        "proxy_model_agreement_as_source_truth",
+        "sota_or_external_baseline_superiority",
+        "track_a_b_product_quality_replacement"
+      ]
+    },
+    "pollution_hygiene": {
+      "status": "fixture_gates_passed",
+      "ok": true,
+      "claim_boundary": "Pollution axis covers public synthetic knowledge contamination, privacy partitioning, source-authority, and transcript/write-path pollution. It is not a live hook-write quality or private-history pollution rate.",
+      "metrics": {
+        "contamination_escape_rate": 0.0,
+        "stale_source_harm_rate": 0.0,
+        "authority_override_rate": 0.0,
+        "privacy_partition_leak_rate": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "auto_hook_pollution_family_counts": {
+          "boot_or_system_text": 1,
+          "tool_trace_user_like_text": 1,
+          "recalled_context_feedback_loop": 1,
+          "empty_message_run_id": 1,
+          "transient_task_state": 1,
+          "agent_or_host_metadata": 1
+        },
+        "auto_hook_durable_memory_write_count": 0,
+        "auto_hook_bounded_evidence_count": 0,
+        "auto_hook_source_backed_fact_count": 0,
+        "auto_hook_recalled_echo_reextraction_count": 0,
+        "auto_hook_empty_message_memory_count": 0
+      },
+      "components": {
+        "knowledge_pollution": {
+          "status": "contract_smoke_scored",
+          "ok": true,
+          "quality_gate_ok": true,
+          "metrics": {
+            "case_count": 13,
+            "contamination_escape_rate": 0.0,
+            "stale_source_harm_rate": 0.0,
+            "authority_override_rate": 0.0,
+            "privacy_partition_leak_rate": 0.0,
+            "unsupported_claim_rate": 0.0,
+            "source_prompt_injection_escape_rate": 0.0,
+            "model_summary_as_truth_rate": 0.0
+          },
+          "privacy_boundary": {
+            "fixture_public_safe": true,
+            "raw_input_text_emitted": false,
+            "raw_source_text_emitted": false,
+            "absolute_paths_emitted": false,
+            "source_text_exported": false,
+            "external_model_source_text_exported": false,
+            "output_shape": "sanitized_ids_hashes_gates_and_metrics"
+          },
+          "cannot_claim": [
+            "claim_scope_not_applicable",
+            "cross_case_context_bleed_safe",
+            "embedding_hit_is_navigation_only",
+            "external_model_contract_secret_safety",
+            "external_tool_contract_secret_safe_by_default",
+            "fake_authority_not_primary_source",
+            "inactive_or_unpromoted_claim_not_answerable",
+            "legal_advice_or_compliance_certification",
+            "low_authority_override_accepted",
+            "medical_memory_used_for_legal_review",
+            "missing_context_not_answerable",
+            "model_summary_is_truth_source",
+            "not_effective_at_requested_date",
+            "private_user_memory_quality",
+            "professional_certification_not_claimed",
+            "real_contract_review_quality",
+            "source_instruction_not_executable",
+            "source_text_not_exported_by_gate",
+            "stale_or_superseded_source_is_current",
+            "therapy_memory_used_for_work_advice"
+          ]
+        },
+        "auto_hook_pollution": {
+          "status": "fixture_report",
+          "ok": true,
+          "metrics": {
+            "case_count": 6,
+            "passed_count": 6,
+            "failed_count": 0,
+            "pollution_family_counts": {
+              "boot_or_system_text": 1,
+              "tool_trace_user_like_text": 1,
+              "recalled_context_feedback_loop": 1,
+              "empty_message_run_id": 1,
+              "transient_task_state": 1,
+              "agent_or_host_metadata": 1
+            },
+            "durable_memory_write_count": 0,
+            "bounded_evidence_count": 0,
+            "source_backed_fact_count": 0,
+            "recalled_echo_reextraction_count": 0,
+            "empty_message_memory_count": 0
+          },
+          "privacy_boundary": {
+            "raw_event_text_emitted": false,
+            "raw_hook_payload_emitted": false,
+            "absolute_paths_emitted": false
+          },
+          "cannot_claim": [
+            "live_agentmemory_or_mem0_behavior",
+            "full_lifecycle_write_path_filter_quality",
+            "competitor_comparison",
+            "durable_memory_write_implementation",
+            "private_real_history_pollution_rate"
+          ]
+        }
+      },
+      "cannot_claim": [
+        "claim_scope_not_applicable",
+        "competitor_comparison",
+        "competitor_superiority",
+        "cross_case_context_bleed_safe",
+        "durable_memory_write_implementation",
+        "embedding_hit_is_navigation_only",
+        "external_model_contract_secret_safety",
+        "external_tool_contract_secret_safe_by_default",
+        "fake_authority_not_primary_source",
+        "full_lifecycle_write_path_filter_quality",
+        "inactive_or_unpromoted_claim_not_answerable",
+        "legal_advice_or_compliance_certification",
+        "live_agentmemory_or_mem0_behavior",
+        "live_hook_write_path_quality",
+        "low_authority_override_accepted",
+        "medical_memory_used_for_legal_review",
+        "missing_context_not_answerable",
+        "model_summary_is_truth_source",
+        "not_effective_at_requested_date",
+        "private_history_pollution_rate",
+        "private_real_history_pollution_rate",
+        "private_user_memory_quality",
+        "professional_certification_not_claimed",
+        "real_contract_review_quality",
+        "source_instruction_not_executable",
+        "source_text_not_exported_by_gate",
+        "stale_or_superseded_source_is_current",
+        "therapy_memory_used_for_work_advice"
+      ]
+    }
+  },
+  "privacy_boundary": {
+    "public_safe_default": true,
+    "raw_private_text_emitted": false,
+    "raw_longmemeval_text_emitted": false,
+    "raw_fixture_text_emitted": false,
+    "local_absolute_paths_emitted": false,
+    "absolute_paths_emitted": false,
+    "secrets_or_tokens_emitted": false,
+    "external_model_payloads_emitted": false,
+    "output_shape": "sanitized_aggregate_axis_report"
+  },
+  "claim_boundary": "A public-safe reliability gate exists for runtime pressure, mis-recall diagnostics, and pollution hygiene. The axes are intentionally not collapsed into a single score.",
+  "cannot_claim": [
+    "answer_generation_quality",
+    "broad_memory_superiority",
+    "broad_real_history_semantic_robustness",
+    "claim_scope_not_applicable",
+    "competitor_comparison",
+    "competitor_superiority",
+    "cross_case_context_bleed_safe",
+    "default_question_index_prefilter_is_safe",
+    "durable_memory_write_implementation",
+    "embedding_hit_is_navigation_only",
+    "embedding_topology_as_understanding_proof",
+    "exact_line_citation_quality_solved",
+    "external_model_contract_secret_safety",
+    "external_tool_contract_secret_safe_by_default",
+    "fake_authority_not_primary_source",
+    "full_lifecycle_write_path_filter_quality",
+    "human_level_semantic_understanding",
+    "inactive_or_unpromoted_claim_not_answerable",
+    "judge_model_score",
+    "legal_advice_or_compliance_certification",
+    "live_agentmemory_or_mem0_behavior",
+    "live_answer_quality",
+    "live_hook_write_path_quality",
+    "live_llm_judge_quality",
+    "longmemeval_qa_score",
+    "longmemeval_v2_score",
+    "low_authority_override_accepted",
+    "medical_memory_used_for_legal_review",
+    "missing_context_not_answerable",
+    "model_summary_is_truth_source",
+    "not_effective_at_requested_date",
+    "private_history_pollution_rate",
+    "private_history_quality",
+    "private_history_question_recall_quality",
+    "private_history_runtime",
+    "private_real_history_pollution_rate",
+    "private_user_memory_quality",
+    "professional_certification_not_claimed",
+    "proxy_model_agreement_as_source_truth",
+    "real_contract_review_quality",
+    "real_file_segment_soak_runtime_from_this_default_run",
+    "real_gb_registry_runtime",
+    "real_registry_runtime_performance",
+    "real_tb_registry_runtime",
+    "single_aggregate_reliability_score",
+    "sota_or_external_baseline_superiority",
+    "source_instruction_not_executable",
+    "source_text_not_exported_by_gate",
+    "stale_or_superseded_source_is_current",
+    "therapy_memory_used_for_work_advice",
+    "track_a_b_product_quality_replacement",
+    "vector_neighbors_are_truth",
+    "windows_interrupted_rebuild_recovery"
+  ],
+  "elapsed_ms": 12098.89
+}
