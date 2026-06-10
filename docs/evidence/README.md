@@ -8,6 +8,11 @@ Use [`docs/evidence/can-claim-ladder.md`](can-claim-ladder.md) when you need
 the short positive map first: what is already proven, what is field-tested, and
 where the boundary starts.
 
+Use [`docs/evidence/public-provenance-ledger.md`](public-provenance-ledger.md)
+when you need the compact public origin/current-value thread: current value
+floor, concept provenance, reproducible first path, field-report index, launch
+gates, and agent recommendation boundary.
+
 ## Current Claim Snapshot
 
 Use [`docs/evidence/current-claims.md`](current-claims.md) for current benchmark

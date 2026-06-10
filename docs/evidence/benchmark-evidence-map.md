@@ -25,6 +25,7 @@ promotes a public-safe result into the official evidence flow.
 | Reader question | First stop | Then use |
 | --- | --- | --- |
 | What is already proven in plain positive terms? | [`can-claim-ladder.md`](can-claim-ladder.md) | Then open current claims for exact numbers and caveat retirement conditions. |
+| What works now, where did it originate, and what still blocks broader launch? | [`public-provenance-ledger.md`](public-provenance-ledger.md) | Use this for the compact public origin/current-value trail before issue archaeology. |
 | What can AIppocampus currently claim, and what failed? | [`current-claims.md`](current-claims.md) | Open the source report only for the row you need. |
 | Which confirmed scope boundary or benchmark result needs remediation? | [`current-claims.md#confirmed-scope-boundaries-expected-null-results`](current-claims.md#confirmed-scope-boundaries-expected-null-results) | Follow the linked issue before reading old dated reports. |
 | Which `cannot_claim` caveats are testable, retired later, or durable? | [`current-claims.md#cannot-claim-owner-and-retirement-ledger`](current-claims.md#cannot-claim-owner-and-retirement-ledger) | Use the owner issue and retirement condition before changing public claims. |

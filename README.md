@@ -32,6 +32,12 @@ For the current proof map, use the
 positive claims that are already supported, then routes to benchmark and
 cannot-claim boundaries.
 
+For a compact origin and current-value trail, use the
+[Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md):
+it separates current claims, deterministic fixtures, field reports,
+private/local aggregate evidence, and launch gates without weakening claim
+boundaries.
+
 In ordinary use, AIppocampus should feel less like a control panel than a
 remembered doorway. It helps an agent ask: where did this come from, what did
 we actually say, and which source should be opened again?
