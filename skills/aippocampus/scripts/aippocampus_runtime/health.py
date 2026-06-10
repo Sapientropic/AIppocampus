@@ -39,7 +39,7 @@ from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
-from aippocampus_runtime.source.source_texture import source_texture_health_summary
+from aippocampus_runtime.source.source_intake_health import clean_source_health_summaries
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 
@@ -643,7 +643,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "unindexed_byte_ratio": ratio(clean_byte_delta, rollout_stat.st_size),
             "activity_class": clean_source_activity_class,
             "latest_visible_gap": raw_newer_than_clean_source,
-            "source_texture": source_texture_health_summary(clean_source_dir, clean_manifest),
+            **clean_source_health_summaries(clean_source_dir, clean_manifest, registry_path, visibility),
         },
         "freshness": freshness,
         "checkpoint": {
