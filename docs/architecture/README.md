@@ -25,6 +25,7 @@ Roles:
 | [architecture-overview.md](architecture-overview.md) | current contract | High-level runtime layers, source-backed kernel contract, authority rings, data flow, and metaphor discipline. |
 | [clean-source-redaction-profiles.md](clean-source-redaction-profiles.md) | current contract | Optional redaction profiles without replacing raw-private clean source. |
 | [continuity-domains.md](continuity-domains.md) | current contract | Source-trailed domains, pathlets, macro derived pointers, and situation glyph boundaries. |
+| [cross-agent-recall-isolation.md](cross-agent-recall-isolation.md) | current contract | Cross-agent read-path isolation hard negatives and leak red-line counters. |
 | [cognitive-runtime-architecture.md](cognitive-runtime-architecture.md) | current contract | Job-circuit runtime discipline for deterministic gates and semantic workers. |
 | [edge-capture-consolidation-boundary.md](edge-capture-consolidation-boundary.md) | current contract | Edge capture vs asynchronous consolidation lane ownership. |
 | [encrypted-sync-v1.md](encrypted-sync-v1.md) | current contract | First encrypted sync design and compatibility boundary. |

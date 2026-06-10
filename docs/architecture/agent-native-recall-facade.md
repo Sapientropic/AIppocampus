@@ -155,6 +155,8 @@ agent adoption.
   [`foreground-memory-ux-budget.md`](foreground-memory-ux-budget.md).
 - The hot/warm/cold source-reopen latency and timeout policy lives in
   [`source-reopen-budget.md`](source-reopen-budget.md).
+- The cross-agent read-path isolation hard negatives live in
+  [`cross-agent-recall-isolation.md`](cross-agent-recall-isolation.md).
 - The current public API boundary lives in
   [`../guides/public-api.md`](../guides/public-api.md).
 - The coding-agent product lane lives in
