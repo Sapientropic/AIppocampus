@@ -21,6 +21,30 @@ The first fixture-backed contract lives in
 projection and example surface. It does not make `recall`, `deepen`, or
 `explain` public network endpoints.
 
+## Default Agent Pull Gesture
+
+`aippocampus_runtime.recall.agent_pull_gesture` defines the copyable #1130
+workflow named `source_backed_continuity_gesture_v1`:
+
+```text
+1. Detect a continuity-sensitive task.
+2. Call recall(query, context) instead of waiting only for hook output.
+3. Use one compact MemoryPacket or AIppo activation packet.
+4. Call deepen(route_id) before exact, public, disputed, stale/currentness,
+   sensitive, or high-risk claims.
+5. Record lightweight outcome feedback.
+```
+
+This gesture is a product shape over existing surfaces, not a new memory
+store. It covers a human CLI path, an agent-native facade path, and a
+hook-plus-pull path. It also includes negative and anti-nag cases so "pull"
+does not become constant memory fishing.
+
+Low-risk bounded summaries and ripe AIppo working-contract packets may guide
+ordinary planning or coding posture without dumping provenance into the
+foreground. They still carry `no_claim_before_reopen` unless source is already
+open and bounded.
+
 ## Memory Packet
 
 Foreground `MemoryPacket` values stay compact:
@@ -142,10 +166,20 @@ source_backed_claim_without_reopen = 0
 foreground_packet_budget_violation_count = 0
 ```
 
+`build_agent_pull_gesture_fixture_report()` covers the named default gesture
+and reports `agent_pull_follow_through_rate`,
+`deepen_required_follow_through_rate`, `aippo_activation_success_rate`,
+`bounded_summary_sufficient_count`, `foreground_packet_max_bytes`,
+`manual_query_invention_count`, `unnecessary_pull_count`, and
+`wrong_route_drag_count`.
+
 This supports a narrow claim: AIppocampus has a simple
 recall/deepen/explain-facing shape for agents. It does not support public SDK
 stability, hosted service readiness, profile-memory equivalence, or default
-agent adoption.
+agent adoption. The gesture fixture adds a second narrow claim: AIppocampus has
+a copyable source-backed continuity gesture for agent-initiated pull. It does
+not claim agents should call memory every turn, AIppos are claim-ready facts, or
+bounded summaries replace source evidence.
 
 ## Relationship To Other Contracts
 
