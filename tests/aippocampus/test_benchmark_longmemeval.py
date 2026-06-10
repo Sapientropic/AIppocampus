@@ -7,6 +7,7 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
@@ -193,6 +194,90 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("drawer nine", dumped)
         self.assertNotIn("blue badge note continues", dumped)
+
+    def test_semantic_line_rerank_reports_llm_arm_metadata_without_raw_text(self) -> None:
+        captured_messages: list[list[dict[str, str]]] = []
+
+        def fake_call_chat_json(
+            messages: list[dict[str, str]],
+            api_key: str,
+            model: str,
+            base_url: str,
+            max_tokens: int | None,
+            timeout: float,
+            temperature: float,
+            **_: object,
+        ) -> dict[str, Any]:
+            captured_messages.append(messages)
+            self.assertEqual(api_key, "test-key")
+            self.assertTrue(model)
+            self.assertTrue(base_url)
+            self.assertIsNone(max_tokens)
+            self.assertEqual(timeout, 12)
+            self.assertEqual(temperature, 0.0)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {"ranked_lines": [2], "confidence": 0.84}
+                            )
+                        }
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 2,
+                    "total_tokens": 12,
+                    "prompt_cache_hit_tokens": 4,
+                    "prompt_cache_miss_tokens": 6,
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "longmemeval_oracle.json"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path), patch.dict(
+                "os.environ",
+                {"DEEPSEEK_API_KEY": "test-key"},
+            ), patch("source_evidence.standard_public.call_chat_json", fake_call_chat_json):
+                payload = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="semantic",
+                    line_reranker_workers=1,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(len(captured_messages), 1)
+        arm = payload["evaluation"]["llm_rerank_arm"]
+        self.assertEqual(arm["arm"], "llm_window_to_line_rerank")
+        self.assertEqual(arm["prompt_version"], "llm-window-to-line-rerank-v1")
+        self.assertFalse(arm["output_boundary"]["question_answering_allowed"])
+        self.assertIn("gold_answer", arm["input_boundary"]["withheld_from_model"])
+        adapter_config = payload["standard_adapter"]["config"]
+        self.assertTrue(adapter_config["line_reranker_external_model"])
+        self.assertEqual(
+            adapter_config["line_reranker_metadata"]["prompt_version"],
+            "llm-window-to-line-rerank-v1",
+        )
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["line_reranker_available_count"], 1)
+        self.assertEqual(metrics["line_reranker_usage"]["total_tokens"], 12)
+        self.assertEqual(metrics["line_reranker_cache"]["hit_tokens"], 4)
+        self.assertEqual(metrics["line_reranker_cache"]["miss_tokens"], 6)
+        self.assertEqual(metrics["line_reranker_latency_ms"]["count"], 1)
+        self.assertEqual(
+            metrics["line_reranker_metadata"]["prompt_version"],
+            "llm-window-to-line-rerank-v1",
+        )
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("secret fixture answer marker", dumped)
+        self.assertNotIn("retrieval marker", dumped)
+        self.assertNotIn(str(path), dumped)
 
     def test_fixed_evidence_rank_buckets_cover_near_miss_diagnostics(self) -> None:
         self.assertEqual(standard_public.evidence_rank_bucket(1), "rank_1")

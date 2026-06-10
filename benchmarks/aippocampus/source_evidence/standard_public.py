@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 import benchmark_fts5_recall as fts5_benchmark
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, deepseek_cache_metrics_from_usage
+from aippocampus_runtime.model.client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
+)
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import split_query_terms
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
@@ -52,6 +56,8 @@ from .reporting import (
 )
 
 EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
+SEMANTIC_LINE_RERANKER_ARM = "llm_window_to_line_rerank"
+SEMANTIC_LINE_RERANKER_PROMPT_VERSION = "llm-window-to-line-rerank-v1"
 LEXICAL_RERANKER_DIRECT_TERMS = {
     "adopt",
     "adopted",
@@ -811,6 +817,152 @@ def semantic_line_reranker_available(api_key_env: str = "DEEPSEEK_API_KEY") -> b
     return bool(os.environ.get(api_key_env))
 
 
+def semantic_line_reranker_provider(*, model: str, base_url: str) -> str:
+    text = " ".join([model, base_url]).casefold()
+    return "deepseek" if "deepseek" in text else "openai_compatible"
+
+
+def semantic_line_reranker_cache_contract(provider: str) -> str:
+    return (
+        DEEPSEEK_PREFIX_CACHE_CONTRACT
+        if provider == "deepseek"
+        else NO_PROVIDER_CACHE_CONTRACT
+    )
+
+
+def semantic_line_reranker_cache_metrics(
+    usage: dict[str, Any],
+    *,
+    provider: str,
+) -> dict[str, Any]:
+    kind = semantic_line_reranker_cache_contract(provider)
+    if kind == DEEPSEEK_PREFIX_CACHE_CONTRACT:
+        result = deepseek_cache_metrics_from_usage(usage)
+        result["kind"] = kind
+        return result
+    return {"available": False, "kind": kind}
+
+
+def summarize_line_reranker_latency(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    values = [
+        float(row["line_reranker_latency_ms"])
+        for row in rows
+        if isinstance(row.get("line_reranker_latency_ms"), int | float)
+    ]
+    if not values:
+        return {"count": 0}
+    return {
+        "count": len(values),
+        "avg": round(sum(values) / len(values), 2),
+        "max": round(max(values), 2),
+    }
+
+
+def summarize_line_reranker_cache(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    kind_counts: dict[str, int] = {}
+    available_count = 0
+    hit_tokens = 0
+    miss_tokens = 0
+    for row in rows:
+        cache = row.get("line_reranker_cache")
+        if not isinstance(cache, dict) or not cache:
+            continue
+        kind = str(cache.get("kind") or "unknown")
+        kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        if cache.get("available"):
+            available_count += 1
+        hit_tokens += int(cache.get("hit_tokens") or 0)
+        miss_tokens += int(cache.get("miss_tokens") or 0)
+    total = hit_tokens + miss_tokens
+    return {
+        "available_count": available_count,
+        "kind_counts": kind_counts,
+        "hit_tokens": hit_tokens,
+        "miss_tokens": miss_tokens,
+        "hit_rate": round(hit_tokens / total, 4) if total else 0.0,
+    }
+
+
+def summarize_line_reranker_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    variants: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        metadata = row.get("line_reranker_metadata")
+        if not isinstance(metadata, dict):
+            continue
+        key = json.dumps(metadata, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        variants.append(metadata)
+    if not variants:
+        return {}
+    first = variants[0]
+    if len(variants) == 1:
+        return first
+    return {
+        "variant_count": len(variants),
+        "variants": variants,
+    }
+
+
+def semantic_line_reranker_public_contract(
+    *,
+    api_key_env: str = "DEEPSEEK_API_KEY",
+    model: str | None = None,
+    base_url: str | None = None,
+    timeout: int = DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    resolved_model = model or os.environ.get("AIPPOCAMPUS_LINE_RERANKER_MODEL") or DEFAULT_MODEL
+    resolved_base_url = (
+        base_url or os.environ.get("AIPPOCAMPUS_LINE_RERANKER_BASE_URL") or DEFAULT_BASE_URL
+    )
+    provider = semantic_line_reranker_provider(
+        model=resolved_model,
+        base_url=resolved_base_url,
+    )
+    return {
+        "arm": SEMANTIC_LINE_RERANKER_ARM,
+        "prompt_version": SEMANTIC_LINE_RERANKER_PROMPT_VERSION,
+        "provider": provider,
+        "model": resolved_model,
+        "base_url_sha1": sha1_text(resolved_base_url)[:16],
+        "api_key_env": api_key_env,
+        "cache_contract": semantic_line_reranker_cache_contract(provider),
+        "timeout": int(timeout),
+        "max_tokens": None if max_tokens is None or int(max_tokens) <= 0 else int(max_tokens),
+        "temperature": 0.0,
+        "cost_status": "provider_cost_not_reported",
+        "tracked_cost_fields": ["usage", "latency_ms", "cache"],
+        "input_boundary": {
+            "visible_to_model": [
+                "question_text",
+                "candidate_line_number",
+                "candidate_role",
+                "candidate_session_rank",
+                "candidate_nearest_hit_rank",
+                "candidate_context_distance",
+                "candidate_source_text",
+            ],
+            "withheld_from_model": [
+                "gold_answer",
+                "expected_lines",
+                "expected_sessions",
+                "has_answer_labels",
+                "judge_labels",
+                "miss_taxonomy",
+                "raw_report_cases",
+            ],
+        },
+        "output_boundary": {
+            "ranked_lines_filtered_to_candidate_set": True,
+            "question_answering_allowed": False,
+            "raw_model_response_persisted": False,
+        },
+    }
+
+
 def line_reranker_error_kind(error: Any) -> str:
     text = str(error or "").casefold()
     if "length" in text or "max-tokens" in text or "max_tokens" in text:
@@ -860,6 +1012,7 @@ Rules:
 """
     user = json.dumps(
         {
+            "prompt_version": SEMANTIC_LINE_RERANKER_PROMPT_VERSION,
             "question": question,
             "candidate_lines": candidate_rows,
             "output_shape": {
@@ -882,30 +1035,61 @@ def run_semantic_line_reranker(
     base_url: str | None = None,
     max_tokens: int | None = None,
 ) -> dict[str, Any]:
+    contract = semantic_line_reranker_public_contract(
+        api_key_env=api_key_env,
+        model=model,
+        base_url=base_url,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
     api_key = os.environ.get(api_key_env)
     if not api_key:
         return {
             "available": False,
             "ranked_lines": [],
             "errors": ["missing semantic line-reranker api key"],
+            "metadata": contract,
         }
     if not candidates:
-        return {"available": False, "ranked_lines": [], "errors": ["empty candidates"]}
+        return {
+            "available": False,
+            "ranked_lines": [],
+            "errors": ["empty candidates"],
+            "metadata": contract,
+        }
+    resolved_model = str(contract["model"])
+    resolved_base_url = (
+        base_url or os.environ.get("AIPPOCAMPUS_LINE_RERANKER_BASE_URL") or DEFAULT_BASE_URL
+    )
+    started = time.perf_counter()
     response = call_chat_json(
         semantic_line_reranker_messages(question=question, candidates=candidates),
         api_key,
-        model or os.environ.get("AIPPOCAMPUS_LINE_RERANKER_MODEL") or DEFAULT_MODEL,
-        base_url or os.environ.get("AIPPOCAMPUS_LINE_RERANKER_BASE_URL") or DEFAULT_BASE_URL,
+        resolved_model,
+        resolved_base_url,
         None if max_tokens is None or int(max_tokens) <= 0 else int(max_tokens),
         int(timeout),
         0.0,
+        service_name=(
+            "DeepSeek line reranker API"
+            if contract["provider"] == "deepseek"
+            else "OpenAI-compatible line reranker API"
+        ),
+        cache_contract=str(contract["cache_contract"]),
     )
     parsed = parse_model_json(response)
+    usage = compact_usage(response.get("usage") or {})
     return {
         "available": True,
         "ranked_lines": parsed.get("ranked_lines") or [],
         "confidence": clamp_confidence(parsed.get("confidence")),
-        "usage": compact_usage(response.get("usage") or {}),
+        "usage": usage,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+        "cache": semantic_line_reranker_cache_metrics(
+            usage,
+            provider=str(contract["provider"]),
+        ),
+        "metadata": contract,
     }
 
 
@@ -1031,6 +1215,14 @@ def evaluate_standard_retrieval_case(
         semantic_lines: list[int] = []
         reranker_payload: dict[str, Any] = {}
         reranker_errors: list[str] = []
+        reranker_metadata: dict[str, Any] = (
+            semantic_line_reranker_public_contract(
+                timeout=line_reranker_timeout,
+                max_tokens=line_reranker_max_tokens,
+            )
+            if resolved_reranker_mode == "semantic" and line_reranker_fn is None
+            else {}
+        )
         source_joined_candidate_rank = rank_expected_line(candidates, expected_lines)
         source_joined_candidate_contains_evidence = bool(
             expected_lines & {int(candidate["line"]) for candidate in candidates}
@@ -1117,6 +1309,11 @@ def evaluate_standard_retrieval_case(
                     reranker_payload.get("confidence")
                 ),
                 "line_reranker_usage": compact_usage(reranker_payload.get("usage") or {}),
+                "line_reranker_latency_ms": reranker_payload.get("latency_ms"),
+                "line_reranker_cache": reranker_payload.get("cache") or {},
+                "line_reranker_metadata": (
+                    reranker_payload.get("metadata") or reranker_metadata
+                ),
                 "source_joined_candidate_contains_evidence": (
                     source_joined_candidate_contains_evidence
                 ),
@@ -1378,6 +1575,13 @@ def summarize_standard_retrieval_results(
                     len(reranker_cases),
                 ),
                 "line_reranker_usage": compact_usage(reranker_usage),
+                "line_reranker_latency_ms": summarize_line_reranker_latency(
+                    reranker_cases
+                ),
+                "line_reranker_cache": summarize_line_reranker_cache(reranker_cases),
+                "line_reranker_metadata": summarize_line_reranker_metadata(
+                    reranker_cases
+                ),
                 f"semantic_only_evidence_hit_top{top_k}": semantic_only_hits,
                 f"semantic_only_evidence_miss_top{top_k}": len(reranker_cases)
                 - semantic_only_hits,
@@ -1569,6 +1773,11 @@ def run_standard_retrieval_qa_benchmark(
         "line_reranker_workers": int(resolved_reranker_workers),
         "line_reranker_external_model": resolved_line_reranker_mode == "semantic",
     }
+    if resolved_line_reranker_mode == "semantic":
+        config["line_reranker_metadata"] = semantic_line_reranker_public_contract(
+            timeout=line_reranker_timeout,
+            max_tokens=line_reranker_max_tokens,
+        )
     if dataset == "longmemeval-v2":
         return skipped_standard_retrieval_payload(
             dataset=dataset,
