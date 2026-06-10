@@ -112,6 +112,8 @@ def _no_memory_turn(turn: DemoTurn) -> dict[str, Any]:
         "requires_source_reopen": False,
         "source_refs_allowed": False,
         "candidate_ref_count": 0,
+        "manual_query_invention_expected": False,
+        "manual_query_invention_count": 0,
         "lock_handling": "none",
         "activation_state": "",
         "activation_update": "none",
@@ -181,6 +183,12 @@ def _run_flow_arm(flow: DemoFlow, arm: DemoArm) -> dict[str, Any]:
                 "requires_source_reopen": action["requires_source_reopen"],
                 "source_refs_allowed": action["source_refs_allowed"],
                 "candidate_ref_count": len(action["candidate_refs"]),
+                "manual_query_invention_expected": bool(
+                    action.get("manual_query_invention_expected", False)
+                ),
+                "manual_query_invention_count": int(
+                    action.get("manual_query_invention_count") or 0
+                ),
                 "lock_handling": action["lock_handling"],
                 "task_context_contract": _demo_task_context_contract(action),
                 "activation_state": str((state or {}).get("state") or ""),

@@ -98,6 +98,8 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertEqual(threshold_turns[0]["packet_advisory_action"], "ask_light_question")
         self.assertEqual(threshold_turns[1]["lock_handling"], "use_ready_lock")
         self.assertTrue(threshold_turns[2]["requires_source_reopen"])
+        self.assertFalse(threshold_turns[2]["manual_query_invention_expected"])
+        self.assertEqual(threshold_turns[2]["manual_query_invention_count"], 0)
 
     def test_negative_controls_are_first_class_and_do_not_call_active_recall(self) -> None:
         report = demo.run_fresh_thread_demo()
@@ -194,6 +196,10 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertTrue(payload["quality_gates"]["negative_controls_pass"])
         self.assertFalse(payload["config"]["uses_live_model"])
         self.assertFalse(payload["config"]["uses_private_history"])
+        readout = payload["issue_readouts"]["github_281"]
+        self.assertTrue(readout["closeout_eligible"])
+        self.assertEqual(readout["claim_level"], "public_safe_fixture_validation")
+        self.assertEqual(readout["metrics"]["manual_query_invention_count"], 0)
         self.assertIn("real-history fresh-thread recall quality", payload["cannot_claim"])
 
 

@@ -1,16 +1,17 @@
 # Fresh-Thread Expanded Coverage Evidence
 
 Evidence date: 2026-06-03.
+GitHub #281 public validation update: 2026-06-10.
 
 This report records the #490 expansion of the fresh-thread public demo and the
-sanitized real-history boundary smoke. It is still not a fresh-thread recall
-quality benchmark. The goal is to make the evidence surface less thin than the
-original synthetic demo plus one-ref smoke while preserving the public/privacy
-boundary.
+sanitized real-history boundary smoke. The 2026-06-10 update adds the #281
+public fixture validation readout from the same public-safe runner. This is
+issue closeout for the public, inspectable fresh-thread fixture requirement,
+not a live/private or universal fresh-thread recall quality benchmark.
 
 ## Source Map
 
-- Issue: #490
+- Issues: #490 and #281
 - Demo benchmark:
   [`benchmark_fresh_thread_recall_demo.py`](../../../benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py)
 - Runtime runner:
@@ -28,10 +29,10 @@ boundary.
 
 The deterministic public-safe demo now reports:
 
-- 10 flows total
-- 5 positive flows
+- 11 flows total
+- 6 positive flows
 - 5 negative controls
-- turn-depth distribution: 6 one-turn flows, 2 two-turn flows, 2 three-turn flows
+- turn-depth distribution: 7 one-turn flows, 2 two-turn flows, 2 three-turn flows
 - max turn depth: 3
 - 2 multi-turn flows
 - 1 wrong-recall correction control
@@ -48,6 +49,34 @@ turning it into personalized answer content.
 
 The fixture catalog is separate from the runner so additional public-safe flows
 do not make the runner own both evidence catalog and report projection.
+
+## GitHub #281 Public Validation Readout
+
+The 2026-06-10 runner exposes `issue_readouts.github_281` with
+`claim_level=public_safe_fixture_validation` and `closeout_eligible=true`.
+It uses public synthetic fixtures only and keeps broad live/private claims out
+of scope.
+
+Recorded metrics:
+
+- positive public flows: 6
+- negative public controls: 5
+- first-turn positive route success count: 6
+- first-turn false activation count: 0
+- `first_turn_scent_precision=1.0`
+- `progressive_activation_gain=1.0`
+- `source_reopen_before_specific_claim_rate=1.0`
+- `irrelevant_memory_drag_rate=0.0`
+- `overpersonalization_count=0`
+- `manual_query_invention_count=0`
+- `manual_query_expected_count=0`
+- `ready_lock_use_count=5`
+- `unsupported_evidence_count=0`
+- `negative_control_active_recall_count=0`
+
+This retires #281's public-fixture validation blocker. Future live host,
+private real-history, or external public-dataset fresh-thread quality work
+should use a new scoped issue instead of reopening #281 as a catch-all.
 
 ## Real-History Smoke Expansion
 
@@ -87,6 +116,10 @@ claiming expanded real-history coverage.
 
 - The public demo now exercises multi-turn, correction, and threshold-edge
   fresh-thread controls with synthetic public-safe fixtures.
+- The public #281 readout records first-turn scent precision, progressive
+  activation gain, source reopen before specific claims, negative-control
+  drag suppression, over-personalization suppression, and manual-query
+  invention suppression for the checked-in public fixtures.
 - The demo reports turn-depth distribution and correction/threshold coverage
   counts.
 - The real-history smoke can sample multiple reopenable refs, report clear
@@ -98,9 +131,11 @@ claiming expanded real-history coverage.
 ## Cannot Claim
 
 - No broad private real-history fresh-thread recall quality claim.
+- No live fresh-thread quality claim.
 - No live semantic-model quality claim.
 - No live correction-extraction quality claim.
 - No proof that all fresh-thread prompts or all private memory families are
   covered in production.
+- No foreground-hook-only sufficiency or base-model innate memory claim.
 - No public release of private prompts, source text, source refs, thread ids,
   registry paths, or local paths.
