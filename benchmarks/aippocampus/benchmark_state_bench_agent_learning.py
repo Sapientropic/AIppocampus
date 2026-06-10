@@ -12,9 +12,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,9 @@ OFFICIAL_NUM_RUNS = 5
 OFFICIAL_TOP_K = 3
 DEFAULT_STATE_BENCH_ROOT = _paths.REPO_ROOT / ".tmp" / "state-bench-upstream"
 DEFAULT_ADAPTER_ROOT = _paths.REPO_ROOT / ".tmp" / "state-bench-aippocampus"
+DEFAULT_AGENT_MODEL_NAME = "gpt-5.4-mini"
+NO_MEMORY_AGENT_CLASS = "NoMemoryStateBenchAgent"
+AIPPOCAMPUS_AGENT_CLASS = "AIppocampusStateBenchAgent"
 
 CANNOT_CLAIM = [
     "official_state_bench_score",
@@ -269,10 +273,31 @@ class AIppocampusStateBenchAgent(StateBenchAgent):
 '''
 
 
+def no_memory_adapter_source() -> str:
+    return '''from __future__ import annotations
+
+from state_bench.agents.state_bench import StateBenchAgent
+
+
+class NoMemoryStateBenchAgent(StateBenchAgent):
+    """Matched Agent Learning baseline that exposes the hook but returns nothing."""
+
+    def retrieve_learnings(self, query: str, top_k: int = 3) -> list[str]:
+        return []
+'''
+
+
 def write_state_bench_adapter(*, output_dir: Path, learnings_path: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     adapter_path = output_dir / "aippocampus_state_bench_agent.py"
     adapter_path.write_text(adapter_source(), encoding="utf-8")
+    return adapter_path
+
+
+def write_no_memory_adapter(*, output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    adapter_path = output_dir / "no_memory_state_bench_agent.py"
+    adapter_path.write_text(no_memory_adapter_source(), encoding="utf-8")
     return adapter_path
 
 
@@ -293,6 +318,13 @@ def build_state_bench_agent_learning_report(
     learnings_output: Path | None = None,
     write_adapter: bool = False,
     official_commit: str = ISSUE_VERIFIED_COMMIT,
+    prepare_matched_run: bool = False,
+    matched_run_output_dir: Path | None = None,
+    matched_task_ids: Sequence[str] | None = None,
+    agent_model_name: str = DEFAULT_AGENT_MODEL_NAME,
+    num_runs: int = OFFICIAL_NUM_RUNS,
+    num_workers: int = 1,
+    env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     if domain not in DOMAINS:
         raise ValueError(f"domain must be one of {', '.join(DOMAINS)}")
@@ -316,6 +348,7 @@ def build_state_bench_agent_learning_report(
         )
     learnings = extract_learnings(root, domain=domain, max_train_files=max_train_files)
     adapter_path = None
+    no_memory_adapter_path = None
     if learnings_output is not None:
         write_learnings(Path(learnings_output), learnings)
     if write_adapter:
@@ -324,6 +357,8 @@ def build_state_bench_agent_learning_report(
             output_dir=adapter_dir,
             learnings_path=Path(learnings_output or DEFAULT_ADAPTER_ROOT / "learnings.json"),
         )
+        if prepare_matched_run:
+            no_memory_adapter_path = write_no_memory_adapter(output_dir=adapter_dir)
     raw_text_count = sum(int(row.get("raw_text_field_count") or 0) for row in learnings)
     report = _base_report(
         status="adapter_dry_run_ready",
@@ -349,6 +384,10 @@ def build_state_bench_agent_learning_report(
             "artifacts": {
                 "adapter_file_written": adapter_path is not None,
                 "adapter_file": safe_path_label(adapter_path) if adapter_path else None,
+                "no_memory_adapter_file_written": no_memory_adapter_path is not None,
+                "no_memory_adapter_file": safe_path_label(no_memory_adapter_path)
+                if no_memory_adapter_path
+                else None,
                 "learnings_file_written": learnings_output is not None,
                 "learnings_file": safe_path_label(learnings_output) if learnings_output else None,
             },
@@ -361,7 +400,187 @@ def build_state_bench_agent_learning_report(
             },
         }
     )
+    if prepare_matched_run:
+        preflight = build_matched_one_domain_preflight(
+            domain=domain,
+            state_bench_root=root,
+            output_dir=Path(matched_run_output_dir or DEFAULT_ADAPTER_ROOT / "outputs"),
+            task_ids=matched_task_ids,
+            agent_model_name=agent_model_name,
+            num_runs=num_runs,
+            num_workers=num_workers,
+            env=env or os.environ,
+        )
+        report["matched_one_domain_preflight"] = preflight
+        if preflight["blockers"]:
+            report["official_submission_decision"] = "no_go_missing_locked_eval_client"
+            report["claim_boundary"][
+                "matched_no_memory_baseline"
+            ] = "blocked_by_locked_eval_client_until_official_tasks_run"
     return report
+
+
+def _configured(env: Mapping[str, str], name: str) -> bool:
+    return bool(str(env.get(name) or "").strip())
+
+
+def _env_readiness(env: Mapping[str, str]) -> dict[str, bool]:
+    agent_provider = str(env.get("STATE_BENCH_AGENT_PROVIDER") or "azure_openai")
+    locked_eval_endpoint = _configured(env, "STATE_BENCH_EVAL_ENDPOINT")
+    locked_eval_deployments = _configured(env, "STATE_BENCH_EVAL_DEPLOYMENTS") or _configured(
+        env, "STATE_BENCH_EVAL_DEPLOYMENTS_1"
+    )
+    if agent_provider == "openai":
+        agent_client = (
+            _configured(env, "STATE_BENCH_AGENT_MODEL")
+            and (_configured(env, "STATE_BENCH_AGENT_API_KEY") or _configured(env, "OPENAI_API_KEY"))
+        )
+    else:
+        agent_client = (
+            _configured(env, "STATE_BENCH_AGENT_ENDPOINT")
+            and (_configured(env, "STATE_BENCH_AGENT_DEPLOYMENTS") or _configured(env, "STATE_BENCH_AGENT_DEPLOYMENTS_1"))
+        )
+    return {
+        "locked_eval_endpoint_configured": locked_eval_endpoint,
+        "locked_eval_deployments_configured": locked_eval_deployments,
+        "locked_eval_api_key_configured": _configured(env, "STATE_BENCH_EVAL_API_KEY"),
+        "agent_provider_openai": agent_provider == "openai",
+        "agent_client_configured": agent_client,
+    }
+
+
+def _matched_run_blockers(readiness: Mapping[str, bool]) -> list[str]:
+    blockers: list[str] = []
+    if not readiness["locked_eval_endpoint_configured"]:
+        blockers.append("missing_state_bench_eval_endpoint")
+    if not readiness["locked_eval_deployments_configured"]:
+        blockers.append("missing_state_bench_eval_deployments")
+    if not readiness["agent_client_configured"]:
+        blockers.append("missing_state_bench_agent_client")
+    return blockers
+
+
+def _run_batch_command(
+    *,
+    domain: str,
+    agent_class: str,
+    output_dir: Path,
+    task_ids: Sequence[str] | None,
+    agent_model_name: str,
+    num_runs: int,
+    num_workers: int,
+) -> str:
+    parts = [
+        "uv run python -m state_bench.scripts.run_batch",
+        f"--domain {domain}",
+    ]
+    if task_ids:
+        parts.append("--tasks " + ",".join(task_ids))
+    parts.extend(
+        [
+            f"--agent-class {agent_class}",
+            "--agent-provider openai",
+            "--agent-api-key-var STATE_BENCH_AGENT_API_KEY",
+            f"--agent-model-name {agent_model_name}",
+            f"--num-runs {num_runs}",
+            f"--retrieve-learnings-top-k {OFFICIAL_TOP_K}",
+            f"--num-workers {num_workers}",
+            f"--output-dir {safe_path_label(output_dir)}",
+        ]
+    )
+    return " ".join(parts)
+
+
+def _compute_metrics_command(*, domain: str, output_dir: Path, num_runs: int) -> str:
+    label = safe_path_label(output_dir)
+    return (
+        "uv run python -m state_bench.scripts.compute_metrics "
+        f"--domain {domain} --results-dir {label} --num-runs {num_runs} --output-dir {label}"
+    )
+
+
+def build_matched_one_domain_preflight(
+    *,
+    domain: str,
+    state_bench_root: Path,
+    output_dir: Path,
+    task_ids: Sequence[str] | None,
+    agent_model_name: str,
+    num_runs: int,
+    num_workers: int,
+    env: Mapping[str, str],
+) -> dict[str, Any]:
+    no_memory_output = output_dir / f"{domain}-no-memory"
+    aippocampus_output = output_dir / f"{domain}-aippocampus"
+    readiness = _env_readiness(env)
+    blockers = _matched_run_blockers(readiness)
+    status = "ready_to_run_matched_one_domain" if not blockers else "blocked_missing_locked_eval_client"
+    if blockers == ["missing_state_bench_agent_client"]:
+        status = "blocked_missing_agent_client"
+    elif "missing_state_bench_agent_client" in blockers and len(blockers) > 1:
+        status = "blocked_missing_locked_eval_and_agent_client"
+    return {
+        "status": status,
+        "domain": domain,
+        "state_bench_root": safe_path_label(state_bench_root),
+        "run_scope": "bounded_task_subset" if task_ids else "full_one_domain",
+        "planned_task_ids": list(task_ids or []),
+        "planned_num_runs": num_runs,
+        "retrieve_learnings_top_k": OFFICIAL_TOP_K,
+        "num_workers": num_workers,
+        "agent_model_name": agent_model_name,
+        "env_readiness": readiness,
+        "blockers": blockers,
+        "official_task_run_count": 0,
+        "arms": [
+            {
+                "arm": "no_memory",
+                "agent_class": NO_MEMORY_AGENT_CLASS,
+                "output_dir": safe_path_label(no_memory_output),
+            },
+            {
+                "arm": "aippocampus",
+                "agent_class": AIPPOCAMPUS_AGENT_CLASS,
+                "output_dir": safe_path_label(aippocampus_output),
+            },
+        ],
+        "commands": {
+            "no_memory_run_batch": _run_batch_command(
+                domain=domain,
+                agent_class=NO_MEMORY_AGENT_CLASS,
+                output_dir=no_memory_output,
+                task_ids=task_ids,
+                agent_model_name=agent_model_name,
+                num_runs=num_runs,
+                num_workers=num_workers,
+            ),
+            "aippocampus_run_batch": _run_batch_command(
+                domain=domain,
+                agent_class=AIPPOCAMPUS_AGENT_CLASS,
+                output_dir=aippocampus_output,
+                task_ids=task_ids,
+                agent_model_name=agent_model_name,
+                num_runs=num_runs,
+                num_workers=num_workers,
+            ),
+            "no_memory_compute_metrics": _compute_metrics_command(
+                domain=domain,
+                output_dir=no_memory_output,
+                num_runs=num_runs,
+            ),
+            "aippocampus_compute_metrics": _compute_metrics_command(
+                domain=domain,
+                output_dir=aippocampus_output,
+                num_runs=num_runs,
+            ),
+        },
+        "cannot_claim": [
+            "official_state_bench_score",
+            "agent_learning_track_lift",
+            "one_domain_task_performance_until_both_arms_complete",
+            "leaderboard_submission_ready",
+        ],
+    }
 
 
 def _base_report(
@@ -445,6 +664,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-adapter", action="store_true")
     parser.add_argument("--adapter-output-dir", type=Path)
     parser.add_argument("--learnings-output", type=Path)
+    parser.add_argument(
+        "--prepare-matched-run",
+        action="store_true",
+        help="Also write the no-memory adapter and emit matched one-domain run commands/readiness.",
+    )
+    parser.add_argument("--matched-run-output-dir", type=Path)
+    parser.add_argument("--matched-task-ids", help="Comma-separated public STATE-Bench task ids for a bounded subset.")
+    parser.add_argument("--agent-model-name", default=DEFAULT_AGENT_MODEL_NAME)
+    parser.add_argument("--num-runs", type=int, default=OFFICIAL_NUM_RUNS)
+    parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
@@ -460,6 +689,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         learnings_output=args.learnings_output,
         write_adapter=args.write_adapter,
         official_commit=args.official_commit,
+        prepare_matched_run=args.prepare_matched_run,
+        matched_run_output_dir=args.matched_run_output_dir,
+        matched_task_ids=[part.strip() for part in (args.matched_task_ids or "").split(",") if part.strip()],
+        agent_model_name=args.agent_model_name,
+        num_runs=args.num_runs,
+        num_workers=args.num_workers,
     )
     output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
     if args.output:

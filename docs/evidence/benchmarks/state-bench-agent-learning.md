@@ -106,6 +106,63 @@ is still **not** a STATE-Bench task-performance result, because it does not run
 held-out tasks, the locked simulator/judge, scored trajectories, or a matched
 no-memory task baseline.
 
+## 2026-06-10 One-Domain Execution Preflight
+
+Machine-readable report:
+`docs/evidence/benchmarks/state-bench-agent-learning-preflight-2026-06-10.json`.
+
+Official source snapshot:
+
+- `git ls-remote https://github.com/microsoft/STATE-Bench.git HEAD
+  refs/heads/main` returned
+  `83cb96de5429c43adfdb5cb9b6785439e937a3ca` for both HEAD and `main`.
+- A default Windows checkout failed the official protocol prompt hash check
+  because prompt files were present with CRLF working-tree line endings. The
+  preflight therefore used an ignored clone whose prompt files checked out with
+  LF line endings.
+
+Preflight command shape:
+
+```powershell
+python benchmarks\aippocampus\benchmark_state_bench_agent_learning.py --state-bench-root .tmp\state-bench-upstream-lf --domain customer_support --write-adapter --adapter-output-dir .tmp\state-bench-upstream-lf\agents --learnings-output .tmp\state-bench-upstream-lf\agents\learnings.json --prepare-matched-run --matched-run-output-dir .tmp\state-bench-aippocampus\outputs --matched-task-ids 1-return_partial_order --agent-model-name gpt-5.4-mini --output docs\evidence\benchmarks\state-bench-agent-learning-preflight-2026-06-10.json --json
+```
+
+Sanitized result:
+
+- `matched_one_domain_preflight.status=blocked_missing_locked_eval_client`.
+- `official_submission_decision=no_go_missing_locked_eval_client`.
+- Both matched adapters were generated into the ignored STATE-Bench checkout:
+  `AIppocampusStateBenchAgent` and `NoMemoryStateBenchAgent`.
+- Planned bounded task subset: `customer_support`, task
+  `1-return_partial_order`, `--num-runs 5`, `--retrieve-learnings-top-k 3`,
+  `--num-workers 1`.
+- Agent client readiness was present for the attempted OpenAI built-in-agent
+  path, but the locked evaluation client was not configured:
+  `STATE_BENCH_EVAL_ENDPOINT` and `STATE_BENCH_EVAL_DEPLOYMENTS` were missing.
+- `official_task_run_count=0`.
+
+Manual official preflight attempts:
+
+```powershell
+uv sync
+uv run python -m state_bench.scripts.run_batch --domain customer_support --tasks 1-return_partial_order --agent-class NoMemoryStateBenchAgent --agent-provider openai --agent-api-key-var STATE_BENCH_AGENT_API_KEY --agent-model-name gpt-5.4-mini --num-runs 1 --retrieve-learnings-top-k 3 --num-workers 1 --output-dir ..\state-bench-aippocampus\outputs\customer_support-no-memory-preflight --no-score
+```
+
+Observed blockers:
+
+- In the default Windows checkout, `run_batch` stopped at protocol prompt hash
+  mismatches caused by CRLF working-tree line endings.
+- In the LF checkout, `run_batch` progressed past prompt validation and adapter
+  loading, then stopped before task execution with:
+  `Azure OpenAI endpoint required. Set STATE_BENCH_EVAL_ENDPOINT environment
+  variable or pass endpoint parameter.`
+
+Decision: this slice turns the one-domain attempt into a concrete operator
+blocker and reproducible run plan. It still does not provide a matched
+no-memory vs AIppocampus task score. #1043 should stay open until the locked
+evaluation client is configured and both arms complete under the same official
+harness/model/run-count settings.
+
 ## Claim Boundary
 
 Can claim:

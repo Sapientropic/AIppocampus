@@ -1,0 +1,190 @@
+{
+  "artifacts": {
+    "adapter_file": ".tmp/state-bench-upstream-lf/agents/aippocampus_state_bench_agent.py",
+    "adapter_file_written": true,
+    "learnings_file": ".tmp/state-bench-upstream-lf/agents/learnings.json",
+    "learnings_file_written": true,
+    "no_memory_adapter_file": ".tmp/state-bench-upstream-lf/agents/no_memory_state_bench_agent.py",
+    "no_memory_adapter_file_written": true
+  },
+  "cannot_claim": [
+    "official_state_bench_score",
+    "agent_learning_track_lift",
+    "leaderboard_submission_ready",
+    "end_to_end_task_performance",
+    "heldout_test_quality",
+    "matched_no_memory_task_score",
+    "state_bench_sota",
+    "private_registry_quality"
+  ],
+  "claim_boundary": {
+    "adapter_hook_shape": "implemented_when_adapter_written",
+    "agent_learning_track_lift": "not_measured",
+    "matched_no_memory_baseline": "blocked_by_locked_eval_client_until_official_tasks_run",
+    "official_state_bench_score": "not_claimed"
+  },
+  "comparison": {
+    "aippocampus": {
+      "retrieved_learning_count": 9,
+      "retrieved_nonempty_case_count": 3
+    },
+    "cannot_read_as": "task_success_lift_or_official_baseline",
+    "case_count": 3,
+    "comparison_kind": "adapter_retrieval_contract",
+    "matched_harness": "same fixture queries and top_k; not a STATE-Bench task run",
+    "no_memory": {
+      "retrieved_learning_count": 0
+    },
+    "official_task_run_count": 0
+  },
+  "created_at": "2026-06-10T08:44:35Z",
+  "domain": "customer_support",
+  "kind": "aippocampus_state_bench_agent_learning_feasibility",
+  "learning_catalog": {
+    "domains": [
+      "customer_support"
+    ],
+    "learning_ids": [
+      "statebench:customer_support:724b78442745b37b",
+      "statebench:customer_support:6263c8e85fd10bdb",
+      "statebench:customer_support:8e06a4ab273ea453",
+      "statebench:customer_support:e3a01afe93710dec",
+      "statebench:customer_support:32644f26c481b1ab",
+      "statebench:customer_support:ed61aa8d4610e128",
+      "statebench:customer_support:986f1ad5376f159f",
+      "statebench:customer_support:29a8759a9dfe4002",
+      "statebench:customer_support:864ca2e2ba629dcd",
+      "statebench:customer_support:999296b2cff582cd",
+      "statebench:customer_support:dd812a083ae58c6e",
+      "statebench:customer_support:7eb2f49b51b6e353",
+      "statebench:customer_support:a84455d33b8001a1",
+      "statebench:customer_support:3f547d631e272f68",
+      "statebench:customer_support:c5ab4321ad6d389c",
+      "statebench:customer_support:5280b4bf17b8d83f",
+      "statebench:customer_support:7a445a0b313f2bb0",
+      "statebench:customer_support:1a6f9ebe46d01c59",
+      "statebench:customer_support:369cddc97d65ec89",
+      "statebench:customer_support:001852f445e171df"
+    ],
+    "policy_topics": [
+      "cancellation",
+      "exchange",
+      "refund",
+      "return",
+      "shipping",
+      "warranty"
+    ],
+    "raw_learning_text_emitted": false,
+    "tool_names": [
+      "cancel_order",
+      "get_customer",
+      "get_order",
+      "get_policies",
+      "get_product_details",
+      "get_warranty_status",
+      "process_exchange",
+      "process_refund",
+      "process_return",
+      "process_warranty_claim",
+      "search_products"
+    ]
+  },
+  "matched_one_domain_preflight": {
+    "agent_model_name": "gpt-5.4-mini",
+    "arms": [
+      {
+        "agent_class": "NoMemoryStateBenchAgent",
+        "arm": "no_memory",
+        "output_dir": ".tmp/state-bench-aippocampus/outputs/customer_support-no-memory"
+      },
+      {
+        "agent_class": "AIppocampusStateBenchAgent",
+        "arm": "aippocampus",
+        "output_dir": ".tmp/state-bench-aippocampus/outputs/customer_support-aippocampus"
+      }
+    ],
+    "blockers": [
+      "missing_state_bench_eval_endpoint",
+      "missing_state_bench_eval_deployments"
+    ],
+    "cannot_claim": [
+      "official_state_bench_score",
+      "agent_learning_track_lift",
+      "one_domain_task_performance_until_both_arms_complete",
+      "leaderboard_submission_ready"
+    ],
+    "commands": {
+      "aippocampus_compute_metrics": "uv run python -m state_bench.scripts.compute_metrics --domain customer_support --results-dir .tmp/state-bench-aippocampus/outputs/customer_support-aippocampus --num-runs 5 --output-dir .tmp/state-bench-aippocampus/outputs/customer_support-aippocampus",
+      "aippocampus_run_batch": "uv run python -m state_bench.scripts.run_batch --domain customer_support --tasks 1-return_partial_order --agent-class AIppocampusStateBenchAgent --agent-provider openai --agent-api-key-var STATE_BENCH_AGENT_API_KEY --agent-model-name gpt-5.4-mini --num-runs 5 --retrieve-learnings-top-k 3 --num-workers 1 --output-dir .tmp/state-bench-aippocampus/outputs/customer_support-aippocampus",
+      "no_memory_compute_metrics": "uv run python -m state_bench.scripts.compute_metrics --domain customer_support --results-dir .tmp/state-bench-aippocampus/outputs/customer_support-no-memory --num-runs 5 --output-dir .tmp/state-bench-aippocampus/outputs/customer_support-no-memory",
+      "no_memory_run_batch": "uv run python -m state_bench.scripts.run_batch --domain customer_support --tasks 1-return_partial_order --agent-class NoMemoryStateBenchAgent --agent-provider openai --agent-api-key-var STATE_BENCH_AGENT_API_KEY --agent-model-name gpt-5.4-mini --num-runs 5 --retrieve-learnings-top-k 3 --num-workers 1 --output-dir .tmp/state-bench-aippocampus/outputs/customer_support-no-memory"
+    },
+    "domain": "customer_support",
+    "env_readiness": {
+      "agent_client_configured": true,
+      "agent_provider_openai": true,
+      "locked_eval_api_key_configured": false,
+      "locked_eval_deployments_configured": false,
+      "locked_eval_endpoint_configured": false
+    },
+    "num_workers": 1,
+    "official_task_run_count": 0,
+    "planned_num_runs": 5,
+    "planned_task_ids": [
+      "1-return_partial_order"
+    ],
+    "retrieve_learnings_top_k": 3,
+    "run_scope": "bounded_task_subset",
+    "state_bench_root": ".tmp/state-bench-upstream-lf",
+    "status": "blocked_missing_locked_eval_client"
+  },
+  "metrics": {
+    "extracted_learning_count": 100,
+    "inspected_train_trajectory_count": 100,
+    "observed_train_trajectory_count": 100,
+    "official_num_runs_required": 5,
+    "official_task_run_count": 0,
+    "official_test_task_count_expected": 50,
+    "official_train_trajectory_count_expected": 100,
+    "retrieve_learnings_top_k": 3,
+    "source_raw_text_field_count_observed_but_not_emitted": 795
+  },
+  "official_requirements": {
+    "agent_learning_track_doc": "https://github.com/microsoft/STATE-Bench/blob/main/docs/AGENT_LEARNING_TRACK.md",
+    "domains": [
+      "travel",
+      "customer_support",
+      "shopping_assistant"
+    ],
+    "heldout_test_oracle_allowed": false,
+    "heldout_test_tasks_per_domain": 50,
+    "hook_shape": "retrieve_learnings(query, top_k=3) -> list[str]",
+    "official_num_runs": 5,
+    "retrieve_learnings_top_k": 3,
+    "state_bench_commit": "83cb96de5429c43adfdb5cb9b6785439e937a3ca",
+    "state_bench_repo": "https://github.com/microsoft/STATE-Bench",
+    "submit_doc": "https://github.com/microsoft/STATE-Bench/blob/main/docs/SUBMIT.md",
+    "train_only_learning_extraction": true,
+    "train_trajectories_per_domain": 100
+  },
+  "official_submission_decision": "no_go_missing_locked_eval_client",
+  "ok": true,
+  "privacy_boundary": {
+    "absolute_paths_emitted": false,
+    "private_registry_text_used": false,
+    "raw_learning_text_emitted_in_report": false,
+    "raw_trajectory_text_emitted": false
+  },
+  "runner_plan": {
+    "adapter_class": "AIppocampusStateBenchAgent",
+    "compute_metrics_module": "state_bench.scripts.compute_metrics",
+    "official_submission_outputs": [
+      "outputs/<domain>/run1..run5/<task_id>.json",
+      "outputs/<domain>/metrics.json"
+    ],
+    "run_batch_module": "state_bench.scripts.run_batch",
+    "state_bench_root": ".tmp/state-bench-upstream-lf"
+  },
+  "schema_version": 1,
+  "status": "adapter_dry_run_ready"
+}

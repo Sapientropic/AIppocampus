@@ -129,6 +129,52 @@ class StateBenchAgentLearningTests(unittest.TestCase):
         self.assertTrue(all(isinstance(item, str) for item in matches))
         self.assertIn("warranty", matches[0])
 
+    def test_matched_run_preflight_reports_missing_locked_eval_without_secret_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_bench_root = root / "STATE-Bench"
+            self._write_train_fixture(state_bench_root)
+            adapter_dir = root / "agents"
+
+            payload = benchmark.build_state_bench_agent_learning_report(
+                state_bench_root=state_bench_root,
+                domain="customer_support",
+                adapter_output_dir=adapter_dir,
+                learnings_output=adapter_dir / "learnings.json",
+                write_adapter=True,
+                prepare_matched_run=True,
+                matched_run_output_dir=root / "outputs",
+                matched_task_ids=["1-return_partial_order"],
+                agent_model_name="gpt-5.4-mini",
+                env={
+                    "STATE_BENCH_AGENT_PROVIDER": "openai",
+                    "STATE_BENCH_AGENT_API_KEY": "SECRET_AGENT_KEY",
+                    "STATE_BENCH_AGENT_MODEL": "gpt-5.4-mini",
+                },
+            )
+            encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+            no_memory_adapter_exists = (adapter_dir / "no_memory_state_bench_agent.py").exists()
+
+        preflight = payload["matched_one_domain_preflight"]
+        self.assertEqual(payload["official_submission_decision"], "no_go_missing_locked_eval_client")
+        self.assertEqual(preflight["status"], "blocked_missing_locked_eval_client")
+        self.assertIn("missing_state_bench_eval_endpoint", preflight["blockers"])
+        self.assertIn("missing_state_bench_eval_deployments", preflight["blockers"])
+        self.assertEqual(preflight["planned_num_runs"], 5)
+        self.assertEqual(preflight["planned_task_ids"], ["1-return_partial_order"])
+        self.assertEqual(
+            {arm["agent_class"] for arm in preflight["arms"]},
+            {"AIppocampusStateBenchAgent", "NoMemoryStateBenchAgent"},
+        )
+        self.assertIn("NoMemoryStateBenchAgent", preflight["commands"]["no_memory_run_batch"])
+        self.assertIn("AIppocampusStateBenchAgent", preflight["commands"]["aippocampus_run_batch"])
+        self.assertTrue(no_memory_adapter_exists)
+        self.assertTrue(payload["artifacts"]["no_memory_adapter_file_written"])
+        self.assertFalse(preflight["env_readiness"]["locked_eval_endpoint_configured"])
+        self.assertTrue(preflight["env_readiness"]["agent_client_configured"])
+        self.assertNotIn("SECRET_AGENT_KEY", encoded)
+        self.assertNotIn(str(adapter_dir), encoded)
+
     def test_runner_writes_report_without_absolute_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
