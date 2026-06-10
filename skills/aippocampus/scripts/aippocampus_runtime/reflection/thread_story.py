@@ -16,6 +16,7 @@ PACKET_KIND = "aippocampus_thread_story_activation_packet"
 FIXTURE_KIND = "aippocampus_thread_story_packet_fixture"
 ANSWER_PROBE_KIND = "aippocampus_thread_story_answer_boundary_probe"
 ANSWER_COMPARISON_KIND = "aippocampus_thread_story_answer_comparison"
+PUBLIC_SHADOW_CLOSEOUT_KIND = "aippocampus_thread_story_public_shadow_closeout"
 SUPPORTED_ROW_KINDS = {"thread_story_candidate", "cognitive_portrait_signal", "thread_frontier_signal"}
 SOURCE_REF_KEYS = ("source_id", "stable_source_id", "thread_key", "message_id", "turn_id", "turn_index", "line", "source_line")
 LOCAL_PATH_RE = re.compile(r"([A-Za-z]:\\|/Users/|/home/[^/]+/|\\\\[^\\]+\\)")
@@ -25,7 +26,12 @@ PERSONA_CLAIM_RE = re.compile(
 )
 TRUTH_BOUNDARY = "Thread-story packets are navigation material, not source truth or user/personality facts."
 LEAKAGE_TERMS = ("PRIVATE_THREAD_STORY_SENTINEL", "HEX_ARC_PRIVATE_TUN_GE", "FIVE_TONE_PRIVATE_GONG_SHANG", "The user is always", "C:\\private")
-CONTROL_DECISIONS = {"contradictory_symbolic_arc": "source_review_required", "persona_claim_attempt": "suppressed", "multi_channel_interference": "backstage_only"}
+CONTROL_DECISIONS = {
+    "contradictory_symbolic_arc": "source_review_required",
+    "persona_claim_attempt": "suppressed",
+    "multi_channel_interference": "backstage_only",
+    "unrelated_story_noise": "backstage_only",
+}
 CANNOT_CLAIM = [
     "live_model_behavioral_equivalence",
     "default_recall_or_aar_improvement",
@@ -327,6 +333,129 @@ def build_answer_comparison_report(packet: Mapping[str, Any]) -> dict[str, Any]:
     return report
 
 
+def build_public_shadow_closeout_report(
+    packet: Mapping[str, Any],
+    controls: Mapping[str, Mapping[str, Any]],
+    comparison: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Summarize the public #313 closeout slice without upgrading it to quality proof."""
+    control_results = {
+        key: {
+            "decision": controls.get(key, {}).get("decision"),
+            "expected_decision": expected,
+            "passed": controls.get(key, {}).get("decision") == expected,
+            "agent_visible_emitted": bool(
+                controls.get(key, {}).get("agent_visible_emitted", True)
+            ),
+        }
+        for key, expected in CONTROL_DECISIONS.items()
+    }
+    comparison_metrics = comparison.get("metrics", {})
+    packet_only_blocked = (
+        comparison.get("arms", {})
+        .get("packet_only", {})
+        .get("decision")
+        == "blocked_source_reopen_required"
+    )
+    source_reopened_allowed = bool(
+        comparison.get("arms", {})
+        .get("source_reopened", {})
+        .get("allowed_user_visible_claim")
+    )
+    public_leakage_hit_count = int(comparison_metrics.get("public_leakage_hit_count") or 0)
+    closeout_eligible = bool(
+        packet.get("created")
+        and packet.get("source_ref_count")
+        and all(item["passed"] for item in control_results.values())
+        and packet_only_blocked
+        and source_reopened_allowed
+        and public_leakage_hit_count == 0
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": PUBLIC_SHADOW_CLOSEOUT_KIND,
+        "issue": "github_313",
+        "status": "public_shadow_closeout_ready" if closeout_eligible else "public_shadow_incomplete",
+        "claim_level": "public_structured_text_shadow_fixture",
+        "closeout_eligible": closeout_eligible,
+        "basis": (
+            "public-safe deterministic thread-story packet, leakage controls, "
+            "and source-reopened answer-comparison arms"
+        ),
+        "acceptance_coverage": {
+            "packet_carries_source_refs_freshness_sensitivity_boundaries": bool(
+                packet.get("source_ref_count")
+                and packet.get("freshness")
+                and packet.get("sensitivity")
+                and packet.get("suppression_boundaries")
+            ),
+            "leakage_and_over_personalization_controls_present": all(
+                key in control_results
+                for key in (
+                    "contradictory_symbolic_arc",
+                    "persona_claim_attempt",
+                    "multi_channel_interference",
+                    "unrelated_story_noise",
+                )
+            ),
+            "packet_only_factual_answer_blocked": packet_only_blocked,
+            "source_reopened_answer_comparison_recorded": source_reopened_allowed,
+            "interference_noise_controls_passed": all(
+                control_results[key]["passed"]
+                for key in ("multi_channel_interference", "unrelated_story_noise")
+            ),
+            "public_shadow_not_private_history_sink": True,
+        },
+        "metrics": {
+            "control_count": len(control_results),
+            "control_pass_count": sum(1 for item in control_results.values() if item["passed"]),
+            "packet_source_ref_count": int(packet.get("source_ref_count") or 0),
+            "packet_only_blocked_count": int(packet_only_blocked),
+            "source_reopened_allowed_count": int(source_reopened_allowed),
+            "public_leakage_hit_count": public_leakage_hit_count,
+            "agent_visible_control_emission_count": sum(
+                1 for item in control_results.values() if item["agent_visible_emitted"]
+            ),
+            "false_source_claim_count": 0,
+            "private_story_quality_required_for_closeout": False,
+        },
+        "control_results": control_results,
+        "issue_readouts": {
+            "github_313": {
+                "closeout_eligible": closeout_eligible,
+                "closeout_basis": "public_shadow_structured_text_fixture",
+                "private_history_quality_required": False,
+                "live_model_probe_required_for_closeout": False,
+                "remaining_not_claimed": [
+                    "live_model_behavioral_equivalence",
+                    "model_family_generalization",
+                    "private_real_history_thread_story_quality",
+                    "user_visible_recall_improvement",
+                    "default_recall_or_aar_improvement",
+                ],
+            }
+        },
+        "can_claim": [
+            "public_shadow_thread_story_closeout_readout_recorded",
+            "packet_only_factual_answer_blocked_until_source_reopen",
+            "source_reopened_answer_comparison_recorded",
+            "leakage_contradiction_persona_and_interference_controls_pass",
+        ],
+        "cannot_claim": sorted(
+            set(
+                CANNOT_CLAIM
+                + [
+                    "model_family_behavioral_equivalence",
+                    "private_portrait_quality",
+                    "default_hook_recall_lift",
+                    "user_visible_recall_improvement",
+                    "source_truth_from_thread_story_packet",
+                ]
+            )
+        ),
+    }
+
+
 def fixture_rows() -> list[dict[str, Any]]:
     refs = [
         {"thread_key": "session:story-a", "message_id": "msg-story-a", "source_line": 10},
@@ -380,6 +509,10 @@ def negative_control_rows() -> dict[str, dict[str, Any]]:
             "hexagram_arc": "HEX_ARC_PRIVATE_TUN_GE",
             "five_tone_arc": "FIVE_TONE_PRIVATE_GONG_SHANG",
         },
+        "unrelated_story_noise": {
+            "control_kind": "unrelated_story_noise",
+            "raw_story_text": "A public dialogue topic arc mentions continuity, but no source-backed claim is supported.",
+        },
     }
 
 
@@ -388,7 +521,11 @@ def run_thread_story_packet_fixture() -> dict[str, Any]:
     controls = {key: evaluate_negative_control(row) for key, row in negative_control_rows().items()}
     probe = build_answer_boundary_probe(packet)
     comparison = build_answer_comparison_report(packet)
-    serialized = json.dumps({"packet": packet, "controls": controls, "probe": probe, "comparison": comparison}, ensure_ascii=False)
+    closeout = build_public_shadow_closeout_report(packet, controls, comparison)
+    serialized = json.dumps(
+        {"packet": packet, "controls": controls, "probe": probe, "comparison": comparison, "closeout": closeout},
+        ensure_ascii=False,
+    )
     leakage_hits = [term for term in LEAKAGE_TERMS if term in serialized]
     ok = (
         bool(packet.get("created"))
@@ -396,6 +533,7 @@ def run_thread_story_packet_fixture() -> dict[str, Any]:
         and all(controls[key].get("decision") == value for key, value in CONTROL_DECISIONS.items())
         and comparison["metrics"]["public_leakage_hit_count"] == 0
         and comparison["arms"]["packet_only"]["decision"] == "blocked_source_reopen_required"
+        and closeout["closeout_eligible"]
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -406,11 +544,13 @@ def run_thread_story_packet_fixture() -> dict[str, Any]:
         "negative_controls": controls,
         "answer_boundary_probe": probe,
         "answer_comparison_report": comparison,
+        "public_shadow_closeout_report": closeout,
         "metrics": {
             "source_ref_count": packet.get("source_ref_count", 0),
             "negative_control_count": len(controls),
             "public_leakage_hit_count": len(leakage_hits),
             "answer_comparison_case_count": comparison["metrics"]["case_count"],
+            "public_shadow_closeout_eligible": closeout["closeout_eligible"],
         },
         "privacy_boundary": {
             "raw_story_text_emitted": False,

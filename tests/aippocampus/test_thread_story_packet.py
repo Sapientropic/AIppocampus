@@ -66,6 +66,10 @@ class ThreadStoryPacketTests(unittest.TestCase):
             controls["multi_channel_interference"]["decision"],
             "backstage_only",
         )
+        self.assertEqual(
+            controls["unrelated_story_noise"]["decision"],
+            "backstage_only",
+        )
         for control in controls.values():
             self.assertFalse(control.get("agent_visible_emitted", True))
             self.assertTrue(control["source_reopen_required"])
@@ -121,7 +125,62 @@ class ThreadStoryPacketTests(unittest.TestCase):
         self.assertNotIn("FIVE_TONE_PRIVATE_GONG_SHANG", serialized)
         self.assertNotIn("The user is always", serialized)
         self.assertNotIn("C:\\private", serialized)
-        self.assertNotIn("source_refs", serialized)
+        self.assertNotIn("session:story-a", serialized)
+        self.assertNotIn("msg-story-a", serialized)
+
+    def test_public_shadow_closeout_report_covers_issue_313_without_quality_claims(self) -> None:
+        payload = thread_story.run_thread_story_packet_fixture()
+        report = payload["public_shadow_closeout_report"]
+        coverage = report["acceptance_coverage"]
+        metrics = report["metrics"]
+        readout = report["issue_readouts"]["github_313"]
+
+        self.assertEqual(
+            report["kind"],
+            "aippocampus_thread_story_public_shadow_closeout",
+        )
+        self.assertEqual(report["issue"], "github_313")
+        self.assertEqual(report["status"], "public_shadow_closeout_ready")
+        self.assertTrue(report["closeout_eligible"])
+        self.assertEqual(report["claim_level"], "public_structured_text_shadow_fixture")
+        self.assertTrue(
+            coverage["packet_carries_source_refs_freshness_sensitivity_boundaries"]
+        )
+        self.assertTrue(coverage["leakage_and_over_personalization_controls_present"])
+        self.assertTrue(coverage["packet_only_factual_answer_blocked"])
+        self.assertTrue(coverage["source_reopened_answer_comparison_recorded"])
+        self.assertTrue(coverage["interference_noise_controls_passed"])
+        self.assertTrue(coverage["public_shadow_not_private_history_sink"])
+        self.assertEqual(metrics["control_count"], 4)
+        self.assertEqual(metrics["control_pass_count"], 4)
+        self.assertEqual(metrics["public_leakage_hit_count"], 0)
+        self.assertEqual(metrics["agent_visible_control_emission_count"], 0)
+        self.assertEqual(metrics["false_source_claim_count"], 0)
+        self.assertFalse(metrics["private_story_quality_required_for_closeout"])
+        self.assertTrue(readout["closeout_eligible"])
+        self.assertEqual(
+            readout["closeout_basis"],
+            "public_shadow_structured_text_fixture",
+        )
+        self.assertFalse(readout["private_history_quality_required"])
+        self.assertFalse(readout["live_model_probe_required_for_closeout"])
+        self.assertIn(
+            "source_truth_from_thread_story_packet",
+            report["cannot_claim"],
+        )
+
+    def test_public_shadow_closeout_report_is_public_safe(self) -> None:
+        payload = thread_story.run_thread_story_packet_fixture()
+        report = payload["public_shadow_closeout_report"]
+
+        serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("PRIVATE_THREAD_STORY_SENTINEL", serialized)
+        self.assertNotIn("HEX_ARC_PRIVATE_TUN_GE", serialized)
+        self.assertNotIn("FIVE_TONE_PRIVATE_GONG_SHANG", serialized)
+        self.assertNotIn("The user is always", serialized)
+        self.assertNotIn("C:\\private", serialized)
+        self.assertNotIn("session:story-a", serialized)
+        self.assertNotIn("msg-story-a", serialized)
 
 
 if __name__ == "__main__":

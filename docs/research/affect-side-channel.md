@@ -39,6 +39,13 @@ blocked from factual answers; the source-reopened arm is allowed only when
 source tokens are attached. This is public-safe contract evidence, not a live
 model quality probe.
 
+As of 2026-06-10, the helper also emits
+`aippocampus_thread_story_public_shadow_closeout`: a public structured-text
+closeout readout for #313 covering leakage, contradiction, packet-only blocking,
+source-reopened comparison, interference, and unrelated-story noise controls.
+It closes the public shadow slice only; private-history thread-story quality and
+live model-family behavior remain separate future evidence questions.
+
 This helper does not install a subconscious extractor, does not promote
 hexagram or five-tone markers into default recall/AAR hooks, and does not let a
 thread-story packet answer factual memory questions by itself. The packet is
@@ -216,10 +223,12 @@ This does NOT replace clean source recall. It precedes it and colors it.
 6. How do thread stories interact with AIppocampus's existing question tracking
    and frontier marker systems?
 
-Current diagnostic coverage: #313 now has a deterministic packet fixture and
-negative controls for contradictions, persona-claim suppression, and
-multi-channel interference. The automation, model-family, coexistence-count,
-and live foreground-quality questions remain open research/evaluation work.
+Current diagnostic coverage: #313 now has a deterministic packet fixture,
+answer-comparison readout, public-shadow closeout report, and negative controls
+for contradictions, persona-claim suppression, multi-channel interference, and
+unrelated story noise. The automation, model-family, coexistence-count, private
+history quality, and live foreground-quality questions remain open research /
+evaluation work.
 
 ## Related Work
 
