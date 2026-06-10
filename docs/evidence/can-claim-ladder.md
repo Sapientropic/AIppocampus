@@ -47,7 +47,7 @@ AIppocampus has public-safe benchmark fixtures and external adapter paths.
 - Proof slice: benchmark owner map in
   [`benchmark-evidence-map.md`](benchmark-evidence-map.md), AMemGym and
   STATE-Bench feasibility notes, LongMemEval retrieval slices, provider
-  conformance fixtures, and E2E50 public-safe seed work.
+  conformance fixtures, and the E2E50 public-safe behavior pack.
 - Can claim: many failure modes are reproducible without private history.
 - Boundary: adapter feasibility is not an official external score or product
   superiority claim.

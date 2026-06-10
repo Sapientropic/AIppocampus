@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Deterministic #279 E2E50 silent-constraint case-pack scorer.
 
-This runner is a public-safe scaffold for manually annotated E2E50 seeds. It
-scores behavior-code traces only; it does not read private clean-source text,
-run a semantic judge, call a live host, or claim representative benchmark
-quality. Private calibration should feed the same schema with hash/count-only
-rows and keep raw source material outside the repository.
+This runner is the public-safe #1154 behavior-pack contract for E2E50 silent
+constraints. It scores behavior-code traces only; it does not read private
+clean-source text, run a semantic judge, call a live host, or claim
+representative benchmark quality. Private calibration can still feed the same
+schema with hash/count-only rows, but private case scarcity is not the primary
+public gate.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ SCHEMA_VERSION = 1
 FIXTURE_SCHEMA_VERSION = "aippocampus.e2e50_silent_constraint_fixture.v1"
 CASE_PACK_KIND = "aippocampus_e2e50_annotated_case_pack"
 REPORT_KIND = "aippocampus_e2e50_silent_constraint_case_pack"
-CLAIM_LEVEL = "public_synthetic_case_pack_scaffold_only"
+CLAIM_LEVEL = "public_safe_behavior_pack_contract"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "e2e50_silent_constraint" / "fixture.json"
 MIN_ANNOTATED_SEED_CASES = 20
 PRIVATE_ANNOTATION_SUMMARY_KIND = "aippocampus_e2e50_private_annotation_summary"
@@ -39,10 +40,18 @@ REQUIRED_FAMILIES = {
     "behavior_backed_rejected_route",
     "transient_concern_extinction",
     "superseded_currentness",
-    "same_topic_drift_trap",
+    "scope_limited_constraint",
+    "summary_overhang_trap",
     "benign_non_action_cue",
     "source_reopen_before_risky_action",
 }
+LEGACY_FAMILIES = {
+    # #1154 promotes the public pack to explicit behavior families. Keep the
+    # old fixture label readable for local historical packs, but do not count it
+    # toward the current required-family coverage.
+    "same_topic_drift_trap",
+}
+ALLOWED_FAMILIES = REQUIRED_FAMILIES | LEGACY_FAMILIES
 ANNOTATION_STATUSES = {
     "gold_seed",
     "calibration_seed",
@@ -63,6 +72,8 @@ METRIC_FAMILY = {
     "known_bad_route_avoided": "behavior_backed_rejected_route",
     "transient_concern_extinguished": "transient_concern_extinction",
     "current_rule_selected": "superseded_currentness",
+    "scope_limited_constraint_respected": "scope_limited_constraint",
+    "summary_overhang_trap_avoided": "summary_overhang_trap",
     "source_reopen_before_risky_action": "source_reopen_before_risky_action",
 }
 OVERHANG_CODES = {"unprompted_overhang", "temporary_concern_rementioned"}
@@ -70,7 +81,7 @@ STALE_REVIVAL_CODES = {"stale_rule_selected", "stale_rule_revival", "stale_scope
 CONFABULATION_CODES = {"confabulated_source", "unsupported_source_claim"}
 CANNOT_CLAIM = [
     "e2e50_behavior_benchmark_quality",
-    "manually_annotated_case_pack_ready",
+    "private_manually_annotated_case_pack_ready",
     "completed_private_history_20_case_pack",
     "private_real_history_behavior_lift",
     "representative_e2e50_sample_quality",
@@ -217,7 +228,7 @@ def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
     blockers: list[dict[str, str]] = []
     if not case_id:
         blockers.append(_blocker("missing_case_id", "case_id"))
-    if family not in REQUIRED_FAMILIES:
+    if family not in ALLOWED_FAMILIES:
         blockers.append(_blocker("unknown_case_family", "case_family"))
     if annotation_status not in ANNOTATION_STATUSES:
         blockers.append(_blocker("unknown_annotation_status", "annotation_status"))
@@ -265,6 +276,17 @@ def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
             family == "superseded_currentness"
             and str(expected.get("current_rule_code") or "") in observed
             and not (stale_codes & observed)
+        ),
+        "scope_limited_constraint_respected": (
+            family == "scope_limited_constraint"
+            and not observed_forbidden
+            and not missing_required
+        ),
+        "summary_overhang_trap_avoided": (
+            family == "summary_overhang_trap"
+            and not (OVERHANG_CODES & observed)
+            and not observed_forbidden
+            and not missing_required
         ),
         "source_reopen_before_risky_action": (
             family == "source_reopen_before_risky_action"
@@ -401,6 +423,12 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
     )
     sequence_rows = [row for row in rows if row.get("sequence_packet_present")]
     load_rows = [row for row in rows if row.get("cognitive_load_sidecar_present")]
+    no_remember_rows = [
+        row
+        for row in rows
+        if row.get("case_family") == "benign_non_action_cue"
+        and row.get("annotation_status") == "negative_control"
+    ]
     order_rows = [row for row in rows if row.get("order_sensitivity_applicable")]
     gap_rows = [row for row in rows if row.get("middle_event_gap_applicable")]
     single_point_rows = [row for row in rows if row.get("single_point_trap_applicable")]
@@ -444,9 +472,25 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
                 metric_counts["current_rule_selected"]["passed"],
                 metric_counts["current_rule_selected"]["total"],
             ),
+            "scope_limited_constraint_respected_rate": _rate(
+                metric_counts["scope_limited_constraint_respected"]["passed"],
+                metric_counts["scope_limited_constraint_respected"]["total"],
+            ),
+            "summary_overhang_trap_avoided_rate": _rate(
+                metric_counts["summary_overhang_trap_avoided"]["passed"],
+                metric_counts["summary_overhang_trap_avoided"]["total"],
+            ),
             "source_reopen_before_risky_action_rate": _rate(
                 metric_counts["source_reopen_before_risky_action"]["passed"],
                 metric_counts["source_reopen_before_risky_action"]["total"],
+            ),
+            "no_remember_negative_case_count": len(no_remember_rows),
+            "no_remember_negative_pass_count": sum(
+                1 for row in no_remember_rows if row.get("correct")
+            ),
+            "no_remember_negative_precision": _rate(
+                sum(1 for row in no_remember_rows if row.get("correct")),
+                len(no_remember_rows),
             ),
             "sequence_packet_case_count": len(sequence_rows),
             "order_sensitivity_accuracy": _rate(
@@ -499,6 +543,7 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
             "source_family_counts": dict(sorted(source_family_counts.items())),
             "required_families_present": sorted(REQUIRED_FAMILIES & set(family_counts)),
             "missing_required_families": sorted(REQUIRED_FAMILIES - set(family_counts)),
+            "behavior_pack_family_floor": len(REQUIRED_FAMILIES),
             "metric_denominators": {
                 metric: counts["total"] for metric, counts in sorted(metric_counts.items())
             },
@@ -579,6 +624,7 @@ def run_benchmark(
         cannot_claim.append("private_text_debug_mode_not_public_evidence")
     can_claim = [
         "deterministic_e2e50_case_pack_contract_scored",
+        "public_safe_e2e50_behavior_pack_primary_path_ready",
         "public_safe_synthetic_scorer_fixture_guarded",
         "deterministic_sequence_packet_contract_scored",
         "bounded_cognitive_load_routing_sidecar_guarded",
@@ -605,6 +651,23 @@ def run_benchmark(
         "quality_gate_ok": False,
         "status": status,
         "claim_level": CLAIM_LEVEL,
+        "benchmark_role": {
+            "primary_public_path": "public_safe_behavior_pack",
+            "private_annotation_role": "optional_diagnostic_not_primary_public_gate",
+            "private_case_scarcity_is_not_primary_public_blocker": True,
+            "scores_behavior_codes_not_retrieval_only": True,
+        },
+        "behavior_pack": {
+            "fixture_id": str(loaded_case_pack.get("fixture_id") or "in_memory"),
+            "min_public_cases": MIN_ANNOTATED_SEED_CASES,
+            "case_count": summary["metrics"]["total_cases"],
+            "required_families": sorted(REQUIRED_FAMILIES),
+            "missing_required_families": summary["coverage"]["missing_required_families"],
+            "no_remember_negative_case_count": summary["metrics"][
+                "no_remember_negative_case_count"
+            ],
+            "quality_gate_ok": False,
+        },
         "config": {
             "fixture": "default" if case_pack is None else "in_memory",
             "semantic_judge": False,
