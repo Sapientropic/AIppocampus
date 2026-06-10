@@ -52,6 +52,42 @@ from .reporting import (
 )
 
 EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
+LEXICAL_RERANKER_DIRECT_TERMS = {
+    "adopt",
+    "adopted",
+    "bought",
+    "buy",
+    "called",
+    "code",
+    "current",
+    "drawer",
+    "email",
+    "favorite",
+    "favourite",
+    "find",
+    "found",
+    "located",
+    "look",
+    "name",
+    "number",
+    "phone",
+    "prefer",
+    "prefers",
+    "truth",
+    "use",
+    "uses",
+}
+LEXICAL_RERANKER_BRIDGE_TERMS = {
+    "about",
+    "context",
+    "discussed",
+    "mentioned",
+    "notes",
+    "question",
+    "recall",
+    "remember",
+    "topic",
+}
 
 
 def standard_content_query_terms(question: str, *, limit: int = 24) -> list[str]:
@@ -572,6 +608,89 @@ def best_rank(*ranks: int | None) -> int | None:
     return min(present) if present else None
 
 
+def lexical_line_reranker_terms(text: str) -> set[str]:
+    terms: set[str] = set()
+    for term in split_query_terms([text]):
+        clean = term.strip().casefold()
+        if not clean or clean in STANDARD_QUERY_TERM_STOPWORDS:
+            continue
+        if len(clean) < 3 and not re.search(r"\d", clean):
+            continue
+        terms.add(clean)
+        for suffix in ("ing", "ed", "es", "s"):
+            if len(clean) > len(suffix) + 3 and clean.endswith(suffix):
+                terms.add(clean[: -len(suffix)])
+                break
+    return terms
+
+
+def lexical_line_reranker_score(
+    question_terms: set[str],
+    candidate: dict[str, Any],
+) -> float:
+    text_terms = lexical_line_reranker_terms(str(candidate.get("text") or ""))
+    overlap = len(question_terms & text_terms)
+    coverage = overlap / max(1, len(question_terms))
+    channels = {str(channel) for channel in candidate.get("query_channels") or []}
+    fts_rank = candidate.get("fts_rank")
+    nearest_hit_rank = int(candidate.get("nearest_hit_rank") or 10**6)
+    context_distance = int(candidate.get("context_distance") or 0)
+    score = (overlap * 100.0) + (coverage * 25.0)
+    if "content" in channels:
+        score += 18.0
+    if fts_rank is not None:
+        score += max(0.0, 12.0 - float(fts_rank))
+    if str(candidate.get("role") or "").casefold() == "user":
+        score += 4.0
+    if text_terms & LEXICAL_RERANKER_DIRECT_TERMS:
+        score += 6.0
+    if text_terms & LEXICAL_RERANKER_BRIDGE_TERMS:
+        score -= 8.0
+    score -= context_distance * 1.5
+    score -= nearest_hit_rank * 0.05
+    return score
+
+
+def run_lexical_line_reranker(
+    question: str,
+    candidates: list[dict[str, Any]],
+    **_: object,
+) -> dict[str, Any]:
+    """Rank visible source lines with local lexical evidence cues only.
+
+    This is a deterministic diagnostic reranker for exact-line recovery. It
+    uses question/candidate text and source-window metadata, but never answer
+    labels, expected lines, or model summaries. Keep it conservative: the
+    surrounding evaluator fuses this ranking with first-stage FTS so a local
+    heuristic can promote context-visible evidence without suppressing an
+    exact line that FTS already surfaced.
+    """
+
+    if not candidates:
+        return {"available": False, "ranked_lines": [], "errors": ["empty candidates"]}
+    question_terms = lexical_line_reranker_terms(question)
+    scored = [
+        (
+            lexical_line_reranker_score(question_terms, candidate),
+            int(candidate.get("session_rank") or 10**6),
+            int(candidate.get("nearest_hit_rank") or 10**6),
+            int(candidate.get("fts_rank") or 10**6),
+            int(candidate.get("context_distance") or 0),
+            int(candidate["line"]),
+        )
+        for candidate in candidates
+    ]
+    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3], item[4], item[5]))
+    ranked_lines = [int(item[-1]) for item in scored]
+    lead = scored[0][0] - scored[1][0] if len(scored) > 1 else scored[0][0]
+    return {
+        "available": True,
+        "ranked_lines": ranked_lines,
+        "confidence": clamp_confidence(0.35 + min(0.45, max(0.0, lead) / 120.0)),
+        "usage": {"local_scored_candidates": len(candidates)},
+    }
+
+
 def build_standard_line_reranker_candidates(
     sqlite_path: Path,
     hits: list[dict[str, Any]],
@@ -917,7 +1036,12 @@ def evaluate_standard_retrieval_case(
             expected_lines & {int(candidate["line"]) for candidate in candidates}
         )
         try:
-            runner = line_reranker_fn or run_semantic_line_reranker
+            if line_reranker_fn is not None:
+                runner = line_reranker_fn
+            elif resolved_reranker_mode == "lexical":
+                runner = run_lexical_line_reranker
+            else:
+                runner = run_semantic_line_reranker
             reranker_payload = runner(
                 str(case.get("query") or ""),
                 candidates,

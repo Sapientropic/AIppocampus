@@ -316,6 +316,18 @@ def run_longmemeval_benchmark(
     candidate_limit: int = retrieval_benchmark.fts5_benchmark.DEFAULT_CANDIDATE_LIMIT,
     context_radius: int = retrieval_benchmark.DEFAULT_STANDARD_QA_CONTEXT_RADIUS,
     min_session_hit_rate: float = DEFAULT_MIN_SESSION_HIT_RATE,
+    line_reranker_mode: str = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE,
+    line_reranker_top_sessions: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TOP_SESSIONS
+    ),
+    line_reranker_max_candidates: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES
+    ),
+    line_reranker_timeout: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
+    line_reranker_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS
+    ),
+    line_reranker_workers: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
     progress_every: int = 0,
     partial_output: Path | str | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -396,6 +408,12 @@ def run_longmemeval_benchmark(
             candidate_limit=candidate_limit,
             context_radius=context_radius,
             min_session_hit_rate=min_session_hit_rate,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_top_sessions=line_reranker_top_sessions,
+            line_reranker_max_candidates=line_reranker_max_candidates,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
+            line_reranker_workers=line_reranker_workers,
             progress_every=progress_every,
             progress_callback=handle_progress if track_progress else None,
         )
@@ -466,6 +484,9 @@ def print_human_summary(payload: dict[str, Any]) -> None:
         f"evidence top-{top_k}: {metrics.get(f'evidence_hit_rate_top{top_k}', 0.0):.2%}; "
         f"context-visible: {metrics.get(f'evidence_context_hit_rate_top{top_k}', 0.0):.2%}"
     )
+    reranked_key = f"reranked_evidence_hit_rate_top{top_k}"
+    if reranked_key in metrics:
+        print(f"- reranked evidence top-{top_k}: {metrics.get(reranked_key, 0.0):.2%}")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -487,6 +508,36 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=retrieval_benchmark.DEFAULT_STANDARD_QA_CONTEXT_RADIUS,
     )
     parser.add_argument("--min-session-hit-rate", type=float, default=DEFAULT_MIN_SESSION_HIT_RATE)
+    parser.add_argument(
+        "--line-reranker",
+        choices=sorted(retrieval_benchmark.STANDARD_LINE_RERANKER_MODES - {"custom"}),
+        default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE,
+    )
+    parser.add_argument(
+        "--line-reranker-top-sessions",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TOP_SESSIONS,
+    )
+    parser.add_argument(
+        "--line-reranker-max-candidates",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES,
+    )
+    parser.add_argument(
+        "--line-reranker-timeout",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
+    )
+    parser.add_argument(
+        "--line-reranker-max-tokens",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
+    )
+    parser.add_argument(
+        "--line-reranker-workers",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--progress-every",
@@ -520,6 +571,12 @@ def main() -> int:
         candidate_limit=args.candidate_limit,
         context_radius=args.context_radius,
         min_session_hit_rate=args.min_session_hit_rate,
+        line_reranker_mode=args.line_reranker,
+        line_reranker_top_sessions=args.line_reranker_top_sessions,
+        line_reranker_max_candidates=args.line_reranker_max_candidates,
+        line_reranker_timeout=args.line_reranker_timeout,
+        line_reranker_max_tokens=args.line_reranker_max_tokens,
+        line_reranker_workers=args.line_reranker_workers,
         progress_every=args.progress_every,
         partial_output=args.partial_output,
         progress_callback=stderr_progress if int(args.progress_every) > 0 else None,

@@ -123,6 +123,14 @@ still leaves a sanitized partial diagnostic instead of disappearing silently:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 ```
 
+Run the optional local exact-line reranker diagnostic. This is not the default
+retrieval-only row; it measures whether source-window-visible lines can be
+promoted without using answer labels or an external model:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
+```
+
 `--progress-every` emits sanitized JSONL progress to stderr. `--partial-output`
 writes a sanitized checkpoint/partial diagnostic with hashed local-path
 identity, phase, built/evaluated counts, elapsed time, and claim boundaries; it
@@ -134,12 +142,13 @@ a small curated artifact with provenance and license notes.
 
 ## Current Published Result
 
-| Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `2026-06-10T03:33:49Z` | `longmemeval-v1-small` | retrieval-only larger slice | 500 | 95.80% | 85.18% | 94.36% | 803.10s | `retrieval_sufficient` |
-| `2026-06-09T14:08:17Z` | `longmemeval-v1-small` | retrieval-only larger slice | 100 | 97.00% | 87.23% | 96.81% | 126.72s | `retrieval_sufficient` |
-| `2026-05-30T17:05:34Z` | `longmemeval-v1-small` | retrieval-only | 50 | 100.00% | 92.00% | 100.00% | 167.65s | `retrieval_sufficient` |
-| `2026-05-30T16:47:41Z` | `longmemeval-v1-oracle` | retrieval-only smoke | 50 | 100.00% | 96.00% | 100.00% | not recorded | `retrieval_sufficient` |
+| Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-10T04:15:44Z` | `longmemeval-v1-small` | retrieval-only + optional lexical line reranker | 500 | 95.80% | 85.18% | 87.47% | 94.36% | 737.84s | `retrieval_sufficient` |
+| `2026-06-10T03:33:49Z` | `longmemeval-v1-small` | retrieval-only larger slice | 500 | 95.80% | 85.18% | - | 94.36% | 803.10s | `retrieval_sufficient` |
+| `2026-06-09T14:08:17Z` | `longmemeval-v1-small` | retrieval-only larger slice | 100 | 97.00% | 87.23% | - | 96.81% | 126.72s | `retrieval_sufficient` |
+| `2026-05-30T17:05:34Z` | `longmemeval-v1-small` | retrieval-only | 50 | 100.00% | 92.00% | - | 100.00% | 167.65s | `retrieval_sufficient` |
+| `2026-05-30T16:47:41Z` | `longmemeval-v1-oracle` | retrieval-only smoke | 50 | 100.00% | 96.00% | - | 100.00% | not recorded | `retrieval_sufficient` |
 
 Fresh reproduction commands:
 
@@ -148,6 +157,7 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-or
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-50.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
 ```
 
 LongMemEval-S 500-question verification summary:
@@ -189,9 +199,37 @@ LongMemEval-S 500-question verification summary:
   `benchmark_corpus/reports/longmemeval-v1-small-retrieval-500.json`
   locally, intentionally gitignored.
 
+Optional lexical line-reranker 500-question follow-up for #1087:
+
+- Run date: `2026-06-10T04:15:44Z`
+- Command: same 500-question LongMemEval-S split and top-k as above, with
+  `--line-reranker lexical --line-reranker-workers 8`.
+- Total runner time: `737.84s`
+- The first-stage retrieval baseline in the same run stayed unchanged:
+  session R@10 `479/500`, exact evidence-line R@10 `408/479`, and
+  context-visible evidence R@10 `452/479`.
+- Fused reranked evidence-line R@10: `419/479 = 0.8747`, up 11 exact-line
+  top-10 hits over first-stage FTS.
+- Fused reranked evidence-line MRR: `0.6746`, up `0.0437` over the
+  first-stage evidence-line MRR `0.6309`.
+- Source-joined bridge lifts: `11`; these came from 10
+  context-visible exact-line misses and 1 same-session wrong-line top-k miss.
+- Reranker candidate evidence coverage: `455/479 = 0.9499`; average candidate
+  count: `51.58`.
+- Reranker error count: `0`; warning count: `0`.
+- Evaluator model / API: none. The `lexical` reranker uses only question terms,
+  source-window candidate text, role, channel, rank, and context-distance
+  metadata. It does not use answer labels, expected lines, or model summaries.
+- Sanitized report spot-check found no raw fixture strings, local absolute
+  paths, or source text markers.
+- Raw report location:
+  `benchmark_corpus/reports/longmemeval-v1-small-lexical-500.json` locally,
+  intentionally gitignored.
+
 This retires the 2026-06-09 incomplete 500-question missing-artifact attempt:
 the current blocker is no longer completion. The remaining LongMemEval gap is
-quality: exact evidence-line ranking is weaker than source-window routing.
+quality: even with the optional lexical reranker, exact evidence-line ranking
+is still weaker than source-window routing.
 
 Earlier 100-question LongMemEval-S verification summary:
 
