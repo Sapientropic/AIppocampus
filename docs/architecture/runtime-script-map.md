@@ -77,6 +77,40 @@ run from registry, clean source, and its rebuildable lookup sidecars.
 - Repo maintenance tools live under `tools/aippocampus/`; they can import
   package owners through `tools/aippocampus/repo_paths.py`.
 
+## Ops Orchestration Boundary
+
+`aippocampus_runtime/ops/` is an operator surface, not a second recall or hook
+policy layer. Ops modules may coordinate maintenance CLI work, diagnostic/reporting
+readouts, fixture runner scenarios, provider doctor checks, hook handoff probes,
+and narrowly reviewed runtime-adjacent policy audits.
+Ops modules must not become foreground recall policy. They also must not own
+hook output policy or implicit prompt-hook hot-path dependencies.
+
+Direct `ops -> recall/hooks` imports are allowlisted in
+`tests/aippocampus/test_architecture_boundaries.py` so a new runtime import has
+to be reviewed as an owner-boundary decision. The current reviewed imports are:
+
+| Ops module | Role | Boundary |
+|---|---|---|
+| `aippocampus_runtime.ops.activation_payload_compaction` | maintenance CLI | May call owner-specific recall compaction helpers from an explicit dead-letter manifest runner; it stays dry-run unless `--apply` is requested. |
+| `aippocampus_runtime.ops.cognitive_observatory` | diagnostic/reporting | May read recall diagnostics for public-safe observatory output; it must not feed decisions back into the foreground hook. |
+| `aippocampus_runtime.ops.presence_first_matrix_fixtures` | fixture runner | May render hook-context fixtures and authority taxonomy examples; fixture output is evidence scaffolding, not live policy. |
+| `aippocampus_runtime.ops.provider_doctor` | provider doctor | May inspect semantic-gate availability/configuration; it reports readiness only. |
+| `aippocampus_runtime.ops.provider_key_bridge` | hook handoff | May coordinate explicit hook installer/status surfaces for provider key bridging; it must not install hooks without an operator command. |
+| `aippocampus_runtime.ops.recall_navigation_comparison` | diagnostic/reporting | May compare navigation authority taxonomies; it must not become a retrieval ranker. |
+| `aippocampus_runtime.ops.recall_navigation_comparison_fixtures` | fixture runner | May reuse ambient-card and prompt-context fixture helpers; fixture rows stay public-safe and non-hot-path. |
+| `aippocampus_runtime.ops.route_readiness` | diagnostic/reporting | May inspect active-recall lock lifecycle rows for route-readiness diagnostics; route rows remain navigation-only. |
+| `aippocampus_runtime.ops.spend_doctor` | provider doctor | May report semantic-gate mode/cost posture; it does not choose foreground recall output. |
+| `aippocampus_runtime.ops.worker_hook_handoff` | hook handoff | May probe prompt-hook and ambient-cache handoff behavior; it stays a handoff diagnostic, not hook glue. |
+
+String-only `python -m aippocampus_runtime.recall...` references in
+`aippocampus_runtime.ops.graphify_corpus`, `aippocampus_runtime.ops.maintenance`,
+and `aippocampus_runtime.ops.storage_governance_contract` are command
+orchestration references, not direct runtime imports. Keep that distinction
+visible when reviewing import graphs: command strings can schedule rebuildable
+cache work, while new import-level coupling needs the allowlist and boundary
+table above.
+
 ## Protocol-First Ports
 
 `ConversationProvider` is the only current protocol-first port with real replacement pressure:
