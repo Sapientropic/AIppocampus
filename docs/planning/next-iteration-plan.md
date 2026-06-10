@@ -49,7 +49,7 @@ reason that it should no longer be an open executable item.
 | Fresh-thread continuity | #281 | Keep open as a product-quality owner. Existing fixtures and private boundary smokes are substrate; closing needs fresh-thread usefulness evidence that survives broader private/live use rather than only selected structural packs. |
 | Question continuity | #248 | Keep open, but narrowed. Extraction gates, prefilter reporting/parity, source-ref rejoin, fallback, selected answer-quality review plumbing, default borderline auto-materialization, stale-confirmation tolerance, question-blind structural baseline reporting, and theme-resonance absence reporting exist. The 2026-06-08 review now shows question-aware structural route-term lift over a question-blind same-row baseline, but it is not closeout: the baseline is still not true no-question-aware retrieval, and the current private slice has only 1 `question_link` and 0 `theme_candidate` rows. Next useful slices are true no-question-aware retrieval/answer evaluation, richer candidate/link materialization, and theme/user-review lift evidence. |
 | Cognitive runtime evidence | #163, #310, #313, #574, #575, #576, #663 | Keep open, but cut tightly. Existing substrate/report slices do not prove live/private or user-visible lift. Focus next PRs on Dream behavior evidence, Journey hint timing, thread-story / cognitive-portrait live probes, live/private load calibration, private/live Observatory evidence, and Episode/Arc richer adapters / live behavior evidence. The #575 private-history aggregate runner now measures local clean-source load signals, and the public behavior-trace fixture covers selected reviewed usefulness/drag/risk outcomes, but it still lacks live/private reviewed host-timing quality. The deterministic query-pattern route sidecar writer, default onboarding registry-metadata and reviewed-semantic-trigger route publication, prompt-hook scent consumer, alias-free Observatory readout, and #574 alias-source fixture for reviewed/generated natural multilingual hits exist, but they still do not prove live DeepSeek alias quality, scheduler adoption, or latency savings. Episode/Arc now also has a #663 private-history aggregate adjudication row for rejected-route chains; packet routes still are not source evidence, and old route currentness still requires source reopen. |
-| Benchmark and retrieval proof | #309, #378 | Keep open as falsifiable evidence owners. Do not close with architecture prose; #378 needs broader repeated/external or public-quality continuous-memory comparison evidence, and #309 needs measured source-joined retrieval/rerank/vector/filter behavior beyond current deterministic proxy slices. |
+| Benchmark and retrieval proof | #309, #378 | Keep open as falsifiable evidence owners. Do not close with architecture prose; #378 needs broader repeated/external or public-quality continuous-memory comparison evidence. #309 now has deterministic source-joined candidate-funnel, route-chain/actionability, and public score-fusion calibration evidence for exact-quote guard, semantic bridge, wrong-stance lure suppression, vector-off fallback, and source-join rejection; it still needs measured real vector/graph/rerank consumers, latency/cost/failure examples, and a decision before any default vector/filter behavior. |
 
 Current open queue after this pass should keep #248 alongside #163, #281,
 #309, #310, #313, #378, #574, #575, #576, and #663.
@@ -236,9 +236,13 @@ Current open queue after this pass should keep #248 alongside #163, #281,
      existing text score formula, blends optional vector and graph scores with
      context-dependent weights, and skips candidates that cannot join back to
      stable source ids, message/turn ids, or source refs.
+   - A public-safe calibration report now exercises exact-quote guard,
+     question-tracking bridge, wrong-stance lure suppression, vector-off
+     fallback, and missing source-join rejection without serializing raw source
+     refs or candidate text.
    - Next hardening: connect real vector/graph consumers only after measuring
-     recall behavior against source-evidence benchmarks; do not promote the
-     policy output to a public schema.
+     recall behavior against source-evidence benchmarks; do not promote score
+     output to answer evidence or default vector behavior.
 
 11. Correction reconsolidation events
    - Source: `docs/research/correction-reconsolidation.md` and

@@ -397,3 +397,18 @@ def blend(
             "graph_optional": True,
         },
     }
+
+
+def build_public_score_fusion_calibration_report() -> dict[str, Any]:
+    """Return the public #309 score-fusion calibration report."""
+
+    from aippocampus_runtime.recall.score_fusion_calibration import (
+        build_public_score_fusion_calibration_report as build_report,
+    )
+
+    return build_report(
+        blend_fn=blend,
+        safe_float_fn=safe_float,
+        schema_version=SCHEMA_VERSION,
+        now_utc_fn=now_utc,
+    )

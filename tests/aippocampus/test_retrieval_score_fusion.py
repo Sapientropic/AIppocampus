@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -222,6 +223,40 @@ class RetrievalScoreFusionTests(unittest.TestCase):
         )
 
         self.assertEqual(score, 143.5)
+
+    def test_public_score_fusion_calibration_report_tracks_issue_309_boundaries(self) -> None:
+        report = fusion.build_public_score_fusion_calibration_report()
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        cases = {row["case_id"]: row for row in report["cases"]}
+        readout = report["issue_readouts"]["github_309"]
+
+        self.assertEqual(report["kind"], "aippocampus_public_score_fusion_calibration")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["metrics"]["case_count"], 5)
+        self.assertEqual(report["metrics"]["semantic_bridge_lift_count"], 1)
+        self.assertEqual(report["metrics"]["wrong_stance_lure_suppressed_count"], 1)
+        self.assertEqual(report["metrics"]["vectors_disabled_fallback_count"], 1)
+        self.assertEqual(report["metrics"]["source_join_gate_reject_count"], 1)
+        self.assertEqual(cases["exact_quote_guard"]["top_source_id"], "public:exact")
+        self.assertTrue(cases["exact_quote_guard"]["exact_text_guard_applied"])
+        self.assertEqual(cases["question_tracking_bridge"]["top_source_id"], "public:bridge")
+        self.assertEqual(cases["wrong_stance_lure"]["top_source_id"], "public:current")
+        self.assertGreater(cases["wrong_stance_lure"]["wrong_stance_rank"], 1)
+        self.assertEqual(cases["vector_unavailable_fallback"]["top_source_id"], "public:text")
+        self.assertEqual(cases["source_join_gate"]["skipped_count"], 1)
+        self.assertTrue(readout["score_fusion_calibration_measured"])
+        self.assertEqual(readout["semantic_bridge_lift_count"], 1)
+        self.assertEqual(readout["wrong_stance_lure_suppressed_count"], 1)
+        self.assertFalse(readout["default_vector_prefilter_enabled"])
+        self.assertFalse(readout["local_embedding_adapter_enabled"])
+        self.assertFalse(readout["closeout_eligible"])
+        self.assertFalse(report["config"]["external_model_calls"])
+        self.assertTrue(report["policy_boundary"]["source_reopen_required_for_claims"])
+        self.assertFalse(report["privacy"]["raw_source_refs_serialized"])
+        self.assertFalse(report["privacy"]["raw_candidate_text_serialized"])
+        self.assertFalse(report["privacy"]["absolute_paths_serialized"])
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn("C:\\", encoded)
 
 
 if __name__ == "__main__":
