@@ -136,6 +136,7 @@ a small curated artifact with provenance and license notes.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-10T03:33:49Z` | `longmemeval-v1-small` | retrieval-only larger slice | 500 | 95.80% | 85.18% | 94.36% | 803.10s | `retrieval_sufficient` |
 | `2026-06-09T14:08:17Z` | `longmemeval-v1-small` | retrieval-only larger slice | 100 | 97.00% | 87.23% | 96.81% | 126.72s | `retrieval_sufficient` |
 | `2026-05-30T17:05:34Z` | `longmemeval-v1-small` | retrieval-only | 50 | 100.00% | 92.00% | 100.00% | 167.65s | `retrieval_sufficient` |
 | `2026-05-30T16:47:41Z` | `longmemeval-v1-oracle` | retrieval-only smoke | 50 | 100.00% | 96.00% | 100.00% | not recorded | `retrieval_sufficient` |
@@ -146,9 +147,53 @@ Fresh reproduction commands:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-oracle --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-oracle-retrieval-50.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-50.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 ```
 
-LongMemEval-S larger-slice verification summary:
+LongMemEval-S 500-question verification summary:
+
+- Dataset file: `longmemeval_s_cleaned.json`
+- Bytes: `277383467`
+- SHA-256: `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`
+- Total runner time: `803.10s`
+- Questions: `500`
+- Case mix: `70` single-session-user, `133` multi-session,
+  `30` single-session-preference, `133` temporal-reasoning,
+  `78` knowledge-update, and `56` single-session-assistant cases.
+- Evidence-line cases: `479`
+- Top-k: `10`
+- Evidence context radius: `5`
+- Session R@10: `479/500`, Wilson 95% CI `0.9366..0.9724`
+- Evidence-line R@10: `408/479`, Wilson 95% CI `0.8172..0.8808`
+- Context-visible evidence R@10: `452/479`, Wilson 95% CI
+  `0.9192..0.9610`
+- MRR: session `0.8809`, evidence-line `0.6309`,
+  context-visible evidence `0.8086`
+- Evidence context rescued top-10 cases: `44`
+- Evidence context improved cases: `179`
+- Evidence-line recall ladder: R@1 `240/479 = 0.5010`, R@3
+  `349/479 = 0.7286`, R@5 `380/479 = 0.7933`, R@10
+  `408/479 = 0.8518`, R@20 `429/479 = 0.8956`, and R@50
+  `450/479 = 0.9395`.
+- Evidence miss taxonomy for the 71 exact-line R@10 misses:
+  context-visible exact-line miss `44`, session found below top-k `9`,
+  same-session wrong-line top-k `9`, gold line low-ranked at 21-50 `5`,
+  gold line below rank 50 `3`, and gold line near-miss rank 11-20 `1`.
+- The 44 context-visible rescues were near the exact evidence line: distance 1
+  `29`, distance 2-to-context-radius `15`.
+- Warning count: `0`
+- Evaluator model / API: none; deterministic retrieval-only run.
+- Progress checkpoints were emitted every 25 cases, and the final partial-output
+  payload completed rather than recording a blocker.
+- Raw report location:
+  `benchmark_corpus/reports/longmemeval-v1-small-retrieval-500.json`
+  locally, intentionally gitignored.
+
+This retires the 2026-06-09 incomplete 500-question missing-artifact attempt:
+the current blocker is no longer completion. The remaining LongMemEval gap is
+quality: exact evidence-line ranking is weaker than source-window routing.
+
+Earlier 100-question LongMemEval-S verification summary:
 
 - Dataset file: `longmemeval_s_cleaned.json`
 - Bytes: `277383467`
@@ -202,13 +247,10 @@ context-visible evidence as equivalent to exact-line retrieval; it means the
 foreground agent can usually reopen the right source window, not that a final
 citation span is already selected.
 
-The 2026-06-09 attempt to run a 500-question LongMemEval-S diagnostic was
-stopped after about 8 minutes without stdout, stderr, or an output report. Treat
-that as an incomplete missing-artifact run, not proof that 500 questions are
-technically impossible. A future 500-question attempt should use the progress
-and partial-output options above and may be promoted only after a dated
-completed report exists. Until then, the 100-question row is the current
-larger-slice claim.
+Historical note: the 2026-06-09 attempt to run a 500-question LongMemEval-S
+diagnostic stopped without stdout, stderr, or an output report. The 2026-06-10
+completed run above supersedes that blocker and confirms the progress /
+partial-output path is sufficient for this local diagnostic.
 
 Earlier 50-question LongMemEval-S verification summary:
 
