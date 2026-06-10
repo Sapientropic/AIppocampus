@@ -30,6 +30,9 @@ REPORT_KIND = "aippocampus_e2e50_silent_constraint_case_pack"
 CLAIM_LEVEL = "public_synthetic_case_pack_scaffold_only"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "e2e50_silent_constraint" / "fixture.json"
 MIN_ANNOTATED_SEED_CASES = 20
+PRIVATE_ANNOTATION_SUMMARY_KIND = "aippocampus_e2e50_private_annotation_summary"
+SEED_SCAN_KIND = "aippocampus_e2e50_seed_candidate_scan"
+PRIVATE_ANNOTATION_PRIVACY = "hash_count_only_no_text_no_paths_no_ids_no_raw_refs"
 
 REQUIRED_FAMILIES = {
     "binding_constraint_survival",
@@ -68,6 +71,7 @@ CONFABULATION_CODES = {"confabulated_source", "unsupported_source_claim"}
 CANNOT_CLAIM = [
     "e2e50_behavior_benchmark_quality",
     "manually_annotated_case_pack_ready",
+    "completed_private_history_20_case_pack",
     "private_real_history_behavior_lift",
     "representative_e2e50_sample_quality",
     "completed_50_case_e2e50_sample",
@@ -80,6 +84,27 @@ CANNOT_CLAIM = [
     "current_validity_without_source_reopen",
     "cognitive_load_as_emotion_or_personality_truth",
 ]
+PRIVATE_ANNOTATION_CATEGORIES = (
+    "gold",
+    "calibration",
+    "negative_control",
+    "source_visible_no_op",
+    "duplicate",
+    "rejected",
+    "blocker",
+    "unknown",
+)
+PRIVATE_ANNOTATION_BLOCKER_CLASSES = (
+    "retained_candidate",
+    "negative_control",
+    "duplicate_candidate",
+    "subagent_or_goal_context_noise",
+    "high_later_remention",
+    "source_visible_no_op",
+    "conceptual_drift",
+    "quality_iteration_staging_risk",
+    "other_rejection_or_blocker",
+)
 
 
 def now_utc() -> str:
@@ -102,6 +127,13 @@ def _string_list(value: Any) -> list[str]:
     return [str(item) for item in _as_list(value) if str(item or "").strip()]
 
 
+def _safe_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _rate(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
@@ -114,6 +146,28 @@ def load_fixture(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"expected object fixture: {fixture_path}")
     return payload
+
+
+def load_private_annotation_summary(path: Path | str) -> dict[str, Any]:
+    """Load a sanitized private annotation summary or scanner payload.
+
+    The ignored manual annotation rows are intentionally not a valid public
+    report input here. The scanner owns row-level parsing and emits an aggregate
+    `annotation_summary`; this benchmark only consumes that count/blocker
+    summary so row hashes, reasons, and local review material cannot leak.
+    """
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("private annotation summary must be a JSON object")
+    if payload.get("kind") == SEED_SCAN_KIND:
+        summary = _as_mapping(payload.get("annotation_summary"))
+        if not summary:
+            raise ValueError("seed scan payload does not include annotation_summary")
+        return dict(summary)
+    if payload.get("kind") == PRIVATE_ANNOTATION_SUMMARY_KIND:
+        return payload
+    raise ValueError("expected private annotation summary or seed scan payload")
 
 
 def _blocker(code: str, field: str) -> dict[str, str]:
@@ -453,10 +507,66 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
     }
 
 
+def _safe_count_map(value: Any, allowed_keys: tuple[str, ...]) -> dict[str, int]:
+    source = _as_mapping(value)
+    return {key: _safe_int(source.get(key)) for key in allowed_keys}
+
+
+def private_annotation_readiness(summary: Mapping[str, Any]) -> dict[str, Any]:
+    blocker_status = _as_mapping(summary.get("blocker_status"))
+    status = str(summary.get("status") or "private_annotation_unknown")
+    if status not in {"private_annotation_blocked", "private_annotation_retained"}:
+        status = "private_annotation_unknown"
+    retained_shortfall = _safe_int(blocker_status.get("retained_case_shortfall"))
+    negative_shortfall = _safe_int(blocker_status.get("negative_control_shortfall"))
+    private_text_exported = bool(summary.get("private_text_exported"))
+    privacy = str(summary.get("privacy") or "")
+    blockers: list[str] = []
+    if retained_shortfall:
+        blockers.append("private_retained_case_shortfall")
+    if negative_shortfall:
+        blockers.append("private_negative_control_shortfall")
+    if private_text_exported:
+        blockers.append("private_text_exported")
+    if privacy != PRIVATE_ANNOTATION_PRIVACY:
+        blockers.append("private_annotation_privacy_boundary_unknown")
+    if status != "private_annotation_retained":
+        blockers.append("private_annotation_not_retained")
+    blockers = sorted(set(blockers))
+    return {
+        "status": status,
+        "gate_ok": not blockers,
+        "privacy": PRIVATE_ANNOTATION_PRIVACY,
+        "reviewed_candidate_count": _safe_int(summary.get("reviewed_candidate_count")),
+        "retained_case_count": _safe_int(summary.get("retained_case_count")),
+        "behavior_seed_count": _safe_int(summary.get("behavior_seed_count")),
+        "min_retained_cases": _safe_int(blocker_status.get("min_retained_cases")),
+        "retained_case_shortfall": retained_shortfall,
+        "min_negative_controls": _safe_int(blocker_status.get("min_negative_controls")),
+        "negative_control_shortfall": negative_shortfall,
+        "annotation_category_counts": _safe_count_map(
+            summary.get("annotation_category_counts"),
+            PRIVATE_ANNOTATION_CATEGORIES,
+        ),
+        "blocker_class_counts": _safe_count_map(
+            summary.get("blocker_class_counts"),
+            PRIVATE_ANNOTATION_BLOCKER_CLASSES,
+        ),
+        "blocker_codes": blockers,
+        "cannot_claim": [
+            "completed_private_history_20_case_pack",
+            "private_real_history_behavior_lift",
+            "representative_e2e50_sample_quality",
+            "live_host_behavior_lift",
+        ],
+    }
+
+
 def run_benchmark(
     *,
     fixture_path: Path | str = DEFAULT_FIXTURE,
     case_pack: Mapping[str, Any] | None = None,
+    private_annotation_summary: Mapping[str, Any] | None = None,
     include_private_text: bool = False,
 ) -> dict[str, Any]:
     loaded_case_pack = dict(case_pack) if case_pack is not None else load_fixture(fixture_path)
@@ -475,20 +585,31 @@ def run_benchmark(
     ]
     if summary["ok"] and int(summary["metrics"].get("total_cases") or 0) >= MIN_ANNOTATED_SEED_CASES:
         can_claim.append("public_safe_20_case_seed_pack_contract_scored")
+    private_readiness = (
+        private_annotation_readiness(private_annotation_summary)
+        if private_annotation_summary is not None
+        else None
+    )
+    if private_readiness is not None:
+        can_claim.append("private_local_e2e50_annotation_summary_readiness_recorded")
+    status = summary["status"]
+    if private_readiness is not None and not private_readiness["gate_ok"]:
+        status = f"{status}_private_annotation_blocked"
 
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": REPORT_KIND,
         "created_at": now_utc(),
         "ok": summary["ok"],
         "contract_gate_ok": summary["ok"],
         "quality_gate_ok": False,
-        "status": summary["status"],
+        "status": status,
         "claim_level": CLAIM_LEVEL,
         "config": {
             "fixture": "default" if case_pack is None else "in_memory",
             "semantic_judge": False,
             "live_host": False,
+            "private_annotation_summary": private_readiness is not None,
             "include_private_text": bool(include_private_text),
         },
         "privacy_boundary": {
@@ -502,6 +623,7 @@ def run_benchmark(
             "episode_chain_emitted": False,
             "sequence_packet_emitted": False,
             "cognitive_load_projection_claims_emitted": False,
+            "private_annotation_rows_emitted": False,
         },
         "validation": {
             "ok": validation["ok"],
@@ -515,11 +637,19 @@ def run_benchmark(
         "can_claim": can_claim,
         "cannot_claim": cannot_claim,
     }
+    if private_readiness is not None:
+        payload["private_annotation_readiness"] = private_readiness
+    return payload
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Score the #279 E2E50 silent-constraint case pack.")
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
+    parser.add_argument(
+        "--private-annotation-summary",
+        type=Path,
+        help="Sanitized scanner output or private annotation summary JSON; raw annotation rows are not accepted here.",
+    )
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
@@ -528,7 +658,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    payload = run_benchmark(fixture_path=args.fixture, include_private_text=args.include_private_text)
+    private_summary = (
+        load_private_annotation_summary(args.private_annotation_summary)
+        if args.private_annotation_summary
+        else None
+    )
+    payload = run_benchmark(
+        fixture_path=args.fixture,
+        private_annotation_summary=private_summary,
+        include_private_text=args.include_private_text,
+    )
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

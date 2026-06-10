@@ -142,6 +142,73 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SENTINEL_CASE_ID", encoded)
         self.assertNotIn("forbidden_route_used", encoded)
 
+    def test_private_annotation_summary_reports_readiness_blocker_without_rows(self) -> None:
+        summary = {
+            "kind": "aippocampus_e2e50_private_annotation_summary",
+            "status": "private_annotation_blocked",
+            "privacy": "hash_count_only_no_text_no_paths_no_ids_no_raw_refs",
+            "private_text_exported": False,
+            "reviewed_candidate_count": 17,
+            "retained_case_count": 7,
+            "behavior_seed_count": 6,
+            "annotation_category_counts": {
+                "gold": 4,
+                "calibration": 2,
+                "negative_control": 1,
+                "source_visible_no_op": 0,
+                "duplicate": 3,
+                "rejected": 7,
+                "blocker": 0,
+                "unknown": 0,
+            },
+            "blocker_class_counts": {
+                "retained_candidate": 6,
+                "negative_control": 1,
+                "duplicate_candidate": 3,
+                "subagent_or_goal_context_noise": 5,
+                "high_later_remention": 1,
+                "source_visible_no_op": 1,
+            },
+            "blocker_status": {
+                "min_retained_cases": 20,
+                "retained_case_shortfall": 13,
+                "min_negative_controls": 1,
+                "negative_control_shortfall": 0,
+            },
+            "annotations": [
+                {
+                    "thread_hash": "sha256:PRIVATE_THREAD_HASH",
+                    "reason": "PRIVATE_REASON_SHOULD_NOT_LEAK",
+                }
+            ],
+        }
+
+        payload = benchmark.run_benchmark(private_annotation_summary=summary)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        readiness = payload["private_annotation_readiness"]
+
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertEqual(
+            payload["status"],
+            "case_pack_contract_passed_private_annotation_blocked",
+        )
+        self.assertFalse(readiness["gate_ok"])
+        self.assertEqual(readiness["status"], "private_annotation_blocked")
+        self.assertEqual(readiness["reviewed_candidate_count"], 17)
+        self.assertEqual(readiness["retained_case_count"], 7)
+        self.assertEqual(readiness["retained_case_shortfall"], 13)
+        self.assertEqual(readiness["negative_control_shortfall"], 0)
+        self.assertIn("private_retained_case_shortfall", readiness["blocker_codes"])
+        self.assertIn(
+            "private_local_e2e50_annotation_summary_readiness_recorded",
+            payload["can_claim"],
+        )
+        self.assertIn("completed_private_history_20_case_pack", payload["cannot_claim"])
+        self.assertNotIn("PRIVATE_THREAD_HASH", encoded)
+        self.assertNotIn("PRIVATE_REASON_SHOULD_NOT_LEAK", encoded)
+        self.assertNotIn("annotations", readiness)
+
     def test_incomplete_pack_reports_20_case_blocker_without_20_case_claim(self) -> None:
         case_pack = benchmark.load_fixture()
         case_pack["cases"] = case_pack["cases"][:19]

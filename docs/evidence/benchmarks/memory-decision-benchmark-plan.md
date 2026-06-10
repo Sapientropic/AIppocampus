@@ -100,6 +100,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   private-history behavior lift, or live host evidence. Its deterministic
   unittest is included in `benchmark-smoke` to keep the scorer contract alive
   while private seed material remains local and source-reviewed.
+  The 2026-06-10 #279 replay can also consume the scanner's sanitized private
+  annotation summary through `--private-annotation-summary` and records the
+  current private/local blocker in
+  `e2e50-private-annotation-readiness-2026-06-10.json`; this is a readiness
+  gate over aggregate counts, not behavior-quality evidence.
   The scaffold now also accepts optional `episode_chain` / `sequence_packet`
   evidence and bounded `cognitive_load` sidecars through
   `aippocampus_runtime.coding.sequence_packets`: those rows are scored as
