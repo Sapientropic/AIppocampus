@@ -162,6 +162,34 @@ repo familiarity slices landed in
 [#631](https://github.com/Sapientropic/AIppocampus/pull/631) and
 [#649](https://github.com/Sapientropic/AIppocampus/pull/649).
 
+## Route Token Hierarchy
+
+The token projection layer lives in
+`aippocampus_runtime.navigation.attention_route_tokens`. It turns clean-source
+containers and existing sidecars into compact route tokens before any router
+scoring happens:
+
+```text
+source_span_token -> event_token -> episode_or_question_token
+```
+
+`source_span_token` is the tightest reopenable unit, such as a line range,
+sentence, clause, or code block. It may point into a larger event with
+`parent_event_token_id` and must preserve source handles for the exact span.
+
+`event_token` represents a clean-source turn or event with role, turn id,
+timestamp, thread, phase, source refs, and any child span ids. The event is a
+container, not the smallest ranking target.
+
+`episode_or_question_token` groups event/span tokens into a question frontier,
+rejected route, conflict/update chain, or episode arc. It remains
+`direction_only` with `no_claim_before_reopen`; grouping route tokens does not
+create claim support.
+
+All token levels carry optional route metadata slots for `salience`,
+`currentness`, `privacy`, and `conflict`. Missing slots stay `unknown`; callers
+must not invent certainty to make a head score cleaner.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in
@@ -171,6 +199,8 @@ repo familiarity slices landed in
   truth layer; see [`memory-evidence-drawer.md`](memory-evidence-drawer.md).
 - The Source-Backed Familiarity Map is the current cold-sidecar owner; see
   [`source-backed-familiarity-map.md`](source-backed-familiarity-map.md).
+- Hierarchical route tokens provide the source span / event / episode input
+  shape for future router heads.
 - Source-open and high-risk claim gates remain separate answer-time authority
   checks; see [`high-risk-answer-gates.md`](high-risk-answer-gates.md).
 
