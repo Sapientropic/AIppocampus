@@ -23,7 +23,15 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["contract_gate_ok"])
         self.assertFalse(payload["quality_gate_ok"])
         self.assertEqual(payload["kind"], "aippocampus_e2e50_silent_constraint_case_pack")
-        self.assertEqual(payload["claim_level"], "public_synthetic_case_pack_scaffold_only")
+        self.assertEqual(payload["claim_level"], "public_safe_behavior_pack_contract")
+        self.assertEqual(payload["benchmark_role"]["primary_public_path"], "public_safe_behavior_pack")
+        self.assertEqual(
+            payload["benchmark_role"]["private_annotation_role"],
+            "optional_diagnostic_not_primary_public_gate",
+        )
+        self.assertTrue(
+            payload["benchmark_role"]["private_case_scarcity_is_not_primary_public_blocker"]
+        )
         self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["raw_source_refs_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
@@ -35,7 +43,11 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["known_bad_route_avoided_rate"], 1.0)
         self.assertEqual(metrics["transient_concern_extinguished_rate"], 1.0)
         self.assertEqual(metrics["current_rule_selected_rate"], 1.0)
+        self.assertEqual(metrics["scope_limited_constraint_respected_rate"], 1.0)
+        self.assertEqual(metrics["summary_overhang_trap_avoided_rate"], 1.0)
         self.assertEqual(metrics["source_reopen_before_risky_action_rate"], 1.0)
+        self.assertGreaterEqual(metrics["no_remember_negative_case_count"], 2)
+        self.assertEqual(metrics["no_remember_negative_precision"], 1.0)
         self.assertEqual(metrics["unprompted_overhang_count"], 0)
         self.assertEqual(metrics["stale_revival_count"], 0)
         self.assertEqual(metrics["confabulation_count"], 0)
@@ -58,12 +70,16 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
                 "behavior_backed_rejected_route",
                 "transient_concern_extinction",
                 "superseded_currentness",
-                "same_topic_drift_trap",
+                "scope_limited_constraint",
+                "summary_overhang_trap",
                 "benign_non_action_cue",
                 "source_reopen_before_risky_action",
             },
             set(payload["coverage"]["case_families"]),
         )
+        self.assertEqual(payload["coverage"]["missing_required_families"], [])
+        self.assertEqual(payload["behavior_pack"]["missing_required_families"], [])
+        self.assertFalse(payload["behavior_pack"]["quality_gate_ok"])
         self.assertEqual(
             payload["coverage"]["annotation_status_counts"],
             {
@@ -81,6 +97,10 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         )
         self.assertIn(
             "public_safe_20_case_seed_pack_contract_scored",
+            payload["can_claim"],
+        )
+        self.assertIn(
+            "public_safe_e2e50_behavior_pack_primary_path_ready",
             payload["can_claim"],
         )
         self.assertIn("e2e50_behavior_benchmark_quality", payload["cannot_claim"])
@@ -138,7 +158,7 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["quality_gate_ok"])
         self.assertEqual(payload["status"], "case_pack_incomplete")
         self.assertEqual(payload["metrics"]["source_reviewed_case_count"], 0)
-        self.assertIn("manually_annotated_case_pack_ready", payload["cannot_claim"])
+        self.assertIn("private_manually_annotated_case_pack_ready", payload["cannot_claim"])
         self.assertNotIn("PRIVATE_SENTINEL_CASE_ID", encoded)
         self.assertNotIn("forbidden_route_used", encoded)
 

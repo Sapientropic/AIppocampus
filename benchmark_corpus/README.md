@@ -31,11 +31,12 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   families, negative controls, and hash/aggregate-only private seed reporting
   rules without committing raw prompts, raw source snippets, or local paths.
 - `e2e50_silent_constraint/` contains the checked-in synthetic public-safe
-  fixture for the #279 annotated case-pack scorer scaffold. It exercises
+  fixture for the #279/#1154 public-safe behavior-pack contract. It exercises
   silent constraint survival, known-bad route avoidance, transient concern
-  extinction, superseded currentness, and source reopen before risky action
-  without committing private clean-source text, local paths, or raw behavior
-  traces.
+  extinction, superseded currentness, scope-limited constraints,
+  no-remember negatives, summary-overhang traps, and source reopen before
+  risky action without committing private clean-source text, local paths, or
+  raw behavior traces.
 - `question_aware_public_shadow/` contains the checked-in public-safe #248
   shadow fixture for question-aware source reopen, answer-review deltas,
   adaptive-threshold readout, and multilingual/noise plus code negative
@@ -164,17 +165,19 @@ This public-safe runner checks original source refs, rejected-route warnings,
 compaction boundary preservation, relevant decision selection, and anti-nag
 suppression. It is a synthetic contract, not private real-history lift evidence.
 
-Run the public-safe E2E50 silent-constraint case-pack scorer scaffold:
+Run the public-safe E2E50 behavior-pack scorer:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json
 ```
 
-This #279/#994 scaffold scores hash/count-only annotated behavior-code cases.
-The checked-in pack is a 20-case public-safe synthetic seed-pack contract with
-`annotation_status` and `source_family` coverage, including negative controls.
-It keeps `quality_gate_ok=false`: this is not representative 50-case E2E50
-quality, private real-history behavior lift, or live host evidence.
+This #279/#1154 contract scores hash/count-only annotated behavior-code cases.
+The checked-in pack is the primary public path: 20 public-safe synthetic cases
+with `annotation_status` and `source_family` coverage, no-remember negatives,
+scope-limited constraints, and summary-overhang traps. Private/local annotation
+summaries remain optional diagnostics, not the public gate. The report keeps
+`quality_gate_ok=false`: this is not representative 50-case E2E50 quality,
+private real-history behavior lift, or live host evidence.
 
 Run the public-safe multimodal corpus-style retrieval contract:
 

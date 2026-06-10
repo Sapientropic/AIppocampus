@@ -88,16 +88,17 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   private/local review artifacts and records the current blocker in
   `e2e50-private-local-seed-followup-2026-06-10.md`: wide candidate discovery
   reaches 23/20, but retained/control annotation remains 7/20.
-- `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` is the #279/#994
-  public-safe annotated case-pack scorer scaffold. It consumes hash/count-only
+- `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` is the
+  #279/#1154 public-safe behavior-pack scorer. It consumes hash/count-only
   behavior-code cases, reports deterministic rates for silent constraint
   survival, known-bad route avoidance, transient-concern extinction,
-  superseded-currentness, and source-reopen-before-risky-action, and now scores
-  a checked-in 20-case public-safe synthetic seed pack with explicit
-  `annotation_status` and `source_family` coverage. It still keeps
-  `quality_gate_ok=false`: this pack retires the immediate public/shareable
-  20-case seed-path blocker, not representative 50-case E2E50 quality,
-  private-history behavior lift, or live host evidence. Its deterministic
+  superseded-currentness, scope-limited constraints, summary-overhang trap
+  avoidance, no-remember negative precision, and
+  source-reopen-before-risky-action. It scores a checked-in 20-case
+  public-safe synthetic behavior pack with explicit `annotation_status` and
+  `source_family` coverage. It keeps `quality_gate_ok=false`: this pack is the
+  primary public executable path, while private/local retained-case scarcity is
+  optional diagnostic evidence, not the main public blocker. Its deterministic
   unittest is included in `benchmark-smoke` to keep the scorer contract alive
   while private seed material remains local and source-reviewed.
   The 2026-06-10 #279 replay can also consume the scanner's sanitized private
@@ -105,7 +106,7 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   current private/local blocker in
   `e2e50-private-annotation-readiness-2026-06-10.json`; this is a readiness
   gate over aggregate counts, not behavior-quality evidence.
-  The scaffold now also accepts optional `episode_chain` / `sequence_packet`
+  The scorer also accepts optional `episode_chain` / `sequence_packet`
   evidence and bounded `cognitive_load` sidecars through
   `aippocampus_runtime.coding.sequence_packets`: those rows are scored as
   ordered read-model contracts and routing/caution metadata only, not as current

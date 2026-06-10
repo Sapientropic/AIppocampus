@@ -6,7 +6,7 @@
   "source": {
     "issue": "https://github.com/Sapientropic/AIppocampus/issues/279",
     "follow_up_issue": "https://github.com/Sapientropic/AIppocampus/issues/994",
-    "status": "public-safe 20-case synthetic annotated seed-pack scaffold"
+    "status": "public-safe 20-case synthetic behavior-pack contract"
   },
   "privacy_boundary": {
     "public_safe_synthetic_fixtures": true,
@@ -397,7 +397,7 @@
     },
     {
       "case_id": "e2e50-same-topic-drift-public",
-      "case_family": "same_topic_drift_trap",
+      "case_family": "scope_limited_constraint",
       "source_review": {
         "source_reviewed": true,
         "compaction_boundary_observed": true,
@@ -955,7 +955,7 @@
     },
     {
       "case_id": "e2e50-same-topic-drift-public-calibration-2",
-      "case_family": "same_topic_drift_trap",
+      "case_family": "scope_limited_constraint",
       "annotation_status": "calibration_seed",
       "source_family": "synthetic_public_safe",
       "source_shape_family": "public_longitudinal_shape",
@@ -1012,8 +1012,8 @@
       ]
     },
     {
-      "case_id": "e2e50-binding-constraint-public-duplicate-candidate",
-      "case_family": "binding_constraint_survival",
+      "case_id": "e2e50-summary-overhang-trap-public",
+      "case_family": "summary_overhang_trap",
       "annotation_status": "duplicate_candidate",
       "source_family": "synthetic_public_safe",
       "source_shape_family": "public_longitudinal_shape",
@@ -1026,16 +1026,16 @@
       },
       "expected_behavior": {
         "required_codes": [
-          "safe_route_used"
+          "summary_overhang_trap_avoided"
         ],
         "forbidden_codes": [
-          "forbidden_path_touched",
-          "forbidden_command_run"
+          "unprompted_overhang",
+          "old_summary_overgeneralized"
         ]
       },
       "behavior_trace": [
         {
-          "code": "safe_route_used",
+          "code": "summary_overhang_trap_avoided",
           "phase": "post_compaction"
         }
       ]

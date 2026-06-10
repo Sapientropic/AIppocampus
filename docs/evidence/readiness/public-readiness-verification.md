@@ -20,6 +20,41 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-10 Issue #1154 E2E50 Public-safe Behavior Pack Pivot
+
+Issue #1154 follows #994/#1086 by making the checked-in public behavior pack
+the primary executable E2E50 path. The private/local retained-case shortfall
+remains useful dogfood, but it is no longer the main public benchmark gate.
+
+Positive local evidence:
+
+- `benchmark_corpus/e2e50_silent_constraint/fixture.json` remains a 20-case
+  public-safe synthetic pack, but now names the public path as a behavior-pack
+  contract rather than a scaffold.
+- The pack covers binding constraint survival, rejected-route avoidance,
+  transient-concern extinction, superseded currentness, scope-limited
+  constraints, summary-overhang traps, benign no-remember negatives, and
+  source reopen before risky action.
+- `python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json`
+  reports `claim_level=public_safe_behavior_pack_contract`,
+  `contract_gate_ok=true`, `quality_gate_ok=false`, 20/20 correct cases,
+  `no_remember_negative_precision=1.0`, and
+  `benchmark_role.private_case_scarcity_is_not_primary_public_blocker=true`.
+- `python -m unittest tests.aippocampus.test_benchmark_e2e50_silent_constraint -v`
+  passed with assertions for behavior-pack role, required family coverage,
+  no-remember negatives, summary-overhang traps, and private-readiness
+  redaction.
+
+Interpretation:
+
+- This closes the public-safe #1154 pivot: E2E50 progress no longer depends on
+  manufacturing more private 50-turn threads or reaching the private 20-case
+  retained target first.
+- The public pack is still contract evidence only. It cannot claim
+  representative E2E50 quality, private-history behavior lift, live host
+  behavior, semantic-judge quality, completed 50-case quality, or
+  public-dialogue continuity proof.
+
 ## 2026-06-10 Issue #1086 E2E50 Private / Local Seed Follow-up
 
 Issue #1086 follows #994 by resolving the private/local seed-pack question as a
@@ -56,9 +91,10 @@ or generic chat material.
 Positive local evidence:
 
 - `benchmark_corpus/e2e50_silent_constraint/fixture.json` now contains 20
-  public-safe synthetic annotated cases. The pack covers all seven E2E50
-  scaffold families and records `annotation_status` plus `source_family` for
-  every case.
+  public-safe synthetic annotated cases. The pack covered the then-current
+  seven E2E50 families and records `annotation_status` plus `source_family` for
+  every case. The #1154 row above now owns the current public behavior-pack
+  interpretation.
 - `python -m unittest tests.aippocampus.test_benchmark_e2e50_silent_constraint -v`:
   passed. The tests cover the 20-case default pack, the 19-case blocker,
   missing negative-control blocker, unknown-source-family sanitization, and the
@@ -71,7 +107,7 @@ Positive local evidence:
 Interpretation:
 
 - This retires the immediate public/shareable 20-case seed-path blocker from
-  #994. It does not convert the E2E50 scaffold into representative benchmark
+  #994. It does not convert the E2E50 pack into representative benchmark
   quality.
 - The pack remains public-safe synthetic contract evidence. It still cannot
   claim E2E50 behavior benchmark quality, private real-history behavior lift,
