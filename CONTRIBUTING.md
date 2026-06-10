@@ -17,12 +17,17 @@ Do not commit private memory artifacts:
 - raw Codex rollouts or archived sessions
 - `.aippocampus/` output
 - `$CODEX_HOME/aippocampus-registry/` exports
-- thread anchors from personal workspaces
+- root `thread-anchors.md`, which is a private local work anchor for unfinished
+  agent context, not a public project artifact
 - private vault exports
 - API keys, cookies, bearer headers, credentials, or local machine paths
 
 Use the fake fixtures under `tests/aippocampus/` when testing redaction
 or local-path handling.
+
+If a local anchor contains context that should survive publicly, promote only a
+source-backed summary into an issue, PR, or the appropriate doc. Do not commit
+the private anchor itself.
 
 ## Licensing Boundary
 
@@ -81,6 +86,25 @@ contracts, browser/MCP surfaces, or sync behavior.
 For public-readiness changes, also run a secret/local-path scan and inspect any
 hits. Test fixtures with `FAKE_TEST_` markers are acceptable; real credentials
 or private paths are not.
+
+Before handing work to another agent or cutting a release, preview ignored
+artifacts with:
+
+```sh
+git clean -ndX
+```
+
+Remove only generated artifacts you intentionally own, such as `dist/`,
+`build/`, and `.tmp/`. Do not delete `.aippocampus/`, local registry exports,
+or private anchors just to make the repository look clean; those are local
+memory surfaces, not public source.
+
+For release metadata drift between `server.json`, `pyproject.toml`, and the MCP
+registry view, use the existing local-safe checker:
+
+```sh
+python tools/aippocampus/release/check_agent_discovery_release.py --json
+```
 
 ## Maintainer Shipping Lanes
 
