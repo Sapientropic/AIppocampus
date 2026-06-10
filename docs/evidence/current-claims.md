@@ -217,6 +217,11 @@ update a dated claim row first.
   the same 500-question cohort. It records a fused exact-line ranking
   improvement, but it does not supersede the retrieval-only row or prove broad
   reranker safety.
+- The LongMemEval-S fixed-reader answer/latency harness exists, but no dated
+  provider answer baseline is promoted here yet. Add a row only after a
+  sanitized report records the fixed reader config, prompt version, retrieval
+  metrics, answer metrics, latency, token use, cost basis, and cannot-claim
+  boundaries separately.
 - The public reliability gauntlet row is an aggregate gate over existing
   runtime, mis-recall, and pollution surfaces. It does not supersede the
   individual LongMemEval, Track S, knowledge-pollution, or scale-smoke owners,
