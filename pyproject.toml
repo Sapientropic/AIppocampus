@@ -312,6 +312,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock_compaction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_path_packet.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_facade_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cross_agent_isolation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/narrative_packet.py",

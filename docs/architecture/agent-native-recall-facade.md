@@ -1,7 +1,8 @@
 # Agent-Native Recall Facade
 
 Role: current contract.
-Status: small fixture-backed architecture contract, not a public SDK promise.
+Status: small runtime/fixture-backed architecture contract, not a public SDK
+promise.
 
 This facade is the small agent-facing shape over existing AIppocampus recall
 authority. It lets an agent ask for useful orientation without learning every
@@ -20,6 +21,23 @@ The first fixture-backed contract lives in
 `aippocampus_runtime.recall.agent_facade_contract`. It is deliberately a
 projection and example surface. It does not make `recall`, `deepen`, or
 `explain` public network endpoints.
+
+The first opt-in callable path lives in
+`aippocampus_runtime.recall.agent_continuity` and is exposed through:
+
+```text
+aippocampus agent recall "<cue>" --json
+aippocampus agent aippo --task "<work>" --json
+aippocampus agent deepen "<opaque handle or deepen:aippo...>" --json
+aippocampus agent explain "<opaque handle or deepen:aippo...>" --json
+aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
+```
+
+This is an explicit pull path for agents and operators. It is not a default
+hook, not every-turn recall, and not a stable TypeScript/Python SDK. The recall
+command returns compact `MemoryPacket` values plus separate opaque deepen
+handles; source refs, source windows, support ledgers, and candidate
+provenance stay behind `deepen` / `explain`.
 
 ## Default Agent Pull Gesture
 

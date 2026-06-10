@@ -39,6 +39,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("health", proc.stdout)
         self.assertIn("onboard", proc.stdout)
         self.assertIn("search", proc.stdout)
+        self.assertIn("agent recall", proc.stdout)
         self.assertIn("continuity-domain", proc.stdout)
         self.assertIn("update status", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
@@ -75,6 +76,16 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(search_invocation.command, "search")
         self.assertEqual(search_invocation.module_name, "aippocampus_runtime.source.search")
         self.assertEqual(search_invocation.script_name, "search_clean_source.py")
+
+        agent_continuity_invocation = facade.resolve_command(
+            ["agent", "recall", "continue project", "--json"]
+        )
+        self.assertEqual(agent_continuity_invocation.command, "agent")
+        self.assertEqual(
+            agent_continuity_invocation.module_name,
+            "aippocampus_runtime.recall.agent_continuity",
+        )
+        self.assertEqual(agent_continuity_invocation.script_name, "agent_continuity.py")
 
         export_invocation = facade.resolve_command(["export", "--cwd", "."])
         self.assertEqual(export_invocation.command, "export")
