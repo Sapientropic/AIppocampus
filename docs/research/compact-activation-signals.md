@@ -170,6 +170,14 @@ The same helper also reports a public-safe deterministic answer-comparison with
 plain-baseline, packet-only, and source-reopened arms so packet-only factual
 answers fail independently from source-reopened answers.
 
+**Public-shadow closeout slice (2026-06-10, #313):** the same helper now emits
+`aippocampus_thread_story_public_shadow_closeout`. That report aggregates the
+source-backed packet, contradiction/persona/interference/noise controls,
+packet-only blocking, and source-reopened answer comparison into a public
+structured-text closeout readout. It is enough to retire #313's public shadow
+executable requirement without requiring private-history story quality or live
+model-family behavior claims.
+
 This is still structured text navigation, not activation steering, live model
 equivalence, default recall lift, or user/personality truth.
 
