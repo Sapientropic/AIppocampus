@@ -48,6 +48,21 @@ Hard red-line counters are zero in the fixture:
 - `wrong_route_revival_count`
 - `deleted_no_recall_emit_count`
 
+Maturity metadata:
+
+- `benchmark_maturity_level = contract_smoke`
+- `contract_gate_ok = true`
+- `quality_gate_ok = false`
+- `minimum_family_case_floor = 30`
+- `sample_floor_met = false`
+- `next_promotion_target = public_cohort_candidate`
+
+The contract gate says the selected lifecycle fixtures still protect the
+stale/current, mask, quarantine, supersession, and deletion red lines. It is
+not representative map-rot quality evidence until a later public/external
+cohort, sample-floor, uncertainty, holdout, and no-tuning-leak promotion
+explicitly passes.
+
 ## Fixture Cases
 
 | Case | Lifecycle pressure | Expected behavior |
@@ -78,4 +93,3 @@ It does not prove:
 
 The pruning/decay markers are action guidance for operators and future
 maintenance code, not a claim that AIppocampus already auto-cleans cold maps.
-

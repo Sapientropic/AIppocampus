@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
@@ -18,6 +19,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import benchmark_maturity
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation import (
     attention_evidence_packager,
@@ -216,11 +218,26 @@ def evaluate_navigation_quality_cases(cases: Iterable[Mapping[str, Any]]) -> dic
         if case["family"] in {"hard_mask", "anti_nag"} and case["packet_summary"]["source_handle_count"] > 0
     ]
     ok = all(value == 0 for value in hard_red_lines.values()) and correct_count == len(projected_cases)
+    maturity = benchmark_maturity.build_benchmark_maturity_report(
+        benchmark_maturity_level="contract_smoke",
+        case_count=len(projected_cases),
+        passed_case_count=correct_count,
+        per_family_case_counts=Counter(str(case["family"]) for case in projected_cases),
+        minimum_family_case_floor=30,
+        external_or_public_cohort_case_count=0,
+        holdout_case_count=0,
+        holdout_used_for_tuning_count=0,
+        contract_gate_ok=ok,
+        next_promotion_target="public_cohort_candidate",
+    )
     return {
         "kind": "aippocampus_attention_navigation_quality",
         "schema_version": SCHEMA_VERSION,
         "run_at": now_utc(),
         "ok": ok,
+        "contract_gate_ok": ok,
+        "quality_gate_ok": maturity["quality_gate_ok"],
+        "benchmark_maturity": maturity,
         "cases": projected_cases,
         "metrics": {
             "case_count": len(projected_cases),
@@ -240,7 +257,16 @@ def evaluate_navigation_quality_cases(cases: Iterable[Mapping[str, Any]]) -> dic
         "quality_gate": {
             "red_lines_must_be_zero": True,
             "averages_do_not_mask_red_lines": True,
-            "status": "passed" if ok else "failed",
+            "contract_gate_ok": ok,
+            "quality_gate_ok": maturity["quality_gate_ok"],
+            "benchmark_maturity_level": maturity["benchmark_maturity_level"],
+            "status": (
+                "quality_gate_passed"
+                if maturity["quality_gate_ok"]
+                else "contract_gate_passed_quality_gate_not_promoted"
+                if ok
+                else "contract_gate_failed"
+            ),
         },
         "privacy_boundary": {
             "raw_source_text_emitted": False,

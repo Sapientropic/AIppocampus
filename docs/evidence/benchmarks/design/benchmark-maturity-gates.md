@@ -1,0 +1,73 @@
+# Benchmark Maturity And Sample-Size Gates
+
+Role: canonical policy for #1165 benchmark maturity and promotion metadata.
+
+Small deterministic fixtures are valuable because they catch red-line failures
+early: privacy bypass, source-free claims, stale-as-current, wrong-route
+revival, summary-as-truth, and foreground provenance leaks. They are not, by
+themselves, representative public-quality evidence. Reports should make both
+truths visible.
+
+## Maturity Ladder
+
+| Level | Meaning | Can support | Cannot support by itself |
+| --- | --- | --- | --- |
+| `contract_smoke` | Small deterministic contract or regression fixture. | Schema shape, red-line behavior, local-safe regression guard. | Representative public quality, live lift, competitor comparison. |
+| `diagnostic_proxy` | Named failure families with uncertainty metadata. | Root-cause or calibration direction. | Population-quality claim or final launch proof. |
+| `public_cohort_candidate` | Public/replayable cases with source-safe reports and planned floors. | Candidate cohort design and early public reproducibility. | Final cohort quality until floors and holdout rules pass. |
+| `public_cohort` | Public/replayable cohort with family floors, negative controls, and uncertainty reporting. | Bounded public cohort quality for the declared surface. | Private-history or live-host quality. |
+| `holdout_quality` | Held-out or externally derived cases excluded from tuning. | Stronger public quality evidence for that surface. | SOTA or market superiority without an external comparison protocol. |
+
+## Required Report Metadata
+
+Use `benchmarks/aippocampus/benchmark_maturity.py` when a runner can emit the
+shared fields directly. Otherwise mirror the same shape in the report owner.
+
+Required fields:
+
+- `benchmark_maturity_level`
+- `case_count`
+- `failure_family_count`
+- `per_family_case_counts`
+- `minimum_family_case_floor`
+- `sample_floor_met`
+- `external_or_public_cohort_case_count`
+- `holdout_case_count`
+- `holdout_used_for_tuning_count`
+- `wilson_or_uncertainty_reported`
+- `contract_gate_ok`
+- `quality_gate_ok`
+- `cannot_claim_due_to_sample_size`
+- `next_promotion_target`
+
+`contract_gate_ok=true` means the local fixture contract passed. It must not be
+read as `quality_gate_ok=true` unless the report also meets its maturity,
+sample-floor, public/external cohort, holdout, and no-tuning-leakage checks.
+
+Red-line counters stay separate from aggregate rates. Passing all red lines is
+necessary for promotion, but it is not sufficient evidence of public cohort
+quality.
+
+## Initial Fixture Annotations
+
+| Surface | Current level | Current sample | Next promotion target | Why not public quality yet |
+| --- | --- | --- | --- | --- |
+| Attention navigation quality | `contract_smoke` | 12 selected cases across route families | `public_cohort_candidate` | Small author-written fixture; no public/external cohort or holdout. |
+| Map-rot lifecycle-debt | `contract_smoke` | 9 selected lifecycle-state cases | `public_cohort_candidate` | Exercises state taxonomy and red lines, not real map-rot distribution. |
+| Agent continuity loop | `contract_smoke` | 6 selected integration cases | `public_cohort_candidate` | Proves composition behavior, not live host or private-history usefulness. |
+| Dream public shadow | `contract_smoke` | 4 synthetic public behavior cases | `public_cohort_candidate` | Useful falsifiable behavior smoke, but too small for broad Dream quality. |
+
+## Promotion Notes
+
+Promotion should be explicit and boring:
+
+- define the public/external cohort source and source-safety boundary;
+- set per-family floors before tuning;
+- keep negative controls and no-remember / stale controls visible;
+- keep holdout cases out of prompt, threshold, or fixture tuning;
+- report Wilson or another uncertainty measure for rates;
+- leave `quality_gate_ok=false` when floors, holdout, or no-leakage checks fail.
+
+Do not use Wilson intervals to make selected or author-written cases
+representative. Uncertainty reporting describes the observed cohort only; it
+does not fix sampling bias.

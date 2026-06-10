@@ -60,6 +60,20 @@ Current deterministic result:
 - `false_preactivation_rate = 0/3 = 0.0`
 - all hard red lines `0`
 
+Maturity metadata:
+
+- `benchmark_maturity_level = contract_smoke`
+- `contract_gate_ok = true`
+- `quality_gate_ok = false`
+- `minimum_family_case_floor = 30`
+- `sample_floor_met = false`
+- `next_promotion_target = public_cohort_candidate`
+
+The contract gate says the selected navigation fixtures still protect the
+declared red lines. It is not a public-quality cohort result until a later
+public/external cohort, sample-floor, uncertainty, holdout, and no-tuning-leak
+promotion explicitly passes.
+
 ## Boundaries
 
 This benchmark does not evaluate answer-generation quality, private-history

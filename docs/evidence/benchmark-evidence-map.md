@@ -29,6 +29,7 @@ promotes a public-safe result into the official evidence flow.
 | Which confirmed scope boundary or benchmark result needs remediation? | [`current-claims.md#confirmed-scope-boundaries-expected-null-results`](current-claims.md#confirmed-scope-boundaries-expected-null-results) | Follow the linked issue before reading old dated reports. |
 | Which `cannot_claim` caveats are testable, retired later, or durable? | [`current-claims.md#cannot-claim-owner-and-retirement-ledger`](current-claims.md#cannot-claim-owner-and-retirement-ledger) | Use the owner issue and retirement condition before changing public claims. |
 | Which benchmark or smoke should I run? | [`benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md) | Use the default run profile and cannot-claim column there. |
+| Is this a small contract fixture or public-quality cohort evidence? | [`benchmarks/design/benchmark-maturity-gates.md`](benchmarks/design/benchmark-maturity-gates.md) | Check maturity level, sample floor, holdout, and promotion target before citing quality. |
 | Which file owns a specific dated report or runner? | [`#evidence-ownership`](#evidence-ownership) and [`#benchmark-runners`](#benchmark-runners) | Treat this page as the maintainer directory. |
 | Where are historical reports? | [`benchmarks/`](benchmarks/) plus [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md) | Historical reports stay visible but do not set current claims by themselves. |
 
@@ -198,6 +199,7 @@ instead of deriving priority from this directory map.
 | Stage readiness boundary | `docs/evidence/readiness/stage-0-5-readiness.md` | Stage-level can-claim / cannot-claim status and missing proof. |
 | Dated command ledger | `docs/evidence/readiness/public-readiness-verification.md` | Summarized commands, dates, pass/fail interpretation, and scope notes. |
 | Benchmark design rationale | `docs/evidence/benchmarks/design/README.md` and `docs/evidence/benchmarks/design/benchmark-design-rationale.md` | Evaluation philosophy, track-family why, evidence-layer separation, and external-comparison boundaries. |
+| Benchmark maturity gates | `docs/evidence/benchmarks/design/benchmark-maturity-gates.md` and `benchmarks/aippocampus/benchmark_maturity.py` | Maturity ladder, sample-size floors, holdout/no-tuning-leakage fields, and promotion metadata separating `contract_gate_ok` from `quality_gate_ok`. |
 | Benchmark priority registry | `docs/evidence/benchmarks/design/benchmark-priority-map.md` | Operational priority, maturity, run-profile, claim-level, and cannot-claim guidance for benchmark and smoke surfaces. |
 | Benchmark runner methodology | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
 | External benchmark analysis | `docs/evidence/benchmarks/design/external-benchmark-map.md` | Layer-aware external benchmark and memory-system comparison candidates, blockers, and cannot-claim boundaries. |
@@ -267,6 +269,7 @@ empty output. The PR-tier guard for this contract is
 | Attention navigation quality | `benchmarks/aippocampus/benchmark_attention_navigation_quality.py` | `docs/evidence/benchmarks/attention-navigation-quality.md`, #1111 |
 | Attention score-fusion calibration | `benchmarks/aippocampus/benchmark_attention_score_fusion_calibration.py` | `docs/evidence/benchmarks/attention-score-fusion-calibration.md`, #1112 |
 | Agent continuity loop gate | `benchmarks/aippocampus/benchmark_agent_continuity_loop.py` | `docs/evidence/benchmarks/agent-continuity-loop.md`, #1163 |
+| Benchmark maturity helper | `benchmarks/aippocampus/benchmark_maturity.py` | `docs/evidence/benchmarks/design/benchmark-maturity-gates.md`, #1165 |
 | Map-rot lifecycle-debt benchmark | `benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py` | `docs/evidence/benchmarks/map-rot-lifecycle-debt.md`, #1126 |
 | Multimodal corpus-style retrieval contract | `benchmarks/aippocampus/benchmark_multimodal_corpus_retrieval.py` | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/public_multimodal_corpus/fixture.json`, #531 |
 | Conversational media-ingest recall contract | `benchmarks/aippocampus/benchmark_conversational_media_ingest_recall.py` | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/conversational_media_ingest/fixture.json`, #532 |

@@ -13,6 +13,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import benchmark_maturity
 from aippocampus_runtime.core import now_utc
 
 SCHEMA_VERSION = 1
@@ -260,18 +261,43 @@ def evaluate_map_rot_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]
     ok = all(value == 0 for value in hard_red_lines.values()) and all(
         bool(case["correct_behavior"]) for case in projected
     )
+    passed_case_count = sum(1 for case in projected if case["correct_behavior"])
+    maturity = benchmark_maturity.build_benchmark_maturity_report(
+        benchmark_maturity_level="contract_smoke",
+        case_count=len(projected),
+        passed_case_count=passed_case_count,
+        per_family_case_counts=by_state,
+        minimum_family_case_floor=30,
+        external_or_public_cohort_case_count=0,
+        holdout_case_count=0,
+        holdout_used_for_tuning_count=0,
+        contract_gate_ok=ok,
+        next_promotion_target="public_cohort_candidate",
+    )
     return {
         "kind": "aippocampus_map_rot_lifecycle_debt",
         "schema_version": SCHEMA_VERSION,
         "run_at": now_utc(),
         "ok": ok,
+        "contract_gate_ok": ok,
+        "quality_gate_ok": maturity["quality_gate_ok"],
+        "benchmark_maturity": maturity,
         "cases": projected,
         "metrics": metrics,
         "hard_red_lines": hard_red_lines,
         "quality_gate": {
             "red_lines_must_be_zero": True,
             "historically_preserved_is_not_current_eligible": True,
-            "status": "passed" if ok else "failed",
+            "contract_gate_ok": ok,
+            "quality_gate_ok": maturity["quality_gate_ok"],
+            "benchmark_maturity_level": maturity["benchmark_maturity_level"],
+            "status": (
+                "quality_gate_passed"
+                if maturity["quality_gate_ok"]
+                else "contract_gate_passed_quality_gate_not_promoted"
+                if ok
+                else "contract_gate_failed"
+            ),
         },
         "privacy_boundary": {
             "raw_source_text_emitted": False,
