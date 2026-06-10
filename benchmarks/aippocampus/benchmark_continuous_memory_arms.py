@@ -36,7 +36,7 @@ from continuous_memory_preregistered_slices import (
     repeat_seed_hash,
 )
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 BARE_CONTINUOUS_NO_MEMORY = "bare_continuous_no_memory"
 HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS = "host_native_continuous_no_aippocampus"
 ARM_ORDER = (
