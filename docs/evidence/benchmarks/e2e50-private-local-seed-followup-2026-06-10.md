@@ -20,6 +20,21 @@ The ignored local annotation artifact is the existing private clean-source
 review summary from the 2026-06-04 Dream/E2E50 diagnostic. The command output
 remains local and ignored.
 
+Machine-readable readiness replay:
+`docs/evidence/benchmarks/e2e50-private-annotation-readiness-2026-06-10.json`.
+
+The replay feeds the sanitized scanner `annotation_summary` into
+`benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` so the public
+20-case scorer and the private/local annotation blocker can be read from one
+hash/count-only report:
+
+```powershell
+python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --private-annotation-summary .tmp\e2e50-private-local-followup-20260610.json --output docs\evidence\benchmarks\e2e50-private-annotation-readiness-2026-06-10.json
+```
+
+The benchmark replay does not accept raw private annotation rows directly; the
+scanner remains the owner for reducing local review rows to aggregate counts.
+
 ## Candidate Discovery
 
 The current wide scan is no longer candidate-count blocked:
@@ -95,6 +110,11 @@ target. The set does include at least one negative control where the correct
 behavior is not to remember, but it still does not support a completed
 private-history 20-case pack.
 
+The benchmark readiness replay records the same blocker as
+`private_annotation_readiness.gate_ok=false`, with
+`blocker_codes=["private_annotation_not_retained",
+"private_retained_case_shortfall"]`.
+
 This report coexists with the public-safe 20-case scaffold from #994. The
 public scaffold proves a shareable contract shape; this private/local report
 shows the real-history annotation pool is still not large enough for private
@@ -103,6 +123,8 @@ behavior-quality claims.
 ## Can Claim
 
 - The E2E50 private/local scanner now has a sanitized annotation-summary path.
+- The E2E50 case-pack scorer can consume that sanitized summary and report the
+  private annotation readiness blocker without emitting annotation rows.
 - Current wide private/local candidate discovery can find 23 candidate seeds
   while emitting only hash/count-style output.
 - Existing private/local annotation evidence has source-safe category and
