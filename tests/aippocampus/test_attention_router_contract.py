@@ -50,6 +50,39 @@ class AttentionRouterContractTests(unittest.TestCase):
         self.assertNotIn('"source_text"', encoded)
         self.assertIn("broad_attention_router_quality", report["cannot_claim"])
 
+    def test_bounded_summary_is_route_not_evidence(self) -> None:
+        report = contract.build_contract_fixture_report()
+        by_id = {case["case_id"]: case for case in report["cases"]}
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        summary = by_id["bounded_summary_as_route"]["packet"]
+
+        self.assertEqual(summary["output_mode"], "bounded_summary_as_route")
+        self.assertEqual(summary["action_grammar"], "direction_only")
+        self.assertEqual(summary["claim_permission"], "no_claim_before_reopen")
+        self.assertEqual(summary["bounded_summary"]["scope"], "project:AIppocampus")
+        self.assertEqual(
+            summary["bounded_summary"]["source_coverage"],
+            ["discussion:#1106", "issue:#1107"],
+        )
+        self.assertTrue(summary["contract"]["bounded_summary_is_route_not_evidence"])
+        self.assertEqual(report["metrics"]["summary_claim_ready_without_reopen_count"], 0)
+        self.assertNotIn("PRIVATE_SUMMARY_TEXT_SENTINEL", encoded)
+        self.assertNotIn('"summary_text"', encoded)
+
+    def test_bounded_summary_falls_back_when_stale_or_weak(self) -> None:
+        report = contract.build_contract_fixture_report()
+        by_id = {case["case_id"]: case for case in report["cases"]}
+
+        stale = by_id["stale_summary_falls_back_to_direction_only"]["packet"]
+
+        self.assertEqual(stale["output_mode"], "direction_only")
+        self.assertEqual(stale["action_grammar"], "direction_only")
+        self.assertEqual(stale["claim_permission"], "no_claim_before_reopen")
+        self.assertIn("summary_stale", stale["summary_fallback_reason_codes"])
+        self.assertIn("summary_coverage_weak", stale["summary_fallback_reason_codes"])
+        self.assertEqual(report["metrics"]["bounded_summary_fallback_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

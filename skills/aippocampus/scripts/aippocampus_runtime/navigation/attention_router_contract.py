@@ -34,7 +34,13 @@ HARD_MASKS = {
     "high_risk_no_source",
 }
 
-OutputMode = Literal["silence", "direction_only", "reopenable_route", "bounded_evidence"]
+OutputMode = Literal[
+    "silence",
+    "direction_only",
+    "bounded_summary_as_route",
+    "reopenable_route",
+    "bounded_evidence",
+]
 ClaimPermission = Literal["no_claim_before_reopen", "bounded_claim_allowed", "blocked"]
 
 
@@ -72,6 +78,52 @@ def _hard_masks(candidate: Mapping[str, Any]) -> list[str]:
     return sorted(set(masks))
 
 
+def _strings(values: Any, *, limit: int = 8) -> list[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    result = []
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _summary_fallback_reason_codes(summary: Mapping[str, Any] | None) -> list[str]:
+    if summary is None:
+        return []
+    reasons = []
+    if not str(summary.get("scope") or "").strip():
+        reasons.append("summary_scope_missing")
+    if not _strings(summary.get("source_coverage")):
+        reasons.append("summary_coverage_missing")
+    if not str(summary.get("freshness") or "").strip():
+        reasons.append("summary_freshness_missing")
+    if not str(summary.get("reopen_path") or "").strip():
+        reasons.append("summary_reopen_path_missing")
+    if summary.get("stale") or str(summary.get("freshness") or "").strip().lower() == "stale":
+        reasons.append("summary_stale")
+    if summary.get("coverage_weak"):
+        reasons.append("summary_coverage_weak")
+    if summary.get("conflicted"):
+        reasons.append("summary_conflicted")
+    if summary.get("high_risk"):
+        reasons.append("summary_high_risk")
+    return sorted(set(reasons))
+
+
+def _compact_bounded_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "scope": str(summary.get("scope") or "").strip(),
+        "source_coverage": _strings(summary.get("source_coverage")),
+        "freshness": str(summary.get("freshness") or "").strip(),
+        "claim_permission": "no_claim_before_reopen",
+        "reopen_path": str(summary.get("reopen_path") or "").strip(),
+    }
+
+
 def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
     """Project a candidate into the #1107 route-packet contract.
 
@@ -91,6 +143,13 @@ def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
         for handle in candidate.get("source_handles") or []
         if isinstance(handle, Mapping)
     ]
+    summary_input = candidate.get("bounded_summary")
+    bounded_summary = (
+        _compact_bounded_summary(summary_input) if isinstance(summary_input, Mapping) else None
+    )
+    summary_fallback_reason_codes = _summary_fallback_reason_codes(
+        summary_input if isinstance(summary_input, Mapping) else None
+    )
 
     if masks:
         output_mode: OutputMode = "silence"
@@ -102,6 +161,11 @@ def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
         claim_permission = "bounded_claim_allowed"
         emitted = True
         action_grammar = "bounded_evidence"
+    elif bounded_summary and not summary_fallback_reason_codes:
+        output_mode = "bounded_summary_as_route"
+        claim_permission = "no_claim_before_reopen"
+        emitted = True
+        action_grammar = "direction_only"
     elif source_handles:
         output_mode = "reopenable_route"
         claim_permission = "no_claim_before_reopen"
@@ -113,7 +177,7 @@ def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
         emitted = True
         action_grammar = "direction_only"
 
-    return {
+    packet: dict[str, Any] = {
         "kind": "aippocampus_attention_route_packet",
         "schema_version": "attention-router-contract-v0",
         "route_id": route_id,
@@ -128,9 +192,15 @@ def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
             "hard_masks_are_gates": True,
             "attention_score_is_not_evidence": True,
             "route_value_is_not_memory_fact": True,
+            "bounded_summary_is_route_not_evidence": True,
             "source_reopen_required_before_claim": claim_permission == "no_claim_before_reopen",
         },
     }
+    if output_mode == "bounded_summary_as_route" and bounded_summary is not None:
+        packet["bounded_summary"] = bounded_summary
+    if summary_fallback_reason_codes:
+        packet["summary_fallback_reason_codes"] = summary_fallback_reason_codes
+    return packet
 
 
 def fixture_candidates() -> list[dict[str, Any]]:
@@ -189,6 +259,34 @@ def fixture_candidates() -> list[dict[str, Any]]:
                 {"head": "abstention_head", "score": 0.55, "reason_code": "weak_route_scent"},
             ],
         },
+        {
+            "case_id": "bounded_summary_as_route",
+            "bounded_summary": {
+                "scope": "project:AIppocampus",
+                "source_coverage": ["discussion:#1106", "issue:#1107"],
+                "freshness": "regenerated_at:2026-06-10T18:49:00+08:00",
+                "reopen_path": "summarize -> re-summarize by selected source spans",
+                "summary_text": "PRIVATE_SUMMARY_TEXT_SENTINEL",
+            },
+            "head_votes": [
+                {"head": "summary_head", "score": 0.82, "reason_code": "bounded_low_risk_summary"},
+            ],
+        },
+        {
+            "case_id": "stale_summary_falls_back_to_direction_only",
+            "bounded_summary": {
+                "scope": "project:AIppocampus",
+                "source_coverage": ["issue:#250"],
+                "freshness": "stale",
+                "reopen_path": "refresh familiarity source refs before use",
+                "coverage_weak": True,
+                "stale": True,
+                "summary_text": "PRIVATE_SUMMARY_TEXT_SENTINEL",
+            },
+            "head_votes": [
+                {"head": "summary_head", "score": 0.48, "reason_code": "stale_weak_summary"},
+            ],
+        },
     ]
 
 
@@ -207,6 +305,8 @@ def build_contract_fixture_report(
 
     masked_source_resurrection_count = 0
     source_backed_claim_without_reopen = 0
+    summary_claim_ready_without_reopen_count = 0
+    bounded_summary_fallback_count = 0
     for row in rows:
         packet = row["packet"]
         if packet["masks_applied"] and packet["emitted"]:
@@ -216,16 +316,29 @@ def build_contract_fixture_report(
             for handle in packet.get("source_handles") or []
         ):
             source_backed_claim_without_reopen += 1
+        if (
+            packet["output_mode"] == "bounded_summary_as_route"
+            and packet["claim_permission"] != "no_claim_before_reopen"
+        ):
+            summary_claim_ready_without_reopen_count += 1
+        if packet.get("summary_fallback_reason_codes"):
+            bounded_summary_fallback_count += 1
 
     return {
         "kind": "aippocampus_attention_router_contract_fixture",
         "schema_version": "attention-router-contract-v0",
-        "ok": masked_source_resurrection_count == 0 and source_backed_claim_without_reopen == 0,
+        "ok": (
+            masked_source_resurrection_count == 0
+            and source_backed_claim_without_reopen == 0
+            and summary_claim_ready_without_reopen_count == 0
+        ),
         "cases": rows,
         "metrics": {
             "case_count": len(rows),
             "masked_source_resurrection_count": masked_source_resurrection_count,
             "source_backed_claim_without_reopen": source_backed_claim_without_reopen,
+            "summary_claim_ready_without_reopen_count": summary_claim_ready_without_reopen_count,
+            "bounded_summary_fallback_count": bounded_summary_fallback_count,
         },
         "privacy_boundary": {
             "raw_source_text_emitted": False,

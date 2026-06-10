@@ -74,6 +74,19 @@ refresh, but not a foreground coding route. A rejected-route card can warn or
 constrain the next coding move, but it still cannot prove current code state
 without reopening source.
 
+## Attention Router Boundary
+
+For the source-backed attention router, familiarity is cold route sidecar
+metadata. It may help later heads compute scope, action, episode, rejected-route,
+or currentness features, but it is not itself an attention head, output level,
+warning channel, or evidence source.
+
+The canonical router contract is
+[`source-backed-attention-router.md`](source-backed-attention-router.md). Router
+prototypes should reuse the existing `repo_familiarity` projection path before
+adding another input lane. Stale familiarity can only request refresh or source
+reopen; it cannot support current-code claims or skip source reopen.
+
 ## Opt-In Foreground Experiment Evidence
 
 The opt-in foreground experiment smoke compares public-safe fixture arms plus a
