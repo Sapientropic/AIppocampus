@@ -614,6 +614,24 @@ Those counters are operational observations for future comparisons against
 direct `search_memory` and hook-card-only baselines; they are not answer-quality
 or benchmark-lift claims by themselves.
 
+## AIppo Working Contracts
+
+`aippocampus_runtime.aippo.working_contract` is the first fixture-backed
+projection from source trails into a reusable AIppo working contract. It does
+not add another truth source. Clean source, reopened source, current claims,
+merged tests, and accepted issues remain the authority layer; semantic labels,
+cognitive maps, concept graphs, Dream/subconscious findings, agent self-notes,
+pathlets, and repo familiarity cards may only nominate or route candidate
+clauses.
+
+The package compiles clause-level lifecycle state. Ripe clauses may produce a
+compact activation packet for low-risk planning or patch posture; stale,
+challenged, gappy, privacy-blocked, or candidate-only clauses degrade to
+`reopenable_route`, `needs_review`, or blocked handling. Source refs, support
+ledgers, candidate provenance, counter-evidence, and changed-clause diagnostics
+belong behind `recall_deepen` / `deepen` / `explain`, not in foreground
+packets.
+
 ## Cognitive Map
 
 `aippocampus_runtime.navigation.cognitive_map` materializes `$CODEX_HOME/aippocampus-registry/cognitive_map.json`.

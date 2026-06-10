@@ -40,6 +40,12 @@ Cards that lack an action delta or stop rule should not enter the foreground
 packet. More context is not better if it only gives the agent more material to
 audit.
 
+AIppo working-contract clauses reuse the same card discipline. A repo
+familiarity card can nominate or route a clause when it has action delta,
+first-source, stop-after, freshness, and reopen boundaries, but the card remains
+navigation until source/path support ripens the clause in
+`aippocampus_runtime.aippo.working_contract`.
+
 ## Selector Contract
 
 The selector must prefer tiny packets over broad maps:

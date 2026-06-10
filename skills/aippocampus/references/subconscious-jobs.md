@@ -816,6 +816,11 @@ Staging findings can be consumed in several ways:
   questions
 - promotion candidates can feed explicit user review or future automatic
   consumers
+- AIppo working-contract clause candidates can feed
+  `aippocampus_runtime.aippo.working_contract`, but they remain staging
+  material until source coverage, path provenance, freshness, and lifecycle
+  gates make a clause ripe. Candidate-only self-notes or Dream findings must
+  not become foreground working-contract guidance by themselves.
 - working-memory routes can feed foreground hook scent/context while preserving
   the source-backed boundary. `confirm_when_relevant` is not a notification; it
   means the assistant should ask only if the current action would depend on that

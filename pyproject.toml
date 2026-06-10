@@ -66,6 +66,7 @@ openai-agents-smoke = ["openai-agents==0.17.4"]
 package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
     "aippocampus_runtime",
+    "aippocampus_runtime.aippo",
     "aippocampus_runtime.artifacts",
     "aippocampus_runtime.cli",
     "aippocampus_runtime.coding",
@@ -143,6 +144,8 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/anchor_graph.py",
     "skills/aippocampus/scripts/aippocampus_runtime/safety.py",
     "skills/aippocampus/scripts/aippocampus_runtime/text.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/aippo/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/aippo/working_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/errors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",

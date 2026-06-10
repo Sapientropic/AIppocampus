@@ -64,6 +64,40 @@ source handles, source ids, spans, head votes, masks, full support ledgers, raw
 private text, or local paths. The packet is for action orientation, not
 provenance inspection.
 
+## AIppo Working-Contract Packet
+
+`aippocampus_runtime.aippo.working_contract` defines the first executable
+`aippo_working_contract` fixture package. It is a contract compiler output, not
+a new truth layer: clause text may guide low-risk work posture only when
+source/path support, freshness, and lifecycle gates make that clause ripe.
+
+The smallest lifecycle unit is a clause. A package may be `partial` when some
+clauses are foreground-eligible while stale, challenged, or gappy clauses
+degrade to `reopenable_route`. Candidate surfaces such as agent self-notes,
+Dream/subconscious findings, cognitive maps, concept graphs, pathlets, and repo
+familiarity cards may nominate or route a clause, but they cannot ripen it
+without source-backed support.
+
+Foreground activation exposes only the working-contract hint:
+
+```json
+{
+  "kind": "aippocampus_aippo_activation_packet",
+  "aippo_id": "aippo_project_workflow_public_safe_v0",
+  "output_mode": "working_contract",
+  "display_hint": "Scope slice, verify, reopen before claims.",
+  "active_clause_count": 2,
+  "claim_permission": "working_contract_allowed_no_fact_claim",
+  "next_action": "use_hint",
+  "deepen_route_id": "deepen:aippo_project_workflow_public_safe_v0"
+}
+```
+
+Source refs, support ledgers, candidate provenance, counter-evidence, and
+suppressed clauses stay behind `deepen` / `explain`. Exact, public, disputed,
+stale/currentness, sensitive, numeric, or high-risk claims still require source
+reopen.
+
 ## Output Mapping
 
 The facade preserves the existing action grammar instead of adding a new
