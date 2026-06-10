@@ -202,6 +202,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_prompt_context_render",
         "test_prompt_foreground_budget",
         "test_prompt_hot_path_funnel",
+        "test_prompt_hook_hot_path",
         "test_prompt_hook_semantic_diagnostics",
         "test_prompt_recall_decision_boundaries",
         "test_prompt_recall_policy",
