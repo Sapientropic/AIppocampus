@@ -924,6 +924,9 @@ def run_semantic_gate(
     for worker_result in parsed_workers:
         add_usage(usage_total, compact_usage(worker_result.get("usage") or {}))
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    buckets = error_buckets(errors)
+    successful_worker_count = len(parsed_workers)
+    failed_worker_count = max(0, len(worker_names) - successful_worker_count)
     result = {
         "kind": "aippocampus_semantic_recall_gate",
         "schema_version": SCHEMA_VERSION,
@@ -932,7 +935,11 @@ def run_semantic_gate(
         **merged,
         "workers": parsed_workers,
         "errors": errors,
-        "error_buckets": error_buckets(errors),
+        "error_buckets": buckets,
+        "successful_worker_count": successful_worker_count,
+        "failed_worker_count": failed_worker_count,
+        "partial_success": bool(successful_worker_count and failed_worker_count),
+        "partial_failure_reasons": sorted(buckets),
         "warnings": [],
         "usage": usage_total,
         "timeout": timeout,

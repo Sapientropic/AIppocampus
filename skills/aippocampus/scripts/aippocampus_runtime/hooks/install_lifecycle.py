@@ -269,20 +269,39 @@ def status(
 ) -> dict[str, Any]:
     data = load_hooks(path)
     installed_events: dict[str, list[str]] = {}
+    bridge_events: dict[str, list[str]] = {}
     for event in EVENTS:
         groups = (data.get("hooks") or {}).get(event) or []
         commands: list[str] = []
+        bridge_commands = (
+            provider_bridge_commands(groups)
+            if script is None and module == DEFAULT_HOOK_MODULE and isinstance(groups, list)
+            else []
+        )
         for group in groups if isinstance(groups, list) else []:
             for handler in group.get("hooks", []) if isinstance(group, dict) else []:
                 if isinstance(handler, dict) and is_maintenance_handler(handler, script, module=module):
                     commands.append(str(handler.get("command") or ""))
+        for command in bridge_commands:
+            if command not in commands:
+                commands.append(command)
+        if bridge_commands:
+            bridge_events[event] = bridge_commands
         if commands:
             installed_events[event] = commands
+    installed = set(installed_events) == set(EVENTS)
+    # Provider bridge wrappers are effective lifecycle hooks: they establish the
+    # provider env and delegate to the lifecycle module. Keep low-level status
+    # aligned with install/update so bridge-only setups are not diagnosed as
+    # missing hooks.
     return add_host_integration(
         {
-            "installed": set(installed_events) == set(EVENTS),
+            "installed": installed,
             "path": str(path),
             "events": installed_events,
+            "provider_key_bridge_installed": bool(bridge_events),
+            "installed_via_provider_bridge": set(bridge_events) == set(EVENTS),
+            "provider_key_bridge_events": sorted(bridge_events),
         }
     )
 

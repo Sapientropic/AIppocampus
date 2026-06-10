@@ -21,6 +21,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.hooks import install_lifecycle as installer  # noqa: E402
+from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
 
 
 class InstallMemoryMaintenanceHookTests(unittest.TestCase):
@@ -109,6 +110,35 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
                 "unsupported_hosts": ["claude-code", "generic-jsonl"],
             },
         )
+
+    def test_status_treats_provider_bridge_wrapper_as_installed(self) -> None:
+        root = Path(self.tmp.name)
+        codex_home = root / "codex-home"
+        dotenv = root / "provider.env"
+        provider_env_var = "PROVIDER_LIFECYCLE_STATUS_BRIDGE"
+        fixture_value = "sk-FAKE_TEST_LIFECYCLE_STATUS_BRIDGE_1234567890"
+        dotenv.write_text(f"{provider_env_var}={fixture_value}\n", encoding="utf-8")
+
+        provider_key_bridge.apply_provider_key_bridge(
+            target="codex-hooks",
+            source="explicit-dotenv",
+            provider_env_var=provider_env_var,
+            credential_dotenv=dotenv,
+            codex_home_path=codex_home,
+            hooks_json=self.hooks_json,
+        )
+        result = installer.status(self.hooks_json)
+        encoded = json.dumps(result, ensure_ascii=False)
+
+        self.assertTrue(result["installed"])
+        self.assertTrue(result["provider_key_bridge_installed"])
+        self.assertTrue(result["installed_via_provider_bridge"])
+        self.assertEqual(set(result["events"]), set(installer.EVENTS))
+        self.assertEqual(set(result["provider_key_bridge_events"]), set(installer.EVENTS))
+        for commands in result["events"].values():
+            self.assertEqual(len(commands), 1)
+            self.assertIn("aippocampus_provider_bridge_hook.py", commands[0])
+        self.assertNotIn(fixture_value, encoded)
 
     def test_uninstall_removes_only_maintenance_hooks(self) -> None:
         installer.install(self.hooks_json, timeout=12)

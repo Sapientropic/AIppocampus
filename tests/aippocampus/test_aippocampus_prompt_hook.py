@@ -1415,7 +1415,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(all(candidate["life_wide_timeline_source"] for candidate in result["candidates"][:2]))
         self.assertEqual(result["evidence"], [])
 
-    def test_vague_continuation_without_semantic_stays_silent_despite_overlap(self) -> None:
+    def test_explicit_continuation_with_exact_terms_can_scent_without_semantic(self) -> None:
         registry_path = self._write_single_thread_registry(
             title="Python list.sort None",
             keywords=["Python", "list.sort", "None", "missing keys"],
@@ -1430,8 +1430,9 @@ class AmbientRecallHookTests(unittest.TestCase):
             search_budget=0,
         )
 
-        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["decision"], "scent")
         self.assertGreaterEqual(result["score"], hook.SCENT_THRESHOLD)
+        self.assertEqual(result["candidates"][0]["thread_key"], "session:single-thread")
         self.assertFalse(result["evidence"])
 
     def test_weaker_vague_continuation_needs_semantic_positive_to_scent(self) -> None:
