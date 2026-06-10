@@ -40,6 +40,7 @@ Roles:
 | [runtime-envelope-and-failure-taxonomy.md](runtime-envelope-and-failure-taxonomy.md) | current contract | Public runtime envelope, failure families, and config registry boundary. |
 | [schema-field-profiles.md](schema-field-profiles.md) | current contract | Field-budget and projection discipline for runtime surfaces. |
 | [source-backed-attention-router.md](source-backed-attention-router.md) | current contract | Hard-mask, route-packet, output-level, and claim-permission boundaries for attention-style navigation. |
+| [source-reopen-budget.md](source-reopen-budget.md) | current contract | Hot/warm/cold source-reopen policy, timeout fail-open behavior, and reopen red lines. |
 | [topology-anchor-policy.md](topology-anchor-policy.md) | current contract | Topology anchor weighting as lifecycle pressure, not source truth. |
 
 ## Implementation Maps
