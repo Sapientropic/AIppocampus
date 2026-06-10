@@ -71,6 +71,14 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         except ModuleNotFoundError:
             self.fail("prompt_recall_projection helper module is missing")
 
+    def test_prompt_cue_catalog_is_split_without_breaking_legacy_imports(self) -> None:
+        catalog = importlib.import_module("aippocampus_runtime.recall.prompt_cue_catalog")
+
+        self.assertIs(prompt_cues.ASSOCIATIVE_CUES, catalog.ASSOCIATIVE_CUES)
+        self.assertIs(prompt_cues.CODE_SURFACE_CUES, catalog.CODE_SURFACE_CUES)
+        self.assertIs(prompt_cues.SEMANTIC_EVIDENCE_TERMS, catalog.SEMANTIC_EVIDENCE_TERMS)
+        self.assertTrue(prompt_cues.matched_terms("Use RAG-lite for recall.", {"rag"}))
+
     def _write_clean_source_registry(self) -> Path:
         clean_dir = self.root / "projection-clean-source"
         clean_dir.mkdir()
