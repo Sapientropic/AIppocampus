@@ -230,6 +230,17 @@ resume-skip, and public-safe checkpoint support, but the full public `v1.base`
 score boundary remains unclaimed until a later dated run completes and reviews
 the whole fixed arm.
 
+Checkpoint/resume audit for #1083 on 2026-06-10:
+
+[`amemgym-official-live-provider-1083-checkpoint-2026-06-10.md`](amemgym-official-live-provider-1083-checkpoint-2026-06-10.md)
+used the #1052 `--resume` / `--checkpoint` path against the existing ignored
+live-provider partial outputs without restarting long provider surfaces. The
+audit skipped the already-complete `random` surface, wrote a public-safe
+checkpoint, and preserved the blocker state: `overall` is still partial at 6 of
+20 user items, `upperbound` is still partial at 38 of 882 choice evaluations,
+and provider cost remains unavailable from official outputs. This closes #1083
+as a precise blocker/progress report, not as an AMemGym score.
+
 Official-compatible local-scripted protocol run on 2026-06-07:
 
 ```powershell
