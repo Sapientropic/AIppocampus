@@ -44,6 +44,10 @@ Rules:
   should not be run as a retrieval-only quality claim. The readiness boundary
   stays in [`docs/evidence/benchmarks/personamem-readiness.md`](benchmarks/personamem-readiness.md)
   until AIppo/Ficus profile-readiness exists.
+- LoCoMo text-QA currently has a fixed-reader answer/latency harness, but no
+  Current Claim Snapshot row yet. Keep its dry-run as schema/privacy evidence
+  only; a dated fixed-reader provider report is required before citing answer
+  quality.
 
 ## Confirmed Scope Boundaries (Expected Null Results)
 

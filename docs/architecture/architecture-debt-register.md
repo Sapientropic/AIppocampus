@@ -115,6 +115,7 @@ Current local helper pressure points:
 | Path | Local helper(s) | Next pressure boundary |
 | --- | --- | --- |
 | `benchmarks/aippocampus/benchmark_amemgym.py` | `claim_boundary` | Keep AMemGym protocol/output caveats owned by the AMemGym evidence doc; do not spread official-score caveats into generic benchmark helpers. |
+| `benchmarks/aippocampus/benchmark_locomo_qa.py` | `cannot_claim` | Keep LoCoMo fixed-reader text-QA caveats local to the opt-in harness; do not promote answer-run boundaries into same-conversation retrieval-only metrics or generic external-benchmark policy. |
 | `benchmarks/aippocampus/benchmark_longmemeval.py` | `cannot_claim` | Keep V1 retrieval-only caveats local unless a shared external-benchmark policy emerges from multiple real adapters. |
 | `benchmarks/aippocampus/benchmark_longmemeval_answer.py` | `cannot_claim` | Keep fixed-reader answer/latency caveats local to the opt-in harness; do not promote answer-run boundaries into retrieval-only or generic external-benchmark policy. |
 | `benchmarks/aippocampus/benchmark_longmemeval_v2_context.py` | `cannot_claim` | Keep V2 context-mapping pilot caveats local and diagnostic; do not promote pilot status into suite-level quality claims. |
