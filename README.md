@@ -27,6 +27,11 @@ an ambiguous automation cue, and a multi-day fuzzy self-reference became
 recoverable through source-backed continuity. The page shows the useful moments
 first, then states exactly what they do not prove.
 
+For the current proof map, use the
+[Can-Claim Ladder](docs/evidence/can-claim-ladder.md): it leads with exact
+positive claims that are already supported, then routes to benchmark and
+cannot-claim boundaries.
+
 In ordinary use, AIppocampus should feel less like a control panel than a
 remembered doorway. It helps an agent ask: where did this come from, what did
 we actually say, and which source should be opened again?

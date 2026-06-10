@@ -5,6 +5,16 @@ STATE-Bench Agent Learning Track. It records the adapter path, local artifact
 policy, and why AIppocampus cannot yet claim an official STATE-Bench score or
 agent-learning lift.
 
+## Benchmark Interpretation
+
+| Field | Current answer |
+| --- | --- |
+| Question answered | Can AIppocampus prepare a train-only Agent Learning adapter shape without leaking held-out/test-oracle or raw trajectory material? |
+| Primary metric | Adapter/readiness feasibility: observed train trajectories, extracted public-safe learning count, retrieval-contract comparison, and `official_task_run_count`. |
+| Can claim | Train-only adapter generation and public-safe no-score feasibility reporting are implemented. |
+| Still cannot claim | Official STATE-Bench score, Agent Learning lift, leaderboard readiness, held-out task quality, or full submission compatibility. |
+| Best next benchmark | One-domain matched no-memory vs AIppocampus task run under the official harness/settings. |
+
 Decision: suitable as a staged external benchmark adapter, but **not ready for
 official submission**. The repository now has a deterministic feasibility
 runner that can inspect an operator-provided STATE-Bench checkout, derive
