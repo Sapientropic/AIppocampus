@@ -62,7 +62,7 @@ as opt-in, experimental, fixture-scoped, or not-yet-default.
 | --- | --- | --- | --- |
 | Awake SWR / online consolidation tagging | `fixture_tested` | #1018, #1058, `aippocampus_runtime.reflection.consolidation_priority`, `aippocampus_runtime.subconscious.event_salience_gate` | Benchmark or private/public evidence shows priority or intake rows improve later review selection or user-visible continuity without promoting source truth. |
 | Dynamic separation/completion threshold | `prototype` | #248 | Broader public/private calibration shows improved question quality without over-merging or noisy default activation. |
-| Retrieval-induced reconsolidation | `substrate_prototype` | #1019, `aippocampus_runtime.reflection.retrieval_lifecycle` | Later consumers use confirmation/correction/conflict evidence without rewriting clean source; retrieval lifecycle counts alone are not memory correctness. |
+| Retrieval-induced reconsolidation | `fixture_tested` | #1019, #1081, `aippocampus_runtime.reflection.retrieval_lifecycle`, `aippocampus_runtime.reflection.retrieval_reconsolidation` | Deterministic fixtures project retrieved sources with superseded/refuted/conflicted/still-current outcomes into review candidates without rewriting clean source; retrieval lifecycle counts alone are still not memory correctness. |
 | Preplay / state-dependent routing | `metaphor` | #163, #310, #940 | Public-safe predictive/preparation fixtures show value without pushing speculative content into foreground. |
 
 ## Board
