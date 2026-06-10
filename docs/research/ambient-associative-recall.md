@@ -660,6 +660,15 @@ The first slice should stay small but real:
    `semantic_provider_timeout`, `cold_semantic_attempted`, and
    `cold_semantic_shadowed`; exact-cache reports expose sanitized
    hit/miss/expired/write/eviction counters without prompt or cue text.
+10. State-dependent preactivation now has a public-safe deterministic fixture
+    in
+    `benchmarks/aippocampus/benchmark_state_dependent_preactivation.py`. It
+    compares a simple warm baseline with a phase/frontier/salience/cache/active
+    lock gated arm: the gated arm preserves expected route preparation while
+    suppressing off-state, stale, privacy-blocked, and conflicted routes. Its
+    output remains next-turn navigation material with explicit
+    `action_grammar`; no source is treated as open and no foreground user
+    reminder is emitted by the benchmark.
    Further work should be driven by new regressions or product behavior gaps,
    not by repeating the completed calibration suite.
 

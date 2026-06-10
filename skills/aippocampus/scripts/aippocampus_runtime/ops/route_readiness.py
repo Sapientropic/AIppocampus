@@ -39,7 +39,15 @@ SOURCE_REF_KEYS = (
 )
 
 SECRETISH_PREFIXES = ("sk-", "ghp_", "AKIA")
-STALE_FRESHNESS = {"stale", "expired", "superseded", "unknown"}
+STALE_FRESHNESS = {
+    "stale",
+    "expired",
+    "superseded",
+    "unknown",
+    "conflicted",
+    "refuted",
+    "uncertain",
+}
 BLOCKED_PRIVACY_STATES = {"blocked", "private", "sensitive", "partition_blocked"}
 
 

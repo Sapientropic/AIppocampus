@@ -277,6 +277,7 @@ empty output. The PR-tier guard for this contract is
 | Subconscious event-salience intake gate | `tests/aippocampus/test_subconscious_event_salience_gate.py`; opt-in `python -m aippocampus_runtime.subconscious.jobs --event-salience-gate --dry-run --json` | `docs/architecture/cognitive-runtime-architecture.md`, `docs/architecture/question-tracking-subconscious.md`, `skills/aippocampus/references/subconscious-jobs.md`, `docs/evidence/current-claims.md`, #1058 |
 | Warm ambient recall benchmark | `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` | `docs/research/ambient-associative-recall.md`, `benchmark_corpus/README.md` |
 | Warm ambient parameter sweep | `benchmarks/aippocampus/benchmark_warm_ambient_sweep.py` | `docs/research/ambient-associative-recall.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
+| State-dependent warm ambient preactivation | `benchmarks/aippocampus/benchmark_state_dependent_preactivation.py` | `docs/evidence/benchmarks/state-dependent-preactivation-2026-06-10.md`, `docs/research/ambient-associative-recall.md`, #1082 |
 | Warm ambient case-pack builder | `benchmarks/aippocampus/build_warm_ambient_trace_cases.py` | `benchmark_corpus/README.md` |
 | Segmented merge policy calibration | `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`, `benchmark_corpus/segmented_merge_policy/fixture.json`, #375 |
 
