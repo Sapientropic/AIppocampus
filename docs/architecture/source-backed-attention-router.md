@@ -190,6 +190,30 @@ All token levels carry optional route metadata slots for `salience`,
 `currentness`, `privacy`, and `conflict`. Missing slots stay `unknown`; callers
 must not invent certainty to make a head score cleaner.
 
+## Deterministic Hot Router V0
+
+The first router prototype lives in
+`aippocampus_runtime.navigation.attention_hot_router`. It accepts query state
+and route tokens, applies hard masks before scoring, computes auditable head
+votes, then emits the route-packet contract from
+`attention_router_contract`.
+
+The V0 heads are deterministic diagnostics:
+
+- `lexical_head`
+- `semantic_head` when a supplied sidecar score exists
+- `scope_head`
+- `salience_head`
+- `currentness_head`
+- `conflict_head`
+- `risk_head`
+- `abstention_head`
+
+The adaptive threshold is a local deterministic gate over risk, conflict,
+currentness, salience, and scope. It is not calibrated model attention and must
+not be treated as learned score fusion. Masked candidates may retain high
+diagnostic scores, but they still emit `silence`.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in
@@ -201,6 +225,8 @@ must not invent certainty to make a head score cleaner.
   [`source-backed-familiarity-map.md`](source-backed-familiarity-map.md).
 - Hierarchical route tokens provide the source span / event / episode input
   shape for future router heads.
+- The deterministic hot router is the V0 scoring prototype over route tokens;
+  it does not replace recall/search paths by default.
 - Source-open and high-risk claim gates remain separate answer-time authority
   checks; see [`high-risk-answer-gates.md`](high-risk-answer-gates.md).
 
