@@ -64,8 +64,9 @@ MemoryAgentBench should not replace current AIppocampus benchmark tracks.
 
 - LongMemEval V1 remains the current public retrieval-only source/session
   evidence control.
-- LongMemEval V2 remains a diagnostic context-mapping pilot until explicit
-  evidence labels and an official reader/evaluator harness are wired.
+- LongMemEval V2 has a diagnostic context-mapping pilot plus a tiny
+  official-harness pilot decision/adapter contract; it still has no dated V2
+  score or source-evidence R@K/MRR claim.
 - LoCoMo remains a same-conversation public control, not proof of cross-thread
   or life-wide memory.
 - Public longitudinal VCS and rollout fixtures remain the better path for

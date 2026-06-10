@@ -13,10 +13,12 @@ adapter checks whether the expected answer session and source lines are
 retrievable. The answer harness can send only bounded retrieved source lines to
 an opt-in reader, then scores the reader locally with a deterministic
 diagnostic judge. It is not the official LongMemEval evaluator.
-LongMemEval-V2 is tracked separately as a context-gathering mapping pilot: it
-can inspect the public V2 schema and local files, but it cannot report
-source-evidence R@K/MRR or answer accuracy without upstream gold evidence refs
-and the official reader/evaluator harness.
+LongMemEval-V2 is tracked separately. The context-gathering mapping pilot can
+inspect the public V2 schema and local files, but it cannot report
+source-evidence R@K/MRR. #1155 chooses a tiny official answer/latency pilot as
+the next valid V2 route: use the upstream Insert/Query harness, a fixed reader
+and evaluator, and sanitized local-only artifacts before any full V2 run or
+answer-quality claim.
 
 Use this page to answer:
 
@@ -97,6 +99,46 @@ question-to-haystack/evidence-state labels and the official reader/evaluator
 harness. Missing fields are `gold_trajectory_ids` or `haystack_ids` per
 question, evidence state indices or source spans, and source ids that can be
 used for grading without leaking answers.
+
+## LongMemEval-V2 Official Pilot Decision
+
+#1155 keeps the V2 source-evidence decision above, but moves the valid answer
+route toward a tiny official-harness pilot rather than another V1-style
+retrieval metric. The decision runner is:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval_v2_official_pilot.py --json --output benchmark_corpus\reports\longmemeval-v2-official-pilot-decision.json
+```
+
+CLI stdout is static; use `--output` for the sanitized decision report. The
+report records the official harness contract, the local AIppocampus
+`aippocampus_context_provider` adapter contract, fixed reader/evaluator
+settings, latency and cost budgets, artifact redaction policy, and the metric
+separation that a later pilot must preserve.
+
+The pilot path is deliberately small:
+
+- default `10` questions, hard maximum `20` without a new issue;
+- ignored local official checkout and ignored V2 data/output directories;
+- fixed reader model/base URL/API-key env and fixed evaluator model/reasoning
+  effort before a run starts;
+- reports separate memory-context telemetry, answer accuracy,
+  reader/evaluator dependency, and memory-query latency;
+- no raw questions, answers, trajectory text, screenshots, URLs, local paths,
+  raw reader responses, or credentials in AIppocampus reports.
+
+`benchmarks/aippocampus/longmemeval_v2_aippocampus_adapter.py` provides the
+minimal text-only Memory adapter shape for that pilot. The official harness
+registers memory backends from its own `memory_modules` package, so a real
+pilot should copy or import the adapter inside an ignored official checkout
+instead of vendoring the official repository here. The adapter can return raw
+trajectory-derived text to the official reader inside the local run workspace;
+AIppocampus should publish only sanitized aggregate decision/report notes.
+
+This closes the decision question, not the score. Do not cite the decision
+report, adapter contract, context-mapping pilot, or a tiny dry run as
+LongMemEval-V2 answer accuracy, LAFS, leaderboard readiness, SOTA, or broad
+memory superiority.
 
 ## Commands
 
@@ -480,6 +522,23 @@ V2 mapping reports have
   mapping status, and candidate counts only.
 - `cannot_claim`: V2 source-evidence hit rate, MRR, answer accuracy, LAFS, SOTA,
   and benchmark-grade context-gathering score boundaries.
+
+V2 official-pilot decision reports have
+`kind: aippocampus_longmemeval_v2_official_pilot_decision` and include:
+
+- `decision`: the tiny official answer/latency pilot route, default and hard
+  maximum question counts, and the run-order checklist.
+- `official_harness_contract`: upstream Memory API method shape, required
+  input files, fixed reader/evaluator configuration, and expected output
+  layers.
+- `adapter_contract`: local `aippocampus_context_provider` Memory adapter
+  boundary and ignored official-checkout integration path.
+- `metric_separation`: memory-context quality, answer accuracy,
+  reader/evaluator dependency, and memory-query latency as separate layers.
+- `privacy_and_artifact_policy`: ignored local official checkout/data/output
+  policy plus sanitized aggregate-only publication requirements.
+- `cannot_claim`: V2 answer accuracy, LAFS, leaderboard readiness, SOTA,
+  source-evidence R@K/MRR, and broad memory-superiority boundaries.
 
 When a future run changes what the project can claim, update
 [`stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md). If it only records a dated
