@@ -214,6 +214,45 @@ currentness, salience, and scope. It is not calibrated model attention and must
 not be treated as learned score fusion. Masked candidates may retain high
 diagnostic scores, but they still emit `silence`.
 
+## Semantic Warming Route Producer
+
+`aippocampus_runtime.navigation.semantic_warm_route_producer` is the #1139
+bridge from background semantic warming to the deterministic router. It accepts
+already-materialized scout output and projects it into the existing
+`attention_route_token` shape:
+
+```text
+background semantic warming / scouts
+  -> sanitized route tokens
+  -> deterministic hot router
+  -> compact route packet
+```
+
+The producer may carry semantic scores, aliases, scout-family votes,
+source-ref fingerprints, topic-epoch labels, guard status, cache/related-cache
+status, and source-bridge diagnostics. It must not carry raw prompt text, raw
+source snippets, local paths, private ids, or raw semantic model reasoning in
+public/debug output.
+
+Foreground budget boundaries:
+
+- Tier 0 foreground may read cache/handles only and must not make fresh
+  external semantic calls.
+- Tier 1 foreground warm-read may consume already-materialized semantic route
+  material under local budget.
+- Tier 2 background may run selected scout profiles and write route material
+  for later turns.
+- Tier 3 diagnostic/benchmark may run full scout sweeps.
+
+Topic-epoch reuse must come from stable source/candidate fingerprints, scout
+topic decisions, semantic trigger ids, scope labels, or source-ref fingerprints.
+Raw prompt fuzzy matching is not a route-reuse authority.
+
+ROI status can reduce low-yield non-guard scout families to watch or diagnostic
+surfaces, but required guard families remain `guard_required`. Quiet privacy or
+evidence-gap guards are not retirement candidates merely because they rarely
+emit visible packets.
+
 ## Action-Time Query Features
 
 `attention_hot_router.extract_action_query_features()` projects synthetic
@@ -265,6 +304,9 @@ gold answers, and miss taxonomy.
   shape for future router heads.
 - The deterministic hot router is the V0 scoring prototype over route tokens;
   it does not replace recall/search paths by default.
+- Semantic warming can produce router-consumable route material only after it
+  has been materialized in the background/cache path; the hot router consumes
+  route features, not fresh semantic model output.
 - Action-time features add pending-tool context to the query surface, but they
   do not mutate hooks, settings, or live foreground behavior by default.
 - Evidence packaging can narrow a source window to source-span handles, but it

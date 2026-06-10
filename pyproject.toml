@@ -202,6 +202,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/navigation_potential.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/project_timeline.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/repo_familiarity.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/semantic_warm_route_producer.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/agency_affordance.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/agency_host_timing.py",
