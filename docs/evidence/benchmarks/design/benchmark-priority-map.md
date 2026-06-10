@@ -175,6 +175,7 @@ resolved in the owning docs.
 
 | Candidate | Current status | Priority | Boundary |
 | --- | --- | --- | --- |
+| PersonaMem / PersonaMem-v2 | staged_readiness_gate | P2 | Full benchmark run is deferred until AIppo/Ficus profile-readiness exists; use [`../personamem-readiness.md`](../personamem-readiness.md) for required profile, lifecycle, privacy, adaptation, and metric boundaries. |
 | Mem0 | planned_or_blocked | P3 | Missing-config diagnostic slot only; no adapter parity or competitor superiority claim. |
 | Zep / Graphiti | planned_or_blocked | P3 | Missing-config graph-memory comparison candidate; live adapters need install/license/fairness review. |
 | Letta | planned_or_blocked | P3 | Missing-config compaction comparison candidate; static retrieval must not stand in for agent-memory behavior. |
@@ -192,3 +193,6 @@ resolved in the owning docs.
   a sanitized aggregate owner updates `current-claims.md` or stage readiness.
 - Do not run expensive live/provider or large-dataset sweeps just because a
   docs link exists. Run them when they answer a named claim-boundary question.
+- Do not run PersonaMem as a low-signal retrieval benchmark before the
+  AIppo/Ficus profile-readiness gate exists; source retrieval is not
+  personalization quality.
