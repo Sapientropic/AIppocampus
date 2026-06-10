@@ -88,9 +88,11 @@ metrics into a small issue-local readout:
 
 This readout deliberately reports `live_fresh_thread_quality=not_measured`,
 `private_real_history_quality=not_measured`,
-`private_seed_review=contract_only`, and `closeout_eligible=false`. It helps
-continue #281 with a reproducible public fixture signal, but it does not prove
-real fresh-thread quality, private-history recall quality, or close the issue.
+`private_seed_review=contract_only`, and `closeout_eligible=false`. It remains
+a supporting public fixture signal for #281, but it is not the closeout surface.
+The 2026-06-10 `benchmark_fresh_thread_recall_demo.py` readout now owns #281's
+public-fixture validation closeout. Neither readout proves real fresh-thread
+quality or private-history recall quality.
 
 ## Command
 

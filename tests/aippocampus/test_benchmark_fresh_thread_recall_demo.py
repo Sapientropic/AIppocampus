@@ -34,6 +34,27 @@ class FreshThreadRecallDemoBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["config"]["uses_live_model"])
         self.assertFalse(payload["config"]["uses_private_history"])
 
+    def test_issue_281_public_validation_readout_is_closeout_eligible(self) -> None:
+        payload = benchmark.run_benchmark()
+        readout = payload["issue_readouts"]["github_281"]
+        metrics = readout["metrics"]
+
+        self.assertTrue(readout["public_validation_measured"])
+        self.assertTrue(readout["closeout_eligible"])
+        self.assertEqual(readout["claim_level"], "public_safe_fixture_validation")
+        self.assertEqual(metrics["positive_public_flow_count"], 6)
+        self.assertEqual(metrics["negative_public_control_count"], 5)
+        self.assertEqual(metrics["first_turn_scent_precision"], 1.0)
+        self.assertEqual(metrics["progressive_activation_gain"], 1.0)
+        self.assertEqual(metrics["source_reopen_before_specific_claim_rate"], 1.0)
+        self.assertEqual(metrics["irrelevant_memory_drag_rate"], 0.0)
+        self.assertEqual(metrics["overpersonalization_count"], 0)
+        self.assertEqual(metrics["manual_query_invention_count"], 0)
+        self.assertEqual(metrics["manual_query_expected_count"], 0)
+        self.assertGreaterEqual(metrics["ready_lock_use_count"], 2)
+        self.assertIn("live fresh-thread quality", readout["cannot_claim"])
+        self.assertIn("private real-history fresh-thread quality", readout["cannot_claim"])
+
     def test_report_has_no_private_artifacts_or_unsupported_evidence(self) -> None:
         payload = benchmark.run_benchmark()
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)

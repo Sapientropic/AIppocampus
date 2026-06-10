@@ -283,10 +283,14 @@ official benchmark proof by itself. Its job is to make the user-visible
 "magic moment" reports reproducible as scenario contracts with controls,
 baselines, and privacy-safe reporting. For #281, the same public fixture also
 exposes
-`issue_readouts.github_281` as a bounded fresh-thread progressive-recall proxy:
-it records whether the `fresh_projectless_familiarity` family is covered and
-whether source reopen, progressive route recovery, wrong-family suppression,
-and irrelevant-memory suppression hold in the deterministic fixture.
+`issue_readouts.github_281` as a supporting bounded fresh-thread
+progressive-recall proxy: it records whether the
+`fresh_projectless_familiarity` family is covered and whether source reopen,
+progressive route recovery, wrong-family suppression, and irrelevant-memory
+suppression hold in the deterministic fixture. The #281 public-fixture closeout
+readout now lives in `benchmark_fresh_thread_recall_demo.py`, which reports the
+larger first-turn/progressive/source-reopen/negative-control metrics in
+`issue_readouts.github_281`.
 
 Scenario families:
 
@@ -328,11 +332,13 @@ Required metrics mirror #454 without reducing the suite to top-k retrieval:
 `wrong_family_persistence`, `irrelevant_memory_drag`, `report_leakage`,
 `latency_budget_overrun`, and `prompt_budget_overrun`.
 
-The first implementation proves the fixture and report contract. The #281
-readout is `public_safe_fixture_quality_proxy` only. The #982 design closes the
-design/fixture/runner-contract prerequisite, while keeping
+The first implementation proves the fixture and report contract. The Field
+Continuity #281 readout is `public_safe_fixture_quality_proxy` only; it is
+supporting evidence, not the issue closeout surface. The #982 design closes the
+design/fixture/runner-contract prerequisite, while the 2026-06-10 fresh-thread
+runner readout retires #281's public-fixture validation blocker. Both keep
 `live_fresh_thread_quality`, `private_real_history_quality`, and private seed
-review outside the claim. It cannot claim real-history field-continuity recall
+review outside the claim. They cannot claim real-history field-continuity recall
 quality, live semantic-model quality, foreground-hook-only sufficiency,
 summary-first/semantic-only/FTS-only superiority, or hosted/cross-device
 readiness.

@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import _paths
 
@@ -20,7 +20,15 @@ _paths.ensure_paths()
 
 from aippocampus_runtime.recall import fresh_thread_demo
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+_PUBLIC_VALIDATION_CANNOT_CLAIM = [
+    "live fresh-thread quality",
+    "private real-history fresh-thread quality",
+    "universal fresh-thread recall quality",
+    "foreground-hook-only sufficiency",
+    "base model innate memory",
+]
 
 
 def _quality_gates(report: dict[str, Any]) -> dict[str, Any]:
@@ -45,6 +53,177 @@ def _quality_gates(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _turns(flow: Mapping[str, Any], arm: str) -> list[Mapping[str, Any]]:
+    arm_payload = (flow.get("arms") or {}).get(arm) if isinstance(flow.get("arms"), dict) else {}
+    rows = arm_payload.get("turns") if isinstance(arm_payload, dict) else []
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, Mapping)]
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 6)
+
+
+def _issue_281_public_validation_readout(
+    report: Mapping[str, Any],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    flows = [flow for flow in report.get("flows") or [] if isinstance(flow, Mapping)]
+    positive_flows = [flow for flow in flows if flow.get("kind") == "positive_demo"]
+    negative_flows = [flow for flow in flows if flow.get("kind") == "negative_control"]
+
+    positive_first_turns = [
+        turns[0]
+        for flow in positive_flows
+        if (turns := _turns(flow, "active_recall"))
+    ]
+    negative_first_turns = [
+        turns[0]
+        for flow in negative_flows
+        if (turns := _turns(flow, "active_recall"))
+    ]
+    positive_first_turn_success_count = sum(
+        1
+        for turn in positive_first_turns
+        if turn.get("agent_action")
+        in {"use_silently", "ask_light_question", "active_recall", "source_reopen"}
+    )
+    first_turn_false_activation_count = sum(
+        1
+        for turn in negative_first_turns
+        if turn.get("should_call_active_recall")
+        or turn.get("source_refs_allowed")
+        or turn.get("allowed_surface") == "source_backed"
+    )
+
+    multi_turn_positive_flows = [
+        flow for flow in positive_flows if len(_turns(flow, "active_recall")) > 1
+    ]
+    progressive_success_count = sum(
+        1
+        for flow in multi_turn_positive_flows
+        if any(
+            turn.get("agent_action") in {"active_recall", "source_reopen"}
+            for turn in _turns(flow, "active_recall")[1:]
+        )
+    )
+
+    active_turns = [
+        turn
+        for flow in flows
+        for turn in _turns(flow, "active_recall")
+    ]
+    source_required_turns = [
+        turn for turn in active_turns if turn.get("packet_support_level") == "source_required"
+    ]
+    source_reopen_success_count = sum(
+        1
+        for turn in source_required_turns
+        if turn.get("agent_action") == "source_reopen"
+        and turn.get("requires_source_reopen")
+    )
+    negative_turns = [
+        turn
+        for flow in negative_flows
+        for turn in _turns(flow, "active_recall")
+    ]
+    irrelevant_memory_drag_count = sum(
+        1
+        for turn in negative_turns
+        if turn.get("should_call_active_recall")
+        or turn.get("source_refs_allowed")
+        or turn.get("allowed_surface") == "source_backed"
+    )
+    manual_query_invention_count = sum(
+        int(turn.get("manual_query_invention_count") or 0)
+        for turn in active_turns
+    )
+    manual_query_expected_count = sum(
+        1 for turn in active_turns if turn.get("manual_query_invention_expected")
+    )
+    ready_lock_use_count = sum(
+        1 for turn in active_turns if turn.get("lock_handling") == "use_ready_lock"
+    )
+    audit = gates.get("audit") or {}
+    unsupported_evidence_count = int(audit.get("unsupported_evidence_count") or 0)
+    negative_active_recall_count = int(audit.get("negative_control_active_recall_count") or 0)
+    overpersonalization_count = (
+        first_turn_false_activation_count
+        + irrelevant_memory_drag_count
+        + unsupported_evidence_count
+        + negative_active_recall_count
+    )
+
+    first_turn_scent_precision = _rate(
+        positive_first_turn_success_count,
+        positive_first_turn_success_count + first_turn_false_activation_count,
+    )
+    metrics = {
+        "positive_public_flow_count": len(positive_flows),
+        "negative_public_control_count": len(negative_flows),
+        "first_turn_positive_route_success_count": positive_first_turn_success_count,
+        "first_turn_false_activation_count": first_turn_false_activation_count,
+        "first_turn_scent_precision": first_turn_scent_precision,
+        "progressive_activation_gain": _rate(
+            progressive_success_count,
+            len(multi_turn_positive_flows),
+        ),
+        "source_reopen_before_specific_claim_rate": _rate(
+            source_reopen_success_count,
+            len(source_required_turns),
+        ),
+        "irrelevant_memory_drag_rate": _rate(
+            irrelevant_memory_drag_count,
+            len(negative_turns),
+        ),
+        "overpersonalization_count": overpersonalization_count,
+        "manual_query_invention_count": manual_query_invention_count,
+        "manual_query_expected_count": manual_query_expected_count,
+        "ready_lock_use_count": ready_lock_use_count,
+        "unsupported_evidence_count": unsupported_evidence_count,
+        "negative_control_active_recall_count": negative_active_recall_count,
+    }
+    closeout_eligible = bool(
+        gates.get("ok")
+        and len(positive_flows) >= 5
+        and len(negative_flows) >= 5
+        and first_turn_scent_precision == 1.0
+        and metrics["progressive_activation_gain"] == 1.0
+        and metrics["source_reopen_before_specific_claim_rate"] == 1.0
+        and metrics["irrelevant_memory_drag_rate"] == 0.0
+        and overpersonalization_count == 0
+        and manual_query_invention_count == 0
+        and manual_query_expected_count == 0
+        and ready_lock_use_count >= 2
+    )
+    return {
+        "public_validation_measured": True,
+        "claim_level": "public_safe_fixture_validation",
+        "closeout_eligible": closeout_eligible,
+        "basis": (
+            "fresh-thread public demo fixtures with positive, negative, "
+            "multi-turn, correction, threshold, active-recall, and source-reopen controls"
+        ),
+        "metrics": metrics,
+        "can_claim": [
+            "public_fixture_first_turn_scent_precision_recorded",
+            "public_fixture_progressive_activation_gain_recorded",
+            "source_reopen_before_specific_claim_recorded",
+            "negative_control_memory_drag_and_overpersonalization_suppressed",
+            "active_recall_route_handles_avoid_manual_query_invention",
+        ],
+        "cannot_claim": list(_PUBLIC_VALIDATION_CANNOT_CLAIM),
+        "remaining_followups_should_use_new_scoped_issue": [
+            "live_host_fresh_thread_quality",
+            "private_real_history_generalization",
+            "public_external_dataset_fresh_thread_quality",
+        ],
+    }
+
+
 def run_benchmark(
     *,
     flow_ids: Sequence[str] | None = None,
@@ -52,6 +231,7 @@ def run_benchmark(
 ) -> dict[str, Any]:
     report = fresh_thread_demo.run_fresh_thread_demo(flow_ids=flow_ids, arms=arms)
     gates = _quality_gates(report)
+    issue_281 = _issue_281_public_validation_readout(report, gates)
     return {
         "kind": "aippocampus_fresh_thread_recall_demo_benchmark",
         "schema_version": SCHEMA_VERSION,
@@ -72,12 +252,16 @@ def run_benchmark(
             "raw_source_snippets_in_report": False,
             "absolute_paths_in_report": False,
         },
+        "issue_readouts": {
+            "github_281": issue_281,
+        },
         "cannot_claim": [
             "real-history fresh-thread recall quality",
             "live semantic-model quality",
             "live correction-extraction quality",
             "competitor or leaderboard superiority",
             "private family or emotional-memory coverage",
+            *_PUBLIC_VALIDATION_CANNOT_CLAIM,
         ],
         "demo_report": report,
     }
