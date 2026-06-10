@@ -113,6 +113,7 @@ The MCP surface is read-mostly by default and exposes tools such as
 - Agent context pack: `docs/agent-context.md`
 - Coding-agent memory lane: `docs/guides/coding-agent-memory.md`
 - Magic moments, claim-bounded: `docs/evidence/magic-moments.md`
+- Public provenance and current value: `docs/evidence/public-provenance-ledger.md`
 - Install guide: `docs/guides/install-guide.md`
 - Public API and 10-minute dependency path: `docs/guides/public-api.md`
 - Claim boundary: `docs/evidence/readiness/stage-0-5-readiness.md`
