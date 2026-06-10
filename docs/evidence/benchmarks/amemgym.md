@@ -20,6 +20,11 @@ clean source, and source index, a pre-score phase materializes worker surfaces,
 and `answer_question` consumes those prepared artifacts without mutating state.
 If the worker/semantic sidecar surfaces are absent, the arm is explicitly a
 clean-source/file-retrieval baseline, not the full AIppocampus system.
+As of 2026-06-10, the official `aippocampus_semantic_sidecar` arm has a
+deterministic pre-score materializer for AMemGym visible messages. It prepares
+working-memory, semantic-trigger, and semantic-cue navigation surfaces before
+scored `answer_question` calls; those surfaces are route hints with source refs,
+not source truth or live semantic-model quality.
 
 For Codex Desktop product evidence, keep the separate Desktop contract. It
 compares native Codex without AIppocampus, AIppocampus clean-source recall
@@ -168,7 +173,7 @@ The official bridge supports three arm names:
 | --- | --- | --- |
 | `official_native_full_history` | Upstream Native-style full `msg_history` in model context, using the official evaluator. | Native baseline for the chosen model/provider only after full fixed-arm outputs exist. |
 | `aippocampus_clean_source_no_semantic_sidecar` | AIppocampus visible-message export through generic JSONL, clean source, source index, and source-backed snippet recall. | File/clean-source retrieval baseline; not the full AIppocampus semantic worker system. |
-| `aippocampus_semantic_sidecar` | The same source-backed adapter plus prepared working-memory, semantic trigger, semantic cue, or semantic sidecar navigation surfaces, with source reopen. | Full semantic-worker arm only when `adapter_metadata.json` shows prepared worker surfaces for the scored period states; otherwise it degrades to the clean-source baseline. |
+| `aippocampus_semantic_sidecar` | The same source-backed adapter plus adapter-prepared working-memory, semantic-trigger, and semantic-cue navigation surfaces, with source reopen. | Full semantic-worker arm only when `adapter_metadata.json` shows prepared worker surfaces for the scored period states; otherwise it degrades to the clean-source baseline. |
 
 Example official Native baseline plan or run:
 
@@ -193,7 +198,8 @@ Reports include `aippocampus_official_adapter_protocol`,
 summaries can tell whether a score came from full-history Native,
 clean-source-only retrieval, or a prepared semantic-worker arm. Do not quote a
 semantic-worker result unless `aippocampus_agent_state.semantic_worker_state`
-is `prepared`.
+is `prepared`; clean-source arms report `clean_source_only`, and missing
+semantic-worker surfaces report `missing_or_degraded`.
 
 Live official Native attempt on 2026-06-06:
 
@@ -352,6 +358,10 @@ Can claim now:
   ignored Pythonpath overlay, keep upstream eval modules unchanged, and report
   whether the arm is Native full-history, clean-source-only retrieval, or a
   prepared semantic-worker arm.
+- The official `aippocampus_semantic_sidecar` adapter can now materialize
+  working-memory, semantic-trigger, and semantic-cue navigation surfaces from
+  visible AMemGym messages before scoring, then load those prepared surfaces
+  during `answer_question` without appending to scored state.
 - AIppocampus has a separate AMemGym-style Codex Desktop benchmark contract for
   native/no-sidecar/semantic-sidecar arms, with hard gates for clean workspace,
   isolated Codex home, expected skill/plugin loading, and AIppocampus hook
@@ -383,6 +393,8 @@ Cannot claim now:
   reviewed.
 - AIppocampus has evaluated or beaten Native, RAG, AWI, AWE, Mem0, or any other
   official/external baseline on AMemGym.
+- The AMemGym visible-message sidecar materializer is a live semantic model,
+  a source-truth layer, or evidence of product memory quality by itself.
 - AIppocampus has beaten Codex Desktop native behavior in live use; the Desktop
   runner currently defaults to a contract preview unless a clean isolated live
   run is attached and validated.
@@ -411,10 +423,12 @@ complete `overall` / `upperbound` / `random` outputs, sanitized cost/latency,
 and an explicit Native/RAG/AWI/AWE parity decision without leaking raw rows,
 model outputs, local paths, or keys.
 
-The semantic-sidecar arm also needs a real pre-score worker materializer that
-writes reviewed working-memory/semantic sidecar artifacts before
-`answer_question`; otherwise the official adapter must continue reporting the
-degraded clean-source boundary.
+The semantic-sidecar pre-score materializer is in place for the official
+adapter prep slice. Remaining AMemGym semantic-sidecar evidence is still
+deferred until a later full fixed-arm run records complete official outputs and
+reviewed reports. Future richer semantic-worker surfaces may be added only when
+their source-review boundary is explicit; the current materializer remains
+navigation over visible AMemGym messages, not source truth.
 
 The commentary/action-summary write-material arm is deliberately deferred to
 the source-backed situation/work-material design work in #701 and #703. That

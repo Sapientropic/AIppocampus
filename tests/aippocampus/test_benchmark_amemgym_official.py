@@ -20,6 +20,7 @@ BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 if str(BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(BENCHMARKS))
 
+import amemgym_aippocampus_adapter as aippocampus_adapter  # noqa: E402
 import amemgym_official_local_provider as local_provider  # noqa: E402
 import benchmark_amemgym_official as benchmark  # noqa: E402
 
@@ -30,6 +31,150 @@ FAKE_PROVIDER_VALUE = "".join(("s", "k", "-", "FAKE_TEST_OPENROUTER_123456"))
 
 
 class AMemGymOfficialBridgeTests(unittest.TestCase):
+    def test_semantic_sidecar_agent_materializes_worker_surfaces_before_saved_state(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            agent = aippocampus_adapter.AIppocampusAMemGymAgent(
+                {
+                    "local_mem_dir": root / "agent-live",
+                    "agent_config": {
+                        "mode": "semantic-sidecar",
+                        "build_source_index": False,
+                    },
+                }
+            )
+            agent.add_msgs(
+                [
+                    {
+                        "role": "user",
+                        "content": "I prefer jasmine tea when debugging AMemGym adapters.",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "Noted: jasmine tea is the debugging preference.",
+                    },
+                ]
+            )
+
+            saved_state = root / "period_1"
+            agent.save_state(str(saved_state))
+            metadata = json.loads(
+                (saved_state / "adapter_metadata.json").read_text(encoding="utf-8")
+            )
+            artifact_status = metadata["artifact_status"]
+            self.assertEqual(artifact_status["semantic_worker_status"], "prepared")
+            self.assertEqual(artifact_status["working_memory"], "present")
+            self.assertEqual(artifact_status["semantic_triggers"], "present")
+            self.assertEqual(artifact_status["semantic_cues"], "present")
+            self.assertGreaterEqual(artifact_status["working_memory_row_count"], 1)
+            self.assertGreaterEqual(artifact_status["semantic_triggers_row_count"], 1)
+            self.assertGreaterEqual(artifact_status["semantic_cues_row_count"], 1)
+            self.assertIn("working_memory", artifact_status["prepared_worker_surfaces"])
+            self.assertTrue((saved_state / "working_memory.jsonl").exists())
+            self.assertTrue((saved_state / "semantic_triggers.jsonl").exists())
+            self.assertTrue((saved_state / "semantic_cues.jsonl").exists())
+            self.assertFalse(metadata["boundary"]["answer_question_mutates_state"])
+            self.assertTrue(metadata["boundary"]["semantic_sidecar_is_navigation_not_truth"])
+
+    def test_clean_source_agent_does_not_materialize_semantic_worker_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            agent = aippocampus_adapter.AIppocampusAMemGymAgent(
+                {
+                    "local_mem_dir": root / "agent-live",
+                    "agent_config": {
+                        "mode": "clean-source",
+                        "build_source_index": False,
+                    },
+                }
+            )
+            agent.add_msgs(
+                [
+                    {
+                        "role": "user",
+                        "content": "This visible state should only become clean source.",
+                    },
+                    {"role": "assistant", "content": "Acknowledged."},
+                ]
+            )
+
+            saved_state = root / "period_1"
+            agent.save_state(str(saved_state))
+            metadata = json.loads(
+                (saved_state / "adapter_metadata.json").read_text(encoding="utf-8")
+            )
+            artifact_status = metadata["artifact_status"]
+            self.assertEqual(
+                artifact_status["semantic_worker_status"],
+                "clean_source_only",
+            )
+            self.assertEqual(artifact_status["prepared_worker_surfaces"], [])
+            self.assertFalse((saved_state / "working_memory.jsonl").exists())
+            self.assertFalse((saved_state / "semantic_triggers.jsonl").exists())
+            self.assertFalse((saved_state / "semantic_cues.jsonl").exists())
+
+    def test_scored_answer_uses_prepared_surfaces_without_mutating_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            agent = aippocampus_adapter.AIppocampusAMemGymAgent(
+                {
+                    "local_mem_dir": root / "agent-live",
+                    "agent_config": {
+                        "mode": "semantic-sidecar",
+                        "build_source_index": False,
+                    },
+                }
+            )
+            agent.add_msgs(
+                [
+                    {
+                        "role": "user",
+                        "content": "I prefer jasmine tea when debugging benchmark adapters.",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "Noted: jasmine tea is the debugging preference.",
+                    },
+                ]
+            )
+            saved_state = root / "period_1"
+            agent.save_state(str(saved_state))
+
+            scoring_agent = aippocampus_adapter.AIppocampusAMemGymAgent(
+                {
+                    "local_mem_dir": root / "agent-scoring",
+                    "agent_config": {
+                        "mode": "semantic-sidecar",
+                        "build_source_index": False,
+                    },
+                }
+            )
+            scoring_agent.load_state(str(saved_state))
+            metadata_before = scoring_agent.metadata_path.read_text(encoding="utf-8")
+            msg_history_before = list(scoring_agent.msg_history)
+
+            with mock.patch.object(
+                aippocampus_adapter,
+                "call_llm",
+                return_value=("1", {"total_tokens": 0}),
+            ) as call:
+                result = scoring_agent.answer_question(
+                    "Which tea do I prefer when debugging?"
+                )
+
+            self.assertEqual(result, ("1", {"total_tokens": 0}))
+            self.assertEqual(scoring_agent.msg_history, msg_history_before)
+            self.assertEqual(
+                scoring_agent.metadata_path.read_text(encoding="utf-8"),
+                metadata_before,
+            )
+            self.assertTrue(call.call_args.kwargs["return_token_usage"])
+            prompt = call.call_args.args[0][0]["content"]
+            self.assertIn("prepared working-memory sidecar matches", prompt)
+            self.assertIn("jasmine tea", prompt)
+
     def test_missing_outputs_emit_plan_without_claiming_scores(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
