@@ -7,9 +7,12 @@ a benchmark run remains visible after the raw report stays local.
 ## Boundary
 
 LongMemEval is an external public benchmark for long-term interactive memory.
-AIppocampus currently has a deterministic retrieval-only adapter for the
-official cleaned V1 files. It checks whether the expected answer session and
-source lines are retrievable; it does not generate answers or run an LLM judge.
+AIppocampus has a deterministic retrieval-only adapter for the official cleaned
+V1 files, plus a separate fixed-reader answer/latency harness. The retrieval
+adapter checks whether the expected answer session and source lines are
+retrievable. The answer harness can send only bounded retrieved source lines to
+an opt-in reader, then scores the reader locally with a deterministic
+diagnostic judge. It is not the official LongMemEval evaluator.
 LongMemEval-V2 is tracked separately as a context-gathering mapping pilot: it
 can inspect the public V2 schema and local files, but it cannot report
 source-evidence R@K/MRR or answer accuracy without upstream gold evidence refs
@@ -23,9 +26,9 @@ Use this page to answer:
 - Which retrieval metrics can be claimed, and which QA claims stay out of
   bounds?
 
-Do not use this page to claim SOTA, answer-generation quality,
-LongMemEval-V2 quality, or broad memory superiority from one retrieval or
-mapping run.
+Do not use this page to claim SOTA, official LongMemEval answer quality,
+LongMemEval-V2 quality, or broad memory superiority from one retrieval,
+answer-harness, or mapping run.
 
 ## Official Sources
 
@@ -151,6 +154,36 @@ input report path local:
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --json
 ```
 
+Run the CI-safe answer/latency report schema path. This reuses the retrieval
+adapter, builds bounded candidate source windows, records retrieval and
+candidate-gathering latency, and produces answer-layer fields without making a
+live provider call:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-oracle --download --questions 5 --min-questions 1 --reader-mode dry-run --output benchmark_corpus\reports\longmemeval-v1-oracle-answer-dry-run-5.json
+```
+
+Run the opt-in fixed-reader answer path only after choosing the provider,
+model, API key environment variable, token budget, and cost table. The reader
+sees the public benchmark question and bounded retrieved candidate source-line
+text. It does not receive gold answers, expected lines/sessions, `has_answer`
+labels, miss taxonomy, judge labels, or raw report cases:
+
+```powershell
+$env:AIPPOCAMPUS_LONGMEMEVAL_READER_API_KEY="<provider key>"
+python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-base-url> --reader-input-cost-per-million <prompt-price> --reader-output-cost-per-million <completion-price> --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25.json
+```
+
+Answer reports keep `retrieval`, `answer`, `latency`, `token_usage`, and `cost`
+as separate top-level fields. The local deterministic judge reports answer
+overlap, abstention, citation-line counts, and a failure taxonomy for
+`retrieval_miss`, `evidence_visible_reader_miss`,
+`abstention_unanswerable_boundary`, `stale_update_confusion`,
+`evaluation_mismatch`, and `answered_correctly`. The report validator rejects
+absolute local paths, raw question/answer/source text that the runner marked
+forbidden, raw model response text, and credential-like strings before the run
+can be treated as a usable artifact.
+
 `--progress-every` emits sanitized JSONL progress to stderr. `--partial-output`
 writes a sanitized checkpoint/partial diagnostic with hashed local-path
 identity, phase, built/evaluated counts, elapsed time, and claim boundaries; it
@@ -159,6 +192,12 @@ does not include raw LongMemEval questions, answers, snippets, or local paths.
 Generated dataset files and reports stay ignored by default. Do not commit full
 LongMemEval downloads or generated JSON reports unless a future change promotes
 a small curated artifact with provenance and license notes.
+
+No dated LongMemEval-S answer/latency baseline is currently promoted into
+`current-claims.md`. A future provider run can add one only if it preserves the
+fixed reader config, prompt version, model/provider metadata, token/cost
+telemetry, sanitized report validation, and the retrieval-vs-answer claim
+separation above.
 
 ## Current Published Result
 
@@ -409,6 +448,23 @@ Reports have `kind: aippocampus_longmemeval_benchmark` and include:
   diagnostics, exact-line recall ladders, and sanitized miss taxonomy counts.
 - `cases`: sanitized per-case rows with hashed ids and no raw LongMemEval text.
 - `cannot_claim`: QA, judge-model, V2, SOTA, and broad-comparison boundaries.
+
+Answer reports have `kind: aippocampus_longmemeval_answer_benchmark` and
+include:
+
+- `evaluation.reader`: fixed prompt version, provider/model/base-url hash,
+  cache policy, API-key environment variable name, and input/output boundaries.
+- `retrieval`: the existing session/source-line/source-window metrics and
+  corpus counts.
+- `answer`: deterministic local answer metrics and failure taxonomy counts,
+  without raw reader answer text.
+- `latency`, `token_usage`, `reader_cache`, and `cost`: measured separately
+  from retrieval quality and answer correctness.
+- `sanitized_report_validation`: absolute-path, raw-text, and credential-like
+  string checks that must pass before the report can be used.
+- `cannot_claim`: official leaderboard score, official judge score, V2, LoCoMo,
+  PersonaMem, SOTA, private-history quality, and default reader/provider
+  adoption boundaries.
 
 V2 mapping reports have
 `kind: aippocampus_longmemeval_v2_context_mapping` and include:
