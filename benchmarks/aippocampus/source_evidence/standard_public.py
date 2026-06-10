@@ -51,6 +51,8 @@ from .reporting import (
     sha1_text,
 )
 
+EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
+
 
 def standard_content_query_terms(question: str, *, limit: int = 24) -> list[str]:
     terms: list[str] = []
@@ -439,6 +441,99 @@ def rank_expected_line_context(
     return None
 
 
+def hit_lines(hits: list[dict[str, Any]], *, limit: int | None = None) -> set[int]:
+    lines: set[int] = set()
+    bounded_hits = hits if limit is None else hits[: max(0, int(limit))]
+    for hit in bounded_hits:
+        try:
+            lines.add(int(hit["line"]))
+        except (TypeError, ValueError, KeyError):
+            continue
+    return lines
+
+
+def evidence_rank_bucket(rank: int | None) -> str:
+    if not rank:
+        return "not_retrieved"
+    if int(rank) == 1:
+        return "rank_1"
+    if int(rank) <= 3:
+        return "rank_2_3"
+    if int(rank) <= 5:
+        return "rank_4_5"
+    if int(rank) <= 10:
+        return "rank_6_10"
+    if int(rank) <= 20:
+        return "rank_11_20"
+    if int(rank) <= 50:
+        return "rank_21_50"
+    return "rank_below_50"
+
+
+def nearest_expected_line_distance(
+    hits: list[dict[str, Any]],
+    *,
+    expected_lines: set[int],
+    line_to_session: dict[str, str],
+    limit: int,
+) -> int | None:
+    if not expected_lines:
+        return None
+    best: int | None = None
+    for hit in hits[: max(0, int(limit))]:
+        try:
+            hit_line = int(hit["line"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        hit_session = line_to_session.get(str(hit_line))
+        for expected_line in expected_lines:
+            expected_session = line_to_session.get(str(expected_line))
+            if hit_session and expected_session and hit_session != expected_session:
+                continue
+            distance = abs(hit_line - int(expected_line))
+            if best is None or distance < best:
+                best = distance
+    return best
+
+
+def evidence_context_distance_bucket(distance: int | None, *, context_radius: int) -> str:
+    if distance is None:
+        return "not_visible"
+    if int(distance) == 0:
+        return "exact_line"
+    if int(distance) == 1:
+        return "distance_1"
+    if int(distance) <= max(1, int(context_radius)):
+        return "distance_2_to_context_radius"
+    return "outside_context_radius"
+
+
+def evidence_miss_category(row: dict[str, Any], *, top_k: int) -> str:
+    if not row.get("has_line_evidence"):
+        return "no_line_evidence"
+    exact_hit = bool(row.get(f"evidence_hit_top{top_k}"))
+    expected_count = int(row.get("expected_line_count") or 0)
+    found_top_k = int(row.get(f"expected_lines_found_top{top_k}") or 0)
+    if exact_hit and expected_count > 1 and 0 < found_top_k < expected_count:
+        return "multi_evidence_partial_hit"
+    if exact_hit:
+        return "exact_line_found_top_k"
+    if row.get(f"evidence_context_hit_top{top_k}"):
+        return "context_visible_exact_line_miss"
+    if row.get(f"session_hit_top{top_k}"):
+        return "same_session_wrong_line_top_k"
+    rank = row.get("evidence_rank")
+    if rank:
+        if int(rank) <= 20:
+            return "gold_line_near_miss_rank_2_20"
+        if int(rank) <= 50:
+            return "gold_line_low_rank_21_50"
+        return "gold_line_rank_below_50"
+    if row.get("session_rank"):
+        return "session_found_below_top_k"
+    return "source_window_not_recovered"
+
+
 def load_standard_message_rows(sqlite_path: Path) -> list[dict[str, Any]]:
     con = sqlite3.connect(sqlite_path)
     con.row_factory = sqlite3.Row
@@ -736,6 +831,14 @@ def evaluate_standard_retrieval_case(
         line_to_session=line_to_session,
         expected_sessions={str(value) for value in expected.get("sessions") or []},
     )
+    expected_lines_found_top_k = len(expected_lines & hit_lines(hits, limit=top_k))
+    expected_lines_found_all_rank = len(expected_lines & hit_lines(hits))
+    nearest_context_distance_top_k = nearest_expected_line_distance(
+        hits,
+        expected_lines=expected_lines,
+        line_to_session=line_to_session,
+        limit=top_k,
+    )
     row: dict[str, Any] = {
         "case_id": case["case_id"],
         "dataset": case["dataset"],
@@ -748,15 +851,39 @@ def evaluate_standard_retrieval_case(
         "expected_session_count": len(expected.get("sessions") or []),
         "has_line_evidence": bool(expected.get("has_line_evidence")),
         "evidence_rank": evidence_rank,
+        "evidence_rank_bucket": evidence_rank_bucket(evidence_rank),
         f"evidence_hit_top{top_k}": evidence_hit_top_k,
         "evidence_context_rank": evidence_context_rank,
         f"evidence_context_hit_top{top_k}": bool(
             evidence_context_rank and evidence_context_rank <= top_k
         ),
+        f"expected_lines_found_top{top_k}": expected_lines_found_top_k,
+        "expected_lines_found_all_rank": expected_lines_found_all_rank,
+        f"multi_evidence_partial_hit_top{top_k}": bool(
+            len(expected_lines) > 1 and 0 < expected_lines_found_top_k < len(expected_lines)
+        ),
+        f"same_session_wrong_line_top{top_k}": bool(
+            session_rank and session_rank <= top_k and not evidence_hit_top_k
+        ),
+        f"evidence_context_rescue_top{top_k}": bool(
+            evidence_context_rank
+            and evidence_context_rank <= top_k
+            and not evidence_hit_top_k
+        ),
+        f"gold_line_near_miss_top{top_k}_to_20": bool(
+            evidence_rank and top_k < evidence_rank <= 20
+        ),
+        f"evidence_context_distance_bucket_top{top_k}": (
+            evidence_context_distance_bucket(
+                nearest_context_distance_top_k,
+                context_radius=context_radius,
+            )
+        ),
         "session_rank": session_rank,
         f"session_hit_top{top_k}": bool(session_rank and session_rank <= top_k),
         "warning_count": len(warnings),
     }
+    row["evidence_miss_category"] = evidence_miss_category(row, top_k=top_k)
     resolved_reranker_mode = line_reranker_mode.strip().casefold()
     if resolved_reranker_mode not in STANDARD_LINE_RERANKER_MODES:
         raise ValueError(f"unsupported line reranker mode: {line_reranker_mode}")
@@ -956,6 +1083,41 @@ def summarize_standard_retrieval_results(
         add_usage(reranker_usage, row.get("line_reranker_usage") or {})
         for kind in row.get("line_reranker_error_kinds") or []:
             reranker_error_kinds[str(kind)] = reranker_error_kinds.get(str(kind), 0) + 1
+    diagnostic_cutoffs = sorted({*EVIDENCE_DIAGNOSTIC_CUTOFFS, int(top_k)})
+    evidence_recall_by_k: dict[str, dict[str, Any]] = {}
+    evidence_rank_bucket_counts: dict[str, int] = {}
+    evidence_line_taxonomy_counts: dict[str, int] = {}
+    evidence_miss_taxonomy_counts: dict[str, int] = {}
+    context_rescue_distance_counts: dict[str, int] = {}
+    for row in line_cases:
+        bucket = str(row.get("evidence_rank_bucket") or "not_retrieved")
+        evidence_rank_bucket_counts[bucket] = evidence_rank_bucket_counts.get(bucket, 0) + 1
+        line_category = str(row.get("evidence_miss_category") or "unknown")
+        evidence_line_taxonomy_counts[line_category] = (
+            evidence_line_taxonomy_counts.get(line_category, 0) + 1
+        )
+        if not row.get(f"evidence_hit_top{top_k}"):
+            evidence_miss_taxonomy_counts[line_category] = (
+                evidence_miss_taxonomy_counts.get(line_category, 0) + 1
+            )
+        if row.get(f"evidence_context_rescue_top{top_k}"):
+            distance_bucket = str(
+                row.get(f"evidence_context_distance_bucket_top{top_k}") or "unknown"
+            )
+            context_rescue_distance_counts[distance_bucket] = (
+                context_rescue_distance_counts.get(distance_bucket, 0) + 1
+            )
+    for cutoff in diagnostic_cutoffs:
+        hits = sum(
+            1
+            for row in line_cases
+            if row.get("evidence_rank") and int(row["evidence_rank"]) <= cutoff
+        )
+        evidence_recall_by_k[str(cutoff)] = {
+            "hit": hits,
+            "miss": len(line_cases) - hits,
+            "hit_rate": safe_rate(hits, len(line_cases)),
+        }
     metrics = {
         "question_count": total,
         "case_types": case_types,
@@ -982,8 +1144,30 @@ def summarize_standard_retrieval_results(
         "evidence_mrr": evidence_mrr,
         "evidence_context_mrr": evidence_context_mrr,
         "evidence_context_mrr_delta": round(evidence_context_mrr - evidence_mrr, 4),
+        "evidence_line_recall_by_k": evidence_recall_by_k,
+        "evidence_rank_bucket_counts": evidence_rank_bucket_counts,
+        "evidence_line_taxonomy_counts": evidence_line_taxonomy_counts,
+        "evidence_miss_taxonomy_counts": evidence_miss_taxonomy_counts,
+        f"evidence_context_rescue_distance_counts_top{top_k}": (
+            context_rescue_distance_counts
+        ),
+        f"same_session_wrong_line_top{top_k}": sum(
+            1 for row in line_cases if row.get(f"same_session_wrong_line_top{top_k}")
+        ),
+        f"multi_evidence_partial_hit_top{top_k}": sum(
+            1
+            for row in line_cases
+            if row.get(f"multi_evidence_partial_hit_top{top_k}")
+        ),
+        f"gold_line_near_miss_top{top_k}_to_20": sum(
+            1 for row in line_cases if row.get(f"gold_line_near_miss_top{top_k}_to_20")
+        ),
         "warning_count": sum(int(row.get("warning_count") or 0) for row in results),
     }
+    for cutoff_label, recall in evidence_recall_by_k.items():
+        metrics[f"evidence_hit_top{cutoff_label}"] = recall["hit"]
+        metrics[f"evidence_miss_top{cutoff_label}"] = recall["miss"]
+        metrics[f"evidence_hit_rate_top{cutoff_label}"] = recall["hit_rate"]
     metrics["rate_estimates"] = {
         f"session_hit_rate_top{top_k}": binomial_rate_report(
             f"session_hit_rate_top{top_k}",

@@ -172,6 +172,36 @@ LongMemEval-S larger-slice verification summary:
 - Raw report location: `benchmark_corpus/reports/longmemeval-v1-small-retrieval-100.json`
   locally, intentionally gitignored.
 
+2026-06-10 exact-line taxonomy addendum for #1087:
+
+- Re-run command used the same public split, 100-question cap, top-k `10`, and
+  evidence context radius `5`; the sanitized local report was written to a
+  gitignored `.tmp` path and did not emit raw LongMemEval questions, answers,
+  snippets, local absolute paths, or source text.
+- Evidence-line recall ladder: R@1 `49/94 = 0.5213`, R@3
+  `69/94 = 0.7340`, R@5 `76/94 = 0.8085`, R@10
+  `82/94 = 0.8723`, R@20 `85/94 = 0.9043`, and R@50
+  `89/94 = 0.9468`.
+- Evidence rank buckets: rank 1 `49`, rank 2-3 `20`, rank 4-5 `7`,
+  rank 6-10 `6`, rank 11-20 `3`, rank 21-50 `4`,
+  below rank 50 `3`, and not retrieved `2`.
+- Top-10 line taxonomy: exact line found `62`, multi-evidence partial hit
+  `20`, context-visible exact-line miss `9`, same-session wrong-line top-10
+  `1`, session found below top-k `1`, and gold line low-ranked at 21-50 `1`.
+- The 12 exact-line R@10 misses break down as: context-visible exact-line miss
+  `9`, session found below top-k `1`, same-session wrong-line top-k `1`, and
+  gold line low-ranked at 21-50 `1`.
+- The 9 context-visible rescues were near the exact evidence line: distance 1
+  `6`, distance 2-to-context-radius `3`.
+
+Product interpretation: the current adapter is strong at source-window and
+reopenable-route navigation, but exact evidence-line citation remains a real
+improvement area. Most exact-line misses are not total retrieval failures: they
+are nearby source-window hits or line-ranking misses. Do not treat
+context-visible evidence as equivalent to exact-line retrieval; it means the
+foreground agent can usually reopen the right source window, not that a final
+citation span is already selected.
+
 The 2026-06-09 attempt to run a 500-question LongMemEval-S diagnostic was
 stopped after about 8 minutes without stdout, stderr, or an output report. Treat
 that as an incomplete missing-artifact run, not proof that 500 questions are
@@ -215,7 +245,8 @@ Reports have `kind: aippocampus_longmemeval_benchmark` and include:
 - `evaluation`: retrieval-only mode, top-k settings, and the explicit absence
   of QA generation or judge model.
 - `metrics`: question count, session recall@K, source-line recall@K,
-  context-visible source-line recall, and MRR where available.
+  context-visible source-line recall, MRR where available, rank-bucket
+  diagnostics, exact-line recall ladders, and sanitized miss taxonomy counts.
 - `cases`: sanitized per-case rows with hashed ids and no raw LongMemEval text.
 - `cannot_claim`: QA, judge-model, V2, SOTA, and broad-comparison boundaries.
 
