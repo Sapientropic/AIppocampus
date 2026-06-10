@@ -111,8 +111,8 @@ evidence correctly.
 | --- | --- | --- |
 | [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) opt-in agent continuity path | Closing with `aippocampus agent ...` runtime wiring | Claiming one practical foreground agent path beyond fixtures. |
 | [#1153](https://github.com/Sapientropic/AIppocampus/issues/1153) context-loss continuous-memory slice | Open | Stronger public long-dialogue continuity behavior claim. |
-| [#1157](https://github.com/Sapientropic/AIppocampus/issues/1157) LongMemEval-S answer/latency harness | Open | End-to-end answer/latency claim on top of verified retrieval. |
-| [#1158](https://github.com/Sapientropic/AIppocampus/issues/1158) LoCoMo text-QA harness | Open | Mainstream long-conversation QA comparison. |
+| [#1157](https://github.com/Sapientropic/AIppocampus/issues/1157) LongMemEval-S answer/latency harness | Closed with fixed-reader harness; no promoted provider score yet | End-to-end answer/latency claim on top of verified retrieval. |
+| [#1158](https://github.com/Sapientropic/AIppocampus/issues/1158) LoCoMo text-QA harness | Closing with fixed-reader harness; no promoted provider score yet | Mainstream long-conversation QA comparison. |
 | [#1155](https://github.com/Sapientropic/AIppocampus/issues/1155) LongMemEval-V2 official pilot | Open | Any V2 answer/latency quality claim. |
 | [#1165](https://github.com/Sapientropic/AIppocampus/issues/1165) maturity gates | Closed | Use the landed gate before citing small deterministic fixtures as quality evidence. |
 | [#1166](https://github.com/Sapientropic/AIppocampus/issues/1166) this ledger | In progress until merged | A single public origin/current-value thread before broader launch. |

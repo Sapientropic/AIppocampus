@@ -112,11 +112,33 @@ ids, and question/answer hashes, but no dialogue text, question text, or answer
 text. The current local snapshot has 10 users, 272 sessions, 5,882 dialogue
 turns, 1,986 QA cases, and 1,973 evidence-linked cases.
 
-When the local LoCoMo file is absent, the LoCoMo retrieval and answer-
-usefulness runners return `status=skipped_missing_dataset` with `ok=true` and
-`quality_gate_status=not_scored`. That skip payload means the diagnostic/report
-contract was generated successfully; it is not a retrieval or answer-quality
-score.
+When the local LoCoMo file is absent, the LoCoMo retrieval, text-QA, and
+answer-usefulness runners return `status=skipped_missing_dataset` with
+`ok=true`; retrieval/answer-usefulness also use
+`quality_gate_status=not_scored` where they own a gate. That skip payload means
+the diagnostic/report contract was generated successfully; it is not a
+retrieval or answer-quality score.
+
+#1158 adds a separate LoCoMo text-QA harness that registers the same public
+conversation sessions through the standard source-backed retrieval adapter,
+then optionally asks a fixed reader to answer from bounded candidate source
+lines:
+
+```powershell
+python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 25 --reader-mode dry-run --json --output benchmark_corpus\reports\locomo-text-qa-dry-run.json
+$env:AIPPOCAMPUS_LOCOMO_READER_API_KEY="<provider key>"
+python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 100 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-url> --json --output benchmark_corpus\reports\locomo-text-qa-provider.json
+```
+
+CLI stdout is static by design; use `--output` for the sanitized JSON report.
+The report keeps retrieval, answer quality, source citation, latency,
+token/cache, cost, and failure taxonomy in separate fields. It preserves the
+dataset-provided LoCoMo `category` values as `locomo_category_*` question-type
+slices, but does not remap them to semantic labels. The fixed reader sees the
+question and bounded source lines only; the serialized report omits raw
+dialogue, question, answer, source text, provider response text, local paths,
+and credentials. A dry-run proves schema and report boundaries; a dated
+provider run is still required before adding any current answer-quality claim.
 
 #400 adds a separate LoCoMo answer-usefulness prototype on top of that
 retrieval layer:

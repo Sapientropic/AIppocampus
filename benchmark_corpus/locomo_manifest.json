@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "benchmark": "LoCoMo",
-  "scope": "public long-conversation same-dialogue control for evidence-retrieval benchmark runs",
+  "scope": "public long-conversation same-dialogue control for evidence retrieval and opt-in fixed-reader text-QA benchmark runs",
   "official_sources": {
     "repository": "https://github.com/snap-research/locomo",
     "license": "https://raw.githubusercontent.com/snap-research/locomo/main/LICENSE.txt",
@@ -9,6 +9,8 @@
   },
   "license": "CC BY-NC 4.0",
   "runner": "benchmarks/aippocampus/benchmark_locomo_public_users.py",
+  "qa_runner": "benchmarks/aippocampus/benchmark_locomo_qa.py",
+  "answer_usefulness_runner": "benchmarks/aippocampus/benchmark_locomo_answer_usefulness.py",
   "evidence_page": "docs/evidence/benchmarks/public-longitudinal-users.md",
   "replication_artifacts": {
     "case_pack": {
@@ -50,9 +52,10 @@
   "claim_boundary": [
     "public same-conversation long-dialogue evidence retrieval",
     "source-turn recall against LoCoMo QA evidence ids",
+    "fixed-reader text-QA answer, citation, latency, token, cache, and cost telemetry when explicitly run",
     "not a cross-conversation longitudinal-user memory score",
-    "no answer generation score",
-    "no LLM judge score",
+    "no promoted answer generation score without a dated fixed-reader provider report",
+    "no official LoCoMo judge or leaderboard score",
     "no coding decision-shadow or tacit-constraint claim",
     "no private real-history claim"
   ]

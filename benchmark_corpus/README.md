@@ -280,6 +280,22 @@ long-dialogue retrieval control, not as proof of cross-conversation user memory;
 keep temporal override, project contamination, coding tacit-constraint, and
 rejected-route claims on the VCS / rollout hard-event track.
 
+Run the #1158 LoCoMo text-QA harness when you need answer/latency telemetry on
+top of the standard source-backed retrieval adapter:
+
+```powershell
+python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 25 --reader-mode dry-run --json --output benchmark_corpus\reports\locomo-text-qa-dry-run.json
+$env:AIPPOCAMPUS_LOCOMO_READER_API_KEY="<provider key>"
+python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 100 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-url> --json --output benchmark_corpus\reports\locomo-text-qa-provider.json
+```
+
+The CLI emits static stdout only; read the sanitized report from `--output`.
+The report separates retrieval, fixed-reader answer quality, citation,
+latency, token/cache, cost, and failure taxonomy. It preserves LoCoMo category
+ids as `locomo_category_*` question-type slices without remapping them to
+semantic labels. A dry-run is a schema/privacy contract check, not an answer
+score.
+
 Build the H1/H2 public-dialogue hard-negative cohort from the same ignored
 LoCoMo file:
 
