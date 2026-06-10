@@ -31,9 +31,12 @@ Rules:
   [`docs/evidence/benchmarks/amemgym.md`](benchmarks/amemgym.md) until a dated
   result owner upgrades a claim.
 - STATE-Bench Agent Learning feasibility currently has no Current Claim
-  Snapshot row; adapter/readiness evidence stays in
+  Snapshot row; adapter/readiness and one-domain preflight blocker evidence stay in
   [`docs/evidence/benchmarks/state-bench-agent-learning.md`](benchmarks/state-bench-agent-learning.md)
-  until a matched no-memory task run produces bounded metrics.
+  until a matched no-memory task run produces bounded metrics. The 2026-06-10
+  preflight generated both matched adapters and commands but stopped before task
+  execution because the locked GPT-5.4 evaluation client endpoint/deployments
+  were not configured.
 
 ## Confirmed Scope Boundaries (Expected Null Results)
 
