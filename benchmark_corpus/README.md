@@ -63,8 +63,9 @@ Supported converter sources:
 intended benchmark use for the locally generated ShareGPT outputs.
 
 `longmemeval_manifest.json` records the official LongMemEval cleaned V1 split
-files, Hugging Face LFS content hashes, V2 context-mapping pilot metadata,
-runner entrypoints, and claim boundaries. The corresponding evidence page is
+files, Hugging Face LFS content hashes, V2 context-mapping pilot metadata, the
+V2 official-harness pilot decision, runner entrypoints, and claim boundaries.
+The corresponding evidence page is
 [`docs/evidence/benchmarks/longmemeval.md`](../docs/evidence/benchmarks/longmemeval.md).
 
 `locomo_manifest.json` records the LoCoMo public long-conversation
@@ -488,6 +489,19 @@ This pilot reports schema, checksum, join-key coverage, environment-pool
 coverage, and sanitized case hashes. It does not report V2 source-evidence
 R@K/MRR, benchmark-grade context-gathering quality, answer accuracy, LAFS, or
 SOTA claims.
+
+Record the LongMemEval V2 official-harness pilot decision without running the
+official reader/evaluator:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval_v2_official_pilot.py --json --output benchmark_corpus\reports\longmemeval-v2-official-pilot-decision.json
+```
+
+The decision report defines the `aippocampus_context_provider` Memory adapter
+contract, fixed reader/evaluator configuration, 5-20 question pilot boundary,
+latency/cost budgets, ignored local official-output policy, and sanitized
+aggregate-only publication rule. It is not a V2 answer accuracy, LAFS, or
+leaderboard claim.
 
 Run the MemoryAgentBench metadata and public-safe case-pack smoke:
 

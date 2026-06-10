@@ -48,6 +48,11 @@ Rules:
   Current Claim Snapshot row yet. Keep its dry-run as schema/privacy evidence
   only; a dated fixed-reader provider report is required before citing answer
   quality.
+- LongMemEval-V2 currently has an official-harness pilot decision and
+  text-only Memory adapter contract, but no Current Claim Snapshot row yet.
+  Keep the decision report and any tiny dry run as integration evidence only;
+  a dated official-harness run is required before citing V2 answer accuracy,
+  LAFS, or latency quality.
 
 ## Confirmed Scope Boundaries (Expected Null Results)
 

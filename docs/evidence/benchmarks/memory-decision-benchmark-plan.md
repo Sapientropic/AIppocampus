@@ -1010,7 +1010,10 @@ Current smoke and diagnostic results from 2026-05-30:
   and 0 question or trajectory rows with gold evidence refs. The standard
   source-evidence adapter therefore still reports V2 as skipped rather than
   inventing R@K, while the V2 pilot reports only schema, checksum, join-key
-  coverage, environment-pool ambiguity, and `cannot_claim` boundaries.
+  coverage, environment-pool ambiguity, and `cannot_claim` boundaries. The
+  #1155 official-harness pilot decision is the separate answer/latency path:
+  it adds a text-only Memory adapter contract and fixed-reader/evaluator plan,
+  but does not turn V2 into a Track B source-evidence score.
 - Standard retrieval-QA semantic line-reranker smoke:
   the optional top-session/top-context second stage keeps the first-stage FTS5
   session/context boundary fixed, sends only bounded candidate source lines to
@@ -1578,7 +1581,10 @@ LongMemEval V2 has a diagnostic context-mapping pilot, but it still needs
 explicit question-to-haystack/evidence-state labels before it can produce
 comparable retrieval R@K/MRR. Until then the source-evidence adapter reports a
 skipped source-evidence status and the V2 runner reports only mapping
-feasibility.
+feasibility. The official-harness pilot decision is intentionally separate:
+it can measure memory context, answer accuracy, reader/evaluator dependency,
+and query latency in a future tiny local run, but it cannot retire the
+source-evidence skipped status by itself.
 
 Segmented-search merge policy calibration is a separate deterministic
 diagnostic under Track B's ranking boundary. The #375 runner
