@@ -161,6 +161,88 @@ class E2E50SeedCandidateScannerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "insufficient_candidate_seeds")
         self.assertIn("e2e50_behavior_benchmark_result", payload["cannot_claim"])
 
+    def test_annotation_summary_reports_retained_blocker_without_leaking_rows(self) -> None:
+        annotation = {
+            "kind": "local_private_annotation",
+            "review_status": "private local note rollout secret marker",
+            "private_text_exported": False,
+            "annotations": [
+                {
+                    "case_index": 1,
+                    "thread_hash": "sha256:private-a",
+                    "label": "gold_seed_candidate",
+                    "reason": "binding_constraint_survival",
+                    "gold_seed": True,
+                },
+                {
+                    "case_index": 2,
+                    "thread_hash": "sha256:private-b",
+                    "label": "calibration_seed",
+                    "reason": "timeboxed_quality_iteration_constraint",
+                },
+                {
+                    "case_index": 3,
+                    "thread_hash": "sha256:private-c",
+                    "label": "negative_control",
+                    "reason": "source_visible_browser_report_should_not_be_remembered",
+                },
+                {
+                    "case_index": 4,
+                    "thread_hash": "sha256:private-d",
+                    "label": "reject_duplicate",
+                    "reason": "duplicate_conceptual_thread_not_behavior_gold",
+                },
+                {
+                    "case_index": 5,
+                    "thread_hash": "sha256:private-e",
+                    "label": "reject",
+                    "reason": "subagent_goal_context_noise_and_high_later_remention",
+                },
+            ],
+        }
+
+        summary = scanner.summarize_annotation_pack(
+            annotation,
+            min_retained_cases=20,
+            min_negative_controls=1,
+        )
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        self.assertEqual(summary["status"], "private_annotation_blocked")
+        self.assertEqual(summary["reviewed_candidate_count"], 5)
+        self.assertEqual(summary["retained_case_count"], 3)
+        self.assertEqual(summary["behavior_seed_count"], 2)
+        self.assertEqual(summary["annotation_category_counts"]["gold"], 1)
+        self.assertEqual(summary["annotation_category_counts"]["calibration"], 1)
+        self.assertEqual(summary["annotation_category_counts"]["negative_control"], 1)
+        self.assertEqual(summary["annotation_category_counts"]["duplicate"], 1)
+        self.assertEqual(summary["annotation_category_counts"]["rejected"], 1)
+        self.assertEqual(summary["blocker_status"]["retained_case_shortfall"], 17)
+        self.assertEqual(summary["blocker_status"]["negative_control_shortfall"], 0)
+        self.assertEqual(summary["review_status"], "local_annotation_summary")
+        self.assertIn("subagent_or_goal_context_noise", summary["blocker_class_counts"])
+        self.assertNotIn("sha256:private-a", encoded)
+        self.assertNotIn("binding_constraint_survival", encoded)
+        self.assertNotIn("private local note", encoded)
+
+    def test_annotation_summary_marks_twenty_retained_with_negative_control(self) -> None:
+        annotations = [
+            {"case_index": index, "label": "gold_seed_candidate", "gold_seed": True}
+            for index in range(1, 20)
+        ]
+        annotations.append({"case_index": 20, "label": "negative_control"})
+
+        summary = scanner.summarize_annotation_pack(
+            {"annotations": annotations, "private_text_exported": False},
+            min_retained_cases=20,
+            min_negative_controls=1,
+        )
+
+        self.assertEqual(summary["status"], "private_annotation_retained")
+        self.assertEqual(summary["retained_case_count"], 20)
+        self.assertEqual(summary["annotation_category_counts"]["negative_control"], 1)
+        self.assertEqual(summary["blocker_status"]["retained_case_shortfall"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,33 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-10 Issue #1086 E2E50 Private / Local Seed Follow-up
+
+Issue #1086 follows #994 by resolving the private/local seed-pack question as a
+sanitized blocker/progress report rather than another public scaffold.
+
+Positive local evidence:
+
+- `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py` now accepts an
+  ignored local manual-annotation JSON and emits only category/blocker counts.
+- The wide private/local scanner command found 23 candidate seeds against a
+  20-candidate minimum, scanning 1,571 registry threads, 17,045 message rows,
+  and 91,034 event rows with no bad JSONL rows.
+- The annotation summary reviewed 17 local candidates and retained 7
+  control/seed cases: 4 gold, 2 calibration, and 1 negative control. The
+  retained/control shortfall is 13 against the 20-case private target.
+- The report is recorded in
+  [`../benchmarks/e2e50-private-local-seed-followup-2026-06-10.md`](../benchmarks/e2e50-private-local-seed-followup-2026-06-10.md).
+
+Interpretation:
+
+- The old private/local candidate-count blocker is narrowed: current
+  wide-window discovery can find enough candidate seeds.
+- The private/local annotation blocker remains. This still cannot claim
+  private-history behavior lift, completed private 20-case or 50-case E2E50
+  quality, representative E2E50 quality, live host behavior lift, or semantic
+  judge quality.
+
 ## 2026-06-09 Issue #994 E2E50 Public-safe 20-case Seed Pack
 
 Issue #994 follows the 2026-06-04 private scanner shortfall by adding a
