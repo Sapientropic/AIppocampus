@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_coupling_helpers import same_dir_import_edges
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
@@ -49,6 +51,55 @@ LARGE_RUNTIME_THRESHOLD = 600
 LARGE_TEST_THRESHOLD = 1500
 LARGE_BENCHMARK_THRESHOLD = 1200
 LARGE_TOOL_THRESHOLD = 1100
+OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
+    "aippocampus_runtime.ops.activation_payload_compaction": {
+        "aippocampus_runtime.recall.active_recall_lock_compaction",
+        "aippocampus_runtime.recall.ambient_cache_compaction",
+        "aippocampus_runtime.recall.semantic_trigger_compaction",
+    },
+    "aippocampus_runtime.ops.cognitive_observatory": {
+        "aippocampus_runtime.recall.why_diagnostics",
+    },
+    "aippocampus_runtime.ops.presence_first_matrix_fixtures": {
+        "aippocampus_runtime.recall",
+        "aippocampus_runtime.recall.authority",
+        "aippocampus_runtime.recall.prompt_context_render",
+    },
+    "aippocampus_runtime.ops.provider_doctor": {
+        "aippocampus_runtime.recall.semantic_recall_gate",
+    },
+    "aippocampus_runtime.ops.provider_key_bridge": {
+        "aippocampus_runtime.hooks",
+        "aippocampus_runtime.hooks.install_lifecycle",
+        "aippocampus_runtime.hooks.install_prompt",
+    },
+    "aippocampus_runtime.ops.recall_navigation_comparison": {
+        "aippocampus_runtime.recall.authority",
+    },
+    "aippocampus_runtime.ops.recall_navigation_comparison_fixtures": {
+        "aippocampus_runtime.recall",
+        "aippocampus_runtime.recall.ambient_cards",
+        "aippocampus_runtime.recall.prompt_context_render",
+        "aippocampus_runtime.recall.prompt_recall_decision",
+    },
+    "aippocampus_runtime.ops.route_readiness": {
+        "aippocampus_runtime.recall.active_recall_lock_lifecycle",
+    },
+    "aippocampus_runtime.ops.spend_doctor": {
+        "aippocampus_runtime.recall.semantic_recall_gate",
+    },
+    "aippocampus_runtime.ops.worker_hook_handoff": {
+        "aippocampus_runtime.hooks",
+        "aippocampus_runtime.hooks.prompt",
+        "aippocampus_runtime.recall",
+        "aippocampus_runtime.recall.ambient_cache",
+    },
+}
+OPS_STRING_ONLY_RECALL_COMMAND_MODULES = {
+    "aippocampus_runtime.ops.graphify_corpus",
+    "aippocampus_runtime.ops.maintenance",
+    "aippocampus_runtime.ops.storage_governance_contract",
+}
 
 
 def debt_register_entries(*, prefixes: tuple[str, ...] | None = None) -> dict[str, int]:
@@ -220,6 +271,46 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "`ConversationProvider`",
         ):
             self.assertIn(phrase, text)
+
+    def test_ops_recall_hook_orchestration_boundary_is_documented_and_allowlisted(self) -> None:
+        edges = same_dir_import_edges()
+        observed = {
+            module: {
+                target
+                for target in targets
+                if target.startswith("aippocampus_runtime.recall")
+                or target.startswith("aippocampus_runtime.hooks")
+            }
+            for module, targets in edges.items()
+            if module.startswith("aippocampus_runtime.ops.")
+        }
+        observed = {module: targets for module, targets in observed.items() if targets}
+
+        self.assertEqual(observed, OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST)
+        self.assertTrue(
+            OPS_STRING_ONLY_RECALL_COMMAND_MODULES.isdisjoint(observed),
+            "string-only command references must not be counted as direct runtime imports",
+        )
+
+        text = RUNTIME_SCRIPT_MAP.read_text(encoding="utf-8")
+        for phrase in (
+            "## Ops Orchestration Boundary",
+            "maintenance CLI",
+            "diagnostic/reporting",
+            "fixture runner",
+            "provider doctor",
+            "hook handoff",
+            "runtime-adjacent policy",
+            "String-only `python -m aippocampus_runtime.recall",
+            "must not become foreground recall policy",
+            "tests/aippocampus/test_architecture_boundaries.py",
+        ):
+            self.assertIn(phrase, text)
+        for module in sorted(
+            set(OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST)
+            | OPS_STRING_ONLY_RECALL_COMMAND_MODULES
+        ):
+            self.assertIn(f"`{module}`", text)
 
     def test_encrypted_sync_v2_contract_records_deferred_decisions(self) -> None:
         self.assertTrue(ENCRYPTED_SYNC_V2.is_file(), "encrypted sync v2 design note is missing")
