@@ -369,6 +369,10 @@ Remaining Codex raw-rollout/default-home script surfaces are classified in
 General recall should use clean-source search, provider-aware onboarding, MCP
 tools, or registry paths; raw Codex audit helpers are not generic
 cross-agent-provider APIs.
+The fixture-backed cross-agent read-path isolation boundary is documented in
+[`cross-agent-recall-isolation.md`](../architecture/cross-agent-recall-isolation.md).
+It proves deterministic hard-negative coverage for search/recall/deepen/cache
+style surfaces, not enterprise multi-tenant authorization.
 
 ### Host Hook Boundary
 
@@ -476,6 +480,10 @@ The companion source-reopen budget lives in
 separates hot bounded-route orientation, warm selected-span verification, and
 cold source-court reopen work, and keeps foreground timeout behavior
 fail-open-without-claim.
+Cross-agent read-path isolation fixtures live in
+[`cross-agent-recall-isolation.md`](../architecture/cross-agent-recall-isolation.md)
+and require scope filtering before a packet, route, source handle, cached
+summary, or semantic sidecar becomes visible.
 
 Contract v1 continuity domains use this same progressive path. `recall_context`
 may return a `continuity_domain` route when a source-trailed working conclusion
