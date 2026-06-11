@@ -148,6 +148,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_diagnose_hooks",
         "test_docs_health",
         "test_dream_delivery_eligibility",
+        "test_dream_atlas_pack",
         "test_dream_input_pack",
         "test_dream_live_shadow_ab",
         "test_dream_one_sidedness",

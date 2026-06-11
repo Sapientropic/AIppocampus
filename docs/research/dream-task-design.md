@@ -606,6 +606,49 @@ substrate: it gives Dream evaluation a reproducible topology-candidate surface
 without claiming live Dream quality, private-history usefulness, or foreground
 default timing.
 
+### Implemented Long-Context Dream Atlas Pack
+
+`aippocampus_runtime.dream.atlas_pack` is the deterministic #1269 prototype for
+batching multiple `status="ready_for_dream_worker"` packs into one
+source-card-only long-context atlas. It targets the DeepSeek V4 family because
+the official [2026-04-24 DeepSeek V4 note](https://api-docs.deepseek.com/news/news260424)
+documents a 1M-token context window, and the official
+[KV-cache guide](https://api-docs.deepseek.com/guides/kv_cache) documents
+`usage.prompt_cache_hit_tokens` and `usage.prompt_cache_miss_tokens` as the
+auditable cache telemetry fields.
+
+The atlas intentionally excludes raw source text and raw source handles. It
+serializes stable, public-safe source cards with selected pack count, source-ref
+count, source-thread count, estimated token budget, and privacy mode. Prompt
+order is fixed as:
+
+- `stable_dream_worker_contract`
+- `stable_atlas_source_card_payload`
+- `variable_run_directive`
+
+This keeps the worker contract and atlas/source-card payload cache-friendly
+while leaving run-specific instructions last. Do not move evaluation prompts,
+repair instructions, or one-off focus text above the stable source-card payload.
+
+The public fixture command is:
+
+```powershell
+python -m aippocampus_runtime.dream.atlas_pack --fixture --json
+```
+
+The report compares bounded-pack Dream against atlas Dream on candidate
+survival, source-ref validity, bridge-quality proxy count, unsupported
+candidate count, and deterministic latency/cost mode. The fixture demonstrates
+the intended cross-pack failure mode: bounded single-pack Dream sees zero
+bridge/cycle candidates, while the atlas recovers one cross-pack cycle and one
+cross-pack weak bridge from four ready packs and eight source refs.
+
+Live DeepSeek runs may attach provider `usage` to record
+`prompt_cache_hit_tokens` and `prompt_cache_miss_tokens`. Offline deterministic
+runs must keep cache telemetry unavailable and must not invent a cache hit
+rate. Hard negatives reject source-free symbolic claims, profile claims, and
+candidates without source refs before they can become atlas candidates.
+
 ### Live Dream Worker DeepSeek KV Cache Contract
 
 The default P1-P3 fallback remains deterministic, so it must not claim provider
