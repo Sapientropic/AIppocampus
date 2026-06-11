@@ -253,6 +253,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/dream/real_history_eval.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/retrospective_lifecycle.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/topology_scout.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/utility_telemetry.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/worker_contract.py",

@@ -586,6 +586,26 @@ a causal hypothesis, an unblock condition, and falsification cues. A bridge
 that explains the route through the user's durable personality or hidden intent
 is also parked for human review even when the source refs resolve.
 
+### Implemented Public-Safe Dream Topology Scout
+
+`aippocampus_runtime.dream.topology_scout` is the deterministic #1268 scout for
+source-backed candidate shapes. It consumes public-safe route, packet, pathlet,
+and source-anchor rows and emits `kind="dream_topology_candidate"` rows only
+when a shape is source-anchored and not a psychological/profile claim.
+
+The scout reuses packet-topology diagnostics for repeated route cycles,
+missing-middle/cut-point gaps, and knots, then adds Dream-specific weak-bridge
+and island shapes. Its outputs stay
+`authority="dream_synthesized_candidate_not_fact"`,
+`foreground_eligible=false`, and
+`source_reopen_required_before_claim=true`.
+
+Hard negatives reject private psychological interpretation, user diagnosis,
+profile claims, and source-free symbolic claims. This is a public-safe #163
+substrate: it gives Dream evaluation a reproducible topology-candidate surface
+without claiming live Dream quality, private-history usefulness, or foreground
+default timing.
+
 ### Live Dream Worker DeepSeek KV Cache Contract
 
 The default P1-P3 fallback remains deterministic, so it must not claim provider

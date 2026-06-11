@@ -156,6 +156,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_dream_real_history_eval",
         "test_dream_retrospective_lifecycle",
         "test_dream_sleep_cycle",
+        "test_dream_topology_scout",
         "test_dream_utility_telemetry",
         "test_dream_worker",
         "test_dream_working_memory",
