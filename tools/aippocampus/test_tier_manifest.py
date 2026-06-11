@@ -186,6 +186,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_long_thread_segment_soak",
         "test_magic_activation_policy",
         "test_macro_hexagram",
+        "test_macro_orientation_state",
         "test_macro_perturbation",
         "test_memory_evidence_drawer",
         "test_macos_install_smoke_workflow",
