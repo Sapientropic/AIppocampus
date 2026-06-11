@@ -64,7 +64,8 @@ from aippocampus_runtime.registry.store import (
 )
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_registry,
-    hook_seen_thread_keys,
+    hook_seen_thread_ref,
+    hook_seen_thread_refs,
 )
 from conversation_sources import (
     PROVIDER_CHOICES,
@@ -282,10 +283,10 @@ def scan_session_rollouts(
 ) -> dict:
     json_path, _ = registry_paths(registry_dir)
     existing = {entry.get("thread_key") for entry in load_registry(json_path).get("threads", [])}
-    hook_seen_filter_keys: set[str] = set()
+    hook_seen_filter_refs: set[str] = set()
     hook_seen_filter_path = hook_seen_ledger or hook_seen_ledger_path_for_registry(json_path)
     if hook_seen_only:
-        hook_seen_filter_keys = hook_seen_thread_keys(hook_seen_filter_path)
+        hook_seen_filter_refs = hook_seen_thread_refs(hook_seen_filter_path)
     candidates: list[tuple[float, Path, dict, str]] = []
     # CLI/onboarding call sites pass a provider explicitly. This fallback is
     # kept only for legacy in-process callers during the provider migration.
@@ -298,7 +299,7 @@ def scan_session_rollouts(
         if cwd_filter and cwd_filter.casefold() not in str(meta.get("cwd") or "").casefold():
             continue
         thread_key = active_provider.thread_key(source, meta)
-        if hook_seen_only and thread_key not in hook_seen_filter_keys:
+        if hook_seen_only and hook_seen_thread_ref(thread_key) not in hook_seen_filter_refs:
             continue
         if not refresh and thread_key in existing:
             continue
@@ -339,7 +340,7 @@ def scan_session_rollouts(
         "hook_seen_filter": {
             "enabled": hook_seen_only,
             "ledger": str(hook_seen_filter_path),
-            "seen_thread_count": len(hook_seen_filter_keys),
+            "seen_thread_count": len(hook_seen_filter_refs),
         },
         "planned": planned,
         "registered": registered,

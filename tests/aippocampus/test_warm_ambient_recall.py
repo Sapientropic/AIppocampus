@@ -22,6 +22,7 @@ from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler  # noqa
 from aippocampus_runtime.warm_ambient import source_validation  # noqa: E402
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
     hook_seen_ledger_path_for_cache,
+    hook_seen_thread_ref,
     load_hook_seen_rows,
 )
 from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
@@ -2287,10 +2288,13 @@ class WarmAmbientRecallTests(unittest.TestCase):
         public_registration = result["ambient_recall"]["source_registration"]
 
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["thread_key"], "session:fresh-thread")
+        self.assertEqual(rows[0]["thread_ref"], hook_seen_thread_ref("session:fresh-thread"))
+        self.assertNotIn("thread_key", rows[0])
+        self.assertNotIn("thread_id", rows[0])
         self.assertEqual(public_registration["status"], "hook_seen_recorded")
         self.assertIn("thread_ref", public_registration)
         self.assertNotIn("fresh-thread", json.dumps(public_registration))
+        self.assertNotIn("fresh-thread", raw_ledger)
         self.assertNotIn("hard blocker", raw_ledger)
         self.assertNotIn(str(self.workspace), raw_ledger)
 
