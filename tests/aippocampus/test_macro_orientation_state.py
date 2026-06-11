@@ -10,7 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import state  # noqa: E402
+from aippocampus_runtime.macro import (  # noqa: E402
+    perturbation,
+    signal_scales,
+    stage_tracker,
+    state,
+)
 
 
 class MacroOrientationStateTests(unittest.TestCase):
@@ -67,6 +72,98 @@ class MacroOrientationStateTests(unittest.TestCase):
         self.assertFalse(validation["ok"])
         self.assertIn("non_project_signal_requires_promotion", validation["errors"])
         self.assertTrue(state.validate_macro_orientation_state(promoted)["ok"])
+
+    def test_signal_scale_contract_matrix_is_shared_across_macro_layers(self) -> None:
+        schema = signal_scales.public_signal_scale_schema()
+        self.assertEqual(signal_scales.normalize_signal_scale("project"), "project_event")
+        self.assertIn("continuity_domain", schema["requires_project_promotion"])
+        self.assertIn("unknown", schema["diagnostic_only"])
+
+        def event(scale: str, *, promoted: bool = False) -> dict[str, object]:
+            return {
+                "event_id": f"event-{scale}",
+                "event_type": "roadmap_shift",
+                "target_hexagram": "解",
+                "signal_scale": scale,
+                "promoted_to_project": promoted,
+                "source_refs": [{"source_id": f"source-{scale}"}],
+                "support_delta": 1.0,
+            }
+
+        matrix = {
+            "project": (True, False, True),
+            "project_event": (True, False, True),
+            "continuity_domain": (False, True, False),
+            "journey": (False, True, False),
+            "thread": (False, True, False),
+            "unknown": (False, False, False),
+        }
+        for scale, (project_level, promotion_can_validate, stage_moves) in matrix.items():
+            with self.subTest(scale=scale):
+                entry = state.build_macro_orientation_state(
+                    project="AIppocampus",
+                    hexagram="蹇",
+                    changing_lines=(3,),
+                    input_signal_scales=(scale,),
+                    source_refs=({"source_id": f"state-{scale}"},),
+                    updated_at="2026-06-11T10:00:00Z",
+                )
+                validation = state.validate_macro_orientation_state(entry)
+                packet = perturbation.build_perturbation_packet(
+                    "蹇",
+                    "解",
+                    signal_scale=scale,
+                )
+                stage = stage_tracker.build_stage_update(
+                    project="AIppocampus",
+                    previous="蹇",
+                    source_events=[event(scale)],
+                )
+
+                self.assertEqual(packet["project_level_signal"], project_level)
+                self.assertEqual(stage["sequence"]["current"] == "解", stage_moves)
+                if project_level:
+                    self.assertTrue(validation["ok"], validation)
+                    self.assertEqual(entry["input_signal_scales"], ["project_event"])
+                else:
+                    self.assertFalse(validation["ok"])
+                    self.assertEqual(packet["route_policy"], "no_project_fanout_from_unpromoted_signal")
+                    self.assertEqual(stage["event_count"], 0)
+
+                promoted_entry = state.build_macro_orientation_state(
+                    project="AIppocampus",
+                    hexagram="蹇",
+                    changing_lines=(3,),
+                    input_signal_scales=(scale,),
+                    promotion_reason="explicit_review",
+                    source_refs=({"source_id": f"promoted-{scale}"},),
+                    updated_at="2026-06-11T10:00:00Z",
+                )
+                promoted_validation = state.validate_macro_orientation_state(promoted_entry)
+                promoted_packet = perturbation.build_perturbation_packet(
+                    "蹇",
+                    "解",
+                    signal_scale=scale,
+                    promoted_to_project=True,
+                )
+                promoted_stage = stage_tracker.build_stage_update(
+                    project="AIppocampus",
+                    previous="蹇",
+                    source_events=[event(scale, promoted=True)],
+                )
+                self.assertEqual(
+                    promoted_packet["project_level_signal"],
+                    project_level or promotion_can_validate,
+                )
+                self.assertEqual(
+                    promoted_validation["ok"],
+                    project_level or promotion_can_validate,
+                    promoted_validation,
+                )
+                self.assertEqual(
+                    promoted_stage["sequence"]["current"] == "解",
+                    project_level or promotion_can_validate,
+                )
 
     def test_stale_missing_source_and_conflicts_degrade_to_diagnostics(self) -> None:
         stale = state.build_macro_orientation_state(

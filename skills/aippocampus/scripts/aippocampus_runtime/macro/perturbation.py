@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal, TypeAlias
-
 from aippocampus_runtime.macro.hexagram import (
     HexagramRef,
     PerturbationBand,
@@ -10,19 +8,15 @@ from aippocampus_runtime.macro.hexagram import (
     perturbation_band,
     resolve_hexagram,
 )
-
-SignalScale: TypeAlias = Literal[
-    "project",
-    "project_event",
-    "continuity_domain",
-    "journey",
-    "thread",
-    "unknown",
-]
+from aippocampus_runtime.macro.signal_scales import (
+    SignalScale,
+    is_project_level_signal,
+    normalize_signal_scale,
+    signal_scale_diagnostic,
+)
 
 AUTHORITY_LEVEL = "navigation_only"
 CLAIM_PERMISSION = "no_claim_before_reopen"
-_PROJECT_LEVEL_SCALES = {"project", "project_event"}
 
 _BAND_POLICIES: dict[PerturbationBand, dict[str, object]] = {
     "none": {
@@ -79,7 +73,10 @@ def _is_project_level_signal(
     signal_scale: SignalScale,
     promoted_to_project: bool,
 ) -> bool:
-    return signal_scale in _PROJECT_LEVEL_SCALES or promoted_to_project
+    return is_project_level_signal(
+        signal_scale,
+        promoted_to_project=promoted_to_project,
+    )
 
 
 def _scale_guard_policy() -> dict[str, object]:
@@ -109,16 +106,17 @@ def build_perturbation_packet(
     previous: HexagramRef,
     current: HexagramRef,
     *,
-    signal_scale: SignalScale = "project",
+    signal_scale: str = "project_event",
     promoted_to_project: bool = False,
 ) -> dict[str, object]:
+    normalized_scale = normalize_signal_scale(signal_scale)
     before = resolve_hexagram(previous)
     after = resolve_hexagram(current)
     lines = changed_lines(before, after)
     distance = hamming_distance(before, after)
     band = perturbation_band(distance)
     project_level_signal = _is_project_level_signal(
-        signal_scale=signal_scale,
+        signal_scale=normalized_scale,
         promoted_to_project=promoted_to_project,
     )
     policy = _policy_for_band(band, project_level_signal=project_level_signal)
@@ -127,6 +125,12 @@ def build_perturbation_packet(
     # be useful input, but it must be promoted by a project/domain event or
     # explicit review before it widens project-level recall fanout.
     reason_codes = [f"perturbation_band_{band}"]
+    diagnostic = signal_scale_diagnostic(
+        normalized_scale,
+        promoted_to_project=promoted_to_project,
+    )
+    if diagnostic:
+        reason_codes.append(diagnostic)
     if not project_level_signal:
         reason_codes.append("scale_not_promoted_no_project_fanout")
     if policy.get("conflict_review_required"):
@@ -155,8 +159,13 @@ def build_perturbation_packet(
         "stale_conflict_checks_required": policy["stale_conflict_checks_required"],
         "conflict_review_required": policy["conflict_review_required"],
         "project_level_signal": project_level_signal,
-        "signal_scale": signal_scale,
+        "signal_scale": normalized_scale,
         "promoted_to_project": promoted_to_project,
+        "signal_scale_schema": {
+            "canonical": normalized_scale,
+            "project_level": project_level_signal,
+            "diagnostic": diagnostic,
+        },
         "authority_level": AUTHORITY_LEVEL,
         "claim_permission": CLAIM_PERMISSION,
         "fact_claim_allowed": False,

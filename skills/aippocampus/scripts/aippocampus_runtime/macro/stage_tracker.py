@@ -6,6 +6,12 @@ from typing import Any, Literal, TypeAlias
 
 from aippocampus_runtime.macro.hexagram import Hexagram, HexagramRef, resolve_hexagram
 from aippocampus_runtime.macro.perturbation import AUTHORITY_LEVEL, CLAIM_PERMISSION
+from aippocampus_runtime.macro.signal_scales import (
+    is_project_level_signal,
+    normalize_signal_scale,
+    public_signal_scale_schema,
+    signal_scale_diagnostic,
+)
 
 MovementState: TypeAlias = Literal["advanced", "stalled", "reversed", "jumped", "forked"]
 ReviewState: TypeAlias = Literal["needs_review", "machine_checked", "stale"]
@@ -19,7 +25,6 @@ DEFAULT_RECHECK_ON = (
     "user_correction",
     "macro_orientation_state_recheck",
 )
-PROJECT_LEVEL_SCALES = {"project_event", "continuity_domain"}
 ALLOWED_REVIEW_STATES = {"needs_review", "machine_checked", "stale"}
 SOURCE_REF_KEYS = ("source_id", "ref_id", "url", "kind", "line", "span_id")
 
@@ -45,8 +50,14 @@ def _safe_source_refs(events: Iterable[Mapping[str, Any]]) -> list[dict[str, obj
 
 
 def _is_project_event(event: Mapping[str, Any]) -> bool:
-    scale = str(event.get("signal_scale") or "project_event")
-    return scale in PROJECT_LEVEL_SCALES or bool(event.get("promoted_to_project"))
+    try:
+        scale = normalize_signal_scale(str(event.get("signal_scale") or "project_event"))
+    except ValueError:
+        return False
+    return is_project_level_signal(
+        scale,
+        promoted_to_project=bool(event.get("promoted_to_project")),
+    )
 
 
 def _eligible_events(events: Iterable[Mapping[str, Any]]) -> tuple[list[Mapping[str, Any]], list[str]]:
@@ -55,10 +66,15 @@ def _eligible_events(events: Iterable[Mapping[str, Any]]) -> tuple[list[Mapping[
     for event in events:
         if _is_project_event(event):
             eligible.append(event)
-        elif str(event.get("signal_scale")) == "journey":
-            diagnostics.append("thread_journey_signal_ignored_without_project_promotion")
         else:
-            diagnostics.append("non_project_signal_ignored_without_project_promotion")
+            try:
+                diagnostic = signal_scale_diagnostic(
+                    str(event.get("signal_scale") or "unknown"),
+                    promoted_to_project=bool(event.get("promoted_to_project")),
+                )
+            except ValueError:
+                diagnostic = "invalid_signal_scale_ignored"
+            diagnostics.append(diagnostic or "non_project_signal_ignored_without_project_promotion")
     return eligible, sorted(set(diagnostics))
 
 
@@ -212,6 +228,7 @@ def build_stage_update(
             "stage_tracker_is_navigation_only": True,
             "source_events_decide_movement": True,
             "king_wen_sequence_is_topology_candidate_not_project_law": True,
+            "signal_scale_schema": public_signal_scale_schema(),
         },
     }
 
