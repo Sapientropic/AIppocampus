@@ -181,7 +181,14 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(activation["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(activation["mode"], "aippo")
         self.assertEqual(activation["activation_packet"]["kind"], "aippocampus_aippo_activation_packet")
-        self.assertIn("planning", activation["activation_packet"]["allowed_without_reopen"])
+        self.assertIn("coding", activation["activation_packet"]["task_families"])
+        self.assertTrue(activation["activation_packet"]["use_guidance"])
+        self.assertEqual(activation["metrics"]["generic_safety_posture_only_count"], 0)
+        self.assertGreaterEqual(
+            activation["metrics"]["low_risk_guidance_allowed_without_reopen_count"],
+            1,
+        )
+        self.assertTrue(activation["metrics"]["usefulness_gate_ok"])
         self.assertEqual(
             activation["activation_packet"]["claim_permission"],
             "working_contract_allowed_no_fact_claim",
@@ -250,6 +257,38 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["memory_packets"][0]["kind"], "aippocampus_memory_packet")
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn(str(self.cwd), encoded)
+
+    def test_cli_agent_aippo_task_selects_useful_clause_family(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--task",
+                "benchmark reporting issue closeout",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        packet = payload["activation_packet"]
+        encoded = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(payload["mode"], "aippo")
+        self.assertIn("benchmark_reporting", packet["task_families"])
+        self.assertIn("measured results", " ".join(packet["use_guidance"]))
+        self.assertTrue(payload["metrics"]["usefulness_gate_ok"])
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("candidate_provenance", encoded)
 
 
 if __name__ == "__main__":

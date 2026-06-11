@@ -12,6 +12,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.aippo import usefulness
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.recall import authority
 
@@ -258,23 +259,32 @@ def _active_clauses(clauses: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
 def activation_packet_from_working_contract(
     contract: Mapping[str, Any],
     *,
+    task: str = "",
     max_packet_bytes: int = FOREGROUND_PACKET_BYTE_BUDGET,
 ) -> dict[str, Any]:
     """Project a working contract into the tiny foreground packet."""
 
-    active = _active_clauses(contract.get("clauses") or [])
+    clauses = [clause for clause in contract.get("clauses") or [] if isinstance(clause, Mapping)]
+    selected = usefulness.selected_active_clauses(clauses, task)
+    active = _active_clauses(clauses)
+    guidance = usefulness.guidance_snippets(selected)
+    families = usefulness.task_families(task)
     packet = {
         "kind": "aippocampus_aippo_activation_packet",
         "schema_version": SCHEMA_VERSION,
         "aippo_id": contract.get("aippo_id") or AIPPO_ID,
         "output_mode": "working_contract",
-        "display_hint": "Scope slice, verify, reopen before claims.",
-        "allowed_without_reopen": ["planning", "patch_shape", "review"],
-        "requires_reopen_for": ["exact_quote", "public_claim", "disputed", "stale", "high_risk"],
-        "active_clause_count": len(active),
-        "active_clause_ids": [clause["clause_id"] for clause in active],
+        "display_hint": _text(f"AIppo {families[0]} guidance.", 80),
+        "task_families": families,
+        "use_guidance": guidance,
+        "allowed_without_reopen": ["planning", "patch_shape", "review", *families],
+        "requires_reopen_for": ["exact_or_public_claim", "disputed_or_stale", "high_risk"],
+        "active_clause_count": len(selected),
+        "available_active_clause_count": len(active),
+        "suppressed_clause_count": len(clauses) - len(active),
+        "active_clause_ids": [clause["clause_id"] for clause in selected],
         "claim_permission": "working_contract_allowed_no_fact_claim",
-        "next_action": "use_hint" if active else "stay_silent",
+        "next_action": "use_hint" if selected else "stay_silent",
         "deepen_route_id": f"deepen:{contract.get('aippo_id') or AIPPO_ID}",
     }
     if _json_bytes(packet) <= max_packet_bytes:
@@ -282,8 +292,14 @@ def activation_packet_from_working_contract(
     compact = dict(packet)
     active_ids = compact.get("active_clause_ids")
     trimmed_ids: list[Any] = active_ids[:1] if isinstance(active_ids, list) else []
+    compact["display_hint"] = _text(f"AIppo {families[0]} guidance.", 80)
+    compact["task_families"] = families[:1]
+    compact.pop("allowed_without_reopen", None)
+    compact.pop("available_active_clause_count", None)
+    compact.pop("suppressed_clause_count", None)
     compact["active_clause_ids"] = trimmed_ids
-    compact["active_clause_count"] = len(trimmed_ids)
+    use_guidance = compact.get("use_guidance")
+    compact["use_guidance"] = use_guidance[:1] if isinstance(use_guidance, list) else []
     return compact
 
 
@@ -388,6 +404,23 @@ def _fixture_source_rows() -> list[dict[str, Any]]:
             "invalidators": ["newer_verification_policy"],
         },
         {
+            "clause_id": "clause_preserve_useful_result_claims",
+            "kind": "benchmark_reporting",
+            "guidance": "Use measured results, supports, limits; keep cannot_claim short.",
+            "applies_when": ["benchmark_reporting", "issue_writing", "PR_review"],
+            "allowed_without_reopen_for": ["low_risk_orientation", "report_drafting"],
+            "requires_reopen_for": shared_reopen,
+            "support_grade": "source_supported",
+            "source_refs": [
+                {"source_ref": "issue:#1183", "path": "issues/1183", "kind": "accepted_issue"},
+                {"source_ref": "doc:current-claims", "path": "docs/evidence/current-claims.md"},
+            ],
+            "independent_trail_count": 2,
+            "support_types": ["accepted_issue_pattern", "current_claim_boundary"],
+            "path_provenance": "complete",
+            "invalidators": ["newer_reporting_policy"],
+        },
+        {
             "clause_id": "clause_benchmark_default_claim",
             "kind": "claim_boundary",
             "guidance": "Do not turn fixture benchmark smoke into public benchmark claims.",
@@ -469,7 +502,20 @@ def _fixture_cases() -> list[dict[str, Any]]:
 def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
     contracts = build_aippo_working_contracts(_fixture_source_rows())
     contract = select_aippo_working_contract(contracts)
-    activation = activation_packet_from_working_contract(contract)
+    activation = activation_packet_from_working_contract(contract, task="benchmark reporting issue closeout")
+    usefulness_metrics = usefulness.usefulness_metrics(contract, activation)
+    generic_activation = {
+        "kind": "aippocampus_aippo_activation_packet",
+        "schema_version": SCHEMA_VERSION,
+        "aippo_id": AIPPO_ID,
+        "output_mode": "working_contract",
+        "display_hint": "Scope slice, verify, reopen before claims.",
+        "use_guidance": [],
+        "active_clause_ids": [],
+        "claim_permission": "working_contract_allowed_no_fact_claim",
+        "next_action": "use_hint",
+    }
+    generic_usefulness = usefulness.usefulness_metrics(contract, generic_activation)
     deepen = deepen_aippo_working_contract(contract)
     explain = explain_aippo_working_contract(contract)
     cases = _fixture_cases()
@@ -510,13 +556,19 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
         ),
     }
     manifest_hash = _stable_hash(contract)
-    changed_source_rows = list(_fixture_source_rows())
-    changed_source_rows[2] = dict(changed_source_rows[2], invalidators=["newer_benchmark_policy"])
+    changed_source_rows = [
+        dict(row, invalidators=["newer_benchmark_policy"])
+        if row.get("clause_id") == "clause_benchmark_default_claim"
+        else row
+        for row in _fixture_source_rows()
+    ]
     changed_contract = build_aippo_working_contracts(changed_source_rows)[0]
+    active_clause_count = len(_active_clauses(contract["clauses"]))
     return {
         "kind": "aippocampus_aippo_working_contract_fixture",
         "schema_version": SCHEMA_VERSION,
-        "ok": all(value == 0 for value in red_lines.values()),
+        "ok": all(value == 0 for value in red_lines.values())
+        and usefulness_metrics["usefulness_gate_ok"],
         "contract_package": contract,
         "activation_packet": activation,
         "deepen_surface": deepen,
@@ -530,9 +582,40 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
             "foreground_packet_bytes": _json_bytes(activation),
             "source_coverage_count": deepen["source_support_ledger"]["source_ref_count"],
             "working_contract_used_without_unnecessary_reopen_count": activation["active_clause_count"],
+            "available_active_clause_count": active_clause_count,
+            "suppressed_clause_count": len(contract["clauses"]) - active_clause_count,
+            "active_clause_information_density": usefulness_metrics[
+                "active_clause_information_density"
+            ],
+            "generic_safety_posture_only_count": usefulness_metrics[
+                "generic_safety_posture_only_count"
+            ],
+            "stable_workflow_search_avoided_count": usefulness_metrics[
+                "stable_workflow_search_avoided_count"
+            ],
+            "aippo_next_action_delta_count": usefulness_metrics["aippo_next_action_delta_count"],
+            "stale_clause_suppressed_count": usefulness_metrics["stale_clause_suppressed_count"],
+            "low_risk_guidance_allowed_without_reopen_count": usefulness_metrics[
+                "low_risk_guidance_allowed_without_reopen_count"
+            ],
             "source_backed_claim_without_reopen": 0,
             "stale_as_current_count": red_lines["stale_clause_activated_as_current"],
             "stable_rebuild_hash_changed_count": int(manifest_hash != _stable_hash(build_aippo_working_contracts(_fixture_source_rows())[0])),
+        },
+        "usefulness_gate": {
+            "safety_gate_ok": all(value == 0 for value in red_lines.values()),
+            "usefulness_gate_ok": usefulness_metrics["usefulness_gate_ok"],
+            "quality_gate_ok": all(value == 0 for value in red_lines.values())
+            and usefulness_metrics["usefulness_gate_ok"],
+        },
+        "negative_fixtures": {
+            "generic_safety_posture_only": {
+                "activation_packet": generic_activation,
+                "usefulness_gate_ok": generic_usefulness["usefulness_gate_ok"],
+                "generic_safety_posture_only_count": generic_usefulness[
+                    "generic_safety_posture_only_count"
+                ],
+            }
         },
         "stability": {
             "stable_manifest_hash": manifest_hash,

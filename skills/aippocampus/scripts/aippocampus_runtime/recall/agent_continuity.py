@@ -349,7 +349,8 @@ def activate_aippo(*, task: str = "") -> dict[str, Any]:
     """Return the compact project/workflow AIppo activation packet."""
 
     contract = _project_workflow_contract()
-    activation = aippo.activation_packet_from_working_contract(contract)
+    activation = aippo.activation_packet_from_working_contract(contract, task=task)
+    usefulness = aippo.usefulness.usefulness_metrics(contract, activation)
     red_lines = _aippo_red_lines(contract, activation)
     result = {
         "kind": KIND,
@@ -363,6 +364,7 @@ def activate_aippo(*, task: str = "") -> dict[str, Any]:
         "policy_boundary": _policy_boundary(),
         "metrics": {
             "active_clause_count": activation.get("active_clause_count", 0),
+            **usefulness,
             "foreground_forbidden_key_count": _count_forbidden_keys(activation),
         },
         "red_lines": red_lines,
