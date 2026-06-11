@@ -245,6 +245,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/dream/compensatory.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/constructive_outputs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/delivery_policy.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/atlas_pack.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/one_sidedness.py",
