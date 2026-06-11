@@ -24,6 +24,7 @@ import _paths
 _paths.ensure_paths()
 
 import benchmark_source_evidence_retrieval as retrieval_benchmark
+import provider_execution_budget
 from claim_boundary_refs import claim_boundary_ref
 
 SCHEMA_VERSION = 1
@@ -339,6 +340,79 @@ def write_json_payload(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def write_provider_budget_checkpoint(path: Path, summary: dict[str, Any]) -> None:
+    write_json_payload(
+        path,
+        {
+            "schema_version": provider_execution_budget.SCHEMA_VERSION,
+            "kind": "aippocampus_provider_execution_budget_checkpoint",
+            "provider_execution_budget": summary,
+        },
+    )
+
+
+def semantic_provider_budget_config(
+    *,
+    live_mode: bool,
+    max_questions: int,
+    line_reranker_timeout: int,
+    line_reranker_max_tokens: int,
+    max_provider_calls: int | None,
+    max_provider_prompt_tokens: int | None,
+    max_provider_completion_tokens: int | None,
+    max_provider_total_tokens: int | None,
+    max_provider_estimated_cost_usd: float | None,
+    provider_cost_unknown: bool,
+    provider_budget_checkpoint: Path | str | None,
+    partial_output: Path | str | None,
+) -> provider_execution_budget.ProviderExecutionBudget:
+    contract = retrieval_benchmark.semantic_line_reranker_public_contract(
+        timeout=line_reranker_timeout,
+        max_tokens=line_reranker_max_tokens,
+    )
+    return provider_execution_budget.build_provider_execution_budget(
+        benchmark_id="longmemeval_semantic_line_reranker",
+        live_mode=live_mode,
+        max_units=max_questions,
+        per_case_timeout_seconds=line_reranker_timeout,
+        max_provider_calls=max_provider_calls,
+        max_prompt_tokens=max_provider_prompt_tokens,
+        max_completion_tokens=max_provider_completion_tokens,
+        max_total_tokens=max_provider_total_tokens,
+        max_estimated_cost_usd=max_provider_estimated_cost_usd,
+        cost_unknown=provider_cost_unknown,
+        checkpoint_path=provider_budget_checkpoint,
+        partial_output_path=partial_output,
+        provider=str(contract.get("provider") or "unknown"),
+        model=str(contract.get("model") or "unknown"),
+        base_url_sha1=str(contract.get("base_url_sha1") or ""),
+    )
+
+
+def provider_budget_summary_for_metrics(
+    config: provider_execution_budget.ProviderExecutionBudget,
+    *,
+    metrics: dict[str, Any],
+    elapsed_ms: float,
+    stop_reason: str,
+) -> dict[str, Any]:
+    error_counts = metrics.get("line_reranker_error_kind_counts") or {}
+    timed_out = int(error_counts.get("timeout") or 0) if isinstance(error_counts, dict) else 0
+    return provider_execution_budget.provider_execution_budget_summary(
+        config,
+        completed_units=int(metrics.get("line_reranker_available_count") or 0),
+        failed_units=int(metrics.get("line_reranker_error_count") or 0),
+        timed_out_units=timed_out,
+        elapsed_ms=elapsed_ms,
+        usage=metrics.get("line_reranker_usage") or {},
+        cache_usage=metrics.get("line_reranker_cache") or {},
+        estimated_cost_usd=None,
+        cost_unavailable_reason="provider_cost_not_reported_by_chat_completions_response",
+        stop_reason=stop_reason,
+        validation_errors=[],
+    )
+
+
 def run_longmemeval_benchmark(
     *,
     split_name: str = DEFAULT_SPLIT,
@@ -364,12 +438,24 @@ def run_longmemeval_benchmark(
     line_reranker_workers: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
     progress_every: int = 0,
     partial_output: Path | str | None = None,
+    provider_budget_checkpoint: Path | str | None = None,
+    max_provider_calls: int | None = None,
+    max_provider_prompt_tokens: int | None = None,
+    max_provider_completion_tokens: int | None = None,
+    max_provider_total_tokens: int | None = None,
+    max_provider_estimated_cost_usd: float | None = None,
+    provider_cost_unknown: bool = False,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     split = LONGMEMEVAL_SPLITS[split_name]
     data_path = Path(data_file).resolve() if data_file else default_data_path(split)
     partial_path = Path(partial_output).resolve() if partial_output else None
+    checkpoint_path = (
+        Path(provider_budget_checkpoint).resolve()
+        if provider_budget_checkpoint
+        else None
+    )
     progress_events: list[dict[str, Any]] = []
     verification = download_dataset(data_path, split) if download else verify_dataset_file(data_path, split)
     if not verification["ok"]:
@@ -391,6 +477,50 @@ def run_longmemeval_benchmark(
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
         )
+    live_provider_mode = line_reranker_mode.strip().casefold() == "semantic"
+    provider_budget = semantic_provider_budget_config(
+        live_mode=live_provider_mode,
+        max_questions=max_questions,
+        line_reranker_timeout=line_reranker_timeout,
+        line_reranker_max_tokens=line_reranker_max_tokens,
+        max_provider_calls=max_provider_calls,
+        max_provider_prompt_tokens=max_provider_prompt_tokens,
+        max_provider_completion_tokens=max_provider_completion_tokens,
+        max_provider_total_tokens=max_provider_total_tokens,
+        max_provider_estimated_cost_usd=max_provider_estimated_cost_usd,
+        provider_cost_unknown=provider_cost_unknown,
+        provider_budget_checkpoint=checkpoint_path,
+        partial_output=partial_path,
+    )
+    budget_errors = provider_execution_budget.validate_provider_execution_budget(
+        provider_budget
+    )
+    if budget_errors:
+        payload = skipped_payload(
+            split=split,
+            data_path=data_path,
+            reason="skipped_provider_budget_not_declared",
+            verification=verification,
+            started=started,
+            max_questions=max_questions,
+            min_questions=min_questions,
+            top_k=top_k,
+            line_reranker_mode=line_reranker_mode,
+            line_reranker_timeout=line_reranker_timeout,
+            line_reranker_max_tokens=line_reranker_max_tokens,
+        )
+        payload["ok"] = False
+        budget_summary = provider_execution_budget.provider_execution_budget_summary(
+            provider_budget,
+            stop_reason="provider_budget_preflight_failed",
+            validation_errors=budget_errors,
+        )
+        payload["provider_execution_budget"] = budget_summary
+        if checkpoint_path is not None:
+            write_provider_budget_checkpoint(checkpoint_path, budget_summary)
+        if partial_path is not None:
+            write_json_payload(partial_path, payload)
+        return payload
 
     def handle_progress(event: dict[str, Any]) -> None:
         long_event = {
@@ -509,6 +639,16 @@ def run_longmemeval_benchmark(
     }
     if progress_events:
         payload["progress"] = progress_snapshot(progress_events)
+    if live_provider_mode:
+        budget_summary = provider_budget_summary_for_metrics(
+            provider_budget,
+            metrics=payload["metrics"],
+            elapsed_ms=payload["elapsed_ms"],
+            stop_reason=status,
+        )
+        payload["provider_execution_budget"] = budget_summary
+        if checkpoint_path is not None:
+            write_provider_budget_checkpoint(checkpoint_path, budget_summary)
     if partial_path is not None:
         write_json_payload(partial_path, payload)
     return payload
@@ -597,6 +737,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Write a sanitized checkpoint/partial diagnostic JSON file during the run.",
     )
+    parser.add_argument(
+        "--provider-budget-checkpoint",
+        type=Path,
+        default=None,
+        help="Write a sanitized provider-budget checkpoint for live/provider runs.",
+    )
+    parser.add_argument("--max-provider-calls", type=int, default=None)
+    parser.add_argument("--max-provider-prompt-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-completion-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-total-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-estimated-cost-usd", type=float, default=None)
+    parser.add_argument(
+        "--provider-cost-unknown",
+        action="store_true",
+        help="Acknowledge that provider dollar cost is unavailable for this run.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
@@ -625,6 +781,13 @@ def main() -> int:
         line_reranker_workers=args.line_reranker_workers,
         progress_every=args.progress_every,
         partial_output=args.partial_output,
+        provider_budget_checkpoint=args.provider_budget_checkpoint,
+        max_provider_calls=args.max_provider_calls,
+        max_provider_prompt_tokens=args.max_provider_prompt_tokens,
+        max_provider_completion_tokens=args.max_provider_completion_tokens,
+        max_provider_total_tokens=args.max_provider_total_tokens,
+        max_provider_estimated_cost_usd=args.max_provider_estimated_cost_usd,
+        provider_cost_unknown=args.provider_cost_unknown,
         progress_callback=stderr_progress if int(args.progress_every) > 0 else None,
     )
     if args.output:

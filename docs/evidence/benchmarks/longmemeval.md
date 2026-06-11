@@ -188,6 +188,25 @@ reported by the chat-completions response:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 ```
 
+Provider-backed reranker runs are opt-in live benchmark runs. They must declare
+a case cap, per-case timeout, provider-call cap, token/cost budget or explicit
+`--provider-cost-unknown`, a provider-budget checkpoint path, and a sanitized
+partial-output path before the runner will call the provider:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
+```
+
+Use the same controls for a reviewed 50-question run, with `--questions 50`,
+`--min-questions 50`, `--max-provider-calls 50`, a reviewed token or dollar
+ceiling, and distinct budget/partial/output paths. A 500-question provider
+sweep requires explicit operator approval before launch: confirm the provider
+cost model or acknowledge `cost_unknown` with a hard token/call cap, review the
+external candidate-source-text privacy boundary, keep checkpoint and partial
+outputs gitignored, and record the stop reason and budget summary in the final
+report. Deterministic retrieval and lexical reranker commands do not require
+provider credentials and remain CI/benchmark-smoke safe.
+
 Analyze a generated semantic reranker report without re-running the provider
 call. This emits only aggregate ladder/taxonomy/projection fields and keeps the
 input report path local:
@@ -260,7 +279,7 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
-python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 ```
 
 LongMemEval-S 500-question verification summary:
@@ -488,6 +507,10 @@ Reports have `kind: aippocampus_longmemeval_benchmark` and include:
 - `metrics`: question count, session recall@K, source-line recall@K,
   context-visible source-line recall, MRR where available, rank-bucket
   diagnostics, exact-line recall ladders, and sanitized miss taxonomy counts.
+- `provider_execution_budget`: present for live/provider reranker runs; records
+  declared caps, completed/skipped/failed/timed-out units, elapsed time,
+  token/cache usage, estimated cost or unavailable reason, stop reason, and
+  preflight validation errors.
 - `cases`: sanitized per-case rows with hashed ids and no raw LongMemEval text.
 - `cannot_claim`: legacy compatibility boundary field for QA, judge-model, V2,
   SOTA, and broad-comparison limits.
