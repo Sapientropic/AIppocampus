@@ -15,6 +15,7 @@ for _path in (BENCHMARKS, REPO_ROOT / "tools" / "aippocampus" / "smoke"):
     sys.path.insert(0, str(_path))
 
 import benchmark_longmemeval as benchmark  # noqa: E402
+import provider_execution_budget  # noqa: E402
 from source_evidence import standard_public  # noqa: E402
 
 
@@ -103,6 +104,36 @@ def patched_oracle_split(path: Path) -> Iterator[None]:
 
 
 class LongMemEvalBenchmarkTests(unittest.TestCase):
+    def test_provider_execution_budget_schema_requires_live_run_controls(self) -> None:
+        deterministic = provider_execution_budget.build_provider_execution_budget(
+            benchmark_id="deterministic-smoke",
+            live_mode=False,
+            max_units=0,
+            per_case_timeout_seconds=None,
+        )
+        self.assertEqual(
+            provider_execution_budget.validate_provider_execution_budget(deterministic),
+            [],
+        )
+
+        live_missing = provider_execution_budget.build_provider_execution_budget(
+            benchmark_id="live-smoke",
+            live_mode=True,
+            max_units=0,
+            per_case_timeout_seconds=None,
+        )
+        self.assertEqual(
+            provider_execution_budget.validate_provider_execution_budget(live_missing),
+            [
+                "missing_case_cap",
+                "missing_per_case_timeout",
+                "missing_provider_call_cap",
+                "missing_token_or_cost_budget",
+                "missing_checkpoint_path",
+                "missing_partial_output_path",
+            ],
+        )
+
     def test_missing_dataset_returns_skipped_payload_with_claim_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "missing-longmemeval.json"
@@ -195,6 +226,47 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn("drawer nine", dumped)
         self.assertNotIn("blue badge note continues", dumped)
 
+    def test_semantic_line_rerank_requires_live_budget_before_provider_call(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "longmemeval_oracle.json"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path), patch.dict(
+                "os.environ",
+                {"DEEPSEEK_API_KEY": "test-key"},
+            ), patch(
+                "source_evidence.standard_public.call_chat_json",
+                side_effect=AssertionError("provider should not be called"),
+            ):
+                payload = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="semantic",
+                    line_reranker_workers=1,
+                )
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_provider_budget_not_declared")
+        budget = payload["provider_execution_budget"]
+        self.assertFalse(budget["ok_to_start"])
+        self.assertEqual(budget["stop_reason"], "provider_budget_preflight_failed")
+        self.assertEqual(
+            budget["validation_errors"],
+            [
+                "missing_provider_call_cap",
+                "missing_token_or_cost_budget",
+                "missing_checkpoint_path",
+                "missing_partial_output_path",
+            ],
+        )
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("secret fixture answer marker", dumped)
+        self.assertNotIn(str(path), dumped)
+
     def test_semantic_line_rerank_reports_llm_arm_metadata_without_raw_text(self) -> None:
         captured_messages: list[list[dict[str, str]]] = []
 
@@ -236,6 +308,8 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "longmemeval_oracle.json"
+            partial_path = Path(tmp) / "semantic.partial.json"
+            checkpoint_path = Path(tmp) / "semantic-budget.json"
             write_oracle_fixture(path)
             with patched_oracle_split(path), patch.dict(
                 "os.environ",
@@ -249,7 +323,13 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
                     top_k=5,
                     line_reranker_mode="semantic",
                     line_reranker_workers=1,
+                    partial_output=partial_path,
+                    provider_budget_checkpoint=checkpoint_path,
+                    max_provider_calls=1,
+                    max_provider_total_tokens=1000,
+                    provider_cost_unknown=True,
                 )
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
 
         self.assertTrue(payload["ok"], payload)
         self.assertEqual(len(captured_messages), 1)
@@ -273,6 +353,21 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertEqual(
             metrics["line_reranker_metadata"]["prompt_version"],
             "llm-window-to-line-rerank-v1",
+        )
+        budget = payload["provider_execution_budget"]
+        self.assertTrue(budget["ok_to_start"])
+        self.assertEqual(budget["completed_units"], 1)
+        self.assertEqual(budget["token_usage"]["total_tokens"], 12)
+        self.assertEqual(budget["cache_usage"]["hit_tokens"], 4)
+        self.assertEqual(budget["cache_usage"]["miss_tokens"], 6)
+        self.assertEqual(budget["cost_status"], "unknown_declared")
+        self.assertEqual(
+            budget["cost_unavailable_reason"],
+            "provider_cost_not_reported_by_chat_completions_response",
+        )
+        self.assertEqual(
+            checkpoint["provider_execution_budget"]["schema_version"],
+            provider_execution_budget.SCHEMA_VERSION,
         )
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("secret fixture answer marker", dumped)
