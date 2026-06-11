@@ -453,6 +453,57 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertNotIn(RAW_QUERY, dumped)
         self.assertNotIn(str(output_root), dumped)
 
+    def test_openrouter_run_requires_provider_budget_before_subprocess(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            env_data = root / "data.json"
+            self._write_env_data(env_data)
+            agent_config = upstream / "configs" / "agent" / "native.json"
+            budget_checkpoint = root / "budget" / "provider-budget.json"
+
+            with (
+                mock.patch.object(
+                    benchmark,
+                    "run_official_surface",
+                    side_effect=AssertionError("provider subprocess should not start"),
+                ) as run_mock,
+                mock.patch.object(
+                    benchmark,
+                    "external_env_value",
+                    side_effect=lambda name: FAKE_PROVIDER_VALUE if name == "Open_Router" else None,
+                ),
+            ):
+                payload = benchmark.build_official_bridge_report(
+                    upstream_root=upstream,
+                    env_data_path=env_data,
+                    agent_config_path=agent_config,
+                    overall_output_dir=root / "overall",
+                    upperbound_output_dir=root / "upperbound",
+                    random_output_file=root / "random_metrics.json",
+                    provider="openrouter",
+                    run_surfaces=("overall",),
+                    max_cases=1,
+                    provider_budget_checkpoint=budget_checkpoint,
+                )
+            checkpoint = json.loads(budget_checkpoint.read_text(encoding="utf-8"))
+
+        run_mock.assert_not_called()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_provider_budget_not_declared")
+        budget = payload["provider_execution_budget"]
+        self.assertFalse(budget["ok_to_start"])
+        self.assertEqual(budget["stop_reason"], "provider_budget_preflight_failed")
+        self.assertEqual(
+            budget["validation_errors"],
+            ["missing_provider_call_cap", "missing_token_or_cost_budget"],
+        )
+        self.assertEqual(checkpoint["provider_execution_budget"], budget)
+        self.assertIn("live_provider_execution_without_declared_budget", payload["cannot_claim"])
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(FAKE_PROVIDER_VALUE, dumped)
+        self.assertNotIn(str(root), dumped)
+
     def test_run_surface_uses_python_module_from_local_upstream_without_emitting_secret_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

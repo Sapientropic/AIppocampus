@@ -22,6 +22,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import provider_execution_budget  # noqa: E402
 from benchmark_longmemeval_v2_context import (  # noqa: E402
     LONGMEMEVAL_V2_DATASET_URL,
     LONGMEMEVAL_V2_LICENSE,
@@ -253,6 +254,25 @@ def pilot_plan(config: PilotConfig) -> dict[str, Any]:
     }
 
 
+def provider_execution_budget_boundary(config: PilotConfig) -> dict[str, Any]:
+    return {
+        "schema_version": provider_execution_budget.SCHEMA_VERSION,
+        "benchmark_id": "longmemeval_v2_official_pilot_decision",
+        "live_mode": False,
+        "ok_to_start": True,
+        "no_provider_budget_required_reason": "decision_report_only_no_official_reader_execution",
+        "planned_live_pilot_requires_budget_before_run": True,
+        "planned_budget": {
+            "pilot_questions": config.pilot_questions,
+            "max_pilot_questions": config.max_pilot_questions,
+            "reader_model": config.reader_model,
+            "evaluator_model": config.evaluator_model,
+            "query_latency_budget_seconds": config.query_latency_budget_seconds,
+            "total_cost_budget_usd": config.total_cost_budget_usd,
+        },
+    }
+
+
 def local_path_matches(text: str) -> list[str]:
     patterns = [
         r"[A-Za-z]:\\[^\s\"']+",
@@ -321,6 +341,7 @@ def build_report(config: PilotConfig) -> dict[str, Any]:
         "official_harness_contract": official_harness_contract(config),
         "adapter_contract": adapter_contract(),
         "metric_separation": metric_separation(),
+        "provider_execution_budget": provider_execution_budget_boundary(config),
         "privacy_and_artifact_policy": privacy_and_artifact_policy(),
         "claim_boundary_ref": claim_boundary_ref(
             "docs/evidence/benchmarks/design/benchmark-priority-map.md"

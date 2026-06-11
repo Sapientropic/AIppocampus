@@ -27,6 +27,7 @@ import _paths
 
 _paths.ensure_paths()
 
+import provider_execution_budget  # noqa: E402
 from amemgym_official_local_provider import (  # noqa: E402
     LOCAL_SCRIPTED_PROVIDER,
     local_scripted_llm_config_update,
@@ -983,6 +984,7 @@ def run_official_surface(
     runner: str = "python",
     provider: str = "default",
     reset: bool = False,
+    provider_timeout_seconds: int | None = None,
     pythonpath_entries: Iterable[Path | str] = (),
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -1012,20 +1014,48 @@ def run_official_surface(
         runner=runner,
         reset=reset,
     )
-    completed = subprocess.run(
-        command,
-        cwd=root,
-        text=True,
-        capture_output=True,
-        check=False,
-        env=env,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+            env=env,
+            timeout=provider_timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = (
+            exc.stdout.decode("utf-8", errors="replace")
+            if isinstance(exc.stdout, bytes)
+            else exc.stdout
+            or ""
+        )
+        stderr = (
+            exc.stderr.decode("utf-8", errors="replace")
+            if isinstance(exc.stderr, bytes)
+            else exc.stderr
+            or ""
+        )
+        return {
+            "surface": surface,
+            "returncode": None,
+            "ok": False,
+            "status": "provider_surface_timeout",
+            "stdout_sha1": sha1_short(stdout) if stdout else None,
+            "stderr_sha1": sha1_short(stderr) if stderr else None,
+            "stdout_line_count": len(stdout.splitlines()),
+            "stderr_line_count": len(stderr.splitlines()),
+            "provider": provider_env.public_status,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        }
     stdout = completed.stdout or ""
     stderr = completed.stderr or ""
     return {
         "surface": surface,
         "returncode": completed.returncode,
         "ok": completed.returncode == 0,
+        "status": "completed" if completed.returncode == 0 else "failed",
         "stdout_sha1": sha1_short(stdout) if stdout else None,
         "stderr_sha1": sha1_short(stderr) if stderr else None,
         "stdout_line_count": len(stdout.splitlines()),
@@ -1033,6 +1063,96 @@ def run_official_surface(
         "provider": provider_env.public_status,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+
+
+def amemgym_provider_budget_required(
+    *,
+    provider: str,
+    run_surfaces: tuple[str, ...],
+) -> bool:
+    return provider == "openrouter" and bool(run_surfaces)
+
+
+def amemgym_no_provider_budget_required(
+    *,
+    provider: str,
+    run_surfaces: tuple[str, ...],
+) -> dict[str, Any]:
+    if not run_surfaces:
+        reason = "summary_only_no_official_surface_execution"
+    elif provider == LOCAL_SCRIPTED_PROVIDER:
+        reason = "local_scripted_provider_is_deterministic_protocol_provider"
+    else:
+        reason = "provider_mode_does_not_inject_repo_managed_live_credentials"
+    return {
+        "schema_version": provider_execution_budget.SCHEMA_VERSION,
+        "benchmark_id": "amemgym_official_runner_bridge",
+        "live_mode": False,
+        "ok_to_start": True,
+        "no_provider_budget_required_reason": reason,
+        "provider": provider,
+        "run_surface_count": len(run_surfaces),
+    }
+
+
+def amemgym_provider_budget_config(
+    *,
+    live_mode: bool,
+    provider: str,
+    openrouter_model: str,
+    dataset_boundary: dict[str, Any],
+    run_surfaces: tuple[str, ...],
+    provider_timeout_seconds: int | None,
+    max_provider_calls: int | None,
+    max_provider_prompt_tokens: int | None,
+    max_provider_completion_tokens: int | None,
+    max_provider_total_tokens: int | None,
+    max_provider_estimated_cost_usd: float | None,
+    provider_cost_unknown: bool,
+    provider_budget_checkpoint: Path | str | None,
+) -> provider_execution_budget.ProviderExecutionBudget:
+    run_item_count = int(dataset_boundary.get("run_item_count") or 0)
+    return provider_execution_budget.build_provider_execution_budget(
+        benchmark_id="amemgym_official_openrouter_surfaces",
+        live_mode=live_mode,
+        max_units=run_item_count * max(1, len(run_surfaces)),
+        per_case_timeout_seconds=provider_timeout_seconds,
+        max_provider_calls=max_provider_calls,
+        max_prompt_tokens=max_provider_prompt_tokens,
+        max_completion_tokens=max_provider_completion_tokens,
+        max_total_tokens=max_provider_total_tokens,
+        max_estimated_cost_usd=max_provider_estimated_cost_usd,
+        cost_unknown=provider_cost_unknown,
+        checkpoint_path=provider_budget_checkpoint,
+        partial_output_path=provider_budget_checkpoint,
+        provider=provider,
+        model=openrouter_model if provider == "openrouter" else provider,
+        base_url=OPENROUTER_BASE_URL if provider == "openrouter" else "",
+    )
+
+
+def amemgym_provider_budget_summary(
+    config: provider_execution_budget.ProviderExecutionBudget,
+    *,
+    run_results: list[dict[str, Any]],
+    elapsed_ms: float,
+    stop_reason: str,
+    validation_errors: list[str] | None = None,
+) -> dict[str, Any]:
+    return provider_execution_budget.provider_execution_budget_summary(
+        config,
+        completed_units=sum(1 for result in run_results if result.get("ok")),
+        failed_units=sum(1 for result in run_results if result and not result.get("ok")),
+        timed_out_units=sum(
+            1
+            for result in run_results
+            if result.get("status") == "provider_surface_timeout"
+        ),
+        elapsed_ms=elapsed_ms,
+        cost_unavailable_reason="official_harness_provider_usage_not_reported",
+        stop_reason=stop_reason,
+        validation_errors=validation_errors or [],
+    )
 
 
 def build_official_bridge_report(
@@ -1054,6 +1174,14 @@ def build_official_bridge_report(
     max_cases: int | None = None,
     checkpoint_path: Path | str | None = None,
     resume: bool = False,
+    provider_budget_checkpoint: Path | str | None = None,
+    provider_timeout_seconds: int | None = 120,
+    max_provider_calls: int | None = None,
+    max_provider_prompt_tokens: int | None = None,
+    max_provider_completion_tokens: int | None = None,
+    max_provider_total_tokens: int | None = None,
+    max_provider_estimated_cost_usd: float | None = None,
+    provider_cost_unknown: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     generated_at = now_utc()
@@ -1092,7 +1220,49 @@ def build_official_bridge_report(
         *provider_runtime["pythonpath_entries"],
         *adapter_runtime["pythonpath_entries"],
     ]
-    if upstream["status"] == "ready" and adapter_ready and provider_ready:
+    provider_budget_required = amemgym_provider_budget_required(
+        provider=provider,
+        run_surfaces=run_surfaces,
+    )
+    provider_budget_summary: dict[str, Any] = amemgym_no_provider_budget_required(
+        provider=provider,
+        run_surfaces=run_surfaces,
+    )
+    provider_budget: provider_execution_budget.ProviderExecutionBudget | None = None
+    provider_budget_errors: list[str] = []
+    if provider_budget_required:
+        provider_budget = amemgym_provider_budget_config(
+            live_mode=True,
+            provider=provider,
+            openrouter_model=openrouter_model,
+            dataset_boundary=dataset_boundary,
+            run_surfaces=run_surfaces,
+            provider_timeout_seconds=provider_timeout_seconds,
+            max_provider_calls=max_provider_calls,
+            max_provider_prompt_tokens=max_provider_prompt_tokens,
+            max_provider_completion_tokens=max_provider_completion_tokens,
+            max_provider_total_tokens=max_provider_total_tokens,
+            max_provider_estimated_cost_usd=max_provider_estimated_cost_usd,
+            provider_cost_unknown=provider_cost_unknown,
+            provider_budget_checkpoint=provider_budget_checkpoint,
+        )
+        provider_budget_errors = provider_execution_budget.validate_provider_execution_budget(
+            provider_budget
+        )
+        provider_budget_summary = provider_execution_budget.provider_execution_budget_summary(
+            provider_budget,
+            stop_reason="provider_budget_preflight_failed"
+            if provider_budget_errors
+            else "provider_budget_preflight_passed",
+            validation_errors=provider_budget_errors,
+        )
+        if provider_budget_checkpoint is not None:
+            provider_execution_budget.write_provider_budget_checkpoint(
+                provider_budget_checkpoint,
+                provider_budget_summary,
+            )
+    can_run_provider_surfaces = not provider_budget_errors
+    if upstream["status"] == "ready" and adapter_ready and provider_ready and can_run_provider_surfaces:
         pre_run_score_payload: dict[str, Any] | None = None
         if resume and run_surfaces:
             try:
@@ -1130,6 +1300,7 @@ def build_official_bridge_report(
                     runner=runner,
                     provider=provider,
                     reset=reset,
+                    provider_timeout_seconds=provider_timeout_seconds,
                     pythonpath_entries=pythonpath_entries,
                 )
             )
@@ -1178,6 +1349,8 @@ def build_official_bridge_report(
         status = "bounded_subset_score_summary"
     elif all_scores_present:
         status = "official_score_summary"
+    elif provider_budget_errors:
+        status = "skipped_provider_budget_not_declared"
     elif run_results or has_partial_outputs:
         status = "partial_official_outputs"
     else:
@@ -1208,6 +1381,8 @@ def build_official_bridge_report(
         cannot_claim.append("amemgym_env_data_unavailable")
     if provider == LOCAL_SCRIPTED_PROVIDER:
         cannot_claim.append("real_llm_memory_quality_or_provider_model_score_from_local_scripted_provider")
+    if provider_budget_errors:
+        cannot_claim.append("live_provider_execution_without_declared_budget")
     if bounded_subset:
         cannot_claim.append("full_public_v1_base_fixed_arm_score_from_bounded_subset")
     cannot_claim.extend(
@@ -1219,6 +1394,18 @@ def build_official_bridge_report(
     )
 
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    if provider_budget_required and not provider_budget_errors and provider_budget is not None:
+        provider_budget_summary = amemgym_provider_budget_summary(
+            provider_budget,
+            run_results=run_results,
+            elapsed_ms=elapsed_ms,
+            stop_reason=status,
+        )
+        if provider_budget_checkpoint is not None:
+            provider_execution_budget.write_provider_budget_checkpoint(
+                provider_budget_checkpoint,
+                provider_budget_summary,
+            )
     official_score_claim = (
         "bounded_subset_summary_not_full_v1_base"
         if all_scores_present and bounded_subset
@@ -1284,7 +1471,7 @@ def build_official_bridge_report(
         "kind": "aippocampus_amemgym_official_runner_bridge",
         "generated_at": generated_at,
         "status": status,
-        "ok": upstream["status"] == "ready",
+        "ok": upstream["status"] == "ready" and not provider_budget_errors,
         "upstream": upstream,
         "configuration": {
             "arm": arm,
@@ -1305,6 +1492,7 @@ def build_official_bridge_report(
             "provider": provider,
             "reset": reset,
             "resume": resume,
+            "provider_timeout_seconds": provider_timeout_seconds,
         },
         "runner_plan": safe_command_plan(
             upstream_root=root,
@@ -1325,6 +1513,7 @@ def build_official_bridge_report(
             provider_plan_environment=provider_plan_environment,
         ),
         "provider": provider_env.public_status,
+        "provider_execution_budget": provider_budget_summary,
         "provider_runtime": {
             "status": provider_runtime["status"],
             **provider_runtime["metadata"],
@@ -1454,6 +1643,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Write a public-safe resumable progress checkpoint with counts, hashes, and redacted labels only.",
     )
+    parser.add_argument("--provider-budget-checkpoint", type=Path)
+    parser.add_argument("--provider-timeout-seconds", type=int, default=120)
+    parser.add_argument("--max-provider-calls", type=int, default=None)
+    parser.add_argument("--max-provider-prompt-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-completion-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-total-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-estimated-cost-usd", type=float, default=None)
+    parser.add_argument("--provider-cost-unknown", action="store_true")
     parser.add_argument(
         "--resume",
         action="store_true",
@@ -1486,6 +1683,14 @@ def main(argv: list[str] | None = None) -> int:
         max_cases=args.max_cases,
         checkpoint_path=args.checkpoint,
         resume=args.resume,
+        provider_budget_checkpoint=args.provider_budget_checkpoint,
+        provider_timeout_seconds=args.provider_timeout_seconds,
+        max_provider_calls=args.max_provider_calls,
+        max_provider_prompt_tokens=args.max_provider_prompt_tokens,
+        max_provider_completion_tokens=args.max_provider_completion_tokens,
+        max_provider_total_tokens=args.max_provider_total_tokens,
+        max_provider_estimated_cost_usd=args.max_provider_estimated_cost_usd,
+        provider_cost_unknown=args.provider_cost_unknown,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

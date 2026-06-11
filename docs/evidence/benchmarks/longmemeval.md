@@ -225,14 +225,17 @@ python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeva
 ```
 
 Run the opt-in fixed-reader answer path only after choosing the provider,
-model, API key environment variable, token budget, and cost table. The reader
-sees the public benchmark question and bounded retrieved candidate source-line
-text. It does not receive gold answers, expected lines/sessions, `has_answer`
-labels, miss taxonomy, judge labels, or raw report cases:
+model, API key environment variable, provider execution budget, checkpoint
+paths, token budget, and cost table. The runner fails before the first provider
+reader call when `--reader-mode provider` omits the shared provider budget
+contract. The reader sees the public benchmark question and bounded retrieved
+candidate source-line text. It does not receive gold answers, expected
+lines/sessions, `has_answer` labels, miss taxonomy, judge labels, or raw report
+cases:
 
 ```powershell
 $env:AIPPOCAMPUS_LONGMEMEVAL_READER_API_KEY="<provider key>"
-python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-base-url> --reader-input-cost-per-million <prompt-price> --reader-output-cost-per-million <completion-price> --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25.json
+python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-base-url> --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25.budget.json --max-provider-calls 25 --max-provider-total-tokens <token-cap> --max-provider-estimated-cost-usd <usd-cap> --reader-input-cost-per-million <prompt-price> --reader-output-cost-per-million <completion-price> --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25.json
 ```
 
 Answer reports keep `retrieval`, `answer`, `latency`, `token_usage`, and `cost`

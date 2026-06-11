@@ -102,6 +102,50 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
         self.assertNotIn(str(path), dumped)
         self.assertTrue(payload["sanitized_report_validation"]["ok"])
 
+    def test_provider_mode_requires_budget_before_reader_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            partial_path = root / "answer.partial.json"
+            checkpoint_path = root / "answer-budget.json"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path), patch.dict(
+                "os.environ",
+                {"AIPPOCAMPUS_LONGMEMEVAL_READER_API_KEY": "reader-key"},
+            ), patch(
+                "benchmark_longmemeval_answer.standard_public.call_chat_json",
+                side_effect=AssertionError("provider should not be called"),
+            ):
+                payload = benchmark.run_longmemeval_answer_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    reader_mode="provider",
+                    partial_output=partial_path,
+                    provider_budget_checkpoint=checkpoint_path,
+                )
+
+            partial = json.loads(partial_path.read_text(encoding="utf-8"))
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_provider_budget_not_declared")
+        budget = payload["provider_execution_budget"]
+        self.assertFalse(budget["ok_to_start"])
+        self.assertEqual(budget["stop_reason"], "provider_budget_preflight_failed")
+        self.assertEqual(
+            budget["validation_errors"],
+            ["missing_provider_call_cap", "missing_token_or_cost_budget"],
+        )
+        self.assertEqual(partial["provider_execution_budget"], budget)
+        self.assertEqual(checkpoint["provider_execution_budget"], budget)
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("secret fixture answer marker", dumped)
+        self.assertNotIn("reader-key", dumped)
+        self.assertNotIn(str(path), dumped)
+
     def test_provider_mode_scores_answer_latency_usage_and_citations(self) -> None:
         captured_messages: list[list[dict[str, str]]] = []
 
@@ -149,7 +193,10 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             }
 
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "longmemeval_oracle.json"
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            partial_path = root / "answer.partial.json"
+            checkpoint_path = root / "answer-budget.json"
             write_context_visible_miss_fixture(path)
             with patched_oracle_split(path), patch.dict(
                 "os.environ",
@@ -171,7 +218,13 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
                     reader_max_tokens=128,
                     reader_input_cost_per_million=0.10,
                     reader_output_cost_per_million=0.20,
+                    partial_output=partial_path,
+                    provider_budget_checkpoint=checkpoint_path,
+                    max_provider_calls=1,
+                    max_provider_total_tokens=1000,
+                    provider_cost_unknown=True,
                 )
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
 
         self.assertTrue(payload["ok"], payload)
         self.assertEqual(payload["status"], "answer_scored")
@@ -188,6 +241,12 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             payload["cost"]["status"],
             "estimated_from_user_supplied_token_prices",
         )
+        budget = payload["provider_execution_budget"]
+        self.assertTrue(budget["ok_to_start"])
+        self.assertEqual(budget["completed_units"], 1)
+        self.assertEqual(budget["token_usage"]["total_tokens"], 35)
+        self.assertEqual(budget["cache_usage"]["hit_tokens"], 10)
+        self.assertEqual(checkpoint["provider_execution_budget"], budget)
         self.assertEqual(payload["cases"][0]["reader"]["cited_candidate_line_count"], 1)
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("drawer nine", dumped)
@@ -220,7 +279,8 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             }
 
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "longmemeval_oracle.json"
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
             write_update_fixture(path)
             with patched_oracle_split(path), patch.dict(
                 "os.environ",
@@ -236,6 +296,11 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
                     min_questions=1,
                     top_k=5,
                     reader_mode="provider",
+                    partial_output=root / "answer.partial.json",
+                    provider_budget_checkpoint=root / "answer-budget.json",
+                    max_provider_calls=1,
+                    max_provider_total_tokens=1000,
+                    provider_cost_unknown=True,
                 )
 
         self.assertTrue(payload["ok"], payload)

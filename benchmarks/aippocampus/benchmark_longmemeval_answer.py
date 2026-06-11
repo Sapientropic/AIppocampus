@@ -25,6 +25,7 @@ _paths.ensure_paths()
 
 import benchmark_longmemeval as retrieval_runner
 import benchmark_source_evidence_retrieval as retrieval_benchmark
+import provider_execution_budget
 from claim_boundary_refs import claim_boundary_ref
 from source_evidence import standard_public
 
@@ -857,6 +858,98 @@ def write_json_payload(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def reader_provider_budget_config(
+    *,
+    live_mode: bool,
+    max_questions: int,
+    reader_config: ReaderConfig,
+    max_provider_calls: int | None,
+    max_provider_prompt_tokens: int | None,
+    max_provider_completion_tokens: int | None,
+    max_provider_total_tokens: int | None,
+    max_provider_estimated_cost_usd: float | None,
+    provider_cost_unknown: bool,
+    provider_budget_checkpoint: Path | str | None,
+    partial_output: Path | str | None,
+) -> provider_execution_budget.ProviderExecutionBudget:
+    return provider_execution_budget.build_provider_execution_budget(
+        benchmark_id="longmemeval_answer_fixed_reader",
+        live_mode=live_mode,
+        max_units=max_questions,
+        per_case_timeout_seconds=reader_config.timeout,
+        max_provider_calls=max_provider_calls,
+        max_prompt_tokens=max_provider_prompt_tokens,
+        max_completion_tokens=max_provider_completion_tokens,
+        max_total_tokens=max_provider_total_tokens,
+        max_estimated_cost_usd=max_provider_estimated_cost_usd,
+        cost_unknown=provider_cost_unknown,
+        checkpoint_path=provider_budget_checkpoint,
+        partial_output_path=partial_output,
+        provider=reader_config.provider,
+        model=reader_config.model,
+        base_url=reader_config.base_url,
+    )
+
+
+def provider_failure_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    failures = [
+        row.get("reader", {})
+        for row in rows
+        if row.get("reader", {}).get("attempted")
+        and row.get("reader", {}).get("error_kind")
+    ]
+    return {
+        "failed_units": len(failures),
+        "timed_out_units": sum(
+            1 for row in failures if row.get("error_kind") == "provider_timeout"
+        ),
+    }
+
+
+def provider_budget_summary_for_rows(
+    config: provider_execution_budget.ProviderExecutionBudget,
+    *,
+    rows: list[dict[str, Any]],
+    usage: dict[str, Any],
+    cache_usage: dict[str, Any],
+    cost: dict[str, Any],
+    elapsed_ms: float,
+    stop_reason: str,
+) -> dict[str, Any]:
+    failures = provider_failure_counts(rows)
+    estimated_cost = cost.get("estimated_usd")
+    return provider_execution_budget.provider_execution_budget_summary(
+        config,
+        completed_units=sum(1 for row in rows if row.get("reader", {}).get("attempted")),
+        failed_units=failures["failed_units"],
+        timed_out_units=failures["timed_out_units"],
+        elapsed_ms=elapsed_ms,
+        usage=usage,
+        cache_usage=cache_usage,
+        estimated_cost_usd=estimated_cost
+        if isinstance(estimated_cost, int | float)
+        else None,
+        cost_unavailable_reason=(
+            "provider_reader_cost_estimated_from_user_prices"
+            if isinstance(estimated_cost, int | float)
+            else "provider_reader_cost_not_estimated_without_price_table"
+        ),
+        stop_reason=stop_reason,
+        validation_errors=[],
+    )
+
+
+def attach_budget_and_validate(
+    payload: dict[str, Any],
+    budget_summary: dict[str, Any],
+) -> None:
+    payload["provider_execution_budget"] = budget_summary
+    validation = validate_sanitized_report(payload)
+    payload["sanitized_report_validation"] = validation
+    payload["report_generation_ok"] = validation["ok"]
+    payload["ok"] = bool(payload["ok"] and validation["ok"])
+
+
 def run_longmemeval_answer_benchmark(
     *,
     split_name: str = "longmemeval-v1-small",
@@ -879,10 +972,24 @@ def run_longmemeval_answer_benchmark(
     reader_max_candidates: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES,
     reader_input_cost_per_million: float | None = None,
     reader_output_cost_per_million: float | None = None,
+    partial_output: Path | str | None = None,
+    provider_budget_checkpoint: Path | str | None = None,
+    max_provider_calls: int | None = None,
+    max_provider_prompt_tokens: int | None = None,
+    max_provider_completion_tokens: int | None = None,
+    max_provider_total_tokens: int | None = None,
+    max_provider_estimated_cost_usd: float | None = None,
+    provider_cost_unknown: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     split = retrieval_runner.LONGMEMEVAL_SPLITS[split_name]
     data_path = Path(data_file).resolve() if data_file else retrieval_runner.default_data_path(split)
+    partial_path = Path(partial_output).resolve() if partial_output else None
+    checkpoint_path = (
+        Path(provider_budget_checkpoint).resolve()
+        if provider_budget_checkpoint
+        else None
+    )
     verification = (
         retrieval_runner.download_dataset(data_path, split)
         if download
@@ -910,7 +1017,7 @@ def run_longmemeval_answer_benchmark(
             if verification.get("status") == "missing"
             else "skipped_dataset_verification_failed"
         )
-        return skipped_payload(
+        payload = skipped_payload(
             split=split,
             data_path=data_path,
             reason=reason,
@@ -925,9 +1032,60 @@ def run_longmemeval_answer_benchmark(
             reader_max_candidates=reader_max_candidates,
             reader_config=reader_config,
         )
+        if partial_path is not None:
+            write_json_payload(partial_path, payload)
+        return payload
+    live_provider_mode = resolved_reader_mode == "provider"
+    provider_budget = reader_provider_budget_config(
+        live_mode=live_provider_mode,
+        max_questions=max_questions,
+        reader_config=reader_config,
+        max_provider_calls=max_provider_calls,
+        max_provider_prompt_tokens=max_provider_prompt_tokens,
+        max_provider_completion_tokens=max_provider_completion_tokens,
+        max_provider_total_tokens=max_provider_total_tokens,
+        max_provider_estimated_cost_usd=max_provider_estimated_cost_usd,
+        provider_cost_unknown=provider_cost_unknown,
+        provider_budget_checkpoint=checkpoint_path,
+        partial_output=partial_path,
+    )
+    budget_errors = provider_execution_budget.validate_provider_execution_budget(
+        provider_budget
+    )
+    if budget_errors:
+        payload = skipped_payload(
+            split=split,
+            data_path=data_path,
+            reason="skipped_provider_budget_not_declared",
+            verification=verification,
+            started=started,
+            max_questions=max_questions,
+            min_questions=min_questions,
+            top_k=top_k,
+            candidate_limit=candidate_limit,
+            context_radius=context_radius,
+            reader_top_sessions=reader_top_sessions,
+            reader_max_candidates=reader_max_candidates,
+            reader_config=reader_config,
+        )
+        payload["ok"] = False
+        budget_summary = provider_execution_budget.provider_execution_budget_summary(
+            provider_budget,
+            stop_reason="provider_budget_preflight_failed",
+            validation_errors=budget_errors,
+        )
+        attach_budget_and_validate(payload, budget_summary)
+        if checkpoint_path is not None:
+            provider_execution_budget.write_provider_budget_checkpoint(
+                checkpoint_path,
+                budget_summary,
+            )
+        if partial_path is not None:
+            write_json_payload(partial_path, payload)
+        return payload
     api_key = os.environ.get(reader_api_key_env)
     if resolved_reader_mode == "provider" and not api_key:
-        return skipped_payload(
+        payload = skipped_payload(
             split=split,
             data_path=data_path,
             reason="skipped_missing_reader_key",
@@ -942,6 +1100,20 @@ def run_longmemeval_answer_benchmark(
             reader_max_candidates=reader_max_candidates,
             reader_config=reader_config,
         )
+        budget_summary = provider_execution_budget.provider_execution_budget_summary(
+            provider_budget,
+            stop_reason="provider_key_missing_before_start",
+            validation_errors=[],
+        )
+        attach_budget_and_validate(payload, budget_summary)
+        if checkpoint_path is not None:
+            provider_execution_budget.write_provider_budget_checkpoint(
+                checkpoint_path,
+                budget_summary,
+            )
+        if partial_path is not None:
+            write_json_payload(partial_path, payload)
+        return payload
 
     gold_by_case = load_gold_answer_map(
         dataset=split.dataset,
@@ -1018,12 +1190,18 @@ def run_longmemeval_answer_benchmark(
     )
     answer_metrics = summarize_answer_cases(rows)
     usage = summarize_usage(rows)
+    reader_cache = summarize_cache(rows)
+    cost = estimate_cost(
+        usage,
+        input_cost_per_million=reader_config.input_cost_per_million,
+        output_cost_per_million=reader_config.output_cost_per_million,
+    )
     status = (
         "dry_run_schema_ready"
         if resolved_reader_mode == "dry-run"
         else "answer_scored"
     )
-    payload: dict[str, Any] = {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_longmemeval_answer_benchmark",
         "generated_at": retrieval_runner.now_utc(),
@@ -1057,12 +1235,8 @@ def run_longmemeval_answer_benchmark(
             "total_elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         },
         "token_usage": usage,
-        "reader_cache": summarize_cache(rows),
-        "cost": estimate_cost(
-            usage,
-            input_cost_per_million=reader_config.input_cost_per_million,
-            output_cost_per_million=reader_config.output_cost_per_million,
-        ),
+        "reader_cache": reader_cache,
+        "cost": cost,
         "cases": rows,
         "privacy_boundary": privacy_boundary(),
         "claim_boundary_ref": claim_boundary_ref(
@@ -1071,12 +1245,30 @@ def run_longmemeval_answer_benchmark(
         "cannot_claim": cannot_claim(status),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+    if live_provider_mode:
+        budget_summary = provider_budget_summary_for_rows(
+            provider_budget,
+            rows=rows,
+            usage=usage,
+            cache_usage=reader_cache,
+            cost=cost,
+            elapsed_ms=float(payload["elapsed_ms"]),
+            stop_reason=status,
+        )
+        payload["provider_execution_budget"] = budget_summary
+        if checkpoint_path is not None:
+            provider_execution_budget.write_provider_budget_checkpoint(
+                checkpoint_path,
+                budget_summary,
+            )
     validation = validate_sanitized_report(payload, forbidden_texts=forbidden_texts)
     payload["sanitized_report_validation"] = validation
     payload["report_generation_ok"] = validation["ok"]
     payload["ok"] = bool(validation["ok"])
     if not validation["ok"]:
         payload["status"] = "sanitized_report_validation_failed"
+    if partial_path is not None:
+        write_json_payload(partial_path, payload)
     return payload
 
 
@@ -1131,6 +1323,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--reader-input-cost-per-million", type=float, default=None)
     parser.add_argument("--reader-output-cost-per-million", type=float, default=None)
+    parser.add_argument("--partial-output", type=Path, default=None)
+    parser.add_argument("--provider-budget-checkpoint", type=Path, default=None)
+    parser.add_argument("--max-provider-calls", type=int, default=None)
+    parser.add_argument("--max-provider-prompt-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-completion-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-total-tokens", type=int, default=None)
+    parser.add_argument("--max-provider-estimated-cost-usd", type=float, default=None)
+    parser.add_argument("--provider-cost-unknown", action="store_true")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
@@ -1159,6 +1359,14 @@ def main() -> int:
         reader_max_candidates=args.reader_max_candidates,
         reader_input_cost_per_million=args.reader_input_cost_per_million,
         reader_output_cost_per_million=args.reader_output_cost_per_million,
+        partial_output=args.partial_output,
+        provider_budget_checkpoint=args.provider_budget_checkpoint,
+        max_provider_calls=args.max_provider_calls,
+        max_provider_prompt_tokens=args.max_provider_prompt_tokens,
+        max_provider_completion_tokens=args.max_provider_completion_tokens,
+        max_provider_total_tokens=args.max_provider_total_tokens,
+        max_provider_estimated_cost_usd=args.max_provider_estimated_cost_usd,
+        provider_cost_unknown=args.provider_cost_unknown,
     )
     if args.output:
         write_json_payload(args.output, payload)
