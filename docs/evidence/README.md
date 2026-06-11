@@ -20,6 +20,11 @@ and readiness numbers, what each result supports, material limits,
 supersession, and cohorts. It is the first stop when an old report still says
 "current" in its local context.
 
+Use [`docs/evidence/benchmark-evidence-maturity.md`](benchmark-evidence-maturity.md)
+when a closed benchmark/evidence issue could be over-read as a completed score.
+It owns the closeout vocabulary for `harness-ready`, `pilot-run`,
+`contract-smoke`, `blocker-recorded`, and `completed-score`.
+
 Use [`docs/evidence/readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md)
 for stage-level positive claims and launch boundaries, and
 [`docs/evidence/readiness/proof-slice-maturity.md`](readiness/proof-slice-maturity.md)
