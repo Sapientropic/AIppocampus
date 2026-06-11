@@ -91,6 +91,32 @@ class AgentNativeRecallFacadeTests(unittest.TestCase):
         self.assertIn("direction_only_navigation", direction["reason_codes"])
         self.assertIn("public_sdk_stability", report["cannot_claim"])
 
+    def test_navigation_only_foreground_packet_is_not_evidence(self) -> None:
+        packet = facade.memory_packet_from_route_packet(
+            {
+                "route_id": "route_macro_orientation",
+                "output_mode": "direction_only",
+                "authority_level": "navigation_only",
+                "claim_permission": "no_claim_before_reopen",
+                "why_may_matter": "Macro orientation can guide route fanout.",
+            }
+        )
+        deepen = facade.deepen_route_packet(
+            {
+                "route_id": "route_macro_orientation",
+                "output_mode": "direction_only",
+                "authority_level": "navigation_only",
+                "claim_permission": "no_claim_before_reopen",
+            }
+        )
+
+        self.assertEqual(packet["authority_level"], "navigation_only")
+        self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
+        self.assertEqual(packet["next_action"], "use_hint")
+        self.assertNotEqual(packet["claim_permission"], "bounded_claim_allowed")
+        self.assertEqual(deepen["status"], "cannot_verify")
+        self.assertEqual(deepen["claim_permission"], "no_claim_before_reopen")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -42,6 +42,54 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertFalse(projected["trust_contract"]["agent_may_answer_within_scope"])
         self.assertFalse(projected["trust_contract"]["treat_as_fact"])
 
+    def test_navigation_only_authority_is_foreground_safe_not_evidence(self) -> None:
+        projected = authority.with_trust_fields(
+            {
+                "authority_level": "navigation_only",
+                "support_level": "macro_orientation",
+                "source_boundary": {"navigation_only_not_fact": True},
+            }
+        )
+        contract = projected["trust_contract"]
+
+        self.assertEqual(projected["authority_level"], "navigation_only")
+        self.assertEqual(projected["claim_permission"], "no_claim_before_reopen")
+        self.assertEqual(projected["trust_level"], "semantic_hint")
+        self.assertEqual(projected["action_grammar"], "direction_only")
+        self.assertTrue(contract["foreground_allowed"])
+        self.assertFalse(contract["fact_claim_allowed"])
+        self.assertFalse(contract["treat_as_fact"])
+        self.assertTrue(contract["source_reopen_required_before_claim"])
+        self.assertFalse(authority.is_bounded_evidence(projected))
+        self.assertNotEqual(projected["action_grammar"], "source_open")
+        self.assertNotIn("probe_family", projected)
+        self.assertNotIn("dream_function", projected)
+
+    def test_navigation_only_candidate_with_refs_keeps_candidate_backed_route(self) -> None:
+        projected = authority.with_trust_fields(
+            {
+                "output_authority": "navigation_only",
+                "support_level": "candidate",
+                "source_reopen_required": True,
+                "source_refs": [{"thread_key": "session:candidate", "message_id": "m1"}],
+            }
+        )
+
+        self.assertEqual(projected["trust_level"], "candidate_backed")
+        self.assertEqual(projected["action_grammar"], "direction_with_ref")
+        self.assertFalse(projected["trust_contract"]["treat_as_fact"])
+        self.assertTrue(projected["trust_contract"]["source_reopen_required_before_claim"])
+
+        unbacked = authority.with_trust_fields(
+            {
+                "output_authority": "navigation_only",
+                "support_level": "candidate",
+                "source_refs": [],
+            }
+        )
+        self.assertEqual(unbacked["trust_level"], "scent")
+        self.assertEqual(unbacked["action_grammar"], "direction_only")
+
     def test_action_grammar_maps_trust_levels_without_new_scoring_layer(self) -> None:
         projected_rows = authority.trust_taxonomy()
 
