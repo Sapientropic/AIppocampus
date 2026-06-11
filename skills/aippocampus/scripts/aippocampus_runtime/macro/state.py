@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from aippocampus_runtime.macro import line_topology
+from aippocampus_runtime.macro import line_topology, signal_scales
 from aippocampus_runtime.macro import momentum as momentum_runtime
 from aippocampus_runtime.macro.hexagram import HexagramRef, change_lines, resolve_hexagram
 from aippocampus_runtime.macro.perturbation import (
@@ -23,7 +23,7 @@ DEFAULT_RECHECK_TRIGGERS = (
     "benchmark_result",
     "repeated_route_failure",
 )
-ALLOWED_INPUT_SIGNAL_SCALES = frozenset({"journey", "continuity_domain", "project_event"})
+ALLOWED_INPUT_SIGNAL_SCALES = frozenset(signal_scales.CANONICAL_SIGNAL_SCALES)
 PROMOTION_REASONS = frozenset(
     {
         "project_source_event",
@@ -78,14 +78,26 @@ def _hexagram_projection(value: HexagramRef) -> dict[str, object]:
     }
 
 
-def _normalize_input_signal_scales(scales: Iterable[str]) -> tuple[str, ...]:
-    values = tuple(dict.fromkeys(scales))
-    if not values:
-        raise ValueError("macro orientation state must name at least one input signal scale")
-    unknown = sorted(set(values) - ALLOWED_INPUT_SIGNAL_SCALES)
-    if unknown:
-        raise ValueError(f"unsupported macro orientation input signal scales: {unknown!r}")
-    return values
+def _normalize_input_signal_scales(
+    scales: Iterable[str],
+) -> tuple[signal_scales.SignalScale, ...]:
+    try:
+        return signal_scales.normalize_signal_scales(scales)
+    except ValueError as exc:
+        schema = signal_scales.public_signal_scale_schema()
+        raise ValueError(
+            "unsupported macro orientation input signal scales; "
+            f"canonical={schema['canonical_values']!r}; "
+            "hint=use 'project' or 'project_event' for project-scoped source events"
+        ) from exc
+
+
+def _perturbation_signal_scale(
+    scales: tuple[signal_scales.SignalScale, ...],
+) -> signal_scales.SignalScale:
+    if "project_event" in scales:
+        return "project_event"
+    return signal_scales.first_non_project_scale(scales) or scales[0]
 
 
 def build_macro_orientation_state(
@@ -112,7 +124,7 @@ def build_macro_orientation_state(
     perturbation = build_perturbation_packet(
         current,
         toward,
-        signal_scale="project_event" if "project_event" in scales else "unknown",
+        signal_scale=_perturbation_signal_scale(scales),
         promoted_to_project=promotion_reason is not None,
     )
     momentum_block = momentum_runtime.coerce_momentum_block(momentum)
@@ -141,6 +153,7 @@ def build_macro_orientation_state(
             "required_for_non_project_signals": True,
             "reason": promotion_reason,
             "allowed_reasons": sorted(PROMOTION_REASONS),
+            "signal_scale_schema": signal_scales.public_signal_scale_schema(),
         },
         "authority_level": AUTHORITY_LEVEL,
         "action_grammar": ACTION_GRAMMAR,
@@ -240,15 +253,27 @@ def validate_macro_orientation_state(entry: Mapping[str, object]) -> dict[str, o
 
     scales_raw = entry.get("input_signal_scales")
     scales = tuple(scales_raw) if isinstance(scales_raw, list) else ()
-    if not scales or set(scales) - ALLOWED_INPUT_SIGNAL_SCALES:
+    try:
+        scales = signal_scales.normalize_signal_scales(scales)
+    except ValueError:
         errors.append("input_signal_scales_invalid")
+        scales = ()
     promotion = entry.get("promotion")
     promotion_reason = promotion.get("reason") if isinstance(promotion, Mapping) else None
     if promotion_reason is not None and promotion_reason not in PROMOTION_REASONS:
         errors.append("promotion_reason_invalid")
-    non_project_scales = set(scales) - {"project_event"}
-    if non_project_scales and "project_event" not in scales and promotion_reason not in PROMOTION_REASONS:
+    non_project_scales = set(scales) - signal_scales.PROJECT_LEVEL_SIGNAL_SCALES
+    if "unknown" in non_project_scales and promotion_reason is not None:
+        errors.append("unknown_signal_scale_cannot_promote")
+    promotable_non_project = non_project_scales - signal_scales.DIAGNOSTIC_ONLY_SIGNAL_SCALES
+    if (
+        promotable_non_project
+        and "project_event" not in scales
+        and promotion_reason not in PROMOTION_REASONS
+    ):
         errors.append("non_project_signal_requires_promotion")
+    if "unknown" in non_project_scales:
+        errors.append("unknown_signal_scale_diagnostic_only")
 
     try:
         hexagram = entry.get("hexagram")

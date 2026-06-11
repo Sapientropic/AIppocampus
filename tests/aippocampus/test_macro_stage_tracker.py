@@ -137,7 +137,7 @@ class MacroStageTrackerTests(unittest.TestCase):
         self.assertEqual(update["sequence"]["movement_state"], "stalled")
         self.assertEqual(update["review_state"], "needs_review")
         self.assertIn(
-            "thread_journey_signal_ignored_without_project_promotion",
+            "journey_signal_ignored_without_project_promotion",
             update["diagnostics"],
         )
 
