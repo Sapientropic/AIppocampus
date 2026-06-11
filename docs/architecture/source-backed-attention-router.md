@@ -328,6 +328,16 @@ orientation shift is. The two signals should stay orthogonal: momentum may add
 recheck triggers or compact packet text, but it cannot widen fanout, support a
 fact claim, or replace reopened source.
 
+`aippocampus_runtime.macro.line_topology` adds diagnostic-only six-line
+topology for macro orientation. It uses one explicit fixture mapping from
+bottom-to-top lines into earth/human/heaven axes, then reports adjacent
+`乘` / `承` / `比` / `不比` structure and cross-line `应` couplings such as
+earth-human, earth-heaven, and human-heaven. This is an attention-dependency
+analogy: topology may explain why a route fanout was widened or why a
+cross-layer pair was flagged, but it must not become evidence, ranking weight,
+or source support. Perturbation chooses where to look; reopened source decides
+what happened.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in

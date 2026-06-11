@@ -60,6 +60,7 @@ class MacroAgentPacketTests(unittest.TestCase):
         self.assertEqual(packet["macro_orientation"]["momentum"]["phase"], "lin")
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("basis", encoded)
+        self.assertNotIn("line_topology", encoded)
         self.assertNotIn("macro-source-1", encoded)
         self.assertEqual(payload["red_lines"]["macro_claim_ready_without_reopen"], 0)
 
@@ -81,6 +82,11 @@ class MacroAgentPacketTests(unittest.TestCase):
         self.assertEqual(deepened["result"]["source_refs"], [{"source_id": "macro-source-1"}])
         self.assertIn("derivation_trace", deepened["result"])
         self.assertEqual(deepened["result"]["momentum"]["basis"]["support_delta"], 0.2)
+        self.assertEqual(
+            deepened["result"]["line_topology"]["authority_level"],
+            "navigation_only",
+        )
+        self.assertFalse(deepened["result"]["line_topology"]["fact_claim_allowed"])
         self.assertEqual(deepened["result"]["authority_level"], "navigation_only")
         self.assertEqual(explained["surface"], "macro")
         self.assertEqual(explained["explanation"]["next_safe_action"], "deepen_or_reopen_source")

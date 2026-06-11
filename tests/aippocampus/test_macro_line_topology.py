@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import json
+import sys
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime.macro import line_topology  # noqa: E402
+
+
+def _relation(report: dict[str, object], pair_id: str) -> dict[str, object]:
+    relations = report["ying_relations"]
+    assert isinstance(relations, list)
+    for relation in relations:
+        assert isinstance(relation, dict)
+        if relation["pair_id"] == pair_id:
+            return relation
+    raise AssertionError(f"missing relation {pair_id!r}")
+
+
+class MacroLineTopologyTests(unittest.TestCase):
+    def test_axis_mapping_names_one_explicit_six_line_fixture_map(self) -> None:
+        axes = line_topology.axis_mapping()
+
+        self.assertEqual([axis["line"] for axis in axes], [1, 2, 3, 4, 5, 6])
+        self.assertEqual([axis["layer"] for axis in axes], ["earth", "earth", "human", "human", "heaven", "heaven"])
+        self.assertEqual(axes[0]["axis_id"], "earth_substrate_evidence")
+        self.assertEqual(axes[3]["axis_id"], "human_workflow_coordination")
+        self.assertIn("why_this_line", axes[5])
+
+    def test_ying_diagnostics_point_to_specific_broken_couplings(self) -> None:
+        earth_human = line_topology.build_line_topology_diagnostics((0, 1, 1, 1, 0, 0))
+        earth_heaven = line_topology.build_line_topology_diagnostics((1, 0, 1, 0, 1, 0))
+        human_heaven = line_topology.build_line_topology_diagnostics((1, 1, 0, 0, 0, 1))
+
+        self.assertEqual(_relation(earth_human, "earth_human")["status"], "missing_lower_support")
+        self.assertIn("broken_coupling_earth_human", earth_human["reason_codes"])
+        self.assertEqual(_relation(earth_heaven, "earth_heaven")["status"], "missing_lower_support")
+        self.assertIn("broken_coupling_earth_heaven", earth_heaven["reason_codes"])
+        self.assertEqual(_relation(human_heaven, "human_heaven")["status"], "missing_lower_support")
+        self.assertIn("broken_coupling_human_heaven", human_heaven["reason_codes"])
+
+    def test_adjacent_relations_use_terms_without_claim_authority(self) -> None:
+        report = line_topology.build_line_topology_diagnostics((0, 1, 1, 0, 0, 1))
+        adjacent = report["adjacent_relations"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertIsInstance(adjacent, list)
+        self.assertIn("乘", encoded)
+        self.assertIn("比", encoded)
+        self.assertEqual(report["authority_level"], "navigation_only")
+        self.assertEqual(report["claim_permission"], "no_claim_before_reopen")
+        self.assertFalse(report["fact_claim_allowed"])
+        self.assertFalse(report["ranking_weight_changes"])
+        self.assertIn("does_topology_reduce_wrong_layer_recall", report["evaluation_questions"])
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("PRIVATE", encoded)
+
+
+if __name__ == "__main__":
+    unittest.main()
