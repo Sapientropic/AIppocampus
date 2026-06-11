@@ -241,6 +241,18 @@ checkpoint, and preserved the blocker state: `overall` is still partial at 6 of
 and provider cost remains unavailable from official outputs. This closes #1083
 as a precise blocker/progress report, not as an AMemGym score.
 
+#1232 follow-up route blocker on 2026-06-11:
+
+[`amemgym-official-live-provider-1232-blocker-2026-06-11.md`](amemgym-official-live-provider-1232-blocker-2026-06-11.md)
+resumed the same OpenRouter Native fixed-arm path after provider-budget
+adoption and account top-up. The follow-up diagnosis added a tiny OpenRouter
+route preflight and showed the required OpenAI-family routes fail even on a
+harmless fixed prompt, while non-OpenAI OpenRouter routes still accept that
+prompt. The run therefore still does not complete: `overall` stayed partial at
+6 of 20 user items, `upperbound` stayed partial at 38 of 882 choice
+evaluations, and `random` stayed complete. This closes #1232 as
+`provider-route-blocked`, not as an AMemGym score.
+
 Official-compatible local-scripted protocol run on 2026-06-07:
 
 ```powershell

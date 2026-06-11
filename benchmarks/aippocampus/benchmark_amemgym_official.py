@@ -48,6 +48,10 @@ from amemgym_official_public_state import (  # noqa: E402
     skipped_complete_run_result,
     write_checkpoint_file,
 )
+from amemgym_openrouter_preflight import (  # noqa: E402
+    openrouter_route_preflight_summary,
+    probe_openrouter_chat_route,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"
@@ -278,7 +282,13 @@ def prepare_agent_config_for_provider(
     config["llm_config"] = llm_config
     if arm == OFFICIAL_NATIVE_ARM:
         if provider == "openrouter":
-            config["name"] = f"{config.get('name') or 'native'}-openrouter"
+            base_name = str(config.get("name") or "native")
+            model_suffix = (
+                ""
+                if openrouter_model == OPENROUTER_DEFAULT_MODEL
+                else f"-{model_name_slug(openrouter_model)}"
+            )
+            config["name"] = f"{base_name}{model_suffix}-openrouter"
         elif provider == LOCAL_SCRIPTED_PROVIDER:
             config["name"] = "native-local-scripted"
     else:
@@ -336,6 +346,24 @@ def public_env_metadata(env_config_path: Path | str) -> dict[str, Any]:
         "high_temp_temperature": safe_config_value(high_temp.get("temperature")),
         "credentials": "redacted_or_env_only",
     }
+
+
+def pending_surfaces_after_resume(
+    *,
+    run_surfaces: tuple[str, ...],
+    resume: bool,
+    pre_run_score_payload: dict[str, Any] | None,
+) -> tuple[str, ...]:
+    if not resume or not pre_run_score_payload:
+        return run_surfaces
+    pending = []
+    outputs = pre_run_score_payload.get("outputs") if isinstance(pre_run_score_payload.get("outputs"), dict) else {}
+    for surface in run_surfaces:
+        output = outputs.get(surface) if isinstance(outputs.get(surface), dict) else None
+        if output and completed_surface_from_output(surface, output):
+            continue
+        pending.append(surface)
+    return tuple(pending)
 
 
 def upstream_metadata(upstream_root: Path | str) -> dict[str, Any]:
@@ -1182,6 +1210,7 @@ def build_official_bridge_report(
     max_provider_total_tokens: int | None = None,
     max_provider_estimated_cost_usd: float | None = None,
     provider_cost_unknown: bool = False,
+    provider_route_preflight: bool = True,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     generated_at = now_utc()
@@ -1230,6 +1259,29 @@ def build_official_bridge_report(
     )
     provider_budget: provider_execution_budget.ProviderExecutionBudget | None = None
     provider_budget_errors: list[str] = []
+    provider_route_preflight_payload: dict[str, Any] = {
+        "required": False,
+        "status": "skipped_not_requested",
+        "checks": [],
+    }
+    pre_run_score_payload: dict[str, Any] | None = None
+    if resume and run_surfaces:
+        try:
+            pre_run_score_payload = score_summary(
+                env_data_path=active_env_data_path,
+                overall_output_dir=overall_output_dir,
+                upperbound_output_dir=upperbound_output_dir,
+                random_output_file=random_output_file,
+                metric=metric,
+                overall_agent_name=expected_overall_agent_name,
+            )
+        except Exception:
+            pre_run_score_payload = None
+    pending_run_surfaces = pending_surfaces_after_resume(
+        run_surfaces=run_surfaces,
+        resume=resume,
+        pre_run_score_payload=pre_run_score_payload,
+    )
     if provider_budget_required:
         provider_budget = amemgym_provider_budget_config(
             live_mode=True,
@@ -1262,20 +1314,23 @@ def build_official_bridge_report(
                 provider_budget_summary,
             )
     can_run_provider_surfaces = not provider_budget_errors
+    if can_run_provider_surfaces and provider == "openrouter" and run_surfaces:
+        provider_route_preflight_payload = openrouter_route_preflight_summary(
+            provider=provider,
+            enabled=provider_route_preflight,
+            pending_run_surfaces=pending_run_surfaces,
+            provider_status=provider_env.public_status,
+            env_config_path=env_config,
+            agent_config_path=agent_config,
+            timeout_seconds=min(provider_timeout_seconds or 30, 30),
+            credential_lookup=external_env_value,
+            probe_func=probe_openrouter_chat_route,
+        )
+    provider_route_errors: list[str] = []
+    if provider_route_preflight_payload.get("status") in {"failed", "failed_missing_credential"}:
+        provider_route_errors.append("openrouter_route_preflight_failed")
+        can_run_provider_surfaces = False
     if upstream["status"] == "ready" and adapter_ready and provider_ready and can_run_provider_surfaces:
-        pre_run_score_payload: dict[str, Any] | None = None
-        if resume and run_surfaces:
-            try:
-                pre_run_score_payload = score_summary(
-                    env_data_path=active_env_data_path,
-                    overall_output_dir=overall_output_dir,
-                    upperbound_output_dir=upperbound_output_dir,
-                    random_output_file=random_output_file,
-                    metric=metric,
-                    overall_agent_name=expected_overall_agent_name,
-                )
-            except Exception:
-                pre_run_score_payload = None
         for surface in run_surfaces:
             pre_output = (
                 pre_run_score_payload.get("outputs", {}).get(surface)
@@ -1351,6 +1406,8 @@ def build_official_bridge_report(
         status = "official_score_summary"
     elif provider_budget_errors:
         status = "skipped_provider_budget_not_declared"
+    elif provider_route_errors:
+        status = "skipped_provider_route_preflight_failed"
     elif run_results or has_partial_outputs:
         status = "partial_official_outputs"
     else:
@@ -1383,6 +1440,8 @@ def build_official_bridge_report(
         cannot_claim.append("real_llm_memory_quality_or_provider_model_score_from_local_scripted_provider")
     if provider_budget_errors:
         cannot_claim.append("live_provider_execution_without_declared_budget")
+    if provider_route_errors:
+        cannot_claim.append("live_provider_route_available_for_required_models")
     if bounded_subset:
         cannot_claim.append("full_public_v1_base_fixed_arm_score_from_bounded_subset")
     cannot_claim.extend(
@@ -1471,7 +1530,7 @@ def build_official_bridge_report(
         "kind": "aippocampus_amemgym_official_runner_bridge",
         "generated_at": generated_at,
         "status": status,
-        "ok": upstream["status"] == "ready" and not provider_budget_errors,
+        "ok": upstream["status"] == "ready" and not provider_budget_errors and not provider_route_errors,
         "upstream": upstream,
         "configuration": {
             "arm": arm,
@@ -1493,6 +1552,7 @@ def build_official_bridge_report(
             "reset": reset,
             "resume": resume,
             "provider_timeout_seconds": provider_timeout_seconds,
+            "provider_route_preflight": provider_route_preflight,
         },
         "runner_plan": safe_command_plan(
             upstream_root=root,
@@ -1514,6 +1574,7 @@ def build_official_bridge_report(
         ),
         "provider": provider_env.public_status,
         "provider_execution_budget": provider_budget_summary,
+        "provider_route_preflight": provider_route_preflight_payload,
         "provider_runtime": {
             "status": provider_runtime["status"],
             **provider_runtime["metadata"],
@@ -1652,6 +1713,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-provider-estimated-cost-usd", type=float, default=None)
     parser.add_argument("--provider-cost-unknown", action="store_true")
     parser.add_argument(
+        "--skip-provider-route-preflight",
+        action="store_true",
+        help=(
+            "Skip the tiny OpenRouter route probe that catches account, region, "
+            "or upstream-provider policy blocks before starting official AMemGym subprocesses."
+        ),
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         help="Skip requested surfaces whose official summary artifacts are already complete.",
@@ -1691,6 +1760,7 @@ def main(argv: list[str] | None = None) -> int:
         max_provider_total_tokens=args.max_provider_total_tokens,
         max_provider_estimated_cost_usd=args.max_provider_estimated_cost_usd,
         provider_cost_unknown=args.provider_cost_unknown,
+        provider_route_preflight=not args.skip_provider_route_preflight,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
