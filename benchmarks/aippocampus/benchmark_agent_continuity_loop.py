@@ -73,6 +73,10 @@ def _semantic_row(case: Mapping[str, Any]) -> dict[str, Any]:
         "conflict": str(metadata.get("conflict") or "none"),
         "hard_masks": list(case.get("hard_masks") or []),
         "source_refs": [_source_ref(str(case["case_id"]))] if case.get("has_source", True) else [],
+        "route_label": str(case.get("route_label") or ""),
+        "why_may_matter": str(case.get("why_may_matter") or ""),
+        "risk_flags": list(case.get("risk_flags") or []),
+        "triage_rank_reason_codes": list(case.get("triage_rank_reason_codes") or []),
     }
 
 
@@ -115,6 +119,50 @@ def fixture_agent_continuity_loop_cases() -> list[dict[str, Any]]:
                 "estimated_latency_ms_proxy": 880,
                 "estimated_token_proxy": 2200,
             },
+            "route_label": "source reopen route",
+            "why_may_matter": "A public source route matched the agent-continuity cue.",
+            "risk_flags": ["source_reopen_required"],
+            "triage_rank_reason_codes": ["term_overlap", "source_bridge_ok"],
+            "expected_output_modes": ["reopenable_route"],
+            "expected_deepen_status": "source_route",
+        },
+        {
+            "case_id": "triage_issue_backlog_reopen_route",
+            "family": "packet_triage",
+            "route_id": "route_agent_packet_triage_issue_backlog",
+            "query": "agent packet triage should distinguish reopenable routes",
+            "query_terms": ["agent", "packet", "triage", "distinguish", "reopenable", "routes"],
+            "semantic_aliases": ["agent packet triage", "issue backlog route"],
+            "source_reopen": {
+                "path": "cold",
+                "triggers": ["issue_cleanup"],
+                "estimated_latency_ms_proxy": 910,
+                "estimated_token_proxy": 2300,
+            },
+            "route_label": "issue backlog route",
+            "why_may_matter": "Points at issue-cleanup context; reopen before choosing the next issue action.",
+            "risk_flags": ["source_reopen_required"],
+            "triage_rank_reason_codes": ["issue_queue_match", "source_bridge_ok"],
+            "expected_output_modes": ["reopenable_route"],
+            "expected_deepen_status": "source_route",
+        },
+        {
+            "case_id": "triage_benchmark_contract_reopen_route",
+            "family": "packet_triage",
+            "route_id": "route_agent_packet_triage_benchmark_contract",
+            "query": "agent packet triage should distinguish reopenable routes",
+            "query_terms": ["agent", "packet", "triage", "distinguish", "reopenable", "routes"],
+            "semantic_aliases": ["agent packet triage", "benchmark contract route"],
+            "source_reopen": {
+                "path": "cold",
+                "triggers": ["benchmark_contract"],
+                "estimated_latency_ms_proxy": 940,
+                "estimated_token_proxy": 2350,
+            },
+            "route_label": "benchmark contract route",
+            "why_may_matter": "Points at benchmark acceptance context; reopen before claiming the contract passes.",
+            "risk_flags": ["source_reopen_required"],
+            "triage_rank_reason_codes": ["benchmark_gate_match", "source_bridge_ok"],
             "expected_output_modes": ["reopenable_route"],
             "expected_deepen_status": "source_route",
         },
@@ -154,6 +202,10 @@ def fixture_agent_continuity_loop_cases() -> list[dict[str, Any]]:
                 "privacy": "public",
                 "conflict": "conflicting_update",
             },
+            "route_label": "stale conflict route",
+            "why_may_matter": "Route may have conflicting updates; reopen and check currentness before use.",
+            "risk_flags": ["source_reopen_required", "check_currentness", "conflict_requires_deepen"],
+            "triage_rank_reason_codes": ["stale_or_conflicted_source_reopen", "source_bridge_ok"],
             "source_reopen": {
                 "path": "cold",
                 "triggers": ["stale_currentness_dispute", "conflict_set"],
@@ -420,6 +472,72 @@ def _foreground_packets(projected_cases: Sequence[Mapping[str, Any]]) -> list[di
     return packets
 
 
+def _selection_hint_present(packet: Mapping[str, Any]) -> bool:
+    label = str(packet.get("route_label") or "").strip()
+    hint = str(packet.get("display_hint") or "").strip()
+    return bool(label) and bool(
+        hint
+        and hint != "A source route may matter; reopen it before using the detail."
+    )
+
+
+def _triage_signature(packet: Mapping[str, Any]) -> str:
+    return "|".join(
+        [
+            str(packet.get("route_label") or "").casefold(),
+            str(packet.get("display_hint") or "").casefold(),
+            ",".join(str(code) for code in packet.get("triage_rank_reason_codes") or []),
+        ]
+    )
+
+
+def _triage_metrics(projected_cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    foreground_packets = _foreground_packets(projected_cases)
+    triage_packets = [
+        packet
+        for packet in foreground_packets
+        if packet.get("output_mode") in {"bounded_summary_as_route", "reopenable_route"}
+    ]
+    signatures = {
+        _triage_signature(packet)
+        for packet in triage_packets
+        if _selection_hint_present(packet)
+    }
+    blind_deepen_required_count = sum(
+        1
+        for packet in triage_packets
+        if packet.get("output_mode") == "reopenable_route"
+        and packet.get("next_action") == "reopen_source"
+        and not _selection_hint_present(packet)
+    )
+    stale_conflict_preview_requires_reopen_count = 0
+    for case in projected_cases:
+        if case.get("family") != "stale_conflict":
+            continue
+        stages = case.get("stages")
+        packet = stages.get("facade_packet") if isinstance(stages, Mapping) else {}
+        if not isinstance(packet, Mapping):
+            continue
+        flags = set(packet.get("risk_flags") or [])
+        if (
+            packet.get("next_action") == "reopen_source"
+            and packet.get("claim_permission") == "no_claim_before_reopen"
+            and {"check_currentness", "conflict_requires_deepen"} <= flags
+        ):
+            stale_conflict_preview_requires_reopen_count += 1
+    return {
+        "packet_triage_distinctiveness": (
+            round(len(signatures) / len(triage_packets), 3) if triage_packets else 0.0
+        ),
+        "packet_triage_collision_count": max(0, len(triage_packets) - len(signatures)),
+        "blind_deepen_required_count": blind_deepen_required_count,
+        "top_route_selection_hint_present_count": sum(
+            1 for packet in triage_packets if _selection_hint_present(packet)
+        ),
+        "stale_conflict_preview_requires_reopen_count": stale_conflict_preview_requires_reopen_count,
+    }
+
+
 def _sum_case_red_lines(projected_cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     names = {
         "privacy_bypass_count",
@@ -463,6 +581,7 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
     projected_cases = [_project_case(case) for case in cases]
     foreground_packets = _foreground_packets(projected_cases)
     red_lines = _sum_case_red_lines(projected_cases)
+    triage_metrics = _triage_metrics(projected_cases)
     packet_budget_violations = 0
     anti_nag_suppressed = 0
     for case in projected_cases:
@@ -480,6 +599,12 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
             anti_nag_suppressed += int(metrics.get("anti_nag_suppressed_count") or 0)
 
     red_lines["foreground_forbidden_key_leak"] += _foreground_forbidden_count(foreground_packets)
+    red_lines["blind_deepen_required_count"] = int(
+        triage_metrics["blind_deepen_required_count"]
+    )
+    red_lines["packet_triage_collision_count"] = int(
+        triage_metrics["packet_triage_collision_count"]
+    )
     ok = all(int(value) == 0 for value in red_lines.values()) and all(
         bool(case.get("passed")) for case in projected_cases
     )
@@ -523,6 +648,7 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
                 "source_backed_claim_without_reopen"
             ],
             "anti_nag_suppressed_count": anti_nag_suppressed,
+            **triage_metrics,
         },
         "red_lines": red_lines,
         "privacy_boundary": {

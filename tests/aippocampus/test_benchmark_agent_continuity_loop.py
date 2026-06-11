@@ -27,6 +27,8 @@ class AgentContinuityLoopBenchmarkTests(unittest.TestCase):
             {
                 "positive_bounded_summary_route",
                 "positive_reopenable_route",
+                "triage_issue_backlog_reopen_route",
+                "triage_benchmark_contract_reopen_route",
                 "aippo_low_risk_workflow",
                 "blocked_privacy_route",
                 "stale_conflict_reopen_route",
@@ -47,7 +49,17 @@ class AgentContinuityLoopBenchmarkTests(unittest.TestCase):
         reopen = by_id["positive_reopenable_route"]["stages"]
         self.assertEqual(reopen["hot_router_packet"]["output_mode"], "reopenable_route")
         self.assertEqual(reopen["facade_packet"]["next_action"], "reopen_source")
+        self.assertEqual(reopen["facade_packet"]["route_label"], "source reopen route")
         self.assertEqual(reopen["deepen_result"]["claim_boundary"], "reopen_source_before_claim")
+
+        triage_issue = by_id["triage_issue_backlog_reopen_route"]["stages"]["facade_packet"]
+        triage_benchmark = by_id["triage_benchmark_contract_reopen_route"]["stages"][
+            "facade_packet"
+        ]
+        self.assertEqual(triage_issue["route_label"], "issue backlog route")
+        self.assertEqual(triage_benchmark["route_label"], "benchmark contract route")
+        self.assertNotEqual(triage_issue["display_hint"], triage_benchmark["display_hint"])
+        self.assertIn("reopen", triage_issue["display_hint"])
 
         aippo = by_id["aippo_low_risk_workflow"]["stages"]
         self.assertEqual(aippo["aippo_packet"]["output_mode"], "working_contract")
@@ -63,20 +75,26 @@ class AgentContinuityLoopBenchmarkTests(unittest.TestCase):
         stale = by_id["stale_conflict_reopen_route"]["stages"]
         self.assertEqual(stale["hot_router_packet"]["claim_permission"], "no_claim_before_reopen")
         self.assertEqual(stale["source_reopen_budget"]["next_action"], "reopen_source")
+        self.assertIn("check_currentness", stale["facade_packet"]["risk_flags"])
+        self.assertIn("conflict_requires_deepen", stale["facade_packet"]["risk_flags"])
 
         anti_nag = by_id["anti_nag_recently_dismissed"]["stages"]
         self.assertEqual(anti_nag["foreground_budget"]["metrics"]["anti_nag_suppressed_count"], 1)
         self.assertFalse(anti_nag["foreground_budget"]["foreground_packets"])
 
         metrics = report["metrics"]
-        self.assertEqual(metrics["integrated_loop_case_count"], 6)
-        self.assertEqual(metrics["integrated_loop_success_count"], 6)
+        self.assertEqual(metrics["integrated_loop_case_count"], 8)
+        self.assertEqual(metrics["integrated_loop_success_count"], 8)
         self.assertGreaterEqual(metrics["deepen_required_follow_through_count"], 3)
         self.assertEqual(metrics["agent_packet_budget_violation_count"], 0)
         self.assertEqual(metrics["foreground_forbidden_key_count"], 0)
         self.assertEqual(metrics["semantic_route_used_as_truth_count"], 0)
         self.assertEqual(metrics["source_backed_claim_without_reopen"], 0)
         self.assertEqual(metrics["aippo_low_risk_guidance_success_count"], 1)
+        self.assertEqual(metrics["packet_triage_distinctiveness"], 1.0)
+        self.assertEqual(metrics["blind_deepen_required_count"], 0)
+        self.assertGreaterEqual(metrics["top_route_selection_hint_present_count"], 5)
+        self.assertEqual(metrics["stale_conflict_preview_requires_reopen_count"], 1)
 
         for name, value in report["red_lines"].items():
             with self.subTest(red_line=name):

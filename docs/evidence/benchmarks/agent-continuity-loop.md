@@ -20,17 +20,20 @@ The report kind is `aippocampus_agent_continuity_loop_fixture`.
 - hot-router output for `bounded_summary_as_route`, `reopenable_route`,
   `direction_only`, and hard-mask `silence`;
 - agent-native foreground `MemoryPacket` compression;
+- safe `route_label` / `display_hint` triage previews for similar
+  reopenable routes;
 - explicit `deepen` / `explain` surfaces for source routes and blocked routes;
 - AIppo low-risk working-contract activation;
 - source-reopen and foreground packet budgets in the same report;
 - anti-nag suppression for a recently dismissed route.
 
-## 2026-06-10 Public Fixture Result
+## 2026-06-11 Public Fixture Result
 
-The checked-in fixture cohort covers six cases:
+The checked-in fixture cohort covers eight cases:
 
 - positive bounded-summary route;
 - positive reopenable source route;
+- two similar packet-triage reopenable routes with distinct safe labels;
 - AIppo low-risk workflow guidance;
 - blocked privacy route;
 - stale/conflicted reopen route;
@@ -38,11 +41,15 @@ The checked-in fixture cohort covers six cases:
 
 Current deterministic result:
 
-- `integrated_loop_case_count = 6`
-- `integrated_loop_success_count = 6`
-- `deepen_required_follow_through_count = 5`
+- `integrated_loop_case_count = 8`
+- `integrated_loop_success_count = 8`
+- `deepen_required_follow_through_count = 7`
 - `aippo_low_risk_guidance_success_count = 1`
 - `anti_nag_suppressed_count = 1`
+- `packet_triage_distinctiveness = 1.0`
+- `blind_deepen_required_count = 0`
+- `top_route_selection_hint_present_count = 5`
+- `stale_conflict_preview_requires_reopen_count = 1`
 - `agent_packet_budget_violation_count = 0`
 - `foreground_forbidden_key_count = 0`
 - all red-line counters `0`
@@ -71,6 +78,8 @@ Red lines are separate from success counts:
 - `semantic_route_used_as_truth_count`
 - `feedback_promoted_without_source`
 - `anti_nag_violation_count`
+- `blind_deepen_required_count`
+- `packet_triage_collision_count`
 
 ## Boundaries
 

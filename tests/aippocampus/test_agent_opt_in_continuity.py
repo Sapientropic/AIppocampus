@@ -80,6 +80,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertFalse(report["policy_boundary"]["default_hook_foreground"])
         self.assertTrue(report["policy_boundary"]["source_reopen_required_for_strong_claims"])
         self.assertEqual(report["metrics"]["foreground_forbidden_key_count"], 0)
+        self.assertEqual(report["metrics"]["blind_deepen_required_count"], 0)
+        self.assertGreaterEqual(report["metrics"]["top_route_selection_hint_present_count"], 1)
         self.assertEqual(report["red_lines"]["foreground_source_dump_count"], 0)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("source_id", encoded)
@@ -92,6 +94,11 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
         self.assertIn(packet["next_action"], {"reopen_source", "use_hint"})
         self.assertTrue(packet["deepen_route_id"].startswith("deepen:"))
+        self.assertTrue(packet["route_label"])
+        self.assertNotEqual(
+            packet["display_hint"],
+            "A source route may matter; reopen it before using the detail.",
+        )
 
         deepen_request = report["deepen_requests"][0]
         self.assertEqual(deepen_request["route_id"], packet["route_id"])
