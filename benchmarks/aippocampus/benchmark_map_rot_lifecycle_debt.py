@@ -15,6 +15,7 @@ _paths.ensure_paths()
 
 import benchmark_maturity
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.ops.map_rot_maintenance import plan_map_rot_maintenance
 
 SCHEMA_VERSION = 1
 LIFECYCLE_STATES = {
@@ -210,6 +211,7 @@ def _project_case(case: Mapping[str, Any]) -> dict[str, Any]:
 
 def evaluate_map_rot_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     projected = [_project_case(case) for case in cases]
+    run_at = now_utc()
     by_state = Counter(str(case.get("lifecycle_state") or "unknown") for case in projected)
     challenged_ages = [
         int(case.get("age_days") or 0)
@@ -277,12 +279,13 @@ def evaluate_map_rot_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]
     return {
         "kind": "aippocampus_map_rot_lifecycle_debt",
         "schema_version": SCHEMA_VERSION,
-        "run_at": now_utc(),
+        "run_at": run_at,
         "ok": ok,
         "contract_gate_ok": ok,
         "quality_gate_ok": maturity["quality_gate_ok"],
         "benchmark_maturity": maturity,
         "cases": projected,
+        "maintenance_actions": plan_map_rot_maintenance(projected, run_at=run_at),
         "metrics": metrics,
         "hard_red_lines": hard_red_lines,
         "quality_gate": {
@@ -310,6 +313,8 @@ def evaluate_map_rot_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]
             "stale_memory_cannot_remain_in_history",
             "automatic_semantic_cleanup_solved",
             "private_history_map_rot_quality",
+            "forgetting_completed",
+            "conflict_auto_resolved",
         ],
     }
 

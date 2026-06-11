@@ -60,7 +60,7 @@ agent attention they save.
 | Surface | Current level | Current sample | Next promotion target | Why not public quality yet |
 | --- | --- | --- | --- | --- |
 | Attention navigation quality | `contract_smoke` | 12 selected cases across route families | `public_cohort_candidate` | Small author-written fixture; no public/external cohort or holdout. |
-| Map-rot lifecycle-debt | `contract_smoke` | 9 selected lifecycle-state cases | `public_cohort_candidate` | Exercises state taxonomy and red lines, not real map-rot distribution. |
+| Map-rot lifecycle-debt | `contract_smoke` | 9 selected lifecycle-state cases with no-write maintenance actions | `public_cohort_candidate` | Exercises state taxonomy, red lines, and bounded operator actions, not real map-rot distribution or completed cleanup. |
 | Agent continuity loop | `contract_smoke` | 6 selected integration cases | `public_cohort_candidate` | Proves composition behavior, not live host or private-history usefulness. |
 | Dream public shadow | `contract_smoke` | 4 synthetic public behavior cases | `public_cohort_candidate` | Useful falsifiable behavior smoke, but too small for broad Dream quality. |
 

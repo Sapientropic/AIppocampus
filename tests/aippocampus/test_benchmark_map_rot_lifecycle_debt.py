@@ -28,6 +28,14 @@ class MapRotLifecycleDebtBenchmarkTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["dead_letter_count"], 1)
         self.assertEqual(report["metrics"]["eligible_current_navigation_count"], 1)
         self.assertEqual(report["metrics"]["historically_preserved_count"], 8)
+        self.assertEqual(
+            report["maintenance_actions"]["metrics"]["action_counts"]["needs_review"],
+            2,
+        )
+        self.assertEqual(
+            report["maintenance_actions"]["metrics"]["hot_surface_removal_count"],
+            8,
+        )
         self.assertEqual(report["hard_red_lines"]["stale_as_current_count"], 0)
         self.assertEqual(report["hard_red_lines"]["masked_source_resurrection_count"], 0)
         self.assertEqual(report["hard_red_lines"]["quarantined_route_emit_count"], 0)
