@@ -447,6 +447,18 @@ telemetry. `aippocampus_runtime.model.client` rejects DeepSeek-flavored configs 
 DeepSeek contract, and docs health scans scripts for missing keywords so newly
 added LLM callers cannot silently bypass this billing guard.
 
+Spend and freshness reports should expose the same public telemetry shape for
+every model-backed lane: `usage_available`, `usage_missing_reason`,
+`cache_metrics_kind`, `prompt_cache_hit_tokens`,
+`prompt_cache_miss_tokens`, `prompt_cache_hit_rate`, `request_count`, and
+`latency_ms`. Missing provider usage must be named rather than silently
+reported as zero: use reasons such as `provider_did_not_return_usage`,
+`artifact_legacy_no_usage`, `local_offline_provider`, or `dry_run`. This shape
+is a sanitized operator surface only; it must not include prompts, source text,
+API keys, or local paths. Provider-backed benchmark reports may use the same
+shape directly or point to their `provider_execution_budget` block when that
+block carries the same token/cache/cost and stop-reason fields.
+
 ## Jobs
 
 ### `question_extraction`

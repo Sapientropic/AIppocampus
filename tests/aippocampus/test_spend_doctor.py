@@ -51,6 +51,34 @@ class SpendDoctorTests(unittest.TestCase):
                             "prompt_cache_miss_tokens": 200,
                         },
                         "cache": {"available": True, "hit_tokens": 800, "miss_tokens": 200},
+                        "elapsed_ms": 1200,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (warm_dir / "warm_nested.result.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_warm_ambient_recall_job_result",
+                        "created_at": "2026-06-05T12:10:00Z",
+                        "status": "written",
+                        "available": True,
+                        "observed_scout_result_count": 1,
+                        "card_count": 1,
+                        "cache_write": {"status": "written", "card_count": 1},
+                        "result": {
+                            "usage": {
+                                "prompt_cache_hit_tokens": 60,
+                                "prompt_cache_miss_tokens": 40,
+                            },
+                            "cache": {
+                                "kind": "deepseek_prefix",
+                                "hit_tokens": 60,
+                                "miss_tokens": 40,
+                            },
+                            "latency_ms": 300,
+                        },
                     },
                     ensure_ascii=False,
                 ),
@@ -80,6 +108,26 @@ class SpendDoctorTests(unittest.TestCase):
                         "status": "staging",
                         "src": "private-src",
                         "usage": {"total_tokens": 0},
+                    }
+                ],
+            )
+            write_jsonl(
+                root / "dream_queue.jsonl",
+                [
+                    {
+                        "kind": "aippocampus_dream_queue_item",
+                        "created_at": "2026-06-05T14:25:00Z",
+                        "status": "completed",
+                        "worker_status": "candidate_emitted",
+                        "dream_function": "compensatory",
+                        "usage": {"prompt_cache_hit_tokens": 20, "prompt_cache_miss_tokens": 10},
+                        "cache": {
+                            "kind": "deepseek_prefix",
+                            "available": True,
+                            "hit_tokens": 20,
+                            "miss_tokens": 10,
+                        },
+                        "latency_ms": 900,
                     }
                 ],
             )
@@ -155,14 +203,27 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertFalse(report["privacy_boundary"]["raw_prompts_included"])
         self.assertFalse(report["privacy_boundary"]["raw_source_text_included"])
         self.assertFalse(report["privacy_boundary"]["local_paths_included"])
-        self.assertEqual(warm["spend"]["effective_tokens"], 1500)
-        self.assertEqual(warm["yield"]["generated_candidates"], 12)
+        self.assertEqual(warm["spend"]["effective_tokens"], 1600)
+        self.assertEqual(warm["yield"]["generated_candidates"], 13)
         self.assertEqual(warm["yield"]["suppressed_candidates"], 12)
         self.assertEqual(warm["yield"]["foreground_cards"], 0)
+        self.assertTrue(warm["model_telemetry"]["usage_available"])
+        self.assertEqual(warm["model_telemetry"]["cache_metrics_kind"], "deepseek_prefix")
+        self.assertEqual(warm["model_telemetry"]["prompt_cache_hit_tokens"], 860)
+        self.assertEqual(warm["model_telemetry"]["prompt_cache_miss_tokens"], 240)
+        self.assertEqual(warm["model_telemetry"]["prompt_cache_hit_rate"], 0.7818)
+        self.assertEqual(warm["model_telemetry"]["latency_ms"]["count"], 2)
+        self.assertEqual(warm["model_telemetry"]["latency_ms"]["average"], 750.0)
         self.assertEqual(subconscious["spend"]["effective_tokens"], 70)
         self.assertEqual(subconscious["yield"]["staging_rows"], 2)
         self.assertEqual(subconscious["yield"]["materialized_rows"], 1)
+        self.assertEqual(dream["spend"]["effective_tokens"], 30)
         self.assertEqual(dream["yield"]["materialized_rows"], 1)
+        self.assertTrue(dream["model_telemetry"]["usage_available"])
+        self.assertEqual(dream["model_telemetry"]["cache_metrics_kind"], "deepseek_prefix")
+        self.assertEqual(dream["model_telemetry"]["prompt_cache_hit_tokens"], 20)
+        self.assertEqual(dream["model_telemetry"]["prompt_cache_miss_tokens"], 10)
+        self.assertEqual(dream["model_telemetry"]["prompt_cache_hit_rate"], 0.6667)
         self.assertEqual(semantic["yield"]["skip_events"], 2)
         self.assertEqual(prompt_hook["yield"]["foreground_cards"], 3)
         self.assertIn("low_yield_high_spend:warm_ambient", report["warning_codes"])
@@ -171,6 +232,40 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertNotIn(FAKE_PRIVATE_MARKER, encoded)
         self.assertNotIn(FAKE_LOCAL_PATH, encoded)
         self.assertNotIn(str(root), encoded)
+
+    def test_spend_report_marks_legacy_model_artifacts_without_fabricating_usage(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_jsonl(
+                root / "dream_queue.jsonl",
+                [
+                    {
+                        "kind": "aippocampus_dream_queue_item",
+                        "created_at": "2026-06-05T14:25:00Z",
+                        "status": "completed",
+                        "worker_status": "candidate_emitted",
+                        "dream_function": "compensatory",
+                    }
+                ],
+            )
+
+            report = spend_doctor.build_spend_doctor_report(
+                registry_dir=root,
+                days=7,
+                now="2026-06-06T12:00:00Z",
+            )
+
+        telemetry = report["routes"]["dream"]["model_telemetry"]
+        self.assertFalse(telemetry["usage_available"])
+        self.assertEqual(telemetry["usage_missing_reason"], "artifact_legacy_no_usage")
+        self.assertEqual(
+            telemetry["usage_missing_reason_counts"],
+            {"artifact_legacy_no_usage": 1},
+        )
+        self.assertEqual(telemetry["prompt_cache_hit_tokens"], 0)
+        self.assertEqual(telemetry["prompt_cache_miss_tokens"], 0)
 
     def test_warm_job_result_summary_persists_public_usage_for_future_spend_reports(self) -> None:
         summary = warm_recall.warm_job_result_summary(

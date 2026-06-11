@@ -223,7 +223,10 @@ class DreamSleepCycleTests(unittest.TestCase):
                 raise RuntimeError("provider timeout")
             return {
                 "choices": [{"message": {"content": accepted_content(dream_function)}}],
-                "usage": {},
+                "usage": {
+                    "prompt_cache_hit_tokens": 6,
+                    "prompt_cache_miss_tokens": 4,
+                },
             }
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -248,6 +251,12 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["worker_failure"], 1)
         self.assertEqual(payload["counts"]["accepted"], 1)
         self.assertEqual({row["status"] for row in queue_rows}, {"completed", "failed"})
+        completed = next(row for row in queue_rows if row["status"] == "completed")
+        self.assertEqual(completed["usage"]["prompt_cache_hit_tokens"], 6)
+        self.assertEqual(completed["usage"]["prompt_cache_miss_tokens"], 4)
+        self.assertEqual(completed["cache"]["kind"], "deepseek_prefix")
+        self.assertEqual(completed["cache"]["hit_tokens"], 6)
+        self.assertEqual(completed["cache"]["miss_tokens"], 4)
         self.assertEqual(len(finding_rows), 1)
         self.assertEqual(finding_rows[0]["adjudication_result"]["status"], "accepted")
         self.assertEqual(len(working_rows), 1)
