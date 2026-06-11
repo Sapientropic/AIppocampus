@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity  # noqa: E402
 
 
@@ -289,6 +290,48 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(payload["metrics"]["usefulness_gate_ok"])
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
+
+    def test_cli_agent_macro_outputs_compact_packet(self) -> None:
+        macro_path = self.cwd / "macro-orientation.jsonl"
+        entry = macro_state.build_macro_orientation_state(
+            project="AIppocampus",
+            hexagram="乾",
+            changing_lines=(1,),
+            source_refs=({"source_id": "macro-cli-source"},),
+            updated_at="2026-06-11T10:00:00Z",
+        )
+        macro_state.append_macro_orientation_state(macro_path, entry)
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "macro",
+                "--project",
+                "AIppocampus",
+                "--macro-state-jsonl",
+                str(macro_path),
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(payload["mode"], "macro")
+        self.assertEqual(
+            payload["memory_packets"][0]["packet_kind"],
+            "macro_orientation_packet",
+        )
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("macro-cli-source", encoded)
 
 
 if __name__ == "__main__":

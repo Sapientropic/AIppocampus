@@ -16,6 +16,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo
+from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
     navigation_error_payload,
@@ -28,8 +29,10 @@ from aippocampus_runtime.recall import agent_facade_contract as facade
 from aippocampus_runtime.recall import feedback_events
 
 SCHEMA_VERSION = "agent-opt-in-continuity-v0"
+MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 KIND = "aippocampus_agent_continuity_path"
 MAX_ROUTES = 5
+MACRO_HANDLE_PREFIX = "macro:project:"
 FOREGROUND_FORBIDDEN_KEYS = {
     "source_refs",
     "source_handles",
@@ -241,6 +244,231 @@ def _is_aippo_deepen_id(value: Any) -> bool:
     return text in {aippo_id, f"deepen:{aippo_id}"} or text.startswith("deepen:aippo_")
 
 
+def _macro_route_id(project: str) -> str:
+    return f"{MACRO_HANDLE_PREFIX}{project}:latest"
+
+
+def _macro_project_from_handle(value: Any) -> str | None:
+    text = str(value or "")
+    if text.startswith("deepen:"):
+        text = text[len("deepen:") :]
+    if not text.startswith(MACRO_HANDLE_PREFIX) or not text.endswith(":latest"):
+        return None
+    project = text[len(MACRO_HANDLE_PREFIX) : -len(":latest")]
+    return project or None
+
+
+def _load_macro_projection(
+    *,
+    project: str,
+    macro_state_path: str | Path | None,
+) -> dict[str, Any]:
+    if macro_state_path is None:
+        return {
+            "kind": "macro_orientation_latest_projection",
+            "project": project,
+            "status": "missing_macro_state_path",
+            "usable_as_current_navigation_pointer": False,
+            "usable_as_current_instruction": False,
+            "authority_level": macro_state.AUTHORITY_LEVEL,
+            "claim_permission": macro_state.CLAIM_PERMISSION,
+        }
+    entries = macro_state.load_macro_orientation_states(Path(macro_state_path).resolve())
+    return macro_state.latest_project_macro_orientation(entries, project=project)
+
+
+def _macro_state_from_projection(projection: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    state = projection.get("state")
+    return state if isinstance(state, Mapping) else None
+
+
+def _macro_state_has_route_delta(entry: Mapping[str, Any]) -> bool:
+    movement = entry.get("movement")
+    if not isinstance(movement, Mapping):
+        return False
+    return str(movement.get("mode") or "") != "standing_state"
+
+
+def _macro_foreground_text(entry: Mapping[str, Any]) -> str:
+    raw_hexagram = entry.get("hexagram")
+    hexagram: Mapping[str, Any] = raw_hexagram if isinstance(raw_hexagram, Mapping) else {}
+    raw_movement = entry.get("movement")
+    movement: Mapping[str, Any] = raw_movement if isinstance(raw_movement, Mapping) else {}
+    raw_relation = entry.get("relation_position")
+    relation: Mapping[str, Any] = raw_relation if isinstance(raw_relation, Mapping) else {}
+    current = str(hexagram.get("name") or "unknown")
+    toward = str(movement.get("toward") or current)
+    layer = str(relation.get("active_layer") or "unknown")
+    role = str(relation.get("current_agent_default_role") or "unknown")
+    return (
+        f"Macro orientation: {current} -> {toward}; active layer {layer}; "
+        f"agent as {role}. Reopen before exact/public/disputed claims."
+    )
+
+
+def _macro_memory_packet(
+    projection: Mapping[str, Any],
+    *,
+    project: str,
+) -> dict[str, Any] | None:
+    entry = _macro_state_from_projection(projection)
+    if projection.get("status") != "current" or entry is None:
+        return None
+    if not _macro_state_has_route_delta(entry):
+        return None
+    route_id = _macro_route_id(project)
+    raw_perturbation = entry.get("perturbation")
+    perturbation: Mapping[str, Any] = (
+        raw_perturbation if isinstance(raw_perturbation, Mapping) else {}
+    )
+    foreground_text = _macro_foreground_text(entry)
+    return {
+        "kind": "aippocampus_memory_packet",
+        "packet_kind": "macro_orientation_packet",
+        "route_id": route_id,
+        "output_mode": "direction_only",
+        "authority_level": macro_state.AUTHORITY_LEVEL,
+        "action_grammar": macro_state.ACTION_GRAMMAR,
+        "claim_permission": macro_state.CLAIM_PERMISSION,
+        "foreground_budget_bytes": 360,
+        "foreground_text": foreground_text,
+        "macro_orientation": {
+            "movement": perturbation.get("movement"),
+            "perturbation": perturbation.get("perturbation"),
+            "route_policy": perturbation.get("route_policy"),
+        },
+        "next_action": "agent_deepen_before_claim",
+        "deepen_route_id": f"deepen:{route_id}",
+    }
+
+
+def macro_orientation(
+    *,
+    project: str = "AIppocampus",
+    macro_state_path: str | Path | None = None,
+) -> dict[str, Any]:
+    projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    packet = _macro_memory_packet(projection, project=project)
+    diagnostics: list[str] = []
+    if projection.get("status") != "current":
+        diagnostics.append("source_required_before_macro_packet")
+    elif packet is None:
+        diagnostics.append("no_route_or_movement_delta")
+    memory_packets = [packet] if packet else []
+    deepen_requests = [
+        {
+            "route_id": packet["route_id"],
+            "deepen_route_id": packet["deepen_route_id"],
+            "tool": "agent deepen",
+            "boundary": "macro_orientation_packet_not_fact",
+        }
+        for packet in memory_packets
+    ]
+    forbidden_count = _count_forbidden_keys(memory_packets)
+    result = {
+        "kind": KIND,
+        "schema_version": SCHEMA_VERSION,
+        "macro_packet_schema_version": MACRO_PACKET_SCHEMA_VERSION,
+        "mode": "macro",
+        "surface": "macro_orientation",
+        "status": "ok" if memory_packets else str(projection.get("status") or "no_packet"),
+        "opt_in_required": True,
+        "memory_packets": memory_packets,
+        "deepen_requests": deepen_requests,
+        "suggested_next": "agent deepen" if deepen_requests else "continue_normally",
+        "diagnostics": diagnostics,
+        "metrics": {
+            "macro_packet_shown_count": len(memory_packets),
+            "foreground_forbidden_key_count": forbidden_count,
+        },
+        "red_lines": {
+            "foreground_source_dump_count": forbidden_count,
+            "macro_claim_ready_without_reopen": 0,
+            "source_backed_claim_without_reopen": 0,
+        },
+        "policy_boundary": _policy_boundary(),
+        "cannot_claim": [
+            "source_required_before_macro_packet",
+            "macro_orientation_packet_as_fact",
+            "bounded_evidence_without_deepen",
+        ],
+    }
+    return _public_payload(result)
+
+
+def _deepen_macro_orientation(
+    *,
+    project: str,
+    macro_state_path: str | Path | None,
+) -> dict[str, Any]:
+    projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    entry = _macro_state_from_projection(projection)
+    if entry is None:
+        result: dict[str, Any] = {
+            "status": "cannot_verify",
+            "projection_status": projection.get("status"),
+            "authority_level": macro_state.AUTHORITY_LEVEL,
+            "claim_permission": macro_state.CLAIM_PERMISSION,
+            "source_refs": [],
+            "diagnostics": projection,
+        }
+    else:
+        diagnostics = macro_state.explain_macro_orientation_state(entry)
+        result = {
+            **diagnostics,
+            "projection_status": projection.get("status"),
+            "recheck_on": entry.get("recheck_on", []),
+            "stale_after_days": entry.get("stale_after_days"),
+        }
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "deepen",
+            "surface": "macro",
+            "status": "ok" if entry is not None else "cannot_verify",
+            "result": result,
+            "policy_boundary": _policy_boundary(),
+            "cannot_claim": ["facts_outside_opened_source_scope", "macro_packet_as_fact"],
+        }
+    )
+
+
+def _explain_macro_orientation(
+    *,
+    project: str,
+    macro_state_path: str | Path | None,
+) -> dict[str, Any]:
+    projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "explain",
+            "surface": "macro",
+            "status": "ok" if projection.get("status") == "current" else "cannot_verify",
+            "explanation": {
+                "kind": "aippocampus_macro_orientation_explanation",
+                "schema_version": MACRO_PACKET_SCHEMA_VERSION,
+                "route_id": _macro_route_id(project),
+                "decision": "why_macro_orientation",
+                "output_mode": "direction_only",
+                "claim_permission": macro_state.CLAIM_PERMISSION,
+                "next_safe_action": "deepen_or_reopen_source",
+                "reason_codes": [
+                    "macro_orientation_packet_not_fact",
+                    f"projection_status_{projection.get('status')}",
+                ],
+                "cannot_claim": [
+                    "source_truth_without_deepen",
+                    "macro_packet_as_full_provenance",
+                ],
+            },
+            "policy_boundary": _policy_boundary(),
+        }
+    )
+
+
 def _project_workflow_contract() -> dict[str, Any]:
     return aippo.build_project_workflow_public_safe_contract()
 
@@ -383,6 +611,7 @@ def deepen(
     cwd: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
     registry_dir: str | Path | None = None,
+    macro_state_path: str | Path | None = None,
     max_matches: int = MAX_ROUTES,
 ) -> dict[str, Any]:
     """Deepen a recall navigation handle or project AIppo activation id."""
@@ -400,6 +629,13 @@ def deepen(
             "cannot_claim": ["facts_outside_opened_source_scope"],
         }
         return _public_payload(result)
+
+    macro_project = _macro_project_from_handle(handle)
+    if macro_project is not None:
+        return _deepen_macro_orientation(
+            project=macro_project,
+            macro_state_path=macro_state_path,
+        )
 
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
@@ -438,7 +674,7 @@ def deepen(
     )
 
 
-def explain(handle: Any) -> dict[str, Any]:
+def explain(handle: Any, *, macro_state_path: str | Path | None = None) -> dict[str, Any]:
     """Return public-safe reason codes for a recall handle or AIppo id."""
 
     if _is_aippo_deepen_id(handle):
@@ -453,6 +689,12 @@ def explain(handle: Any) -> dict[str, Any]:
                 "explanation": aippo.explain_aippo_working_contract(contract),
                 "policy_boundary": _policy_boundary(),
             }
+        )
+    macro_project = _macro_project_from_handle(handle)
+    if macro_project is not None:
+        return _explain_macro_orientation(
+            project=macro_project,
+            macro_state_path=macro_state_path,
         )
     try:
         normalized = normalize_handle(handle)
@@ -551,6 +793,93 @@ def capture_feedback(
     )
 
 
+def build_macro_orientation_packet_fixture_report() -> dict[str, Any]:
+    moving = macro_state.build_macro_orientation_state(
+        project="AIppocampus",
+        hexagram="乾",
+        changing_lines=(1,),
+        source_refs=({"source_id": "fixture-macro-source"},),
+        updated_at="2026-06-11T10:00:00Z",
+        active_layer="人",
+    )
+    standing = macro_state.build_macro_orientation_state(
+        project="AIppocampus",
+        hexagram="乾",
+        source_refs=({"source_id": "fixture-standing-source"},),
+        updated_at="2026-06-11T11:00:00Z",
+        active_layer="人",
+    )
+    current = macro_state.latest_project_macro_orientation([moving], project="AIppocampus")
+    standing_projection = macro_state.latest_project_macro_orientation(
+        [standing],
+        project="AIppocampus",
+    )
+    packet = _macro_memory_packet(current, project="AIppocampus")
+    standing_packet = _macro_memory_packet(standing_projection, project="AIppocampus")
+    cases: list[dict[str, Any]] = [
+        {
+            "case_id": "manual_search_avoided_by_macro_route_delta",
+            "packet": packet,
+            "effect": "manual_search_avoided",
+        },
+        {
+            "case_id": "wrong_layer_recall_reduced",
+            "packet": packet,
+            "effect": "wrong_layer_recall_reduced",
+        },
+        {
+            "case_id": "premature_broad_closeout_blocked",
+            "packet": packet,
+            "effect": "reopen_before_public_claim",
+        },
+        {
+            "case_id": "standing_state_suppressed",
+            "packet": standing_packet,
+            "effect": "suppressed_no_route_delta",
+        },
+    ]
+    shown = [case for case in cases if isinstance(case.get("packet"), Mapping)]
+    metrics = {
+        "claim_ready_macro_packets": sum(
+            1
+            for case in shown
+            if case["packet"]["claim_permission"] == "bounded_claim_allowed"
+        ),
+        "manual_search_avoided_count": sum(
+            1 for case in shown if case["effect"] == "manual_search_avoided"
+        ),
+        "wrong_layer_recall_reduced_count": sum(
+            1 for case in shown if case["effect"] == "wrong_layer_recall_reduced"
+        ),
+        "premature_broad_closeout_blocked_count": sum(
+            1 for case in shown if case["effect"] == "reopen_before_public_claim"
+        ),
+        "next_action_usefulness_count": sum(
+            1
+            for case in shown
+            if case["packet"]["next_action"] == "agent_deepen_before_claim"
+        ),
+        "suppressed_no_route_delta_count": sum(1 for case in cases if not case["packet"]),
+    }
+    report = {
+        "kind": "macro_orientation_agent_packet_fixture_report",
+        "schema_version": MACRO_PACKET_SCHEMA_VERSION,
+        "ok": (
+            metrics["claim_ready_macro_packets"] == 0
+            and metrics["manual_search_avoided_count"] >= 1
+            and metrics["wrong_layer_recall_reduced_count"] >= 1
+            and metrics["premature_broad_closeout_blocked_count"] >= 1
+            and metrics["next_action_usefulness_count"] >= 1
+            and metrics["suppressed_no_route_delta_count"] >= 1
+        ),
+        "cases": cases,
+        "metrics": metrics,
+        "authority_level": macro_state.AUTHORITY_LEVEL,
+        "claim_permission": macro_state.CLAIM_PERMISSION,
+    }
+    return _public_payload(report)
+
+
 def _json_out(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
@@ -576,16 +905,23 @@ def _parser() -> argparse.ArgumentParser:
     aippo_parser.add_argument("--task", dest="task_flag")
     aippo_parser.add_argument("--json", action="store_true")
 
+    macro_parser = sub.add_parser("macro")
+    macro_parser.add_argument("--project", default="AIppocampus")
+    macro_parser.add_argument("--macro-state-jsonl", required=True)
+    macro_parser.add_argument("--json", action="store_true")
+
     deepen_parser = sub.add_parser("deepen")
     deepen_parser.add_argument("handle")
     deepen_parser.add_argument("--cwd")
     deepen_parser.add_argument("--clean-source-dir")
     deepen_parser.add_argument("--registry-dir")
+    deepen_parser.add_argument("--macro-state-jsonl")
     deepen_parser.add_argument("--max", type=int, default=MAX_ROUTES)
     deepen_parser.add_argument("--json", action="store_true")
 
     explain_parser = sub.add_parser("explain")
     explain_parser.add_argument("handle")
+    explain_parser.add_argument("--macro-state-jsonl")
     explain_parser.add_argument("--json", action="store_true")
 
     feedback_parser = sub.add_parser("feedback")
@@ -616,6 +952,14 @@ def main(argv: list[str] | None = None) -> int:
         task = args.task_flag or " ".join(args.task)
         _json_out(activate_aippo(task=task))
         return 0
+    if args.command == "macro":
+        _json_out(
+            macro_orientation(
+                project=args.project,
+                macro_state_path=args.macro_state_jsonl,
+            )
+        )
+        return 0
     if args.command == "deepen":
         _json_out(
             deepen(
@@ -623,12 +967,13 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=args.cwd,
                 clean_source_dir=args.clean_source_dir,
                 registry_dir=args.registry_dir,
+                macro_state_path=args.macro_state_jsonl,
                 max_matches=args.max,
             )
         )
         return 0
     if args.command == "explain":
-        _json_out(explain(args.handle))
+        _json_out(explain(args.handle, macro_state_path=args.macro_state_jsonl))
         return 0
     if args.command == "feedback":
         _json_out(
