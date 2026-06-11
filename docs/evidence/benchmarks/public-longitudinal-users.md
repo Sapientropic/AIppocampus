@@ -127,10 +127,14 @@ lines:
 ```powershell
 python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 25 --reader-mode dry-run --json --output benchmark_corpus\reports\locomo-text-qa-dry-run.json
 $env:AIPPOCAMPUS_LOCOMO_READER_API_KEY="<provider key>"
-python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 100 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-url> --json --output benchmark_corpus\reports\locomo-text-qa-provider.json
+python benchmarks\aippocampus\benchmark_locomo_qa.py --questions 100 --reader-mode provider --reader-model <fixed-reader-model> --reader-base-url <openai-compatible-url> --partial-output benchmark_corpus\reports\locomo-text-qa-provider.partial.json --provider-budget-checkpoint benchmark_corpus\reports\locomo-text-qa-provider.budget.json --max-provider-calls 100 --max-provider-total-tokens <token-cap> --max-provider-estimated-cost-usd <usd-cap> --json --output benchmark_corpus\reports\locomo-text-qa-provider.json
 ```
 
 CLI stdout is static by design; use `--output` for the sanitized JSON report.
+Provider mode now reuses the shared provider execution budget helper and stops
+before the first reader call when max calls plus a token/cost budget and
+checkpoint paths are missing. Dry-run remains cheap and does not require budget
+flags.
 The report keeps retrieval, answer quality, source citation, latency,
 token/cache, cost, and failure taxonomy in separate fields. It preserves the
 dataset-provided LoCoMo `category` values as `locomo_category_*` question-type

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -215,3 +216,22 @@ def provider_execution_budget_summary(
         "validation_errors": validation_errors or [],
         "ok_to_start": not validation_errors,
     }
+
+
+def write_provider_budget_checkpoint(path: str | Path, summary: dict[str, Any]) -> None:
+    """Write a sanitized reusable budget checkpoint before or after a live run."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "aippocampus_provider_execution_budget_checkpoint",
+                "provider_execution_budget": summary,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )

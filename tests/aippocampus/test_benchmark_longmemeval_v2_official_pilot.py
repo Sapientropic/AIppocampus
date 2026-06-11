@@ -104,6 +104,14 @@ class LongMemEvalV2OfficialPilotTests(unittest.TestCase):
         self.assertIn("query_latency", payload["metric_separation"])
         self.assertIn("answer_accuracy", payload["metric_separation"])
         self.assertIn("reader_evaluator_dependency", payload["metric_separation"])
+        budget = payload["provider_execution_budget"]
+        self.assertTrue(budget["ok_to_start"])
+        self.assertFalse(budget["live_mode"])
+        self.assertEqual(
+            budget["no_provider_budget_required_reason"],
+            "decision_report_only_no_official_reader_execution",
+        )
+        self.assertTrue(budget["planned_live_pilot_requires_budget_before_run"])
         self.assertIn("longmemeval_v2_answer_accuracy", payload["cannot_claim"])
         self.assertIn("longmemeval_v2_lafs_gain", payload["cannot_claim"])
         self.assertTrue(payload["sanitized_report_validation"]["ok"])
