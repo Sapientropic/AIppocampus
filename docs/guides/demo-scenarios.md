@@ -3,12 +3,10 @@
 These scenarios use public-safe examples. They are meant to show product shape
 without exposing private rollouts or personal registry data.
 
-Demo `Important limits` lines are claim-boundary inputs for
-`docs/evidence/current-claims.md`, not standalone benchmark or readiness proof.
-The profile boundary lives in
-[public-core-boundary.md](public-core-boundary.md#product-profile-boundary):
-personal demos should not require purpose tokens, review inboxes, or enterprise
-policy setup unless the scenario explicitly says it is high-risk/governed.
+Current claim boundaries live in `docs/evidence/current-claims.md`; these demos
+are command and product-shape examples, not a separate evidence ledger. The
+profile boundary lives in
+[public-core-boundary.md](public-core-boundary.md#product-profile-boundary).
 
 ## Scenario 1: Exact Quote Recall
 
@@ -21,7 +19,7 @@ PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.sea
 Expected result: matches come from original visible clean-source text, not a
 summary-only memory.
 
-Important limits: summaries or model-generated findings are not the source.
+Boundary: summaries or model-generated findings are not the source.
 
 ## Scenario 2: Fuzzy Life-Topic Recall
 
@@ -40,8 +38,8 @@ subconscious finding that can be materialized into
 `semantic-scope-labels.jsonl`, modeling a DeepSeek/subconscious sidecar rather
 than hard-coded lexical expansion.
 
-Important limits: all personal life-wide labels are not complete by default. The governed
-demo boundary lives in `docs/evidence/current-claims.md`.
+Boundary: semantic sidecar labels are navigational; current governed-demo
+claims live in `docs/evidence/current-claims.md`.
 
 ## Scenario 3: Real-History Semantic Scope Sidecar Smoke
 
@@ -87,8 +85,8 @@ mode, retries transient reviewer failures, reports per-label pass rates, and
 emits hashed case ids plus counts. Source-review-sensitive labels are filtered
 unless the model supplied strong per-label evidence.
 
-Important limits: semantic labels are not source truth, and not all historical
-threads have been semantically labeled or perfectly ranked.
+Boundary: semantic labels are not source truth; live source-review mode sends
+selected clean-source snippets to the configured reviewer.
 
 ## Scenario 3b: Slow Real Codex Long-Session Continuity Smoke
 
@@ -112,9 +110,8 @@ clean-source rebuild from the real rollout. If the host is unavailable, it
 reports `status=skipped_host_unavailable`; if the host is available but
 compaction or correction survival fails, it reports `status=failed`.
 
-Important limits: no private real-history compaction survival, live semantic
-adjudication quality, interactive Desktop UI behavior, or every Codex client
-surface. This smoke is not part of the fast deterministic tier.
+Boundary: this slow smoke requires a real Codex app-server host and is not part
+of the fast deterministic tier.
 
 ## Scenario 4: Project Timeline
 
@@ -126,10 +123,8 @@ PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.navigation
 ```
 
 Expected result: the output contains a `life_wide` section with labeled turns
-and source refs back to clean-source message ids.
-
-Important limits: timeline labels are not stronger evidence than the underlying
-clean-source turns.
+and source refs back to clean-source message ids. Timeline labels stay below
+the underlying clean-source turns.
 
 ## Scenario 5: Project Continuity Recall
 
@@ -139,9 +134,7 @@ PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.mcp.server
 
 Expected result: `search_memory`, `recall_context`, `recall_deepen`, and
 `get_turn_context` are available for recovering project context from clean
-source.
-
-Important limits: not every project thread has necessarily been onboarded.
+source. A project thread must be onboarded before those tools can recover it.
 
 ## Scenario 6: Multilingual Recall Smoke
 
@@ -158,8 +151,8 @@ without forcing a live semantic call in the foreground hook. Seeded rows also
 report `exact_cache_hit`, `semantic_cue_hit`, and `cold_model_call` separately
 so operators can tell an exact prompt cache hit from reusable cue coverage.
 
-Important limits: optional external semantic gates may be disabled, and not every
-private multilingual prompt already has warmed semantic cue coverage.
+The optional external semantic gate may be disabled; the seeded command shows
+the deterministic warmed-cue path.
 
 ## Scenario 6b: Memory Pain Boundary Fixtures
 
@@ -173,9 +166,8 @@ public-safe negative cases and no unsupported-evidence false positives for the
 memory-pain fixture family. The public report is
 [`memory-pain-fixture-report.md`](../evidence/benchmarks/memory-pain-fixture-report.md).
 
-Important limits: no competitor superiority, live semantic-model quality, real-history
-coverage, or real Track D runtime compaction-continuity behavior. Use the
-separate Track D synthetic runner when demonstrating that measurement surface.
+Boundary: these commands exercise public memory-pain fixtures. Use the separate
+Track D synthetic runner when demonstrating compaction-continuity measurement.
 
 ## Scenario 6c: Private Memory Pain Prompt Smoke
 
@@ -191,9 +183,8 @@ thread ids, source refs, or candidate titles. The smoke reports negative
 over-escalations, vague evidence upgrades, positive misses, semantic timeout
 buckets, and semantic-evidence bridge diagnostics separately.
 
-Important limits: no full private-history coverage or live semantic-model quality. A
-relaxed live run with `--max-elapsed-ms 0` is useful for diagnosis, but it is not
-part of the fast deterministic path.
+Boundary: a relaxed live run with `--max-elapsed-ms 0` is useful for diagnosis,
+but it is not part of the fast deterministic path.
 
 ## Scenario 6d: Fresh-Thread Recall Arms
 
@@ -210,11 +201,9 @@ correction coverage, threshold-edge coverage, and three arms: `no_memory`,
 `hook_only`, and `active_recall`. Privacy, unsupported-evidence,
 negative-control, multi-turn, correction, and threshold gates should pass.
 
-Important limits: no real-history fresh-thread recall quality, live semantic-model
-quality, live correction-extraction quality, competitor superiority, or
-production coverage for private emotional, family, design, or coding memories.
-The fixtures model upstream semantic/subconscious output; the runner must not
-be read as a prompt-keyword classifier.
+Boundary: the fixtures model upstream semantic/subconscious output; the runner
+must not be read as a prompt-keyword classifier. Use
+`docs/evidence/current-claims.md` for quality claims.
 
 ## Scenario 7: Inspect MCP Tools
 
@@ -235,7 +224,7 @@ python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 Expected result: `dist/aippocampus-plugin/` contains `.codex-plugin`,
 `.mcp.json`, and `skills/aippocampus/`. Hooks are not auto-enabled.
 
-Important limits: the plugin has not been verified through every Codex client.
+Boundary: package build verifies bundle shape, not every Codex client surface.
 
 ## Scenario 8b: Real Codex Plugin And MCP Host Smoke
 
@@ -249,8 +238,8 @@ Codex MCP host lists the `aippocampus` server, `mcpServer/tool/call` runs
 `sync_status` through a real thread, and cleanup removes the plugin,
 marketplace, build output, temporary marketplace root, and plugin-cache entry.
 
-Important limits: no human Desktop marketplace UI click-through or
-third-party machine installed the public package.
+Boundary: this covers the host API path, not human Desktop marketplace
+click-through or third-party machine install.
 
 ## Scenario 9: Local Sync Folder
 
@@ -266,9 +255,8 @@ Expected result: the sync manifest is valid and `raw_rollout_included` remains
 false. The synced registry uses portable bundle-relative locators, and pull
 repairs generated-artifact paths to the target registry.
 
-Important limits: no real second machine, cross-OS path behavior, cloud,
-object-storage backend, or cloud-safe encrypted sync path has been exercised.
-This is a plaintext throwaway demo for local protocol validation.
+Boundary: this is a plaintext throwaway demo for local protocol validation; it
+does not exercise cloud, object storage, encryption, or another machine.
 
 ## Scenario 9b: Single-Machine Cross-Device Sync Smoke
 
@@ -281,9 +269,8 @@ rewrites source-device locators, repairs generated artifact paths to the target
 registry, preserves conflicts in both directions, keeps raw rollouts excluded
 by default, and transfers raw rollout only in the explicit opt-in branch.
 
-Important limits: no physical second machine, real alternate OS runtime, cloud
-folder client, object-storage backend, or cloud-safe encrypted sync path has
-been exercised.
+Boundary: this smoke models two registries on one machine; it does not exercise
+a physical second machine, cloud folder client, object storage, or encryption.
 
 ## Scenario 9c: Docker/WSL Alternate-Runtime Sync Smoke
 
@@ -296,8 +283,8 @@ runs `status`, `repair`, and `pull`. The pulled registry should use
 runtime-local generated-artifact locators, keep workspace unresolved, and keep
 raw rollout excluded by default.
 
-Important limits: no physical second machine, real cloud client, or
-object-storage backend has been exercised.
+Boundary: this exercises alternate runtime behavior, not a physical second
+machine, cloud client, or object-storage backend.
 
 ## Scenario 9d: HTTP Object-Storage Sync Smoke
 
@@ -310,17 +297,16 @@ bundle through real object `PUT` calls, verifies status/repair through object
 `GET` calls, and pulls into a target registry with generated-artifact paths
 repaired. Raw rollout stays excluded by default.
 
-Important limits: no physical second machine or managed cloud object-storage
-provider has been exercised.
+Boundary: this uses a local HTTP object store, not a managed cloud provider or
+physical second machine.
 
 ## Scenario 10: Over-Personalization Avoidance
 
 Ask an unrelated technical question in a workspace with AIppocampus installed.
 
 Expected result: ambient recall may stay silent when the prompt has no strong
-memory scent. Strong claims require source hits.
-
-Important limits: not every prompt should include personal history.
+memory scent. Strong claims require source hits, and unrelated prompts should
+not include personal history by default.
 
 ## Scenario 11: Ambient Recall Boundary
 
@@ -341,8 +327,9 @@ titles, session/turn ids, secrets, topic-epoch values, or local paths.
 Installing a prompt hook is an explicit user action because it can surface
 private clean source in future prompts.
 
-Important limits: hooks are not enabled by plugin install alone, and a visible
-`scent`/`candidate` audit status is source-backed evidence.
+Boundary: hooks are not enabled by plugin install alone. A visible
+`scent`/`candidate` audit status is not claim-supporting evidence unless source
+is opened or the surface reports `source_backed_evidence`.
 
 ## Scenario 12: Raw Audit Opt-In
 
@@ -356,6 +343,5 @@ Expected result: raw audit remains an explicit operator action.
 Default stream fallback output is bounded: it returns raw-line refs, payload
 class, short snippets, byte/truncation diagnostics, and hides the raw rollout
 path. Full normalized raw payloads require the local audit override
-`--include-raw-payload` / `--audit-raw`.
-
-Important limits: raw rollout mining is not the daily default.
+`--include-raw-payload` / `--audit-raw`. Raw rollout mining is not the daily
+default.

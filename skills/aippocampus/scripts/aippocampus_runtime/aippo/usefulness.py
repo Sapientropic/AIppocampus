@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.recall import continuity_usefulness
 
 TASK_FAMILY_TERMS = {
     "issue_writing": ("issue", "closeout", "triage", "github"),
@@ -127,3 +128,25 @@ def usefulness_metrics(
         "low_risk_guidance_allowed_without_reopen_count": active_count if selected_guidance else 0,
         "usefulness_gate_ok": generic_only == 0 and bool(selected_guidance),
     }
+
+
+def continuity_usefulness_for_activation(
+    activation: Mapping[str, Any],
+    red_lines: Mapping[str, Any],
+) -> dict[str, Any]:
+    guidance = [str(item) for item in activation.get("use_guidance") or []]
+    active_count = int(activation.get("active_clause_count") or len(guidance) or 0)
+    return continuity_usefulness.continuity_usefulness_metrics(
+        {
+            "red_line_counts": red_lines,
+            "manual_query_invention_count": 0,
+            "blind_deepen_required_count": 0,
+            "packet_triage_distinctiveness": 0.8 if active_count > 1 else 1.0,
+            "wrong_route_drag_count": 0,
+            "useful_packet_count": active_count,
+            "packet_count": max(1, active_count),
+            "foreground_protocol_noise_bytes": 48,
+            "useful_guidance_bytes": sum(len(item.encode("utf-8")) for item in guidance),
+            "time_to_first_useful_packet_ms_proxy": 120,
+        }
+    )

@@ -53,6 +53,23 @@ strict-config proof below. The diagnostic reports one of:
 `server_start_failure`, `tool_schema_failure`, `tool_call_failure`, or
 `healthy`.
 
+Minimal healthy persistent config:
+
+| Claude field | Expected value |
+| --- | --- |
+| `Type` | `stdio` |
+| `Command` | `aippocampus` |
+| `Args` | `mcp` |
+| diagnostic status | `persistent_config_healthy` |
+| nested diagnostic status | `healthy` |
+
+`bad_command_path` means the configured command or a path-like argument no
+longer resolves. The common stale local-clone failure is
+`path_check=configured_arg_path_missing`, which should be repaired by removing
+the stale local entry and adding the portable `aippocampus mcp` command again.
+Do not commit or paste the local path from `claude mcp get`; the smoke output
+redacts it for public reports.
+
 Common manual repairs:
 
 - `missing_config`: run `claude mcp add aippocampus -- aippocampus mcp`.

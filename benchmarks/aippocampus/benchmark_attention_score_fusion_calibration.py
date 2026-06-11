@@ -20,6 +20,7 @@ _paths.ensure_paths()
 
 import benchmark_attention_navigation_quality as navigation_quality
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.navigation import attention_score_fusion_policy
 
 SCHEMA_VERSION = 1
 THRESHOLD = 0.5
@@ -53,6 +54,7 @@ CALIBRATED_RULE_GRID = {
     "source_handle_score": 0.35,
     "anti_nag_penalty": 1.20,
 }
+RUNTIME_DEFAULT_POLICY_NAME = attention_score_fusion_policy.DEFAULT_SCORE_FUSION_POLICY_NAME
 
 
 def _rate(numerator: int, denominator: int) -> dict[str, Any]:
@@ -145,6 +147,7 @@ def evaluate_calibration_arm(
     weights: Mapping[str, float],
     *,
     arm_name: str,
+    policy_name: str | None = None,
 ) -> dict[str, Any]:
     projected = [_score_row(row, weights) for row in rows]
     positives = [row for row in projected if row["label"]["useful_route"]]
@@ -157,6 +160,7 @@ def evaluate_calibration_arm(
     red_lines = _red_lines(projected)
     return {
         "arm_name": arm_name,
+        "policy_name": policy_name or arm_name,
         "weights": {key: round(float(value), 4) for key, value in sorted(weights.items())},
         "rows": projected,
         "metrics": {
@@ -177,14 +181,7 @@ def evaluate_calibration_arm(
 
 def _score_row(row: Mapping[str, Any], weights: Mapping[str, float]) -> dict[str, Any]:
     features = dict(row.get("features") or {})
-    raw_score = 0.0
-    for key, weight in weights.items():
-        if key.endswith("_penalty"):
-            continue
-        raw_score += float(features.get(key) or 0.0) * float(weight)
-    if features.get("anti_nag_flag"):
-        raw_score -= float(weights.get("anti_nag_penalty") or 0.0)
-    score = max(0.0, min(1.0, round(raw_score, 4)))
+    score = attention_score_fusion_policy.score_features_with_policy(features, weights)
     hard_masked = float(features.get("hard_mask_count") or 0.0) > 0.0
     gated_score = 0.0 if hard_masked else score
     return {
@@ -232,10 +229,19 @@ def run_attention_score_fusion_calibration() -> dict[str, Any]:
         rows,
         CALIBRATED_RULE_GRID,
         arm_name="calibrated_rule_grid",
+        policy_name="calibrated_rule_grid_v1",
     )
-    ok = calibrated["ok"] and (
-        calibrated["metrics"]["route_precision_at_threshold"]["rate"]
+    runtime_default = evaluate_calibration_arm(
+        rows,
+        attention_score_fusion_policy.default_score_fusion_policy(),
+        arm_name="runtime_default_policy",
+        policy_name=RUNTIME_DEFAULT_POLICY_NAME,
+    )
+    ok = runtime_default["ok"] and (
+        runtime_default["metrics"]["route_precision_at_threshold"]["rate"]
         >= current["metrics"]["route_precision_at_threshold"]["rate"]
+        and runtime_default["metrics"]["route_recall_at_threshold"]["rate"]
+        >= calibrated["metrics"]["route_recall_at_threshold"]["rate"]
     )
     return {
         "kind": "aippocampus_attention_score_fusion_calibration",
@@ -251,10 +257,11 @@ def run_attention_score_fusion_calibration() -> dict[str, Any]:
         "arms": {
             "current_deterministic_weights": current,
             "calibrated_rule_grid": calibrated,
+            "runtime_default_policy": runtime_default,
         },
         "decision": {
-            "selected_arm": "calibrated_rule_grid" if ok else "none",
-            "default_adoption": "not_adopted_by_this_benchmark",
+            "selected_arm": "runtime_default_policy" if ok else "none",
+            "default_adoption": "adopted_by_hot_router" if ok else "not_adopted",
             "hard_masks_remain_policy_gates": True,
         },
         "privacy_boundary": {
@@ -265,7 +272,7 @@ def run_attention_score_fusion_calibration() -> dict[str, Any]:
         },
         "cannot_claim": [
             "calibration_affects_routing_only",
-            "default_foreground_adoption",
+            "default_foreground_hook_adoption",
             "private_history_training_quality",
             "answer_generation_quality",
             "hard_masks_are_learnable",

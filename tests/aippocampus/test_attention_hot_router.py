@@ -20,10 +20,19 @@ class AttentionHotRouterTests(unittest.TestCase):
         masked = by_id["masked_high_relevance_private_route"]["packet"]
 
         self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
+        self.assertEqual(
+            report["score_fusion_policy"]["default_policy"],
+            "calibrated_rule_grid_v1",
+        )
+        self.assertTrue(report["score_fusion_policy"]["hard_masks_outside_scoring"])
         self.assertEqual(masked["output_mode"], "silence")
         self.assertEqual(masked["claim_permission"], "blocked")
         self.assertFalse(masked["emitted"])
         self.assertIn("privacy_domain", masked["masks_applied"])
+        self.assertEqual(
+            masked["router_diagnostics"]["score_policy"],
+            "calibrated_rule_grid_v1",
+        )
         self.assertGreater(masked["router_diagnostics"]["score"], 0.8)
         self.assertEqual(report["metrics"]["masked_high_score_emission_count"], 0)
 
@@ -96,6 +105,10 @@ class AttentionHotRouterTests(unittest.TestCase):
 
         self.assertEqual(suppressed["output_mode"], "direction_only")
         self.assertIn("anti_nag_suppressed", suppressed["router_diagnostics"]["reason_codes"])
+        self.assertLess(
+            suppressed["router_diagnostics"]["raw_score_before_policy_gates"],
+            suppressed["router_diagnostics"]["threshold"],
+        )
         self.assertEqual(report["metrics"]["anti_nag_suppressed_count"], 1)
         self.assertEqual(report["metrics"]["masked_action_match_emission_count"], 0)
         self.assertNotIn("PRIVATE_TOOL_ARG_SENTINEL", encoded)

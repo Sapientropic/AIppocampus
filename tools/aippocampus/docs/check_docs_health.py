@@ -35,7 +35,11 @@ from source_kernel_guard import source_kernel_contract_issues
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
 
-MAX_SKILL_LINES = 220
+# 220 remains the slim-entrypoint pressure line. The hard budget is a little
+# higher so SKILL.md can carry agent-native packet decoding guidance without
+# forcing foreground agents into reference docs for every ordinary hook packet.
+SKILL_LINE_WARNING_THRESHOLD = 220
+MAX_SKILL_LINES = 260
 MAX_SKILL_WORDS = 2600
 MAX_SKILL_CODE_FENCES = 2
 
@@ -72,6 +76,9 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
     "bounded_evidence": "SKILL.md missing bounded_evidence action grammar",
     "source_open": "SKILL.md missing source_open action grammar",
     "ignore_or_blocked": "SKILL.md missing ignore_or_blocked action grammar",
+    "## Hook Packet Decoder": "SKILL.md missing hook packet decoder",
+    "suggested_agent_action": "SKILL.md missing hook suggested action decoder",
+    "not_enough_for_claim": "SKILL.md missing not-enough-for-claim decoder",
     "Active Path Packets": "SKILL.md missing route-first Active Path Packet framing",
     "before broad manual search": "SKILL.md missing route-first search boundary",
     "progressive MCP tools": "SKILL.md missing progressive MCP recall preference",
@@ -1362,11 +1369,18 @@ def check_docs(root: Path) -> dict[str, Any]:
     code_fence_count = text.count("```")
     metrics = {
         "skill_lines": len(lines),
+        "skill_line_warning_threshold": SKILL_LINE_WARNING_THRESHOLD,
         "skill_words": word_count,
         "skill_code_fences": code_fence_count,
         "required_references": len(REQUIRED_REFERENCES),
     }
 
+    if len(lines) > SKILL_LINE_WARNING_THRESHOLD:
+        warnings.append(
+            "SKILL.md has "
+            f"{len(lines)} lines; keep runtime-primer additions compact above "
+            f"{SKILL_LINE_WARNING_THRESHOLD}"
+        )
     if len(lines) > MAX_SKILL_LINES:
         issues.append(f"SKILL.md has {len(lines)} lines; keep it <= {MAX_SKILL_LINES}")
     if word_count > MAX_SKILL_WORDS:

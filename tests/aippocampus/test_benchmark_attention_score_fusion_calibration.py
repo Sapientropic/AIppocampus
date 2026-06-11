@@ -30,6 +30,7 @@ class AttentionScoreFusionCalibrationTests(unittest.TestCase):
 
         current = report["arms"]["current_deterministic_weights"]
         calibrated = report["arms"]["calibrated_rule_grid"]
+        runtime_default = report["arms"]["runtime_default_policy"]
 
         self.assertLess(
             current["metrics"]["route_precision_at_threshold"]["rate"],
@@ -41,8 +42,13 @@ class AttentionScoreFusionCalibrationTests(unittest.TestCase):
         self.assertEqual(calibrated["metrics"]["route_recall_at_threshold"]["rate"], 1.0)
         self.assertEqual(calibrated["red_lines"]["privacy_bypass_count"], 0)
         self.assertEqual(calibrated["red_lines"]["hard_mask_override_count"], 0)
+        self.assertEqual(runtime_default["policy_name"], "calibrated_rule_grid_v1")
+        self.assertEqual(runtime_default["metrics"], calibrated["metrics"])
+        self.assertEqual(runtime_default["red_lines"], calibrated["red_lines"])
+        self.assertEqual(report["decision"]["selected_arm"], "runtime_default_policy")
+        self.assertEqual(report["decision"]["default_adoption"], "adopted_by_hot_router")
         self.assertIn("calibration_affects_routing_only", report["cannot_claim"])
-        self.assertIn("default_foreground_adoption", report["cannot_claim"])
+        self.assertIn("default_foreground_hook_adoption", report["cannot_claim"])
 
     def test_hard_masks_remain_non_negotiable_even_with_high_scores(self) -> None:
         rows = calibration.export_attention_feature_rows()

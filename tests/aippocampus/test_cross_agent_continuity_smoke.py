@@ -584,6 +584,82 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
         )
         self.assertEqual(result["tool_call"]["status"], "called_memory_health")
 
+    def test_claude_probe_reports_healthy_persistent_config(self) -> None:
+        def fake_which(command: str) -> str | None:
+            if command in {"claude", "aippocampus"}:
+                return command
+            return None
+
+        def fake_run(args: list[str], **kwargs: object) -> object:
+            command = tuple(args)
+            if command == ("claude", "mcp", "list"):
+                stdout = "aippocampus: aippocampus mcp - ✓ Connected"
+            elif command == ("claude", "mcp", "get", "aippocampus"):
+                stdout = (
+                    "aippocampus:\n"
+                    "  Status: ✓ Connected\n"
+                    "  Type: stdio\n"
+                    "  Command: aippocampus\n"
+                    "  Args: mcp\n"
+                    "  Environment:\n"
+                )
+            elif command == ("claude", "--version"):
+                stdout = "2.1.138 (Claude Code)"
+            elif command == ("aippocampus", "mcp"):
+                stdout = "\n".join(
+                    [
+                        json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}),
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 2,
+                                "result": {"tools": [{"name": "memory_health"}]},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 3,
+                                "result": {
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": json.dumps(
+                                                {"recommended_actions": []}
+                                            ),
+                                        }
+                                    ],
+                                    "isError": False,
+                                },
+                            }
+                        ),
+                    ]
+                )
+            else:
+                stdout = ""
+
+            class Proc:
+                returncode = 0
+                stderr = ""
+
+            proc = Proc()
+            proc.stdout = stdout
+            return proc
+
+        with (
+            patch.object(smoke_claude_code_mcp_host.shutil, "which", side_effect=fake_which),
+            patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+        ):
+            result = smoke_claude_code_mcp_host.run_claude_mcp_probe(
+                persistent_diagnostic=True
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["host_config_ok"])
+        self.assertEqual(result["status"], "persistent_config_healthy")
+        self.assertEqual(result["persistent_config_status"], "healthy")
+        self.assertTrue(result["persistent_config_diagnostic"]["memory_health_listed"])
+
 
 if __name__ == "__main__":
     unittest.main()

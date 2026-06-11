@@ -19,11 +19,15 @@ Today AIppocampus has:
 
 - source-backed recall and source-reopen routes;
 - AIppo working-contract fixtures for low-risk workflow guidance;
+- a first public-safe Ficus MVP fixture for low-risk project/workflow
+  impressions, source authority classes, hard masks, compact activation, and
+  explicit deepen output;
 - foreground profile-like-detail suppression and source-reopen boundaries;
 - evidence docs that separate retrieval, answer generation, privacy, and cost.
 
 That is enough to plan PersonaMem, and enough for a tiny diagnostic pilot. It
-is not enough to claim personalization quality.
+is not enough to claim personalization quality, broad Ficus quality, or a
+PersonaMem score.
 
 ## Required Product Capabilities
 
@@ -40,9 +44,11 @@ and have their own deterministic tests:
 | Baseline separation | No-memory, source-retrieval-only, AIppo/Ficus profile, and oracle context arms must stay separate. |
 
 AIppo working contracts can guide low-risk task behavior after source support.
-They are not user-profile truth. Ficus-style impressions, when implemented,
-should follow the same source-backed discipline but carry stronger privacy and
-lifecycle gates.
+They are not user-profile truth. The first Ficus MVP now tests the schema,
+lifecycle, authority, hard-mask, activation, and deepen boundary for selected
+public-safe cases. It is still not a broad profile layer: a full benchmark path
+needs a public cohort, baseline separation, adaptation scoring, and reviewed
+privacy/currentness failures.
 
 ## Minimal Diagnostic Pilot
 
@@ -83,7 +89,9 @@ evaluator mismatch, and reader hallucination.
 ## Can Claim
 
 - PersonaMem is staged behind AIppo/Ficus profile-readiness.
-- A pre-readiness pilot, if added later, can validate schema and red-line
+- The current Ficus MVP can validate schema, lifecycle, hard masks, and
+  selected activation/deepen behavior only.
+- A pre-readiness pilot, if added later, can validate report shape and red-line
   behavior only.
 - AIppocampus has documented what profile capabilities must exist before a full
   PersonaMem result is meaningful.

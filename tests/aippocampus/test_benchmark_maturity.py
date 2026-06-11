@@ -64,6 +64,26 @@ class BenchmarkMaturityTests(unittest.TestCase):
         self.assertFalse(leaked["quality_gate_ok"])
         self.assertIn("holdout_used_for_tuning", leaked["quality_gate_blockers"])
 
+    def test_usefulness_and_attention_cost_are_public_quality_blockers(self) -> None:
+        report = maturity.build_benchmark_maturity_report(
+            benchmark_maturity_level="public_cohort",
+            case_count=40,
+            passed_case_count=40,
+            per_family_case_counts={"route": 20, "noise": 20},
+            minimum_family_case_floor=10,
+            external_or_public_cohort_case_count=40,
+            holdout_case_count=10,
+            holdout_used_for_tuning_count=0,
+            contract_gate_ok=True,
+            usefulness_gate_ok=False,
+            attention_cost_ok=False,
+            next_promotion_target="holdout_quality",
+        )
+
+        self.assertFalse(report["quality_gate_ok"])
+        self.assertIn("usefulness_gate_failed", report["quality_gate_blockers"])
+        self.assertIn("attention_cost_gate_failed", report["quality_gate_blockers"])
+
     def test_small_existing_reports_declare_contract_smoke_maturity(self) -> None:
         reports = [
             attention.run_attention_navigation_quality(),
