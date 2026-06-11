@@ -289,6 +289,30 @@ def _macro_state_has_route_delta(entry: Mapping[str, Any]) -> bool:
     return str(movement.get("mode") or "") != "standing_state"
 
 
+def _macro_momentum_block(entry: Mapping[str, Any]) -> Mapping[str, Any]:
+    momentum = entry.get("momentum")
+    return momentum if isinstance(momentum, Mapping) else {}
+
+
+def _macro_momentum_foreground_text(entry: Mapping[str, Any]) -> str:
+    momentum = _macro_momentum_block(entry)
+    direction = str(momentum.get("direction") or "")
+    route_policy = str(momentum.get("route_policy") or "")
+    if not direction:
+        return ""
+    if route_policy == "closeout_with_overconfidence_watch":
+        return "momentum peaking; close out only with overconfidence watch"
+    if direction == "rising":
+        return "momentum rising"
+    if direction == "turning":
+        return "momentum turning; recheck currentness before pushing"
+    if direction == "declining":
+        return "momentum declining; reduce push and reopen currentness"
+    if direction == "hibernating":
+        return "momentum hibernating; stay quiet until new source changes"
+    return f"momentum {direction}"
+
+
 def _macro_foreground_text(entry: Mapping[str, Any]) -> str:
     raw_hexagram = entry.get("hexagram")
     hexagram: Mapping[str, Any] = raw_hexagram if isinstance(raw_hexagram, Mapping) else {}
@@ -300,8 +324,10 @@ def _macro_foreground_text(entry: Mapping[str, Any]) -> str:
     toward = str(movement.get("toward") or current)
     layer = str(relation.get("active_layer") or "unknown")
     role = str(relation.get("current_agent_default_role") or "unknown")
+    momentum_text = _macro_momentum_foreground_text(entry)
+    momentum_clause = f"; {momentum_text}" if momentum_text else ""
     return (
-        f"Macro orientation: {current} -> {toward}; active layer {layer}; "
+        f"Macro orientation: {current} -> {toward}; active layer {layer}{momentum_clause}; "
         f"agent as {role}. Reopen before exact/public/disputed claims."
     )
 
@@ -321,6 +347,7 @@ def _macro_memory_packet(
     perturbation: Mapping[str, Any] = (
         raw_perturbation if isinstance(raw_perturbation, Mapping) else {}
     )
+    momentum = _macro_momentum_block(entry)
     foreground_text = _macro_foreground_text(entry)
     return {
         "kind": "aippocampus_memory_packet",
@@ -336,6 +363,11 @@ def _macro_memory_packet(
             "movement": perturbation.get("movement"),
             "perturbation": perturbation.get("perturbation"),
             "route_policy": perturbation.get("route_policy"),
+            "momentum": {
+                "phase": momentum.get("phase"),
+                "direction": momentum.get("direction"),
+                "route_policy": momentum.get("route_policy"),
+            },
         },
         "next_action": "agent_deepen_before_claim",
         "deepen_route_id": f"deepen:{route_id}",
@@ -801,6 +833,7 @@ def build_macro_orientation_packet_fixture_report() -> dict[str, Any]:
         source_refs=({"source_id": "fixture-macro-source"},),
         updated_at="2026-06-11T10:00:00Z",
         active_layer="人",
+        momentum={"basis": {"support_delta": 0.95}},
     )
     standing = macro_state.build_macro_orientation_state(
         project="AIppocampus",

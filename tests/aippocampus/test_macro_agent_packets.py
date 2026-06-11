@@ -14,7 +14,13 @@ from aippocampus_runtime.macro import state  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity  # noqa: E402
 
 
-def _write_macro_state(path: Path, *, source_refs: bool = True, changing: tuple[int, ...] = (1,)) -> None:
+def _write_macro_state(
+    path: Path,
+    *,
+    source_refs: bool = True,
+    changing: tuple[int, ...] = (1,),
+    momentum_basis: dict[str, float] | None = None,
+) -> None:
     entry = state.build_macro_orientation_state(
         project="AIppocampus",
         hexagram="乾",
@@ -22,6 +28,7 @@ def _write_macro_state(path: Path, *, source_refs: bool = True, changing: tuple[
         source_refs=({"source_id": "macro-source-1"},) if source_refs else (),
         updated_at="2026-06-11T10:00:00Z",
         active_layer="人",
+        momentum={"basis": momentum_basis or {"support_delta": 0.20}},
     )
     state.append_macro_orientation_state(path, entry)
 
@@ -47,8 +54,12 @@ class MacroAgentPacketTests(unittest.TestCase):
         self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
         self.assertEqual(packet["deepen_route_id"], "deepen:macro:project:AIppocampus:latest")
         self.assertLessEqual(len(packet["foreground_text"].encode("utf-8")), 360)
+        self.assertIn("momentum rising", packet["foreground_text"])
         self.assertIn("macro_orientation", packet)
+        self.assertEqual(packet["macro_orientation"]["momentum"]["direction"], "rising")
+        self.assertEqual(packet["macro_orientation"]["momentum"]["phase"], "lin")
         self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("basis", encoded)
         self.assertNotIn("macro-source-1", encoded)
         self.assertEqual(payload["red_lines"]["macro_claim_ready_without_reopen"], 0)
 
@@ -69,6 +80,7 @@ class MacroAgentPacketTests(unittest.TestCase):
         self.assertEqual(deepened["surface"], "macro")
         self.assertEqual(deepened["result"]["source_refs"], [{"source_id": "macro-source-1"}])
         self.assertIn("derivation_trace", deepened["result"])
+        self.assertEqual(deepened["result"]["momentum"]["basis"]["support_delta"], 0.2)
         self.assertEqual(deepened["result"]["authority_level"], "navigation_only")
         self.assertEqual(explained["surface"], "macro")
         self.assertEqual(explained["explanation"]["next_safe_action"], "deepen_or_reopen_source")
@@ -79,7 +91,7 @@ class MacroAgentPacketTests(unittest.TestCase):
             missing_source = Path(tmp) / "missing-source.jsonl"
             standing = Path(tmp) / "standing.jsonl"
             _write_macro_state(missing_source, source_refs=False)
-            _write_macro_state(standing, changing=())
+            _write_macro_state(standing, changing=(), momentum_basis={"staleness_delta": 1.30})
 
             missing_payload = agent_continuity.macro_orientation(
                 project="AIppocampus",

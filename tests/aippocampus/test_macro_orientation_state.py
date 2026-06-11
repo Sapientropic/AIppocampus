@@ -152,7 +152,10 @@ class MacroOrientationStateTests(unittest.TestCase):
 
         self.assertEqual(set(momentum["basis"]), set(state.MOMENTUM_BASIS_KEYS))
         self.assertEqual(momentum["authority_level"], "navigation_only")
-        self.assertEqual(momentum["status"], "reserved_for_momentum_phase_slice")
+        self.assertEqual(momentum["phase"], "kun")
+        self.assertEqual(momentum["direction"], "hibernating")
+        self.assertEqual(momentum["claim_permission"], "no_claim_before_reopen")
+        self.assertFalse(momentum["fact_claim_allowed"])
 
 
 if __name__ == "__main__":
