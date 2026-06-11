@@ -14,6 +14,14 @@ python benchmarks\aippocampus\benchmark_agent_continuity_loop.py --json
 
 The report kind is `aippocampus_agent_continuity_loop_fixture`.
 
+Report shape:
+
+- `measured_result`: the compact positive result string.
+- `supports`: what the measured public-safe fixture actually supports.
+- `material_limits`: short limits that prevent likely over-reading.
+- `cannot_claim`: legacy compatibility field kept short; prefer
+  `material_limits` for new reader-facing prose.
+
 ## What It Exercises
 
 - semantic warm route material projected into attention route tokens;
@@ -81,12 +89,18 @@ Red lines are separate from success counts:
 - `blind_deepen_required_count`
 - `packet_triage_collision_count`
 
-## Boundaries
+## Claim Shape
 
-Passing this gate supports only the narrow claim that the public-safe semantic
-warming, hot-router, facade, AIppo, source-reopen, and foreground-budget
-contracts compose without obvious red-line drift.
+Measured result: 8/8 public-safe agent-continuity fixture cases pass, all
+red-line counters are 0, `packet_triage_distinctiveness = 1.0`, and
+`blind_deepen_required_count = 0`.
 
-It does not evaluate live host behavior lift, private-history quality,
-answer-generation quality, default foreground adoption, public benchmark
-quality lift, or external model quality.
+Supports: semantic warming, hot-router packets, agent-native facade/deepen,
+AIppo guidance, source-reopen budget, and foreground budget compose on the
+checked-in public-safe fixtures. Multiple similar reopenable route packets now
+carry distinct safe triage hints instead of forcing blind deepen.
+
+Material limits: this is still a deterministic contract fixture, not
+private-history or live-host lift evidence; it measures route/deepen/facade
+composition, not answer-generation or external-model quality; opt-in/default
+foreground adoption remains a separate runtime decision.

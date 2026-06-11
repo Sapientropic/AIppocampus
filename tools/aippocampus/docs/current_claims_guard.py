@@ -15,6 +15,8 @@ REQUIRED_CURRENT_CLAIMS_TERMS = {
     "claim_level": "current claims snapshot missing claim-level column",
     "cohort": "current claims snapshot missing cohort column",
     "supersedes": "current claims snapshot missing supersession column",
+    "supports": "current claims snapshot missing supports/material-limits reporting term",
+    "material_limits": "current claims snapshot missing material-limits reporting term",
     "cannot_claim": "current claims snapshot missing cannot-claim column",
     "semantic_sidecar.aggregate_materialized_rows": (
         "current claims snapshot missing semantic sidecar aggregate metric"
