@@ -88,6 +88,9 @@ suppression as a product policy.
 - [`coordination-topology-diagnostics.md`](coordination-topology-diagnostics.md)
   owns Telepathy V0 coordination-shape diagnostics. It can report boundary
   crossings, but it does not authorize cross-agent recall.
+- [`telepathy-coordination-packets.md`](telepathy-coordination-packets.md) owns
+  Telepathy V0 soft-lock and handoff-card packets. Isolation filters still apply
+  before any packet is emitted.
 - [`source-backed-attention-router.md`](source-backed-attention-router.md) owns
   route-packet authority and hard masks.
 - [`foreground-memory-ux-budget.md`](foreground-memory-ux-budget.md) owns
