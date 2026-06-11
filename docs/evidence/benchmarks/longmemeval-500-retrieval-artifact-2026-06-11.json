@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "artifact_id": "longmemeval_s.retrieval_only_500_artifact_2026_06_11",
+  "role": "public reopenable artifact trail for the LongMemEval-S 500-question retrieval-only result",
+  "generated_from_run": {
+    "generated_at": "2026-06-11T15:16:15Z",
+    "status": "retrieval_sufficient",
+    "runner": "benchmarks/aippocampus/benchmark_longmemeval.py",
+    "command": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\\reports\\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\\reports\\longmemeval-v1-small-retrieval-500.json",
+    "elapsed_ms": 764686.52,
+    "line_reranker_mode": "off",
+    "provider_or_judge_model": "none"
+  },
+  "claim_relationship": {
+    "current_claim_row": "longmemeval_s.retrieval_only_500_2026_06_10",
+    "interpretation": "The 2026-06-11 deterministic rerun reproduces the current 500-question retrieval-only metrics and adds a public artifact trail. It does not create a new answer-quality, judge-model, V2, SOTA, or exact-line-citation-quality claim.",
+    "closeout_state": "completed-score",
+    "artifact_boundary": "The generated full report remains gitignored; this manifest records enough public metadata, hashes, metrics, and schema shape for future agents to understand and rerun it."
+  },
+  "official_sources": {
+    "paper": "https://arxiv.org/abs/2410.10813",
+    "repository": "https://github.com/xiaowu0162/LongMemEval",
+    "cleaned_dataset": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned"
+  },
+  "dataset": {
+    "split": "longmemeval-v1-small",
+    "split_label": "LongMemEval-S cleaned",
+    "filename": "longmemeval_s_cleaned.json",
+    "bytes": 277383467,
+    "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "checksum_note": "SHA-256 is the Hugging Face LFS content oid and matched the locally verified downloaded file."
+  },
+  "generated_reports": {
+    "full_report": {
+      "relative_path": "benchmark_corpus/reports/longmemeval-v1-small-retrieval-500.json",
+      "git_policy": "ignored_local_artifact",
+      "bytes": 557485,
+      "sha256": "e793dca50785ad84beb265a1d006cd675a8b4a3dde6b0d2da0b4f6e7bc3ebd85"
+    },
+    "partial_output": {
+      "relative_path": "benchmark_corpus/reports/longmemeval-v1-small-retrieval-500.partial.json",
+      "git_policy": "ignored_local_artifact",
+      "bytes": 557485,
+      "sha256": "e793dca50785ad84beb265a1d006cd675a8b4a3dde6b0d2da0b4f6e7bc3ebd85",
+      "completion_note": "The final partial-output artifact has the same hash as the full report, indicating the checkpoint path completed rather than preserving an interrupted blocker."
+    }
+  },
+  "run_parameters": {
+    "questions": 500,
+    "min_questions": 100,
+    "top_k": 10,
+    "evidence_context_radius": 5,
+    "progress_every": 25,
+    "mode": "retrieval_only",
+    "qa_generation": "not_run",
+    "judge_model": null
+  },
+  "aggregate_metrics": {
+    "question_count": 500,
+    "case_types": {
+      "longmemeval_single-session-user": 70,
+      "longmemeval_multi-session": 133,
+      "longmemeval_single-session-preference": 30,
+      "longmemeval_temporal-reasoning": 133,
+      "longmemeval_knowledge-update": 78,
+      "longmemeval_single-session-assistant": 56
+    },
+    "session_r_at_10": {
+      "hit": 479,
+      "total": 500,
+      "rate": 0.958,
+      "wilson_95_ci": [0.9366, 0.9724]
+    },
+    "evidence_line_r_at_10": {
+      "hit": 408,
+      "total": 479,
+      "rate": 0.8518,
+      "wilson_95_ci": [0.8172, 0.8808]
+    },
+    "context_visible_evidence_r_at_10": {
+      "hit": 452,
+      "total": 479,
+      "rate": 0.9436,
+      "wilson_95_ci": [0.9192, 0.961]
+    },
+    "mrr": {
+      "session": 0.8809,
+      "evidence_line": 0.6309,
+      "context_visible_evidence": 0.8086
+    },
+    "evidence_line_recall_by_k": {
+      "1": {"hit": 240, "total": 479, "rate": 0.501},
+      "3": {"hit": 349, "total": 479, "rate": 0.7286},
+      "5": {"hit": 380, "total": 479, "rate": 0.7933},
+      "10": {"hit": 408, "total": 479, "rate": 0.8518},
+      "20": {"hit": 429, "total": 479, "rate": 0.8956},
+      "50": {"hit": 450, "total": 479, "rate": 0.9395}
+    },
+    "evidence_miss_taxonomy_counts": {
+      "context_visible_exact_line_miss": 44,
+      "session_found_below_top_k": 9,
+      "same_session_wrong_line_top_k": 9,
+      "gold_line_low_rank_21_50": 5,
+      "gold_line_rank_below_50": 3,
+      "gold_line_near_miss_rank_2_20": 1
+    },
+    "evidence_context_rescue_distance_counts_top10": {
+      "distance_1": 29,
+      "distance_2_to_context_radius": 15
+    },
+    "warning_count": 0
+  },
+  "privacy_and_schema_preview": {
+    "report_privacy_boundary": {
+      "raw_text_emitted": false,
+      "snippets_emitted": false,
+      "absolute_paths_emitted": false,
+      "case_ids_are_hashed": true,
+      "output_shape": "sanitized_longmemeval_retrieval_metrics"
+    },
+    "local_path_and_secret_scan": {
+      "checked_for": [
+        "drive-letter absolute paths",
+        "home-directory path fragments",
+        "common API key, token, password, and secret assignment patterns"
+      ],
+      "matches": 0
+    },
+    "json_validation": "python -m json.tool benchmark_corpus\\reports\\longmemeval-v1-small-retrieval-500.json",
+    "case_schema_keys": [
+      "case_id",
+      "dataset",
+      "case_type",
+      "source_id_sha1",
+      "question_id_sha1",
+      "query_sha1",
+      "query_terms_count",
+      "expected_line_count",
+      "expected_session_count",
+      "has_line_evidence",
+      "evidence_rank",
+      "evidence_rank_bucket",
+      "evidence_hit_top10",
+      "evidence_context_rank",
+      "evidence_context_hit_top10",
+      "expected_lines_found_top10",
+      "expected_lines_found_all_rank",
+      "multi_evidence_partial_hit_top10",
+      "same_session_wrong_line_top10",
+      "evidence_context_rescue_top10",
+      "gold_line_near_miss_top10_to_20",
+      "evidence_context_distance_bucket_top10",
+      "session_rank",
+      "session_hit_top10",
+      "warning_count",
+      "evidence_miss_category"
+    ],
+    "sample_case": {
+      "case_id": "2209ca0bc894dca2",
+      "dataset": "longmemeval-v1-small",
+      "case_type": "longmemeval_single-session-user",
+      "source_id_sha1": "878689469dcd8d10",
+      "question_id_sha1": "878689469dcd8d10",
+      "query_sha1": "2ca9a0d5f1876fa9",
+      "query_terms_count": 6,
+      "expected_line_count": 2,
+      "expected_session_count": 1,
+      "has_line_evidence": true,
+      "evidence_rank_bucket": "rank_1",
+      "evidence_hit_top10": true,
+      "evidence_context_hit_top10": true,
+      "session_hit_top10": true,
+      "warning_count": 0,
+      "evidence_miss_category": "multi_evidence_partial_hit"
+    }
+  },
+  "cannot_claim": [
+    "answer_generation_quality",
+    "judge_model_score",
+    "longmemeval_qa_score",
+    "longmemeval_v2_score",
+    "sota_or_external_baseline_superiority",
+    "decision_gate_quality",
+    "exact_line_citation_quality_solved",
+    "semantic_or_llm_reranker_quality",
+    "private_history_quality",
+    "broad_memory_superiority"
+  ],
+  "related_issues": [
+    {"number": 1039, "url": "https://github.com/Sapientropic/AIppocampus/issues/1039", "relationship": "expanded LongMemEval-S beyond 50-question smoke"},
+    {"number": 1085, "url": "https://github.com/Sapientropic/AIppocampus/issues/1085", "relationship": "completed 500-question retrieval-only diagnostic"},
+    {"number": 1193, "url": "https://github.com/Sapientropic/AIppocampus/issues/1193", "relationship": "open exact evidence-line ranking gap beyond lexical rerank"},
+    {"number": 1234, "url": "https://github.com/Sapientropic/AIppocampus/issues/1234", "relationship": "publishes this reopenable artifact trail"}
+  ]
+}

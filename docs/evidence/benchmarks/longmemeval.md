@@ -284,6 +284,11 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 
 LongMemEval-S 500-question verification summary:
 
+- Public artifact trail:
+  [`longmemeval-500-retrieval-artifact-2026-06-11.json`](longmemeval-500-retrieval-artifact-2026-06-11.json).
+  This manifest records the deterministic rerun metadata, dataset checksum,
+  command shape, report SHA-256, aggregate metrics, privacy checks, and schema
+  preview without committing the raw dataset or full generated report.
 - Dataset file: `longmemeval_s_cleaned.json`
 - Bytes: `277383467`
 - SHA-256: `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`
