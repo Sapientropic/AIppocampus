@@ -1103,7 +1103,7 @@ class DocsHealthTests(unittest.TestCase):
                         "track_b.private_semantic_sidecar_required",
                         "fts5.real_history_recall_2026_05_29",
                         "demo_scenarios.claim_boundaries",
-                        "## Cannot-Claim Owner And Retirement Ledger",
+                        "## Claim-Boundary Owner And Retirement Ledger",
                         "| Caveat | Category | Owner issue | Retirement condition | Next review |",
                         "| --- | --- | --- | --- | --- |",
                         "| Claude Code hooks | actionable | - | - | before Beta readiness update |",
@@ -1153,7 +1153,10 @@ class DocsHealthTests(unittest.TestCase):
             "proof-slice maturity board missing public_safe_fixture status",
             issues,
         )
-        self.assertIn("proof-slice maturity board missing cannot-claim column", issues)
+        self.assertIn(
+            "proof-slice maturity board missing important-limits column",
+            issues,
+        )
         self.assertIn(
             "docs README missing proof-slice maturity board pointer",
             issues,

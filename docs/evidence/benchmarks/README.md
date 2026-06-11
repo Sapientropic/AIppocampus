@@ -20,7 +20,7 @@ this folder.
 | Reader need | Start here | Why |
 | --- | --- | --- |
 | Current claims, scope boundaries, and remediation routes | [`../current-claims.md`](../current-claims.md) | It is the claim snapshot and links active or closed remediation routes such as #960/#963/#958. |
-| Which runner or smoke to prioritize | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | It names priority, maturity, default run profile, and cannot-claim boundaries. |
+| Which runner or smoke to prioritize | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | It names priority, maturity, default run profile, and claim-boundary guidance. |
 | Why benchmark layers are separate | [`design/README.md`](design/README.md) | It explains the benchmark philosophy without dated result noise. |
 | Full maintainer directory | [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) | It maps every runner, smoke, corpus, and evidence owner. |
 
@@ -37,11 +37,11 @@ collapsing them into one leaderboard.
 | Need | Start here | Boundary |
 | --- | --- | --- |
 | Benchmark philosophy | [`design/benchmark-design-rationale.md`](design/benchmark-design-rationale.md) | Reader-facing rationale; no raw outputs or current-status upgrades. |
-| Benchmark priority and run profiles | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | P0/P1/P2/P3 priority, maturity, default run profile, claim-level, and cannot-claim guidance. |
+| Benchmark priority and run profiles | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | P0/P1/P2/P3 priority, maturity, default run profile, claim-level, and claim-boundary guidance. |
 | Detailed track plan | [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md) | Track A-D runner details, profiles, diagnostics, and implementation notes. |
 | Track S semantic robustness | [`semantic-robustness-track-s.md`](semantic-robustness-track-s.md) | No-live-judge diagnostics for perturbation stability, retrieval invariance, hard negatives, and optional proxy/vector health boundaries. |
 | External benchmark comparison home | [`design/external-benchmark-map.md`](design/external-benchmark-map.md) | Analysis map and blockers; not a superiority claim. |
-| AMemGym adapter boundary | [`amemgym.md`](amemgym.md) and [`amemgym-official-live-provider-blocker-2026-06-09.md`](amemgym-official-live-provider-blocker-2026-06-09.md) | Public `v1.base` metadata smoke, local overlay metrics, cannot-claim boundary for #733/#742, and #958 live-provider blocker decision. |
+| AMemGym adapter boundary | [`amemgym.md`](amemgym.md) and [`amemgym-official-live-provider-blocker-2026-06-09.md`](amemgym-official-live-provider-blocker-2026-06-09.md) | Public `v1.base` metadata smoke, local overlay metrics, material limits for #733/#742, and #958 live-provider blocker decision. |
 | PersonaMem readiness gate | [`personamem-readiness.md`](personamem-readiness.md) | #1159 staging boundary for PersonaMem / PersonaMem-v2 behind AIppo/Ficus profile-readiness; no score or personalization-quality claim. |
 | E2E50 private/local seed follow-up | [`e2e50-private-local-seed-followup-2026-06-10.md`](e2e50-private-local-seed-followup-2026-06-10.md) | #1086 sanitized scanner/annotation blocker report; not private-history behavior lift or a completed 20/50-case pack. |
 | Multimodal memory benchmark map | [`design/multimodal-memory-benchmark-map.md`](design/multimodal-memory-benchmark-map.md) | #528 source-shape routing across HippoCamp, MemLens, ATM-Bench, egocentric video, UniDoc, Persona, and conversation-memory benchmarks. |

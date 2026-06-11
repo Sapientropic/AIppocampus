@@ -3,7 +3,7 @@
 Role: reader-facing positive evidence map.
 Status: public interpretation layer for #1079.
 
-This page answers a simple question before readers hit the caveat wall: what is
+This page answers a simple question before readers hit the caveats: what is
 already proven, and where is the proof? It does not replace
 [`current-claims.md`](current-claims.md), the stage readiness docs, or dated
 verification ledgers. Those remain the source of truth for numbers,
@@ -69,8 +69,8 @@ they are not broad statistical proof.
 Can claim: there are real user-visible recovery examples and second-user
 signals.
 
-Still cannot claim: default hook lift, universal fresh-thread quality,
-cross-host quality, or broad private-history generality.
+Important limits: no default hook lift, universal fresh-thread quality,
+cross-host quality, or broad private-history generality yet.
 
 ## Benchmark-Supported But Not Product-Wide
 
@@ -85,7 +85,7 @@ story.
 | External comparability | LongMemEval retrieval, AMemGym adapter state, STATE-Bench feasibility, MemoryAgentBench feasibility | Not official leaderboard superiority unless a complete official run says so. |
 | Provider/runtime confidence | Provider conformance, install/update/status checks, deterministic PR tier | Not all-client or all-provider quality. |
 
-## Not Claimed Yet
+## Open Proof Walls
 
 These are not failures by themselves; they are the next proof walls.
 
@@ -98,8 +98,8 @@ These are not failures by themselves; they are the next proof walls.
   Observatory, cognitive-load, Episode/Arc, or warm preactivation.
 
 Use the
-[`cannot-claim owner and retirement ledger`](current-claims.md#cannot-claim-owner-and-retirement-ledger)
-to find what evidence would narrow or retire each caveat.
+[`claim-boundary owner and retirement ledger`](current-claims.md#claim-boundary-owner-and-retirement-ledger)
+to find what evidence would narrow or retire each material limit.
 
 ## Benchmark Interpretation Header
 
@@ -110,7 +110,7 @@ when it helps readers:
 Question answered:
 Primary metric:
 Can claim:
-Still cannot claim:
+Important limits:
 Best next benchmark:
 ```
 

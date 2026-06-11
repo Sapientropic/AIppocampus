@@ -1,4 +1,4 @@
-"""Current-claims snapshot and cannot-claim retirement guards."""
+"""Current-claims snapshot and claim-boundary retirement guards."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ REQUIRED_CURRENT_CLAIMS_TERMS = {
     ),
 }
 
-CANNOT_CLAIM_RETIREMENT_SECTION = "## Cannot-Claim Owner And Retirement Ledger"
+CANNOT_CLAIM_RETIREMENT_SECTION = "## Claim-Boundary Owner And Retirement Ledger"
 CANNOT_CLAIM_RETIREMENT_REQUIRED_COLUMNS = (
     "Caveat",
     "Category",
@@ -178,11 +178,11 @@ def cannot_claim_retirement_issues(text: str) -> list[str]:
     issues: list[str] = []
     parsed = _current_claims_table_after_section(text, CANNOT_CLAIM_RETIREMENT_SECTION)
     if parsed is None:
-        return ["current claims snapshot missing cannot-claim owner/retirement ledger"]
+        return ["current claims snapshot missing claim-boundary owner/retirement ledger"]
 
     headers, rows = parsed
     if not rows:
-        issues.append("current claims cannot-claim owner/retirement ledger has no rows")
+        issues.append("current claims claim-boundary owner/retirement ledger has no rows")
 
     for column in CANNOT_CLAIM_RETIREMENT_REQUIRED_COLUMNS:
         if column not in headers:

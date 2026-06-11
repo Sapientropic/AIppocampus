@@ -24,7 +24,7 @@ contract-review assistance.
   `model_summary_as_truth_rate`
 - contract-review prototype behavior:
   source-backed bounded risk flags, missing-context questions, source-reopen
-  enforcement, and cannot-claim boundaries
+  enforcement, and material limits
 
 ## Public-Safe Boundary
 

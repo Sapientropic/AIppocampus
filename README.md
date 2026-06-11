@@ -29,8 +29,8 @@ first, then states exactly what they do not prove.
 
 For the current proof map, use the
 [Can-Claim Ladder](docs/evidence/can-claim-ladder.md): it leads with exact
-positive claims that are already supported, then routes to benchmark and
-cannot-claim boundaries.
+positive claims that are already supported, then routes to benchmark evidence
+and material claim boundaries.
 
 For a compact origin and current-value trail, use the
 [Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md):

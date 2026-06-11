@@ -153,7 +153,7 @@ Coding decision-shadow deterministic benchmark:
 - Negative controls passed: wrong-source evidence, visible-source suppression,
   stale-authority suppression
 - Privacy boundary: no raw text, raw source refs, or absolute paths emitted
-- Still cannot claim live host timing, private-history behavior lift, or full
+- Important limits: no live host timing, private-history behavior lift, or full
   code-index navigation quality
 
 Live semantic gate diagnostic with `--semantic-workers default`:

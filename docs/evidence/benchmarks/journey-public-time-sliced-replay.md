@@ -53,15 +53,15 @@ python -m pytest tests\aippocampus\test_journey_tracking.py::JourneyTrackingTest
 Broader local validation for the landing PR also ran the full Journey test file,
 Ruff, mypy on the touched files, docs health, and the repository PR tier.
 
-## Claim Boundary
+## Claim Shape
 
-This fixture supports a narrow public claim: the checked Journey replay helper
+Supports: the checked Journey replay helper
 can build no-write time-sliced candidates from replayable public-style rows,
 exclude future rows before the horizon, keep an active Journey hint
 navigation-only, and suppress resolved, stale, wrong-route, source-visible,
 unrelated, and high-risk exact-claim controls without public leakage of raw
 source material.
 
-It cannot claim private real-history Journey quality, live host timing quality,
-default foreground usefulness, user-visible recall lift, future-state
+Important limits: no private real-history Journey quality, live host timing
+quality, default foreground usefulness, user-visible recall lift, future-state
 prediction, or source evidence without reopen.

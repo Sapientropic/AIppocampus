@@ -18,8 +18,7 @@ smokes, public-safe fixtures, and second-user evidence.
 | `release_claimable` | Docs, install path, diagnostics, and evidence support the exact public claim in the row's `Can claim` cell. |
 
 Rows name the maturity of the strongest current proof slice, not the ambition of
-the whole line. A row can be useful and still have a strict `Cannot claim`
-boundary.
+the whole line. A row can be useful and still have strict material limits.
 
 ## Cognitive Layer Graduation Ladder
 
@@ -31,10 +30,10 @@ surfaces:
 | Rung | Meaning | Public wording boundary |
 | --- | --- | --- |
 | `metaphor` | Research language or product intuition only. | May appear in origin/research docs, not as implemented behavior. |
-| `prototype` | Deterministic code or design slice exists, but quality is local or narrow. | Describe as experimental/internal and name cannot-claim boundaries. |
+| `prototype` | Deterministic code or design slice exists, but quality is local or narrow. | Describe as experimental/internal and name material limits. |
 | `fixture_tested` | Public-safe deterministic fixture or smoke covers the slice. | May claim the fixture contract, not live quality. |
 | `benchmark_supported` | Redistributable benchmark, public shadow cohort, or external public fixture supports the same failure taxonomy. | May cite benchmark support within scope. |
-| `dogfooded` | Sanitized private/local aggregate runs show useful behavior. | private dogfood evidence may support operator confidence but needs explicit cannot-claim wording. |
+| `dogfooded` | Sanitized private/local aggregate runs show useful behavior. | Private dogfood evidence may support operator confidence but needs explicit material-limit wording. |
 | `public_contract` | Public reproducible evidence, docs, diagnostics, and release boundary support the default behavior claim. | May be advertised as stable public behavior only within the exact contract. |
 
 private dogfood evidence is valuable for realism, but public-facing proof should
@@ -45,7 +44,7 @@ as opt-in, experimental, fixture-scoped, or not-yet-default.
 
 ## Cognitive Layer Board
 
-| Layer | Current rung | Evidence owner | Can claim | Cannot claim |
+| Layer | Current rung | Evidence owner | Can claim | Important limits |
 | --- | --- | --- | --- | --- |
 | Dream / sleep-cycle synthesis | `dogfooded` | #163, [`dream-task-design.md`](../../research/dream-task-design.md), [`dream-private-large-history-diagnostic-2026-06-04.md`](../dream/dream-private-large-history-diagnostic-2026-06-04.md), [`current-claims.md`](../current-claims.md) | Source-backed Dream substrates, bounded workers, precision gates, sanitized private structural diagnostics, and public Dream-vs-baseline shadow axes exist. | Live provider Dream quality, private-history reviewed quality, predictive validity, active-imagination usefulness, or user-visible recall/reflection lift. |
 | Journey / frontier routing | `fixture_tested` | #310, [`journey-tracking.md`](../../research/journey-tracking.md), [`journey-public-time-sliced-replay.md`](../benchmarks/journey-public-time-sliced-replay.md) | Source-backed waypoint/Journey structures, conservative foreground hint timing fixtures, and a public time-sliced replay cohort for active-hint, resolved/stale/wrong-route suppression, false-foreground, and no-future-leak controls exist. | Live default Journey quality, weekly/monthly journey review value, private-history quality, user-visible recall lift, or future-state prediction. |
@@ -58,7 +57,7 @@ as opt-in, experimental, fixture-scoped, or not-yet-default.
 
 ## Flagship Cognitive Mechanism Gate
 
-| Mechanism | Current gate | Owning issue | Cannot claim until |
+| Mechanism | Current gate | Owning issue | Important limit until |
 | --- | --- | --- | --- |
 | Awake SWR / online consolidation tagging | `fixture_tested` | #1018, #1058, `aippocampus_runtime.reflection.consolidation_priority`, `aippocampus_runtime.subconscious.event_salience_gate` | Benchmark or private/public evidence shows priority or intake rows improve later review selection or user-visible continuity without promoting source truth. |
 | Dynamic separation/completion threshold | `prototype` | #248 | Broader public/private calibration shows improved question quality without over-merging or noisy default activation. |
@@ -67,11 +66,11 @@ as opt-in, experimental, fixture-scoped, or not-yet-default.
 
 ## Board
 
-| Line | Current maturity | last_checked | Can claim | Cannot claim | Owner / evidence |
+| Line | Current maturity | last_checked | Can claim | Important limits | Owner / evidence |
 | --- | --- | --- | --- | --- | --- |
 | Local source-backed conversation memory | `release_claimable` | 2026-06-03 | AIppocampus provides a local, source-backed continuity path for agent work: clean source, search, MCP access, install docs, and source-reopen boundaries exist. | Broad adoption, all-client quality, hosted service readiness, innate model memory, universal recall quality, or generated sidecars as replacement truth. | [`agent-context.md`](../../agent-context.md), [`install-guide.md`](../../guides/install-guide.md), [`architecture-overview.md#source-backed-kernel-contract`](../../architecture/architecture-overview.md#source-backed-kernel-contract), [`magic-moments.md`](../magic-moments.md), [`stage-0-5-readiness.md`](stage-0-5-readiness.md), #470, #307 |
 | Knowledge-as-source and high-risk gates | `public_safe_fixture` | 2026-06-03 | Governed source/claim manifests, lifecycle checks, high-risk answer gates, and synthetic public-safe pollution/privacy fixtures exist. | Medical, legal, therapy, compliance, or real high-risk answer quality certification. | [`knowledge-source-lifecycle.md`](../../architecture/knowledge-source-lifecycle.md), [`high-risk-answer-gates.md`](../../architecture/high-risk-answer-gates.md), [`knowledge-pollution-privacy-fixture-report.md`](../benchmarks/knowledge-pollution-privacy-fixture-report.md), #512, #514-#517 |
-| Typed capability contracts | `deterministic_smoke` | 2026-06-03 | The repo has an architecture contract and public-safe internal manifest/validator prototype for source, permission, privacy, and cannot-claim boundaries. | Public SDK stability, replacement of `SKILL.md`, broad capability taxonomy completeness, or answer quality. | [`agent-skill-capability-contracts.md`](../../architecture/agent-skill-capability-contracts.md), [`knowledge-pollution-privacy-fixture-report.md`](../benchmarks/knowledge-pollution-privacy-fixture-report.md), #518 |
+| Typed capability contracts | `deterministic_smoke` | 2026-06-03 | The repo has an architecture contract and public-safe internal manifest/validator prototype for source, permission, privacy, and claim-boundary rules. | Public SDK stability, replacement of `SKILL.md`, broad capability taxonomy completeness, or answer quality. | [`agent-skill-capability-contracts.md`](../../architecture/agent-skill-capability-contracts.md), [`knowledge-pollution-privacy-fixture-report.md`](../benchmarks/knowledge-pollution-privacy-fixture-report.md), #518 |
 | Multimodal source recall | `public_safe_fixture` | 2026-06-03 | Source/route/gate contracts exist for public-safe corpus, conversational media-ingest, and NIAH-style evidence-pool fixtures. | ATM-Bench score, live vision-model quality, private media runtime, face identity graph behavior, or background photo/file scanning consent. | [`multimodal-source-manifests.md`](../../architecture/multimodal-source-manifests.md), [`multimodal-provider-routing.md`](../../architecture/multimodal-provider-routing.md), [`multimodal-answer-gate.md`](../../architecture/multimodal-answer-gate.md), [`multimodal-corpus-fixture-report.md`](../benchmarks/multimodal-corpus-fixture-report.md), #528, #531-#533, #541-#543 |
 | Continuous-memory benchmark | `public_safe_fixture` | 2026-06-03 | Diagnostic public-safe benchmark arms exist for memory/no-memory/sham/stale/oracle/host-native-style comparisons with claim boundaries. | Superiority over fresh-context loops, live host-native telemetry, large-sample significance, or product-quality memory lift. | [`memory-decision-benchmark-plan.md`](../benchmarks/memory-decision-benchmark-plan.md), [`benchmark-evidence-map.md`](../benchmark-evidence-map.md), #378, #406-#410, #453 |
 | Rust deterministic core | `design_only` | 2026-06-03 | A conservative contract-replay boundary and candidate order exist for future Rust infrastructure slices. | Any authoritative Rust runtime slice, Python/Rust fixture parity, Python fallback readiness, or shipped Rust storage/index/sync core. | [`rust-deterministic-core.md`](../../architecture/rust-deterministic-core.md), #463 |
