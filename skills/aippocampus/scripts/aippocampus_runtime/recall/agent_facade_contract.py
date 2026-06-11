@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.navigation import attention_router_contract
+from aippocampus_runtime.recall import authority
 
 SCHEMA_VERSION = "agent-native-recall-facade-v0"
 # #1125 owns the stricter foreground UX budget. This facade fixture keeps only
@@ -331,6 +332,14 @@ def memory_packet_from_route_packet(
     }
     if output_mode != "ignore_or_blocked":
         result["route_label"] = route_label
+        declared_authority = _as_text(
+            packet.get("authority_level") or packet.get("output_authority")
+        )
+        if (
+            declared_authority == authority.AUTHORITY_NAVIGATION_ONLY
+            or output_mode in {"direction_only", "bounded_summary_as_route"}
+        ):
+            result["authority_level"] = authority.AUTHORITY_NAVIGATION_ONLY
         if risk_flags:
             result["risk_flags"] = risk_flags
         if triage_rank_reason_codes and _json_bytes(result) < FOREGROUND_PACKET_BYTE_BUDGET - 96:

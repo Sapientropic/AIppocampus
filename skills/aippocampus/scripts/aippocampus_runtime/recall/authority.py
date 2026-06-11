@@ -15,6 +15,8 @@ CANDIDATE_WITH_REFS = "candidate_with_refs"
 BOUNDED_EVIDENCE_READY = "bounded_evidence_ready"
 REOPEN_REQUIRED_BEFORE_CLAIM = "reopen_required_before_claim"
 HIGH_RISK_REOPEN_REQUIRED = "high_risk_reopen_required"
+AUTHORITY_NAVIGATION_ONLY = "navigation_only"
+CLAIM_NO_CLAIM_BEFORE_REOPEN = "no_claim_before_reopen"
 
 TRUST_IGNORE = "ignore"
 TRUST_SEMANTIC_HINT = "semantic_hint"
@@ -97,6 +99,33 @@ def _has_candidate_conflict(surface: Mapping[str, Any]) -> bool:
     }
 
 
+def is_navigation_only_surface(surface: Mapping[str, Any]) -> bool:
+    """Return true when a surface declares route guidance that is not evidence."""
+
+    boundary = _mapping(surface.get("source_boundary"))
+    return bool(
+        str(surface.get("authority_level") or "") == AUTHORITY_NAVIGATION_ONLY
+        or str(surface.get("output_authority") or "") == AUTHORITY_NAVIGATION_ONLY
+        or boundary.get("navigation_only_not_fact")
+        or boundary.get("navigation_not_truth")
+        or boundary.get("registry_derived_navigation_only")
+    )
+
+
+def navigation_only_projection(
+    *, action_grammar: str = ACTION_DIRECTION_ONLY
+) -> dict[str, Any]:
+    return {
+        "authority_level": AUTHORITY_NAVIGATION_ONLY,
+        "action_grammar": action_grammar,
+        "claim_permission": CLAIM_NO_CLAIM_BEFORE_REOPEN,
+        "foreground_allowed": True,
+        "fact_claim_allowed": False,
+        "source_reopen_required_before_claim": True,
+        "treat_as_fact": False,
+    }
+
+
 def is_bounded_evidence(surface: Mapping[str, Any]) -> bool:
     """Return true only when a surface already came from bounded clean source."""
 
@@ -166,6 +195,12 @@ def trust_level(surface: Mapping[str, Any]) -> str:
         and bool(surface.get("source_reopen_required", True))
     ):
         return TRUST_CANDIDATE_BACKED
+    if (
+        is_navigation_only_surface(surface)
+        and not _has_route_refs(surface)
+        and support not in {"candidate", "scent", "soft_hypothesis", "silent_scent"}
+    ):
+        return TRUST_SEMANTIC_HINT
     if provenance in {
         "cognitive_map_route",
         "working_memory_model",
@@ -254,6 +289,7 @@ def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = Non
         }
     if clean_level == TRUST_SEMANTIC_HINT:
         return {
+            **navigation_only_projection(action_grammar=grammar),
             "action_grammar": grammar,
             "allowed_use": "wayfinding_only",
             "agent_may_answer_within_scope": False,
@@ -342,6 +378,9 @@ def with_trust_fields(surface: Mapping[str, Any]) -> dict[str, Any]:
     clean["trust_level"] = level
     clean["action_grammar"] = grammar
     clean["trust_contract"] = trust_contract_for_level(level, clean)
+    if is_navigation_only_surface(clean) and grammar == ACTION_DIRECTION_ONLY:
+        clean["authority_level"] = AUTHORITY_NAVIGATION_ONLY
+        clean.setdefault("claim_permission", CLAIM_NO_CLAIM_BEFORE_REOPEN)
     return clean
 
 
