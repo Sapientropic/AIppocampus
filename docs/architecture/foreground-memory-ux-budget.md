@@ -13,6 +13,15 @@ The runtime owner is
 MemoryPacket-style rows, removes fields that belong behind `deepen` / `explain`
 or review surfaces, and reports public-safe aggregate metrics only.
 
+Adjacent runtime owners keep the product bar from collapsing into "safe but
+useless." `aippocampus_runtime.recall.continuity_usefulness` owns the shared
+usefulness and attention-cost metric group, while
+`aippocampus_runtime.ops.foreground_output_audit` owns the no-write matrix over
+hook, active-recall, AIppo, router, bounded-summary, and macro foreground
+surfaces. `aippocampus_runtime.recall.candidate_survival` separately reports
+over-conservative filtering: a candidate can survive as navigation-only without
+becoming evidence or foreground profile truth.
+
 ## Budget
 
 Default V0 budget:
@@ -71,6 +80,31 @@ high-risk claims still require source reopen.
 `anti_nag_violation_count` protects recency and dismissal boundaries. A route
 that was just dismissed must not reappear in ordinary foreground output.
 
+## Usefulness And Attention Gate
+
+Red-line safety is necessary but not enough. A packet that leaks nothing can
+still fail the product contract if it forces blind deepen, makes similar routes
+indistinguishable, invents manual search work, drags the agent toward a wrong
+route, or spends more foreground attention than it saves.
+
+The shared usefulness group tracks:
+
+- `manual_query_invention_count`
+- `blind_deepen_required_count`
+- `packet_triage_distinctiveness`
+- `wrong_route_drag_count`
+- `useful_packet_rate`
+- `route_actionability_rate`
+- `foreground_protocol_noise_ratio`
+- `attention_saved_vs_spent_proxy`
+- `time_to_first_useful_packet_ms_proxy`
+
+Candidate-survival metrics keep false negatives visible without weakening hard
+masks. Dropped or parked candidates that later become useful, direction-only
+false positives/negatives, silent nudge drift, and suppressed useful candidates
+must be visible as agency/usability debt, not hidden behind a green privacy
+gate.
+
 ## Claim Boundary
 
 Passing this contract supports a narrow claim:
@@ -80,8 +114,8 @@ AIppocampus has a measurable foreground UX budget for memory packets.
 ```
 
 It does not support default hook adoption, private Ficus quality, live user
-annoyance rates, broad foreground lift, or the safety of arbitrary profile
-memory.
+annoyance rates, broad foreground lift, arbitrary profile-memory safety, or
+general continuity usefulness.
 
 ## Related Owners
 

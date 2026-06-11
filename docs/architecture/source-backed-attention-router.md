@@ -202,6 +202,8 @@ The V0 heads are deterministic diagnostics:
 
 - `lexical_head`
 - `semantic_head` when a supplied sidecar score exists
+- `action_head`
+- `evidence_packaging_head` when packaged span features exist
 - `scope_head`
 - `salience_head`
 - `currentness_head`
@@ -209,10 +211,16 @@ The V0 heads are deterministic diagnostics:
 - `risk_head`
 - `abstention_head`
 
-The adaptive threshold is a local deterministic gate over risk, conflict,
-currentness, salience, and scope. It is not calibrated model attention and must
-not be treated as learned score fusion. Masked candidates may retain high
-diagnostic scores, but they still emit `silence`.
+The default score-fusion policy is `calibrated_rule_grid_v1`. It is a
+deterministic runtime policy adopted from the public-safe #1112/#1230
+calibration fixture, not a trained model. The policy lifts source handles and
+evidence-packaging signals, penalizes anti-nag repeats, and keeps hard masks
+outside scoring. Masked candidates may retain high diagnostic scores, but they
+still emit `silence`.
+
+The adaptive threshold remains a local deterministic gate over risk, conflict,
+currentness, salience, and scope. It is not learned attention and must not be
+treated as production traffic calibration.
 
 ## Semantic Warming Route Producer
 
@@ -362,7 +370,9 @@ single hot-router result must not mutate project-level macro state.
 - Hierarchical route tokens provide the source span / event / episode input
   shape for future router heads.
 - The deterministic hot router is the V0 scoring prototype over route tokens;
-  it does not replace recall/search paths by default.
+  it uses `calibrated_rule_grid_v1` by default for route-token score fusion,
+  but it does not replace recall/search paths or enable foreground hooks by
+  default.
 - Semantic warming can produce router-consumable route material only after it
   has been materialized in the background/cache path; the hot router consumes
   route features, not fresh semantic model output.
@@ -377,5 +387,6 @@ single hot-router result must not mutate project-level macro state.
 ## Cannot Claim
 
 This contract does not prove broad attention-router quality, private-history
-behavior, live foreground usefulness, score-fusion calibration, model training,
-default router adoption, or summary text as source-backed evidence.
+behavior, live foreground usefulness, production score-fusion calibration,
+model training, default foreground-hook adoption, or summary text as
+source-backed evidence.

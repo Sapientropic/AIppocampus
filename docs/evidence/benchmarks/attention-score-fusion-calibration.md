@@ -1,6 +1,6 @@
 # Attention Score-Fusion Calibration
 
-Role: public-safe calibration diagnostic for #1112.
+Role: public-safe calibration and runtime-adoption contract for #1112 / #1230.
 
 This benchmark evaluates score fusion over sanitized attention-router feature
 rows exported from the #1111 Attention Navigation Quality fixture cohort. It
@@ -29,7 +29,7 @@ Hard masks remain policy gates. Calibration may change route scores, but it
 cannot learn around privacy masks, source-reopen requirements, or claim
 permissions.
 
-## 2026-06-10 Public Fixture Result
+## 2026-06-11 Public Fixture Result
 
 Input: 12 public-safe feature rows from
 [`attention-navigation-quality.md`](attention-navigation-quality.md).
@@ -47,19 +47,29 @@ Selected calibrated rule-grid arm:
 - `privacy_bypass_count = 0`
 - `hard_mask_override_count = 0`
 
-The calibrated arm adds explicit source-handle support and anti-nag penalty
-features while preserving hard-mask gating after score computation.
+Runtime default policy:
+
+- `policy_name = calibrated_rule_grid_v1`
+- `default_adoption = adopted_by_hot_router`
+- `route_precision_at_threshold = 9/9 = 1.0`
+- `route_recall_at_threshold = 9/9 = 1.0`
+- all red lines remain `0`
+
+The adopted runtime policy adds explicit source-handle support,
+evidence-packaging lift, and anti-nag penalty while preserving hard-mask gating
+after score computation.
 
 ## Decision
 
-This is an evaluation result, not a default-adoption change. The report selects
-`calibrated_rule_grid` as the best public fixture arm, but default foreground
-router adoption remains a separate product decision requiring broader route
-quality and live/synthetic-host evidence.
+The hot router now uses `calibrated_rule_grid_v1` as its deterministic default
+score-fusion policy for the affected route-token path. This is runtime-router
+policy adoption, not default foreground-hook adoption: broad route quality,
+private-history behavior, live/synthetic-host usefulness, and public-quality
+promotion remain separate evidence questions.
 
 ## Cannot Claim
 
-- Default foreground adoption.
+- Default foreground-hook adoption.
 - Private-history training or behavior quality.
 - Answer-generation quality.
 - Source truth from scores.

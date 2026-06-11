@@ -108,6 +108,8 @@ class AIppoWorkingContractTests(unittest.TestCase):
             report["metrics"]["low_risk_guidance_allowed_without_reopen_count"],
             2,
         )
+        self.assertEqual(report["continuity_usefulness"]["kind"], "continuity_usefulness")
+        self.assertTrue(report["continuity_usefulness"]["quality_gate_ok"])
         self.assertTrue(report["usefulness_gate"]["usefulness_gate_ok"])
         generic = report["negative_fixtures"]["generic_safety_posture_only"]
         self.assertFalse(generic["usefulness_gate_ok"])

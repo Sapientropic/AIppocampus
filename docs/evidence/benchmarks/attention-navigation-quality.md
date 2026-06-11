@@ -77,6 +77,7 @@ promotion explicitly passes.
 ## Boundaries
 
 This benchmark does not evaluate answer-generation quality, private-history
-behavior, live host behavior, default foreground adoption, or calibrated score
-fusion. It is a public route-safety and navigation-quality gate that can feed
-future #1112 score-fusion calibration and #1102-style reliability readouts.
+behavior, live host behavior, default foreground-hook adoption, production
+score-fusion calibration, or representative public router quality. It is a
+public route-safety and navigation-quality gate around the deterministic router
+policy adopted in #1230, and it can still feed #1102-style reliability readouts.

@@ -40,6 +40,8 @@ def _quality_gate_blockers(
     *,
     benchmark_maturity_level: str,
     contract_gate_ok: bool,
+    usefulness_gate_ok: bool,
+    attention_cost_ok: bool,
     sample_floor_met: bool,
     external_or_public_cohort_case_count: int,
     holdout_case_count: int,
@@ -48,6 +50,10 @@ def _quality_gate_blockers(
     blockers: list[str] = []
     if not contract_gate_ok:
         blockers.append("contract_gate_failed")
+    if not usefulness_gate_ok:
+        blockers.append("usefulness_gate_failed")
+    if not attention_cost_ok:
+        blockers.append("attention_cost_gate_failed")
     if benchmark_maturity_level not in PUBLIC_QUALITY_LEVELS:
         blockers.append("maturity_level_below_public_quality")
     if not sample_floor_met:
@@ -72,7 +78,9 @@ def build_benchmark_maturity_report(
     holdout_case_count: int,
     holdout_used_for_tuning_count: int,
     contract_gate_ok: bool,
-    next_promotion_target: str,
+    usefulness_gate_ok: bool = True,
+    attention_cost_ok: bool = True,
+    next_promotion_target: str = "",
 ) -> dict[str, Any]:
     """Return reusable maturity metadata for benchmark reports.
 
@@ -95,6 +103,8 @@ def build_benchmark_maturity_report(
     blockers = _quality_gate_blockers(
         benchmark_maturity_level=level,
         contract_gate_ok=bool(contract_gate_ok),
+        usefulness_gate_ok=bool(usefulness_gate_ok),
+        attention_cost_ok=bool(attention_cost_ok),
         sample_floor_met=family_floor_met,
         external_or_public_cohort_case_count=int(external_or_public_cohort_case_count),
         holdout_case_count=int(holdout_case_count),
@@ -114,6 +124,8 @@ def build_benchmark_maturity_report(
         "wilson_or_uncertainty_reported": bool(success_rate["defined"]),
         "success_rate": success_rate,
         "contract_gate_ok": bool(contract_gate_ok),
+        "usefulness_gate_ok": bool(usefulness_gate_ok),
+        "attention_cost_ok": bool(attention_cost_ok),
         "quality_gate_ok": quality_gate_ok,
         "quality_gate_blockers": blockers,
         "cannot_claim_due_to_sample_size": not family_floor_met,

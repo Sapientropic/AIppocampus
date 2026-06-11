@@ -80,11 +80,21 @@ second scoring layer and should not force rigid behavior.
 
 ## Hook Packet Decoder
 
-Hook packets are action hints, not facts. Treat `suggested_agent_action=agent_recall` as a prompt to pull or deepen context, and `not_enough_for_claim=true` as route guidance only until source is reopened.
-Follow `source_refs`, route handles, Active Path Packets, lock ids, or reopen plans before broad manual search when present and not blocked.
-Use `direction_only` for low-risk orientation; deepen or reopen `direction_with_ref` and `reopenable_route`; use `bounded_evidence` only inside declared scope.
-Use `source_open` only within scope/redaction boundaries; let `ignore_or_blocked` shape content only to explain or defer.
-Reopen or deepen for exact wording, public/numeric claims, stale/conflicted material, sensitive facts, or high-risk action; proceed normally when the packet is weak.
+Hook packets are action hints, not facts. Decode the packet into the smallest
+safe next action:
+
+| Signal | Default action | Do not do |
+|---|---|---|
+| `suggested_agent_action=agent_recall`, `lead_kinds`, or `budget=recall_top_2` | Call recall/deepen or follow the provided route before broad manual search. | Treat the packet itself as evidence. |
+| `not_enough_for_claim=true` | Use it as route/context only until source is reopened. | Make factual, public, numeric, stale, sensitive, or high-risk claims. |
+| `direction_only` | Let it shape low-risk attention or the next search question. | Repeat it as a fact or overfit the answer to it. |
+| `direction_with_ref` or `reopenable_route` | Follow refs, route handles, Active Path Packets, lock ids, or reopen plans; deepen/reopen when relevant. | Ignore route handles and invent a broad manual search first. |
+| `bounded_evidence` or `source_open` | Use only inside declared scope and redaction/currentness boundaries. | Widen scope, quote exact wording, or resolve conflicts without reopening. |
+| `ignore_or_blocked` | Defer, ask lightly, or explain the boundary when it matters. | Let blocked/private/stale/conflicted material shape answer content. |
+
+When the packet is weak, proceed normally. Reopen or deepen for exact wording,
+public/numeric claims, stale/conflicted material, sensitive facts, or high-risk
+action.
 
 Presence and proof are different layers. A memory atmosphere can help the agent
 understand the moment; a working continuity brief can guide the next action;

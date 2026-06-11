@@ -9,7 +9,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.navigation import attention_route_tokens, attention_router_contract
+from aippocampus_runtime.navigation import (
+    attention_route_tokens,
+    attention_router_contract,
+    attention_score_fusion_policy,
+)
+
+DEFAULT_SCORE_FUSION_POLICY_NAME = attention_score_fusion_policy.DEFAULT_SCORE_FUSION_POLICY_NAME
 
 
 def _terms(value: Any) -> set[str]:
@@ -216,22 +222,76 @@ def _head_votes(query_state: Mapping[str, Any], token: Mapping[str, Any]) -> lis
     ]
 
 
-def _combined_score(votes: Iterable[Mapping[str, Any]]) -> float:
-    weights = {
-        "lexical_head": 0.24,
-        "action_head": 0.24,
-        "semantic_head": 0.18,
-        "scope_head": 0.12,
-        "salience_head": 0.14,
-        "currentness_head": 0.12,
-        "conflict_head": 0.10,
-        "risk_head": 0.06,
-        "abstention_head": -0.08,
+def _score_features_from_votes(
+    votes: Iterable[Mapping[str, Any]],
+    *,
+    token: Mapping[str, Any],
+    hard_mask_count: int,
+    anti_nag_flag: bool,
+) -> dict[str, float]:
+    features = {
+        "lexical_score": 0.0,
+        "semantic_score": 0.0,
+        "action_score": 0.0,
+        "evidence_packaging_score": 0.0,
+        "scope_score": 0.0,
+        "salience_score": 0.0,
+        "currentness_score": 0.0,
+        "conflict_score": 0.0,
+        "risk_score": 0.0,
+        "abstention_score": 0.0,
     }
-    total = 0.0
+    mapping = {
+        "lexical_head": "lexical_score",
+        "semantic_head": "semantic_score",
+        "action_head": "action_score",
+        "evidence_packaging_head": "evidence_packaging_score",
+        "scope_head": "scope_score",
+        "salience_head": "salience_score",
+        "currentness_head": "currentness_score",
+        "conflict_head": "conflict_score",
+        "risk_head": "risk_score",
+        "abstention_head": "abstention_score",
+    }
     for vote in votes:
-        total += weights.get(str(vote.get("head")), 0.0) * float(vote.get("score") or 0.0)
-    return max(0.0, min(1.0, round(total, 3)))
+        key = mapping.get(str(vote.get("head") or ""))
+        if key:
+            features[key] = max(0.0, min(1.0, float(vote.get("score") or 0.0)))
+    route_features = token.get("route_features")
+    if isinstance(route_features, Mapping):
+        features["evidence_packaging_score"] = max(
+            features["evidence_packaging_score"],
+            max(0.0, min(1.0, float(route_features.get("evidence_packaging_score") or 0.0))),
+        )
+    if _bounded_summary(token):
+        features["evidence_packaging_score"] = max(features["evidence_packaging_score"], 1.0)
+    source_handle_count = len(_source_handles(token))
+    features.update(
+        {
+            "source_handle_count": float(source_handle_count),
+            "source_handle_score": min(1.0, float(source_handle_count)),
+            "hard_mask_count": float(hard_mask_count),
+            "hard_mask_pass": 1.0 if hard_mask_count == 0 else 0.0,
+            "anti_nag_flag": 1.0 if anti_nag_flag else 0.0,
+        }
+    )
+    return features
+
+
+def _combined_score(
+    votes: Iterable[Mapping[str, Any]],
+    *,
+    token: Mapping[str, Any],
+    hard_mask_count: int,
+    anti_nag_flag: bool,
+) -> float:
+    features = _score_features_from_votes(
+        votes,
+        token=token,
+        hard_mask_count=hard_mask_count,
+        anti_nag_flag=anti_nag_flag,
+    )
+    return attention_score_fusion_policy.score_features_with_policy(features)
 
 
 def _action_score(action_features: Any, token: Mapping[str, Any]) -> float:
@@ -289,7 +349,13 @@ def route_attention(
         token_id = str(token.get("token_id") or "")
         masks = _hard_masks(query_state, token)
         votes = _head_votes(query_state, token)
-        score = _combined_score(votes)
+        anti_nag_active = token_id in anti_nag_ids
+        score = _combined_score(
+            votes,
+            token=token,
+            hard_mask_count=len(masks),
+            anti_nag_flag=anti_nag_active,
+        )
         threshold = _adaptive_threshold(query_state, token)
         handles = _source_handles(token)
         reason_codes = ["adaptive_threshold"]
@@ -302,7 +368,7 @@ def route_attention(
         lexical_vote = next((vote for vote in votes if vote.get("head") == "lexical_head"), None)
         if action_vote and lexical_vote and action_vote["score"] > 0.75 and lexical_vote["score"] < 0.5:
             reason_codes.append("action_cue_lift")
-        if token_id in anti_nag_ids:
+        if anti_nag_active:
             reason_codes.append("anti_nag_suppressed")
             handles = []
         metadata = _metadata(token)
@@ -324,7 +390,7 @@ def route_attention(
                 # Only pass them to the route-packet contract after relevance
                 # gates and anti-nag suppression have allowed ordinary emission.
                 "bounded_summary": _bounded_summary(token)
-                if handles and not masks and token_id not in anti_nag_ids
+                if handles and not masks and not anti_nag_active
                 else None,
                 "source_open": token_id in source_open_ids,
                 "bounded_scope": token_id in bounded_scope_ids,
@@ -338,6 +404,8 @@ def route_attention(
         )
         packet["router_diagnostics"] = {
             "score": score,
+            "raw_score_before_policy_gates": score,
+            "score_policy": DEFAULT_SCORE_FUSION_POLICY_NAME,
             "threshold": threshold,
             "adaptive_threshold": threshold,
             "reason_codes": sorted(set(reason_codes)),
@@ -375,6 +443,12 @@ def build_hot_router_fixture_report() -> dict[str, Any]:
         "kind": "aippocampus_attention_hot_router_fixture",
         "schema_version": "attention-hot-router-v0",
         "ok": masked_high_score_emission_count == 0 and claim_ready_without_source_open_count == 0,
+        "score_fusion_policy": {
+            "default_policy": DEFAULT_SCORE_FUSION_POLICY_NAME,
+            "hard_masks_outside_scoring": True,
+            "anti_nag_penalty_active": True,
+            "source_handle_lift_active": True,
+        },
         "cases": cases,
         "metrics": {
             "case_count": len(cases),
@@ -385,7 +459,7 @@ def build_hot_router_fixture_report() -> dict[str, Any]:
             "default_foreground_router_adoption",
             "private_history_router_quality",
             "learned_attention_quality",
-            "score_fusion_calibration",
+            "public_quality_router_performance",
         ],
     }
 

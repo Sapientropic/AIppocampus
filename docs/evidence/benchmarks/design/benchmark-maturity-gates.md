@@ -36,6 +36,8 @@ Required fields:
 - `holdout_used_for_tuning_count`
 - `wilson_or_uncertainty_reported`
 - `contract_gate_ok`
+- `usefulness_gate_ok`
+- `attention_cost_ok`
 - `quality_gate_ok`
 - `cannot_claim_due_to_sample_size`
 - `next_promotion_target`
@@ -47,6 +49,11 @@ sample-floor, public/external cohort, holdout, and no-tuning-leakage checks.
 Red-line counters stay separate from aggregate rates. Passing all red lines is
 necessary for promotion, but it is not sufficient evidence of public cohort
 quality.
+
+Usefulness and attention cost are separate promotion gates. A report can pass
+privacy/source red lines and still leave `quality_gate_ok=false` if foreground
+packets are too noisy, indistinct, over-filtered, or expensive for the user or
+agent attention they save.
 
 ## Initial Fixture Annotations
 
@@ -66,7 +73,8 @@ Promotion should be explicit and boring:
 - keep negative controls and no-remember / stale controls visible;
 - keep holdout cases out of prompt, threshold, or fixture tuning;
 - report Wilson or another uncertainty measure for rates;
-- leave `quality_gate_ok=false` when floors, holdout, or no-leakage checks fail.
+- leave `quality_gate_ok=false` when floors, holdout, no-leakage,
+  usefulness, or attention-cost checks fail.
 
 Do not use Wilson intervals to make selected or author-written cases
 representative. Uncertainty reporting describes the observed cohort only; it

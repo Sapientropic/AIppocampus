@@ -555,6 +555,7 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
             "PRIVATE_SOURCE_SENTINEL" in json.dumps(activation, ensure_ascii=False)
         ),
     }
+    continuity_metrics = usefulness.continuity_usefulness_for_activation(activation, red_lines)
     manifest_hash = _stable_hash(contract)
     changed_source_rows = [
         dict(row, invalidators=["newer_benchmark_policy"])
@@ -602,11 +603,14 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
             "stale_as_current_count": red_lines["stale_clause_activated_as_current"],
             "stable_rebuild_hash_changed_count": int(manifest_hash != _stable_hash(build_aippo_working_contracts(_fixture_source_rows())[0])),
         },
+        "continuity_usefulness": continuity_metrics,
         "usefulness_gate": {
             "safety_gate_ok": all(value == 0 for value in red_lines.values()),
-            "usefulness_gate_ok": usefulness_metrics["usefulness_gate_ok"],
+            "usefulness_gate_ok": usefulness_metrics["usefulness_gate_ok"]
+            and continuity_metrics["usefulness_gate_ok"],
             "quality_gate_ok": all(value == 0 for value in red_lines.values())
-            and usefulness_metrics["usefulness_gate_ok"],
+            and usefulness_metrics["usefulness_gate_ok"]
+            and continuity_metrics["quality_gate_ok"],
         },
         "negative_fixtures": {
             "generic_safety_posture_only": {

@@ -124,11 +124,52 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("ignore_or_blocked", skill_text)
         self.assertIn("Active Path Packets", skill_text)
         self.assertIn("before broad manual search", " ".join(skill_text.split()))
+        self.assertIn("suggested_agent_action", skill_text)
+        self.assertIn("not_enough_for_claim", skill_text)
         self.assertIn("## Runtime Posture For Agents", agent_context)
         self.assertIn("cheap orientation", agent_context.lower())
         self.assertIn("explicit source reopen", agent_context.lower())
         self.assertIn("## Agent Runtime Posture", coding_lane)
         self.assertIn("before broad manual search", coding_lane_flat)
+
+    def test_skill_hook_packet_decoder_maps_signals_to_actions(self) -> None:
+        skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        start = skill_text.index("## Hook Packet Decoder")
+        end = skill_text.index("## First Moves")
+        decoder = skill_text[start:end]
+        decoder_flat = " ".join(decoder.split())
+
+        self.assertIn("| Signal | Default action | Do not do |", decoder)
+        for phrase in (
+            "suggested_agent_action=agent_recall",
+            "not_enough_for_claim=true",
+            "direction_with_ref",
+            "reopenable_route",
+            "bounded_evidence",
+            "ignore_or_blocked",
+            "before broad manual search",
+            "deepen",
+            "reopen",
+        ):
+            self.assertIn(phrase, decoder_flat)
+        self.assertLessEqual(decoder.count("| `"), 8)
+        self.assertNotIn("full packet schema", decoder.lower())
+
+    def test_demo_scenarios_centralize_generic_claim_boundaries(self) -> None:
+        demo_text = (REPO_ROOT / "docs" / "guides" / "demo-scenarios.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("docs/evidence/current-claims.md", demo_text)
+        self.assertNotIn("Important limits:", demo_text)
+        self.assertLessEqual(demo_text.count("Boundary:"), 14)
+        for repeated_caveat in (
+            "no full private-history coverage",
+            "no real-history fresh-thread recall quality",
+            "no competitor superiority",
+            "no live host behavior",
+        ):
+            self.assertNotIn(repeated_caveat, demo_text)
 
     def test_private_thread_anchor_artifact_is_gitignored(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
