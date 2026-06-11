@@ -30,7 +30,11 @@ from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_m
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.public_output import emit_public_text
-from aippocampus_runtime.subconscious import agent_fallback_queue, shell_selection
+from aippocampus_runtime.subconscious import (
+    agent_fallback_queue,
+    scheduler_due_diagnostics,
+    shell_selection,
+)
 from aippocampus_runtime.subconscious.scheduler_lock import FileLock
 from aippocampus_runtime.subconscious.scheduler_public import (
     public_scheduler_payload,
@@ -515,42 +519,48 @@ def choose_projects(
     cooldown_seconds: int,
     min_new_turns: int,
 ) -> list[tuple[ProjectStats, str]]:
+    due, _diagnostics = choose_projects_with_diagnostics(
+        root=root,
+        cwd=cwd,
+        project=project,
+        all_projects=all_projects,
+        state=state,
+        now_ts=now_ts,
+        cooldown_seconds=cooldown_seconds,
+        min_new_turns=min_new_turns,
+    )
+    return due
+
+
+def choose_projects_with_diagnostics(
+    *,
+    root: Path,
+    cwd: Path | None,
+    project: str | None,
+    all_projects: bool,
+    state: dict[str, Any],
+    now_ts: float,
+    cooldown_seconds: int,
+    min_new_turns: int,
+) -> tuple[list[tuple[ProjectStats, str]], list[dict[str, Any]]]:
     registry = load_json(registry_path(root))
     stats_by_label = project_stats_from_registry(registry)
-    if all_projects:
-        labels = sorted(stats_by_label)
-    elif project:
-        labels = [project]
-    else:
-        inferred = project_for_cwd(registry, cwd)
-        labels = [inferred] if inferred else []
-
-    due: list[tuple[ProjectStats, str]] = []
-    projects_state = state.setdefault("projects", {})
-    for label in labels:
-        if not label:
-            continue
-        stats = stats_by_label.get(label)
-        if not stats:
-            continue
-        project_state = projects_state.setdefault(label, {})
-        bootstrap_project_state_from_staging(
-            root,
-            stats,
-            project_state,
-            now_ts=now_ts,
-            cooldown_seconds=cooldown_seconds,
-        )
-        reason = due_reason(
-            stats,
-            project_state,
-            now_ts=now_ts,
-            cooldown_seconds=cooldown_seconds,
-            min_new_turns=min_new_turns,
-        )
-        if reason:
-            due.append((stats, reason))
-    return due
+    return scheduler_due_diagnostics.choose_projects_with_diagnostics(
+        root=root,
+        registry=registry,
+        stats_by_label=stats_by_label,
+        cwd=cwd,
+        project=project,
+        all_projects=all_projects,
+        state=state,
+        now_ts=now_ts,
+        cooldown_seconds=cooldown_seconds,
+        min_new_turns=min_new_turns,
+        project_for_cwd=project_for_cwd,
+        bootstrap_project_state_from_staging=bootstrap_project_state_from_staging,
+        due_reason=due_reason,
+        lease_active=lease_active,
+    )
 
 
 def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
@@ -605,7 +615,7 @@ def maybe_enqueue_agent_fallback(
     state = load_state(state_file)
     now_ts = time.time()
     shell_override = getattr(args, "shell_selection", "auto")
-    due = choose_projects(
+    due, diagnostics = choose_projects_with_diagnostics(
         root=root,
         cwd=Path(args.cwd).resolve() if args.cwd else None,
         project=args.project,
@@ -619,8 +629,10 @@ def maybe_enqueue_agent_fallback(
         save_state(state_file, state)
         return {
             "started": False,
+            "dry_run": bool(getattr(args, "dry_run", False)),
             "skipped": "no_due_projects",
             "projects": [],
+            "scheduler_diagnostics": diagnostics,
             "cognitive_worker": worker_mode,
         }
     projects = [
@@ -635,6 +647,7 @@ def maybe_enqueue_agent_fallback(
             "queued": False,
             "skipped": "agent_fallback_queued",
             "projects": projects,
+            "scheduler_diagnostics": diagnostics,
             "agent_fallback_task_count": len(projects),
             "cognitive_worker": worker_mode,
         }
@@ -659,6 +672,7 @@ def maybe_enqueue_agent_fallback(
         "queued": bool(queue_result.get("queued")),
         "skipped": queue_result.get("skipped"),
         "projects": result_projects,
+        "scheduler_diagnostics": diagnostics,
         "agent_fallback_task_count": int(queue_result.get("agent_fallback_task_count") or 0),
         "cognitive_worker": worker_mode,
     }
@@ -669,7 +683,7 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
     now_ts = time.time()
     shell_override = getattr(args, "shell_selection", "auto")
 
-    due = choose_projects(
+    due, diagnostics = choose_projects_with_diagnostics(
         root=root,
         cwd=Path(args.cwd).resolve() if args.cwd else None,
         project=args.project,
@@ -681,7 +695,13 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
     )
     if not due:
         save_state(state_file, state)
-        return {"started": False, "skipped": "no_due_projects", "projects": []}
+        return {
+            "started": False,
+            "dry_run": bool(getattr(args, "dry_run", False)),
+            "skipped": "no_due_projects",
+            "projects": [],
+            "scheduler_diagnostics": diagnostics,
+        }
     if args.dry_run:
         save_state(state_file, state)
         return {
@@ -691,6 +711,7 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
                 shell_selection.scheduler_project_report(stats, reason, root=root, override=shell_override)
                 for stats, reason in due
             ],
+            "scheduler_diagnostics": diagnostics,
         }
     filtered: list[tuple[ProjectStats, str]] = []
     leased: list[tuple[ProjectStats, str]] = []
@@ -721,8 +742,29 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
                 "started": False,
                 "skipped": "leased_projects",
                 "projects": [{"label": stats.label, "reason": reason} for stats, reason in leased],
+                "scheduler_diagnostics": [
+                    {
+                        **scheduler_due_diagnostics.project_due_diagnostic(
+                            stats,
+                            state.setdefault("projects", {}).setdefault(stats.label, {}),
+                            due_reason=reason,
+                            now_ts=now_ts,
+                            cooldown_seconds=args.cooldown_seconds,
+                            min_new_turns=args.min_new_turns,
+                            lease_active=True,
+                        ),
+                        "due_state": "blocked",
+                        "skip_reason": "lease_active_or_stale",
+                    }
+                    for stats, _reason in leased
+                ],
             }
-        return {"started": False, "skipped": "enqueue_cooldown", "projects": []}
+        return {
+            "started": False,
+            "skipped": "enqueue_cooldown",
+            "projects": [],
+            "scheduler_diagnostics": diagnostics,
+        }
     cmd = [
         *module_cmd("aippocampus_runtime.subconscious.scheduler"),
         "--run-due",
@@ -765,6 +807,7 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
             shell_selection.scheduler_project_report(stats, reason, root=root, override=shell_override)
             for stats, reason in due
         ],
+        "scheduler_diagnostics": diagnostics,
         "log": str(log_path(root)),
     }
 
@@ -776,7 +819,7 @@ def run_due(args: argparse.Namespace) -> dict[str, Any]:
     now_ts = time.time()
     with FileLock(root / "subconscious_scheduler.lock"):
         state = load_state(state_file)
-        due = choose_projects(
+        due, diagnostics = choose_projects_with_diagnostics(
             root=root,
             cwd=Path(args.cwd).resolve() if args.cwd else None,
             project=args.project,
@@ -788,7 +831,12 @@ def run_due(args: argparse.Namespace) -> dict[str, Any]:
         )
         if not due:
             save_state(state_file, state)
-            return {"ran": False, "skipped": "no_due_projects", "projects": []}
+            return {
+                "ran": False,
+                "skipped": "no_due_projects",
+                "projects": [],
+                "scheduler_diagnostics": diagnostics,
+            }
         results = []
         for stats, reason in due:
             project_state = state.setdefault("projects", {}).setdefault(stats.label, {})
@@ -828,6 +876,7 @@ def run_due(args: argparse.Namespace) -> dict[str, Any]:
             "ran": True,
             "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
             "results": results,
+            "scheduler_diagnostics": diagnostics,
         }
 
 

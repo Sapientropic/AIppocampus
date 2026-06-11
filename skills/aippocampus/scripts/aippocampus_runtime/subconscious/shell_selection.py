@@ -47,6 +47,12 @@ PRIVATE_REPORT_REASONS = {
     "enqueue_cooldown",
     "disabled_by_env",
     "missing_api_key",
+    "cooldown_not_elapsed",
+    "no_registered_project_for_cwd",
+    "source_growth_below_threshold",
+    "missing_clean_source_freshness",
+    "lease_active_or_stale",
+    "project_name_not_resolved",
 }
 
 
@@ -157,6 +163,29 @@ def private_scheduler_report_payload(
         projects.append(row)
     if projects:
         payload["projects"] = projects
+    diagnostics: list[dict[str, Any]] = []
+    for item in result.get("scheduler_diagnostics") or []:
+        if not isinstance(item, dict):
+            continue
+        row = {
+            "label": str(item.get("label") or ""),
+            "project_resolved": bool(item.get("project_resolved")),
+            "due_state": str(item.get("due_state") or "unknown"),
+            "due_reason": _private_report_reason(item.get("due_reason")),
+            "skip_reason": _private_report_reason(item.get("skip_reason")),
+            "last_run_at": str(item.get("last_run_at") or ""),
+            "new_turns_since_last_run": _safe_count(
+                item.get("new_turns_since_last_run")
+            ),
+            "new_messages_since_last_run": _safe_count(
+                item.get("new_messages_since_last_run")
+            ),
+            "next_due_at": str(item.get("next_due_at") or ""),
+            "lease_active": bool(item.get("lease_active")),
+        }
+        diagnostics.append(row)
+    if diagnostics:
+        payload["scheduler_diagnostics"] = diagnostics
     return payload
 
 
