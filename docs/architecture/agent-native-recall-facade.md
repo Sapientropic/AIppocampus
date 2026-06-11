@@ -215,6 +215,28 @@ clause counts stay in the report metrics or deepen/explain surfaces, not in the
 ordinary foreground packet. A packet that only says to scope, verify, and reopen
 is safety-clean but fails the usefulness gate.
 
+## Skill-Derived AIppo Seed
+
+`aippocampus_runtime.aippo.skill_bridge` imports an existing `SKILL.md` as a
+`candidate_aippo_seed`, not as a ripe AIppo. This bridge is for adoption and
+coexistence with the skill ecosystem: a skill declares triggers, workflows,
+commands, boundaries, and output expectations; AIppocampus can compress those
+declarations into a foreground seed packet and then observe whether the seed
+actually helps.
+
+The skill file is the source of an instruction, not evidence of usefulness.
+Imported clauses use `authority: skill_declared_instruction` and
+`support_status: declared_not_observed`. Over-broad or sensitive instructions
+are suppressed or left behind deepen/explain before foreground activation.
+Commands and references stay in deepen output, so a foreground packet does not
+become a raw skill dump.
+
+Evaluation remains a promotion tier. A skill-derived seed may collect #1254
+feedback such as used, ignored, deepened, corrected, or
+manual-search-after-packet. A #1256-style eval environment is only recommended
+after observed usefulness, repeated correction/risk, or operator selection; it
+is not a default cost for every imported skill.
+
 ## Output Mapping
 
 The facade preserves the existing action grammar instead of adding a new

@@ -434,6 +434,36 @@ source-free dynamics labels，把项目身份 hash 化，输出 source-refresh
 hypothesis，不跨项目携带 source refs、source text、local paths 或私有项目名。
 完整图随机游走、真实历史质量和用户可感知 lift 仍是后续验证范围。
 
+### P6a 验证重构：从符号匹配转向 agent-usefulness
+
+旧 P6a 把 HexArc / path resonance 的验证重点放在结构或象征匹配上：
+上卦序列、爻变模式、互卦序列是否相似。这仍可作为诊断输入，但不能作为
+通过标准。它太容易把「结构上有趣」误读成「对 agent 的下一步有用」，
+也容易让 topology 变成解释权威。
+
+新的验证目标是 topology diagnostics 是否改善导航行为：
+
+- **wrong-layer recall avoided**：同一查询在 地 / 人 / 天 层之间容易跑偏时，
+  topology 是否帮助避免错误层级召回。
+- **specific cross-layer coupling flagged**：诊断是否指出具体断裂，例如
+  ground/action、action/direction、evidence/claim，而不是只给宽泛象征标签。
+- **fanout/deepen rationale clarified**：当 route fanout 变宽、保持窄、或要求
+  deepen/source reopen 时，topology 是否给出可检查理由。
+
+负例同样重要：
+
+- `symbolic_match_without_route_usefulness`：两个片段结构相似，但 source-backed
+  route 结果没有变好；这不能通过。
+- `interesting_topology_navigation_only`：topology 很有解释力，但仍只能是
+  `navigation_only`，不能改变事实 claim、ranking 权重或 source authority。
+- `broad_label_wrong_layer_drag`：宽泛象征标签导致 agent 多搜了错误层级；
+  诊断应降权或要求 deepen，而不是放大它。
+
+#1219 可以作为 diagnostic-only V0 先 ship；它不需要等待旧 P6a 验证。新的
+P6a 只在证明上述行为问题被改善后，才允许把 topology 从 deepen/explain
+诊断推向更强的 route-fanout 策略。即便通过，它也仍是导航控制面，不是
+factual support、public claim、user/personality inference，或默认排名权重。
+
 ## 用户反馈
 
 ```python

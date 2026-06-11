@@ -60,6 +60,22 @@ class MacroLineTopologyTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("PRIVATE", encoded)
 
+    def test_path_resonance_validation_is_behavior_oriented_not_symbolic_authority(self) -> None:
+        doc = (REPO_ROOT / "docs" / "research" / "journey-tracking.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("P6a 验证重构", doc)
+        self.assertIn("agent-usefulness", doc)
+        self.assertIn("wrong-layer recall avoided", doc)
+        self.assertIn("specific cross-layer coupling flagged", doc)
+        self.assertIn("fanout/deepen rationale clarified", doc)
+        self.assertIn("symbolic_match_without_route_usefulness", doc)
+        self.assertIn("interesting_topology_navigation_only", doc)
+        self.assertIn("#1219 可以作为 diagnostic-only V0 先 ship", doc)
+        self.assertIn("factual support", doc)
+        self.assertIn("默认排名权重", doc)
+
 
 if __name__ == "__main__":
     unittest.main()
