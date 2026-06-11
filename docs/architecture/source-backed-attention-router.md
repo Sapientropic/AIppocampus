@@ -311,6 +311,13 @@ disagreements such as `earth_supports_but_heaven_not_ready` or
 `heaven_direction_clear_but_earth_evidence_missing` may guide the next reopen
 path, but they cannot promote a weak macro orientation into fact.
 
+`aippocampus_runtime.macro.stage_tracker` uses the same boundary for project
+stage updates. King Wen adjacency can classify source-backed project movement
+as advanced, stalled, reversed, jumped, or forked, but source events decide the
+movement. Unpromoted Journey/thread arcs cannot move project stage, and stale
+or contradictory later source degrades a stage packet back to recheck
+diagnostics.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in
