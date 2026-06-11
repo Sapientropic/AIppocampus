@@ -222,6 +222,12 @@ MCP progressive recall reuses existing tools:
   MCP context should report the missing snapshot artifact instead of silently
   implying there is no memory.
 
+Post-packet relation diagnostics for narrative pathlets, missing-middle
+cut-points, route cycles, and navigation-as-claim failures are defined in
+[`packet-topology-diagnostics.md`](packet-topology-diagnostics.md). They may
+explain a broken pathlet relation, but they do not create a separate pathlet
+fact layer.
+
 No new MCP tool is required for Contract v1. Domain handles are short-lived and
 become stale when the caller clean source, referenced registry-thread clean
 source, or the domain snapshot changes.

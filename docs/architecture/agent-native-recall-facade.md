@@ -142,6 +142,11 @@ state. Non-blocked reopenable packets should carry enough safe route-selection
 signal to choose a first deepen step, while blocked, private, source-thin, or
 high-risk routes should stay silent or return a bounded next safe action.
 
+Post-packet relation diagnostics for MemoryPacket overreach, blind source-handle
+claims, and foreground-suppression false negatives live in
+[`packet-topology-diagnostics.md`](packet-topology-diagnostics.md). They are an
+explain/debug surface, not a foreground packet expansion.
+
 ## Macro Orientation Packet
 
 `aippocampus_runtime.recall.agent_continuity` can expose the latest
@@ -165,6 +170,11 @@ suppresses the packet.
 Macro packets must not satisfy bounded-evidence requirements. Exact, public,
 disputed, stale/currentness, sensitive, numeric, or high-risk claims still
 require source reopen through deepen/explain.
+
+If a Macro packet is rendered as an action instruction or evidence, that is a
+packet topology failure, not a reason to add Macro fields to the foreground
+MemoryPacket; see
+[`packet-topology-diagnostics.md`](packet-topology-diagnostics.md).
 
 ## AIppo Working-Contract Packet
 
@@ -374,6 +384,9 @@ bounded summaries replace source evidence.
 
 - The route packet authority mapping lives in
   [`source-backed-attention-router.md`](source-backed-attention-router.md).
+- Post-packet relation diagnostics for MemoryPacket, Macro, route, narrative,
+  Dream, and AIppo packet failures live in
+  [`packet-topology-diagnostics.md`](packet-topology-diagnostics.md).
 - The foreground packet width, review-needed, and anti-nag budget lives in
   [`foreground-memory-ux-budget.md`](foreground-memory-ux-budget.md).
 - The hot/warm/cold source-reopen latency and timeout policy lives in

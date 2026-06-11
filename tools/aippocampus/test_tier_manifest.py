@@ -216,6 +216,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_operation_claim_gate",
         "test_operation_integrity",
         "test_package_windows_binary",
+        "test_packet_topology_diagnostic",
         "test_path_identity",
         "test_planning_audit",
         "test_plugin_distribution",
