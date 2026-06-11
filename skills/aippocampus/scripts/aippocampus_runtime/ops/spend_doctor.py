@@ -34,6 +34,25 @@ VALUE_STATUSES = {"accepted", "activated", "materialized", "promoted", "ready", 
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
 
 
+def _empty_model_telemetry() -> dict[str, Any]:
+    return {
+        "usage_available": False,
+        "usage_missing_reason": "no_model_usage_artifacts_scanned",
+        "usage_missing_reason_counts": {},
+        "cache_metrics_kind": "none",
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 0,
+        "prompt_cache_hit_rate": None,
+        "request_count": 0,
+        "latency_ms": {
+            "count": 0,
+            "total": 0.0,
+            "average": None,
+            "max": 0.0,
+        },
+    }
+
+
 def _empty_route() -> dict[str, Any]:
     return {
         "spend": {
@@ -46,6 +65,7 @@ def _empty_route() -> dict[str, Any]:
             "cache_hit_tokens": 0,
             "cache_miss_tokens": 0,
         },
+        "model_telemetry": _empty_model_telemetry(),
         "yield": {
             "generated_candidates": 0,
             "suppressed_candidates": 0,
@@ -142,6 +162,69 @@ def _public_usage(value: Any) -> dict[str, int]:
     return result
 
 
+def _nested_mapping(row: Mapping[str, Any], *keys: str) -> Mapping[str, Any]:
+    current: Any = row
+    for key in keys:
+        if not isinstance(current, Mapping):
+            return {}
+        current = current.get(key)
+    return current if isinstance(current, Mapping) else {}
+
+
+def _public_usage_from_row(row: Mapping[str, Any]) -> dict[str, int]:
+    for candidate in (
+        row.get("usage"),
+        _nested_mapping(row, "model_telemetry", "usage"),
+        _nested_mapping(row, "worker", "usage"),
+        _nested_mapping(row, "worker_run", "usage"),
+        _nested_mapping(row, "worker_result", "usage"),
+        _nested_mapping(row, "result", "usage"),
+        _nested_mapping(row, "summary", "usage"),
+    ):
+        usage = _public_usage(candidate)
+        if usage:
+            return usage
+    return {}
+
+
+def _cache_from_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    for candidate in (
+        row.get("cache"),
+        _nested_mapping(row, "model_telemetry", "cache"),
+        _nested_mapping(row, "worker", "cache"),
+        _nested_mapping(row, "worker_run", "cache"),
+        _nested_mapping(row, "worker_result", "cache"),
+        _nested_mapping(row, "result", "cache"),
+        _nested_mapping(row, "summary", "cache"),
+    ):
+        if isinstance(candidate, Mapping):
+            return candidate
+    return {}
+
+
+def _usage_missing_reason(row: Mapping[str, Any]) -> str:
+    status = str(row.get("status") or row.get("worker_status") or "").casefold()
+    reason = str(row.get("reason") or row.get("usage_missing_reason") or "").casefold()
+    if status in {"dry_run", "not_run"} or reason == "dry_run":
+        return "dry_run"
+    if status in {"unavailable", "skipped", "suppressed"}:
+        return "local_offline_provider" if "offline" in reason else "provider_did_not_return_usage"
+    if row.get("usage") is None and _cache_from_row(row):
+        return "provider_did_not_return_usage"
+    return "artifact_legacy_no_usage"
+
+
+def _latency_ms_from_row(row: Mapping[str, Any]) -> float:
+    for key in ("latency_ms", "elapsed_ms", "duration_ms"):
+        if key in row:
+            return _safe_float(row.get(key))
+    for container_key in ("model_telemetry", "worker", "worker_run", "worker_result", "result", "summary"):
+        value = _nested_mapping(row, container_key).get("latency_ms")
+        if value is not None:
+            return _safe_float(value)
+    return 0.0
+
+
 def _effective_tokens(usage: Mapping[str, int]) -> int:
     total = _safe_int(usage.get("total_tokens"))
     if total:
@@ -158,6 +241,63 @@ def _effective_tokens(usage: Mapping[str, int]) -> int:
 def _counter_increment(container: dict[str, Any], key: Any, amount: int = 1) -> None:
     label = str(key or "unknown")
     container[label] = _safe_int(container.get(label)) + max(0, int(amount))
+
+
+def _record_model_telemetry(
+    route: dict[str, Any],
+    row: Mapping[str, Any],
+    usage: Mapping[str, int],
+    *,
+    request_count: int,
+) -> None:
+    telemetry = route["model_telemetry"]
+    count = max(0, int(request_count))
+    telemetry["request_count"] += count
+    if usage:
+        telemetry["usage_available"] = True
+        telemetry["usage_missing_reason"] = None
+    else:
+        reason = _usage_missing_reason(row)
+        _counter_increment(telemetry["usage_missing_reason_counts"], reason, count or 1)
+        if not telemetry["usage_available"]:
+            telemetry["usage_missing_reason"] = reason
+    cache = _cache_from_row(row)
+    cache_kind = str(
+        cache.get("kind")
+        or cache.get("cache_metrics_kind")
+        or row.get("cache_metrics_kind")
+        or ""
+    ).strip()
+    hit = _safe_int(
+        usage.get("prompt_cache_hit_tokens")
+        or usage.get("cache_hit_tokens")
+        or cache.get("hit_tokens")
+        or cache.get("prompt_cache_hit_tokens")
+    )
+    miss = _safe_int(
+        usage.get("prompt_cache_miss_tokens")
+        or usage.get("cache_miss_tokens")
+        or cache.get("miss_tokens")
+        or cache.get("prompt_cache_miss_tokens")
+    )
+    if hit or miss:
+        telemetry["prompt_cache_hit_tokens"] += hit
+        telemetry["prompt_cache_miss_tokens"] += miss
+        telemetry["cache_metrics_kind"] = cache_kind or "deepseek_prefix"
+    elif cache_kind and telemetry["cache_metrics_kind"] == "none":
+        telemetry["cache_metrics_kind"] = cache_kind
+    latency = _latency_ms_from_row(row)
+    if latency:
+        latency_summary = telemetry["latency_ms"]
+        latency_summary["count"] += 1
+        latency_summary["total"] = round(
+            float(latency_summary.get("total") or 0.0) + latency,
+            2,
+        )
+        latency_summary["max"] = round(
+            max(float(latency_summary.get("max") or 0.0), latency),
+            2,
+        )
 
 
 def _by_day(route: dict[str, Any], row: Mapping[str, Any]) -> dict[str, Any]:
@@ -180,9 +320,11 @@ def _add_spend(
     row: Mapping[str, Any],
     request_count: int = 1,
 ) -> None:
-    usage = _public_usage(usage_value)
+    usage = _public_usage(usage_value) or _public_usage_from_row(row)
     spend = route["spend"]
-    spend["request_count"] += max(0, int(request_count))
+    count = max(0, int(request_count))
+    spend["request_count"] += count
+    _record_model_telemetry(route, row, usage, request_count=count)
     if usage:
         spend["known_usage"] = True
     effective = _effective_tokens(usage)
@@ -507,6 +649,29 @@ def _attach_route_metrics_and_warnings(
     return warnings
 
 
+def _finalize_model_telemetry(routes: Mapping[str, dict[str, Any]]) -> None:
+    for route in routes.values():
+        telemetry = route.get("model_telemetry")
+        if not isinstance(telemetry, dict):
+            continue
+        hit = _safe_int(telemetry.get("prompt_cache_hit_tokens"))
+        miss = _safe_int(telemetry.get("prompt_cache_miss_tokens"))
+        total = hit + miss
+        telemetry["prompt_cache_hit_rate"] = round(hit / total, 4) if total else None
+        latency = telemetry.get("latency_ms")
+        if isinstance(latency, dict):
+            count = _safe_int(latency.get("count"))
+            total_latency = _safe_float(latency.get("total"))
+            latency["average"] = round(total_latency / count, 2) if count else None
+            latency["total"] = round(total_latency, 2)
+            latency["max"] = round(_safe_float(latency.get("max")), 2)
+        reasons = telemetry.get("usage_missing_reason_counts")
+        if telemetry.get("usage_available"):
+            telemetry["usage_missing_reason"] = None
+        elif isinstance(reasons, Mapping) and len(reasons) > 1:
+            telemetry["usage_missing_reason"] = "mixed"
+
+
 def _subconscious_hook_enabled() -> bool:
     raw = os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_HOOK")
     if raw is None:
@@ -588,6 +753,7 @@ def build_spend_doctor_report(
     _aggregate_semantic(routes["semantic_gate"], root, since=since)
     _aggregate_dream(routes["dream"], root, since=since)
     _aggregate_prompt_hook(routes["prompt_hook"], root, since=since)
+    _finalize_model_telemetry(routes)
     warnings = _attach_route_metrics_and_warnings(
         routes,
         warn_effective_tokens=max(1, int(warn_effective_tokens)),

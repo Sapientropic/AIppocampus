@@ -252,6 +252,8 @@ def queue_lifecycle_row(
     error: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     worker_counts = dict((worker_run or {}).get("counts") or {})
+    usage = dict((worker_run or {}).get("usage") or {})
+    cache = dict((worker_run or {}).get("cache") or {})
     return {
         "schema_version": 1,
         "kind": QUEUE_ITEM_KIND,
@@ -267,6 +269,8 @@ def queue_lifecycle_row(
         "foreground_eligible": False,
         "worker_status": (worker_run or {}).get("status"),
         "worker_counts": worker_counts,
+        "usage": usage,
+        "cache": cache,
         "error": dict(error or {}) if error else None,
     }
 
