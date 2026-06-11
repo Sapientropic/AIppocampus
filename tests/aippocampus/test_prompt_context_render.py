@@ -12,6 +12,95 @@ from aippocampus_runtime.recall import prompt_context_render as render  # noqa: 
 
 
 class PromptContextRenderTests(unittest.TestCase):
+    def test_hook_debug_payload_includes_agent_affordance_for_aippo_lead(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.72,
+            "confidence": "medium",
+            "query_terms": ["continue", "issue"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [{"title": "AIppo workflow route", "anchors": ["route packet"]}],
+            "working_memory": [
+                {
+                    "candidate_type": "aippo_working_contract",
+                    "route": "aippo_project_workflow_activation",
+                    "matched_terms": ["issue"],
+                }
+            ],
+            "evidence": [],
+            "reasons": ["soft working memory: AIppo workflow route"],
+        }
+
+        public = render.public_hook_debug_payload(result)
+        affordance = public["agent_recall_affordance"]
+        payload = render.hook_stdout_payload(result)
+        context = payload["hookSpecificOutput"]["additionalContext"] if payload else ""
+
+        self.assertTrue(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "agent_aippo")
+        self.assertIn("aippo_working_contract", affordance["lead_kinds"])
+        self.assertEqual(affordance["not_enough_for_claim"], True)
+        self.assertEqual(
+            affordance["privacy_boundary"],
+            "no raw source, no local paths, no source refs in hook",
+        )
+        self.assertIn("suggested_agent_action=agent_aippo", context)
+        self.assertIn("not_enough_for_claim=true", context)
+        self.assertNotIn("source_refs", context)
+        self.assertNotIn("C:\\", context)
+        self.assertNotIn("PRIVATE_SOURCE_SENTINEL", context)
+
+    def test_vague_old_route_affordance_suggests_deepen_without_manual_search(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.64,
+            "confidence": "medium",
+            "query_terms": ["old", "route"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [{"title": "old route candidate", "anchors": ["source route"]}],
+            "working_memory": [],
+            "evidence": [],
+            "semantic_source_reopen_route": True,
+            "reasons": ["registry overlap: old route candidate"],
+        }
+
+        affordance = render.public_hook_debug_payload(result)["agent_recall_affordance"]
+        context = render.context_for_hook(result) or ""
+
+        self.assertTrue(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "agent_deepen")
+        self.assertEqual(affordance["budget_hint"], "deepen_top_1")
+        self.assertEqual(affordance["suggested_query_seed"], "source-required route")
+        self.assertIn("source_required", affordance["lead_kinds"])
+        self.assertIn("source_required_route_available", affordance["reason_codes"])
+        self.assertIn("suggested_agent_action=agent_deepen", context)
+
+    def test_current_code_question_affordance_reads_repo_first_without_context(self) -> None:
+        result = {
+            "decision": "skip",
+            "score": 0.1,
+            "confidence": "low",
+            "query_terms": ["current", "code"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [],
+            "working_memory": [],
+            "evidence": [],
+            "reasons": ["current checkout required: read current repo first"],
+        }
+
+        public = render.public_hook_debug_payload(result)
+        affordance = public["agent_recall_affordance"]
+
+        self.assertFalse(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "read_current_repo_first")
+        self.assertEqual(affordance["lead_count"], 0)
+        self.assertEqual(affordance["budget_hint"], "current_repo_first")
+        self.assertIsNone(render.context_for_hook(result))
+        self.assertIsNone(render.hook_stdout_payload(result))
+
     def test_generic_meta_suppression_hides_legacy_candidate_summary(self) -> None:
         result = {
             "decision": "scent",
