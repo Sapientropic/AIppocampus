@@ -24,6 +24,7 @@ class HookAgentAffordanceTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["agent_pull_follow_through_rate"], 1.0)
         self.assertEqual(report["metrics"]["hook_full_context_delivery_count"], 0)
         self.assertEqual(report["metrics"]["manual_search_fallback_count"], 0)
+        self.assertEqual(report["metrics"]["manual_search_before_ai_pull_count"], 0)
         self.assertEqual(report["metrics"]["blind_deepen_required_count"], 0)
         self.assertEqual(report["metrics"]["false_activation_count"], 0)
         self.assertEqual(report["metrics"]["read_current_repo_first_count"], 1)
@@ -42,6 +43,51 @@ class HookAgentAffordanceTests(unittest.TestCase):
             ],
             "read_current_repo_first",
         )
+
+    def test_agent_policy_follows_affordance_before_manual_search(self) -> None:
+        report = affordance.build_hook_agent_affordance_fixture_report()
+        by_id = {case["case_id"]: case for case in report["agent_policy_cases"]}
+
+        aippo = by_id["hook_aippo_before_manual_search"]["agent_policy"]
+        recall = by_id["hook_recall_before_broad_history_search"]["agent_policy"]
+        deepen = by_id["hook_deepen_before_broad_history_search"]["agent_policy"]
+
+        self.assertEqual(aippo["next_step"], "call_agent_aippo")
+        self.assertEqual(aippo["tool"], "aippocampus agent aippo")
+        self.assertTrue(aippo["agent_pull_before_manual_search"])
+        self.assertTrue(aippo["aippo_first_activation"])
+        self.assertFalse(aippo["manual_search_before_ai_pull"])
+
+        self.assertEqual(recall["next_step"], "call_agent_recall")
+        self.assertEqual(recall["tool"], "aippocampus agent recall")
+        self.assertTrue(recall["broad_repo_history_search_suppressed"])
+
+        self.assertEqual(deepen["next_step"], "call_agent_deepen")
+        self.assertEqual(deepen["tool"], "aippocampus agent deepen")
+        self.assertTrue(deepen["source_reopen_required_before_claim"])
+
+        self.assertEqual(report["metrics"]["agent_pull_follow_through_rate"], 1.0)
+        self.assertEqual(report["metrics"]["useful_continuity_ignored_count"], 0)
+        self.assertGreaterEqual(report["metrics"]["aippo_first_activation_count"], 1)
+
+    def test_low_risk_aippo_posture_and_strong_claim_boundaries_are_separate(self) -> None:
+        report = affordance.build_hook_agent_affordance_fixture_report()
+        by_id = {case["case_id"]: case for case in report["agent_policy_cases"]}
+
+        aippo = by_id["aippo_working_contract_low_risk_posture"]["agent_policy"]
+        public_claim = by_id["exact_public_claim_forces_deepen"]["agent_policy"]
+
+        self.assertTrue(aippo["low_risk_working_contract_used_without_reopen"])
+        self.assertEqual(
+            aippo["claim_permission"],
+            "low_risk_guidance_allowed_no_fact_claim",
+        )
+        self.assertFalse(aippo["source_reopen_required_before_claim"])
+
+        self.assertTrue(public_claim["agent_pull_before_manual_search"])
+        self.assertTrue(public_claim["source_reopen_required_before_claim"])
+        self.assertEqual(public_claim["claim_permission"], "must_deepen_before_claim")
+        self.assertEqual(report["metrics"]["strong_claim_without_deepen_count"], 0)
 
     def test_fixture_report_is_public_safe_and_source_non_authoritative(self) -> None:
         report = affordance.build_hook_agent_affordance_fixture_report()

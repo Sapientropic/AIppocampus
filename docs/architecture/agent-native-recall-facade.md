@@ -90,15 +90,29 @@ right next move. The default foreground text renders only a short
 `not evidence` action line; source refs, local paths, raw source text, support
 ledgers, and candidate provenance stay out of the hook output.
 
+The intended product posture has three layers:
+
+- always-on agent posture: at task boundaries, treat AIppocampus like an
+  `AGENTS.md` working default for continuity-sensitive work;
+- tiny hook affordance: ask whether a usable lead exists and which
+  AIppocampus pull should happen first;
+- active foreground pull: the main agent calls recall, AIppo, or deepen, then
+  decides how to use the returned route packet inside the task.
+
 Active agent pull owns context recovery. `deepen` / source reopen owns evidence
 for exact, public, disputed, stale/currentness, sensitive, numeric, or high-risk
 claims. A useful hook affordance should reduce broad manual search and blind
 deepen without weakening the rule that source-backed claims require source.
+Ripe AIppo working-contract packets may guide low-risk task posture without
+source reopen, but exact, public, stale, sensitive, numeric, or high-risk claims
+still force deepen/source reopen before use.
 
 The fixture report tracks `usable_lead_emitted_count`,
 `agent_pull_suggested_count`, `hook_full_context_delivery_count`,
 `manual_search_fallback_count`, `blind_deepen_required_count`,
-`false_activation_count`, and `read_current_repo_first_count`.
+`false_activation_count`, `read_current_repo_first_count`,
+`manual_search_before_ai_pull_count`, `aippo_first_activation_count`,
+`useful_continuity_ignored_count`, and `strong_claim_without_deepen_count`.
 
 ## Memory Packet
 
