@@ -191,6 +191,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_macro_momentum",
         "test_macro_orientation_state",
         "test_macro_perturbation",
+        "test_macro_router_interface",
         "test_macro_stage_tracker",
         "test_macro_three_powers",
         "test_memory_evidence_drawer",
