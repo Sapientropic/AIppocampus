@@ -288,6 +288,29 @@ span can become a tighter packet, while wrong-source, stale, and conflicted
 controls cannot become claim-ready support. The report omits raw source text,
 gold answers, and miss taxonomy.
 
+## Three Powers Route Facets
+
+`aippocampus_runtime.macro.three_powers` is a deterministic macro-orientation
+helper for layer-aware fanout. It maps route source families into:
+
+- `earth` / 地: clean source, tests, benchmark reports, artifacts, and
+  implementation facts;
+- `human` / 人: issues, PRs, handoffs, workflow, agent decisions, and current
+  task routes;
+- `heaven` / 天: roadmap, discussions, product claims, public positioning, and
+  long-horizon purpose.
+
+The helper may infer or accept an active layer, rank route candidates by that
+layer, and consume perturbation-amplitude packets to choose narrow, medium, or
+broad fanout. Large shifts request stale/conflict checks; inversion requests
+source reopen or conflict review before high-risk action or public claims.
+
+Three Powers facets do not replace hard masks, router heads, action grammar, or
+source-backed authority. They are route metadata and diagnostics only. Layer
+disagreements such as `earth_supports_but_heaven_not_ready` or
+`heaven_direction_clear_but_earth_evidence_missing` may guide the next reopen
+path, but they cannot promote a weak macro orientation into fact.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in

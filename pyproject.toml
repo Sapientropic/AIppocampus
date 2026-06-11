@@ -265,6 +265,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/journey/live.py",
     "skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py",
     "skills/aippocampus/scripts/aippocampus_runtime/macro/state.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/macro/three_powers.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py",
     "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/client.py",
