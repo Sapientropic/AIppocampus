@@ -188,6 +188,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_log_retention",
         "test_long_thread_segment_soak",
         "test_magic_activation_policy",
+        "test_map_rot_maintenance",
         "test_macro_agent_packets",
         "test_macro_hexagram",
         "test_macro_line_topology",
