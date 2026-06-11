@@ -20,6 +20,7 @@ this folder.
 | Reader need | Start here | Why |
 | --- | --- | --- |
 | Current claims, scope boundaries, and remediation routes | [`../current-claims.md`](../current-claims.md) | It is the claim snapshot and links active or closed remediation routes such as #960/#963/#958. |
+| Closed issue closeout state | [`../benchmark-evidence-maturity.md`](../benchmark-evidence-maturity.md) | It distinguishes harnesses, pilots, contract smokes, blockers, and completed scores. |
 | Which runner or smoke to prioritize | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | It names priority, maturity, default run profile, and claim-boundary guidance. |
 | Why benchmark layers are separate | [`design/README.md`](design/README.md) | It explains the benchmark philosophy without dated result noise. |
 | Full maintainer directory | [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) | It maps every runner, smoke, corpus, and evidence owner. |

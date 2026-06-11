@@ -24,6 +24,10 @@ Rules:
 - Benchmark maturity, sample-size floors, and the separation between
   `contract_gate_ok` and `quality_gate_ok` remain in
   [`docs/evidence/benchmarks/design/benchmark-maturity-gates.md`](benchmarks/design/benchmark-maturity-gates.md).
+- Closed benchmark/evidence issue states such as `harness-ready`, `pilot-run`,
+  `contract-smoke`, `blocker-recorded`, and `completed-score` remain in
+  [`docs/evidence/benchmark-evidence-maturity.md`](benchmark-evidence-maturity.md).
+  Use that ledger before reading an issue title as a completed score.
 - Stage-level positive claims and launch boundaries remain in
   [`docs/evidence/readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md).
 - New public-facing benchmark reports should project `measured_result`,
