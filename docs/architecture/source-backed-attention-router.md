@@ -363,6 +363,10 @@ single hot-router result must not mutate project-level macro state.
 - The agent-native recall/deepen/explain facade is the small foreground
   projection over route packets; see
   [`agent-native-recall-facade.md`](agent-native-recall-facade.md).
+- Packet topology diagnostics can name post-packet relation failures such as
+  navigation-as-claim, missing-middle, and route-cycle shapes; see
+  [`packet-topology-diagnostics.md`](packet-topology-diagnostics.md). They do
+  not change router weights or route-packet authority.
 - The Memory Evidence Drawer explains surfaced recall routes without becoming a
   truth layer; see [`memory-evidence-drawer.md`](memory-evidence-drawer.md).
 - The Source-Backed Familiarity Map is the current cold-sidecar owner; see

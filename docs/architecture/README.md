@@ -37,6 +37,7 @@ Roles:
 | [multimodal-answer-gate.md](multimodal-answer-gate.md) | current contract | Multimodal answer source and gate contract. |
 | [multimodal-provider-routing.md](multimodal-provider-routing.md) | current contract | Provider capability-routing contract and public-safe fixture boundary. |
 | [multimodal-source-manifests.md](multimodal-source-manifests.md) | current contract | Multimodal source manifest fields and provenance boundary. |
+| [packet-topology-diagnostics.md](packet-topology-diagnostics.md) | current contract | Post-packet relation diagnostics for route, narrative, Macro, Dream, and AIppo packets. |
 | [path-identity.md](path-identity.md) | current contract | Identity keys, display paths, and privacy-safe path handling. |
 | [product-profiles.md](product-profiles.md) | current contract | Personal default, power-user optional, and enterprise-governed profiles. |
 | [runtime-envelope-and-failure-taxonomy.md](runtime-envelope-and-failure-taxonomy.md) | current contract | Public runtime envelope, failure families, and config registry boundary. |
