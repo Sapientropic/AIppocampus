@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.model import cache_contract_guard as cache_guard  # noqa: E402
 from aippocampus_runtime.model import routing as routing  # noqa: E402
 
 
@@ -227,36 +229,76 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
             self.assertNotIn("C:\\", rendered)
             self.assertNotIn("api_key", item["usage_telemetry"].casefold())
 
-    def test_audited_call_sites_do_not_rely_on_wrapper_default_cache_contract(self) -> None:
-        checks = {
-            "skills/aippocampus/scripts/aippocampus_runtime/subconscious/agent.py": [
-                '"cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT',
-            ],
-            "skills/aippocampus/scripts/aippocampus_runtime/subconscious/review.py": [
-                '"cache_contract": route_cache_contract(route)',
-            ],
-            (
-                "skills/aippocampus/scripts/aippocampus_runtime/source/"
-                "semantic_scope_suppressed_recovery.py"
-            ): [
-                '"cache_contract": route_cache_contract(route)',
-                '"cache": route_cache_metrics(route, usage_total)',
-            ],
-            "benchmarks/aippocampus/source_evidence/public_semantic.py": [
-                "cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT",
-            ],
-            "benchmarks/aippocampus/benchmark_locomo_qa.py": [
-                "cache_contract=cache_contract(config.provider)",
-            ],
-            "benchmarks/aippocampus/benchmark_longmemeval_answer.py": [
-                "cache_contract=cache_contract(config.provider)",
-            ],
-        }
+    def test_static_cache_contract_guard_covers_live_model_call_surfaces(self) -> None:
+        audit = cache_guard.model_cache_contract_call_site_audit(repo_root=REPO_ROOT)
 
-        for relative_path, snippets in checks.items():
-            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-            for snippet in snippets:
-                self.assertIn(snippet, text, relative_path)
+        self.assertTrue(audit["ok"], json.dumps(audit, ensure_ascii=False, indent=2))
+        self.assertEqual(audit["metrics"]["missing_cache_contract_count"], 0)
+        self.assertGreaterEqual(audit["metrics"]["explicit_cache_contract_count"], 10)
+        self.assertEqual(audit["metrics"]["inventory_entry_count"], 11)
+
+        audited_paths = {item["path"] for item in audit["call_sites"]}
+        for required_path in [
+            "skills/aippocampus/scripts/aippocampus_runtime/subconscious/runtime.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/subconscious/worker.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/dream/real_history_eval.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/question/confirmation_live.py",
+            "benchmarks/aippocampus/source_evidence/public_semantic.py",
+            "benchmarks/aippocampus/source_evidence/standard_public.py",
+            "benchmarks/aippocampus/benchmark_locomo_qa.py",
+            "benchmarks/aippocampus/benchmark_longmemeval_answer.py",
+        ]:
+            self.assertIn(required_path, audited_paths)
+
+        rendered = json.dumps(audit, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("E:\\", rendered)
+        self.assertNotIn("C:\\", rendered)
+        self.assertNotIn("sk-", rendered)
+
+    def test_static_cache_contract_guard_fails_new_uncontracted_live_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = (
+                root
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "new_live_model_path.py"
+            )
+            target.parent.mkdir(parents=True)
+            target.write_text(
+                "\n".join(
+                    [
+                        "from aippocampus_runtime.model.client import ChatClientConfig",
+                        "",
+                        "CONFIG = ChatClientConfig(",
+                        "    api_key='SECRET_NOT_RENDERED',",
+                        "    model='deepseek-v4-flash',",
+                        "    base_url='https://api.deepseek.com',",
+                        ")",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            audit = cache_guard.model_cache_contract_call_site_audit(
+                repo_root=root,
+                scan_paths=(
+                    "skills/aippocampus/scripts/aippocampus_runtime/new_live_model_path.py",
+                ),
+            )
+
+        self.assertFalse(audit["ok"])
+        self.assertEqual(audit["metrics"]["missing_cache_contract_count"], 1)
+        self.assertEqual(
+            audit["missing_cache_contract"][0]["path"],
+            "skills/aippocampus/scripts/aippocampus_runtime/new_live_model_path.py",
+        )
+        self.assertEqual(audit["missing_cache_contract"][0]["call"], "ChatClientConfig")
+        self.assertNotIn("SECRET_NOT_RENDERED", json.dumps(audit, sort_keys=True))
 
     def test_openai_compatible_provider_reports_missing_required_config(self) -> None:
         with self.assertRaisesRegex(
