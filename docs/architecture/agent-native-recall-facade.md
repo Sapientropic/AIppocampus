@@ -156,8 +156,8 @@ aippocampus agent explain macro:project:AIppocampus:latest --macro-state-jsonl <
 The foreground packet is `direction_only` / `navigation_only` and carries only
 short route-control metadata such as perturbation movement, distance label,
 momentum direction, and route policy. It omits source refs, derivation trace,
-delta basis, and stage evidence; those stay behind deepen/explain. The packet
-is useful only when the latest
+delta basis, line-topology diagnostics, and stage evidence; those stay behind
+deepen/explain. The packet is useful only when the latest
 project-scoped state is current, source-backed, and has a route or movement
 delta. Standing state, stale state, missing source, or missing macro-state file
 suppresses the packet.

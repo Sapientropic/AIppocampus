@@ -4,6 +4,9 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, TypeAlias
 
+from aippocampus_runtime.macro import line_topology
+from aippocampus_runtime.macro.hexagram import HexagramRef
+
 Layer: TypeAlias = Literal["earth", "human", "heaven"]
 
 AUTHORITY_LEVEL = "navigation_only"
@@ -310,6 +313,7 @@ def apply_three_powers_fanout(
     *,
     active_layer: object | None = None,
     perturbation_packet: Mapping[str, Any] | None = None,
+    topology_hexagram: HexagramRef | None = None,
     base_candidate_limit: int = 1,
 ) -> dict[str, object]:
     layer_profile = infer_active_layer(query, explicit_layer=active_layer)
@@ -340,6 +344,15 @@ def apply_three_powers_fanout(
         facet_counts=counts,
         fanout_policy=policy,
     )
+    topology = (
+        line_topology.build_line_topology_diagnostics(topology_hexagram)
+        if topology_hexagram is not None
+        else None
+    )
+    if topology is not None:
+        reason_codes = topology.get("reason_codes")
+        if isinstance(reason_codes, list):
+            diagnostics.extend(str(code) for code in reason_codes)
     return {
         "kind": "macro_three_powers_route_fanout",
         "schema_version": SCHEMA_VERSION,
@@ -350,6 +363,7 @@ def apply_three_powers_fanout(
         "selected_route_ids": [str(candidate["route_id"]) for candidate in selected],
         "fanout_policy": policy,
         "facet_counts": counts,
+        "topology_diagnostics": topology,
         "diagnostics": diagnostics,
         "authority_level": AUTHORITY_LEVEL,
         "claim_permission": CLAIM_PERMISSION,

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from aippocampus_runtime.macro import line_topology
 from aippocampus_runtime.macro import momentum as momentum_runtime
 from aippocampus_runtime.macro.hexagram import HexagramRef, change_lines, resolve_hexagram
 from aippocampus_runtime.macro.perturbation import (
@@ -302,12 +303,35 @@ def load_macro_orientation_states(path: Path) -> list[dict[str, object]]:
 
 
 def explain_macro_orientation_state(entry: Mapping[str, object]) -> dict[str, object]:
+    hexagram = entry.get("hexagram")
+    topology: dict[str, object]
+    if isinstance(hexagram, Mapping) and hexagram.get("bits_bottom_to_top"):
+        try:
+            bits = tuple(int(bit) for bit in str(hexagram.get("bits_bottom_to_top")))
+            topology = line_topology.build_line_topology_diagnostics(bits)
+        except (TypeError, ValueError):
+            topology = {
+                "kind": "macro_line_topology_diagnostics",
+                "status": "invalid_hexagram_projection",
+                "authority_level": AUTHORITY_LEVEL,
+                "claim_permission": CLAIM_PERMISSION,
+                "fact_claim_allowed": False,
+            }
+    else:
+        topology = {
+            "kind": "macro_line_topology_diagnostics",
+            "status": "missing_hexagram_projection",
+            "authority_level": AUTHORITY_LEVEL,
+            "claim_permission": CLAIM_PERMISSION,
+            "fact_claim_allowed": False,
+        }
     return {
         "kind": "macro_orientation_state_diagnostics",
         "state_id": entry.get("state_id"),
         "source_refs": entry.get("source_refs", []),
         "derivation_trace": entry.get("derivation_trace", []),
         "momentum": entry.get("momentum", default_momentum_block()),
+        "line_topology": topology,
         "recheck_on": entry.get("recheck_on", []),
         "validation": validate_macro_orientation_state(entry),
         "authority_level": AUTHORITY_LEVEL,

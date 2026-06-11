@@ -197,6 +197,31 @@ class MacroThreePowersTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_line_topology_diagnostics_do_not_change_ranking(self) -> None:
+        routes = _route_candidates()
+
+        baseline = three_powers.apply_three_powers_fanout(
+            "benchmark evidence",
+            routes,
+            active_layer="earth",
+        )
+        with_topology = three_powers.apply_three_powers_fanout(
+            "benchmark evidence",
+            routes,
+            active_layer="earth",
+            topology_hexagram=(1, 0, 1, 0, 1, 0),
+        )
+
+        self.assertEqual(
+            [candidate["route_id"] for candidate in baseline["ranked_candidates"]],
+            [candidate["route_id"] for candidate in with_topology["ranked_candidates"]],
+        )
+        self.assertEqual(baseline["selected_route_ids"], with_topology["selected_route_ids"])
+        self.assertIn("broken_coupling_earth_heaven", with_topology["diagnostics"])
+        self.assertEqual(with_topology["topology_diagnostics"]["authority_level"], "navigation_only")
+        self.assertFalse(with_topology["topology_diagnostics"]["fact_claim_allowed"])
+        self.assertFalse(with_topology["topology_diagnostics"]["ranking_weight_changes"])
+
 
 if __name__ == "__main__":
     unittest.main()
