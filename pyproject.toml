@@ -77,6 +77,7 @@ packages = [
     "aippocampus_runtime.hooks",
     "aippocampus_runtime.journey",
     "aippocampus_runtime.knowledge",
+    "aippocampus_runtime.macro",
     "aippocampus_runtime.mcp",
     "aippocampus_runtime.model",
     "aippocampus_runtime.navigation",
