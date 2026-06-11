@@ -1092,7 +1092,10 @@ class DocsHealthTests(unittest.TestCase):
                     [
                         "# Current Evidence Claims",
                         "## Current Claim Snapshot",
-                        "metric_id run_date source_report claim_level cohort supersedes cannot_claim",
+                        (
+                            "metric_id run_date source_report claim_level cohort supersedes "
+                            "supports material_limits cannot_claim"
+                        ),
                         "semantic_sidecar.aggregate_materialized_rows",
                         "semantic_sidecar.strict_survival_snapshot",
                         "semantic_sidecar.source_review_green_gate",

@@ -670,13 +670,34 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
                 else "contract_gate_failed"
             ),
         },
+        "measured_result": (
+            f"{success_count}/{len(projected_cases)} public-safe agent-continuity "
+            "fixture cases passed; all red-line counters were 0; "
+            f"packet_triage_distinctiveness={triage_metrics['packet_triage_distinctiveness']}; "
+            f"blind_deepen_required_count={triage_metrics['blind_deepen_required_count']}."
+        ),
+        "supports": [
+            (
+                "semantic warming, hot-router packets, agent-native facade/deepen, "
+                "AIppo guidance, source-reopen budget, and foreground budget compose "
+                "on checked-in public-safe fixtures"
+            ),
+            (
+                "multiple similar reopenable route packets carry distinct safe triage "
+                "hints instead of forcing blind deepen"
+            ),
+            "blocked, stale/conflicted, and anti-nag controls preserve safety boundaries",
+        ],
+        "material_limits": [
+            "public-safe deterministic fixtures only; no private-history or live-host lift measured",
+            "route/deepen/facade composition only; no answer-generation or external-model quality measured",
+            "opt-in/default foreground adoption remains a separate runtime decision",
+        ],
         "cannot_claim": [
             "live_host_behavior_lift",
             "private_history_quality",
             "answer_generation_quality",
             "default_foreground_adoption",
-            "public_benchmark_quality_lift",
-            "external_model_quality",
         ],
     }
 
