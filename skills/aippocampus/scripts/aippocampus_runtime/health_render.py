@@ -16,6 +16,7 @@ def render_health_text(result: dict[str, Any]) -> None:
     graphify = result["graphify"]
     storage = result.get("storage") or {}
     question_stats = result.get("question_stats") or {}
+    background = result.get("background_cognition") or {}
     logs = result.get("logs") or {}
     trajectory = result.get("health_trajectory") or {}
     actions = result["recommended_actions"]
@@ -69,6 +70,26 @@ def render_health_text(result: dict[str, Any]) -> None:
             f"{question_stats.get('dormant_question_count', 0)} dormant, "
             f"{question_stats.get('resolved_question_count', 0)} resolved"
         )
+    if background.get("available"):
+        print(
+            "background cognition: "
+            f"{background.get('running_lane_count', 0)} running, "
+            f"{background.get('due_lane_count', 0)} due, "
+            f"{background.get('blocked_lane_count', 0)} blocked, "
+            f"{background.get('stale_lane_count', 0)} stale"
+        )
+        for name, lane in (background.get("lanes") or {}).items():
+            due_state = str(lane.get("due_state") or "unknown")
+            freshness_state = str(lane.get("freshness_state") or "unknown")
+            if due_state in {"blocked", "due", "stale"} or freshness_state in {
+                "blocked",
+                "due",
+                "stale",
+                "no_signal",
+            }:
+                print(
+                    f"- {name}: {due_state}; freshness={freshness_state}; next={lane.get('next_operator_action')}"
+                )
     if actions:
         print("\nrecommended actions:")
         for item in actions:

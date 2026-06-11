@@ -30,6 +30,7 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.health_background_cognition import background_cognition_health
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
@@ -239,14 +240,9 @@ def default_question_jobs_path(registry_path: Path) -> Path:
     return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
 
 
-def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, Any]:
-    """Return the runtime health payload without shelling out to the CLI.
 
-    CLI, MCP, recall, and registry code all need the same operator health
-    contract. Keeping that contract as a package API prevents frozen binaries
-    and embedded hosts from accidentally re-entering the facade through
-    `sys.executable script.py`.
-    """
+def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, Any]:
+    """Return the runtime health payload without shelling out to the CLI."""
     return build_health_report(HealthOptions(cwd=Path.cwd() if cwd is None else cwd, **overrides))
 
 
@@ -680,6 +676,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "activity_class": segments_activity_class,
         },
         "question_stats": question_stats,
+        "background_cognition": background_cognition_health(root=registry_path.resolve().parent, registry_path=registry_path, jobs_path=jobs_path, cwd=cwd, now=now),
         "logs": logs,
         "recommended_actions": actions,
     }

@@ -154,6 +154,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/cli/errors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
     "skills/aippocampus/scripts/aippocampus_runtime/health.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/health_background_cognition.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/debug_log.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/diagnose.py",
