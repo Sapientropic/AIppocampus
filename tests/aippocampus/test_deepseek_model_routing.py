@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -17,6 +18,10 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.model import routing as routing  # noqa: E402
+
+
+def json_dump_for_test(item: dict[str, str]) -> str:
+    return json.dumps(item, ensure_ascii=False, sort_keys=True)
 
 
 class DeepSeekModelRoutingTests(unittest.TestCase):
@@ -70,6 +75,7 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(routing.resolve_route_thinking(default), "enabled")
         self.assertEqual(routing.resolve_route_reasoning_effort(default, thinking="enabled"), "high")
         self.assertEqual(default.capabilities.cache_metrics_kind, "deepseek_prefix")
+        self.assertEqual(routing.route_cache_contract(default), "deepseek_prefix_v1")
         self.assertEqual(default.capabilities.safe_default_concurrency, 4)
         self.assertEqual(routing.resolve_model_route("default").model, "deepseek-v4-flash")
         self.assertEqual(routing.resolve_model_route("fast").model, "deepseek-v4-flash")
@@ -116,6 +122,7 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertIsNone(routing.resolve_route_thinking(resolved))
         self.assertIsNone(routing.resolve_route_reasoning_effort(resolved, thinking=None))
         self.assertEqual(resolved.capabilities.cache_metrics_kind, "none")
+        self.assertEqual(routing.route_cache_contract(resolved), "none")
         self.assertEqual(resolved.capabilities.safe_default_concurrency, 1)
 
     def test_aippocampus_deepseek_env_wins_over_legacy_env(self) -> None:
@@ -156,6 +163,7 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertFalse(resolved.capabilities.supports_thinking)
         self.assertFalse(resolved.capabilities.supports_reasoning_effort)
         self.assertEqual(resolved.capabilities.cache_metrics_kind, "none")
+        self.assertEqual(routing.route_cache_contract(resolved), "none")
         self.assertEqual(resolved.capabilities.safe_default_concurrency, 2)
         self.assertEqual(payload["capabilities"]["supports_user_id"], False)
         self.assertNotIn("LOCAL_TEST_SECRET_VALUE", str(payload))
@@ -182,6 +190,73 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(routing.resolve_route_thinking(resolved), "enabled")
         self.assertEqual(routing.resolve_route_reasoning_effort(resolved, thinking="enabled"), "max")
         self.assertEqual(resolved.capabilities.cache_metrics_kind, "provider_specific")
+        self.assertEqual(routing.route_cache_contract(resolved), "none")
+
+    def test_model_call_site_cache_contract_inventory_is_public_and_sanitized(self) -> None:
+        inventory = routing.model_call_site_cache_contract_inventory()
+        by_call_site = {item["call_site"]: item for item in inventory}
+
+        for required in [
+            "subconscious.agent",
+            "subconscious.review",
+            "semantic_scope_suppressed_recovery",
+            "public_semantic_sidecar_labeler",
+            "standard_public_line_reranker",
+            "locomo_fixed_reader",
+            "longmemeval_fixed_reader",
+            "dream_sleep_cycle",
+            "dream_real_history_eval",
+            "dream_live_shadow_ab",
+            "question_confirmation_live",
+        ]:
+            self.assertIn(required, by_call_site)
+
+        required_fields = {
+            "call_site",
+            "path",
+            "owner",
+            "purpose",
+            "route_source",
+            "cache_contract",
+            "usage_telemetry",
+        }
+        for item in inventory:
+            self.assertTrue(required_fields <= set(item), item)
+            rendered = json_dump_for_test(item)
+            self.assertNotIn("E:\\", rendered)
+            self.assertNotIn("C:\\", rendered)
+            self.assertNotIn("api_key", item["usage_telemetry"].casefold())
+
+    def test_audited_call_sites_do_not_rely_on_wrapper_default_cache_contract(self) -> None:
+        checks = {
+            "skills/aippocampus/scripts/aippocampus_runtime/subconscious/agent.py": [
+                '"cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT',
+            ],
+            "skills/aippocampus/scripts/aippocampus_runtime/subconscious/review.py": [
+                '"cache_contract": route_cache_contract(route)',
+            ],
+            (
+                "skills/aippocampus/scripts/aippocampus_runtime/source/"
+                "semantic_scope_suppressed_recovery.py"
+            ): [
+                '"cache_contract": route_cache_contract(route)',
+                '"cache": route_cache_metrics(route, usage_total)',
+            ],
+            "benchmarks/aippocampus/source_evidence/public_semantic.py": [
+                "cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT",
+            ],
+            "benchmarks/aippocampus/benchmark_locomo_qa.py": [
+                "cache_contract=cache_contract(config.provider)",
+            ],
+            "benchmarks/aippocampus/benchmark_longmemeval_answer.py": [
+                "cache_contract=cache_contract(config.provider)",
+            ],
+        }
+
+        for relative_path, snippets in checks.items():
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            for snippet in snippets:
+                self.assertIn(snippet, text, relative_path)
 
     def test_openai_compatible_provider_reports_missing_required_config(self) -> None:
         with self.assertRaisesRegex(

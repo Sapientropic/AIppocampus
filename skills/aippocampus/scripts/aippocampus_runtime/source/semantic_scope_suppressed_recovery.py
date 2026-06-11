@@ -22,7 +22,14 @@ from aippocampus_runtime.core import (
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
 )
-from aippocampus_runtime.model.routing import resolve_model_route
+from aippocampus_runtime.model.routing import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
+    resolve_model_route,
+    route_cache_contract,
+    route_cache_metrics,
+    route_service_name,
+)
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
@@ -225,6 +232,7 @@ def run_recovery_case(
     min_tool_steps: int,
     chat_fn,
     model_route: str,
+    chat_kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     messages = recovery_messages(
         case, max_steps=max_steps, min_tool_steps=min_tool_steps, model_route=model_route
@@ -241,6 +249,7 @@ def run_recovery_case(
             max_tokens,
             timeout,
             temperature,
+            **(chat_kwargs or {}),
         )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         action = parse_agent_action(response)
@@ -338,6 +347,12 @@ def run_recovery_case(
         recovered_findings, {str(case.get("message_id")): message}
     )
     recovered_labels = sorted({label for row in rows for label in row.get("scope_labels") or []})
+    cache_contract = str((chat_kwargs or {}).get("cache_contract") or "")
+    cache = (
+        {**deepseek_cache_metrics_from_usage(usage_total), "kind": "deepseek_prefix"}
+        if cache_contract == DEEPSEEK_PREFIX_CACHE_CONTRACT
+        else {"available": False, "kind": NO_PROVIDER_CACHE_CONTRACT}
+    )
     return {
         "case_id": case.get("case_id"),
         "labels": case.get("labels") or [],
@@ -346,7 +361,7 @@ def run_recovery_case(
         "strict_recovered_labels": recovered_labels,
         "tool_step_count": tool_step_count,
         "usage": usage_total,
-        "cache": deepseek_cache_metrics_from_usage(usage_total),
+        "cache": cache,
     }
 
 
@@ -431,6 +446,7 @@ def run_suppressed_label_recovery_smoke(
         else default_jobs_output_path(registry_path=registry)
     )
     route = resolve_model_route(model_route, explicit_model=model)
+    resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
     cases = selected_suppressed_cases(registry, jobs_output, max_cases=max_cases)
     privacy_boundary = {
         "raw_text_emitted": False,
@@ -492,12 +508,21 @@ def run_suppressed_label_recovery_smoke(
             "privacy_boundary": privacy_boundary,
         }
     reviewer = chat_fn or call_chat_json
+    live_chat_kwargs = (
+        {
+            "cache_contract": route_cache_contract(route),
+            "service_name": route_service_name(route),
+            "response_format_json": True,
+        }
+        if reviewer is call_chat_json
+        else None
+    )
     results = [
         run_recovery_case(
             case,
             api_key=api_key,
             model=route.model,
-            base_url=base_url,
+            base_url=resolved_base_url,
             max_tokens=max_tokens,
             timeout=timeout,
             temperature=0.0,
@@ -505,6 +530,7 @@ def run_suppressed_label_recovery_smoke(
             min_tool_steps=min_tool_steps,
             chat_fn=reviewer,
             model_route=route.route,
+            chat_kwargs=live_chat_kwargs,
         )
         for case in cases
     ]
@@ -541,7 +567,7 @@ def run_suppressed_label_recovery_smoke(
             {label for item in results for label in item.get("strict_recovered_labels") or []}
         ),
         "usage": usage_total,
-        "cache": deepseek_cache_metrics_from_usage(usage_total),
+        "cache": route_cache_metrics(route, usage_total),
         "cases": results,
         "privacy_boundary": privacy_boundary,
         "boundary": "Pro-agent recovery proposes stronger sidecar findings, then the unchanged strict materializer decides what can be recovered.",

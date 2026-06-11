@@ -184,9 +184,15 @@ class SubconsciousReviewTests(unittest.TestCase):
                 max_tokens,
                 timeout,
                 temperature,
+                **kwargs,
             ):
                 del messages, api_key, base_url, max_tokens, timeout, temperature
                 self.assertEqual(model, "local-review-model")
+                self.assertEqual(kwargs["cache_contract"], "none")
+                self.assertEqual(
+                    kwargs["service_name"],
+                    "local-test OpenAI-compatible API",
+                )
                 content = {
                     "action": "final",
                     "promotion_candidates": [],
@@ -209,6 +215,10 @@ class SubconsciousReviewTests(unittest.TestCase):
                     "LOCAL_REVIEW_KEY": "present",
                 },
                 clear=False,
+            ), patch.object(
+                review,
+                "call_chat_json",
+                fake_chat,
             ):
                 result = review.run_review(
                     jobs_path=jobs_path,
@@ -221,7 +231,7 @@ class SubconsciousReviewTests(unittest.TestCase):
                     api_key=None,
                     model_route="local_review",
                     no_write=True,
-                    chat_fn=fake_chat,
+                    chat_fn=review.call_chat_json,
                 )
 
         self.assertEqual(result["model"], "local-review-model")

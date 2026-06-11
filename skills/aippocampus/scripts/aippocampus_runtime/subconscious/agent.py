@@ -24,6 +24,7 @@ from aippocampus_runtime.core import (
     sanitize_external_model_payload,
 )
 from aippocampus_runtime.model.routing import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
     DEFAULT_DEEPSEEK_REASONING_EFFORT,
     DEFAULT_DEEPSEEK_THINKING,
 )
@@ -417,6 +418,7 @@ def run_agent(
             "Do not return an empty final when the observations contain concrete decisions, libraries, workflows, aliases, or contrasts."
         ),
         chat_kwargs={
+            "cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT,
             "thinking": DEFAULT_DEEPSEEK_THINKING,
             "reasoning_effort": DEFAULT_DEEPSEEK_REASONING_EFFORT,
         }

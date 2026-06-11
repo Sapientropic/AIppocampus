@@ -17,14 +17,10 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.model.client import (
-    DEEPSEEK_PREFIX_CACHE_CONTRACT,
-    NO_PROVIDER_CACHE_CONTRACT,
-    ChatClientConfig,
-    chat_json,
-)
+from aippocampus_runtime.model.client import ChatClientConfig, chat_json
 from aippocampus_runtime.model.routing import (
     resolve_model_route,
+    route_cache_contract,
     route_cache_metrics,
     route_service_name,
 )
@@ -231,10 +227,6 @@ def confirmation_artifact(
     return artifact
 
 
-def _cache_contract_for_provider(provider: str) -> str:
-    return DEEPSEEK_PREFIX_CACHE_CONTRACT if provider == "deepseek" else NO_PROVIDER_CACHE_CONTRACT
-
-
 def run_question_confirmation_live(
     *,
     requests_path: Path,
@@ -289,7 +281,7 @@ def run_question_confirmation_live(
         timeout=timeout,
         service_name=route_service_name(route),
         response_format_json=True,
-        cache_contract=_cache_contract_for_provider(route.provider),
+        cache_contract=route_cache_contract(route),
     )
     artifacts: list[dict[str, Any]] = []
     usage: list[dict[str, Any]] = []

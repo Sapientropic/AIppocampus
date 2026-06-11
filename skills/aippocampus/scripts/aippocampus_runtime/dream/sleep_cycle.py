@@ -31,11 +31,7 @@ from aippocampus_runtime.dream import precision_policy as dream_precision_policy
 from aippocampus_runtime.dream import queue as dream_queue
 from aippocampus_runtime.dream import worker as dream_worker
 from aippocampus_runtime.dream import working_memory_publication
-from aippocampus_runtime.model.client import (
-    DEEPSEEK_PREFIX_CACHE_CONTRACT,
-    NO_PROVIDER_CACHE_CONTRACT,
-    ChatClientConfig,
-)
+from aippocampus_runtime.model.client import ChatClientConfig
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
@@ -43,6 +39,7 @@ from aippocampus_runtime.model.routing import (
     resolve_model_route,
     resolve_route_reasoning_effort,
     resolve_route_thinking,
+    route_cache_contract,
     route_service_name,
 )
 
@@ -641,11 +638,6 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
     api_key = os.environ.get(api_key_env, "")
     if not api_key:
         raise RuntimeError(f"missing API key env: {api_key_env}")
-    cache_contract = (
-        DEEPSEEK_PREFIX_CACHE_CONTRACT
-        if route.provider == "deepseek"
-        else NO_PROVIDER_CACHE_CONTRACT
-    )
     thinking = resolve_route_thinking(
         route,
         str(getattr(args, "dream_model_thinking", "auto") or "auto"),
@@ -664,7 +656,7 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
         service_name=route_service_name(route),
         thinking=thinking,
         reasoning_effort=reasoning_effort,
-        cache_contract=cache_contract,
+        cache_contract=route_cache_contract(route),
     )
 
 
