@@ -45,6 +45,12 @@ Every packet also carries `next_safe_action`, a small `foreground_projection`,
 and a `handoff_card`. The foreground projection is intentionally much smaller
 than the full packet and is not enabled as a default hook surface.
 
+`topology_row_from_coordination_packet()` can project a packet into the existing
+coordination-topology diagnostic row shape. That bridge is deliberately one
+way: packet fields can be diagnosed for collision, handoff-knot, orphan, or
+boundary-crossing shape, but topology diagnostics do not assign work or upgrade
+packet authority.
+
 ## Fixture Coverage
 
 The deterministic fixture covers:
@@ -76,6 +82,7 @@ Telepathy packets are navigation-only coordination material:
 - `handoff_cards_are_source_routes_not_truth = true`
 - `source_reopen_required_before_claim = true`
 - `cross_agent_isolation_applies_before_output = true`
+- `packet_projects_to_coordination_topology_rows = true`
 - `failed_glue_is_obstruction_not_assignment = true`
 - `no_shared_chain_of_thought = true`
 

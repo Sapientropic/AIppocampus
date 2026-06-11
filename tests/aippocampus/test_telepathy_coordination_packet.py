@@ -11,7 +11,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import telepathy_coordination_packet  # noqa: E402
+from aippocampus_runtime.ops import (  # noqa: E402
+    coordination_topology,
+    telepathy_coordination_packet,
+)
 
 
 class TelepathyCoordinationPacketTests(unittest.TestCase):
@@ -73,6 +76,7 @@ class TelepathyCoordinationPacketTests(unittest.TestCase):
         report = telepathy_coordination_packet.build_telepathy_coordination_report()
 
         self.assertTrue(report["contract"]["cross_agent_isolation_applies_before_output"])
+        self.assertTrue(report["contract"]["packet_projects_to_coordination_topology_rows"])
         self.assertTrue(report["contract"]["soft_locks_are_advisory_not_transactional"])
         self.assertTrue(report["contract"]["handoff_cards_are_source_routes_not_truth"])
         self.assertTrue(report["contract"]["failed_glue_is_obstruction_not_assignment"])
@@ -81,6 +85,33 @@ class TelepathyCoordinationPacketTests(unittest.TestCase):
         self.assertIn("shared_chain_of_thought", report["cannot_claim"])
         self.assertIn("central_planner_assignments", report["cannot_claim"])
         self.assertIn("distributed_lock_correctness", report["cannot_claim"])
+
+    def test_packets_project_to_existing_coordination_topology_rows(self) -> None:
+        report = telepathy_coordination_packet.build_telepathy_coordination_report()
+        packets = {packet["case_id"]: packet for packet in report["packets"]}
+
+        clean_row = telepathy_coordination_packet.topology_row_from_coordination_packet(
+            packets["clean_reopenable_handoff"]
+        )
+        candidate_row = telepathy_coordination_packet.topology_row_from_coordination_packet(
+            packets["candidate_only_handoff"]
+        )
+        private_row = telepathy_coordination_packet.topology_row_from_coordination_packet(
+            packets["privacy_blocked_packet"]
+        )
+
+        self.assertEqual(
+            coordination_topology.evaluate_coordination_case(clean_row)["diagnostic"],
+            "healthy_handoff",
+        )
+        self.assertEqual(
+            coordination_topology.evaluate_coordination_case(candidate_row)["diagnostic"],
+            "handoff_knot",
+        )
+        self.assertEqual(
+            coordination_topology.evaluate_coordination_case(private_row)["diagnostic"],
+            "boundary_crossing",
+        )
 
     def test_cli_sanitizes_private_coordination_material(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -315,6 +315,41 @@ def normalize_coordination_packet(row: Mapping[str, Any]) -> dict[str, Any]:
     return packet
 
 
+def topology_row_from_coordination_packet(packet_or_row: Mapping[str, Any]) -> dict[str, Any]:
+    packet = (
+        dict(packet_or_row)
+        if packet_or_row.get("kind") == PACKET_KIND
+        else normalize_coordination_packet(packet_or_row)
+    )
+    source_support = _label(packet.get("source_support"), fallback="reopenable_route")
+    status = _label(packet.get("status"), fallback="active")
+    boundary_flags = _boundary_flags(packet.get("boundary_flags"))
+    privacy_blocked = _privacy_blocked(boundary_flags, status, source_support)
+    coordination_mode = _label(packet.get("coordination_mode"), fallback="watch")
+    return {
+        "case_id": packet.get("case_id"),
+        "scenario": "boundary_crossing"
+        if privacy_blocked
+        else "handoff_knot"
+        if source_support == "candidate_only"
+        else "orphan"
+        if status in {"stale", "released"}
+        else "healthy_handoff",
+        "agents": [packet.get("owner_ref")],
+        "scope_ids": [packet.get("scope")],
+        "handoff_present": coordination_mode in {"handoff", "human_needed"},
+        "coordination_packet_visible": True,
+        "owner_agent": packet.get("owner_ref"),
+        "source_reopenable": source_support
+        in {"source_open", "bounded_evidence", "reopenable_route"},
+        "privacy_material_crossed": privacy_blocked,
+        "source_support_state": "candidate"
+        if source_support == "candidate_only"
+        else "supported",
+        "route_state": "stale" if status in {"stale", "released"} else "active",
+    }
+
+
 def fixture_coordination_packets() -> list[dict[str, Any]]:
     return [
         {
@@ -483,6 +518,7 @@ def build_telepathy_coordination_report(
         },
         "contract": {
             "cross_agent_isolation_applies_before_output": True,
+            "packet_projects_to_coordination_topology_rows": True,
             "soft_locks_are_advisory_not_transactional": True,
             "handoff_cards_are_source_routes_not_truth": True,
             "failed_glue_is_obstruction_not_assignment": True,
