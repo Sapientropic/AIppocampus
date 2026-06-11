@@ -62,6 +62,73 @@ class ContinuityUsefulnessAndCandidateSurvivalTests(unittest.TestCase):
         self.assertTrue(natural["quality_gate_ok"])
         self.assertGreater(natural["attention_saved_vs_spent_proxy"], 0)
 
+    def test_action_permission_ladder_blocks_safe_route_demoted_to_scent(self) -> None:
+        overconservative = continuity_usefulness.continuity_usefulness_metrics(
+            {
+                "surface_id": "safe_route_demoted_to_scent",
+                "action_permission_level": "scent",
+                "safe_route_evidence_present_count": 1,
+                "manual_query_invention_count": 1,
+                "blind_deepen_required_count": 1,
+                "packet_triage_distinctiveness": 0.82,
+                "wrong_route_drag_count": 0,
+                "useful_packet_count": 1,
+                "packet_count": 1,
+                "foreground_protocol_noise_bytes": 60,
+                "useful_guidance_bytes": 460,
+                "fresh_agent_active_pull_success_count": 1,
+                "fresh_agent_broad_search_before_recall_count": 1,
+                "deepen_handle_misuse_count": 1,
+                "copy_pasteable_deepen_target_present_count": 0,
+                "recall_to_source_reopen_success_count": 0,
+                "recall_to_source_reopen_attempt_count": 1,
+            }
+        )
+        natural = continuity_usefulness.continuity_usefulness_metrics(
+            {
+                "surface_id": "natural_actionable_route",
+                "action_permission_level": "actionable_route",
+                "safe_route_evidence_present_count": 2,
+                "manual_query_invention_count": 0,
+                "blind_deepen_required_count": 0,
+                "packet_triage_distinctiveness": 0.86,
+                "wrong_route_drag_count": 0,
+                "useful_packet_count": 2,
+                "packet_count": 2,
+                "foreground_protocol_noise_bytes": 70,
+                "useful_guidance_bytes": 540,
+                "fresh_agent_active_pull_success_count": 2,
+                "fresh_agent_broad_search_before_recall_count": 0,
+                "deepen_handle_misuse_count": 0,
+                "copy_pasteable_deepen_target_present_count": 2,
+                "recall_to_source_reopen_success_count": 2,
+                "recall_to_source_reopen_attempt_count": 2,
+            }
+        )
+
+        self.assertEqual(overconservative["action_permission_level"], "scent")
+        self.assertEqual(overconservative["minimum_useful_action_permission_level"], "actionable_route")
+        self.assertEqual(overconservative["usefulness_lost_by_demoting_to_scent_count"], 1)
+        self.assertEqual(overconservative["main_agent_extra_work_count"], 4)
+        self.assertEqual(overconservative["copy_pasteable_deepen_target_present_count"], 0)
+        self.assertEqual(overconservative["recall_to_source_reopen_success_rate"], 0.0)
+        self.assertIn("safe_route_demoted_to_scent", overconservative["usefulness_blockers"])
+        self.assertIn("deepen_handle_misuse", overconservative["usefulness_blockers"])
+        self.assertIn(
+            "copy_pasteable_deepen_target_missing",
+            overconservative["usefulness_blockers"],
+        )
+        self.assertFalse(overconservative["usefulness_gate_ok"])
+        self.assertFalse(overconservative["quality_gate_ok"])
+
+        self.assertEqual(natural["action_permission_level"], "actionable_route")
+        self.assertEqual(natural["minimum_useful_action_permission_level"], "actionable_route")
+        self.assertEqual(natural["usefulness_lost_by_demoting_to_scent_count"], 0)
+        self.assertEqual(natural["main_agent_extra_work_count"], 0)
+        self.assertEqual(natural["recall_to_source_reopen_success_rate"], 1.0)
+        self.assertTrue(natural["usefulness_gate_ok"])
+        self.assertTrue(natural["quality_gate_ok"])
+
     def test_foreground_output_audit_matrix_covers_overreach_and_overfiltering(self) -> None:
         report = foreground_output_audit.build_foreground_output_audit_fixture_report()
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)

@@ -39,6 +39,13 @@ command returns compact `MemoryPacket` values plus separate opaque deepen
 handles; source refs, source windows, support ledgers, and candidate
 provenance stay behind `deepen` / `explain`.
 
+Use the opaque `deepen_requests[].handle` value when calling `agent deepen`.
+`memory_packets[].deepen_route_id` is a stable display route id for labels,
+explainability, and feedback correlation; it is not a callable recall handle
+unless a specific packet family documents that behavior. `agent recall` also
+emits `deepen_requests[].copy_paste_command` so a fresh agent can follow the
+active-pull path without guessing which id is callable.
+
 ## Default Agent Pull Gesture
 
 `aippocampus_runtime.recall.agent_pull_gesture` defines the copyable #1130
@@ -123,6 +130,7 @@ Foreground `MemoryPacket` values stay compact:
   "route_id": "route_project_workflow_summary",
   "output_mode": "bounded_summary_as_route",
   "route_label": "workflow route",
+  "route_topic": "workflow_contract",
   "display_hint": "workflow route: reopen before use.",
   "claim_permission": "no_claim_before_reopen",
   "next_action": "use_hint",
@@ -130,7 +138,15 @@ Foreground `MemoryPacket` values stay compact:
 }
 ```
 
-`route_label` and `display_hint` are a route-selection preview, not evidence.
+`route_label`, `display_hint`, and `deepen_route_id` are a route-selection
+preview, not evidence and not a substitute for the opaque
+`deepen_requests[].handle` returned by the opt-in agent recall path.
+Live recall may also emit a fixed-vocabulary `route_topic`, plus budget
+permitting `scope_bucket`, `label_granularity`, and
+`route_label_specificity_score`. These labels exist to reduce blind deepen when
+several routes share a broad scope bucket; they remain navigation-only and must
+come from sanitized clean-source route projection, not raw source text or model
+freeform memories.
 They may distinguish two reopenable routes enough for an agent to choose which
 one to deepen first, but they must not include source handles, source ids,
 spans, head votes, masks, full support ledgers, raw private text, profile-like

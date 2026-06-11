@@ -16,9 +16,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.recall import prompt_recall_ambient  # noqa: E402
 from aippocampus_runtime.warm_ambient import recall as warm  # noqa: E402
 from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler  # noqa: E402
 from aippocampus_runtime.warm_ambient import source_validation  # noqa: E402
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
+    hook_seen_ledger_path_for_cache,
+    hook_seen_thread_ref,
+    load_hook_seen_rows,
+)
 from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
 
 
@@ -2250,6 +2256,47 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn(local_path, raw_job)
         self.assertNotIn("private", job["prompt"].casefold())
         self.assertNotIn("ambient.md", job["prompt"].casefold())
+
+    def test_prompt_ambient_records_hook_seen_thread_for_registry_reconciliation(self) -> None:
+        registry_path = self._write_registry([])
+
+        result = prompt_recall_ambient.attach_ambient_recall(
+            {
+                "decision": "skip",
+                "query_terms": ["hard", "blocker"],
+                "candidates": [],
+                "evidence": [],
+            },
+            prompt="Do you think his design has a hard blocker?",
+            thread_id="fresh-thread",
+            workspace=str(self.workspace),
+            registry_path=registry_path,
+            ambient_cache_path=self.cache_path,
+            ambient_policy_path=None,
+            topic_epoch="epoch-test",
+            use_thread_cache=True,
+            warm_background=False,
+            warm_job_dir=None,
+            warm_max_workers=None,
+            warm_timeout=None,
+            warm_quorum=None,
+        )
+
+        ledger_path = hook_seen_ledger_path_for_cache(self.cache_path)
+        rows = load_hook_seen_rows(ledger_path)
+        raw_ledger = ledger_path.read_text(encoding="utf-8")
+        public_registration = result["ambient_recall"]["source_registration"]
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["thread_ref"], hook_seen_thread_ref("session:fresh-thread"))
+        self.assertNotIn("thread_key", rows[0])
+        self.assertNotIn("thread_id", rows[0])
+        self.assertEqual(public_registration["status"], "hook_seen_recorded")
+        self.assertIn("thread_ref", public_registration)
+        self.assertNotIn("fresh-thread", json.dumps(public_registration))
+        self.assertNotIn("fresh-thread", raw_ledger)
+        self.assertNotIn("hard blocker", raw_ledger)
+        self.assertNotIn(str(self.workspace), raw_ledger)
 
     def test_detached_job_waits_all_and_writes_late_scout_results_to_cache(self) -> None:
         lock_path = self.root / "active_recall_locks.json"

@@ -20,6 +20,10 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime import health as health  # noqa: E402
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
+    hook_seen_ledger_path_for_registry,
+    record_hook_seen_thread,
+)
 
 
 class AippocampusHealthTests(unittest.TestCase):
@@ -697,6 +701,18 @@ class AippocampusHealthTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            ledger_path = hook_seen_ledger_path_for_registry(registry_dir / "threads.json")
+            record_hook_seen_thread(
+                ledger_path,
+                thread_id="private-thread-title",
+                workspace="private-workspace",
+                current_thread_key="provider:private-thread-title",
+            )
+            record_hook_seen_thread(
+                ledger_path,
+                thread_id="missing-fresh-thread",
+                workspace="private-workspace",
+            )
 
             payload = health.registry_health_report(registry_dir=registry_dir)
 
@@ -705,9 +721,16 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["recommended_action_counts"], {"build_index": 1})
         self.assertFalse(payload["privacy"]["message_bodies_read"])
         self.assertFalse(payload["privacy"]["paths_included"])
+        reconciliation = payload["source_intake"]["hook_seen_registry_reconciliation"]
+        self.assertEqual(
+            reconciliation["metrics"]["hook_seen_but_not_registered_count"],
+            1,
+        )
+        self.assertEqual(reconciliation["candidates"][0]["status"], "hook_seen_but_not_registered")
         thread = payload["top_threads"][0]
         self.assertIn("thread_ref", thread)
         self.assertNotIn("private-thread-title", json.dumps(payload))
+        self.assertNotIn("missing-fresh-thread", json.dumps(payload))
         self.assertNotIn("thread_dir", thread)
 
     def test_registry_wide_cli_can_emit_json(self) -> None:

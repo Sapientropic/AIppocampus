@@ -1170,13 +1170,13 @@ def run_benchmark(
     source_families = sorted({str(row.get("source_family") or "") for row in dataset.rows})
     has_rollout_sources = any("rollout" in source_family for source_family in source_families)
     claim_boundary = (
-        "V1 is a hard-event public contract fixture. It proves recall-aware "
-        "scoring semantics over deterministic rollout behavior traces, not "
-        "live agent quality or private real-history continuity."
+        "This rollout behavior hard-event fixture proves recall-aware scoring "
+        "semantics over deterministic agent behavior traces, not live agent "
+        "quality or private real-history continuity."
         if has_rollout_sources
         else (
-            "V1 is a VCS-shaped public contract fixture. It proves recall-aware "
-            "scoring semantics, not wild MSR/Gerrit/SATD corpus performance."
+            "This VCS-shaped public contract fixture proves recall-aware scoring "
+            "semantics, not wild MSR/Gerrit/SATD corpus performance."
         )
     )
     return {

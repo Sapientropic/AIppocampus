@@ -117,6 +117,31 @@ class AgentNativeRecallFacadeTests(unittest.TestCase):
         self.assertEqual(deepen["status"], "cannot_verify")
         self.assertEqual(deepen["claim_permission"], "no_claim_before_reopen")
 
+    def test_topic_level_route_label_survives_without_source_leakage(self) -> None:
+        packet = facade.memory_packet_from_route_packet(
+            {
+                "route_id": "route_benchmark_claim",
+                "output_mode": "reopenable_route",
+                "route_label": "benchmark_claim_posture route",
+                "route_topic": "benchmark_claim_posture",
+                "scope_bucket": "technical_work",
+                "label_granularity": "topic_label",
+                "route_label_specificity_score": 1.0,
+                "claim_permission": "no_claim_before_reopen",
+                "source_handles": [{"handle": "PRIVATE_SOURCE_SENTINEL"}],
+            }
+        )
+        encoded = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(packet["route_topic"], "benchmark_claim_posture")
+        self.assertEqual(packet["scope_bucket"], "technical_work")
+        self.assertLessEqual(
+            len(encoded.encode("utf-8")),
+            facade.FOREGROUND_PACKET_BYTE_BUDGET,
+        )
+        self.assertNotIn("source_handles", encoded)
+        self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -72,6 +72,21 @@ jobs:
       - name: Compile Python files
         run: python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 
+  required-checks-312:
+    name: checks (3.12)
+    runs-on: ubuntu-latest
+    needs: checks
+    if: ${{ always() }}
+
+    steps:
+      - name: Mirror canonical Python 3.12 ruleset context
+        run: |
+          if [ "${{ needs.checks.result }}" != "success" ]; then
+            echo "Canonical Python 3.12 checks finished with: ${{ needs.checks.result }}"
+            exit 1
+          fi
+          echo "Canonical Python 3.12 checks passed."
+
   python-compat:
     name: Python 3.13 quick compatibility tier
     runs-on: ubuntu-latest
@@ -93,6 +108,21 @@ jobs:
 
       - name: Python 3.13 quick compatibility tier
         run: python tools/aippocampus/run_tests.py --tier quick
+
+  required-checks-313:
+    name: checks (3.13)
+    runs-on: ubuntu-latest
+    needs: python-compat
+    if: ${{ always() }}
+
+    steps:
+      - name: Mirror Python 3.13 ruleset context
+        run: |
+          if [ "${{ needs.python-compat.result }}" != "success" ]; then
+            echo "Python 3.13 compatibility tier finished with: ${{ needs.python-compat.result }}"
+            exit 1
+          fi
+          echo "Python 3.13 compatibility tier passed."
 
   benchmark-smoke:
     name: Benchmark smoke (deterministic)

@@ -24,6 +24,10 @@ for _path in (
 
 from aippocampus_runtime import core as aippocampuslib  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
+    hook_seen_ledger_path_for_registry,
+    record_hook_seen_thread,
+)
 from conversation_sources import CodexConversationProvider  # noqa: E402
 
 REGISTRY_CMD = [sys.executable, "-m", "aippocampus_runtime.registry.api"]
@@ -173,6 +177,56 @@ class RegisterRolloutTests(unittest.TestCase):
             registry.codex_home = original_home
 
         self.assertEqual(result["count"], 1)
+        self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
+
+    def test_scan_sessions_hook_seen_only_limits_repair_scope(self) -> None:
+        original_home = registry.codex_home
+        registry.codex_home = lambda: self.root
+        self._copy_rollout_into_codex_sessions()
+        unseen = self.root / "sessions" / "2026" / "05" / "26" / "rollout-unseen.jsonl"
+        unseen.write_text(
+            "\n".join(
+                json.dumps(row, ensure_ascii=False)
+                for row in [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "session-unseen",
+                            "timestamp": "2026-05-26T03:10:00Z",
+                            "cwd": str(self.cwd),
+                            "originator": "Codex Desktop",
+                        },
+                    },
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "user_message",
+                            "message": "this other session was never hook seen",
+                        },
+                    },
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        ledger_path = hook_seen_ledger_path_for_registry(self.registry_dir / "threads.json")
+        record_hook_seen_thread(
+            ledger_path,
+            thread_id="session-other",
+            workspace=str(self.cwd),
+        )
+        try:
+            result = registry.scan_session_rollouts(
+                registry_dir=self.registry_dir,
+                dry_run=True,
+                hook_seen_only=True,
+                hook_seen_ledger=ledger_path,
+            )
+        finally:
+            registry.codex_home = original_home
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["hook_seen_filter"]["seen_thread_count"], 1)
         self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
 
     def test_registry_cli_scan_sessions_accepts_explicit_provider(self) -> None:

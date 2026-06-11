@@ -13,7 +13,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +51,64 @@ MAX_HANDLE_REFS = 3
 MAX_SOURCE_WINDOW_MESSAGES = 8
 MAX_INTENT_CHARS = 280
 DEFAULT_TTL_SECONDS = 30 * 60
+_ROUTE_TOPIC_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "benchmark_claim_posture",
+        (
+            "benchmark",
+            "quality gate",
+            "quality_gate",
+            "claim",
+            "cannot_claim",
+            "current claims",
+            "evidence map",
+            "readiness",
+            "over-conservative",
+            "overconservative",
+        ),
+    ),
+    (
+        "issue_backlog_interpretation",
+        ("issue", "backlog", "project triage", "milestone", "roadmap", "planning"),
+    ),
+    (
+        "developer_assessment",
+        ("developer assessment", "evaluation", "review", "critique", "second-user"),
+    ),
+    (
+        "competitor_comparison",
+        ("competitor", "comparison", "baseline", "external", "amemgym", "longmemeval", "mem0", "zep"),
+    ),
+    (
+        "route_usefulness_feedback",
+        (
+            "usefulness",
+            "blind deepen",
+            "manual search",
+            "wrong route",
+            "route label",
+            "hint collision",
+            "wasted motion",
+        ),
+    ),
+    (
+        "source_reopen_boundary",
+        ("source reopen", "source-backed", "currentness", "conflict", "privacy", "mask"),
+    ),
+    (
+        "agent_native_recall_facade",
+        ("agent recall", "memorypacket", "memory packet", "deepen", "mcp", "facade"),
+    ),
+    (
+        "workflow_contract",
+        ("aippo", "working contract", "clause", "skill", "ficus"),
+    ),
+    (
+        "coding_route_recovery",
+        ("rejected route", "test failed", "failed route", "patch", "pr", "pull request"),
+    ),
+)
+_TOPIC_TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
 
 class RecallNavigationError(ValueError):
@@ -95,9 +155,22 @@ def _encode_handle(payload: dict[str, Any]) -> str:
 
 def _decode_handle(value: str) -> dict[str, Any]:
     if not value.startswith(HANDLE_PREFIX):
+        if value.startswith("deepen:"):
+            raise RecallNavigationError(
+                "malformed_recall_handle",
+                (
+                    "This looks like a display route id, not a callable recall handle. "
+                    "Use the opaque value from deepen_requests[].handle."
+                ),
+                received_handle_family="display_deepen_route_id",
+                callable_handle_field="deepen_requests[].handle",
+            )
         raise RecallNavigationError(
             "malformed_recall_handle",
-            "recall_deepen requires a recall_context handle or navigation seed.",
+            (
+                "recall_deepen requires a recall_context handle or navigation seed. "
+                "For agent recall output, use deepen_requests[].handle."
+            ),
         )
     raw = value[len(HANDLE_PREFIX) :]
     try:
@@ -192,6 +265,75 @@ def _route_label_for_clean_hit(hit: dict[str, Any]) -> str:
     return f"{bucket} route"
 
 
+def _topic_cue_match_count(text: str, cues: tuple[str, ...]) -> int:
+    tokens = _TOPIC_TOKEN_RE.findall(text.casefold())
+    token_set = set(tokens)
+    normalized_text = " ".join(tokens)
+    count = 0
+    for cue in cues:
+        cue_tokens = _TOPIC_TOKEN_RE.findall(cue.casefold())
+        if not cue_tokens:
+            continue
+        if len(cue_tokens) == 1:
+            if cue_tokens[0] in token_set:
+                count += 1
+            continue
+        if " ".join(cue_tokens) in normalized_text:
+            count += 1
+    return count
+
+
+def _route_topic_for_clean_hit(hit: dict[str, Any], *, intent: str) -> dict[str, Any]:
+    local_text = " ".join(
+        str(value or "")
+        for value in (
+            hit.get("phase"),
+            hit.get("role"),
+            hit.get("snippet"),
+            " ".join(str(label) for label in hit.get("scope_labels") or []),
+            " ".join(str(label) for label in hit.get("semantic_scope_labels") or []),
+        )
+    ).casefold()
+    query_text = str(intent or "").casefold()
+    matched: list[tuple[int, str]] = []
+    for topic, cues in _ROUTE_TOPIC_RULES:
+        # Topic labels are foreground route-selection hints, so broad substring
+        # matches are worse than silence: "pr" inside "PRIVATE" or "review"
+        # inside "preview" makes clean routes collide and sends agents to the
+        # wrong source. Keep short cues token-bound and let source scope labels
+        # carry the route when no safe topic cue is present.
+        score = _topic_cue_match_count(local_text, cues)
+        if score:
+            matched.append((score, topic))
+    if not matched:
+        for topic, cues in _ROUTE_TOPIC_RULES:
+            score = _topic_cue_match_count(query_text, cues)
+            if score:
+                matched.append((score, topic))
+    if matched:
+        matched.sort(key=lambda item: (-item[0], item[1]))
+        matched_topics = [topic for _, topic in matched]
+        return {
+            "route_topic": matched_topics[0],
+            "label_granularity": "topic_label",
+            "route_label_specificity_score": 1.0 if len(matched_topics) == 1 else 0.85,
+            "topic_reason_codes": [f"topic_{topic}" for topic in matched_topics[:3]],
+        }
+    return {
+        "route_topic": "",
+        "label_granularity": "scope_bucket_only",
+        "route_label_specificity_score": 0.35,
+        "topic_reason_codes": ["no_safe_topic_label"],
+    }
+
+
+def _route_label_for_topic(hit: dict[str, Any], topic: Mapping[str, Any]) -> str:
+    route_topic = str(topic.get("route_topic") or "").strip()
+    if route_topic:
+        return f"{route_topic} route"
+    return _route_label_for_clean_hit(hit)
+
+
 def _route_handle(
     *,
     source_dir: Path,
@@ -227,7 +369,12 @@ def _boundary() -> dict[str, Any]:
     }
 
 
-def _route_from_clean_hit(hit: dict[str, Any], *, source_dir: Path) -> dict[str, Any]:
+def _route_from_clean_hit(
+    hit: dict[str, Any],
+    *,
+    source_dir: Path,
+    intent: str,
+) -> dict[str, Any]:
     source_refs = [_clean_ref(hit)]
     route_id = _stable_id("clean_source", source_refs[0], hit.get("score"))
     handle = _route_handle(
@@ -243,6 +390,7 @@ def _route_from_clean_hit(hit: dict[str, Any], *, source_dir: Path) -> dict[str,
     ]
     scope_bucket = _scope_bucket(hit)
     matched_cue_family = _matched_cue_family(hit)
+    route_topic = _route_topic_for_clean_hit(hit, intent=intent)
     return {
         "handle": handle,
         "route_id": route_id,
@@ -258,15 +406,19 @@ def _route_from_clean_hit(hit: dict[str, Any], *, source_dir: Path) -> dict[str,
         "scope_labels": list(dict.fromkeys(scope_labels))[:8],
         "scope_bucket": scope_bucket,
         "matched_cue_family": matched_cue_family,
-        "route_label": _route_label_for_clean_hit(hit),
+        "route_topic": route_topic["route_topic"],
+        "label_granularity": route_topic["label_granularity"],
+        "route_label_specificity_score": route_topic["route_label_specificity_score"],
+        "route_label": _route_label_for_topic(hit, route_topic),
         "triage_rank_reason_codes": [
+            *route_topic["topic_reason_codes"],
             f"scope_bucket_{scope_bucket}",
             matched_cue_family,
             "clean_source_reopenable",
-        ],
+        ][:4],
         "reopenable": True,
         "why_this_may_matter": (
-            f"A {scope_bucket} clean-source route matched the cue; "
+            f"A {route_topic['label_granularity']} clean-source route matched the cue; "
             "reopen before using exact claims."
         ),
         "suggested_next": {
@@ -358,7 +510,7 @@ def recall_context_packet(
         snippet_chars=220,
     )
     routes = [
-        _route_from_clean_hit(hit, source_dir=clean_source_dir)
+        _route_from_clean_hit(hit, source_dir=clean_source_dir, intent=clean_intent)
         for hit in search_result.get("matches") or []
         if isinstance(hit, dict)
     ]

@@ -86,6 +86,13 @@ CONFIG_KNOBS = (
     _knob("AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING", "model/routing", "provider_specific", "model routing", "provider route default"),
     _knob("AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID", "model/routing", "provider_specific", "model routing", "provider route default"),
     _knob("AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE", "model/routing", "provider_specific", "agent fallback", "unset"),
+    _knob(
+        "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE",
+        "update/cli",
+        "experimental",
+        "host readiness diagnostics",
+        "auto",
+    ),
     _knob("AIPPOCAMPUS_COGNITIVE_WORKER_MODE", "model/routing", "provider_specific", "worker routing", "auto"),
     _knob("AIPPOCAMPUS_SEMANTIC_GATE", "recall", "experimental", "semantic recall", "auto"),
     _knob("AIPPOCAMPUS_SEMANTIC_TIMEOUT", "recall", "experimental", "semantic recall", "route default"),

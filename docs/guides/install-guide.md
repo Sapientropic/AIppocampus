@@ -144,7 +144,7 @@ still feels like grep because hooks or provider visibility are not ready.
 | Label | What works | What does not work yet | Next check |
 | --- | --- | --- | --- |
 | `source_search_ready` | Onboarding plus clean-source search after consent. | Automatic prompt-time recall is not implied. | `aippocampus onboard --provider auto --status` |
-| `active_recall_ready` | MCP/progressive recall can let an agent reopen source. | It does not install prompt/lifecycle hooks. | `aippocampus mcp list-tools` |
+| `active_recall_ready` | The current foreground host exposes AIppocampus MCP/plugin tools to the agent. | Current MCP/plugin artifacts alone do not prove host tool visibility; CLI/module fallbacks may still work. | `aippocampus update status --json` |
 | `ambient_hooks_ready` | Prompt/lifecycle hooks can emit recall scents and refresh clean source/indexes. | Semantic lift still needs provider visibility. | `aippocampus hooks prompt status --last` |
 | `semantic_provider_ready` | Semantic lift, warm scouts, and provider-backed jobs can call the configured route. | It does not prove a previously started hook process can see the key. | `aippocampus doctor provider --json` |
 | `hook_provider_ready` | The provider key is visible to the current process and a child process like a future/restarted hook. | It still does not inspect an already-running older Codex Desktop hook process or validate the key value. | `aippocampus hooks prompt status --last` |
@@ -173,8 +173,16 @@ key are current. Human output leads with profile-aware readiness:
 - `core_ready`: the small source-backed CLI/skill path is usable.
 - `magic_ready`: hooks plus the optional LLM route can power the more ambient
   external-hippocampus feel.
+- `agent_callable_status`: whether package artifacts are merely current or the
+  active host is known to expose AIppocampus tools to the foreground agent.
 - optional/plugin and operator surfaces stay visible without making the default
   personal path look broken.
+
+The distinction matters: `mcp` or `plugin` can be `current` as package
+artifacts while `agent_callable` is still `artifact_current_host_not_exposed`.
+That state means a foreground agent may need `aippocampus agent ...` or
+`python -m aippocampus_runtime...` fallbacks until the host plugin/MCP surface
+is actually enabled.
 
 Apply local package/effect surfaces explicitly:
 

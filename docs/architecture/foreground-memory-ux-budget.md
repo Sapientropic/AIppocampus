@@ -95,9 +95,31 @@ The shared usefulness group tracks:
 - `wrong_route_drag_count`
 - `useful_packet_rate`
 - `route_actionability_rate`
+- `action_permission_level`
+- `minimum_useful_action_permission_level`
+- `usefulness_lost_by_demoting_to_scent_count`
+- `main_agent_extra_work_count`
+- `fresh_agent_broad_search_before_recall_count`
+- `deepen_handle_misuse_count`
+- `copy_pasteable_deepen_target_present_count`
+- `recall_to_source_reopen_success_rate`
 - `foreground_protocol_noise_ratio`
 - `attention_saved_vs_spent_proxy`
 - `time_to_first_useful_packet_ms_proxy`
+
+`action_permission_level` is a foreground usefulness ladder, not a claim
+shortcut:
+
+```text
+silent_or_blocked -> scent -> route_hint -> actionable_route ->
+bounded_context -> source_open -> claim_ready
+```
+
+If safe route evidence exists, demoting the foreground packet back to `scent`
+is counted as usefulness loss. Actionable route packets must expose a
+copy-pasteable deepen target so a fresh foreground agent does not grab a
+display-only route id, fall back to broad search, or spend the user's context
+budget learning AIppocampus internals.
 
 Candidate-survival metrics keep false negatives visible without weakening hard
 masks. Dropped or parked candidates that later become useful, direction-only

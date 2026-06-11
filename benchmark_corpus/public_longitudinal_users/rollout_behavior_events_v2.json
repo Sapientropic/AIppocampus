@@ -1,0 +1,1022 @@
+[
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-gateway-validation",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-gateway-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-03-10T10:00:00Z",
+        "behavior_backed": false,
+        "text": "The agent speculated that app-layer gateway validation might be simpler, without running tests."
+      },
+      {
+        "source_id": "v2-gateway-test-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-03-10T10:03:00Z",
+        "behavior_backed": true,
+        "tool_name": "pytest",
+        "command_class": "test",
+        "failure_family": "gateway_contract_validation",
+        "text": "pytest failed when app-layer gateway validation moved customer checks outside the gateway contract."
+      },
+      {
+        "source_id": "v2-gateway-edit-reverted",
+        "kind": "edit_reverted",
+        "timestamp": "2026-03-10T10:08:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted app-layer gateway validation and restored the gateway-owned validation fixture."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-gateway-repeat-test-failed",
+        "track": "rejected_route",
+        "family": "rejected_route",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-03T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later rollout reintroduced app-layer gateway validation; gateway contract tests failed after the same route was reverted.",
+        "required_past_source_ids": [
+          "v2-gateway-test-failed",
+          "v2-gateway-edit-reverted"
+        ],
+        "expected_signal": "Flag the behavior-backed rejected route before repeating app-layer validation."
+      },
+      {
+        "event_id": "v2-gateway-docs-test-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-04T10:00:00Z",
+        "flag_worthy": false,
+        "text": "A docs-only gateway validation wording update passed tests and did not touch the app-layer route.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not activate the rejected app-layer validation route for docs-only wording."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-dream-foreground",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-dream-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-03-18T10:00:00Z",
+        "behavior_backed": false,
+        "text": "The assistant guessed that foreground Dream extraction might be acceptable before measuring it."
+      },
+      {
+        "source_id": "v2-dream-latency-failed",
+        "kind": "tool_call_failed",
+        "timestamp": "2026-03-18T10:05:00Z",
+        "behavior_backed": true,
+        "tool_name": "prompt_latency_smoke",
+        "command_class": "smoke",
+        "failure_family": "foreground_latency",
+        "text": "Prompt latency smoke failed when foreground Dream extraction ran on every user prompt."
+      },
+      {
+        "source_id": "v2-dream-route-abandoned",
+        "kind": "route_abandoned",
+        "timestamp": "2026-03-18T10:11:00Z",
+        "behavior_backed": true,
+        "text": "Agent abandoned the foreground Dream extraction route and moved Dream work back to bounded background processing."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-dream-foreground-latency-failed",
+        "track": "action_time_boundary",
+        "family": "workaround_rationale",
+        "hard_event_kind": "tool_call_failed",
+        "timestamp": "2026-05-10T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later foreground Dream extraction experiment failed prompt latency smoke after repeating the route that was abandoned.",
+        "required_past_source_ids": [
+          "v2-dream-latency-failed",
+          "v2-dream-route-abandoned"
+        ],
+        "expected_signal": "Preserve the bounded-background rationale before putting Dream extraction on the prompt path."
+      },
+      {
+        "event_id": "v2-dream-background-smoke-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "tool_call_succeeded",
+        "timestamp": "2026-05-11T10:00:00Z",
+        "flag_worthy": false,
+        "text": "Background Dream worker refactor succeeded and did not run foreground extraction on every prompt.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress bounded background Dream work because the rejected route was foreground extraction."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-search-scope",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-search-error",
+        "kind": "tool_call_failed",
+        "timestamp": "2026-04-02T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "rg",
+        "command_class": "search",
+        "failure_family": "generated_corpus_scope",
+        "text": "Recursive broad search over generated benchmark_corpus outputs timed out and produced no usable source boundary."
+      },
+      {
+        "source_id": "v2-search-route-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-02T10:04:00Z",
+        "behavior_backed": true,
+        "text": "Agent switched from broad corpus search to targeted fixture paths and excluded generated public-corpus outputs."
+      },
+      {
+        "source_id": "v2-search-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-02T10:05:00Z",
+        "behavior_backed": false,
+        "text": "The agent said broad search was noisy, but this message alone was not the support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-search-broad-timeout",
+        "track": "implicit_constraint_drift",
+        "family": "tacit_constraint",
+        "hard_event_kind": "tool_call_failed",
+        "timestamp": "2026-05-15T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later broad recursive generated-corpus search timed out again before the agent narrowed to targeted fixture paths.",
+        "required_past_source_ids": [
+          "v2-search-error",
+          "v2-search-route-switched"
+        ],
+        "expected_signal": "Flag the behavior-backed search-scope constraint before rerunning broad generated-corpus search."
+      },
+      {
+        "event_id": "v2-search-targeted-succeeded",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "tool_call_succeeded",
+        "timestamp": "2026-05-15T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Targeted search under public_longitudinal_users succeeded quickly.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress targeted fixture search."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-snapshot-export",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-snapshot-old-decision",
+        "kind": "old_decision_source",
+        "timestamp": "2026-02-20T10:00:00Z",
+        "behavior_backed": true,
+        "text": "Old source allowed synchronous snapshot export before the dataset grew."
+      },
+      {
+        "source_id": "v2-snapshot-current-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-06T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "pytest",
+        "command_class": "test",
+        "failure_family": "snapshot_timeout",
+        "text": "Current effective rule: synchronous snapshot export timed out after the dataset grew."
+      },
+      {
+        "source_id": "v2-snapshot-current-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-06T10:06:00Z",
+        "behavior_backed": true,
+        "text": "Current effective rule switched snapshot export to async chunked writes after the timeout."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-snapshot-sync-timeout",
+        "track": "temporal_override",
+        "family": "rejected_route",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-17T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A newer effective source says synchronous snapshot export failed again with timeout after the route had switched to async chunked writes.",
+        "required_past_source_ids": [
+          "v2-snapshot-current-failed",
+          "v2-snapshot-current-switched"
+        ],
+        "expected_signal": "Use the current effective rule, not the stale old source."
+      },
+      {
+        "event_id": "v2-snapshot-async-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-17T10:04:00Z",
+        "flag_worthy": false,
+        "text": "Async chunked snapshot export passed under the current effective rule.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not drag the old synchronous failure onto the current async path."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-cross-project-cache",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-cache-web-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-08T10:00:00Z",
+        "behavior_backed": false,
+        "text": "The agent mentioned cache helpers across packages without checking project scope."
+      },
+      {
+        "source_id": "v2-cache-cli-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-08T10:03:00Z",
+        "behavior_backed": true,
+        "tool_name": "vitest",
+        "command_class": "test",
+        "failure_family": "cross_project_cache",
+        "text": "CLI package tests failed when browser cache middleware from the web app was copied into the command-line tool."
+      },
+      {
+        "source_id": "v2-cache-cli-switched",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-08T10:08:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted the browser cache middleware in the CLI package and used a filesystem cache adapter."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-cache-cli-browser-cache-failed",
+        "track": "cross_project_contamination",
+        "family": "tacit_constraint",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-18T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later CLI change copied browser cache middleware again and CLI tests failed until the edit was reverted to the filesystem cache adapter.",
+        "required_past_source_ids": [
+          "v2-cache-cli-failed",
+          "v2-cache-cli-switched"
+        ],
+        "expected_signal": "Keep cache route memory scoped to the CLI package."
+      },
+      {
+        "event_id": "v2-cache-web-cache-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-18T10:05:00Z",
+        "flag_worthy": false,
+        "text": "The web app browser cache middleware test passed in its own project scope.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not leak the CLI rejection into the web app scope."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-forget-boundary",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-forget-privacy-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-09T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "privacy_contract",
+        "command_class": "test",
+        "failure_family": "forget_leak",
+        "text": "Privacy contract failed when a forgotten source span remained in derived recall labels."
+      },
+      {
+        "source_id": "v2-forget-edit-reverted",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-09T10:07:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted the recall-label retention edit and kept only non-identifying tombstone metadata."
+      },
+      {
+        "source_id": "v2-forget-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-09T10:08:00Z",
+        "behavior_backed": false,
+        "text": "The agent described the forget policy, but the privacy test and revert are the support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-forget-label-leak-failed",
+        "track": "intentional_forget_boundary",
+        "family": "tacit_constraint",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-19T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later recall-label change retained a forgotten source span and privacy contract failed until the edit was reverted.",
+        "required_past_source_ids": [
+          "v2-forget-privacy-failed",
+          "v2-forget-edit-reverted"
+        ],
+        "expected_signal": "Flag the forget-boundary source trail before preserving deleted text in derived labels."
+      },
+      {
+        "event_id": "v2-forget-tombstone-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-19T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Non-identifying tombstone metadata passed the privacy contract without retaining forgotten source text.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress safe tombstone metadata."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-compaction-gap",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-compaction-summary-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-11T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "docs_health",
+        "command_class": "test",
+        "failure_family": "compaction_omitted_rejection",
+        "text": "Docs health failed after compaction summary omitted the rejected zstd-value claim and a later doc repeated it."
+      },
+      {
+        "source_id": "v2-compaction-edit-reverted",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-11T10:09:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted the zstd-value claim and added an audit-trail pointer to the rejected alternative."
+      },
+      {
+        "source_id": "v2-compaction-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-11T10:10:00Z",
+        "behavior_backed": false,
+        "text": "The summary sounded confident, but it did not preserve the rejected alternative."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-compaction-zstd-claim-failed",
+        "track": "post_compaction_gap",
+        "family": "workaround_rationale",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-20T10:00:00Z",
+        "flag_worthy": true,
+        "text": "After compaction, a doc repeated the rejected zstd-value claim and docs health failed until the claim was reverted with an audit-trail pointer.",
+        "required_past_source_ids": [
+          "v2-compaction-summary-failed",
+          "v2-compaction-edit-reverted"
+        ],
+        "expected_signal": "Reopen the audit trail before repeating a compacted-away rejected alternative."
+      },
+      {
+        "event_id": "v2-compaction-pointer-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-20T10:05:00Z",
+        "flag_worthy": false,
+        "text": "A summary-only documentation change passed after linking the audit-trail pointer and avoiding the zstd-value claim.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not block compact summaries that preserve the pointer and avoid the rejected claim."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-mcp-deepen-handle",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-mcp-display-failed",
+        "kind": "tool_call_failed",
+        "timestamp": "2026-04-12T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "aippocampus_mcp_deepen",
+        "command_class": "mcp",
+        "failure_family": "display_handle_misuse",
+        "text": "MCP deepen failed when the agent copied a display-only deepen_route_id instead of the opaque handle."
+      },
+      {
+        "source_id": "v2-mcp-handle-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-12T10:04:00Z",
+        "behavior_backed": true,
+        "text": "Agent abandoned display id copying and used the opaque deepen_requests handle with a copy-paste command."
+      },
+      {
+        "source_id": "v2-mcp-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-12T10:05:00Z",
+        "behavior_backed": false,
+        "text": "The assistant explained handle confusion, but the MCP failure is the support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-mcp-display-handle-failed",
+        "track": "agent_recall_usability",
+        "family": "rejected_route",
+        "hard_event_kind": "tool_call_failed",
+        "timestamp": "2026-05-21T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later MCP deepen attempt copied the display-only deepen_route_id again and failed before switching to the opaque handle.",
+        "required_past_source_ids": [
+          "v2-mcp-display-failed",
+          "v2-mcp-handle-switched"
+        ],
+        "expected_signal": "Warn that display ids are not callable and point to the opaque handle route."
+      },
+      {
+        "event_id": "v2-mcp-docs-handle-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-21T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Docs mentioning display-only deepen_route_id passed because the example also showed the opaque handle command.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress safe documentation that distinguishes display id from callable handle."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-foreground-readiness",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-readiness-cli-failed",
+        "kind": "tool_call_failed",
+        "timestamp": "2026-04-13T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "aippocampus",
+        "command_class": "cli",
+        "failure_family": "path_hidden",
+        "text": "Foreground readiness smoke failed because the package artifact existed but the aippocampus console script was hidden from PATH."
+      },
+      {
+        "source_id": "v2-readiness-module-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-13T10:06:00Z",
+        "behavior_backed": true,
+        "text": "Agent switched readiness checks to report agent-callable module entrypoint separately from package-installed status."
+      },
+      {
+        "source_id": "v2-readiness-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-13T10:07:00Z",
+        "behavior_backed": false,
+        "text": "The agent said the package was installed, but that did not prove the foreground tool was callable."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-readiness-cli-hidden-failed",
+        "track": "host_surface_readiness",
+        "family": "tacit_constraint",
+        "hard_event_kind": "tool_call_failed",
+        "timestamp": "2026-05-22T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later host assumed package-installed meant foreground callable; the aippocampus CLI command failed until module entrypoint readiness was checked.",
+        "required_past_source_ids": [
+          "v2-readiness-cli-failed",
+          "v2-readiness-module-switched"
+        ],
+        "expected_signal": "Separate package presence from agent-callable foreground readiness."
+      },
+      {
+        "event_id": "v2-readiness-wheel-check-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "tool_call_succeeded",
+        "timestamp": "2026-05-22T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Wheel artifact verification succeeded as a package check without claiming the foreground CLI was visible.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not block package-artifact checks that avoid foreground-callable claims."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-sparse-provenance",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-codebook-privacy-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-14T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "privacy_redline",
+        "command_class": "test",
+        "failure_family": "foreground_reconstructed_text",
+        "text": "Privacy redline failed when sparse provenance codebook emitted reconstructed source text into the foreground packet."
+      },
+      {
+        "source_id": "v2-codebook-hash-switched",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-14T10:08:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted foreground reconstructed text and kept hash-only route reconstruction plus source-open rehydration proof."
+      },
+      {
+        "source_id": "v2-codebook-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-14T10:09:00Z",
+        "behavior_backed": false,
+        "text": "The assistant summarized compression quality, but the privacy failure and revert are the support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-codebook-text-leak-failed",
+        "track": "privacy_redline",
+        "family": "tacit_constraint",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-23T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later sparse provenance codebook change emitted reconstructed source text foreground and privacy redline failed until it returned to hash-only reconstruction.",
+        "required_past_source_ids": [
+          "v2-codebook-privacy-failed",
+          "v2-codebook-hash-switched"
+        ],
+        "expected_signal": "Keep source text behind source-open rehydration, not foreground packets."
+      },
+      {
+        "event_id": "v2-codebook-hash-report-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-23T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Hash-only route reconstruction report passed with no foreground reconstructed source text.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress hash-only provenance diagnostics."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-observatory-readonly",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-observatory-control-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-15T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "activation_contract",
+        "command_class": "test",
+        "failure_family": "observatory_control_loop",
+        "text": "Activation contract failed when Cognitive Observatory panel ranks changed live recall activation order."
+      },
+      {
+        "source_id": "v2-observatory-readonly-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-15T10:06:00Z",
+        "behavior_backed": true,
+        "text": "Agent abandoned the Observatory control-loop route and kept Campus panels read-only for operator triage."
+      },
+      {
+        "source_id": "v2-observatory-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-15T10:07:00Z",
+        "behavior_backed": false,
+        "text": "The panel looked useful, but narrative usefulness did not justify changing activation order."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-observatory-control-loop-failed",
+        "track": "observability_boundary",
+        "family": "workaround_rationale",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-24T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later Cognitive Observatory control-loop change altered live recall activation order and activation contract failed before returning to read-only panels.",
+        "required_past_source_ids": [
+          "v2-observatory-control-failed",
+          "v2-observatory-readonly-switched"
+        ],
+        "expected_signal": "Keep Observatory output read-only unless a separate activation contract is introduced."
+      },
+      {
+        "event_id": "v2-observatory-html-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-24T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Read-only Campus panel HTML rendering passed without changing live recall activation order.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress read-only observability output."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-semantic-cache",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-semantic-hook-timeout",
+        "kind": "tool_call_failed",
+        "timestamp": "2026-04-16T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "prompt_latency_smoke",
+        "command_class": "smoke",
+        "failure_family": "online_rerank_latency",
+        "text": "Prompt latency smoke failed when online semantic rerank called a provider in the hot hook path."
+      },
+      {
+        "source_id": "v2-semantic-cache-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-16T10:08:00Z",
+        "behavior_backed": true,
+        "text": "Agent abandoned hot-path provider rerank and moved semantic evidence selection toward source-side cache and deterministic line ranking."
+      },
+      {
+        "source_id": "v2-semantic-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-16T10:09:00Z",
+        "behavior_backed": false,
+        "text": "The agent said rerank quality was high, but latency failure governed the default hook route."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-semantic-hot-provider-timeout",
+        "track": "latency_cost_boundary",
+        "family": "workaround_rationale",
+        "hard_event_kind": "tool_call_failed",
+        "timestamp": "2026-05-25T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later hot hook path called online semantic rerank provider again and prompt latency smoke failed before switching back to source-side cache.",
+        "required_past_source_ids": [
+          "v2-semantic-hook-timeout",
+          "v2-semantic-cache-switched"
+        ],
+        "expected_signal": "Treat online semantic rerank as opt-in diagnostic, not default hook behavior."
+      },
+      {
+        "event_id": "v2-semantic-offline-cache-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "tool_call_succeeded",
+        "timestamp": "2026-05-25T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Offline source-side semantic cache build succeeded and did not call a provider in the hot hook path.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress offline cache warming."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-generated-format",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-format-generated-failed",
+        "kind": "tool_call_failed",
+        "timestamp": "2026-04-17T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "formatter",
+        "command_class": "format",
+        "failure_family": "generated_files",
+        "text": "Formatter failed after recursively formatting generated benchmark report files and churned large generated outputs."
+      },
+      {
+        "source_id": "v2-format-targeted-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-17T10:06:00Z",
+        "behavior_backed": true,
+        "text": "Agent abandoned broad generated-file formatting and switched to targeted source and test paths."
+      },
+      {
+        "source_id": "v2-format-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-17T10:07:00Z",
+        "behavior_backed": false,
+        "text": "The agent called the churn noisy, but the formatter failure is the support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-format-generated-churn-failed",
+        "track": "tool_scope_boundary",
+        "family": "tacit_constraint",
+        "hard_event_kind": "tool_call_failed",
+        "timestamp": "2026-05-26T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later broad formatter run over generated benchmark report files failed with churn until the agent switched to targeted source and test paths.",
+        "required_past_source_ids": [
+          "v2-format-generated-failed",
+          "v2-format-targeted-switched"
+        ],
+        "expected_signal": "Flag generated-file formatting scope before broad formatter runs."
+      },
+      {
+        "event_id": "v2-format-targeted-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "tool_call_succeeded",
+        "timestamp": "2026-05-26T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Targeted formatter run on source and test paths succeeded without touching generated benchmark reports.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress targeted formatting."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-react-version-boundary",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-react18-old",
+        "kind": "old_decision_source",
+        "timestamp": "2026-03-01T10:00:00Z",
+        "behavior_backed": true,
+        "text": "Old source used a React 18 adapter in a legacy package."
+      },
+      {
+        "source_id": "v2-react19-test-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-18T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "vitest",
+        "command_class": "test",
+        "failure_family": "react_version_boundary",
+        "text": "Current React 19 package tests failed when the legacy React 18 adapter was copied into the new app."
+      },
+      {
+        "source_id": "v2-react19-route-switched",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-18T10:07:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted the React 18 adapter in the React 19 package and used a version-specific adapter path."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-react19-adapter-failed",
+        "track": "cross_scope_drift",
+        "family": "tacit_constraint",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-27T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A newer React 19 app copied the legacy React 18 adapter again and tests failed until the route was reverted to the version-specific adapter.",
+        "required_past_source_ids": [
+          "v2-react19-test-failed",
+          "v2-react19-route-switched"
+        ],
+        "expected_signal": "Respect the React version scope instead of generalizing the old adapter route."
+      },
+      {
+        "event_id": "v2-react18-legacy-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-27T10:05:00Z",
+        "flag_worthy": false,
+        "text": "The legacy React 18 package tests passed while keeping its existing adapter.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not leak the React 19 rejection into the legacy React 18 package."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-question-tracking",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-question-hidden-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-19T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "question_axis_check",
+        "command_class": "test",
+        "failure_family": "hidden_question_gap",
+        "text": "Question-axis check failed when an unresolved user question was kept only in subconscious notes and never surfaced in the active queue."
+      },
+      {
+        "source_id": "v2-question-queue-switched",
+        "kind": "route_abandoned",
+        "timestamp": "2026-04-19T10:06:00Z",
+        "behavior_backed": true,
+        "text": "Agent abandoned subconscious-only question tracking and added an explicit active question queue with source pointers."
+      },
+      {
+        "source_id": "v2-question-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-19T10:07:00Z",
+        "behavior_backed": false,
+        "text": "The assistant remembered a question informally, but the failing check required a real active queue."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-question-subconscious-only-failed",
+        "track": "question_tracking_gap",
+        "family": "rejected_route",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-28T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later unresolved user question stayed subconscious-only and question-axis check failed until it was moved to the active question queue.",
+        "required_past_source_ids": [
+          "v2-question-hidden-failed",
+          "v2-question-queue-switched"
+        ],
+        "expected_signal": "Use an explicit active question queue for unresolved questions."
+      },
+      {
+        "event_id": "v2-question-answered-archive-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-28T10:05:00Z",
+        "flag_worthy": false,
+        "text": "Archiving an already answered question passed because it was not an unresolved active queue item.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not keep answered questions active."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-aippo-clause",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-aippo-dream-only-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-20T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "aippo_contract",
+        "command_class": "test",
+        "failure_family": "dream_only_clause",
+        "text": "AIppo contract failed when a Dream-only candidate clause reached foreground without source support."
+      },
+      {
+        "source_id": "v2-aippo-source-switched",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-20T10:08:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted the Dream-only foreground clause and required source-backed compilation before AIppo clause activation."
+      },
+      {
+        "source_id": "v2-aippo-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-20T10:09:00Z",
+        "behavior_backed": false,
+        "text": "The Dream candidate sounded useful, but it was not source support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-aippo-dream-only-leak-failed",
+        "track": "dream_candidate_boundary",
+        "family": "tacit_constraint",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-29T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later Dream-only AIppo candidate clause reached foreground and contract tests failed until source-backed compilation was restored.",
+        "required_past_source_ids": [
+          "v2-aippo-dream-only-failed",
+          "v2-aippo-source-switched"
+        ],
+        "expected_signal": "Keep Dream candidates backstage until source support ripens them."
+      },
+      {
+        "event_id": "v2-aippo-source-backed-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-29T10:05:00Z",
+        "flag_worthy": false,
+        "text": "A source-backed AIppo clause activation passed after compilation verified behavior support.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not suppress source-backed AIppo clauses."
+      }
+    ]
+  },
+  {
+    "dataset_id": "aippocampus_rollout_behavior_events_v2",
+    "schema_version": 1,
+    "license": "CC0-1.0",
+    "project_id": "rollout-v2-topic-labels",
+    "source_family": "agent_rollout_behavior_contract",
+    "past_window": [
+      {
+        "source_id": "v2-topic-scope-only-failed",
+        "kind": "test_failed",
+        "timestamp": "2026-04-21T10:00:00Z",
+        "behavior_backed": true,
+        "tool_name": "route_label_specificity",
+        "command_class": "test",
+        "failure_family": "scope_only_route_label",
+        "text": "Route label specificity test failed when several reopenable packets only said technical_work route and the agent picked the wrong benchmark route."
+      },
+      {
+        "source_id": "v2-topic-label-switched",
+        "kind": "edit_reverted",
+        "timestamp": "2026-04-21T10:08:00Z",
+        "behavior_backed": true,
+        "text": "Agent reverted scope-only labels for safe reopenable packets and added compact topic labels such as benchmark_claim_posture."
+      },
+      {
+        "source_id": "v2-topic-narrative",
+        "kind": "assistant_message",
+        "timestamp": "2026-04-21T10:09:00Z",
+        "behavior_backed": false,
+        "text": "The assistant said topic labels were nicer, but the failing specificity test was the support."
+      }
+    ],
+    "future_window": [
+      {
+        "event_id": "v2-topic-scope-only-failed-again",
+        "track": "route_topic_specificity",
+        "family": "workaround_rationale",
+        "hard_event_kind": "test_failed",
+        "timestamp": "2026-05-30T10:00:00Z",
+        "flag_worthy": true,
+        "text": "A later safe reopenable packet returned only technical_work route and route label specificity test failed until compact benchmark topic labels were restored.",
+        "required_past_source_ids": [
+          "v2-topic-scope-only-failed",
+          "v2-topic-label-switched"
+        ],
+        "expected_signal": "Prefer compact topic labels over scope-only labels when safe metadata exists."
+      },
+      {
+        "event_id": "v2-topic-blocked-scope-passed",
+        "track": "anti_drift_negative",
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "timestamp": "2026-05-30T10:05:00Z",
+        "flag_worthy": false,
+        "text": "A blocked private packet kept only a broad scope label and passed because topic metadata was not safe to expose.",
+        "required_past_source_ids": [],
+        "expected_signal": "Do not force topic labels when privacy masks block safe metadata."
+      }
+    ]
+  }
+]

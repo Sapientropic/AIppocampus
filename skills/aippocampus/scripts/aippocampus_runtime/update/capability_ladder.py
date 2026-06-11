@@ -10,6 +10,8 @@ READY_SURFACE_STATUSES = {"current", "ready", "installed_package"}
 def _surface_ready(item: dict[str, Any]) -> bool:
     if item.get("surface") == "llm":
         return bool(item.get("ready"))
+    if item.get("surface") == "agent_callable":
+        return item.get("ready") is True
     return item.get("status") in READY_SURFACE_STATUSES
 
 
@@ -68,6 +70,7 @@ def build_capability_ladder(
     hooks = surfaces.get("hooks") or {}
     llm = surfaces.get("llm") or {}
     mcp = surfaces.get("mcp") or {}
+    agent_callable = surfaces.get("agent_callable") or {}
     llm_ready = _surface_ready(llm)
     child_visible = llm.get("visible_in_child_process")
     hook_provider_ready = False
@@ -100,10 +103,17 @@ def build_capability_ladder(
         },
         {
             "id": "active_recall_ready",
-            "ready": _surface_ready(mcp),
-            "status": _ready_or_status(mcp),
-            "what_works": "MCP/progressive recall routes for agent source reopen",
-            "next_command": "aippocampus mcp list-tools",
+            "ready": _surface_ready(agent_callable),
+            "status": _ready_or_status(agent_callable) if agent_callable else _ready_or_status(mcp),
+            "what_works": (
+                "foreground agent-callable AIppocampus MCP/plugin tools"
+                if _surface_ready(agent_callable)
+                else "CLI/module fallbacks may work, but foreground host tool exposure is not confirmed"
+            ),
+            "next_command": agent_callable.get("next_command") or "aippocampus mcp list-tools",
+            "claim_boundary": (
+                "MCP/plugin artifacts being current does not prove this foreground agent can call them"
+            ),
         },
         {
             "id": "ambient_hooks_ready",

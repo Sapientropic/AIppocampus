@@ -137,6 +137,12 @@ def _safe_code_list(values: Any, *, limit: int = 4) -> list[str]:
     return result
 
 
+def _safe_float(value: Any) -> float | None:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return None
+    return round(max(0.0, min(1.0, float(value))), 3)
+
+
 def _router_reason_codes(packet: Mapping[str, Any]) -> list[str]:
     diagnostics = packet.get("router_diagnostics")
     if not isinstance(diagnostics, Mapping):
@@ -250,6 +256,8 @@ def _default_display_hint(
     if output_mode == "reopenable_route":
         if "check_currentness" in _risk_flags(packet, output_mode):
             return f"{route_label or 'route'}: reopen/check currentness."
+        if packet.get("route_topic"):
+            return "Reopen before use; route is not evidence."
         if route_label:
             return f"{route_label}: reopen before use."
         return "A source route may matter; reopen it before using the detail."
@@ -274,13 +282,25 @@ def _fit_memory_packet_budget(result: dict[str, Any]) -> dict[str, Any]:
         result["risk_flags"] = list(result["risk_flags"])[:3]
     if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
         return result
+    result.pop("route_label_specificity_score", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
     result.pop("triage_rank_reason_codes", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("label_granularity", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("scope_bucket", None)
     if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
         return result
     result.pop("preview_permission", None)
     if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
         return result
     result.pop("risk_flags", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("route_topic", None)
     if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
         return result
     result.pop("why_may_matter", None)
@@ -332,6 +352,18 @@ def memory_packet_from_route_packet(
     }
     if output_mode != "ignore_or_blocked":
         result["route_label"] = route_label
+        route_topic = _safe_code(packet.get("route_topic"))
+        scope_bucket = _safe_code(packet.get("scope_bucket"))
+        label_granularity = _safe_code(packet.get("label_granularity"))
+        specificity = _safe_float(packet.get("route_label_specificity_score"))
+        if route_topic:
+            result["route_topic"] = route_topic
+        if scope_bucket:
+            result["scope_bucket"] = scope_bucket
+        if label_granularity:
+            result["label_granularity"] = label_granularity
+        if specificity is not None:
+            result["route_label_specificity_score"] = specificity
         declared_authority = _as_text(
             packet.get("authority_level") or packet.get("output_authority")
         )
