@@ -626,7 +626,8 @@ def render_html(report: Mapping[str, Any]) -> str:
     ]
     raw_panels = report.get("campus_usefulness_panels")
     campus: Mapping[str, Any] = raw_panels if isinstance(raw_panels, Mapping) else {}
-    panel_rows = campus.get("panels") if isinstance(campus.get("panels"), Mapping) else {}
+    raw_panel_rows = campus.get("panels")
+    panel_rows: Mapping[str, Any] = raw_panel_rows if isinstance(raw_panel_rows, Mapping) else {}
     route_table = _table(
         [
             "status",

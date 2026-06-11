@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -107,6 +108,7 @@ _ROUTE_TOPIC_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("rejected route", "test failed", "failed route", "patch", "pr", "pull request"),
     ),
 )
+_TOPIC_TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
 
 class RecallNavigationError(ValueError):
@@ -263,6 +265,24 @@ def _route_label_for_clean_hit(hit: dict[str, Any]) -> str:
     return f"{bucket} route"
 
 
+def _topic_cue_match_count(text: str, cues: tuple[str, ...]) -> int:
+    tokens = _TOPIC_TOKEN_RE.findall(text.casefold())
+    token_set = set(tokens)
+    normalized_text = " ".join(tokens)
+    count = 0
+    for cue in cues:
+        cue_tokens = _TOPIC_TOKEN_RE.findall(cue.casefold())
+        if not cue_tokens:
+            continue
+        if len(cue_tokens) == 1:
+            if cue_tokens[0] in token_set:
+                count += 1
+            continue
+        if " ".join(cue_tokens) in normalized_text:
+            count += 1
+    return count
+
+
 def _route_topic_for_clean_hit(hit: dict[str, Any], *, intent: str) -> dict[str, Any]:
     local_text = " ".join(
         str(value or "")
@@ -277,12 +297,17 @@ def _route_topic_for_clean_hit(hit: dict[str, Any], *, intent: str) -> dict[str,
     query_text = str(intent or "").casefold()
     matched: list[tuple[int, str]] = []
     for topic, cues in _ROUTE_TOPIC_RULES:
-        score = sum(1 for cue in cues if cue.casefold() in local_text)
+        # Topic labels are foreground route-selection hints, so broad substring
+        # matches are worse than silence: "pr" inside "PRIVATE" or "review"
+        # inside "preview" makes clean routes collide and sends agents to the
+        # wrong source. Keep short cues token-bound and let source scope labels
+        # carry the route when no safe topic cue is present.
+        score = _topic_cue_match_count(local_text, cues)
         if score:
             matched.append((score, topic))
     if not matched:
         for topic, cues in _ROUTE_TOPIC_RULES:
-            score = sum(1 for cue in cues if cue.casefold() in query_text)
+            score = _topic_cue_match_count(query_text, cues)
             if score:
                 matched.append((score, topic))
     if matched:
