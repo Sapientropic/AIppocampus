@@ -504,6 +504,78 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertNotIn(FAKE_PROVIDER_VALUE, dumped)
         self.assertNotIn(str(root), dumped)
 
+    def test_openrouter_route_preflight_blocks_provider_subprocess(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            env_data = root / "data.json"
+            self._write_env_data(env_data)
+            agent_config = upstream / "configs" / "agent" / "native.json"
+            budget_checkpoint = root / "budget" / "provider-budget.json"
+
+            def fake_probe(*, api_key: str, model: str, timeout_seconds: int = 30) -> dict[str, object]:
+                self.assertEqual(api_key, FAKE_PROVIDER_VALUE)
+                return {
+                    "status": "failed",
+                    "http_status": 403,
+                    "elapsed_ms": 3.0,
+                    "model": model,
+                    "error": {
+                        "code": 403,
+                        "message": "The request is prohibited due to a violation of provider Terms Of Service.",
+                        "metadata": {"provider_name": None},
+                        "openrouter_metadata": {
+                            "requested": model,
+                            "summary": "available=2",
+                            "is_byok": False,
+                        },
+                    },
+                }
+
+            with (
+                mock.patch.object(
+                    benchmark,
+                    "run_official_surface",
+                    side_effect=AssertionError("provider subprocess should not start"),
+                ) as run_mock,
+                mock.patch.object(
+                    benchmark,
+                    "external_env_value",
+                    side_effect=lambda name: FAKE_PROVIDER_VALUE if name == "Open_Router" else None,
+                ),
+                mock.patch.object(benchmark, "probe_openrouter_chat_route", side_effect=fake_probe) as probe_mock,
+            ):
+                payload = benchmark.build_official_bridge_report(
+                    upstream_root=upstream,
+                    env_data_path=env_data,
+                    agent_config_path=agent_config,
+                    overall_output_dir=root / "overall",
+                    upperbound_output_dir=root / "upperbound",
+                    random_output_file=root / "random_metrics.json",
+                    provider="openrouter",
+                    run_surfaces=("overall",),
+                    max_cases=1,
+                    provider_budget_checkpoint=budget_checkpoint,
+                    max_provider_calls=10,
+                    max_provider_total_tokens=1000,
+                    provider_cost_unknown=True,
+                )
+            checkpoint = json.loads(budget_checkpoint.read_text(encoding="utf-8"))
+
+        run_mock.assert_not_called()
+        self.assertEqual(probe_mock.call_count, 2)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_provider_route_preflight_failed")
+        self.assertEqual(payload["provider_route_preflight"]["status"], "failed")
+        self.assertEqual(checkpoint["provider_execution_budget"]["stop_reason"], payload["status"])
+        self.assertIn("live_provider_route_available_for_required_models", payload["cannot_claim"])
+        checked_models = {check["model"] for check in payload["provider_route_preflight"]["checks"]}
+        self.assertEqual(checked_models, {"gpt-4.1", benchmark.OPENROUTER_DEFAULT_MODEL})
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(FAKE_PROVIDER_VALUE, dumped)
+        self.assertNotIn(str(root), dumped)
+        self.assertNotIn(RAW_QUERY, dumped)
+
     def test_run_surface_uses_python_module_from_local_upstream_without_emitting_secret_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -567,6 +639,29 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertEqual(result["provider"]["credential_status"], "set_redacted")
         self.assertEqual(result["provider"]["credential_alias"], "Open_Router")
         self.assertNotIn(FAKE_PROVIDER_VALUE, json.dumps(result, ensure_ascii=False))
+
+    def test_openrouter_nondefault_model_gets_isolated_agent_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upstream = self._write_upstream_stub(root / "amemgym-upstream")
+            default_path = benchmark.prepare_agent_config_for_provider(
+                upstream / "configs" / "agent" / "native.json",
+                provider="openrouter",
+                output_root=root / "generated",
+            )
+            qwen_path = benchmark.prepare_agent_config_for_provider(
+                upstream / "configs" / "agent" / "native.json",
+                provider="openrouter",
+                openrouter_model="qwen/qwen3.7-plus",
+                output_root=root / "generated",
+            )
+            default_config = json.loads(default_path.read_text(encoding="utf-8"))
+            qwen_config = json.loads(qwen_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(default_config["name"], "native-gpt-4.1-mini-openrouter")
+        self.assertEqual(qwen_config["name"], "native-gpt-4.1-mini-qwen-qwen3-7-plus-openrouter")
+        self.assertNotEqual(default_path, qwen_path)
+        self.assertEqual(qwen_config["llm_config"]["llm_model"], "qwen/qwen3.7-plus")
 
     def test_local_scripted_provider_reports_protocol_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
