@@ -387,6 +387,10 @@ bounded summaries replace source evidence.
 - Post-packet relation diagnostics for MemoryPacket, Macro, route, narrative,
   Dream, and AIppo packet failures live in
   [`packet-topology-diagnostics.md`](packet-topology-diagnostics.md).
+- Telepathy soft-lock and handoff-card packets live in
+  [`telepathy-coordination-packets.md`](telepathy-coordination-packets.md); this
+  facade may explain them later, but they are not default foreground recall
+  packets.
 - The foreground packet width, review-needed, and anti-nag budget lives in
   [`foreground-memory-ux-budget.md`](foreground-memory-ux-budget.md).
 - The hot/warm/cold source-reopen latency and timeout policy lives in

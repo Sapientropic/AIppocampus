@@ -23,9 +23,10 @@ The V0 report accepts synthetic or public-safe rows that describe:
 - repeated stale or rejected route reopen attempts;
 - privacy/candidate/source-handle crossing indicators.
 
-Inputs may come later from Telepathy coordination packets, soft locks, handoff
-cards, route packets, or topology detectors. V0 fixtures are checked-in and
-synthetic; they are not private-history evidence.
+Inputs may come from Telepathy coordination packets, soft locks, handoff cards,
+route packets, or topology detectors. The canonical packet contract lives in
+[`telepathy-coordination-packets.md`](telepathy-coordination-packets.md). V0
+fixtures are checked-in and synthetic; they are not private-history evidence.
 
 Runtime position is deliberately narrow: run these checks after packets or
 handoff artifacts already exist, and expose full detail through `explain`,
@@ -91,6 +92,8 @@ bounded action hints only.
 - [`cross-agent-recall-isolation.md`](cross-agent-recall-isolation.md) owns the
   pre-output scope filter and leak red lines. Coordination topology may detect a
   boundary crossing, but it does not authorize cross-agent recall.
+- [`telepathy-coordination-packets.md`](telepathy-coordination-packets.md) owns
+  the soft-lock, handoff-card, source-support, and readiness packet shape.
 - [`agent-native-recall-facade.md`](agent-native-recall-facade.md) owns compact
   recall/deepen/explain packet shape. Coordination diagnostics can be explained
   through that facade later, but V0 does not add a foreground hook.

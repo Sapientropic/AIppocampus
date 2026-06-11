@@ -45,6 +45,7 @@ Roles:
 | [source-backed-attention-router.md](source-backed-attention-router.md) | current contract | Hard-mask, route-packet, output-level, and claim-permission boundaries for attention-style navigation. |
 | [source-intake-health.md](source-intake-health.md) | current contract | Source-intake health diagnostics for hook fragility, source pollution, and fallback posture. |
 | [source-reopen-budget.md](source-reopen-budget.md) | current contract | Hot/warm/cold source-reopen policy, timeout fail-open behavior, and reopen red lines. |
+| [telepathy-coordination-packets.md](telepathy-coordination-packets.md) | current contract | Telepathy V0 coordination packet, soft-lock, and handoff-card contract. |
 | [topology-anchor-policy.md](topology-anchor-policy.md) | current contract | Topology anchor weighting as lifecycle pressure, not source truth. |
 
 ## Implementation Maps
