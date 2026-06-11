@@ -78,6 +78,14 @@ second scoring layer and should not force rigid behavior.
 | `source_open` | Source is already open to the host; exact wording may be used only within scope and redaction boundaries. |
 | `ignore_or_blocked` | Privacy, stale, conflict, missing-source, or high-risk boundary. Do not let it shape answer content except to report/defer when that boundary matters. |
 
+## Hook Packet Decoder
+
+Hook packets are action hints, not facts. Treat `suggested_agent_action=agent_recall` as a prompt to pull or deepen context, and `not_enough_for_claim=true` as route guidance only until source is reopened.
+Follow `source_refs`, route handles, Active Path Packets, lock ids, or reopen plans before broad manual search when present and not blocked.
+Use `direction_only` for low-risk orientation; deepen or reopen `direction_with_ref` and `reopenable_route`; use `bounded_evidence` only inside declared scope.
+Use `source_open` only within scope/redaction boundaries; let `ignore_or_blocked` shape content only to explain or defer.
+Reopen or deepen for exact wording, public/numeric claims, stale/conflicted material, sensitive facts, or high-risk action; proceed normally when the packet is weak.
+
 Presence and proof are different layers. A memory atmosphere can help the agent
 understand the moment; a working continuity brief can guide the next action;
 source-court behavior still owns exact quotes, disputed facts, sensitive
