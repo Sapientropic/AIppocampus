@@ -489,7 +489,8 @@ Reports have `kind: aippocampus_longmemeval_benchmark` and include:
   context-visible source-line recall, MRR where available, rank-bucket
   diagnostics, exact-line recall ladders, and sanitized miss taxonomy counts.
 - `cases`: sanitized per-case rows with hashed ids and no raw LongMemEval text.
-- `cannot_claim`: QA, judge-model, V2, SOTA, and broad-comparison boundaries.
+- `cannot_claim`: legacy compatibility boundary field for QA, judge-model, V2,
+  SOTA, and broad-comparison limits.
 
 Answer reports have `kind: aippocampus_longmemeval_answer_benchmark` and
 include:
@@ -504,9 +505,9 @@ include:
   from retrieval quality and answer correctness.
 - `sanitized_report_validation`: absolute-path, raw-text, and credential-like
   string checks that must pass before the report can be used.
-- `cannot_claim`: official leaderboard score, official judge score, V2, LoCoMo,
-  PersonaMem, SOTA, private-history quality, and default reader/provider
-  adoption boundaries.
+- `cannot_claim`: legacy compatibility boundary field for official leaderboard
+  score, official judge score, V2, LoCoMo, PersonaMem, SOTA, private-history
+  quality, and default reader/provider adoption limits.
 
 V2 mapping reports have
 `kind: aippocampus_longmemeval_v2_context_mapping` and include:
@@ -520,8 +521,9 @@ V2 mapping reports have
   scoring are supported, diagnostic-only, or not run.
 - `cases`: hashed case ids with domain, environment family, question type,
   mapping status, and candidate counts only.
-- `cannot_claim`: V2 source-evidence hit rate, MRR, answer accuracy, LAFS, SOTA,
-  and benchmark-grade context-gathering score boundaries.
+- `cannot_claim`: legacy compatibility boundary field for V2 source-evidence hit
+  rate, MRR, answer accuracy, LAFS, SOTA, and benchmark-grade
+  context-gathering score limits.
 
 V2 official-pilot decision reports have
 `kind: aippocampus_longmemeval_v2_official_pilot_decision` and include:
@@ -537,8 +539,9 @@ V2 official-pilot decision reports have
   reader/evaluator dependency, and memory-query latency as separate layers.
 - `privacy_and_artifact_policy`: ignored local official checkout/data/output
   policy plus sanitized aggregate-only publication requirements.
-- `cannot_claim`: V2 answer accuracy, LAFS, leaderboard readiness, SOTA,
-  source-evidence R@K/MRR, and broad memory-superiority boundaries.
+- `cannot_claim`: legacy compatibility boundary field for V2 answer accuracy,
+  LAFS, leaderboard readiness, SOTA, source-evidence R@K/MRR, and broad
+  memory-superiority limits.
 
 When a future run changes what the project can claim, update
 [`stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md). If it only records a dated

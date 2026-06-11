@@ -45,15 +45,18 @@ Positive local evidence:
   no-remember negatives, summary-overhang traps, and private-readiness
   redaction.
 
-Interpretation:
+Supports:
 
 - This closes the public-safe #1154 pivot: E2E50 progress no longer depends on
   manufacturing more private 50-turn threads or reaching the private 20-case
   retained target first.
-- The public pack is still contract evidence only. It cannot claim
-  representative E2E50 quality, private-history behavior lift, live host
-  behavior, semantic-judge quality, completed 50-case quality, or
-  public-dialogue continuity proof.
+
+Important limits:
+
+- The public pack is contract evidence only; do not cite it as representative
+  E2E50 quality, private-history behavior lift, live host behavior,
+  semantic-judge quality, completed 50-case quality, or public-dialogue
+  continuity proof.
 
 ## 2026-06-10 Issue #1086 E2E50 Private / Local Seed Follow-up
 
@@ -73,11 +76,14 @@ Positive local evidence:
 - The report is recorded in
   [`../benchmarks/e2e50-private-local-seed-followup-2026-06-10.md`](../benchmarks/e2e50-private-local-seed-followup-2026-06-10.md).
 
-Interpretation:
+Supports:
 
 - The old private/local candidate-count blocker is narrowed: current
   wide-window discovery can find enough candidate seeds.
-- The private/local annotation blocker remains. This still cannot claim
+
+Important limits:
+
+- The private/local annotation blocker remains. Do not cite this as
   private-history behavior lift, completed private 20-case or 50-case E2E50
   quality, representative E2E50 quality, live host behavior lift, or semantic
   judge quality.
@@ -149,9 +155,9 @@ Interpretation:
   source-derived cue coverage, so a nearby recap or repeated-term decoy cannot
   win only by repeating one cue many times.
 - The current selected private semantic-sidecar-required Track B row now
-  supersedes the 2026-05-29 97/100 row for this local selected slice. It still
-  cannot claim public benchmark score, broad real-user gate quality, full
-  semantic completeness, live semantic-model quality, or private-text
+  supersedes the 2026-05-29 97/100 row for this local selected slice.
+  Important limits: no public benchmark score, broad real-user gate quality,
+  full semantic completeness, live semantic-model quality, or private-text
   disclosure safety beyond the sanitized report contract.
 
 ## 2026-06-09 Issue #1053 Preference Source-review Floor And Taxonomy Slice
@@ -216,7 +222,7 @@ Positive evidence:
   `UserPromptSubmit` and `Stop` events through the handler with exit code 0 and
   no raw prompt/session/transcript/path/tool-payload leakage in public output.
 
-Cannot claim:
+Important limits:
 
 - real-host hook firing;
 - Claude settings mutation or a configuration-mutating installer;
@@ -288,7 +294,7 @@ MCP configuration currently reports `Status: Failed to connect` for
 The smoke now reports this as `blocked_host_config` while keeping the temporary
 strict-config tool-call path separately provable.
 
-Cannot claim from this slice: Claude Code hooks, unattended private-history
+Important limits for this slice: Claude Code hooks, unattended private-history
 ingestion, cross-device sync, hosted/cloud continuity, broad private-history
 quality, or that the user's persistent Claude Code MCP config is healthy.
 
@@ -322,7 +328,7 @@ Cross-platform contract evidence in the same slice:
   and `--source auto`; unsupported platforms or unavailable OS store tools
   return an explicit `skipped` report instead of pretending the adapter passed.
 
-Cannot claim from this slice: arbitrary password-manager support, macOS or Linux
+Important limits for this slice: arbitrary password-manager support, macOS or Linux
 host-store success until the smoke runs on those hosts, already-running Codex
 Desktop hook visibility, provider-key correctness or freshness, or default
 `aippocampus doctor provider` reading credential stores. The doctor remains an
@@ -355,7 +361,7 @@ metadata observation shape, and deleted 13/13 uploaded encrypted objects, but
 the final pull hit an `SSL: UNEXPECTED_EOF_WHILE_READING` transport error. Treat
 that as a transient provider/client observation, not as a successful full smoke.
 
-Cannot claim from this slice: metadata padding evaluated, traffic-analysis
+Important limits for this slice: metadata padding evaluated, traffic-analysis
 resistance, provider-console cleanup, broad S3-compatible/GCS/cloud-folder
 coverage, or long-duration provider/client stability. Provider account
 identifiers, bucket names, object prefixes, credential values, raw private
@@ -391,7 +397,7 @@ Release-boundary note:
   not as evidence that the PyPI package has a provider-scoped Codex-only status
   surface.
 
-Cannot claim from this slice: interactive Codex Desktop UI click-through,
+Important limits for this slice: interactive Codex Desktop UI click-through,
 public marketplace install UX, third-party install review, macOS/Linux
 standalone binaries, signed installers, automatic updaters, or all client
 wrappers.
@@ -426,7 +432,7 @@ Release-boundary note:
   command still reports the provider matrix rather than a Codex-only status
   object.
 
-Cannot claim from this slice: interactive Codex Desktop UI marketplace behavior,
+Important limits for this slice: interactive Codex Desktop UI marketplace behavior,
 public marketplace submission, second-user review, macOS/Linux standalone
 binary support, or every client/provider surface.
 

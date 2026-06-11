@@ -19,7 +19,7 @@ REQUIRED_PROOF_SLICE_MATURITY_TERMS = {
         "proof-slice maturity board missing release_claimable status"
     ),
     "last_checked": "proof-slice maturity board missing last_checked field",
-    "Cannot claim": "proof-slice maturity board missing cannot-claim column",
+    "Important limits": "proof-slice maturity board missing important-limits column",
     "Owner / evidence": "proof-slice maturity board missing owner/evidence column",
     "## Cognitive Layer Graduation Ladder": (
         "proof-slice maturity board missing cognitive layer graduation ladder"

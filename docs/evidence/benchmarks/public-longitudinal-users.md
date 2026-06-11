@@ -459,9 +459,9 @@ measure which better predicts hard holdout support. If disagreement predicts
 future support better than self-assessment, the Dream scoring philosophy has a
 public, falsifiable foundation.
 
-## Claim Boundary
+## Claim Shape
 
-This benchmark can claim:
+Supports:
 
 - public, reproducible pseudo-user scoring for coding implicit knowledge;
 - public LoCoMo same-conversation long-dialogue evidence retrieval;
@@ -469,7 +469,7 @@ This benchmark can claim:
 - a public contract other memory systems can implement against;
 - a smoke-tested report shape for later VCS-derived future-event recall.
 
-It cannot claim:
+Important limits:
 
 - private real-history coding continuity quality;
 - real same-user longitudinal identity;

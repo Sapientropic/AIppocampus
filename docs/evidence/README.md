@@ -16,11 +16,12 @@ gates, and agent recommendation boundary.
 ## Current Claim Snapshot
 
 Use [`docs/evidence/current-claims.md`](current-claims.md) for current benchmark
-and readiness numbers, supersession, cohorts, and cannot-claim boundaries. It
-is the first stop when an old report still says "current" in its local context.
+and readiness numbers, what each result supports, material limits,
+supersession, and cohorts. It is the first stop when an old report still says
+"current" in its local context.
 
 Use [`docs/evidence/readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md)
-for stage-level can-claim / cannot-claim status, and
+for stage-level positive claims and launch boundaries, and
 [`docs/evidence/readiness/proof-slice-maturity.md`](readiness/proof-slice-maturity.md)
 for a compact view of which proof slices are design-only, deterministic smoke,
 public-safe fixtures, second-user evidence, or release-claimable.

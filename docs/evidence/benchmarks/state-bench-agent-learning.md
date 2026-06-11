@@ -2,8 +2,8 @@
 
 This page owns the #1043 feasibility boundary for evaluating AIppocampus on the
 STATE-Bench Agent Learning Track. It records the adapter path, local artifact
-policy, and why AIppocampus cannot yet claim an official STATE-Bench score or
-agent-learning lift.
+policy, and the material limits around official STATE-Bench score and
+agent-learning lift claims.
 
 ## Benchmark Interpretation
 
@@ -12,7 +12,7 @@ agent-learning lift.
 | Question answered | Can AIppocampus prepare a train-only Agent Learning adapter shape without leaking held-out/test-oracle or raw trajectory material? |
 | Primary metric | Adapter/readiness feasibility: observed train trajectories, extracted public-safe learning count, retrieval-contract comparison, and `official_task_run_count`. |
 | Can claim | Train-only adapter generation and public-safe no-score feasibility reporting are implemented. |
-| Still cannot claim | Official STATE-Bench score, Agent Learning lift, leaderboard readiness, held-out task quality, or full submission compatibility. |
+| Important limits | No official STATE-Bench score, Agent Learning lift, leaderboard readiness, held-out task quality, or full submission compatibility yet. |
 | Best next benchmark | One-domain matched no-memory vs AIppocampus task run under the official harness/settings. |
 
 Decision: suitable as a staged external benchmark adapter, but **not ready for
@@ -163,9 +163,9 @@ no-memory vs AIppocampus task score. #1043 should stay open until the locked
 evaluation client is configured and both arms complete under the same official
 harness/model/run-count settings.
 
-## Claim Boundary
+## Claim Shape
 
-Can claim:
+Supports:
 
 - A local, ignored STATE-Bench checkout at the verified commit can feed a
   train-only AIppocampus learning extractor.
@@ -175,7 +175,7 @@ Can claim:
   text, private registry text, provider keys, and local absolute paths are not
   emitted.
 
-Cannot claim:
+Important limits:
 
 - Official STATE-Bench score.
 - Agent Learning Track lift over no-memory.

@@ -68,15 +68,15 @@ runner's `ok` means the diagnostic executed and stayed inside the privacy
 contract. The separate `quality_gate_ok` field reports whether the current
 fixture clears the narrow robustness thresholds.
 
-## Claim Boundary
+## Claim Shape
 
-Track S can support only this narrow claim:
+Supports:
 
 > AIppocampus has a no-live-judge diagnostic surface for semantic perturbation,
 > equivalent-query retrieval invariance, and hard-negative/negation suppression
 > over public-safe fixtures.
 
-It cannot claim:
+Important limits:
 
 - human-level semantic understanding;
 - replacement for Track A/B/C/D quality gates;
