@@ -142,6 +142,29 @@ state. Non-blocked reopenable packets should carry enough safe route-selection
 signal to choose a first deepen step, while blocked, private, source-thin, or
 high-risk routes should stay silent or return a bounded next safe action.
 
+## Macro Orientation Packet
+
+`aippocampus_runtime.recall.agent_continuity` can expose the latest
+project-scoped macro orientation as a compact opt-in packet through:
+
+```text
+aippocampus agent macro --project AIppocampus --macro-state-jsonl <path> --json
+aippocampus agent deepen macro:project:AIppocampus:latest --macro-state-jsonl <path> --json
+aippocampus agent explain macro:project:AIppocampus:latest --macro-state-jsonl <path> --json
+```
+
+The foreground packet is `direction_only` / `navigation_only` and carries only
+short route-control metadata such as perturbation movement, distance label, and
+route policy. It omits source refs, derivation trace, and stage evidence; those
+stay behind deepen/explain. The packet is useful only when the latest
+project-scoped state is current, source-backed, and has a route or movement
+delta. Standing state, stale state, missing source, or missing macro-state file
+suppresses the packet.
+
+Macro packets must not satisfy bounded-evidence requirements. Exact, public,
+disputed, stale/currentness, sensitive, numeric, or high-risk claims still
+require source reopen through deepen/explain.
+
 ## AIppo Working-Contract Packet
 
 `aippocampus_runtime.aippo.working_contract` defines the first executable
