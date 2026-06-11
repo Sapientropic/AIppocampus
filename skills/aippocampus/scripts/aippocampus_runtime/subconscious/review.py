@@ -23,6 +23,7 @@ from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     resolve_model_route,
     route_artifact_source,
+    route_cache_contract,
     route_cache_metrics,
     route_payload_with_effective_values,
     route_service_name,
@@ -576,6 +577,7 @@ def run_review(
     ]
     chat_kwargs = (
         {
+            "cache_contract": route_cache_contract(route),
             "service_name": route_service_name(route),
             "response_format_json": bool(
                 capabilities.supports_json_response if capabilities else True

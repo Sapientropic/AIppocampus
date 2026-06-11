@@ -456,6 +456,12 @@ def run_reader(
             max_tokens=config.max_tokens,
             timeout=float(config.timeout),
             temperature=0.0,
+            service_name=(
+                "DeepSeek LoCoMo reader API"
+                if config.provider == "deepseek"
+                else "OpenAI-compatible LoCoMo reader API"
+            ),
+            cache_contract=cache_contract(config.provider),
         )
         parsed = standard_public.parse_model_json(response)
         usage = standard_public.compact_usage(response.get("usage") or {})

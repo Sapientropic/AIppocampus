@@ -12,6 +12,7 @@ from typing import Any
 import smoke_source_evidence_recall_eval as source_evidence_eval
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.model.client import DEEPSEEK_PREFIX_CACHE_CONTRACT
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
     SEMANTIC_SCOPE_LABELS_FILENAME,
@@ -324,6 +325,7 @@ def run_public_semantic_labeler(
         None if int(max_tokens) <= 0 else int(max_tokens),
         int(timeout),
         0.0,
+        cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
     )
     parsed = parse_model_json(response)
     raw_findings = parsed.get("findings") if isinstance(parsed, dict) else []

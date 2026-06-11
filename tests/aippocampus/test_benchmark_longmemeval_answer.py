@@ -113,7 +113,7 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             max_tokens: int | None,
             timeout: float,
             temperature: float,
-            **_: object,
+            **kwargs: object,
         ) -> dict[str, Any]:
             captured_messages.append(messages)
             self.assertEqual(api_key, "reader-key")
@@ -122,6 +122,8 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             self.assertEqual(max_tokens, 128)
             self.assertEqual(timeout, 7)
             self.assertEqual(temperature, 0.0)
+            self.assertEqual(kwargs["cache_contract"], "deepseek_prefix_v1")
+            self.assertEqual(kwargs["service_name"], "DeepSeek LongMemEval reader API")
             return {
                 "choices": [
                     {

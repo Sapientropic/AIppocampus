@@ -36,7 +36,6 @@ from aippocampus_runtime.dream.working_memory import (
 from aippocampus_runtime.model.client import (
     DEEPSEEK_KV_CACHE_GUIDE_URL,
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
-    NO_PROVIDER_CACHE_CONTRACT,
     ChatClientConfig,
 )
 from aippocampus_runtime.model.routing import (
@@ -44,6 +43,7 @@ from aippocampus_runtime.model.routing import (
     resolve_model_route,
     resolve_route_reasoning_effort,
     resolve_route_thinking,
+    route_cache_contract,
     route_payload_with_effective_values,
     route_service_name,
 )
@@ -543,15 +543,6 @@ def normalized_worker_mode(value: str | None) -> str:
     return mode
 
 
-def cache_contract_for_route(route: Any) -> str:
-    if getattr(route, "provider", "") == "deepseek":
-        return DEEPSEEK_PREFIX_CACHE_CONTRACT
-    capabilities = getattr(route, "capabilities", None)
-    if getattr(capabilities, "cache_metrics_kind", "") == "deepseek_prefix":
-        return DEEPSEEK_PREFIX_CACHE_CONTRACT
-    return NO_PROVIDER_CACHE_CONTRACT
-
-
 def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str, Any]]:
     route_name = getattr(args, "model_route", None)
     model = str(getattr(args, "model", "") or "")
@@ -604,7 +595,7 @@ def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str,
         thinking=thinking_value,
         reasoning_effort=reasoning_effort_value,
         response_format_json=bool(getattr(capabilities, "supports_json_response", True)),
-        cache_contract=cache_contract_for_route(route),
+        cache_contract=route_cache_contract(route),
     )
     return config, route_payload_with_effective_values(
         route,

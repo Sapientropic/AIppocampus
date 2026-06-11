@@ -16,12 +16,12 @@ from aippocampus_runtime.core import (
     validate_private_credential_transport,
 )
 from aippocampus_runtime.model.routing import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
     normalize_reasoning_effort,
     normalize_thinking_mode,
 )
 
-DEEPSEEK_PREFIX_CACHE_CONTRACT = "deepseek_prefix_v1"
-NO_PROVIDER_CACHE_CONTRACT = "none"
 DEEPSEEK_KV_CACHE_GUIDE_URL = "https://api-docs.deepseek.com/zh-cn/guides/kv_cache"
 VALID_CACHE_CONTRACTS = {DEEPSEEK_PREFIX_CACHE_CONTRACT, NO_PROVIDER_CACHE_CONTRACT}
 

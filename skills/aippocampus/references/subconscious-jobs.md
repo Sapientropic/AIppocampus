@@ -446,6 +446,10 @@ All production `ChatClientConfig(...)` call sites must now pass an explicit
 telemetry. `aippocampus_runtime.model.client` rejects DeepSeek-flavored configs without the
 DeepSeek contract, and docs health scans scripts for missing keywords so newly
 added LLM callers cannot silently bypass this billing guard.
+Route-aware callers should use `aippocampus_runtime.model.routing.route_cache_contract`;
+the checked call-site inventory lives in
+`model_call_site_cache_contract_inventory()` so docs stay a pointer rather
+than a second source of truth.
 
 Spend and freshness reports should expose the same public telemetry shape for
 every model-backed lane: `usage_available`, `usage_missing_reason`,

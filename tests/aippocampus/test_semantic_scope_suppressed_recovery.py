@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -102,9 +103,14 @@ class SemanticScopeSuppressedRecoveryTests(unittest.TestCase):
         self._write_fixture()
         os.environ["FAKE_DEEPSEEK_KEY"] = "present"
         calls: list[str] = []
+        cache_contracts: list[str] = []
 
-        def fake_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+        def fake_chat_fn(  # noqa: ANN001
+            messages, api_key, model, base_url, max_tokens, timeout, temperature, **kwargs
+        ):
             calls.append(model)
+            cache_contracts.append(str(kwargs.get("cache_contract") or ""))
+            self.assertEqual(kwargs.get("service_name"), "DeepSeek API")
             if len(calls) == 1:
                 payload = json.loads(messages[1]["content"])
                 self.assertEqual(payload["model_route"], "suppressed_label_recovery")
@@ -165,19 +171,20 @@ class SemanticScopeSuppressedRecoveryTests(unittest.TestCase):
                 "usage": {"prompt_cache_hit_tokens": 7, "prompt_cache_miss_tokens": 3},
             }
 
-        result = recovery.run_suppressed_label_recovery_smoke(
-            registry_path=self.registry,
-            jobs_output_path=self.jobs,
-            live=True,
-            api_key_env="FAKE_DEEPSEEK_KEY",
-            max_cases=1,
-            min_recovered_labels=2,
-            chat_fn=fake_chat_fn,
-        )
+        with patch.object(recovery, "call_chat_json", fake_chat_fn):
+            result = recovery.run_suppressed_label_recovery_smoke(
+                registry_path=self.registry,
+                jobs_output_path=self.jobs,
+                live=True,
+                api_key_env="FAKE_DEEPSEEK_KEY",
+                max_cases=1,
+                min_recovered_labels=2,
+            )
 
         rendered = json.dumps(result, ensure_ascii=False)
         self.assertTrue(result["ok"], rendered)
         self.assertEqual(set(calls), {"deepseek-v4-pro"})
+        self.assertEqual(set(cache_contracts), {"deepseek_prefix_v1"})
         self.assertEqual(result["model_route"]["route"], "suppressed_label_recovery")
         self.assertEqual(result["candidate_label_count"], 2)
         self.assertEqual(result["strict_recovered_label_count"], 2)

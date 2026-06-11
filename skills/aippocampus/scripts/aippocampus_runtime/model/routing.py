@@ -23,10 +23,121 @@ DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEFAULT_DEEPSEEK_THINKING = "enabled"
 DEFAULT_DEEPSEEK_REASONING_EFFORT = "high"
+DEEPSEEK_PREFIX_CACHE_CONTRACT = "deepseek_prefix_v1"
+NO_PROVIDER_CACHE_CONTRACT = "none"
 OPENAI_COMPAT_ROUTE_FALLBACKS = {"openai_compatible", "external", "custom_openai"}
 EXPLICIT_OPENAI_COMPAT_ROUTE = "explicit_openai_compatible"
 VALID_THINKING_MODES = {"enabled", "disabled"}
 VALID_REASONING_EFFORTS = {"high", "max"}
+SUPPORTED_CACHE_CONTRACT_METRIC_KINDS = {
+    "deepseek_prefix": DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    "none": NO_PROVIDER_CACHE_CONTRACT,
+}
+
+MODEL_CALL_SITE_CACHE_CONTRACT_INVENTORY: tuple[dict[str, str], ...] = (
+    {
+        "call_site": "subconscious.agent",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/subconscious/agent.py",
+        "owner": "subconscious_agent",
+        "purpose": "tool-using concept-edge proposal over clean source",
+        "route_source": "DeepSeek CLI defaults",
+        "cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT,
+        "usage_telemetry": "tool loop usage_total plus DeepSeek prefix cache metrics",
+    },
+    {
+        "call_site": "subconscious.review",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/subconscious/review.py",
+        "owner": "subconscious_review",
+        "purpose": "promotion-candidate review over staged findings",
+        "route_source": "resolve_model_route",
+        "cache_contract": "route_cache_contract(route)",
+        "usage_telemetry": "compact usage plus route_cache_metrics",
+    },
+    {
+        "call_site": "semantic_scope_suppressed_recovery",
+        "path": (
+            "skills/aippocampus/scripts/aippocampus_runtime/source/"
+            "semantic_scope_suppressed_recovery.py"
+        ),
+        "owner": "source_semantic_scope",
+        "purpose": "slow adjudication of suppressed semantic sidecar labels",
+        "route_source": "resolve_model_route",
+        "cache_contract": "route_cache_contract(route)",
+        "usage_telemetry": "aggregate compact usage plus route_cache_metrics",
+    },
+    {
+        "call_site": "public_semantic_sidecar_labeler",
+        "path": "benchmarks/aippocampus/source_evidence/public_semantic.py",
+        "owner": "benchmark_public_semantic",
+        "purpose": "public semantic-sidecar candidate labeling",
+        "route_source": "DeepSeek benchmark defaults",
+        "cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT,
+        "usage_telemetry": "sanitized compact usage in benchmark labeler metadata",
+    },
+    {
+        "call_site": "standard_public_line_reranker",
+        "path": "benchmarks/aippocampus/source_evidence/standard_public.py",
+        "owner": "benchmark_source_evidence",
+        "purpose": "provider-backed public source-line reranking",
+        "route_source": "semantic_line_reranker_public_contract",
+        "cache_contract": "provider-derived DeepSeek prefix or none",
+        "usage_telemetry": "usage, latency_ms, and provider cache summary",
+    },
+    {
+        "call_site": "locomo_fixed_reader",
+        "path": "benchmarks/aippocampus/benchmark_locomo_qa.py",
+        "owner": "benchmark_locomo_qa",
+        "purpose": "fixed reader answer/latency arm over bounded LoCoMo source lines",
+        "route_source": "reader_config provider detection",
+        "cache_contract": "provider-derived DeepSeek prefix or none",
+        "usage_telemetry": "reader usage, latency_ms, cost fields, and cache summary",
+    },
+    {
+        "call_site": "longmemeval_fixed_reader",
+        "path": "benchmarks/aippocampus/benchmark_longmemeval_answer.py",
+        "owner": "benchmark_longmemeval_answer",
+        "purpose": "fixed reader answer/latency arm over bounded LongMemEval source lines",
+        "route_source": "reader_config provider detection",
+        "cache_contract": "provider-derived DeepSeek prefix or none",
+        "usage_telemetry": "reader usage, latency_ms, cost fields, and cache summary",
+    },
+    {
+        "call_site": "dream_sleep_cycle",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py",
+        "owner": "dream_scheduler",
+        "purpose": "detached model-backed dream worker execution",
+        "route_source": "resolve_model_route",
+        "cache_contract": "route_cache_contract(route)",
+        "usage_telemetry": "queue lifecycle usage/cache projection",
+    },
+    {
+        "call_site": "dream_real_history_eval",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/dream/real_history_eval.py",
+        "owner": "dream_eval",
+        "purpose": "selected real-history dream-pack model-backed evaluation",
+        "route_source": "resolve_model_route",
+        "cache_contract": "route_cache_contract(route)",
+        "usage_telemetry": "model run usage/cache diagnostics",
+    },
+    {
+        "call_site": "dream_live_shadow_ab",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py",
+        "owner": "dream_shadow_ab",
+        "purpose": "live shadow A/B semantic relevance model arm",
+        "route_source": "resolve_model_route",
+        "cache_contract": "route_cache_contract(route)",
+        "usage_telemetry": "shadow event model metadata and usage summaries",
+    },
+    {
+        "call_site": "question_confirmation_live",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/question/confirmation_live.py",
+        "owner": "question_tracking",
+        "purpose": "optional live confirmation for borderline question-pair requests",
+        "route_source": "resolve_model_route",
+        "cache_contract": "route_cache_contract(route)",
+        "usage_telemetry": "per-request route_cache_metrics summaries",
+    },
+)
 
 
 def env_truthy(name: str, *, default: bool) -> bool:
@@ -224,6 +335,18 @@ def route_cache_metrics(route: ModelRoute, usage: dict[str, Any]) -> dict[str, A
     return {"available": False, "kind": kind}
 
 
+def route_cache_contract(route: ModelRoute) -> str:
+    capabilities = route.capabilities or deepseek_capabilities(route.tier)
+    kind = capabilities.cache_metrics_kind or "none"
+    if route.provider == "deepseek" or kind == "deepseek_prefix":
+        return DEEPSEEK_PREFIX_CACHE_CONTRACT
+    return SUPPORTED_CACHE_CONTRACT_METRIC_KINDS.get(kind, NO_PROVIDER_CACHE_CONTRACT)
+
+
+def model_call_site_cache_contract_inventory() -> tuple[dict[str, str], ...]:
+    return tuple(dict(item) for item in MODEL_CALL_SITE_CACHE_CONTRACT_INVENTORY)
+
+
 def route_payload_with_effective_values(
     route: ModelRoute,
     *,
@@ -235,6 +358,7 @@ def route_payload_with_effective_values(
     payload["model"] = model
     payload["base_url"] = base_url
     payload["api_key_env"] = api_key_env
+    payload["cache_contract"] = route_cache_contract(route)
     return payload
 
 
