@@ -529,6 +529,141 @@ class AippocampusHealthTests(unittest.TestCase):
             "quiet",
         )
 
+    def test_background_cognition_reports_freshness_without_private_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "private workspace"
+            workspace.mkdir()
+            registry_path = root / "threads.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "threads": [
+                            {
+                                "project_label": "private-project-label",
+                                "paths": {"workspace": str(workspace)},
+                                "clean_turn_count": 20,
+                                "clean_message_count": 40,
+                                "updated_at": "2026-06-06T10:00:00Z",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "subconscious_state.json").write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "private-project-label": {
+                                "last_run_ts": 1780627200.0,
+                                "last_run_at": "2026-06-05T00:00:00Z",
+                                "last_clean_turn_count": 4,
+                                "last_clean_message_count": 8,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            jobs_path = root / "subconscious_jobs.jsonl"
+            jobs_path.write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-05T00:10:00Z",
+                        "project_label": "private-project-label",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "dream_queue.jsonl").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_dream_queue_item",
+                        "created_at": "2026-06-06T08:00:00Z",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "aippocampus_prompt_hook_skip_telemetry.json").write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-06-06T09:00:00Z",
+                        "semantic_diagnostic_counts": {"semantic_skipped": 2},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "aippocampus_prompt_hook_last_status.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_prompt_hook_audit_status",
+                        "last_prompt_hook": {
+                            "timestamp": "2026-06-06T09:30:00Z",
+                            "memory_surface": "candidate",
+                            "card_count": 3,
+                            "source_backed_count": 1,
+                            "candidate_count": 2,
+                            "warm_background": {"status": "scheduled", "spawned": True},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            warm_dir = root / "ambient_warm_jobs"
+            warm_dir.mkdir()
+            (warm_dir / "warm-public.json").write_text(
+                json.dumps({"created_at": "2026-06-06T09:35:00Z"}),
+                encoding="utf-8",
+            )
+            (warm_dir / "warm-public.result.json").write_text(
+                json.dumps({"completed_at": "2026-06-06T09:36:00Z"}),
+                encoding="utf-8",
+            )
+            now = health.datetime(2026, 6, 6, 12, 0, 0, tzinfo=health.timezone.utc)
+
+            with mock.patch.dict(
+                health.os.environ,
+                {
+                    "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1",
+                    "AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "1",
+                    "AIPPOCAMPUS_SEMANTIC_GATE": "off",
+                    "AIPPOCAMPUS_DREAM_DELIVERY_MODE": "shadow",
+                },
+                clear=True,
+            ):
+                payload = health.background_cognition_health(
+                    root=root,
+                    registry_path=registry_path,
+                    jobs_path=jobs_path,
+                    cwd=workspace,
+                    now=now,
+                )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        subconscious = payload["lanes"]["subconscious"]
+        warm = payload["lanes"]["warm_ambient"]
+        dream = payload["lanes"]["dream"]
+        semantic = payload["lanes"]["semantic_gate"]
+        prompt_hook = payload["lanes"]["prompt_hook_affordance"]
+
+        self.assertEqual(subconscious["due_state"], "due")
+        self.assertEqual(
+            subconscious["diagnostic"]["new_turns_since_last_run"],
+            16,
+        )
+        self.assertEqual(warm["freshness_state"], "fresh")
+        self.assertEqual(dream["freshness_state"], "fresh")
+        self.assertEqual(semantic["due_state"], "disabled")
+        self.assertEqual(prompt_hook["latest"]["source_backed_count"], 1)
+        self.assertEqual(subconscious["last_run_at"], "2026-06-05T00:00:00Z")
+        self.assertIn("freshness_age_hours", subconscious)
+        self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
+        self.assertNotIn(str(workspace), encoded)
+        self.assertNotIn("private-project-label", encoded)
+
     def test_registry_wide_health_aggregates_without_default_private_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             registry_dir = Path(tmp)
