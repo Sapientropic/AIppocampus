@@ -116,6 +116,10 @@ def project_semantic_warm_route_tokens(rows: Iterable[Mapping[str, Any]]) -> lis
                 "source_handles": source_handles,
                 "hard_masks": _hard_masks(row),
                 "route_metadata": _route_metadata(row),
+                "route_label": str(row.get("route_label") or "").strip(),
+                "why_may_matter": str(row.get("why_may_matter") or "").strip(),
+                "risk_flags": _strings(row.get("risk_flags")),
+                "triage_rank_reason_codes": _strings(row.get("triage_rank_reason_codes")),
                 "route_features": {
                     "terms": _terms(
                         row.get("route_terms"),

@@ -83,6 +83,49 @@ def _policy_boundary() -> dict[str, Any]:
     }
 
 
+def _route_kind(route: Mapping[str, Any]) -> str:
+    return str(route.get("kind") or "navigation_route").strip() or "navigation_route"
+
+
+def _route_label(route: Mapping[str, Any]) -> str:
+    kind = _route_kind(route)
+    title = str(route.get("title") or "").strip()
+    if title:
+        return f"{kind}: {title}"
+    return kind
+
+
+def _route_why(route: Mapping[str, Any]) -> str:
+    kind = _route_kind(route)
+    if kind == "continuity_domain":
+        return "Continuity domain matched the cue; deepen before using details."
+    if kind == "pathlet":
+        return "Ordered route chain matched the cue; reopen source before claims."
+    if kind == "thread_candidate":
+        return "Thread candidate matched the cue; locate source refs before relying on it."
+    return "Clean-source route matched the cue; reopen before using details."
+
+
+def _triage_reason_codes(route: Mapping[str, Any], output_mode: str) -> list[str]:
+    reason_codes = [f"route_kind_{_route_kind(route)}"]
+    if output_mode == "reopenable_route":
+        reason_codes.append("source_reopen_required")
+    if route.get("scope_labels"):
+        reason_codes.append("scope_label_available")
+    if str(route.get("evidence_level") or "") in {"needs_reopen", "needs_domain_deepen"}:
+        reason_codes.append("reopen_before_claim")
+    return reason_codes[:4]
+
+
+def _triage_risk_flags(route: Mapping[str, Any], output_mode: str) -> list[str]:
+    flags: list[str] = []
+    if output_mode == "reopenable_route":
+        flags.append("source_reopen_required")
+    if str(route.get("evidence_level") or "") in {"needs_reopen", "needs_domain_deepen"}:
+        flags.append("check_currentness")
+    return flags
+
+
 def _route_packet_from_navigation_route(route: Mapping[str, Any]) -> dict[str, Any]:
     action = str(route.get("action_grammar") or "")
     if action == "ignore_or_blocked":
@@ -100,6 +143,12 @@ def _route_packet_from_navigation_route(route: Mapping[str, Any]) -> dict[str, A
         else [],
         "head_votes": [],
         "masks_applied": ["blocked"] if output_mode == "ignore_or_blocked" else [],
+        "route_label": _route_label(route),
+        "why_may_matter": _route_why(route),
+        "preview_permission": "route_selection_only",
+        "route_kind": _route_kind(route),
+        "risk_flags": _triage_risk_flags(route, output_mode),
+        "triage_rank_reason_codes": _triage_reason_codes(route, output_mode),
     }
 
 
@@ -118,6 +167,52 @@ def _deepen_request_for_route(route: Mapping[str, Any], packet: Mapping[str, Any
         "handle": route.get("handle"),
         "boundary": "opaque_navigation_handle_not_fact",
         "claim_boundary": "source_reopen_required_before_strong_claim",
+    }
+
+
+def _selection_hint_present(packet: Mapping[str, Any]) -> bool:
+    label = str(packet.get("route_label") or "").strip()
+    hint = str(packet.get("display_hint") or "").strip()
+    return bool(label) and bool(
+        hint
+        and hint != "A source route may matter; reopen it before using the detail."
+    )
+
+
+def _triage_signature(packet: Mapping[str, Any]) -> str:
+    return "|".join(
+        [
+            str(packet.get("route_label") or "").casefold(),
+            str(packet.get("display_hint") or "").casefold(),
+            ",".join(str(code) for code in packet.get("triage_rank_reason_codes") or []),
+        ]
+    )
+
+
+def _memory_packet_triage_metrics(memory_packets: list[dict[str, Any]]) -> dict[str, Any]:
+    triage_packets = [
+        packet
+        for packet in memory_packets
+        if packet.get("output_mode") in {"bounded_summary_as_route", "reopenable_route"}
+    ]
+    signatures = {
+        _triage_signature(packet)
+        for packet in triage_packets
+        if _selection_hint_present(packet)
+    }
+    distinctiveness = round(len(signatures) / len(triage_packets), 3) if triage_packets else 0.0
+    return {
+        "packet_triage_distinctiveness": distinctiveness,
+        "blind_deepen_required_count": sum(
+            1
+            for packet in triage_packets
+            if packet.get("output_mode") == "reopenable_route"
+            and packet.get("next_action") == "reopen_source"
+            and not _selection_hint_present(packet)
+        ),
+        "top_route_selection_hint_present_count": sum(
+            1 for packet in triage_packets if _selection_hint_present(packet)
+        ),
     }
 
 
@@ -197,6 +292,7 @@ def recall(
         if route.get("handle")
     ]
     forbidden_count = _count_forbidden_keys(memory_packets)
+    triage_metrics = _memory_packet_triage_metrics(memory_packets)
     result = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -212,6 +308,7 @@ def recall(
             "memory_packet_count": len(memory_packets),
             "deepen_request_count": len(deepen_requests),
             "foreground_forbidden_key_count": forbidden_count,
+            **triage_metrics,
             "source_reopen_success_rate_observed": None,
             "wrong_or_stale_handle_rate_observed": None,
         },

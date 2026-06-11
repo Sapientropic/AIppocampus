@@ -71,16 +71,20 @@ Foreground `MemoryPacket` values stay compact:
 {
   "route_id": "route_project_workflow_summary",
   "output_mode": "bounded_summary_as_route",
-  "display_hint": "Use the bounded route for project:AIppocampus/workflow; reopen source before claims.",
+  "route_label": "workflow route",
+  "display_hint": "workflow route: reopen before use.",
   "claim_permission": "no_claim_before_reopen",
-  "next_action": "use_hint"
+  "next_action": "use_hint",
+  "deepen_route_id": "deepen:route_project_workflow_summary"
 }
 ```
 
-Packets may include a derived `deepen_route_id`, but they must not include
-source handles, source ids, spans, head votes, masks, full support ledgers, raw
-private text, or local paths. The packet is for action orientation, not
-provenance inspection.
+`route_label` and `display_hint` are a route-selection preview, not evidence.
+They may distinguish two reopenable routes enough for an agent to choose which
+one to deepen first, but they must not include source handles, source ids,
+spans, head votes, masks, full support ledgers, raw private text, profile-like
+private details, or local paths. Optional `risk_flags` may say a route needs a
+currentness or conflict check; they still do not authorize a claim.
 
 ## AIppo Working-Contract Packet
 
@@ -217,6 +221,17 @@ foreground_forbidden_key_count = 0
 source_backed_claim_without_reopen = 0
 foreground_packet_budget_violation_count = 0
 ```
+
+The integrated agent-continuity loop also reports triage ergonomics:
+
+```text
+packet_triage_distinctiveness
+blind_deepen_required_count
+top_route_selection_hint_present_count
+```
+
+These metrics check whether multiple safe foreground packets are distinguishable
+without making the first layer a provenance drawer.
 
 `build_agent_pull_gesture_fixture_report()` covers the named default gesture
 and reports `agent_pull_follow_through_rate`,

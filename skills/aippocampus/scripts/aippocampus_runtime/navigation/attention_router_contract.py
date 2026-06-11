@@ -95,6 +95,28 @@ def _strings(values: Any, *, limit: int = 8) -> list[str]:
     return result
 
 
+def _optional_text(candidate: Mapping[str, Any], key: str) -> str:
+    return str(candidate.get(key) or "").strip()
+
+
+def _copy_triage_preview_fields(packet: dict[str, Any], candidate: Mapping[str, Any]) -> None:
+    """Keep safe route-selection hints with the route packet, never evidence.
+
+    These fields are small labels/reason codes for the agent facade to clean and
+    budget. They deliberately exclude source refs, handles, raw snippets, head
+    votes, and scoring internals.
+    """
+
+    for key in ("route_label", "why_may_matter", "preview_permission", "route_kind", "currentness", "conflict"):
+        value = _optional_text(candidate, key)
+        if value:
+            packet[key] = value
+    for key in ("risk_flags", "triage_rank_reason_codes"):
+        values = _strings(candidate.get(key), limit=6)
+        if values:
+            packet[key] = values
+
+
 def _summary_fallback_reason_codes(summary: Mapping[str, Any] | None) -> list[str]:
     if summary is None:
         return []
@@ -204,6 +226,7 @@ def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
         packet["bounded_summary"] = bounded_summary
     if summary_fallback_reason_codes:
         packet["summary_fallback_reason_codes"] = summary_fallback_reason_codes
+    _copy_triage_preview_fields(packet, candidate)
     return packet
 
 

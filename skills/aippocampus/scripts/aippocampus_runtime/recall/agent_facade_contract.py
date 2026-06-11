@@ -9,6 +9,7 @@ replace MCP, source reopen, or the attention-router internals.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -37,6 +38,43 @@ _FOREGROUND_FORBIDDEN_KEYS = {
     "masks_applied",
     "bounded_summary",
 }
+_TRIAGE_TEXT_FORBIDDEN_MARKERS = (
+    "source_id",
+    "message_id",
+    "turn_id",
+    "source_ref",
+    "source_handle",
+    "head_vote",
+    "mask_applied",
+    "raw_text",
+    "private_",
+    "secret",
+    "password",
+    "credential",
+    "api_key",
+    "token=",
+    "c:\\",
+    "\\users\\",
+    "/users/",
+    "://",
+)
+_PROFILE_LIKE_MARKERS = (
+    "adhd",
+    "anxiety",
+    "identity",
+    "personality",
+    "profile",
+    "private impression",
+    "dislikes",
+    "hates",
+)
+_CODE_RE = re.compile(r"[^a-z0-9_]+")
+_ROUTE_LABEL_FALLBACKS = {
+    "bounded_summary_as_route": "bounded_summary_route",
+    "reopenable_route": "source_reopen_route",
+    "bounded_evidence": "bounded_source_route",
+    "direction_only": "direction_only_route",
+}
 
 
 def _as_text(value: Any) -> str:
@@ -52,6 +90,122 @@ def _truncate_for_budget(text: str, *, max_chars: int = 180) -> str:
     if len(normalized) <= max_chars:
         return normalized
     return normalized[: max_chars - 3].rstrip() + "..."
+
+
+def _safe_preview_text(value: Any, *, max_chars: int = 140) -> str:
+    text = _truncate_for_budget(_as_text(value), max_chars=max_chars)
+    folded = text.casefold()
+    if not text:
+        return ""
+    if any(marker in folded for marker in _TRIAGE_TEXT_FORBIDDEN_MARKERS):
+        return ""
+    if any(marker in folded for marker in _PROFILE_LIKE_MARKERS):
+        return ""
+    return text
+
+
+def _safe_code(value: Any, *, max_chars: int = 64) -> str:
+    text = _as_text(value).casefold().replace("-", "_").replace(" ", "_")
+    text = _CODE_RE.sub("_", text).strip("_")
+    if not text:
+        return ""
+    if any(marker.strip("_") and marker.strip("_") in text for marker in _PROFILE_LIKE_MARKERS):
+        return ""
+    if any(marker.strip("_") and marker.strip("_") in text for marker in ("secret", "password", "credential", "api_key")):
+        return ""
+    return text[:max_chars].strip("_")
+
+
+def _safe_code_list(values: Any, *, limit: int = 4) -> list[str]:
+    if isinstance(values, str):
+        raw_values: list[Any] = [values]
+    elif isinstance(values, (list, tuple, set)):
+        raw_values = list(values)
+    else:
+        raw_values = []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in raw_values:
+        code = _safe_code(value)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        result.append(code)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _router_reason_codes(packet: Mapping[str, Any]) -> list[str]:
+    diagnostics = packet.get("router_diagnostics")
+    if not isinstance(diagnostics, Mapping):
+        return []
+    return _safe_code_list(diagnostics.get("reason_codes"), limit=6)
+
+
+def _route_label(packet: Mapping[str, Any], output_mode: str) -> str:
+    explicit = _safe_preview_text(packet.get("route_label"), max_chars=72)
+    if explicit:
+        return explicit
+    route_kind = _safe_code(packet.get("route_kind"))
+    if route_kind and route_kind != "aippocampus_attention_route_packet":
+        return route_kind
+    return _ROUTE_LABEL_FALLBACKS.get(output_mode, "memory_route")
+
+
+def _risk_flags(packet: Mapping[str, Any], output_mode: str) -> list[str]:
+    flags = _safe_code_list(packet.get("risk_flags"), limit=6)
+    reasons = set(_router_reason_codes(packet))
+    currentness = _safe_code(packet.get("currentness"))
+    conflict = _safe_code(packet.get("conflict"))
+    if currentness in {"stale", "needs_reopen", "superseded"} or "stale_or_conflicted_source_reopen" in reasons:
+        flags.append("check_currentness")
+    if conflict and conflict not in {"none", "unknown"}:
+        flags.append("conflict_requires_deepen")
+    result: list[str] = []
+    seen: set[str] = set()
+    for flag in flags:
+        clean = _safe_code(flag)
+        if clean in {"source_reopen_required", "summary_is_not_evidence"}:
+            continue
+        if clean and clean not in seen:
+            seen.add(clean)
+            result.append(clean)
+        if len(result) >= 4:
+            break
+    return result
+
+
+def _rank_reason_codes(packet: Mapping[str, Any], risk_flags: list[str]) -> list[str]:
+    explicit = _safe_code_list(packet.get("triage_rank_reason_codes"), limit=4)
+    if explicit:
+        return explicit
+    reasons = _router_reason_codes(packet)
+    if reasons:
+        return reasons[:4]
+    return risk_flags[:3]
+
+
+def _why_may_matter(
+    packet: Mapping[str, Any],
+    output_mode: str,
+    *,
+    risk_flags: list[str],
+) -> str:
+    explicit = _safe_preview_text(packet.get("why_may_matter"), max_chars=132)
+    if explicit:
+        return explicit
+    if output_mode == "bounded_summary_as_route":
+        return "Scoped summary can orient the next step; reopen source before claims."
+    if output_mode == "reopenable_route" and (
+        "check_currentness" in risk_flags or "conflict_requires_deepen" in risk_flags
+    ):
+        return "Route may be stale or conflicted; reopen and check currentness before use."
+    if output_mode == "reopenable_route":
+        return "Source-backed route matched the cue; reopen before using details."
+    if output_mode == "bounded_evidence":
+        return "Source is already open only within the declared bounded scope."
+    return "Navigation hint only; do not turn it into a factual claim."
 
 
 def _source_handles(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -81,18 +235,56 @@ def _default_next_action(output_mode: str) -> str:
     return "use_hint"
 
 
-def _default_display_hint(packet: Mapping[str, Any], output_mode: str) -> str:
+def _default_display_hint(
+    packet: Mapping[str, Any],
+    output_mode: str,
+    *,
+    route_label: str = "",
+    why_may_matter: str = "",
+) -> str:
     if output_mode == "ignore_or_blocked":
         return "Recall route blocked; stay silent unless the user asks to inspect the boundary."
     if output_mode == "bounded_summary_as_route":
-        summary = packet.get("bounded_summary")
-        scope = _as_text(summary.get("scope")) if isinstance(summary, Mapping) else "this source trail"
-        return f"Use the bounded route for {scope}; reopen source before claims."
+        return "Use scoped route; reopen before claims."
     if output_mode == "reopenable_route":
+        if "check_currentness" in _risk_flags(packet, output_mode):
+            return f"{route_label or 'route'}: reopen/check currentness."
+        if route_label:
+            return f"{route_label}: reopen before use."
         return "A source route may matter; reopen it before using the detail."
     if output_mode == "bounded_evidence":
         return "Source is already open within scope; use only that bounded evidence."
     return "This is a direction-only memory hint; do not turn it into a claim."
+
+
+def _fit_memory_packet_budget(result: dict[str, Any]) -> dict[str, Any]:
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    if "why_may_matter" in result:
+        result["why_may_matter"] = _truncate_for_budget(
+            str(result["why_may_matter"]),
+            max_chars=92,
+        )
+    if "display_hint" in result:
+        result["display_hint"] = _truncate_for_budget(str(result["display_hint"]), max_chars=132)
+    if "triage_rank_reason_codes" in result:
+        result["triage_rank_reason_codes"] = list(result["triage_rank_reason_codes"])[:2]
+    if "risk_flags" in result:
+        result["risk_flags"] = list(result["risk_flags"])[:3]
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("triage_rank_reason_codes", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("preview_permission", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("risk_flags", None)
+    if _json_bytes(result) <= FOREGROUND_PACKET_BYTE_BUDGET:
+        return result
+    result.pop("why_may_matter", None)
+    result["display_hint"] = _truncate_for_budget(str(result.get("display_hint") or ""), max_chars=96)
+    return result
 
 
 def memory_packet_from_route_packet(
@@ -109,6 +301,10 @@ def memory_packet_from_route_packet(
 
     route_id = _as_text(packet.get("route_id")) or "route:unknown"
     output_mode = _facade_mode(packet)
+    route_label = _route_label(packet, output_mode)
+    risk_flags = _risk_flags(packet, output_mode)
+    why_may_matter = _why_may_matter(packet, output_mode, risk_flags=risk_flags)
+    triage_rank_reason_codes = _rank_reason_codes(packet, risk_flags)
     claim_permission = (
         "blocked" if output_mode == "ignore_or_blocked" else _as_text(packet.get("claim_permission"))
     )
@@ -121,13 +317,25 @@ def memory_packet_from_route_packet(
         "route_id": route_id,
         "output_mode": output_mode,
         "display_hint": _truncate_for_budget(
-            display_hint or _default_display_hint(packet, output_mode)
+            display_hint
+            or _default_display_hint(
+                packet,
+                output_mode,
+                route_label=route_label,
+                why_may_matter=why_may_matter,
+            )
         ),
         "claim_permission": claim_permission,
         "next_action": _default_next_action(output_mode),
         "deepen_route_id": f"deepen:{route_id}",
     }
-    return result
+    if output_mode != "ignore_or_blocked":
+        result["route_label"] = route_label
+        if risk_flags:
+            result["risk_flags"] = risk_flags
+        if triage_rank_reason_codes and _json_bytes(result) < FOREGROUND_PACKET_BYTE_BUDGET - 96:
+            result["triage_rank_reason_codes"] = triage_rank_reason_codes[:2]
+    return _fit_memory_packet_budget(result)
 
 
 def deepen_route_packet(packet: Mapping[str, Any]) -> dict[str, Any]:

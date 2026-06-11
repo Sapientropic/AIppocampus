@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
@@ -54,12 +55,23 @@ FOREGROUND_PACKET_ALLOWED_KEYS = {
     "route_id",
     "output_mode",
     "display_hint",
+    "route_label",
+    "why_may_matter",
+    "preview_permission",
+    "risk_flags",
+    "triage_rank_reason_codes",
     "claim_permission",
     "next_action",
     "deepen_route_id",
     "review_needed",
     "suppression_reason",
 }
+TRIAGE_TEXT_KEYS = (
+    "display_hint",
+    "route_label",
+    "why_may_matter",
+    "preview_permission",
+)
 
 
 def ambient_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -281,6 +293,58 @@ def _contains_profile_like_detail(text: str) -> bool:
     return any(marker in folded for marker in PROFILE_LIKE_MARKERS)
 
 
+def _packet_triage_text(packet: dict[str, Any]) -> str:
+    values = [str(packet.get(key) or "") for key in TRIAGE_TEXT_KEYS]
+    values.extend(str(value) for value in packet.get("risk_flags") or [])
+    values.extend(str(value) for value in packet.get("triage_rank_reason_codes") or [])
+    return " ".join(value for value in values if value)
+
+
+def _has_selection_hint(packet: Mapping[str, Any]) -> bool:
+    label = str(packet.get("route_label") or "").strip()
+    hint = str(packet.get("display_hint") or "").strip()
+    return bool(label) and bool(
+        hint
+        and hint != "A source route may matter; reopen it before using the detail."
+    )
+
+
+def _triage_signature(packet: Mapping[str, Any]) -> str:
+    return "|".join(
+        [
+            str(packet.get("route_label") or "").casefold(),
+            str(packet.get("display_hint") or "").casefold(),
+            ",".join(str(code) for code in packet.get("triage_rank_reason_codes") or []),
+        ]
+    )
+
+
+def _packet_triage_distinctiveness(packets: list[dict[str, Any]]) -> float:
+    triage_packets = [
+        packet
+        for packet in packets
+        if packet.get("output_mode") in {"bounded_summary_as_route", "reopenable_route"}
+    ]
+    if not triage_packets:
+        return 0.0
+    signatures = {
+        _triage_signature(packet)
+        for packet in triage_packets
+        if _has_selection_hint(packet)
+    }
+    return round(len(signatures) / len(triage_packets), 3)
+
+
+def _blind_deepen_required_count(packets: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for packet in packets
+        if packet.get("output_mode") == "reopenable_route"
+        and packet.get("next_action") == "reopen_source"
+        and not _has_selection_hint(packet)
+    )
+
+
 def _allowed_packet_fields(packet: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in packet.items() if key in FOREGROUND_PACKET_ALLOWED_KEYS}
 
@@ -307,8 +371,7 @@ def _normalize_memory_packet(packet: dict[str, Any]) -> tuple[dict[str, Any], di
         "unnecessary_reopen_prevented_count": 0,
     }
     clean = _allowed_packet_fields(packet)
-    hint = str(clean.get("display_hint") or "")
-    if _contains_profile_like_detail(hint):
+    if _contains_profile_like_detail(_packet_triage_text(clean)):
         metrics["profile_like_suppressed_count"] = 1
         return _review_needed_packet(clean, reason="profile_like_detail"), metrics
 
@@ -358,7 +421,14 @@ def project_memory_packets_for_foreground(
     false_personalization_count = sum(
         1
         for packet in foreground
-        if _contains_profile_like_detail(str(packet.get("display_hint") or ""))
+        if _contains_profile_like_detail(_packet_triage_text(packet))
+    )
+    blind_deepen_count = _blind_deepen_required_count(foreground)
+    top_route_selection_hint_present_count = sum(
+        1
+        for packet in foreground
+        if packet.get("output_mode") in {"bounded_summary_as_route", "reopenable_route"}
+        and _has_selection_hint(packet)
     )
     over_cautious_abstention_count = sum(
         1
@@ -387,6 +457,9 @@ def project_memory_packets_for_foreground(
         "profile_like_suppressed_count": profile_suppressed,
         "anti_nag_suppressed_count": suppressed_recent,
         "anti_nag_violation_count": int(any(route in encoded for route in dismissed)),
+        "packet_triage_distinctiveness": _packet_triage_distinctiveness(foreground),
+        "blind_deepen_required_count": blind_deepen_count,
+        "top_route_selection_hint_present_count": top_route_selection_hint_present_count,
         "source_backed_claim_without_reopen": source_backed_claim_without_reopen,
         "debug_or_source_field_leak_count": sum(
             1

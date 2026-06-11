@@ -99,6 +99,53 @@ def _bounded_summary(token: Mapping[str, Any]) -> dict[str, Any] | None:
     return dict(summary) if isinstance(summary, Mapping) else None
 
 
+def _strings(values: Any, *, limit: int = 6) -> list[str]:
+    if isinstance(values, str):
+        raw_values: list[Any] = [values]
+    elif isinstance(values, (list, tuple, set)):
+        raw_values = list(values)
+    else:
+        raw_values = []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in raw_values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _triage_preview_fields(
+    token: Mapping[str, Any],
+    *,
+    metadata: Mapping[str, Any],
+    reason_codes: list[str],
+    source_handle_count: int,
+) -> dict[str, Any]:
+    risk_flags = _strings(token.get("risk_flags"))
+    if source_handle_count > 0:
+        risk_flags.append("source_reopen_required")
+    if metadata.get("currentness") in {"stale", "needs_reopen", "superseded"}:
+        risk_flags.append("check_currentness")
+    if metadata.get("conflict") not in {None, "", "none", "unknown"}:
+        risk_flags.append("conflict_requires_deepen")
+    rank_reasons = _strings(token.get("triage_rank_reason_codes") or reason_codes, limit=4)
+    return {
+        "route_label": str(token.get("route_label") or "").strip(),
+        "why_may_matter": str(token.get("why_may_matter") or "").strip(),
+        "preview_permission": "route_selection_only",
+        "route_kind": str(token.get("route_token_level") or "").strip(),
+        "currentness": str(metadata.get("currentness") or "").strip(),
+        "conflict": str(metadata.get("conflict") or "").strip(),
+        "risk_flags": _strings(risk_flags, limit=4),
+        "triage_rank_reason_codes": rank_reasons,
+    }
+
+
 def _score_overlap(query_terms: set[str], token_terms: set[str]) -> float:
     if not query_terms or not token_terms:
         return 0.0
@@ -281,6 +328,12 @@ def route_attention(
                 else None,
                 "source_open": token_id in source_open_ids,
                 "bounded_scope": token_id in bounded_scope_ids,
+                **_triage_preview_fields(
+                    token,
+                    metadata=metadata,
+                    reason_codes=reason_codes,
+                    source_handle_count=len(handles),
+                ),
             }
         )
         packet["router_diagnostics"] = {
