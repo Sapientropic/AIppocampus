@@ -357,6 +357,26 @@ def _agent_policy_cases() -> list[dict[str, Any]]:
             },
             claim_intent="public_claim",
         ),
+        _policy_fixture_case(
+            "exact_claim_forces_deepen",
+            {
+                "decision": "scent",
+                "confidence": "high",
+                "candidates": [{"title": "exact wording route"}],
+                "reasons": ["registry overlap: exact wording route"],
+            },
+            claim_intent="exact_claim",
+        ),
+        _policy_fixture_case(
+            "stale_claim_forces_deepen",
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"title": "stale route candidate"}],
+                "reasons": ["registry overlap: stale route candidate"],
+            },
+            claim_intent="stale_claim",
+        ),
     ]
 
 
