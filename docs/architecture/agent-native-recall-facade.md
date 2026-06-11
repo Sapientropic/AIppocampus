@@ -63,6 +63,43 @@ ordinary planning or coding posture without dumping provenance into the
 foreground. They still carry `no_claim_before_reopen` unless source is already
 open and bounded.
 
+## Hook-To-Agent Affordance
+
+`aippocampus_runtime.recall.hook_agent_affordance` defines the prompt-time
+activation envelope for hook-plus-pull flows. The hook may tell the foreground
+agent that a usable continuity lead exists, what broad lead kind it is, and
+which active pull to try next:
+
+```json
+{
+  "usable_continuity_lead": true,
+  "lead_confidence_bucket": "medium",
+  "lead_kinds": ["aippo_working_contract", "memory_route"],
+  "suggested_agent_action": "agent_aippo",
+  "suggested_query_seed": "work-continuation / prior task contract",
+  "budget_hint": "aippo_then_deepen_if_claim",
+  "not_enough_for_claim": true,
+  "privacy_boundary": "no raw source, no local paths, no source refs in hook"
+}
+```
+
+This affordance is an ignition layer, not a context transport layer. It should
+prefer `agent_aippo`, `agent_recall`, or `agent_deepen` when a route is usable,
+and `read_current_repo_first` or `stay_silent` when old continuity is not the
+right next move. The default foreground text renders only a short
+`not evidence` action line; source refs, local paths, raw source text, support
+ledgers, and candidate provenance stay out of the hook output.
+
+Active agent pull owns context recovery. `deepen` / source reopen owns evidence
+for exact, public, disputed, stale/currentness, sensitive, numeric, or high-risk
+claims. A useful hook affordance should reduce broad manual search and blind
+deepen without weakening the rule that source-backed claims require source.
+
+The fixture report tracks `usable_lead_emitted_count`,
+`agent_pull_suggested_count`, `hook_full_context_delivery_count`,
+`manual_search_fallback_count`, `blind_deepen_required_count`,
+`false_activation_count`, and `read_current_repo_first_count`.
+
 ## Memory Packet
 
 Foreground `MemoryPacket` values stay compact:

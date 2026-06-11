@@ -7,6 +7,10 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_payload
 from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
+from aippocampus_runtime.recall.hook_agent_affordance import (
+    build_hook_agent_affordance,
+    prepend_hook_agent_affordance,
+)
 from aippocampus_runtime.recall.prompt_context_diagnostics import (
     brief_precision_debug_summary,
     legacy_candidate_summary_suppressed,
@@ -298,6 +302,7 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     """
 
     foreground_context = context_for_hook(result) or ""
+    agent_affordance = build_hook_agent_affordance(result)
     payload = {
         "decision": result.get("decision"),
         "score": result.get("score"),
@@ -319,6 +324,7 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
             result,
             context=foreground_context,
         ),
+        "agent_recall_affordance": agent_affordance,
         "elapsed_ms": result.get("elapsed_ms"),
     }
     raw_semantic_gate = result.get("semantic_gate")
@@ -536,11 +542,12 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
     if is_weak_direction_only_scent(result):
         if legacy_candidate_summary_suppressed(result) and not _ambient_cards(result):
             return None
+        weak_lines = prepend_hook_agent_affordance(result, compact_weak_scent_lines(result))
         return truncate_preserving_lines(
-            "\n".join(compact_weak_scent_lines(result)),
+            "\n".join(weak_lines),
             max_chars,
         )
-    lines: list[str] = []
+    lines: list[str] = prepend_hook_agent_affordance(result, [])
     if decision == "evidence":
         lines.append(
             "Ambient recall evidence (aippocampus). Use bounded source-backed evidence when relevant; reopen only for disputed exact wording or wider context:"
