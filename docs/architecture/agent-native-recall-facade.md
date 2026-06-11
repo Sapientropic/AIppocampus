@@ -86,6 +86,11 @@ spans, head votes, masks, full support ledgers, raw private text, profile-like
 private details, or local paths. Optional `risk_flags` may say a route needs a
 currentness or conflict check; they still do not authorize a claim.
 
+A safe packet that forces blind deepen or broad manual search is not a success
+state. Non-blocked reopenable packets should carry enough safe route-selection
+signal to choose a first deepen step, while blocked, private, source-thin, or
+high-risk routes should stay silent or return a bounded next safe action.
+
 ## AIppo Working-Contract Packet
 
 `aippocampus_runtime.aippo.working_contract` defines the first executable
@@ -232,6 +237,11 @@ top_route_selection_hint_present_count
 
 These metrics check whether multiple safe foreground packets are distinguishable
 without making the first layer a provenance drawer.
+
+`benchmark_recall_degradation_audit.py` adds a narrower degradation audit for
+the live clean-source path. It counts generic reopen hints, triage collisions,
+blind deepen, `ask_light_question` despite reopenable candidates, manual-search
+fallback, and source-thin `CannotVerify` results without a next safe action.
 
 `build_agent_pull_gesture_fixture_report()` covers the named default gesture
 and reports `agent_pull_follow_through_rate`,

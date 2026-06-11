@@ -88,6 +88,9 @@ def _route_kind(route: Mapping[str, Any]) -> str:
 
 
 def _route_label(route: Mapping[str, Any]) -> str:
+    explicit = str(route.get("route_label") or "").strip()
+    if explicit:
+        return explicit
     kind = _route_kind(route)
     title = str(route.get("title") or "").strip()
     if title:
@@ -96,6 +99,9 @@ def _route_label(route: Mapping[str, Any]) -> str:
 
 
 def _route_why(route: Mapping[str, Any]) -> str:
+    explicit = str(route.get("why_this_may_matter") or "").strip()
+    if explicit and route.get("route_label"):
+        return explicit
     kind = _route_kind(route)
     if kind == "continuity_domain":
         return "Continuity domain matched the cue; deepen before using details."
@@ -107,6 +113,13 @@ def _route_why(route: Mapping[str, Any]) -> str:
 
 
 def _triage_reason_codes(route: Mapping[str, Any], output_mode: str) -> list[str]:
+    explicit = [
+        str(code)
+        for code in route.get("triage_rank_reason_codes") or []
+        if str(code).strip()
+    ]
+    if explicit:
+        return explicit[:4]
     reason_codes = [f"route_kind_{_route_kind(route)}"]
     if output_mode == "reopenable_route":
         reason_codes.append("source_reopen_required")
@@ -121,8 +134,12 @@ def _triage_risk_flags(route: Mapping[str, Any], output_mode: str) -> list[str]:
     flags: list[str] = []
     if output_mode == "reopenable_route":
         flags.append("source_reopen_required")
-    if str(route.get("evidence_level") or "") in {"needs_reopen", "needs_domain_deepen"}:
+    currentness = str(route.get("currentness") or "").casefold()
+    conflict = str(route.get("conflict") or "").casefold()
+    if currentness in {"stale", "needs_reopen", "superseded"}:
         flags.append("check_currentness")
+    if conflict and conflict not in {"none", "unknown"}:
+        flags.append("conflict_requires_deepen")
     return flags
 
 
@@ -147,6 +164,8 @@ def _route_packet_from_navigation_route(route: Mapping[str, Any]) -> dict[str, A
         "why_may_matter": _route_why(route),
         "preview_permission": "route_selection_only",
         "route_kind": _route_kind(route),
+        "matched_cue_family": route.get("matched_cue_family"),
+        "scope_bucket": route.get("scope_bucket"),
         "risk_flags": _triage_risk_flags(route, output_mode),
         "triage_rank_reason_codes": _triage_reason_codes(route, output_mode),
     }
