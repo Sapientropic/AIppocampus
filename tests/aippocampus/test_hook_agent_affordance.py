@@ -76,6 +76,8 @@ class HookAgentAffordanceTests(unittest.TestCase):
 
         aippo = by_id["aippo_working_contract_low_risk_posture"]["agent_policy"]
         public_claim = by_id["exact_public_claim_forces_deepen"]["agent_policy"]
+        exact_claim = by_id["exact_claim_forces_deepen"]["agent_policy"]
+        stale_claim = by_id["stale_claim_forces_deepen"]["agent_policy"]
 
         self.assertTrue(aippo["low_risk_working_contract_used_without_reopen"])
         self.assertEqual(
@@ -87,6 +89,10 @@ class HookAgentAffordanceTests(unittest.TestCase):
         self.assertTrue(public_claim["agent_pull_before_manual_search"])
         self.assertTrue(public_claim["source_reopen_required_before_claim"])
         self.assertEqual(public_claim["claim_permission"], "must_deepen_before_claim")
+        self.assertTrue(exact_claim["source_reopen_required_before_claim"])
+        self.assertEqual(exact_claim["claim_permission"], "must_deepen_before_claim")
+        self.assertTrue(stale_claim["source_reopen_required_before_claim"])
+        self.assertEqual(stale_claim["claim_permission"], "must_deepen_before_claim")
         self.assertEqual(report["metrics"]["strong_claim_without_deepen_count"], 0)
 
     def test_fixture_report_is_public_safe_and_source_non_authoritative(self) -> None:
