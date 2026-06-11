@@ -26,11 +26,15 @@ class AIppoWorkingContractTests(unittest.TestCase):
 
         scoped = clauses["clause_keep_changes_scoped"]
         stale = clauses["clause_benchmark_default_claim"]
+        reporting = clauses["clause_preserve_useful_result_claims"]
 
         self.assertEqual(scoped["lifecycle"]["status"], "ripe")
         self.assertEqual(scoped["claim_permission"], "working_contract_allowed_no_fact_claim")
         self.assertIn("low_risk_orientation", scoped["allowed_without_reopen_for"])
         self.assertIn("public_claim", scoped["requires_reopen_for"])
+
+        self.assertEqual(reporting["lifecycle"]["status"], "ripe")
+        self.assertIn("benchmark_reporting", reporting["applies_when"])
 
         self.assertEqual(stale["lifecycle"]["status"], "stale")
         self.assertEqual(stale["activation"]["next_action"], "reopen_source")
@@ -85,23 +89,58 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertEqual(packet["output_mode"], "working_contract")
         self.assertEqual(packet["claim_permission"], "working_contract_allowed_no_fact_claim")
         self.assertEqual(packet["next_action"], "use_hint")
+        self.assertIn("benchmark_reporting", packet["task_families"])
+        self.assertTrue(packet["use_guidance"])
+        self.assertIn("measured results", " ".join(packet["use_guidance"]))
         self.assertLessEqual(
             report["metrics"]["foreground_packet_bytes"],
             report["foreground_packet_budget_bytes"],
         )
         self.assertEqual(packet["active_clause_count"], 2)
+        self.assertEqual(report["metrics"]["available_active_clause_count"], 3)
+        self.assertEqual(report["metrics"]["suppressed_clause_count"], 3)
+        self.assertGreater(report["metrics"]["active_clause_information_density"], 0)
+        self.assertEqual(report["metrics"]["generic_safety_posture_only_count"], 0)
+        self.assertGreaterEqual(report["metrics"]["stable_workflow_search_avoided_count"], 2)
+        self.assertEqual(report["metrics"]["aippo_next_action_delta_count"], 1)
+        self.assertGreaterEqual(report["metrics"]["stale_clause_suppressed_count"], 2)
+        self.assertGreaterEqual(
+            report["metrics"]["low_risk_guidance_allowed_without_reopen_count"],
+            2,
+        )
+        self.assertTrue(report["usefulness_gate"]["usefulness_gate_ok"])
+        generic = report["negative_fixtures"]["generic_safety_posture_only"]
+        self.assertFalse(generic["usefulness_gate_ok"])
+        self.assertEqual(generic["generic_safety_posture_only_count"], 1)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
         self.assertNotIn("support_ledger", encoded)
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_task_family_selection_changes_activation_emphasis(self) -> None:
+        contract = aippo.build_project_workflow_public_safe_contract()
+        packets = {
+            task: aippo.activation_packet_from_working_contract(contract, task=task)
+            for task in ("issue writing", "benchmark reporting", "PR review", "coding patch")
+        }
+
+        self.assertIn("issue_writing", packets["issue writing"]["task_families"])
+        self.assertIn("benchmark_reporting", packets["benchmark reporting"]["task_families"])
+        self.assertIn("PR_review", packets["PR review"]["task_families"])
+        self.assertIn("coding", packets["coding patch"]["task_families"])
+        self.assertNotEqual(
+            packets["benchmark reporting"]["active_clause_ids"],
+            packets["coding patch"]["active_clause_ids"],
+        )
+        self.assertIn("cannot_claim", " ".join(packets["benchmark reporting"]["use_guidance"]))
+
     def test_deepen_and_stability_surfaces_preserve_audit_without_foreground_leakage(self) -> None:
         report = aippo.build_aippo_working_contract_fixture_report()
         deepen = report["deepen_surface"]
 
         self.assertEqual(deepen["kind"], "aippocampus_aippo_deepen_surface")
-        self.assertEqual(deepen["source_support_ledger"]["source_ref_count"], 6)
+        self.assertEqual(deepen["source_support_ledger"]["source_ref_count"], 8)
         self.assertIn("agent_self_notes", deepen["candidate_provenance"]["allowed_candidate_inputs"])
         self.assertFalse(deepen["candidate_provenance"]["candidate_inputs_are_truth"])
         self.assertEqual(report["metrics"]["stable_rebuild_hash_changed_count"], 0)

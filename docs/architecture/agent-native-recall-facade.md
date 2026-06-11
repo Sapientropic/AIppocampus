@@ -112,7 +112,11 @@ Foreground activation exposes only the working-contract hint:
   "kind": "aippocampus_aippo_activation_packet",
   "aippo_id": "aippo_project_workflow_public_safe_v0",
   "output_mode": "working_contract",
-  "display_hint": "Scope slice, verify, reopen before claims.",
+  "display_hint": "AIppo benchmark_reporting guidance.",
+  "task_families": ["benchmark_reporting"],
+  "use_guidance": [
+    "Use measured results, supports, limits; keep cannot_claim short."
+  ],
   "active_clause_count": 2,
   "claim_permission": "working_contract_allowed_no_fact_claim",
   "next_action": "use_hint",
@@ -124,6 +128,17 @@ Source refs, support ledgers, candidate provenance, counter-evidence, and
 suppressed clauses stay behind `deepen` / `explain`. Exact, public, disputed,
 stale/currentness, sensitive, numeric, or high-risk claims still require source
 reopen.
+
+AIppo packets are expected to be useful, not just safe. The task-aware
+projection may emphasize `issue_writing`, `benchmark_reporting`, `PR_review`,
+or `coding` clauses. The fixture report tracks
+`active_clause_information_density`, `generic_safety_posture_only_count`,
+`stable_workflow_search_avoided_count`, `aippo_next_action_delta_count`,
+`stale_clause_suppressed_count`, and
+`low_risk_guidance_allowed_without_reopen_count`. Available and suppressed
+clause counts stay in the report metrics or deepen/explain surfaces, not in the
+ordinary foreground packet. A packet that only says to scope, verify, and reopen
+is safety-clean but fails the usefulness gate.
 
 ## Output Mapping
 
