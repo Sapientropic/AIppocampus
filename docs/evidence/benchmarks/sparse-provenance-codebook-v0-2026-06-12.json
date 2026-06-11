@@ -1,0 +1,146 @@
+{
+  "kind": "aippocampus_sparse_provenance_codebook_report",
+  "codebook": {
+    "schema_version": "sparse-provenance-codebook-v0",
+    "manifest_hash": "manifest_73e3118f84896e773a1c5cba",
+    "merkle_root": "manifest_73e3118f84896e773a1c5cba",
+    "metrics": {
+      "source_entry_count": 8,
+      "unique_chunk_count": 6,
+      "deduped_entry_count": 2,
+      "raw_text_bytes": 816,
+      "unique_text_bytes": 612,
+      "dedupe_saved_bytes": 204,
+      "compression_ratio": 0.75,
+      "dictionary_compression": "not_enabled_v0",
+      "topology_missing_count": 0
+    }
+  },
+  "lookup": {
+    "kind": "aippocampus_sparse_provenance_route_lookup",
+    "query_terms": [
+      "calibration",
+      "chain",
+      "route"
+    ],
+    "routes": [
+      {
+        "route_handle": "spc:manifest_73e3118f84896e773a1c5cba:entry_0001",
+        "chunk_id": "chunk_f0d799f1f07f714c59035e3a",
+        "source_fingerprint": "srcfp_483f1ec24a60e026fc6e455d",
+        "route_family": "route_chain_calibration",
+        "scope_labels": [
+          "benchmark",
+          "retrieval"
+        ],
+        "action_grammar": "reopenable_route",
+        "claim_permission": "no_claim_before_reopen",
+        "matched_terms": [
+          "calibration",
+          "chain",
+          "route"
+        ],
+        "topology": {
+          "pathlet_id": "route-chain-calibration",
+          "support_chain_count": 1,
+          "topology_hash": "topo_1f7c294fa7693f9937c2"
+        }
+      },
+      {
+        "route_handle": "spc:manifest_73e3118f84896e773a1c5cba:entry_0002",
+        "chunk_id": "chunk_f0d799f1f07f714c59035e3a",
+        "source_fingerprint": "srcfp_7d4dbf467c05bc97b779d3a5",
+        "route_family": "route_chain_calibration",
+        "scope_labels": [
+          "benchmark",
+          "retrieval"
+        ],
+        "action_grammar": "reopenable_route",
+        "claim_permission": "no_claim_before_reopen",
+        "matched_terms": [
+          "calibration",
+          "chain",
+          "route"
+        ],
+        "topology": {
+          "pathlet_id": "route-chain-calibration",
+          "support_chain_count": 1,
+          "topology_hash": "topo_1f7c294fa7693f9937c2"
+        }
+      },
+      {
+        "route_handle": "spc:manifest_73e3118f84896e773a1c5cba:entry_0003",
+        "chunk_id": "chunk_8dee940cb39587b1957d8e62",
+        "source_fingerprint": "srcfp_440db9d342cda90ea0233d6e",
+        "route_family": "route_chain_calibration",
+        "scope_labels": [
+          "benchmark",
+          "retrieval"
+        ],
+        "action_grammar": "reopenable_route",
+        "claim_permission": "no_claim_before_reopen",
+        "matched_terms": [
+          "calibration",
+          "chain",
+          "route"
+        ],
+        "topology": {
+          "pathlet_id": "route-chain-calibration",
+          "support_chain_count": 0,
+          "topology_hash": "topo_10ae4cc0516b33f5cd84"
+        }
+      }
+    ],
+    "metrics": {
+      "naive_scan_entry_count": 8,
+      "route_index_candidate_count": 5,
+      "lookup_candidate_reduction": 0.375,
+      "blocked_candidate_match_count": 2,
+      "foreground_reconstructed_text_count": 0
+    }
+  },
+  "quality": {
+    "kind": "aippocampus_sparse_provenance_quality_report",
+    "metrics": {
+      "source_entry_count": 8,
+      "unique_chunk_count": 6,
+      "deduped_entry_count": 2,
+      "raw_text_bytes": 816,
+      "unique_text_bytes": 612,
+      "dedupe_saved_bytes": 204,
+      "compression_ratio": 0.75,
+      "dictionary_compression": "not_enabled_v0",
+      "topology_missing_count": 0,
+      "naive_scan_entry_count": 8,
+      "route_index_candidate_count": 5,
+      "lookup_candidate_reduction": 0.375,
+      "blocked_candidate_match_count": 2,
+      "foreground_reconstructed_text_count": 0,
+      "wrong_source_reconstruction_count": 0
+    },
+    "red_lines": {
+      "masked_source_resurrection_count": 0,
+      "deleted_no_recall_rehydration_count": 0,
+      "cross_privacy_partition_cache_hit_count": 0,
+      "stale_or_quarantined_as_current_count": 0,
+      "lossy_summary_used_as_source_count": 0,
+      "reconstruction_hash_mismatch_count": 0
+    },
+    "topology_preservation_check": {
+      "status": "ok",
+      "topology_missing_count": 0,
+      "preserves": [
+        "pathlet_id",
+        "supersession_direction",
+        "privacy_partition",
+        "source_support_chain"
+      ]
+    },
+    "claim_boundary": {
+      "foreground_output": "route_handles_only",
+      "rehydrated_text_requires_explicit_source_reopen": true,
+      "clean_source_remains_authority": true
+    }
+  },
+  "latency_proxy_ms": 0.319
+}

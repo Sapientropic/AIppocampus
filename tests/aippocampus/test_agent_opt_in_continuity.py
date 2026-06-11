@@ -83,6 +83,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["foreground_forbidden_key_count"], 0)
         self.assertEqual(report["metrics"]["blind_deepen_required_count"], 0)
         self.assertGreaterEqual(report["metrics"]["top_route_selection_hint_present_count"], 1)
+        self.assertGreaterEqual(report["metrics"]["topic_label_present_count"], 1)
         self.assertEqual(report["red_lines"]["foreground_source_dump_count"], 0)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("source_id", encoded)
@@ -90,19 +91,34 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("SECRET_TOKEN", encoded)
 
-        packet = report["memory_packets"][0]
+        topic_packet = next(
+            packet for packet in report["memory_packets"] if packet.get("route_topic")
+        )
+        self.assertTrue(topic_packet["route_label"])
+        self.assertTrue(topic_packet["route_topic"])
+        self.assertNotEqual(
+            topic_packet["display_hint"],
+            "A source route may matter; reopen it before using the detail.",
+        )
+
+        deepen_request = report["deepen_requests"][0]
+        packet = next(
+            packet
+            for packet in report["memory_packets"]
+            if packet["route_id"] == deepen_request["route_id"]
+        )
         self.assertEqual(packet["kind"], "aippocampus_memory_packet")
         self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
         self.assertIn(packet["next_action"], {"reopen_source", "use_hint"})
         self.assertTrue(packet["deepen_route_id"].startswith("deepen:"))
         self.assertTrue(packet["route_label"])
-        self.assertNotEqual(
-            packet["display_hint"],
-            "A source route may matter; reopen it before using the detail.",
-        )
 
-        deepen_request = report["deepen_requests"][0]
         self.assertEqual(deepen_request["route_id"], packet["route_id"])
+        self.assertTrue(deepen_request["deepen_route_id_display_only"])
+        self.assertEqual(deepen_request["callable_handle"], deepen_request["handle"])
+        self.assertEqual(deepen_request["callable_handle_field"], "deepen_requests[].handle")
+        self.assertIn(deepen_request["handle"], deepen_request["copy_paste_command"])
+        self.assertEqual(report["suggested_next_command"], deepen_request["copy_paste_command"])
         self.assertNotIn("source_refs", json.dumps(deepen_request, ensure_ascii=False))
 
         deepened = agent_continuity.deepen(
@@ -114,6 +130,66 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(deepened["surface"], "recall")
         self.assertEqual(deepened["result"]["evidence_level"], "source_backed")
         self.assertIn("compact MemoryPacket", json.dumps(deepened, ensure_ascii=False))
+
+    def test_topic_labels_distinguish_routes_that_share_broad_scope_bucket(self) -> None:
+        rows = [
+            {
+                "message_id": "msg_benchmark",
+                "turn_id": "turn_benchmark",
+                "source_line": 10,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 10,
+                "is_final": True,
+                "scope_labels": ["technical_work"],
+                "text": "Benchmark claim posture should use measured_result, supports, limits, and avoid over-conservative cannot_claim wording.",
+            },
+            {
+                "message_id": "msg_issue",
+                "turn_id": "turn_issue",
+                "source_line": 11,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 11,
+                "is_final": True,
+                "scope_labels": ["technical_work"],
+                "text": "Issue backlog interpretation should separate roadmap seeds, active issues, milestone cleanup, and planning queue triage.",
+            },
+            {
+                "message_id": "msg_eval",
+                "turn_id": "turn_eval",
+                "source_line": 12,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 12,
+                "is_final": True,
+                "scope_labels": ["technical_work"],
+                "text": "Developer assessment and second-user evaluation comments should be kept separate from benchmark proof.",
+            },
+        ]
+        with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        report = agent_continuity.recall(
+            "technical work route labels for benchmark, issue backlog, and developer evaluation",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=5,
+        )
+        packets = report["memory_packets"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        topics = {packet.get("route_topic") for packet in packets}
+
+        self.assertIn("benchmark_claim_posture", topics)
+        self.assertIn("issue_backlog_interpretation", topics)
+        self.assertIn("developer_assessment", topics)
+        self.assertGreaterEqual(report["metrics"]["topic_label_present_count"], 3)
+        self.assertEqual(report["metrics"]["blind_deepen_required_count"], 0)
+        self.assertGreaterEqual(report["metrics"]["packet_triage_distinctiveness"], 0.75)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("msg_benchmark", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
 
     def test_stale_and_malformed_deepen_cannot_verify(self) -> None:
         recall = agent_continuity.recall(
@@ -154,7 +230,20 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
         self.assertEqual(malformed["status"], "cannot_verify")
         self.assertEqual(malformed["result"]["error"]["code"], "malformed_recall_handle")
+        self.assertIn("deepen_requests[].handle", malformed["result"]["error"]["message"])
         self.assertIn("source_backed_claim", malformed["cannot_claim"])
+
+        route_id_misuse = agent_continuity.deepen(
+            recall["memory_packets"][0]["deepen_route_id"],
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+        )
+        self.assertEqual(route_id_misuse["status"], "cannot_verify")
+        self.assertEqual(route_id_misuse["result"]["error"]["code"], "malformed_recall_handle")
+        self.assertEqual(
+            route_id_misuse["result"]["error"]["details"]["callable_handle_field"],
+            "deepen_requests[].handle",
+        )
 
     def test_explain_is_public_safe(self) -> None:
         recall = agent_continuity.recall(

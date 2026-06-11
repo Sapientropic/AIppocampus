@@ -257,16 +257,18 @@ Generated dataset files and reports stay ignored by default. Do not commit full
 LongMemEval downloads or generated JSON reports unless a future change promotes
 a small curated artifact with provenance and license notes.
 
-No dated LongMemEval-S answer/latency baseline is currently promoted into
-`current-claims.md`. A future provider run can add one only if it preserves the
-fixed reader config, prompt version, model/provider metadata, token/cost
-telemetry, sanitized report validation, and the retrieval-vs-answer claim
-separation above.
+The first dated LongMemEval-S answer/latency baseline is summarized in
+[`longmemeval-fixed-reader-answer-25-2026-06-12.md`](longmemeval-fixed-reader-answer-25-2026-06-12.md).
+The raw generated report remains local and gitignored; the committed summary
+preserves the fixed reader config, prompt version, model/provider metadata,
+token/cost telemetry, sanitized report validation, and retrieval-vs-answer
+claim separation.
 
 ## Current Published Result
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-11T22:24:24Z` | `longmemeval-v1-small` | fixed-reader provider answer baseline | 25 | 100.00% | 92.00% | - | 100.00% | 192.69s | `answer_scored` |
 | `2026-06-10T07:26:53Z` | `longmemeval-v1-small` | retrieval-only + optional semantic LLM line reranker pilot | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 239.15s | `retrieval_sufficient` pilot |
 | `2026-06-10T04:15:44Z` | `longmemeval-v1-small` | retrieval-only + optional lexical line reranker | 500 | 95.80% | 85.18% | 87.47% | 94.36% | 737.84s | `retrieval_sufficient` |
 | `2026-06-10T03:33:49Z` | `longmemeval-v1-small` | retrieval-only larger slice | 500 | 95.80% | 85.18% | - | 94.36% | 803.10s | `retrieval_sufficient` |
@@ -283,7 +285,26 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
+python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.json --json
 ```
+
+Fixed-reader answer baseline for #1194:
+
+- Summary:
+  [`longmemeval-fixed-reader-answer-25-2026-06-12.md`](longmemeval-fixed-reader-answer-25-2026-06-12.md).
+- Reader attempted: `25/25`; deterministic answer-correct count:
+  `20/25 = 0.8000`.
+- Retrieval/reference layer in the same run: session R@10 `25/25`, evidence-line
+  R@10 `23/25`, and context-visible evidence R@10 `25/25`.
+- Reader latency: average `2723.84ms`, max `6775.68ms`; total elapsed
+  `192.69s`.
+- Token/cost: `379965` total tokens; run-configured cost estimate
+  `USD 0.106922` under the explicit command-line price table.
+- Sanitized report validation: passed; the committed summary does not include
+  raw question text, raw answers, raw source text, local paths, raw model
+  responses, or credentials.
+- Boundary: this is not the official LongMemEval judge, not LongMemEval-V2,
+  not SOTA/leaderboard evidence, and not default reader/provider adoption.
 
 LongMemEval-S 500-question verification summary:
 

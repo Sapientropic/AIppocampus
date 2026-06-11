@@ -303,6 +303,10 @@ For these commands:
   factual claims, mutate owner surfaces, or control foreground hooks. The
   `control_authority_audit` block counts attempted activation/mutation requests
   as blocked diagnostics; it is not an API for applying those actions.
+  The readout also includes `campus_usefulness_panels` with `Useful Now`,
+  `Wasted Motion`, `Quiet For A Reason`, and `Needs Ripening` buckets. These
+  panels reuse existing diagnostics to make usefulness failures visible; they
+  do not rank, activate, edit, or prove routes.
 - `episode-arcs --json` emits an aggregate-only, private-history Episode/Arc
   adjudication readout for #663. It scans local clean-source messages/events and
   reports counts, buckets, and claim boundaries for rejected-route chains. It
@@ -523,8 +527,17 @@ foreground rows and separate opaque follow-up handles; it must not inline
 source refs, message ids, source windows, head votes, masks, or raw local paths
 into the foreground packet. `agent aippo` exposes only the narrow
 project/workflow working-contract activation. `agent feedback` records or
-returns calibration/routing evidence only; it cannot ripen a candidate-only or
-stale clause without source support.
+returns calibration/routing evidence only; it cannot ripen a candidate-only,
+Dream-only, or stale clause without source support.
+
+For recall output, pass `deepen_requests[].handle` to `agent deepen`.
+`memory_packets[].deepen_route_id` is a display/correlation id, not the
+copy-pasteable recall handle. When available, prefer the emitted
+`deepen_requests[].copy_paste_command`.
+The usefulness gate treats missing copy-pasteable deepen targets, display-handle
+misuse, broad search before recall, and safe route evidence demoted back to
+`scent` as foreground usefulness failures rather than harmless diagnostics.
+
 The foreground size, no-profile-dump, review-needed, and anti-nag budget for
 those packets lives in
 [`foreground-memory-ux-budget.md`](../architecture/foreground-memory-ux-budget.md).
@@ -605,6 +618,18 @@ for an exported transcript. `register_thread` is for attaching/building the
 selected current provider session through the MCP control plane; it is not a
 generic arbitrary-file ingest endpoint.
 This is not a generic arbitrary-file ingest endpoint.
+
+For Codex hook dogfood, registry-wide health may report
+`hook_seen_but_not_registered` when the prompt hook saw a thread but the
+registry has no clean-source entry for it. The operator repair path is:
+
+```text
+python -m aippocampus_runtime.registry.api scan-sessions --hook-seen-only --dry-run --json
+```
+
+Then rerun without `--dry-run` after reviewing the plan. This reuses provider
+rollout discovery and clean-source registration; it does not treat hook output,
+warm cache cards, or sanitized prompt traces as source-backed evidence.
 
 MCP JSON output defaults to public-safe local-path redaction for tool results
 that can be forwarded through host agents. Callers that are acting as local

@@ -296,6 +296,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_source_intake_health",
         "test_source_reopen_budget",
         "test_source_texture",
+        "test_sparse_provenance_codebook",
         "test_stage_0_5_smoke",
         "test_standard_line_reranker_contract",
         "test_storage_capacity_report",
@@ -321,6 +322,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_warm_ambient_topic_epoch_policy",
         "test_wheel_contract_release",
         "test_worker_hook_handoff_smoke",
+        "test_yi_macro_runtime_interfaces",
     }
 )
 
@@ -375,8 +377,10 @@ QUICK_STEMS = frozenset(
         "test_source_intake_health",
         "test_source_reopen_budget",
         "test_source_texture",
+        "test_sparse_provenance_codebook",
         "test_standard_line_reranker_contract",
         "test_topology_anchor_policy",
+        "test_yi_macro_runtime_interfaces",
     }
 )
 

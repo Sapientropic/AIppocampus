@@ -31,6 +31,10 @@ from aippocampus_runtime.recall.ambient_policy import (
     surface_events_for_cards,
 )
 from aippocampus_runtime.recall.ambient_source_reopen import promote_reopenable_ambient_cards
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (
+    hook_seen_ledger_path_for_cache,
+    record_hook_seen_thread,
+)
 from aippocampus_runtime.warm_ambient.scheduler import (
     public_warm_schedule_status,
     schedule_warm_ambient_recall,
@@ -185,6 +189,7 @@ def attach_ambient_recall(
         registry_path=registry_path,
     )
     policy_file = Path(ambient_policy_path).resolve() if ambient_policy_path else None
+    hook_seen_record: dict[str, Any] | None = None
     related_fingerprints = related_signal_fingerprints(
         candidates=result.get("candidates") or [],
         evidence=result.get("evidence") or [],
@@ -197,6 +202,14 @@ def attach_ambient_recall(
         ),
     )
     try:
+        current_thread_key = current_thread_key_from_hook_thread_id(thread_id)
+        hook_seen_record = record_hook_seen_thread(
+            hook_seen_ledger_path_for_cache(cache_file),
+            thread_id=thread_id,
+            workspace=workspace,
+            current_thread_key=current_thread_key,
+            topic_epoch=epoch,
+        )
         cached = read_thread_cache(
             cache_file,
             thread_id=thread_id,
@@ -230,6 +243,12 @@ def attach_ambient_recall(
             cached_cards_first=True,
             prompt=prompt,
         )
+        if hook_seen_record:
+            result["ambient_recall"]["source_registration"] = {
+                "status": "hook_seen_recorded",
+                "thread_ref": hook_seen_record.get("thread_ref"),
+                "next_action_if_missing": "registry_scan_hook_seen_only",
+            }
         if policy_file:
             policy_events = load_policy_events(policy_file)
             policy_filter = filter_ambient_cards(
@@ -308,7 +327,6 @@ def attach_ambient_recall(
             and not cache_is_warm
             and warm_background_enabled(warm_background)
         ):
-            current_thread_key = current_thread_key_from_hook_thread_id(thread_id)
             # The foreground hook may enqueue warming, but the 50-lane scout
             # batch must run detached. Otherwise model tail latency or rate
             # limiting would turn ambient recall from peripheral awareness into

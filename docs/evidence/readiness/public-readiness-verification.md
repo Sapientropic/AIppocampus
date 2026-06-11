@@ -472,6 +472,61 @@ long-duration provider/client soak coverage. Provider account identifiers,
 bucket names, object prefixes, credentials, raw private source, and local
 temporary paths are intentionally omitted.
 
+## 2026-06-12 Rollout Hard-Event Route-Chain Calibration
+
+This public-safe synthetic rollout behavior slice compares source-disambiguation
+candidate budgets for multi-source route chains and actionability suppression.
+It uses the checked-in `rollout_behavior_events_v1.jsonl` fixture and writes
+only sanitized ids, hashes, metrics, and claim boundaries.
+
+Latest verification for this slice:
+
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 1 --json --output docs\evidence\benchmarks\rollout-hard-event-route-chain-topk1-2026-06-12.json`:
+  exited nonzero as expected for the quality gate. It found flag-worthy events
+  but recovered 0/3 complete required source chains, with 3 source-support
+  failures.
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json --output docs\evidence\benchmarks\rollout-hard-event-route-chain-topk2-2026-06-12.json`:
+  exited zero. It recovered 3/3 complete chains with recall 1.0, precision 1.0,
+  wrong-source evidence 0, stale-source top-k rate 0, and foreground action
+  false positives 0.
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 3 --json --output docs\evidence\benchmarks\rollout-hard-event-route-chain-topk3-2026-06-12.json`:
+  exited zero for the main gate but admitted narrative/stale decoys into the
+  top source set, with wrong-source evidence 2/3 and stale-source top-k rate
+  2/3.
+
+The committed report is
+`docs/evidence/benchmarks/rollout-hard-event-route-chain-2026-06-12.md`.
+This is route-chain/actionability calibration over a small public synthetic
+fixture. It is not representative #1197 public-quality evidence, live agent
+quality, private real-history quality, or wild VCS corpus quality.
+
+## 2026-06-12 Rollout Hard-Event Cohort V2
+
+This public-safe synthetic rollout behavior cohort expands #1197 from a
+3-chain calibration into a 17-project, 34-event public hard-event pack. It uses
+`rollout_behavior_events_v2.json`, keeps assistant narration as non-supporting
+context only, and requires behavior-backed tool/test/edit/route traces for
+flag-worthy hard events.
+
+Latest verification for this slice:
+
+- `python -m pytest tests\aippocampus\test_benchmark_vcs_future_event_recall.py -q`:
+  18 tests passed, including the V2 cohort shape and production-like top-k2
+  recovery tests.
+- `python -m ruff check benchmarks\aippocampus\benchmark_vcs_future_event_recall.py tests\aippocampus\test_benchmark_vcs_future_event_recall.py`:
+  passed.
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json --output docs\evidence\benchmarks\rollout-hard-event-cohort-v2-topk2-2026-06-12.json`:
+  exited zero. It measured 17/17 recall, 17/17 precision, 17/17 complete
+  two-source chains, 0 source-support failures, wrong-source evidence rate
+  0.0, stale-source top-k rate 0.0, foreground action false positives 0,
+  anti-drift violations 0, and current-vs-stale pairwise wins 34/34.
+
+The committed report is
+`docs/evidence/benchmarks/rollout-hard-event-cohort-v2-2026-06-12.md`.
+This closes the public-safe cohort-building gap for #1197, while preserving
+the limits: no live agent quality, private real-history quality, wild public
+VCS corpus quality, or #1195 benchmark-family promotion claim.
+
 ## 2026-06-04 React VCS Production-Like Source Disambiguation
 
 Issue #254 added the first non-oracle source-disambiguation arm for the React

@@ -392,6 +392,28 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
+        self.assertIn("deepen_requests[].handle", payload["error"]["message"])
+
+    def test_recall_deepen_display_route_id_points_to_callable_agent_handle_field(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3051,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": "deepen:route_project_context", "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
+        self.assertEqual(
+            payload["error"]["details"]["callable_handle_field"],
+            "deepen_requests[].handle",
+        )
 
     def test_recall_deepen_rejects_stale_context_handle_before_source_reopen(self) -> None:
         context_response = mcp.handle_request(

@@ -150,6 +150,13 @@ is context, not support. That lets the benchmark follow decision shadows from
 PR history into agent work traces while keeping the anchor on what actually
 happened.
 
+[`rollout_behavior_events_v2.json`](rollout_behavior_events_v2.json) is the
+broader public-safe cohort for #1197. It keeps the same behavior-backed support
+rule and expands the synthetic rollout shape to 17 projects and 34 future
+events across temporal override, cross-scope drift, cross-project
+contamination, post-compaction gaps, forget boundaries, Dream candidate
+boundaries, route-topic specificity, and related actionability failures.
+
 Public VCS outcomes can be pretrained into a model, especially crisp and famous
 merge/revert/reopen outcomes. Every public report should therefore include a
 closed-book ablation:
@@ -171,6 +178,7 @@ been downloaded or curated into normalized event-link rows:
 ```powershell
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\vcs-future-events-built.jsonl --allow-non-cc0-dataset --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json
 ```
 
 The builder does not scrape datasets or infer labels. It only groups curated

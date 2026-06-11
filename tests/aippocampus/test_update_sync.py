@@ -160,6 +160,12 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("llm", surfaces)
         self.assertIn("mcp", surfaces)
         self.assertIn("plugin", surfaces)
+        self.assertIn("agent_callable", surfaces)
+        self.assertIn(
+            surfaces["agent_callable"]["status"],
+            {"artifact_current_host_not_exposed", "host_not_exposed"},
+        )
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
         self.assertFalse(payload["summary"]["magic_ready"])
         self.assertEqual(surfaces["hooks"]["status"], "missing")
         self.assertEqual(surfaces["llm"]["status"], "missing_provider_env_var")
@@ -238,7 +244,12 @@ class UpdateSyncTests(unittest.TestCase):
             ],
         )
         self.assertEqual(by_id["source_search_ready"]["status"], "ready")
-        self.assertEqual(by_id["active_recall_ready"]["status"], "ready")
+        self.assertIn(
+            by_id["active_recall_ready"]["status"],
+            {"artifact_current_host_not_exposed", "host_not_exposed"},
+        )
+        self.assertFalse(by_id["active_recall_ready"]["ready"])
+        self.assertIn("foreground host", by_id["active_recall_ready"]["what_works"])
         self.assertEqual(by_id["ambient_hooks_ready"]["status"], "ready")
         self.assertEqual(
             by_id["semantic_provider_ready"]["status"], "missing_provider_env_var"
@@ -258,6 +269,47 @@ class UpdateSyncTests(unittest.TestCase):
             by_id["agent_fallback_ready"]["status"],
             "deterministic_only_missing_provider_and_agent",
         )
+
+    def test_status_splits_mcp_artifact_from_foreground_agent_callable_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            mcp_config = root / ".mcp.json"
+            mcp_config.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "aippocampus": {
+                                "command": "python-definitely-missing-for-aippocampus-test",
+                                "args": ["-m", "aippocampus_runtime.mcp.server"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--mcp-config",
+                str(mcp_config),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        mcp = payload["surfaces"]["mcp"]
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertEqual(mcp["status"], "current")
+        self.assertTrue(mcp["package_artifact_current"])
+        self.assertFalse(mcp["mcp_command_resolves"])
+        self.assertEqual(agent["status"], "artifact_current_host_not_exposed")
+        self.assertFalse(agent["ready"])
+        self.assertFalse(agent["host_plugin_installed_or_enabled"])
+        self.assertFalse(agent["host_mcp_registered"])
 
     def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
         self,
@@ -386,6 +438,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("Magic ready: false", output)
         self.assertIn("Magic blockers: llm", output)
         self.assertIn("Optional surfaces: plugin", output)
+        self.assertIn("Agent-callable surfaces:", output)
         self.assertIn("First-run readiness:", output)
         self.assertIn("source_search_ready: ready", output)
         self.assertIn("ambient_hooks_ready: ready", output)

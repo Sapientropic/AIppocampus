@@ -8,6 +8,8 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -54,6 +56,8 @@ PROVIDER_KEY_BRIDGE_MARKERS = (
 )
 OLD_MCP_SCRIPT_NAMES = ("aippocampus_mcp_server.py",)
 CURRENT_MCP_MARKERS = ("aippocampus_runtime.mcp.server", "aippocampus mcp")
+PLUGIN_SECTION_RE = re.compile(r'^\s*\[plugins\."([^"]+)"\]\s*$')
+MCP_SECTION_RE = re.compile(r'^\s*\[(?:mcp_servers|mcpServers)\."?([^"\]]+)"?\]\s*$')
 
 
 def _json_default(value: Any) -> str:
@@ -72,6 +76,43 @@ def _path_is_under(child: Path, parent: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _command_resolves(command: str) -> bool:
+    if not command:
+        return False
+    command_path = Path(command)
+    if command_path.is_absolute():
+        return command_path.exists()
+    return shutil.which(command) is not None
+
+
+def _read_config_text(codex_home_path: Path) -> str:
+    config_path = codex_home_path / "config.toml"
+    if not config_path.exists():
+        return ""
+    try:
+        return config_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _configured_plugin_ids(config_text: str) -> list[str]:
+    ids: list[str] = []
+    for line in config_text.splitlines():
+        match = PLUGIN_SECTION_RE.match(line)
+        if match:
+            ids.append(match.group(1))
+    return ids
+
+
+def _configured_mcp_server_ids(config_text: str) -> list[str]:
+    ids: list[str] = []
+    for line in config_text.splitlines():
+        match = MCP_SECTION_RE.match(line)
+        if match:
+            ids.append(match.group(1))
+    return ids
 
 
 def find_repo_root(start: Path | None = None) -> Path:
@@ -253,11 +294,13 @@ def compare_plugin(*, repo_root: Path, plugin_output: Path | None = None) -> dic
         f"skills/aippocampus/{item}"
         for item in collect_ignored_entries(repo_root / "skills" / "aippocampus")
     )
+    status = _surface_status_from_diff(
+        diff, source_exists=plugin_source.exists(), target_exists=output.exists()
+    )
     return {
         "surface": "plugin",
-        "status": _surface_status_from_diff(
-            diff, source_exists=plugin_source.exists(), target_exists=output.exists()
-        ),
+        "status": status,
+        "package_artifact_current": status == "current",
         "source_path": str(plugin_source),
         "target_path": str(output),
         "ignored_artifacts": ignored_artifacts_report(sorted(ignored)),
@@ -293,8 +336,10 @@ def status_cli(repo_root: Path) -> dict[str, Any]:
         "source_path": str(scripts),
         "active_package_path": _safe_path_text(active_path),
         "console_script": console_script,
+        "console_script_available_on_path": bool(console_script),
         "installed_version": version,
         "source_checkout_import_ready": bool(source_active or sys_path_ready),
+        "module_entrypoint_available": bool(source_active or sys_path_ready or version),
         "documented_install_command": f"{Path(sys.executable).name} -m pip install -e {repo_root}",
         "safety_notes": [
             "CLI refresh is reported as a package install command; update does not run pip implicitly"
@@ -328,6 +373,7 @@ def status_mcp(repo_root: Path, mcp_config: Path | None = None) -> dict[str, Any
         }
     server = ((data.get("mcpServers") or {}).get("aippocampus") or {}) if isinstance(data, dict) else {}
     serialized = json.dumps(server, ensure_ascii=False)
+    command = str(server.get("command") or "")
     stale = any(name in serialized for name in OLD_MCP_SCRIPT_NAMES)
     current = any(marker in serialized for marker in CURRENT_MCP_MARKERS)
     if stale:
@@ -339,14 +385,86 @@ def status_mcp(repo_root: Path, mcp_config: Path | None = None) -> dict[str, Any
     return {
         "surface": "mcp",
         "status": status,
+        "package_artifact_current": status == "current",
         "source_path": str(path),
         "target_path": str(path),
         "stale_flat_script": stale,
         "current_module_entrypoint": current,
         "manual_review_needed": status != "current",
         "server_command_present": bool(server),
+        "mcp_command": command or None,
+        "mcp_command_resolves": _command_resolves(command),
+        "mcp_command_uses_ambiguous_python": Path(command).name.casefold()
+        in {"python", "python.exe"},
+        "portable_module_command": f"{Path(sys.executable).name} -m aippocampus_runtime.mcp.server",
         "safety_notes": [
-            "MCP host/user config is preserved; update reports stale commands instead of rewriting it"
+            "MCP package artifacts are not the same as foreground host tool visibility",
+            "MCP host/user config is preserved; update reports stale commands instead of rewriting it",
+        ],
+    }
+
+
+def status_agent_callable(
+    codex_home_path: Path, surfaces: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    config_text = _read_config_text(codex_home_path)
+    plugin_ids = _configured_plugin_ids(config_text)
+    mcp_ids = _configured_mcp_server_ids(config_text)
+    host_plugin_installed = any("aippocampus" in item.casefold() for item in plugin_ids)
+    host_mcp_registered = any("aippocampus" == item.casefold() for item in mcp_ids)
+    foreground_override = os.environ.get("AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
+    if foreground_override in {"1", "true", "TRUE", "yes"}:
+        foreground_tools_visible: bool | None = True
+    elif host_plugin_installed or host_mcp_registered:
+        foreground_tools_visible = None
+    else:
+        foreground_tools_visible = False
+
+    cli = surfaces.get("cli") or {}
+    mcp = surfaces.get("mcp") or {}
+    plugin = surfaces.get("plugin") or {}
+    package_artifact_current = bool(
+        mcp.get("package_artifact_current") or plugin.get("package_artifact_current")
+    )
+    ready = foreground_tools_visible is True
+    if ready:
+        status = "ready"
+    elif host_plugin_installed or host_mcp_registered:
+        status = "host_registered_tools_unverified"
+    elif package_artifact_current:
+        status = "artifact_current_host_not_exposed"
+    else:
+        status = "host_not_exposed"
+
+    next_command = "aippocampus update status --json"
+    if not cli.get("console_script_available_on_path") and cli.get("module_entrypoint_available"):
+        next_command = f"{Path(sys.executable).name} -m aippocampus_runtime.cli.facade agent recall"
+    elif not host_plugin_installed and not host_mcp_registered:
+        next_command = "enable the AIppocampus plugin/MCP in the active agent host"
+
+    return {
+        "surface": "agent_callable",
+        "status": status,
+        "ready": ready,
+        "package_artifact_current": package_artifact_current,
+        "console_script_available_on_path": bool(cli.get("console_script_available_on_path")),
+        "host_plugin_installed_or_enabled": host_plugin_installed,
+        "host_mcp_registered": host_mcp_registered,
+        "mcp_command_resolves": bool(mcp.get("mcp_command_resolves")),
+        "foreground_tools_visible": foreground_tools_visible,
+        "foreground_tools_visibility_source": (
+            "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE"
+            if foreground_override
+            else "host_config_probe"
+        ),
+        "next_command": next_command,
+        "claim_boundary": (
+            "package artifacts being current does not prove that the current "
+            "foreground agent can call AIppocampus MCP/plugin tools"
+        ),
+        "safety_notes": [
+            "This is host exposure/readiness, not core recall quality",
+            "Unknown foreground tool visibility should not be reported as ready",
         ],
     }
 
@@ -560,12 +678,14 @@ READY_SURFACE_STATUSES = {"current", "ready", "installed_package"}
 CORE_SURFACES = ("cli", "skill")
 MAGIC_SURFACES = ("hooks", "llm")
 OPTIONAL_SURFACES = ("plugin",)
-OPERATOR_SURFACES = ("mcp",)
+OPERATOR_SURFACES = ("mcp", "agent_callable")
 
 
 def _surface_ready(item: dict[str, Any]) -> bool:
     if item.get("surface") == "llm":
         return bool(item.get("ready"))
+    if item.get("surface") == "agent_callable":
+        return item.get("ready") is True
     return item.get("status") in READY_SURFACE_STATUSES
 
 
@@ -606,6 +726,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         "hooks": hooks,
         "llm": llm,
     }
+    surfaces["agent_callable"] = status_agent_callable(codex_home_path, surfaces)
     actionable = [
         name
         for name, item in surfaces.items()
@@ -633,6 +754,8 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "optional_surfaces": optional_surfaces,
             "operator_surfaces": list(OPERATOR_SURFACES),
             "operator_blockers": operator_blockers,
+            "agent_callable_ready": surfaces["agent_callable"]["ready"],
+            "agent_callable_status": surfaces["agent_callable"]["status"],
             "capability_ladder": capability_ladder,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
@@ -843,11 +966,15 @@ def render_text(report: dict[str, Any]) -> str:
         lines.append("- Optional surfaces: " + ", ".join(summary.get("optional_surfaces") or []))
     if summary.get("operator_surfaces"):
         lines.append("- Operator surfaces: " + ", ".join(summary.get("operator_surfaces") or []))
+    lines.append(
+        "- Agent-callable surfaces: "
+        + str(summary.get("agent_callable_status") or "unknown")
+    )
     if summary.get("capability_ladder"):
         lines.append("- First-run readiness:")
         for item in summary.get("capability_ladder") or []:
             lines.append(f"  {item.get('id')}: {item.get('status')}")
-    for name in ("skill", "hooks", "llm", "cli", "mcp", "plugin"):
+    for name in ("skill", "hooks", "llm", "cli", "mcp", "plugin", "agent_callable"):
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")
         if name == "llm" and not item.get("ready"):
@@ -855,6 +982,15 @@ def render_text(report: dict[str, Any]) -> str:
             lines.append(f"  next: set {env_name} in the environment that launches the hook")
         if name == "hooks" and item.get("status") != "current":
             lines.append("  next: aippocampus update apply --surface hooks")
+        if name == "cli" and not item.get("console_script_available_on_path"):
+            lines.append("  warn: console script is not available on PATH")
+        if name == "mcp":
+            if item.get("package_artifact_current") and not item.get("mcp_command_resolves"):
+                lines.append("  warn: MCP artifact is current but its command does not resolve")
+            if item.get("mcp_command_uses_ambiguous_python"):
+                lines.append("  warn: MCP command uses python; verify python vs python3 on this host")
+        if name == "agent_callable" and not item.get("ready"):
+            lines.append("  warn: foreground host tool visibility is not confirmed")
     if mode == "plan":
         lines.append("- Apply all local package/effect surfaces: aippocampus update apply --all-local")
         lines.append("- API key values are never read or written by update; configure the env var explicitly.")

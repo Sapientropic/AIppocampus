@@ -256,6 +256,14 @@ Topic-epoch reuse must come from stable source/candidate fingerprints, scout
 topic decisions, semantic trigger ids, scope labels, or source-ref fingerprints.
 Raw prompt fuzzy matching is not a route-reuse authority.
 
+Live agent recall now has a narrow route-producer slice: clean-source recall
+hits can be projected into compact foreground packets with fixed-vocabulary
+`route_topic`, `route_label`, `label_granularity`, and specificity metrics.
+This is enough to distinguish routes that share broad buckets such as
+`technical_work`, but it is not the full #1188 promotion. It does not add fresh
+semantic warming, familiarity-map scoring, trained topic inference, source
+support, or default foreground hooks.
+
 ROI status can reduce low-yield non-guard scout families to watch or diagnostic
 surfaces, but required guard families remain `guard_required`. Quiet privacy or
 evidence-gap guards are not retirement candidates merely because they rarely

@@ -1,0 +1,907 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_vcs_future_event_recall_benchmark",
+  "generated_at": "2026-06-11T21:39:00Z",
+  "status": "future_event_recall_scored",
+  "ok": true,
+  "quality_gate_ok": true,
+  "config": {
+    "dataset_path_sha1": "eb2e0d04986f8446",
+    "predictions_file_sha1": null,
+    "closed_book_predictions_file_sha1": null,
+    "event_metadata_file_sha1": null,
+    "prediction_source": "production_like_retrieval",
+    "baseline": null,
+    "closed_book_ablation": false,
+    "require_cc0_dataset": true,
+    "production_like_retrieval": true,
+    "source_disambiguation_top_k": 3,
+    "source_disambiguation_min_score": 1.0,
+    "min_recall": 1.0,
+    "min_precision": 1.0,
+    "max_false_positives": 0,
+    "gate_statistic": "point",
+    "live_llm": false
+  },
+  "dataset": {
+    "dataset_id": "aippocampus_rollout_behavior_events_v1",
+    "fixture": "benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v1.jsonl",
+    "license": "CC0-1.0",
+    "source_family": "agent_rollout_behavior_contract",
+    "project_count": 3,
+    "future_event_count": 6,
+    "future_event_gold_available": true,
+    "hard_event_kinds": [
+      "test_failed",
+      "test_passed",
+      "tool_call_failed",
+      "tool_call_succeeded"
+    ],
+    "claim_boundary": "V1 is a hard-event public contract fixture. It proves recall-aware scoring semantics over deterministic rollout behavior traces, not live agent quality or private real-history continuity."
+  },
+  "metrics": {
+    "total_future_event_count": 6,
+    "future_event_gold_count": 3,
+    "non_flag_future_event_count": 3,
+    "predicted_flag_count": 3,
+    "true_positive_count": 3,
+    "false_negative_count": 0,
+    "false_positive_count": 0,
+    "future_event_flag_recall_rate": 1.0,
+    "future_event_flag_precision": 1.0,
+    "diagnostic_event_identity_precision": 1.0,
+    "future_event_flag_f1": 1.0,
+    "rate_estimates": {
+      "future_event_flag_recall": {
+        "name": "future_event_flag_recall",
+        "numerator": 3,
+        "denominator": 3,
+        "point_estimate": 1.0,
+        "confidence_interval": {
+          "method": "wilson_score",
+          "confidence_level": 0.95,
+          "success_count": 3,
+          "total_count": 3,
+          "point_estimate": 1.0,
+          "lower": 0.4385,
+          "upper": 1.0,
+          "defined": true
+        },
+        "defined": true
+      },
+      "future_event_flag_precision": {
+        "name": "future_event_flag_precision",
+        "numerator": 3,
+        "denominator": 3,
+        "point_estimate": 1.0,
+        "confidence_interval": {
+          "method": "wilson_score",
+          "confidence_level": 0.95,
+          "success_count": 3,
+          "total_count": 3,
+          "point_estimate": 1.0,
+          "lower": 0.4385,
+          "upper": 1.0,
+          "defined": true
+        },
+        "defined": true
+      },
+      "anti_drift_pass_rate": {
+        "name": "anti_drift_pass_rate",
+        "numerator": 3,
+        "denominator": 3,
+        "point_estimate": 1.0,
+        "confidence_interval": {
+          "method": "wilson_score",
+          "confidence_level": 0.95,
+          "success_count": 3,
+          "total_count": 3,
+          "point_estimate": 1.0,
+          "lower": 0.4385,
+          "upper": 1.0,
+          "defined": true
+        },
+        "defined": true
+      },
+      "anti_drift_violation_rate": {
+        "name": "anti_drift_violation_rate",
+        "numerator": 0,
+        "denominator": 3,
+        "point_estimate": 0.0,
+        "confidence_interval": {
+          "method": "wilson_score",
+          "confidence_level": 0.95,
+          "success_count": 0,
+          "total_count": 3,
+          "point_estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.5615,
+          "defined": true
+        },
+        "defined": true
+      }
+    },
+    "silent_dream_penalty_applies": true,
+    "anti_drift_negative_count": 3,
+    "anti_drift_violation_count": 0,
+    "anti_drift_pass_rate": 1.0,
+    "unknown_event_false_positive_count": 0,
+    "source_support_failure_count": 0,
+    "by_family": {
+      "rejected_route": {
+        "gold_event_count": 1,
+        "true_positive_count": 1,
+        "false_negative_count": 0,
+        "recall": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 1,
+        "true_positive_count": 1,
+        "false_negative_count": 0,
+        "recall": 1.0
+      },
+      "tacit_constraint": {
+        "gold_event_count": 1,
+        "true_positive_count": 1,
+        "false_negative_count": 0,
+        "recall": 1.0
+      }
+    }
+  },
+  "precision_contract": {
+    "primary_metric": "future_event_flag_precision",
+    "primary_definition": "true positives require a flag-worthy event, all required past source ids, and no full-support-blocking source degradation",
+    "diagnostic_metric": "diagnostic_event_identity_precision",
+    "diagnostic_definition": "known flag-worthy event ids among predicted flags, ignoring required-source support; useful for debugging but not for the source-backed quality gate"
+  },
+  "claim_levels": {
+    "source_window_oracle_contract": {
+      "available": false,
+      "uses_required_past_source_ids_as_prediction_input": false,
+      "claim_boundary": "The gold baseline is an oracle contract check: it proves scorer semantics only when required source ids are supplied as predictions."
+    },
+    "production_like_retrieval": {
+      "available": true,
+      "uses_required_past_source_ids_as_prediction_input": false,
+      "claim_boundary": "Ranks a local past-window source index without gold ids; it is not a live model/provider quality claim."
+    },
+    "live_source_disambiguation": {
+      "available": false,
+      "why": "No live model/provider call is made by this deterministic runner."
+    }
+  },
+  "source_disambiguation": {
+    "available": true,
+    "kind": "production_like_source_disambiguation",
+    "config": {
+      "top_k": 3,
+      "min_score": 1.0
+    },
+    "input_contract": {
+      "uses_required_past_source_ids_for_ranking": false,
+      "required_past_source_ids_used_for": "grading_only",
+      "ranking_input_fields": [
+        "future_window.text",
+        "future_window.family",
+        "future_window.hard_event_kind",
+        "past_window.kind",
+        "past_window.text",
+        "past_window.behavior_backed",
+        "past_window.tool_name",
+        "past_window.command_class",
+        "past_window.failure_family"
+      ],
+      "live_model_or_provider_call": false,
+      "claim_boundary": "This arm builds a local in-memory candidate index from each case's past_window and ranks candidates without gold source ids. It is production-like deterministic retrieval, not live LLM quality."
+    },
+    "metrics": {
+      "event_count": 6,
+      "gold_event_count": 3,
+      "non_flag_event_count": 3,
+      "current_source_top_k_hit_rate": 1.0,
+      "required_chain_candidate_count": 3,
+      "multi_source_chain_recovered_count": 3,
+      "positive_chain_complete_rate": 1.0,
+      "negative_route_drag_count": 2,
+      "negative_route_drag_rate": 0.6667,
+      "anti_drift_route_suppression_count": 2,
+      "anti_drift_route_suppression_rate": 1.0,
+      "hard_negative_event_count": 0,
+      "hard_negative_suppressed_count": 0,
+      "hard_negative_suppression_rate": 0.0,
+      "foreground_action_false_positive_count": 0,
+      "current_vs_stale_pairwise_win_rate": 1.0,
+      "stale_source_top_k_rate": 0.6667,
+      "wrong_source_evidence_rate": 0.6667,
+      "negative_false_positive_rate": 0.0,
+      "current_vs_stale_pairwise_wins": 4,
+      "current_vs_stale_pairwise_comparisons": 4
+    },
+    "by_track": {
+      "unknown": {
+        "event_count": 6,
+        "gold_event_count": 3,
+        "non_flag_event_count": 3,
+        "current_source_top_k_hit_rate": 1.0,
+        "required_chain_candidate_count": 3,
+        "multi_source_chain_recovered_count": 3,
+        "positive_chain_complete_rate": 1.0,
+        "negative_route_drag_count": 2,
+        "negative_route_drag_rate": 0.6667,
+        "anti_drift_route_suppression_count": 2,
+        "anti_drift_route_suppression_rate": 1.0,
+        "hard_negative_event_count": 0,
+        "hard_negative_suppressed_count": 0,
+        "hard_negative_suppression_rate": 0.0,
+        "foreground_action_false_positive_count": 0,
+        "current_vs_stale_pairwise_win_rate": 1.0,
+        "stale_source_top_k_rate": 0.6667,
+        "wrong_source_evidence_rate": 0.6667,
+        "negative_false_positive_rate": 0.0,
+        "current_vs_stale_pairwise_wins": 4,
+        "current_vs_stale_pairwise_comparisons": 4
+      }
+    },
+    "negative_subtypes": {},
+    "events": [
+      {
+        "event_id": "validation-repeat-test-failed",
+        "project_id": "rollout-gateway-validation",
+        "track": null,
+        "family": "rejected_route",
+        "hard_event_kind": "test_failed",
+        "flag_worthy": true,
+        "required_past_source_ids": [
+          "validation-edit-reverted",
+          "validation-test-failed"
+        ],
+        "selected_past_source_ids": [
+          "validation-test-failed",
+          "validation-edit-reverted",
+          "validation-narrative-claim"
+        ],
+        "top_source_ids": [
+          "validation-test-failed",
+          "validation-edit-reverted",
+          "validation-narrative-claim"
+        ],
+        "top_sources": [
+          {
+            "source_id": "validation-test-failed",
+            "kind": "tool_call",
+            "score": 15.0,
+            "source_text_sha1": "f2608bc01733a752",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "validation-edit-reverted",
+            "kind": "edit_reverted",
+            "score": 11.0,
+            "source_text_sha1": "36ade6e89bdd4637",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "validation-narrative-claim",
+            "kind": "assistant_message",
+            "score": -3.0,
+            "source_text_sha1": "a2c96e85fe0fdce7",
+            "behavior_backed": false
+          }
+        ],
+        "route_candidate": true,
+        "route_candidate_reason": "route_candidate",
+        "route_actionability": {
+          "decision": "flag",
+          "reason": "source_route_actionable",
+          "foreground_visible": true
+        },
+        "hard_negative_subtype": "",
+        "hard_negative_suppressed": false,
+        "route_chain_required": true,
+        "route_chain_complete": true,
+        "negative_route_drag": false,
+        "anti_drift_route_suppressed": false,
+        "stale_or_decoy_source_ids": [
+          "validation-narrative-claim"
+        ],
+        "current_source_top_k_hit": true,
+        "stale_source_top_k": true,
+        "wrong_source_evidence": true,
+        "negative_false_positive": false,
+        "pairwise_current_vs_stale": {
+          "wins": 2,
+          "comparisons": 2
+        }
+      },
+      {
+        "event_id": "validation-doc-test-passed",
+        "project_id": "rollout-gateway-validation",
+        "track": null,
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "flag_worthy": false,
+        "required_past_source_ids": [],
+        "selected_past_source_ids": [],
+        "top_source_ids": [
+          "validation-test-failed",
+          "validation-edit-reverted",
+          "validation-narrative-claim"
+        ],
+        "top_sources": [
+          {
+            "source_id": "validation-test-failed",
+            "kind": "tool_call",
+            "score": 2.0,
+            "source_text_sha1": "f2608bc01733a752",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "validation-edit-reverted",
+            "kind": "edit_reverted",
+            "score": 0.0,
+            "source_text_sha1": "36ade6e89bdd4637",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "validation-narrative-claim",
+            "kind": "assistant_message",
+            "score": -2.0,
+            "source_text_sha1": "a2c96e85fe0fdce7",
+            "behavior_backed": false
+          }
+        ],
+        "route_candidate": false,
+        "route_candidate_reason": "unsupported_signal",
+        "route_actionability": {
+          "decision": "suppress",
+          "reason": "unsupported_signal",
+          "foreground_visible": false
+        },
+        "hard_negative_subtype": "",
+        "hard_negative_suppressed": false,
+        "route_chain_required": false,
+        "route_chain_complete": false,
+        "negative_route_drag": false,
+        "anti_drift_route_suppressed": false,
+        "stale_or_decoy_source_ids": [
+          "validation-edit-reverted",
+          "validation-narrative-claim",
+          "validation-test-failed"
+        ],
+        "current_source_top_k_hit": false,
+        "stale_source_top_k": false,
+        "wrong_source_evidence": false,
+        "negative_false_positive": false,
+        "pairwise_current_vs_stale": {
+          "wins": 0,
+          "comparisons": 0
+        }
+      },
+      {
+        "event_id": "foreground-latency-failed-again",
+        "project_id": "rollout-dream-foreground",
+        "track": null,
+        "family": "workaround_rationale",
+        "hard_event_kind": "tool_call_failed",
+        "flag_worthy": true,
+        "required_past_source_ids": [
+          "foreground-route-abandoned",
+          "foreground-smoke-failed"
+        ],
+        "selected_past_source_ids": [
+          "foreground-smoke-failed",
+          "foreground-route-abandoned",
+          "foreground-narrative-claim"
+        ],
+        "top_source_ids": [
+          "foreground-smoke-failed",
+          "foreground-route-abandoned",
+          "foreground-narrative-claim"
+        ],
+        "top_sources": [
+          {
+            "source_id": "foreground-smoke-failed",
+            "kind": "tool_call",
+            "score": 14.0,
+            "source_text_sha1": "22b32efa386418bf",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "foreground-route-abandoned",
+            "kind": "route_abandoned",
+            "score": 8.0,
+            "source_text_sha1": "d1ad14f21e639032",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "foreground-narrative-claim",
+            "kind": "assistant_message",
+            "score": -4.0,
+            "source_text_sha1": "dff89eec1a5bd539",
+            "behavior_backed": false
+          }
+        ],
+        "route_candidate": true,
+        "route_candidate_reason": "route_candidate",
+        "route_actionability": {
+          "decision": "flag",
+          "reason": "source_route_actionable",
+          "foreground_visible": true
+        },
+        "hard_negative_subtype": "",
+        "hard_negative_suppressed": false,
+        "route_chain_required": true,
+        "route_chain_complete": true,
+        "negative_route_drag": false,
+        "anti_drift_route_suppressed": false,
+        "stale_or_decoy_source_ids": [
+          "foreground-narrative-claim"
+        ],
+        "current_source_top_k_hit": true,
+        "stale_source_top_k": true,
+        "wrong_source_evidence": true,
+        "negative_false_positive": false,
+        "pairwise_current_vs_stale": {
+          "wins": 2,
+          "comparisons": 2
+        }
+      },
+      {
+        "event_id": "background-refactor-tests-passed",
+        "project_id": "rollout-dream-foreground",
+        "track": null,
+        "family": "anti_drift_negative",
+        "hard_event_kind": "test_passed",
+        "flag_worthy": false,
+        "required_past_source_ids": [],
+        "selected_past_source_ids": [],
+        "top_source_ids": [
+          "foreground-smoke-failed",
+          "foreground-route-abandoned",
+          "foreground-narrative-claim"
+        ],
+        "top_sources": [
+          {
+            "source_id": "foreground-smoke-failed",
+            "kind": "tool_call",
+            "score": 5.0,
+            "source_text_sha1": "22b32efa386418bf",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "foreground-route-abandoned",
+            "kind": "route_abandoned",
+            "score": 3.0,
+            "source_text_sha1": "d1ad14f21e639032",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "foreground-narrative-claim",
+            "kind": "assistant_message",
+            "score": 0.0,
+            "source_text_sha1": "dff89eec1a5bd539",
+            "behavior_backed": false
+          }
+        ],
+        "route_candidate": true,
+        "route_candidate_reason": "route_candidate",
+        "route_actionability": {
+          "decision": "suppress",
+          "reason": "successful_current_event",
+          "foreground_visible": false
+        },
+        "hard_negative_subtype": "",
+        "hard_negative_suppressed": false,
+        "route_chain_required": false,
+        "route_chain_complete": false,
+        "negative_route_drag": true,
+        "anti_drift_route_suppressed": true,
+        "stale_or_decoy_source_ids": [
+          "foreground-narrative-claim",
+          "foreground-route-abandoned",
+          "foreground-smoke-failed"
+        ],
+        "current_source_top_k_hit": false,
+        "stale_source_top_k": false,
+        "wrong_source_evidence": false,
+        "negative_false_positive": false,
+        "pairwise_current_vs_stale": {
+          "wins": 0,
+          "comparisons": 0
+        }
+      },
+      {
+        "event_id": "scope-broad-search-failed-again",
+        "project_id": "rollout-search-scope",
+        "track": null,
+        "family": "tacit_constraint",
+        "hard_event_kind": "tool_call_failed",
+        "flag_worthy": true,
+        "required_past_source_ids": [
+          "scope-route-switched",
+          "scope-tool-error"
+        ],
+        "selected_past_source_ids": [
+          "scope-tool-error",
+          "scope-route-switched"
+        ],
+        "top_source_ids": [
+          "scope-tool-error",
+          "scope-route-switched"
+        ],
+        "top_sources": [
+          {
+            "source_id": "scope-tool-error",
+            "kind": "tool_call",
+            "score": 15.0,
+            "source_text_sha1": "8c8d8744ceb7f996",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "scope-route-switched",
+            "kind": "route_abandoned",
+            "score": 11.0,
+            "source_text_sha1": "10bd0ffea42c60a1",
+            "behavior_backed": true
+          }
+        ],
+        "route_candidate": true,
+        "route_candidate_reason": "route_candidate",
+        "route_actionability": {
+          "decision": "flag",
+          "reason": "source_route_actionable",
+          "foreground_visible": true
+        },
+        "hard_negative_subtype": "",
+        "hard_negative_suppressed": false,
+        "route_chain_required": true,
+        "route_chain_complete": true,
+        "negative_route_drag": false,
+        "anti_drift_route_suppressed": false,
+        "stale_or_decoy_source_ids": [],
+        "current_source_top_k_hit": true,
+        "stale_source_top_k": false,
+        "wrong_source_evidence": false,
+        "negative_false_positive": false,
+        "pairwise_current_vs_stale": {
+          "wins": 0,
+          "comparisons": 0
+        }
+      },
+      {
+        "event_id": "scope-targeted-search-succeeded",
+        "project_id": "rollout-search-scope",
+        "track": null,
+        "family": "anti_drift_negative",
+        "hard_event_kind": "tool_call_succeeded",
+        "flag_worthy": false,
+        "required_past_source_ids": [],
+        "selected_past_source_ids": [],
+        "top_source_ids": [
+          "scope-route-switched",
+          "scope-tool-error"
+        ],
+        "top_sources": [
+          {
+            "source_id": "scope-route-switched",
+            "kind": "route_abandoned",
+            "score": 3.0,
+            "source_text_sha1": "10bd0ffea42c60a1",
+            "behavior_backed": true
+          },
+          {
+            "source_id": "scope-tool-error",
+            "kind": "tool_call",
+            "score": 3.0,
+            "source_text_sha1": "8c8d8744ceb7f996",
+            "behavior_backed": true
+          }
+        ],
+        "route_candidate": true,
+        "route_candidate_reason": "route_candidate",
+        "route_actionability": {
+          "decision": "suppress",
+          "reason": "successful_current_event",
+          "foreground_visible": false
+        },
+        "hard_negative_subtype": "",
+        "hard_negative_suppressed": false,
+        "route_chain_required": false,
+        "route_chain_complete": false,
+        "negative_route_drag": true,
+        "anti_drift_route_suppressed": true,
+        "stale_or_decoy_source_ids": [
+          "scope-route-switched",
+          "scope-tool-error"
+        ],
+        "current_source_top_k_hit": false,
+        "stale_source_top_k": false,
+        "wrong_source_evidence": false,
+        "negative_false_positive": false,
+        "pairwise_current_vs_stale": {
+          "wins": 0,
+          "comparisons": 0
+        }
+      }
+    ],
+    "privacy_boundary": {
+      "raw_event_text_emitted": false,
+      "raw_past_source_text_emitted": false,
+      "source_text_hashes_emitted": true,
+      "absolute_paths_emitted": false
+    }
+  },
+  "candidate_discovery_bias": {
+    "available": false
+  },
+  "source_degradation_controls": {
+    "available": false,
+    "counts_by_state": {
+      "full_source": 6
+    },
+    "full_support_blocking_states": [
+      "missing_source_id",
+      "partial_support"
+    ],
+    "full_support_blocked_count": 0,
+    "claim_boundary": "Source-degradation controls test scorer behavior under retained, redacted, partial, or missing support. Partial support and missing source ids cannot satisfy the source-backed contract by themselves."
+  },
+  "anti_drift_controls": {
+    "negative_count": 3,
+    "negative_cross_family_count": 0,
+    "negative_same_family_count": 0,
+    "negative_cross_family_violation_count": 0,
+    "claim_boundary": "Negative cross-family anti-drift rows prove that similar public events from another family are penalized when flagged. They are separate from positive family-cross-contamination checks."
+  },
+  "lower_bound_gates": {
+    "future_event_flag_recall": {
+      "metric": "future_event_flag_recall",
+      "threshold": 1.0,
+      "point_estimate": 1.0,
+      "lower_bound": 0.4385,
+      "confidence_level": 0.95,
+      "confidence_method": "wilson_score",
+      "passes_point_estimate": true,
+      "passes_lower_bound": false,
+      "applied_to_status": false
+    },
+    "future_event_flag_precision": {
+      "metric": "future_event_flag_precision",
+      "threshold": 1.0,
+      "point_estimate": 1.0,
+      "lower_bound": 0.4385,
+      "confidence_level": 0.95,
+      "confidence_method": "wilson_score",
+      "passes_point_estimate": true,
+      "passes_lower_bound": false,
+      "applied_to_status": false
+    }
+  },
+  "contamination_control": {
+    "closed_book_ablation_available": false,
+    "closed_book": null,
+    "time_split_required_for_public_claims": true,
+    "counterfactual_perturbation_required_for_public_claims": true,
+    "private_real_history_must_report_separately": true,
+    "why": "Public VCS outcomes may be memorized by pretrained models. Closed-book collapse is the cheap first contamination test; time splits and counterfactual variants are needed before wild public-corpus claims."
+  },
+  "events": [
+    {
+      "event_id": "validation-repeat-test-failed",
+      "project_id": "rollout-gateway-validation",
+      "track": null,
+      "family": "rejected_route",
+      "hard_event_kind": "test_failed",
+      "flag_worthy": true,
+      "event_text_sha1": "79718f63e1a09cb3",
+      "required_past_source_ids": [
+        "validation-edit-reverted",
+        "validation-test-failed"
+      ],
+      "predicted_past_source_ids": [
+        "validation-edit-reverted",
+        "validation-narrative-claim",
+        "validation-test-failed"
+      ],
+      "flagged": true,
+      "source_supported": true,
+      "source_degradation": "full_source",
+      "anti_drift_family_under_test": null,
+      "anti_drift_contrast_family": null,
+      "true_positive": true,
+      "false_negative": false,
+      "false_positive": false,
+      "anti_drift_violation": false,
+      "prediction_count": 1
+    },
+    {
+      "event_id": "validation-doc-test-passed",
+      "project_id": "rollout-gateway-validation",
+      "track": null,
+      "family": "anti_drift_negative",
+      "hard_event_kind": "test_passed",
+      "flag_worthy": false,
+      "event_text_sha1": "6809b53ca9c4cb7b",
+      "required_past_source_ids": [],
+      "predicted_past_source_ids": [],
+      "flagged": false,
+      "source_supported": false,
+      "source_degradation": "full_source",
+      "anti_drift_family_under_test": null,
+      "anti_drift_contrast_family": null,
+      "true_positive": false,
+      "false_negative": false,
+      "false_positive": false,
+      "anti_drift_violation": false,
+      "prediction_count": 0
+    },
+    {
+      "event_id": "foreground-latency-failed-again",
+      "project_id": "rollout-dream-foreground",
+      "track": null,
+      "family": "workaround_rationale",
+      "hard_event_kind": "tool_call_failed",
+      "flag_worthy": true,
+      "event_text_sha1": "0251b0ff21fa3c6c",
+      "required_past_source_ids": [
+        "foreground-route-abandoned",
+        "foreground-smoke-failed"
+      ],
+      "predicted_past_source_ids": [
+        "foreground-narrative-claim",
+        "foreground-route-abandoned",
+        "foreground-smoke-failed"
+      ],
+      "flagged": true,
+      "source_supported": true,
+      "source_degradation": "full_source",
+      "anti_drift_family_under_test": null,
+      "anti_drift_contrast_family": null,
+      "true_positive": true,
+      "false_negative": false,
+      "false_positive": false,
+      "anti_drift_violation": false,
+      "prediction_count": 1
+    },
+    {
+      "event_id": "background-refactor-tests-passed",
+      "project_id": "rollout-dream-foreground",
+      "track": null,
+      "family": "anti_drift_negative",
+      "hard_event_kind": "test_passed",
+      "flag_worthy": false,
+      "event_text_sha1": "41bb61ab6af8aa24",
+      "required_past_source_ids": [],
+      "predicted_past_source_ids": [],
+      "flagged": false,
+      "source_supported": false,
+      "source_degradation": "full_source",
+      "anti_drift_family_under_test": null,
+      "anti_drift_contrast_family": null,
+      "true_positive": false,
+      "false_negative": false,
+      "false_positive": false,
+      "anti_drift_violation": false,
+      "prediction_count": 0
+    },
+    {
+      "event_id": "scope-broad-search-failed-again",
+      "project_id": "rollout-search-scope",
+      "track": null,
+      "family": "tacit_constraint",
+      "hard_event_kind": "tool_call_failed",
+      "flag_worthy": true,
+      "event_text_sha1": "14cedc7add57ecc0",
+      "required_past_source_ids": [
+        "scope-route-switched",
+        "scope-tool-error"
+      ],
+      "predicted_past_source_ids": [
+        "scope-route-switched",
+        "scope-tool-error"
+      ],
+      "flagged": true,
+      "source_supported": true,
+      "source_degradation": "full_source",
+      "anti_drift_family_under_test": null,
+      "anti_drift_contrast_family": null,
+      "true_positive": true,
+      "false_negative": false,
+      "false_positive": false,
+      "anti_drift_violation": false,
+      "prediction_count": 1
+    },
+    {
+      "event_id": "scope-targeted-search-succeeded",
+      "project_id": "rollout-search-scope",
+      "track": null,
+      "family": "anti_drift_negative",
+      "hard_event_kind": "tool_call_succeeded",
+      "flag_worthy": false,
+      "event_text_sha1": "91076a64b204c6a3",
+      "required_past_source_ids": [],
+      "predicted_past_source_ids": [],
+      "flagged": false,
+      "source_supported": false,
+      "source_degradation": "full_source",
+      "anti_drift_family_under_test": null,
+      "anti_drift_contrast_family": null,
+      "true_positive": false,
+      "false_negative": false,
+      "false_positive": false,
+      "anti_drift_violation": false,
+      "prediction_count": 0
+    }
+  ],
+  "predictions": [
+    {
+      "prediction_id": "production-like:validation-repeat-test-failed",
+      "event_id": "validation-repeat-test-failed",
+      "decision": "flag",
+      "track": null,
+      "family": "rejected_route",
+      "known_event_id": true,
+      "flag_worthy_event": true,
+      "non_flag_event": false,
+      "source_supported": true,
+      "source_degradation": "full_source",
+      "unknown_event_false_positive": false,
+      "non_flag_false_positive": false,
+      "missing_required_sources": [],
+      "extra_past_source_ids": [
+        "validation-narrative-claim"
+      ]
+    },
+    {
+      "prediction_id": "production-like:foreground-latency-failed-again",
+      "event_id": "foreground-latency-failed-again",
+      "decision": "flag",
+      "track": null,
+      "family": "workaround_rationale",
+      "known_event_id": true,
+      "flag_worthy_event": true,
+      "non_flag_event": false,
+      "source_supported": true,
+      "source_degradation": "full_source",
+      "unknown_event_false_positive": false,
+      "non_flag_false_positive": false,
+      "missing_required_sources": [],
+      "extra_past_source_ids": [
+        "foreground-narrative-claim"
+      ]
+    },
+    {
+      "prediction_id": "production-like:scope-broad-search-failed-again",
+      "event_id": "scope-broad-search-failed-again",
+      "decision": "flag",
+      "track": null,
+      "family": "tacit_constraint",
+      "known_event_id": true,
+      "flag_worthy_event": true,
+      "non_flag_event": false,
+      "source_supported": true,
+      "source_degradation": "full_source",
+      "unknown_event_false_positive": false,
+      "non_flag_false_positive": false,
+      "missing_required_sources": [],
+      "extra_past_source_ids": []
+    }
+  ],
+  "privacy_boundary": {
+    "fixture_contains_private_user_data": false,
+    "raw_event_text_emitted": false,
+    "raw_past_source_text_emitted": false,
+    "absolute_paths_emitted": false,
+    "event_ids_are_public": true,
+    "output_shape": "sanitized_vcs_future_event_recall_scores"
+  },
+  "cannot_claim": [
+    "wild_vcs_corpus_quality",
+    "contamination_resistant_public_score_without_closed_book_lift",
+    "private_real_history_coding_continuity_quality",
+    "live_dream_worker_quality",
+    "external_baseline_superiority",
+    "soft_semantic_reopen_support"
+  ],
+  "elapsed_ms": 1.1
+}

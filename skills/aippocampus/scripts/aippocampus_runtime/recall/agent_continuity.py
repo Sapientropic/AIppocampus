@@ -169,6 +169,9 @@ def _route_packet_from_navigation_route(route: Mapping[str, Any]) -> dict[str, A
         "route_kind": _route_kind(route),
         "matched_cue_family": route.get("matched_cue_family"),
         "scope_bucket": route.get("scope_bucket"),
+        "route_topic": route.get("route_topic"),
+        "label_granularity": route.get("label_granularity"),
+        "route_label_specificity_score": route.get("route_label_specificity_score"),
         "risk_flags": _triage_risk_flags(route, output_mode),
         "triage_rank_reason_codes": _triage_reason_codes(route, output_mode),
     }
@@ -182,11 +185,17 @@ def _memory_packet_for_route(route: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _deepen_request_for_route(route: Mapping[str, Any], packet: Mapping[str, Any]) -> dict[str, Any]:
+    handle = route.get("handle")
+    command = f"aippocampus agent deepen {handle}" if handle else None
     return {
         "route_id": packet.get("route_id"),
         "deepen_route_id": packet.get("deepen_route_id"),
+        "deepen_route_id_display_only": True,
         "tool": "agent deepen",
-        "handle": route.get("handle"),
+        "handle": handle,
+        "callable_handle": handle,
+        "callable_handle_field": "deepen_requests[].handle",
+        "copy_paste_command": command,
         "boundary": "opaque_navigation_handle_not_fact",
         "claim_boundary": "source_reopen_required_before_strong_claim",
     }
@@ -234,6 +243,19 @@ def _memory_packet_triage_metrics(memory_packets: list[dict[str, Any]]) -> dict[
         ),
         "top_route_selection_hint_present_count": sum(
             1 for packet in triage_packets if _selection_hint_present(packet)
+        ),
+        "topic_label_present_count": sum(1 for packet in triage_packets if packet.get("route_topic")),
+        "scope_only_label_count": sum(
+            1
+            for packet in triage_packets
+            if packet.get("label_granularity") == "scope_bucket_only"
+        ),
+        "route_label_specificity_floor": min(
+            (
+                float(packet.get("route_label_specificity_score") or 0)
+                for packet in triage_packets
+            ),
+            default=0.0,
         ),
     }
 
@@ -582,6 +604,9 @@ def recall(
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
+        "suggested_next_command": (
+            deepen_requests[0].get("copy_paste_command") if deepen_requests else None
+        ),
         "policy_boundary": _policy_boundary(),
         "metrics": {
             "memory_packet_count": len(memory_packets),

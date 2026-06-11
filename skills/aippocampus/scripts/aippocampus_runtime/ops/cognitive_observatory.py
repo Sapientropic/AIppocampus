@@ -33,6 +33,203 @@ OBSERVATORY_KIND = "aippocampus_cognitive_observatory_readout"
 OBSERVATORY_SCHEMA_VERSION = 1
 
 
+def _codes(row: Mapping[str, Any]) -> list[str]:
+    values = row.get("reason_codes")
+    return [str(item) for item in values] if isinstance(values, list) else []
+
+
+def _panel_item(
+    *,
+    surface: str,
+    label: Any,
+    next_action: str,
+    reason_codes: list[str],
+    authority: str = "navigation_only",
+) -> dict[str, Any]:
+    return {
+        "surface": surface,
+        "label": str(label or surface),
+        "authority": authority,
+        "next_action": next_action,
+        "reason_codes": reason_codes[:6],
+    }
+
+
+def _campus_usefulness_panels(
+    *,
+    readiness: Mapping[str, Any],
+    authority: Mapping[str, Any],
+    query_routes: Mapping[str, Any] | None,
+    cognitive_load: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Project usefulness-first Observatory panels without adding new scoring.
+
+    These panels reuse existing diagnostics so Campus can expose product
+    usefulness failures without becoming a planner, truth source, or foreground
+    ranking layer. A row appears because an owner report already said it was
+    ready, suppressed, blocked, stale, or noisy.
+    """
+
+    useful_now: list[dict[str, Any]] = []
+    wasted_motion: list[dict[str, Any]] = []
+    quiet_for_a_reason: list[dict[str, Any]] = []
+    needs_ripening: list[dict[str, Any]] = []
+
+    for row in readiness.get("rows") or []:
+        if not isinstance(row, Mapping):
+            continue
+        codes = _codes(row)
+        label = row.get("route_id") or row.get("surface_kind") or "route"
+        if row.get("status") == "ready":
+            useful_now.append(
+                _panel_item(
+                    surface=str(row.get("surface_kind") or "route_readiness"),
+                    label=label,
+                    next_action="reopen_source_before_claim",
+                    reason_codes=["reduces_manual_search", *codes],
+                )
+            )
+            continue
+        code_text = " ".join(codes)
+        if any(term in code_text for term in ("privacy", "secret", "stale", "deleted", "high_risk", "external")):
+            quiet_for_a_reason.append(
+                _panel_item(
+                    surface=str(row.get("surface_kind") or "route_readiness"),
+                    label=label,
+                    next_action="stay_silent_or_refresh_source",
+                    reason_codes=codes,
+                )
+            )
+        elif any(term in code_text for term in ("low_value", "low_roi", "wrong_route", "generic", "drag")):
+            wasted_motion.append(
+                _panel_item(
+                    surface=str(row.get("surface_kind") or "route_readiness"),
+                    label=label,
+                    next_action="do_not_surface_until_useful",
+                    reason_codes=codes,
+                )
+            )
+        else:
+            needs_ripening.append(
+                _panel_item(
+                    surface=str(row.get("surface_kind") or "route_readiness"),
+                    label=label,
+                    next_action="add_source_support_or_review",
+                    reason_codes=codes or ["candidate_needs_support"],
+                )
+            )
+
+    for row in authority.get("surfaces") or []:
+        if not isinstance(row, Mapping):
+            continue
+        label = row.get("surface_id") or row.get("surface_kind") or "activation_surface"
+        surface_kind = str(row.get("surface_kind") or "activation_surface")
+        authority_level = str(row.get("authority_level") or "navigation_only")
+        if row.get("eligible_for_foreground") and row.get("source_ref_count"):
+            useful_now.append(
+                _panel_item(
+                    surface=surface_kind,
+                    label=label,
+                    authority=authority_level,
+                    next_action="use_as_low_authority_route_hint",
+                    reason_codes=["active_and_source_reopenable"],
+                )
+            )
+        if int(row.get("wrong_route_drag_count") or 0) > 0:
+            wasted_motion.append(
+                _panel_item(
+                    surface=surface_kind,
+                    label=label,
+                    authority=authority_level,
+                    next_action="suppress_or_rework_route",
+                    reason_codes=["wrong_route_drag"],
+                )
+            )
+        if row.get("pruning_action") in {"retire", "dead_letter", "park"}:
+            quiet_for_a_reason.append(
+                _panel_item(
+                    surface=surface_kind,
+                    label=label,
+                    authority=authority_level,
+                    next_action="keep_out_of_foreground",
+                    reason_codes=[f"pruning_{row.get('pruning_action')}"],
+                )
+            )
+        if authority_level in {"candidate", "review_required"}:
+            needs_ripening.append(
+                _panel_item(
+                    surface=surface_kind,
+                    label=label,
+                    authority=authority_level,
+                    next_action="review_before_activation",
+                    reason_codes=["candidate_activation_needs_review"],
+                )
+            )
+
+    if query_routes:
+        metrics = query_routes.get("metrics") or {}
+        if int(metrics.get("active_route_count") or 0) > 0:
+            useful_now.append(
+                _panel_item(
+                    surface="query_pattern_routes",
+                    label="active query-pattern routes",
+                    next_action="reuse_route_handle_then_reopen_source",
+                    reason_codes=["active_query_pattern_route"],
+                )
+            )
+        if int(metrics.get("stale_suppressed_count") or 0) or int(
+            metrics.get("privacy_suppressed_count") or 0
+        ):
+            quiet_for_a_reason.append(
+                _panel_item(
+                    surface="query_pattern_routes",
+                    label="suppressed query-pattern routes",
+                    next_action="stay_silent_or_refresh_source",
+                    reason_codes=["stale_or_privacy_suppressed"],
+                )
+            )
+
+    if cognitive_load:
+        metrics = cognitive_load.get("metrics") or {}
+        if int(metrics.get("irrelevant_load_drag_count") or 0) > 0:
+            wasted_motion.append(
+                _panel_item(
+                    surface="cognitive_load_calibration",
+                    label="irrelevant load drag",
+                    next_action="do_not_boost_this_route",
+                    reason_codes=["irrelevant_load_drag"],
+                )
+            )
+        if int(metrics.get("helpful_caution_hint_count") or 0) > 0:
+            useful_now.append(
+                _panel_item(
+                    surface="cognitive_load_calibration",
+                    label="helpful caution hints",
+                    next_action="keep_caution_hint_available",
+                    reason_codes=["reviewed_helpful_caution"],
+                )
+            )
+
+    panels = {
+        "useful_now": useful_now[:12],
+        "wasted_motion": wasted_motion[:12],
+        "quiet_for_a_reason": quiet_for_a_reason[:12],
+        "needs_ripening": needs_ripening[:12],
+    }
+    return {
+        "kind": "aippocampus_campus_usefulness_panels",
+        "read_only": True,
+        "not_control_plane": True,
+        "panels": panels,
+        "metrics": {f"{name}_count": len(items) for name, items in panels.items()},
+        "contract": {
+            "uses_existing_diagnostics_only": True,
+            "does_not_rank_or_activate_routes": True,
+            "source_reopen_required_before_claim": True,
+        },
+    }
+
+
 def _load_json(path: str | Path | None) -> Any:
     if not path:
         return None
@@ -216,6 +413,12 @@ def cognitive_observatory_readout(
         else None
     )
     cognitive_load = cognitive_load_calibration_summary(cognitive_load_calibration)
+    campus_panels = _campus_usefulness_panels(
+        readiness=readiness,
+        authority=authority,
+        query_routes=query_routes,
+        cognitive_load=cognitive_load,
+    )
     metrics = {
         "route_ready_count": (readiness.get("metrics") or {}).get("ready_count", 0),
         "route_suppressed_count": (readiness.get("metrics") or {}).get("suppressed_count", 0),
@@ -234,8 +437,15 @@ def cognitive_observatory_readout(
         "cognitive_load_public_feedback_case_count": (cognitive_load or {})
         .get("metrics", {})
         .get("public_behavior_trace_case_count", 0),
+        "campus_useful_now_count": campus_panels["metrics"]["useful_now_count"],
+        "campus_wasted_motion_count": campus_panels["metrics"]["wasted_motion_count"],
+        "campus_quiet_for_a_reason_count": campus_panels["metrics"][
+            "quiet_for_a_reason_count"
+        ],
+        "campus_needs_ripening_count": campus_panels["metrics"]["needs_ripening_count"],
     }
     surfaces = ["route_readiness", "activation_authority"]
+    surfaces.append("campus_usefulness_panels")
     if diagnostic:
         surfaces.append("recall_diagnostic")
     if sleep_summary:
@@ -258,6 +468,7 @@ def cognitive_observatory_readout(
         "route_readiness": readiness,
         "activation_authority": authority,
         "control_authority_audit": control_authority,
+        "campus_usefulness_panels": campus_panels,
         "recall_diagnostic": diagnostic,
         "sleep_cycle": sleep_summary,
         "query_pattern_routes": query_routes,
@@ -286,6 +497,7 @@ def cognitive_observatory_readout(
             "suppressed_prewarm_reason_codes_are_reported",
             "public_safe_query_pattern_route_observability_exists",
             "public_safe_cognitive_load_calibration_observability_exists",
+            "campus_usefulness_panels_show_safe_but_useless_routes",
         ],
         "cannot_claim": [
             "complete_cognitive_observatory_ui_exists",
@@ -296,6 +508,7 @@ def cognitive_observatory_readout(
             "query_pattern_route_is_source_truth",
             "cognitive_load_calibration_proves_user_visible_lift",
             "cognitive_load_signal_is_source_truth",
+            "campus_panels_are_control_or_truth_surface",
         ],
     }
     return redact_sensitive_values(redact_private_paths(report))
@@ -365,6 +578,26 @@ def _list_block(title: str, items: Any) -> str:
     return f"<section><h2>{_html(title)}</h2><ul>{rendered}</ul></section>"
 
 
+def _panel_table(title: str, rows: Any) -> str:
+    items = [row for row in rows or [] if isinstance(row, Mapping)]
+    return (
+        f"<section><h2>{_html(title)}</h2>"
+        + _table(
+            ["surface", "label", "next action", "reason codes"],
+            [
+                [
+                    row.get("surface"),
+                    row.get("label"),
+                    row.get("next_action"),
+                    _join_codes(row.get("reason_codes")),
+                ]
+                for row in items[:12]
+            ],
+        )
+        + "</section>"
+    )
+
+
 def render_html(report: Mapping[str, Any]) -> str:
     """Render a static, no-script Observatory view from a sanitized report.
 
@@ -391,6 +624,9 @@ def render_html(report: Mapping[str, Any]) -> str:
     authority_rows = [
         row for row in authority.get("surfaces") or [] if isinstance(row, Mapping)
     ]
+    raw_panels = report.get("campus_usefulness_panels")
+    campus: Mapping[str, Any] = raw_panels if isinstance(raw_panels, Mapping) else {}
+    panel_rows = campus.get("panels") if isinstance(campus.get("panels"), Mapping) else {}
     route_table = _table(
         [
             "status",
@@ -536,6 +772,10 @@ def render_html(report: Mapping[str, Any]) -> str:
     <h2>Activation Authority</h2>
     {authority_table}
   </section>
+  {_panel_table("Useful Now", panel_rows.get("useful_now"))}
+  {_panel_table("Wasted Motion", panel_rows.get("wasted_motion"))}
+  {_panel_table("Quiet For A Reason", panel_rows.get("quiet_for_a_reason"))}
+  {_panel_table("Needs Ripening", panel_rows.get("needs_ripening"))}
   {_list_block("Can Claim", report.get("can_claim"))}
   {_list_block("Cannot Claim", report.get("cannot_claim"))}
 </main>

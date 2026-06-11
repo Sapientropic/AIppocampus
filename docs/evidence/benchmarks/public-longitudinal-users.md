@@ -47,6 +47,11 @@ Latest adversarial React VCS measurement:
 Latest non-oracle React VCS source-disambiguation follow-up:
 [`react-real-vcs-production-like-disambiguation-2026-06-04.md`](react-real-vcs-production-like-disambiguation-2026-06-04.md).
 
+Latest rollout behavior route-chain/actionability top-k calibration:
+[`rollout-hard-event-route-chain-2026-06-12.md`](rollout-hard-event-route-chain-2026-06-12.md).
+Latest broader public-safe rollout hard-event cohort:
+[`rollout-hard-event-cohort-v2-2026-06-12.md`](rollout-hard-event-cohort-v2-2026-06-12.md).
+
 ## Purpose
 
 AIppocampus should help agents remember hidden engineering context across
@@ -378,6 +383,23 @@ explicit-cue lexical near-miss hard negatives. It remains source-disambiguation
 evidence,
 not live model quality or wild VCS corpus quality.
 
+The first rollout behavior route-chain/actionability calibration is
+[`rollout-hard-event-route-chain-2026-06-12.md`](rollout-hard-event-route-chain-2026-06-12.md).
+It uses the public synthetic rollout fixture and compares top-k 1, 2, and 3.
+Top-k 2 recovers all three two-source support chains with no wrong-source
+evidence, while top-k 3 starts admitting narrative decoys. Treat it as a
+candidate-budget and actionability boundary, not representative live quality.
+
+The first broader public-safe rollout hard-event cohort is
+[`rollout-hard-event-cohort-v2-2026-06-12.md`](rollout-hard-event-cohort-v2-2026-06-12.md).
+It adds 17 synthetic agent-behavior projects and 34 future events covering
+temporal override, cross-scope drift, cross-project contamination,
+post-compaction gaps, forget boundaries, Dream candidate boundaries,
+route-topic specificity, host-surface readiness, privacy redlines,
+observability boundaries, latency/cost boundaries, and tool-scope failures.
+Treat it as #1197 public cohort evidence, not live agent quality or wild VCS
+corpus quality.
+
 ## Runner
 
 Entrypoint:
@@ -520,6 +542,7 @@ python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --predictions
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\react-real-vcs-adversarial-v2\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
@@ -536,6 +559,11 @@ Rollout behavior fixture:
 It is also synthetic, but it encodes the new boundary: assistant narrative
 sources can appear in the past window, yet they cannot be required gold support
 for a flag-worthy future event unless the row also has behavior evidence.
+
+Broader rollout behavior cohort:
+[`benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v2.json`](../../../benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v2.json).
+It keeps the same boundary while expanding the public-safe #1197 hard-event
+pack to 17 projects and 34 future events.
 
 Builder:
 [`benchmarks/aippocampus/build_vcs_future_event_fixture.py`](../../../benchmarks/aippocampus/build_vcs_future_event_fixture.py).

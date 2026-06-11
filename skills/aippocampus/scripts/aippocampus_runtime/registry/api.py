@@ -62,6 +62,10 @@ from aippocampus_runtime.registry.store import (
     update_registry,
     upsert_thread,
 )
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (
+    hook_seen_ledger_path_for_registry,
+    hook_seen_thread_keys,
+)
 from conversation_sources import (
     PROVIDER_CHOICES,
     ConversationProvider,
@@ -272,10 +276,16 @@ def scan_session_rollouts(
     project: str | None = None,
     tags: list[str] | None = None,
     dry_run: bool = False,
+    hook_seen_only: bool = False,
+    hook_seen_ledger: Path | None = None,
     provider: ConversationProvider | None = None,
 ) -> dict:
     json_path, _ = registry_paths(registry_dir)
     existing = {entry.get("thread_key") for entry in load_registry(json_path).get("threads", [])}
+    hook_seen_filter_keys: set[str] = set()
+    hook_seen_filter_path = hook_seen_ledger or hook_seen_ledger_path_for_registry(json_path)
+    if hook_seen_only:
+        hook_seen_filter_keys = hook_seen_thread_keys(hook_seen_filter_path)
     candidates: list[tuple[float, Path, dict, str]] = []
     # CLI/onboarding call sites pass a provider explicitly. This fallback is
     # kept only for legacy in-process callers during the provider migration.
@@ -288,6 +298,8 @@ def scan_session_rollouts(
         if cwd_filter and cwd_filter.casefold() not in str(meta.get("cwd") or "").casefold():
             continue
         thread_key = active_provider.thread_key(source, meta)
+        if hook_seen_only and thread_key not in hook_seen_filter_keys:
+            continue
         if not refresh and thread_key in existing:
             continue
         try:
@@ -324,6 +336,11 @@ def scan_session_rollouts(
     return {
         "registry": str(json_path),
         "dry_run": dry_run,
+        "hook_seen_filter": {
+            "enabled": hook_seen_only,
+            "ledger": str(hook_seen_filter_path),
+            "seen_thread_count": len(hook_seen_filter_keys),
+        },
         "planned": planned,
         "registered": registered,
         "count": len(planned) if dry_run else len(registered),
@@ -445,6 +462,15 @@ def main() -> int:
     )
     scan.add_argument("--provider", choices=PROVIDER_CHOICES, default="codex")
     scan.add_argument("--dry-run", action="store_true")
+    scan.add_argument(
+        "--hook-seen-only",
+        action="store_true",
+        help="Only include sessions previously observed by the prompt hook ledger.",
+    )
+    scan.add_argument(
+        "--hook-seen-ledger",
+        help="Private hook-seen thread ledger path. Defaults beside the registry JSON.",
+    )
     scan.add_argument("--json", action="store_true", dest="json_output")
 
     list_cmd = sub.add_parser("list")
@@ -564,6 +590,8 @@ def main() -> int:
                 project=args.project,
                 tags=args.tag,
                 dry_run=args.dry_run,
+                hook_seen_only=args.hook_seen_only,
+                hook_seen_ledger=Path(args.hook_seen_ledger) if args.hook_seen_ledger else None,
                 provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
             )
         except RegistryWriteBusyError as exc:

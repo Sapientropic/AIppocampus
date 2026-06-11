@@ -466,6 +466,14 @@ authority. It can render the same sanitized readout as JSON, text, or static
 no-script HTML for local inspection. These rows can justify reopening source,
 but they cannot support factual claims by themselves.
 
+The Observatory also projects `campus_usefulness_panels` from existing
+readiness, activation-authority, query-pattern, and cognitive-load diagnostics.
+The four buckets are `Useful Now`, `Wasted Motion`, `Quiet For A Reason`, and
+`Needs Ripening`. This is a reader aid for continuity quality: it makes safe
+but useless routes, blind deepen pressure, suppressed hard-mask rows, and
+candidate-only material visible without adding a new scoring layer or control
+surface.
+
 Query-pattern prewarm now has a deterministic sidecar boundary:
 `aippocampus_runtime.warm_ambient.query_pattern_enrichment` remains the
 no-write planning report, while

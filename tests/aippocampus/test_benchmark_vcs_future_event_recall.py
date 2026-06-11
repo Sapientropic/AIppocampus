@@ -14,6 +14,12 @@ ROLLOUT_DATASET = (
     / "public_longitudinal_users"
     / "rollout_behavior_events_v1.jsonl"
 )
+ROLLOUT_V2_DATASET = (
+    REPO_ROOT
+    / "benchmark_corpus"
+    / "public_longitudinal_users"
+    / "rollout_behavior_events_v2.json"
+)
 sys.path.insert(0, str(BENCHMARKS))
 
 import benchmark_vcs_future_event_recall as benchmark  # noqa: E402
@@ -175,6 +181,80 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "narrative-only source"):
                 benchmark.load_dataset(fixture)
+
+    def test_rollout_v2_dataset_is_public_hard_event_cohort(self) -> None:
+        dataset = benchmark.load_dataset(ROLLOUT_V2_DATASET)
+        tracks = {str(event.get("track")) for event in dataset.events_by_id.values()}
+        positive_families = {
+            str(event.get("family"))
+            for event_id, event in dataset.events_by_id.items()
+            if event_id in dataset.flag_worthy_event_ids
+        }
+        narrative_source_ids = {
+            str(source.get("source_id"))
+            for row in dataset.rows
+            for source in row.get("past_window", [])
+            if source.get("behavior_backed") is False
+        }
+        required_source_ids = {
+            source_id
+            for event in dataset.events_by_id.values()
+            for source_id in benchmark.as_string_list(event.get("required_past_source_ids"))
+        }
+
+        self.assertEqual(dataset.dataset_id, "aippocampus_rollout_behavior_events_v2")
+        self.assertEqual(len(dataset.rows), 17)
+        self.assertEqual(len(dataset.flag_worthy_event_ids), 17)
+        self.assertEqual(len(dataset.non_flag_event_ids), 17)
+        self.assertLessEqual(
+            {
+                "temporal_override",
+                "cross_project_contamination",
+                "cross_scope_drift",
+                "post_compaction_gap",
+                "intentional_forget_boundary",
+                "dream_candidate_boundary",
+                "route_topic_specificity",
+            },
+            tracks,
+        )
+        self.assertLessEqual(
+            {"rejected_route", "tacit_constraint", "workaround_rationale"},
+            positive_families,
+        )
+        self.assertTrue(narrative_source_ids)
+        self.assertTrue(narrative_source_ids.isdisjoint(required_source_ids))
+
+    def test_rollout_v2_production_like_topk2_recovers_cohort_chains(self) -> None:
+        payload = benchmark.run_benchmark(
+            dataset_path=ROLLOUT_V2_DATASET,
+            production_like_retrieval=True,
+            source_disambiguation_top_k=2,
+        )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["dataset"]["project_count"], 17)
+        self.assertNotIn("V1", payload["dataset"]["claim_boundary"])
+        self.assertEqual(payload["metrics"]["future_event_gold_count"], 17)
+        self.assertEqual(payload["metrics"]["non_flag_future_event_count"], 17)
+        self.assertEqual(payload["metrics"]["future_event_flag_recall_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["future_event_flag_precision"], 1.0)
+        self.assertEqual(payload["metrics"]["anti_drift_violation_count"], 0)
+
+        source_metrics = payload["source_disambiguation"]["metrics"]
+        self.assertEqual(source_metrics["required_chain_candidate_count"], 17)
+        self.assertEqual(source_metrics["multi_source_chain_recovered_count"], 17)
+        self.assertEqual(source_metrics["positive_chain_complete_rate"], 1.0)
+        self.assertEqual(source_metrics["wrong_source_evidence_rate"], 0.0)
+        self.assertEqual(source_metrics["foreground_action_false_positive_count"], 0)
+        self.assertGreaterEqual(
+            len(payload["source_disambiguation"]["by_track"]),
+            10,
+        )
+
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("Assistant speculated", dumped)
+        self.assertNotIn(str(REPO_ROOT), dumped)
 
     def test_predictions_catch_non_flag_unknown_and_source_support_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

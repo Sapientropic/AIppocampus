@@ -11,6 +11,10 @@ from typing import Any
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampus_runtime.registry.store import registry_paths
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (
+    hook_seen_ledger_path_for_registry,
+    hook_seen_registry_diagnostic,
+)
 
 
 def load_json_fail_open(path: Path) -> dict[str, Any]:
@@ -89,6 +93,11 @@ def registry_health_report(
     registry_path, _registry_md = registry_paths(registry_root_dir)
     registry = load_json_fail_open(registry_path)
     threads = [item for item in registry.get("threads") or [] if isinstance(item, dict)]
+    hook_seen_reconciliation = hook_seen_registry_diagnostic(
+        hook_seen_ledger_path_for_registry(registry_path),
+        registered_thread_keys=[str(item.get("thread_key") or "") for item in threads],
+        include_private_keys=include_paths,
+    )
     action_counts: dict[str, int] = {}
     severity_counts: dict[str, int] = {}
     status_counts = {"ok": 0, "needs_maintenance": 0, "unknown": 0}
@@ -180,12 +189,19 @@ def registry_health_report(
 
     high_risk_threads.sort(key=lambda item: int(item.get("risk_score") or 0), reverse=True)
     return {
-        "ok": status_counts["needs_maintenance"] == 0 and status_counts["unknown"] == 0,
+        "ok": (
+            status_counts["needs_maintenance"] == 0
+            and status_counts["unknown"] == 0
+            and hook_seen_reconciliation["metrics"]["hook_seen_but_not_registered_count"] == 0
+        ),
         "registry": str(registry_path) if include_paths else None,
         "thread_count": len(threads),
         "status_counts": status_counts,
         "recommended_action_counts": dict(sorted(action_counts.items())),
         "severity_counts": dict(sorted(severity_counts.items())),
+        "source_intake": {
+            "hook_seen_registry_reconciliation": hook_seen_reconciliation,
+        },
         "storage": {
             "rollout_bytes": total_rollout_bytes,
             "clean_source_bytes": total_clean_source_bytes,
