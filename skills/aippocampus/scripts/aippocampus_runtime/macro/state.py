@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from aippocampus_runtime.macro import momentum as momentum_runtime
 from aippocampus_runtime.macro.hexagram import HexagramRef, change_lines, resolve_hexagram
 from aippocampus_runtime.macro.perturbation import (
     AUTHORITY_LEVEL,
@@ -32,13 +33,7 @@ PROMOTION_REASONS = frozenset(
         "explicit_review",
     }
 )
-MOMENTUM_BASIS_KEYS = (
-    "support_delta",
-    "counter_evidence_delta",
-    "route_success_delta",
-    "staleness_delta",
-    "user_correction_delta",
-)
+MOMENTUM_BASIS_KEYS = momentum_runtime.MOMENTUM_BASIS_KEYS
 FORBIDDEN_RAW_KEYS = frozenset(
     {
         "raw_text",
@@ -57,13 +52,7 @@ def utc_now_iso() -> str:
 
 
 def default_momentum_block() -> dict[str, object]:
-    return {
-        "phase": None,
-        "direction": None,
-        "basis": {key: 0.0 for key in MOMENTUM_BASIS_KEYS},
-        "authority_level": AUTHORITY_LEVEL,
-        "status": "reserved_for_momentum_phase_slice",
-    }
+    return momentum_runtime.build_momentum_block()
 
 
 def _normalize_changing_lines(changing: Iterable[int]) -> tuple[int, ...]:
@@ -125,6 +114,19 @@ def build_macro_orientation_state(
         signal_scale="project_event" if "project_event" in scales else "unknown",
         promoted_to_project=promotion_reason is not None,
     )
+    momentum_block = momentum_runtime.coerce_momentum_block(momentum)
+    recheck_values = list(
+        dict.fromkeys(
+            [
+                *(str(item) for item in recheck_on),
+                *momentum_runtime.momentum_recheck_triggers(momentum_block),
+            ]
+        )
+    )
+    stale_after_days = momentum_runtime.stale_after_days_for_momentum(
+        momentum_block,
+        default=stale_after_days,
+    )
 
     return {
         "kind": KIND,
@@ -155,13 +157,14 @@ def build_macro_orientation_state(
             "current_agent_default_role": "应",
             "active_layer": active_layer,
         },
-        "momentum": dict(momentum) if momentum is not None else default_momentum_block(),
+        "momentum": momentum_block,
         "source_refs": [dict(ref) for ref in source_refs],
-        "recheck_on": list(recheck_on),
+        "recheck_on": recheck_values,
         "stale_after_days": stale_after_days,
         "derivation_trace": [
             "hexagram_resolved_by_deterministic_runtime",
             "movement_derived_from_bottom_to_top_changing_lines",
+            "momentum_phase_derived_from_source_backed_delta_basis",
             "authority_forced_to_navigation_only",
         ],
         "source_boundary": {
@@ -232,6 +235,7 @@ def validate_macro_orientation_state(entry: Mapping[str, object]) -> dict[str, o
         errors.append("updated_at_must_be_iso_datetime")
     if _has_forbidden_raw_key(entry):
         errors.append("raw_private_text_or_local_path_field_forbidden")
+    errors.extend(momentum_runtime.validate_momentum_block(entry.get("momentum")))
 
     scales_raw = entry.get("input_signal_scales")
     scales = tuple(scales_raw) if isinstance(scales_raw, list) else ()
@@ -303,6 +307,8 @@ def explain_macro_orientation_state(entry: Mapping[str, object]) -> dict[str, ob
         "state_id": entry.get("state_id"),
         "source_refs": entry.get("source_refs", []),
         "derivation_trace": entry.get("derivation_trace", []),
+        "momentum": entry.get("momentum", default_momentum_block()),
+        "recheck_on": entry.get("recheck_on", []),
         "validation": validate_macro_orientation_state(entry),
         "authority_level": AUTHORITY_LEVEL,
         "claim_permission": CLAIM_PERMISSION,

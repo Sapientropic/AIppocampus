@@ -318,6 +318,16 @@ movement. Unpromoted Journey/thread arcs cannot move project stage, and stale
 or contradictory later source degrades a stage packet back to recheck
 diagnostics.
 
+`aippocampus_runtime.macro.momentum` adds the twelve-phase momentum signal for
+macro orientation. It compresses existing source-backed deltas such as
+`support_delta`, `counter_evidence_delta`, `route_success_delta`,
+`staleness_delta`, and `user_correction_delta` into a navigation-only phase and
+direction. Momentum answers whether the route is rising, peaking, declining,
+turning, or hibernating; perturbation amplitude still answers how large the
+orientation shift is. The two signals should stay orthogonal: momentum may add
+recheck triggers or compact packet text, but it cannot widen fanout, support a
+fact claim, or replace reopened source.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in

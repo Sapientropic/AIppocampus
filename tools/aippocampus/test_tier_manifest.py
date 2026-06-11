@@ -187,6 +187,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_magic_activation_policy",
         "test_macro_agent_packets",
         "test_macro_hexagram",
+        "test_macro_momentum",
         "test_macro_orientation_state",
         "test_macro_perturbation",
         "test_macro_stage_tracker",
