@@ -10,6 +10,19 @@ AFFORDANCE_SCHEMA_VERSION = "hook-agent-affordance-v0"
 PRIVACY_BOUNDARY = "no raw source, no local paths, no source refs in hook"
 
 _AGENT_ACTIONS = {"agent_aippo", "agent_recall", "agent_deepen"}
+_AGENT_TOOL_BY_ACTION = {
+    "agent_aippo": "aippocampus agent aippo",
+    "agent_recall": "aippocampus agent recall",
+    "agent_deepen": "aippocampus agent deepen",
+}
+_STRONG_CLAIM_INTENTS = {
+    "exact_claim",
+    "public_claim",
+    "stale_claim",
+    "sensitive_claim",
+    "high_risk_claim",
+    "numeric_claim",
+}
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -202,12 +215,188 @@ def prepend_hook_agent_affordance(
     return [affordance_line, *lines]
 
 
+def agent_policy_decision_from_affordance(
+    affordance: Mapping[str, Any],
+    *,
+    claim_intent: str = "low_risk_task_posture",
+    received_aippo_packet: bool = False,
+) -> dict[str, Any]:
+    """Project the foreground agent's bounded next move from hook affordance.
+
+    This is a fixture-backed policy shape, not an autonomous decision engine:
+    the foreground agent still chooses. The point is to make the useful
+    AIppocampus pull cheaper than broad manual search while preserving source
+    reopen for exact, public, stale, sensitive, numeric, or high-risk claims.
+    """
+
+    action = str(affordance.get("suggested_agent_action") or "stay_silent")
+    usable = bool(affordance.get("usable_continuity_lead"))
+    claim_intent = str(claim_intent or "low_risk_task_posture")
+    strong_claim = claim_intent in _STRONG_CLAIM_INTENTS
+    agent_pull = bool(usable and action in _AGENT_ACTIONS)
+    if action == "read_current_repo_first":
+        next_step = "read_current_repo_first"
+    elif not agent_pull:
+        next_step = "continue_normally"
+    else:
+        next_step = f"call_{action}"
+    low_risk_aippo_use = bool(
+        action == "agent_aippo"
+        and received_aippo_packet
+        and not strong_claim
+    )
+    source_reopen_required = bool(strong_claim or action == "agent_deepen")
+    return {
+        "next_step": next_step,
+        "tool": _AGENT_TOOL_BY_ACTION.get(action),
+        "agent_pull_before_manual_search": agent_pull,
+        "manual_search_before_ai_pull": False,
+        "broad_repo_history_search_suppressed": agent_pull,
+        "aippo_first_activation": bool(action == "agent_aippo" and agent_pull),
+        "low_risk_working_contract_used_without_reopen": low_risk_aippo_use,
+        "source_reopen_required_before_claim": source_reopen_required,
+        "useful_continuity_ignored": bool(usable and action not in _AGENT_ACTIONS),
+        "claim_intent": claim_intent,
+        "claim_permission": (
+            "must_deepen_before_claim"
+            if source_reopen_required
+            else "low_risk_guidance_allowed_no_fact_claim"
+            if low_risk_aippo_use
+            else "navigation_only_not_fact"
+            if agent_pull
+            else "not_applicable"
+        ),
+    }
+
+
 def _fixture_case(case_id: str, result: dict[str, Any]) -> dict[str, Any]:
     affordance = build_hook_agent_affordance(result)
     return {
         "case_id": case_id,
         "affordance": affordance,
         "formatted": format_hook_agent_affordance(affordance),
+    }
+
+
+def _policy_fixture_case(
+    case_id: str,
+    result: dict[str, Any],
+    *,
+    claim_intent: str = "low_risk_task_posture",
+    received_aippo_packet: bool = False,
+) -> dict[str, Any]:
+    affordance = build_hook_agent_affordance(result)
+    return {
+        "case_id": case_id,
+        "affordance": affordance,
+        "agent_policy": agent_policy_decision_from_affordance(
+            affordance,
+            claim_intent=claim_intent,
+            received_aippo_packet=received_aippo_packet,
+        ),
+    }
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 3)
+
+
+def _agent_policy_cases() -> list[dict[str, Any]]:
+    aippo_result = {
+        "decision": "scent",
+        "confidence": "medium",
+        "working_memory": [
+            {
+                "candidate_type": "aippo_working_contract",
+                "route": "aippo_project_workflow_activation",
+            }
+        ],
+        "candidates": [{"title": "AIppo workflow route"}],
+        "reasons": ["soft working memory: AIppo workflow route"],
+    }
+    return [
+        _policy_fixture_case(
+            "hook_aippo_before_manual_search",
+            aippo_result,
+            received_aippo_packet=True,
+        ),
+        _policy_fixture_case(
+            "hook_recall_before_broad_history_search",
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"title": "prior route candidate"}],
+                "reasons": ["registry overlap: prior route candidate"],
+            },
+        ),
+        _policy_fixture_case(
+            "hook_deepen_before_broad_history_search",
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"title": "old route candidate"}],
+                "semantic_source_reopen_route": True,
+                "reasons": ["registry overlap: old route candidate"],
+            },
+        ),
+        _policy_fixture_case(
+            "aippo_working_contract_low_risk_posture",
+            aippo_result,
+            claim_intent="low_risk_task_posture",
+            received_aippo_packet=True,
+        ),
+        _policy_fixture_case(
+            "exact_public_claim_forces_deepen",
+            {
+                "decision": "scent",
+                "confidence": "high",
+                "candidates": [{"title": "public claim route"}],
+                "reasons": ["registry overlap: public claim route"],
+            },
+            claim_intent="public_claim",
+        ),
+    ]
+
+
+def _agent_policy_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    policy_rows = [case["agent_policy"] for case in cases]
+    pull_candidates = [
+        case
+        for case in cases
+        if case["affordance"]["suggested_agent_action"] in _AGENT_ACTIONS
+        and case["affordance"]["usable_continuity_lead"]
+    ]
+    followed = [
+        case
+        for case in pull_candidates
+        if case["agent_policy"]["agent_pull_before_manual_search"]
+    ]
+    strong_claims = [
+        row for row in policy_rows if row["claim_intent"] in _STRONG_CLAIM_INTENTS
+    ]
+    return {
+        "agent_pull_follow_through_rate": _rate(len(followed), len(pull_candidates)),
+        "manual_search_before_ai_pull_count": sum(
+            1 for row in policy_rows if row["manual_search_before_ai_pull"]
+        ),
+        "aippo_first_activation_count": sum(
+            1 for row in policy_rows if row["aippo_first_activation"]
+        ),
+        "useful_continuity_ignored_count": sum(
+            1 for row in policy_rows if row["useful_continuity_ignored"]
+        ),
+        "low_risk_aippo_posture_without_reopen_count": sum(
+            1
+            for row in policy_rows
+            if row["low_risk_working_contract_used_without_reopen"]
+        ),
+        "strong_claim_without_deepen_count": sum(
+            1
+            for row in strong_claims
+            if not row["source_reopen_required_before_claim"]
+        ),
     }
 
 
@@ -249,6 +438,8 @@ def build_hook_agent_affordance_fixture_report() -> dict[str, Any]:
     ]
     actions = [case["affordance"]["suggested_agent_action"] for case in cases]
     usable_cases = [case for case in cases if case["affordance"]["usable_continuity_lead"]]
+    agent_policy_cases = _agent_policy_cases()
+    agent_policy_metrics = _agent_policy_metrics(agent_policy_cases)
     metrics = {
         "usable_lead_emitted_count": len(usable_cases),
         "agent_pull_suggested_count": sum(action in _AGENT_ACTIONS for action in actions),
@@ -263,6 +454,7 @@ def build_hook_agent_affordance_fixture_report() -> dict[str, Any]:
             and case["affordance"]["usable_continuity_lead"]
         ),
         "read_current_repo_first_count": actions.count("read_current_repo_first"),
+        **agent_policy_metrics,
     }
     report = {
         "kind": "aippocampus_hook_agent_affordance_fixture",
@@ -274,8 +466,14 @@ def build_hook_agent_affordance_fixture_report() -> dict[str, Any]:
             and metrics["hook_full_context_delivery_count"] == 0
             and metrics["manual_search_fallback_count"] == 0
             and metrics["blind_deepen_required_count"] == 0
+            and metrics["manual_search_before_ai_pull_count"] == 0
+            and metrics["useful_continuity_ignored_count"] == 0
+            and metrics["aippo_first_activation_count"] >= 1
+            and metrics["low_risk_aippo_posture_without_reopen_count"] >= 1
+            and metrics["strong_claim_without_deepen_count"] == 0
         ),
         "cases": cases,
+        "agent_policy_cases": agent_policy_cases,
         "metrics": metrics,
         "privacy_boundary": {
             "raw_prompt_text_emitted": False,
