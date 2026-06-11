@@ -338,6 +338,15 @@ cross-layer pair was flagged, but it must not become evidence, ranking weight,
 or source support. Perturbation chooses where to look; reopened source decides
 what happened.
 
+`aippocampus_runtime.navigation.macro_router_interface` owns the explicit
+bidirectional contract between Macro Orientation and the router. Macro state may
+project a `macro_router_context` as navigation priors: active layer,
+perturbation band, momentum direction, and recheck triggers. Router output may
+project a `router_macro_observation` with layer distribution, source refs, and
+source-backed delta signals for a later integration worker or macro-state
+rebuild. The asymmetry is mandatory: hard masks run before any macro bias, and a
+single hot-router result must not mutate project-level macro state.
+
 ## Relationship To Other Contracts
 
 - The stable action grammar lives in
