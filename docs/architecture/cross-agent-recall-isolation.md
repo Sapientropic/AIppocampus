@@ -85,6 +85,9 @@ suppression as a product policy.
 
 - [`agent-native-recall-facade.md`](agent-native-recall-facade.md) owns the
   recall/deepen/explain packet shape.
+- [`coordination-topology-diagnostics.md`](coordination-topology-diagnostics.md)
+  owns Telepathy V0 coordination-shape diagnostics. It can report boundary
+  crossings, but it does not authorize cross-agent recall.
 - [`source-backed-attention-router.md`](source-backed-attention-router.md) owns
   route-packet authority and hard masks.
 - [`foreground-memory-ux-budget.md`](foreground-memory-ux-budget.md) owns

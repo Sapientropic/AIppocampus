@@ -24,6 +24,7 @@ Roles:
 | [agent-skill-capability-contracts.md](agent-skill-capability-contracts.md) | current contract | Typed agent-skill capability boundaries. |
 | [architecture-overview.md](architecture-overview.md) | current contract | High-level runtime layers, source-backed kernel contract, authority rings, data flow, and metaphor discipline. |
 | [clean-source-redaction-profiles.md](clean-source-redaction-profiles.md) | current contract | Optional redaction profiles without replacing raw-private clean source. |
+| [coordination-topology-diagnostics.md](coordination-topology-diagnostics.md) | current contract | Telepathy V0 coordination topology diagnostics for collision, orphan, loop, cut-point, boundary-crossing, and handoff-knot shapes. |
 | [continuity-domains.md](continuity-domains.md) | current contract | Source-trailed domains, pathlets, macro derived pointers, and situation glyph boundaries. |
 | [cross-agent-recall-isolation.md](cross-agent-recall-isolation.md) | current contract | Cross-agent read-path isolation hard negatives and leak red-line counters. |
 | [cognitive-runtime-architecture.md](cognitive-runtime-architecture.md) | current contract | Job-circuit runtime discipline for deterministic gates and semantic workers. |

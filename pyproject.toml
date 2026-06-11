@@ -289,6 +289,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/activation_payload_compaction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cold_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cognitive_observatory.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/coordination_topology.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/observatory_control_authority.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/generation_eviction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/graphify_corpus.py",
