@@ -158,6 +158,40 @@ def _query_terms(intent: str) -> list[str]:
     return out
 
 
+def _safe_label_token(value: Any, *, fallback: str = "route") -> str:
+    text = _safe_text(value, 48).casefold().replace("-", "_").replace(" ", "_")
+    clean = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in text).strip("_")
+    if not clean or any(marker in clean for marker in ("secret", "token", "password", "credential")):
+        return fallback
+    return clean[:48].strip("_") or fallback
+
+
+def _scope_bucket(hit: dict[str, Any]) -> str:
+    labels = [
+        str(label)
+        for label in [*(hit.get("scope_labels") or []), *(hit.get("semantic_scope_labels") or [])]
+        if isinstance(label, str) and label.strip()
+    ]
+    if labels:
+        return _safe_label_token(labels[0], fallback="scoped")
+    phase = _safe_label_token(hit.get("phase"), fallback="")
+    return phase or _safe_label_token(hit.get("role"), fallback="source_window")
+
+
+def _matched_cue_family(hit: dict[str, Any]) -> str:
+    bucket = _scope_bucket(hit)
+    if bucket in {"final_answer", "assistant", "user", "source_window"}:
+        return "clean_source_hit"
+    return f"scope_{bucket}"
+
+
+def _route_label_for_clean_hit(hit: dict[str, Any]) -> str:
+    bucket = _scope_bucket(hit)
+    if bucket in {"final_answer", "assistant", "user", "source_window"}:
+        return f"{bucket} source route"
+    return f"{bucket} route"
+
+
 def _route_handle(
     *,
     source_dir: Path,
@@ -207,6 +241,8 @@ def _route_from_clean_hit(hit: dict[str, Any], *, source_dir: Path) -> dict[str,
         for label in [*(hit.get("scope_labels") or []), *(hit.get("semantic_scope_labels") or [])]
         if isinstance(label, str)
     ]
+    scope_bucket = _scope_bucket(hit)
+    matched_cue_family = _matched_cue_family(hit)
     return {
         "handle": handle,
         "route_id": route_id,
@@ -220,8 +256,19 @@ def _route_from_clean_hit(hit: dict[str, Any], *, source_dir: Path) -> dict[str,
         "support_level": "navigation",
         "source_refs": source_refs,
         "scope_labels": list(dict.fromkeys(scope_labels))[:8],
+        "scope_bucket": scope_bucket,
+        "matched_cue_family": matched_cue_family,
+        "route_label": _route_label_for_clean_hit(hit),
+        "triage_rank_reason_codes": [
+            f"scope_bucket_{scope_bucket}",
+            matched_cue_family,
+            "clean_source_reopenable",
+        ],
         "reopenable": True,
-        "why_this_may_matter": "A clean-source hit matched the fuzzy cue; reopen before using exact claims.",
+        "why_this_may_matter": (
+            f"A {scope_bucket} clean-source route matched the cue; "
+            "reopen before using exact claims."
+        ),
         "suggested_next": {
             "tool": "recall_deepen",
             "arguments": {"handle": handle},
