@@ -136,6 +136,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_compensatory_dream",
         "test_continuity_domain_producer",
         "test_continuity_domains",
+        "test_coordination_topology",
         "test_cross_agent_isolation",
         "test_correction_reconsolidation",
         "test_cognitive_load_sidecar",
