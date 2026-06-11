@@ -170,6 +170,144 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         self.assertFalse(result["started"])
         self.assertEqual(result["projects"][0]["label"], "T-Sense")
+        self.assertEqual(result["scheduler_diagnostics"][0]["due_state"], "due")
+        self.assertEqual(result["scheduler_diagnostics"][0]["due_reason"], "first_run")
+
+    def test_maybe_start_dry_run_reports_due_growth_since_previous_run(self) -> None:
+        state_file = self.root / "subconscious_state.json"
+        scheduler.save_json(
+            state_file,
+            {
+                "projects": {
+                    "T-Sense": {
+                        "last_run_ts": time.time() - 7200,
+                        "last_run_at": "2026-05-26T00:00:00Z",
+                        "last_clean_turn_count": 3,
+                        "last_clean_message_count": 6,
+                        "last_status": "success",
+                    }
+                }
+            },
+        )
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+            result = scheduler.maybe_start(
+                self.args(dry_run=True, state_file=str(state_file))
+            )
+
+        diagnostic = result["scheduler_diagnostics"][0]
+        self.assertTrue(result["dry_run"])
+        self.assertEqual(result["projects"][0]["label"], "T-Sense")
+        self.assertEqual(diagnostic["due_state"], "due")
+        self.assertEqual(diagnostic["due_reason"], "new_turns:12")
+        self.assertEqual(diagnostic["new_turns_since_last_run"], 12)
+        self.assertEqual(diagnostic["new_messages_since_last_run"], 24)
+        self.assertEqual(diagnostic["last_run_at"], "2026-05-26T00:00:00Z")
+
+    def test_no_due_project_reports_growth_below_threshold_without_private_labels_publicly(
+        self,
+    ) -> None:
+        state_file = self.root / "subconscious_state.json"
+        scheduler.save_json(
+            state_file,
+            {
+                "projects": {
+                    "T-Sense": {
+                        "last_run_ts": time.time() - 7200,
+                        "last_run_at": "2026-05-26T00:00:00Z",
+                        "last_clean_turn_count": 15,
+                        "last_clean_message_count": 30,
+                        "last_status": "success",
+                    }
+                }
+            },
+        )
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+            result = scheduler.maybe_start(
+                self.args(dry_run=True, state_file=str(state_file))
+            )
+
+        self.assertEqual(result["skipped"], "no_due_projects")
+        self.assertTrue(result["dry_run"])
+        diagnostic = result["scheduler_diagnostics"][0]
+        self.assertEqual(diagnostic["label"], "T-Sense")
+        self.assertEqual(diagnostic["due_state"], "not_due")
+        self.assertEqual(diagnostic["skip_reason"], "source_growth_below_threshold")
+        self.assertEqual(diagnostic["new_turns_since_last_run"], 0)
+        public = scheduler.public_scheduler_payload(result)
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(
+            public["scheduler_diagnostics"][0]["skip_reason"],
+            "source_growth_below_threshold",
+        )
+        self.assertNotIn("T-Sense", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_old_project_name_reports_name_resolution_skip_reason(self) -> None:
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+            result = scheduler.maybe_start(
+                self.args(dry_run=True, project="Old Project Name")
+            )
+
+        self.assertEqual(result["skipped"], "no_due_projects")
+        diagnostic = result["scheduler_diagnostics"][0]
+        self.assertEqual(diagnostic["due_state"], "blocked")
+        self.assertEqual(diagnostic["skip_reason"], "project_name_not_resolved")
+        public = scheduler.public_scheduler_payload(result)
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(
+            public["scheduler_diagnostics"][0]["skip_reason"],
+            "project_name_not_resolved",
+        )
+        self.assertNotIn("Old Project Name", encoded)
+
+    def test_missing_clean_source_freshness_reports_explicit_skip_reason(self) -> None:
+        registry = {
+            "threads": [
+                {
+                    "title": "T-Sense · stale",
+                    "project_label": "T-Sense",
+                    "clean_turn_count": 8,
+                    "clean_message_count": 16,
+                    "paths": {"workspace": str(self.cwd)},
+                }
+            ]
+        }
+        scheduler.save_json(self.root / "threads.json", registry)
+        state_file = self.root / "subconscious_state.json"
+        scheduler.save_json(
+            state_file,
+            {
+                "projects": {
+                    "T-Sense": {
+                        "last_run_ts": time.time() - 7200,
+                        "last_run_at": "2026-05-26T00:00:00Z",
+                        "last_clean_turn_count": 8,
+                        "last_clean_message_count": 16,
+                        "last_status": "success",
+                    }
+                }
+            },
+        )
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+            result = scheduler.maybe_start(
+                self.args(dry_run=True, state_file=str(state_file))
+            )
+
+        self.assertEqual(result["skipped"], "no_due_projects")
+        diagnostic = result["scheduler_diagnostics"][0]
+        self.assertEqual(diagnostic["due_state"], "not_due")
+        self.assertEqual(diagnostic["skip_reason"], "missing_clean_source_freshness")
+        public = scheduler.public_scheduler_payload(result)
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(
+            public["scheduler_diagnostics"][0]["skip_reason"],
+            "missing_clean_source_freshness",
+        )
+        self.assertNotIn("T-Sense", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
 
     def test_shell_selection_policy_reports_core_routing_shapes(self) -> None:
         from aippocampus_runtime.subconscious import shell_selection
@@ -304,6 +442,10 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         self.assertFalse(result["started"])
         self.assertEqual(result["skipped"], "leased_projects")
+        self.assertEqual(
+            result["scheduler_diagnostics"][0]["skip_reason"],
+            "lease_active_or_stale",
+        )
 
     def test_file_lock_reports_active_local_lock_without_recovery(self) -> None:
         lock_path = self.root / "active.lock"

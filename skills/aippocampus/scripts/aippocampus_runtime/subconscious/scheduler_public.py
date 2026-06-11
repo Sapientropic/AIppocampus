@@ -18,14 +18,66 @@ PUBLIC_SKIP_REASONS = {
     "no_due_projects",
     "leased_projects",
     "enqueue_cooldown",
+    "cooldown_not_elapsed",
+    "no_registered_project_for_cwd",
+    "source_growth_below_threshold",
+    "missing_clean_source_freshness",
+    "lease_active_or_stale",
+    "project_name_not_resolved",
 }
 
 
 def public_skip_reason(value: Any) -> str | None:
     reason = str(value or "").strip()
+    if reason in PUBLIC_SKIP_REASONS:
+        return reason
     if reason.startswith("missing_"):
         return "missing_api_key"
-    return reason if reason in PUBLIC_SKIP_REASONS else ("runtime_error" if reason else None)
+    return "runtime_error" if reason else None
+
+
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_timestamp(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if len(text) > 40:
+        return None
+    return text if all(char.isdigit() or char in "-:TZ+." for char in text) else None
+
+
+def public_scheduler_diagnostic(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "project_resolved": bool(item.get("project_resolved")),
+        "due_state": str(item.get("due_state") or "unknown"),
+        "due_reason": _public_due_reason(item.get("due_reason")),
+        "skip_reason": public_skip_reason(item.get("skip_reason")),
+        "last_run_at": public_timestamp(item.get("last_run_at")),
+        "new_turns_since_last_run": public_count(item.get("new_turns_since_last_run")),
+        "new_messages_since_last_run": public_count(
+            item.get("new_messages_since_last_run")
+        ),
+        "min_new_turns": public_count(item.get("min_new_turns")),
+        "cooldown_remaining_seconds": public_count(item.get("cooldown_remaining_seconds")),
+        "next_due_at": public_timestamp(item.get("next_due_at")),
+        "lease_active": bool(item.get("lease_active")),
+    }
+
+
+def _public_due_reason(value: Any) -> str | None:
+    reason = str(value or "").strip()
+    if reason.startswith("new_turns:"):
+        suffix = reason.removeprefix("new_turns:")
+        return f"new_turns:{public_count(suffix)}"
+    if reason == "first_run":
+        return reason
+    return None
 
 
 def public_scheduler_payload(result: dict[str, Any]) -> dict[str, Any]:
@@ -58,6 +110,14 @@ def public_scheduler_payload(result: dict[str, Any]) -> dict[str, Any]:
     if result.get("queued"):
         payload["queued"] = True
         payload["agent_fallback_task_count"] = int(result.get("agent_fallback_task_count") or 0)
+    diagnostics = [
+        public_scheduler_diagnostic(item)
+        for item in result.get("scheduler_diagnostics") or []
+        if isinstance(item, dict)
+    ]
+    if diagnostics:
+        payload["scheduler_diagnostics"] = diagnostics[:8]
+        payload["diagnostic_count"] = len(diagnostics)
     if result.get("error"):
         payload["error"] = {"code": "runtime_error"}
     return payload

@@ -651,6 +651,16 @@ starts a detached `--run-due` worker and logs to
 subconscious automatic without making every user prompt or Stop hook wait for
 DeepSeek.
 
+When `--maybe-start --dry-run --json` returns `no_due_projects`, the public
+payload includes sanitized `scheduler_diagnostics` rather than leaving the
+operator to infer the reason. These diagnostics may expose counts and timestamps
+such as `last_run_at`, `new_turns_since_last_run`,
+`new_messages_since_last_run`, `next_due_at`, and skip reasons like
+`source_growth_below_threshold`, `cooldown_not_elapsed`,
+`no_registered_project_for_cwd`, `project_name_not_resolved`, or
+`lease_active_or_stale`. They must not expose raw source text, private thread
+ids, local paths, prompt text, or API-key values.
+
 Preview time-driven idle maintenance without writes:
 
 ```powershell
