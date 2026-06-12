@@ -52,6 +52,227 @@ def write_update_fixture(path: Path) -> None:
 
 
 class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
+    def test_answer_quality_normalizes_equivalent_number_forms(self) -> None:
+        quality = benchmark.answer_quality("drawer 9", "drawer nine")
+
+        self.assertTrue(quality["strong_match"], quality)
+        self.assertGreaterEqual(quality["token_overlap_rate"], 0.8)
+
+    def test_reader_prompt_marks_bounded_evidence_as_answerable_when_supported(self) -> None:
+        messages = benchmark.reader_messages(
+            "Where did the blue badge note say to look?",
+            [
+                {
+                    "line": 2,
+                    "role": "assistant",
+                    "session_rank": 1,
+                    "nearest_hit_rank": 1,
+                    "context_distance": 0,
+                    "text": "The object is in drawer nine.",
+                }
+            ],
+        )
+        user_payload = json.loads(messages[1]["content"])
+        first_line = user_payload["candidate_source_lines"][0]
+
+        self.assertEqual(
+            user_payload["source_support_scope"],
+            "bounded_evidence_answerable_when_lines_support",
+        )
+        self.assertIn("do_not_abstain_merely_because_context_is_bounded", user_payload["answer_policy"])
+        self.assertEqual(first_line["salience_hint"], "direct_retrieval_hit")
+
+    def test_failure_taxonomy_separates_reader_error_and_over_abstention(self) -> None:
+        provider_error = benchmark.classify_failure(
+            retrieval_row={
+                "case_type": "longmemeval_single-session-user",
+                "has_line_evidence": True,
+                "evidence_context_hit_top10": True,
+            },
+            prediction=benchmark.ReaderPrediction(
+                attempted=True,
+                status="reader_error",
+                error_kind="provider_error",
+            ),
+            quality={"token_overlap_rate": 0.0},
+            context_sufficient=True,
+            answer_correct=False,
+            candidate_contains_evidence=True,
+            top_k=10,
+        )
+        over_abstention = benchmark.classify_failure(
+            retrieval_row={
+                "case_type": "longmemeval_single-session-user",
+                "has_line_evidence": True,
+                "evidence_context_hit_top10": True,
+            },
+            prediction=benchmark.ReaderPrediction(
+                attempted=True,
+                status="answered",
+                abstained=True,
+            ),
+            quality={"token_overlap_rate": 0.0},
+            context_sufficient=True,
+            answer_correct=False,
+            candidate_contains_evidence=True,
+            top_k=10,
+        )
+
+        self.assertEqual(provider_error, "reader_provider_error")
+        self.assertEqual(over_abstention, "over_abstention_boundary_false_negative")
+
+    def test_context_visible_missing_candidate_is_packaging_failure(self) -> None:
+        row = benchmark.score_answer_case(
+            case={
+                "case_id": "case-packaging",
+                "expected": {"lines": [2]},
+            },
+            retrieval_row={
+                "case_type": "longmemeval_single-session-user",
+                "source_id_sha1": "sourcehash",
+                "question_id_sha1": "questionhash",
+                "query_sha1": "queryhash",
+                "has_line_evidence": True,
+                "session_rank": 1,
+                "evidence_rank": 2,
+                "evidence_context_rank": 1,
+                "session_hit_top10": True,
+                "evidence_hit_top10": True,
+                "evidence_context_hit_top10": True,
+                "evidence_miss_category": "exact_line_found_top_k",
+            },
+            candidates=[
+                {
+                    "line": 1,
+                    "role": "user",
+                    "session_rank": 1,
+                    "nearest_hit_rank": 1,
+                    "context_distance": 0,
+                }
+            ],
+            candidate_latency_ms=0.1,
+            candidate_warning_count=0,
+            gold={"answer": "drawer nine"},
+            prediction=benchmark.ReaderPrediction(
+                attempted=True,
+                status="answered",
+                answer_text="drawer eight",
+            ),
+            top_k=10,
+        )
+
+        self.assertEqual(
+            row["answer"]["failure_category"],
+            "insufficient_evidence_packaging",
+        )
+
+    def test_failure_review_and_expansion_gate_are_public_safe(self) -> None:
+        payload = {
+            "answer": {
+                "metrics": {
+                    "case_count": 3,
+                    "answer_correct_count": 1,
+                    "failure_taxonomy_counts": {
+                        "answered_correctly": 1,
+                        "reader_provider_error": 1,
+                        "deterministic_judge_mismatch": 1,
+                        "over_abstention_boundary_false_negative": 1,
+                    },
+                }
+            },
+            "cases": [
+                {
+                    "case_id": "ok",
+                    "answer": {"failure_category": "answered_correctly"},
+                },
+                {
+                    "case_id": "err",
+                    "case_type": "longmemeval_single-session-user",
+                    "source_id_sha1": "source-a",
+                    "question_id_sha1": "question-a",
+                    "answer_sha1": "answer-a",
+                    "retrieval": {
+                        "candidate_contains_evidence": True,
+                        "evidence_context_hit_top10": True,
+                        "evidence_rank": 1,
+                        "evidence_context_rank": 1,
+                    },
+                    "reader": {
+                        "status": "reader_error",
+                        "error_kind": "provider_error",
+                        "answer_text_sha1": None,
+                    },
+                    "answer": {
+                        "failure_category": "reader_provider_error",
+                        "context_sufficient": True,
+                        "answer_quality": {"token_overlap_rate": 0.0},
+                    },
+                },
+                {
+                    "case_id": "judge",
+                    "case_type": "longmemeval_single-session-user",
+                    "source_id_sha1": "source-b",
+                    "question_id_sha1": "question-b",
+                    "answer_sha1": "answer-b",
+                    "retrieval": {
+                        "candidate_contains_evidence": True,
+                        "evidence_context_hit_top10": True,
+                        "evidence_rank": 2,
+                        "evidence_context_rank": 1,
+                    },
+                    "reader": {
+                        "status": "answered",
+                        "answer_text_sha1": "predicted-b",
+                    },
+                    "answer": {
+                        "failure_category": "deterministic_judge_mismatch",
+                        "context_sufficient": True,
+                        "answer_quality": {"token_overlap_rate": 0.5},
+                    },
+                },
+                {
+                    "case_id": "abstain",
+                    "case_type": "longmemeval_single-session-user",
+                    "source_id_sha1": "source-c",
+                    "question_id_sha1": "question-c",
+                    "answer_sha1": "answer-c",
+                    "retrieval": {
+                        "candidate_contains_evidence": True,
+                        "evidence_context_hit_top10": True,
+                        "evidence_rank": 3,
+                        "evidence_context_rank": 1,
+                    },
+                    "reader": {
+                        "status": "answered",
+                        "abstained": True,
+                        "answer_text_sha1": None,
+                    },
+                    "answer": {
+                        "failure_category": "over_abstention_boundary_false_negative",
+                        "context_sufficient": True,
+                        "answer_quality": {"token_overlap_rate": 0.0},
+                    },
+                },
+            ],
+        }
+
+        review = benchmark.build_failure_review(payload)
+        gate = benchmark.expansion_go_no_go(review)
+        dumped = json.dumps(review, ensure_ascii=False)
+
+        self.assertEqual(review["non_correct_case_count"], 3)
+        self.assertEqual(review["taxonomy_counts"]["reader_provider_error"], 1)
+        self.assertEqual(review["taxonomy_counts"]["deterministic_judge_mismatch"], 1)
+        self.assertEqual(
+            review["taxonomy_counts"]["over_abstention_boundary_false_negative"],
+            1,
+        )
+        abstain_row = next(row for row in review["cases"] if row["case_id"] == "abstain")
+        self.assertEqual(abstain_row["reader_outcome"], "abstained")
+        self.assertEqual(gate["status"], "no_go")
+        self.assertIn("reader_provider_error", gate["blockers"])
+        self.assertNotIn("raw question", dumped)
+
     def test_missing_dataset_returns_answer_claim_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "missing-longmemeval.json"
