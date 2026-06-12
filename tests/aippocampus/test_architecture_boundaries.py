@@ -82,6 +82,9 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
         "aippocampus_runtime.recall.prompt_context_render",
         "aippocampus_runtime.recall.prompt_recall_decision",
     },
+    "aippocampus_runtime.ops.recall_navigation_promotion": {
+        "aippocampus_runtime.recall.continuity_usefulness",
+    },
     "aippocampus_runtime.ops.route_readiness": {
         "aippocampus_runtime.recall.active_recall_lock_lifecycle",
     },

@@ -99,6 +99,7 @@ to be reviewed as an owner-boundary decision. The current reviewed imports are:
 | `aippocampus_runtime.ops.provider_key_bridge` | hook handoff | May coordinate explicit hook installer/status surfaces for provider key bridging; it must not install hooks without an operator command. |
 | `aippocampus_runtime.ops.recall_navigation_comparison` | diagnostic/reporting | May compare navigation authority taxonomies; it must not become a retrieval ranker. |
 | `aippocampus_runtime.ops.recall_navigation_comparison_fixtures` | fixture runner | May reuse ambient-card and prompt-context fixture helpers; fixture rows stay public-safe and non-hot-path. |
+| `aippocampus_runtime.ops.recall_navigation_promotion` | runtime-adjacent policy | May project comparison rows through the shared usefulness gate for default-promotion decisions; it must not become foreground recall policy or a hidden router. |
 | `aippocampus_runtime.ops.route_readiness` | diagnostic/reporting | May inspect active-recall lock lifecycle rows for route-readiness diagnostics; route rows remain navigation-only. |
 | `aippocampus_runtime.ops.foreground_output_audit` | diagnostic/reporting | May render a no-write public-safe matrix over foreground surfaces and overreach/overfilter failure modes; it does not choose hook output or recall ranking. |
 | `aippocampus_runtime.ops.spend_doctor` | provider doctor | May report semantic-gate mode/cost posture; it does not choose foreground recall output. |
