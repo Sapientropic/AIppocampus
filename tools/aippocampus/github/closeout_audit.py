@@ -9,12 +9,37 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 SCHEMA_VERSION = 1
 
 CLOSING_REF_RE = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b", re.I)
 ISSUE_REF_RE = re.compile(r"#\d+\b")
+EVIDENCE_LEVELS = (
+    "contract_fixture",
+    "scripted_proxy",
+    "model_pilot",
+    "behavior_run",
+    "scale_run",
+    "default_adoption",
+)
+EVIDENCE_LEVEL_RANK = {
+    "contract_fixture": 0,
+    "scripted_proxy": 0,
+    "model_pilot": 2,
+    "behavior_run": 3,
+    "scale_run": 4,
+    "default_adoption": 5,
+}
+EVIDENCE_LEVEL_RE = re.compile(
+    r"^\s*evidence[_ -]?level\s*[:=-]\s*"
+    r"(contract_fixture|scripted_proxy|model_pilot|behavior_run|scale_run|default_adoption)\b",
+    re.I | re.M,
+)
+ISSUE_INTENT_RE = re.compile(
+    r"^\s*issue[_ -]?intent\s*[:=-]\s*(?P<intent>.+)$",
+    re.I | re.M,
+)
 CLOSEOUT_CLASS_RE = re.compile(
     r"\bcloseout(?:[ _-]class)?\s*[:=-]\s*"
     r"(complete_with_followups|complete|blocker_recorded|narrow_slice_only)\b",
@@ -52,6 +77,21 @@ FOLLOWUP_SECTION_RE = re.compile(
     re.I,
 )
 MARKDOWN_HEADING_RE = re.compile(r"^\s*#{1,6}\s+\S")
+INTENT_LEVEL_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(?:live|model[- ]backed|provider|model output|external model)\b", re.I), "model_pilot"),
+    (
+        re.compile(
+            r"\b(?:behavior|behaviour|agent behavior|user[- ]visible|usefulness|quality lift)\b",
+            re.I,
+        ),
+        "behavior_run",
+    ),
+    (re.compile(r"\b(?:500q|100q|scale|scaled|source[- ]side|full run|larger run)\b", re.I), "scale_run"),
+    (
+        re.compile(r"\b(?:default adoption|default[- ]ready|default behavior|promot(?:e|ion).{0,40}default)\b", re.I),
+        "default_adoption",
+    ),
+)
 
 
 def _unique_issue_numbers(matches: list[str]) -> list[int]:
@@ -72,6 +112,93 @@ def _closeout_class(body: str) -> str | None:
         return match.group(1).casefold()
     checked_match = CHECKED_CLOSEOUT_CLASS_RE.search(body)
     return checked_match.group(1).casefold() if checked_match else None
+
+
+def _evidence_level(body: str) -> str | None:
+    match = EVIDENCE_LEVEL_RE.search(body)
+    return match.group(1).casefold() if match else None
+
+
+def _intent_level_requirements(text: str) -> list[str]:
+    levels: list[str] = []
+    for pattern, level in INTENT_LEVEL_RULES:
+        if pattern.search(text) and level not in levels:
+            levels.append(level)
+    levels.sort(key=lambda item: EVIDENCE_LEVEL_RANK[item])
+    return levels
+
+
+def _issue_intent_text_from_body(body: str) -> str:
+    return "\n".join(match.group("intent").strip() for match in ISSUE_INTENT_RE.finditer(body))
+
+
+def _normalize_issue_metadata(value: Any) -> dict[int, dict[str, Any]]:
+    if not value:
+        return {}
+    if isinstance(value, Mapping):
+        raw_items: list[tuple[Any, Any]] = list(value.items())
+    elif isinstance(value, list):
+        raw_items = []
+        for item in value:
+            if isinstance(item, Mapping):
+                number = item.get("number")
+                if number is not None:
+                    raw_items.append((number, item))
+    else:
+        return {}
+    normalized: dict[int, dict[str, Any]] = {}
+    for key, item in raw_items:
+        if not isinstance(item, Mapping):
+            continue
+        try:
+            number = int(str(key).lstrip("#"))
+        except ValueError:
+            continue
+        normalized[number] = dict(item)
+    return normalized
+
+
+def _issue_intent_levels(
+    *,
+    closing_issues: list[int],
+    body: str,
+    issue_metadata: Mapping[int, Mapping[str, Any]] | None,
+) -> dict[str, list[str]]:
+    levels: dict[str, list[str]] = {}
+    body_intent = _issue_intent_text_from_body(body)
+    if body_intent:
+        levels["pr_body"] = _intent_level_requirements(body_intent)
+    metadata = issue_metadata or {}
+    for issue in closing_issues:
+        item = metadata.get(issue)
+        if not item:
+            continue
+        text = "\n".join(str(item.get(key) or "") for key in ("title", "body"))
+        required = _intent_level_requirements(text)
+        if required:
+            levels[str(issue)] = required
+    return {key: value for key, value in levels.items() if value}
+
+
+def _flatten_required_levels(issue_intent_levels: Mapping[str, list[str]]) -> list[str]:
+    required = sorted(
+        {level for levels in issue_intent_levels.values() for level in levels},
+        key=lambda item: EVIDENCE_LEVEL_RANK[item],
+    )
+    return required
+
+
+def _evidence_level_satisfies(declared: str | None, required_levels: list[str]) -> bool:
+    if not required_levels or not declared:
+        return bool(not required_levels)
+    required_rank = max(EVIDENCE_LEVEL_RANK[level] for level in required_levels)
+    if "default_adoption" in required_levels and declared != "default_adoption":
+        return False
+    return EVIDENCE_LEVEL_RANK[declared] >= required_rank
+
+
+def _honest_lower_evidence_followup(closeout_class: str | None, has_followup_pointer: bool) -> bool:
+    return bool(has_followup_pointer and closeout_class in {"complete_with_followups", "blocker_recorded"})
 
 
 def _has_followup_pointer(body: str) -> bool:
@@ -124,10 +251,22 @@ def _selected_task_text(body: str) -> str:
     return "\n".join(selected_lines)
 
 
-def audit_pr_body(body: str) -> dict[str, Any]:
+def audit_pr_body(
+    body: str,
+    *,
+    issue_metadata: Mapping[int, Mapping[str, Any]] | Mapping[str, Any] | list[Any] | None = None,
+) -> dict[str, Any]:
     text = _selected_task_text(str(body or ""))
     closing_issues = _unique_issue_numbers(CLOSING_REF_RE.findall(text))
     closeout_class = _closeout_class(text)
+    evidence_level = _evidence_level(text)
+    normalized_issue_metadata = _normalize_issue_metadata(issue_metadata)
+    issue_intent_levels = _issue_intent_levels(
+        closing_issues=closing_issues,
+        body=text,
+        issue_metadata=normalized_issue_metadata,
+    )
+    required_evidence_levels = _flatten_required_levels(issue_intent_levels)
     risky_terms = sorted({match.group(1).casefold() for match in RISKY_CLOSEOUT_RE.finditer(text)})
     has_followup_pointer = _has_followup_pointer(text)
     findings: list[dict[str, Any]] = []
@@ -166,12 +305,36 @@ def audit_pr_body(body: str) -> dict[str, Any]:
             }
         )
 
+    if (
+        closing_issues
+        and required_evidence_levels
+        and not _evidence_level_satisfies(evidence_level, required_evidence_levels)
+        and not _honest_lower_evidence_followup(closeout_class, has_followup_pointer)
+    ):
+        findings.append(
+            {
+                "kind": "evidence_level_mismatch" if evidence_level else "evidence_level_missing",
+                "severity": "error",
+                "message": (
+                    "Closing issue intent asks for mature evidence, but the PR body "
+                    "does not declare a matching evidence level or an honest follow-up closeout."
+                ),
+                "closing_issues": closing_issues,
+                "declared_evidence_level": evidence_level,
+                "required_evidence_levels": required_evidence_levels,
+                "issue_intent_levels": issue_intent_levels,
+            }
+        )
+
     return {
         "kind": "aippocampus_closeout_audit",
         "schema_version": SCHEMA_VERSION,
         "ok": not findings,
         "closing_issues": closing_issues,
         "closeout_class": closeout_class,
+        "evidence_level": evidence_level,
+        "required_evidence_levels": required_evidence_levels,
+        "issue_intent_levels": issue_intent_levels,
         "risk_terms": risky_terms,
         "has_followup_pointer": has_followup_pointer,
         "findings": findings,
@@ -183,6 +346,7 @@ def audit_pr_body(body: str) -> dict[str, Any]:
                 "blocker_recorded",
                 "narrow_slice_only",
             ],
+            "evidence_levels": list(EVIDENCE_LEVELS),
             "heuristic_only": True,
         },
     }
@@ -198,16 +362,26 @@ def _body_from_args(args: argparse.Namespace) -> str:
     return sys.stdin.read()
 
 
+def _issue_metadata_from_args(args: argparse.Namespace) -> Any:
+    if not args.issue_metadata_file:
+        return None
+    return json.loads(Path(args.issue_metadata_file).read_text(encoding="utf-8"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--body-file", type=Path)
     parser.add_argument("--body-env")
     parser.add_argument("--body")
+    parser.add_argument("--issue-metadata-file", type=Path)
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--github-annotations", action="store_true")
     args = parser.parse_args(argv)
 
-    report = audit_pr_body(_body_from_args(args))
+    report = audit_pr_body(
+        _body_from_args(args),
+        issue_metadata=_issue_metadata_from_args(args),
+    )
     if args.json_output or not args.github_annotations:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.github_annotations:

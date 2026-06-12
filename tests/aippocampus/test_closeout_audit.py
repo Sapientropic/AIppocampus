@@ -142,6 +142,82 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["findings"][0]["kind"], "narrow_slice_closes_issue")
 
+    def test_scripted_proxy_cannot_close_model_backed_behavior_issue(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds a deterministic scripted proxy for the bounded resonance prompt pilot.
+
+            Evidence level: scripted_proxy
+            Issue intent: model-backed behavior
+
+            Closes #1319.
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        finding = report["findings"][0]
+        self.assertEqual(finding["kind"], "evidence_level_mismatch")
+        self.assertEqual(finding["declared_evidence_level"], "scripted_proxy")
+        self.assertIn("model_pilot", finding["required_evidence_levels"])
+        self.assertIn("behavior_run", finding["required_evidence_levels"])
+
+    def test_contract_pack_cannot_close_live_behavior_issue_without_followup(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Lands the public E2E50 contract pack.
+
+            Evidence level: contract_fixture
+            Issue intent: live behavior validation
+
+            Closes #279.
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["findings"][0]["kind"], "evidence_level_mismatch")
+
+    def test_lower_evidence_level_passes_with_complete_followup(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Lands the public E2E50 contract pack.
+
+            Closeout class: complete_with_followups
+            Evidence level: contract_fixture
+            Issue intent: live behavior validation
+            remaining_gap: #1322 owns model-backed behavior validation.
+
+            Closes #279.
+            """
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["evidence_level"], "contract_fixture")
+        self.assertIn("behavior_run", report["required_evidence_levels"])
+
+    def test_issue_metadata_file_can_supply_intent_when_pr_body_omits_it(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Lands the public E2E50 contract pack.
+
+            Evidence level: contract_fixture
+
+            Closes #279.
+            """,
+            issue_metadata={
+                279: {
+                    "title": "Run model-backed public E2E50 behavior validation",
+                    "body": "Need live/model-backed behavior evidence, not only a contract pack.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["issue_intent_levels"]["279"], ["model_pilot", "behavior_run"])
+
     def test_cli_reads_body_file_and_returns_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             body = Path(tmp) / "body.md"
