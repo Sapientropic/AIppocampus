@@ -8,9 +8,11 @@
 
 ## Verification
 
+- [ ] `python tools\aippocampus\test_plan.py --json`
 - [ ] `python tools\aippocampus\docs\check_docs_health.py --json`
 - [ ] `python tools\aippocampus\run_tests.py --tier quick`
 - [ ] `python tools\aippocampus\run_tests.py --tier pr`
+- [ ] Focused tests from the changed-surface planner
 - [ ] Other:
 
 ## Source And Privacy Boundary

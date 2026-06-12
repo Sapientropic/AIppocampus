@@ -318,6 +318,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_subconscious_worker",
         "test_sync_bundle",
         "test_synthetic_scale_capacity_smoke",
+        "test_test_plan",
         "test_theme_emergence",
         "test_thread_story_packet",
         "test_time_driven_maintenance",
@@ -388,6 +389,7 @@ QUICK_STEMS = frozenset(
         "test_source_texture",
         "test_sparse_provenance_codebook",
         "test_standard_line_reranker_contract",
+        "test_test_plan",
         "test_topology_anchor_policy",
         "test_yi_macro_runtime_interfaces",
     }
@@ -619,12 +621,15 @@ SLOW_MODULES = frozenset(_module_name(stem) for stem in SLOW_STEMS)
 BENCHMARK_MODULES = frozenset(_module_name(stem) for stem in BENCHMARK_STEMS)
 BENCHMARK_SMOKE_MODULES = frozenset(_module_name(stem) for stem in BENCHMARK_SMOKE_STEMS)
 
-TIER_ALIASES = {"fast": "pr", "deterministic": "pr", "ci": "pr"}
-PR_PRIMARY_TIERS = frozenset({"quick", "pr", "smoke", "integration"})
-PRIMARY_TIER_ORDER = ("quick", "pr", "smoke", "integration", "slow", "benchmark")
+TIER_ALIASES = {"fast": "pr", "deterministic": "broad-pr", "ci": "broad-pr"}
+PR_PRIMARY_TIERS = frozenset({"quick", "pr"})
+BROAD_PR_PRIMARY_TIERS = frozenset({"quick", "pr", "broad", "smoke", "integration"})
+PRIMARY_TIER_ORDER = ("quick", "pr", "broad", "smoke", "integration", "slow", "benchmark")
 TEST_TIERS = (
     "quick",
     "pr",
+    "broad",
+    "broad-pr",
     "smoke",
     "integration",
     "slow",
@@ -636,14 +641,16 @@ TEST_TIERS = (
 
 TIER_DESCRIPTIONS = {
     "quick": "Small local inner loop for core source, CLI, docs, and tier-contract guards.",
-    "pr": "Broad deterministic PR lane; includes quick plus local-safe contract, smoke, and integration modules.",
+    "pr": "Fast local PR gate; includes quick plus PR-critical deterministic contract modules.",
+    "broad": "Broad deterministic modules that are safe but too wide for every local PR edit.",
+    "broad-pr": "Broad deterministic pre-merge lane; includes pr plus smoke and integration modules.",
     "smoke": "Focused deterministic smoke lane for hooks, install workflows, host/cross-agent probes, and scale smokes.",
     "integration": "Focused local integration lane for MCP, browser companion, provider routing, sync bundles, and packaging contracts.",
     "slow": "Deterministic but expensive or readiness-heavy tests kept out of normal PR loops.",
     "benchmark-smoke": "Curated public benchmark/support smoke lane.",
     "benchmark": "Full checked-in benchmark test mirror.",
     "full": "Composition of all explicitly classified tests.",
-    "fast": "Deprecated compatibility alias for pr.",
+    "fast": "Compatibility alias for pr.",
 }
 
 
@@ -660,12 +667,12 @@ def _primary_tier_for_stem(stem: str) -> str:
         return "slow"
     if stem in BENCHMARK_STEMS:
         return "benchmark"
-    return "pr"
+    return "broad"
 
 
 def _tags_for_stem(stem: str, primary_tier: str) -> tuple[str, ...]:
     tags = {primary_tier}
-    if primary_tier in {"quick", "pr"}:
+    if primary_tier in {"quick", "pr", "broad"}:
         tags.add("deterministic")
     if stem.startswith("test_benchmark_"):
         tags.add("benchmark")

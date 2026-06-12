@@ -11,7 +11,8 @@ remain in `docs/roadmap.md`.
 Older entries preserve the historical `--tier fast` command name as evidence of
 what was run at the time. The current test taxonomy is defined in
 `tools/aippocampus/test_tier_manifest.py`: use `--tier quick` for the small local
-inner loop and `--tier pr` for the broad deterministic PR lane.
+inner loop, `--tier pr` for the fast local PR gate, and `--tier broad-pr` for
+the broad deterministic pre-merge lane.
 
 For the navigation map that connects benchmark runners, smoke scripts, corpus
 records, and this ledger, see `docs/evidence/benchmark-evidence-map.md`.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import hashlib
 import json
 import os
 import re
@@ -32,6 +33,7 @@ from aippocampus_runtime.subconscious.worker import (
 from benchmark_statistics import binomial_rate_report
 
 from .defaults import (
+    DEFAULT_STANDARD_CASE_CACHE_ROOT,
     DEFAULT_STANDARD_DATASET,
     DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES,
     DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
@@ -64,6 +66,8 @@ SEMANTIC_LINE_RERANKER_PROMPT_VERSION = "llm-window-to-line-rerank-v1"
 SOURCE_SEMANTIC_CACHE_ARM = "aippocampus_source_worker_surface_cache"
 SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-v1"
 SOURCE_SEMANTIC_CACHE_BUILDER_ID = "aippocampus-working-memory-surface-v1"
+STANDARD_CASE_CACHE_POLICY_VERSION = "standard-public-case-index-cache-v1"
+STANDARD_CASE_ADAPTER_VERSION = "standard-public-case-adapter-v1"
 LEXICAL_RERANKER_DIRECT_TERMS = {
     "adopt",
     "adopted",
@@ -128,6 +132,163 @@ SOURCE_SEMANTIC_TASK_RE = re.compile(
     r"(?i)\b(issue|bug|fix|test|code|repo|branch|pr|pull request|benchmark|"
     r"report|docs?|design|runner|cache|timeout)\b"
 )
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def stable_json_sha1(value: Any, *, length: int = 16) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha1_text(encoded)[:length]
+
+
+def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f"{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    tmp_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(tmp_path, path)
+
+
+def read_json_dict(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def standard_case_cache_key(
+    *,
+    dataset: str,
+    corpus_sha256: str,
+    max_questions: int,
+) -> str:
+    material = {
+        "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
+        "adapter_version": STANDARD_CASE_ADAPTER_VERSION,
+        "dataset": dataset,
+        "corpus_sha256": corpus_sha256,
+        "question_selection": "first_eligible_questions_in_corpus_order",
+        "max_questions": int(max_questions),
+    }
+    return stable_json_sha1(material, length=20)
+
+
+def new_standard_case_cache_metrics(
+    *,
+    enabled: bool,
+    cache_key: str | None,
+    rebuild_requested: bool,
+) -> dict[str, Any]:
+    return {
+        "enabled": bool(enabled),
+        "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
+        "adapter_version": STANDARD_CASE_ADAPTER_VERSION,
+        "cache_key": cache_key or "",
+        "cache_root_emitted": False,
+        "rebuild_requested": bool(rebuild_requested),
+        "source_index_hit_count": 0,
+        "source_index_miss_count": 0,
+        "source_index_rebuild_count": 0,
+        "source_index_manifest_mismatch_count": 0,
+        "source_index_forced_rebuild_count": 0,
+        "source_index_error_rebuild_count": 0,
+        "source_index_count": 0,
+        "source_index_hit_rate": 0.0,
+    }
+
+
+def finalized_standard_case_cache_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(metrics)
+    hit_count = int(payload.get("source_index_hit_count") or 0)
+    rebuild_count = int(payload.get("source_index_rebuild_count") or 0)
+    total = hit_count + rebuild_count
+    payload["source_index_count"] = total
+    payload["source_index_hit_rate"] = safe_rate(hit_count, total)
+    return payload
+
+
+def standard_messages_fingerprint(messages: list[dict[str, Any]]) -> str:
+    material = [
+        {
+            "line": int(message.get("line") or 0),
+            "timestamp": str(message.get("timestamp") or ""),
+            "role": str(message.get("role") or ""),
+            "phase": str(message.get("phase") or ""),
+            "turn_index": int(message.get("turn_index") or 0),
+            "is_final": bool(message.get("is_final")),
+            "sha1": str(message.get("sha1") or ""),
+        }
+        for message in messages
+    ]
+    return stable_json_sha1(material, length=40)
+
+
+def source_index_manifest(
+    *,
+    dataset: str,
+    source_id: str,
+    question_id: str,
+    messages: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "kind": "standard_public_source_index_manifest",
+        "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
+        "adapter_version": STANDARD_CASE_ADAPTER_VERSION,
+        "dataset": dataset,
+        "source_id_sha1": sha1_text(source_id)[:16],
+        "question_id_sha1": sha1_text(question_id)[:16],
+        "message_count": len(messages),
+        "messages_fingerprint": standard_messages_fingerprint(messages),
+        "builder": "aippocampus_runtime.recall.index_builder.make_sqlite",
+    }
+
+
+def prepare_standard_sqlite_index(
+    sqlite_path: Path,
+    *,
+    messages: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    cache_metrics: dict[str, Any],
+    rebuild_cache: bool,
+) -> None:
+    manifest_path = sqlite_path.with_name("source_index_manifest.json")
+    cache_enabled = bool(cache_metrics.get("enabled"))
+    if cache_enabled and not rebuild_cache and sqlite_path.exists() and manifest_path.exists():
+        existing = read_json_dict(manifest_path)
+        if existing == manifest:
+            cache_metrics["source_index_hit_count"] += 1
+            return
+        cache_metrics["source_index_manifest_mismatch_count"] += 1
+    elif cache_enabled:
+        cache_metrics["source_index_miss_count"] += 1
+    if cache_enabled and rebuild_cache and sqlite_path.exists():
+        cache_metrics["source_index_forced_rebuild_count"] += 1
+
+    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        make_sqlite(sqlite_path, messages, anchors=[], turns=[])
+    except Exception:
+        if cache_enabled:
+            cache_metrics["source_index_error_rebuild_count"] += 1
+        raise
+    if cache_enabled:
+        cache_metrics["source_index_rebuild_count"] += 1
+        write_json_atomic(manifest_path, manifest)
 
 
 def standard_content_query_terms(question: str, *, limit: int = 24) -> list[str]:
@@ -301,8 +462,15 @@ def build_locomo_standard_cases(
     *,
     corpus_path: Path,
     max_questions: int,
+    cache_metrics: dict[str, Any] | None = None,
+    rebuild_cache: bool = False,
     case_progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cache_metrics = cache_metrics or new_standard_case_cache_metrics(
+        enabled=False,
+        cache_key=None,
+        rebuild_requested=rebuild_cache,
+    )
     cases: list[dict[str, Any]] = []
     corpus: dict[str, Any] = {
         "dataset": "locomo",
@@ -322,9 +490,26 @@ def build_locomo_standard_cases(
         corpus["messages_scanned"] += len(messages)
         if not messages:
             continue
-        sqlite_path = root / "standard" / "locomo" / sha1_text(source_id)[:12] / "index" / "source_index.sqlite"
-        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-        make_sqlite(sqlite_path, messages, anchors=[], turns=[])
+        sqlite_path = (
+            root
+            / "standard"
+            / "locomo"
+            / sha1_text(source_id)[:12]
+            / "index"
+            / "source_index.sqlite"
+        )
+        prepare_standard_sqlite_index(
+            sqlite_path,
+            messages=messages,
+            manifest=source_index_manifest(
+                dataset="locomo",
+                source_id=source_id,
+                question_id=source_id,
+                messages=messages,
+            ),
+            cache_metrics=cache_metrics,
+            rebuild_cache=rebuild_cache,
+        )
         for qa_index, qa in enumerate(sample.get("qa") or []):
             if len(cases) >= max_questions:
                 break
@@ -403,8 +588,15 @@ def build_longmemeval_v1_standard_cases(
     dataset: str,
     corpus_path: Path,
     max_questions: int,
+    cache_metrics: dict[str, Any] | None = None,
+    rebuild_cache: bool = False,
     case_progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cache_metrics = cache_metrics or new_standard_case_cache_metrics(
+        enabled=False,
+        cache_key=None,
+        rebuild_requested=rebuild_cache,
+    )
     cases: list[dict[str, Any]] = []
     corpus: dict[str, Any] = {
         "dataset": dataset,
@@ -429,9 +621,26 @@ def build_longmemeval_v1_standard_cases(
             continue
         corpus["messages_scanned"] += len(messages)
         corpus["session_count"] += len(item.get("haystack_sessions") or [])
-        sqlite_path = root / "standard" / dataset / sha1_text(question_id)[:12] / "index" / "source_index.sqlite"
-        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-        make_sqlite(sqlite_path, messages, anchors=[], turns=[])
+        sqlite_path = (
+            root
+            / "standard"
+            / dataset
+            / sha1_text(question_id)[:12]
+            / "index"
+            / "source_index.sqlite"
+        )
+        prepare_standard_sqlite_index(
+            sqlite_path,
+            messages=messages,
+            manifest=source_index_manifest(
+                dataset=dataset,
+                source_id=question_id,
+                question_id=question_id,
+                messages=messages,
+            ),
+            cache_metrics=cache_metrics,
+            rebuild_cache=rebuild_cache,
+        )
         add_standard_case(
             cases,
             dataset=dataset,
@@ -924,6 +1133,85 @@ def source_semantic_query_labels(question: str) -> set[str]:
     return labels
 
 
+def line_to_session_fingerprint(line_to_session: dict[str, str]) -> str:
+    return stable_json_sha1(
+        sorted((str(key), str(value)) for key, value in line_to_session.items()),
+        length=40,
+    )
+
+
+def source_index_manifest_fingerprint(sqlite_path: Path) -> str:
+    manifest = read_json_dict(sqlite_path.with_name("source_index_manifest.json"))
+    if manifest:
+        return stable_json_sha1(manifest, length=40)
+    return sha1_text(str(sqlite_path.resolve()))
+
+
+def source_semantic_artifact_cache_key(
+    sqlite_path: Path,
+    *,
+    line_to_session: dict[str, str],
+) -> str:
+    material = {
+        "policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+        "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
+        "source_index_manifest_sha1": source_index_manifest_fingerprint(sqlite_path),
+        "line_to_session_sha1": line_to_session_fingerprint(line_to_session),
+    }
+    return stable_json_sha1(material, length=20)
+
+
+def source_semantic_cache_for_json(cache: dict[str, Any]) -> dict[str, Any]:
+    profiles: dict[str, Any] = {}
+    for raw_line, raw_profile in (cache.get("profiles") or {}).items():
+        if not isinstance(raw_profile, dict):
+            continue
+        profile = dict(raw_profile)
+        for key in (
+            "source_terms",
+            "previous_terms",
+            "next_terms",
+            "route_terms",
+            "labels",
+            "context_labels",
+        ):
+            value = profile.get(key)
+            if isinstance(value, set):
+                profile[key] = sorted(str(item) for item in value)
+        profiles[str(raw_line)] = profile
+    return {
+        "schema_version": 1,
+        "kind": "source_semantic_cache_artifact",
+        "manifest": dict(cache.get("manifest") or {}),
+        "profiles": profiles,
+        "working_memory_rows": [
+            row for row in (cache.get("working_memory_rows") or []) if isinstance(row, dict)
+        ],
+    }
+
+
+def source_semantic_cache_from_json(payload: dict[str, Any]) -> dict[str, Any] | None:
+    if payload.get("kind") != "source_semantic_cache_artifact":
+        return None
+    profiles: dict[int, dict[str, Any]] = {}
+    for raw_line, raw_profile in (payload.get("profiles") or {}).items():
+        if not isinstance(raw_profile, dict):
+            continue
+        try:
+            line = int(raw_line)
+        except (TypeError, ValueError):
+            continue
+        profiles[line] = dict(raw_profile)
+    working_rows = [
+        row for row in (payload.get("working_memory_rows") or []) if isinstance(row, dict)
+    ]
+    return {
+        "manifest": dict(payload.get("manifest") or {}),
+        "profiles": profiles,
+        "working_memory_rows": working_rows,
+    }
+
+
 def build_source_semantic_cache(
     sqlite_path: Path,
     *,
@@ -1070,14 +1358,66 @@ def build_source_semantic_cache(
             "hot_query_provider_call_count": 0,
             "raw_source_text_emitted": False,
             "cache_values_emitted": False,
+            "line_to_session_sha1": line_to_session_fingerprint(line_to_session),
+            "source_index_manifest_sha1": source_index_manifest_fingerprint(sqlite_path),
         },
     }
 
 
 class SourceSemanticCacheStore:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        artifact_cache_dir: Path | str | None = None,
+        rebuild_artifact_cache: bool = False,
+    ) -> None:
         self._lock = threading.Lock()
         self._caches: dict[str, dict[str, Any]] = {}
+        self._artifact_cache_dir = (
+            Path(artifact_cache_dir).resolve() if artifact_cache_dir else None
+        )
+        self._rebuild_artifact_cache = bool(rebuild_artifact_cache)
+        self._artifact_hits = 0
+        self._artifact_misses = 0
+        self._artifact_rebuilds = 0
+        self._artifact_mismatches = 0
+
+    def _artifact_path(
+        self,
+        sqlite_path: Path,
+        *,
+        line_to_session: dict[str, str],
+    ) -> Path | None:
+        if self._artifact_cache_dir is None:
+            return None
+        key = source_semantic_artifact_cache_key(
+            sqlite_path,
+            line_to_session=line_to_session,
+        )
+        return self._artifact_cache_dir / f"{key}.json"
+
+    def _load_artifact(self, artifact_path: Path) -> dict[str, Any] | None:
+        payload = read_json_dict(artifact_path)
+        if not payload:
+            self._artifact_misses += 1
+            return None
+        cache = source_semantic_cache_from_json(payload)
+        if cache is None:
+            self._artifact_mismatches += 1
+            return None
+        manifest = cache.get("manifest") or {}
+        if (
+            manifest.get("cache_policy_version") != SOURCE_SEMANTIC_CACHE_POLICY_VERSION
+            or manifest.get("builder_id") != SOURCE_SEMANTIC_CACHE_BUILDER_ID
+        ):
+            self._artifact_mismatches += 1
+            return None
+        self._artifact_hits += 1
+        return cache
+
+    def _write_artifact(self, artifact_path: Path, cache: dict[str, Any]) -> None:
+        write_json_atomic(artifact_path, source_semantic_cache_for_json(cache))
+        self._artifact_rebuilds += 1
 
     def get(
         self,
@@ -1090,10 +1430,21 @@ class SourceSemanticCacheStore:
             cached = self._caches.get(key)
         if cached is not None:
             return cached
+        artifact_path = self._artifact_path(
+            Path(sqlite_path),
+            line_to_session=line_to_session,
+        )
+        if artifact_path is not None and not self._rebuild_artifact_cache:
+            loaded = self._load_artifact(artifact_path)
+            if loaded is not None:
+                with self._lock:
+                    return self._caches.setdefault(key, loaded)
         built = build_source_semantic_cache(
             Path(sqlite_path),
             line_to_session=line_to_session,
         )
+        if artifact_path is not None:
+            self._write_artifact(artifact_path, built)
         with self._lock:
             return self._caches.setdefault(key, built)
 
@@ -1118,6 +1469,15 @@ class SourceSemanticCacheStore:
             "arm": SOURCE_SEMANTIC_CACHE_ARM,
             "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
             "cache_policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+            "source_artifact_cache": {
+                "enabled": self._artifact_cache_dir is not None,
+                "cache_root_emitted": False,
+                "hit_count": self._artifact_hits,
+                "miss_count": self._artifact_misses,
+                "rebuild_count": self._artifact_rebuilds,
+                "manifest_mismatch_count": self._artifact_mismatches,
+                "rebuild_requested": self._rebuild_artifact_cache,
+            },
             "source_cache_count": len(manifests),
             "message_count": message_count,
             "span_count": span_count,
@@ -2679,6 +3039,9 @@ def run_standard_retrieval_qa_benchmark(
     line_reranker_workers: int = DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
     progress_every: int = 0,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    standard_cache_dir: Path | str | None = None,
+    use_standard_cache: bool = True,
+    rebuild_standard_cache: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if dataset not in STANDARD_DATASET_PATHS:
@@ -2692,9 +3055,25 @@ def run_standard_retrieval_qa_benchmark(
         if int(line_reranker_workers) <= 0 and resolved_line_reranker_mode != "off"
         else max(1, int(line_reranker_workers))
     )
+    corpus_sha256 = file_sha256(resolved_path) if resolved_path.exists() else ""
+    case_cache_key = (
+        standard_case_cache_key(
+            dataset=dataset,
+            corpus_sha256=corpus_sha256,
+            max_questions=max_questions,
+        )
+        if corpus_sha256
+        else ""
+    )
+    standard_case_cache = new_standard_case_cache_metrics(
+        enabled=bool(use_standard_cache and corpus_sha256),
+        cache_key=case_cache_key,
+        rebuild_requested=bool(rebuild_standard_cache),
+    )
     config = {
         "dataset": dataset,
         "corpus_path_sha1": sha1_text(str(resolved_path))[:16],
+        "corpus_sha256": corpus_sha256,
         "max_questions": int(max_questions),
         "min_questions": int(min_questions),
         "top_k": int(top_k),
@@ -2710,6 +3089,14 @@ def run_standard_retrieval_qa_benchmark(
         "line_reranker_max_tokens": int(line_reranker_max_tokens),
         "line_reranker_workers": int(resolved_reranker_workers),
         "line_reranker_external_model": resolved_line_reranker_mode == "semantic",
+        "standard_case_cache": {
+            "enabled": bool(standard_case_cache["enabled"]),
+            "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
+            "adapter_version": STANDARD_CASE_ADAPTER_VERSION,
+            "cache_key": case_cache_key,
+            "cache_root_emitted": False,
+            "rebuild_requested": bool(rebuild_standard_cache),
+        },
     }
     if resolved_line_reranker_mode == "semantic":
         config["line_reranker_metadata"] = semantic_line_reranker_public_contract(
@@ -2757,22 +3144,39 @@ def run_standard_retrieval_qa_benchmark(
                 corpus=corpus,
             )
 
-    with tempfile.TemporaryDirectory(prefix="aippocampus-standard-track-b-") as tmp:
+    tmp_context: tempfile.TemporaryDirectory[str] | None = None
+    if standard_case_cache["enabled"]:
+        base_cache_dir = Path(
+            standard_cache_dir or DEFAULT_STANDARD_CASE_CACHE_ROOT
+        ).resolve()
+        case_root = base_cache_dir / case_cache_key
+        case_root.mkdir(parents=True, exist_ok=True)
+    else:
+        tmp_context = tempfile.TemporaryDirectory(prefix="aippocampus-standard-track-b-")
+        case_root = Path(tmp_context.name)
+    try:
         if dataset == "locomo":
             cases, corpus = build_locomo_standard_cases(
-                Path(tmp),
+                case_root,
                 corpus_path=resolved_path,
                 max_questions=max_questions,
+                cache_metrics=standard_case_cache,
+                rebuild_cache=bool(rebuild_standard_cache),
                 case_progress_callback=emit_case_building_progress,
             )
         else:
             cases, corpus = build_longmemeval_v1_standard_cases(
-                Path(tmp),
+                case_root,
                 dataset=dataset,
                 corpus_path=resolved_path,
                 max_questions=max_questions,
+                cache_metrics=standard_case_cache,
+                rebuild_cache=bool(rebuild_standard_cache),
                 case_progress_callback=emit_case_building_progress,
             )
+        corpus["case_cache"] = finalized_standard_case_cache_metrics(
+            standard_case_cache
+        )
         emit_standard_progress(
             progress_callback,
             started=started,
@@ -2782,8 +3186,16 @@ def run_standard_retrieval_qa_benchmark(
             total_cases=len(cases),
             corpus=corpus,
         )
+        source_artifact_cache_dir = (
+            case_root / "source_artifacts" / SOURCE_SEMANTIC_CACHE_POLICY_VERSION
+            if standard_case_cache["enabled"]
+            else None
+        )
         source_semantic_cache_store = (
-            SourceSemanticCacheStore()
+            SourceSemanticCacheStore(
+                artifact_cache_dir=source_artifact_cache_dir,
+                rebuild_artifact_cache=bool(rebuild_standard_cache),
+            )
             if resolved_line_reranker_mode == "source_semantic_cache"
             else None
         )
@@ -2879,6 +3291,9 @@ def run_standard_retrieval_qa_benchmark(
                         total_cases=len(cases),
                         corpus=corpus,
                     )
+    finally:
+        if tmp_context is not None:
+            tmp_context.cleanup()
     metrics = summarize_standard_retrieval_results(
         results,
         top_k=top_k,

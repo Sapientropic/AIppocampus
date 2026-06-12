@@ -14,6 +14,7 @@ from typing import TypedDict
 from test_tier_manifest import (
     BENCHMARK_MODULES,
     BENCHMARK_SMOKE_MODULES,
+    BROAD_PR_PRIMARY_TIERS,
     PR_PRIMARY_TIERS,
     SLOW_MODULES,
     TEST_MODULE_CLASSIFICATIONS,
@@ -35,6 +36,11 @@ QUICK_BUDGET = {
     "test_count_target": 330,
     "elapsed_seconds_target": 30.0,
 }
+PR_BUDGET = {
+    "module_count_target": 70,
+    "test_count_target": 500,
+    "elapsed_seconds_target": 180.0,
+}
 
 
 class TierModuleRow(TypedDict):
@@ -54,36 +60,66 @@ def _target_status(actual: int | float, target: int | float) -> str:
     return "within_target" if actual <= target else "over_target"
 
 
-def quick_count_budget(*, module_count: int, test_count: int) -> dict[str, object]:
+def count_budget_for_tier(
+    tier: str,
+    *,
+    module_count: int,
+    test_count: int,
+) -> dict[str, object] | None:
+    normalized_tier = TIER_ALIASES.get(tier, tier)
+    if normalized_tier == "quick":
+        budget = QUICK_BUDGET
+        label = "Quick"
+        note = (
+            "Quick targets are drift indicators for the local inner loop, not "
+            "portable performance SLAs."
+        )
+    elif normalized_tier == "pr":
+        budget = PR_BUDGET
+        label = "PR"
+        note = (
+            "PR targets keep the default local gate useful for agents. Broad "
+            "pre-merge coverage belongs to broad-pr, benchmark-smoke, or full."
+        )
+    else:
+        return None
     return {
-        "module_count_target": QUICK_BUDGET["module_count_target"],
-        "test_count_target": QUICK_BUDGET["test_count_target"],
+        "module_count_target": budget["module_count_target"],
+        "test_count_target": budget["test_count_target"],
         "module_count_status": _target_status(
             module_count,
-            QUICK_BUDGET["module_count_target"],
+            budget["module_count_target"],
         ),
         "test_count_status": _target_status(
             test_count,
-            QUICK_BUDGET["test_count_target"],
+            budget["test_count_target"],
         ),
-        "note": (
-            "Quick targets are drift indicators for the local inner loop, not "
-            "portable performance SLAs."
-        ),
+        "note": note,
+        "tier_label": label,
     }
 
 
 def timing_budget_for_tier(selected_tier: str, *, elapsed_seconds: float) -> dict[str, object] | None:
-    if TIER_ALIASES.get(selected_tier, selected_tier) != "quick":
+    normalized_tier = TIER_ALIASES.get(selected_tier, selected_tier)
+    if normalized_tier == "quick":
+        budget = QUICK_BUDGET
+        note = (
+            "Use this quick timing budget to spot drift. It is not a hard "
+            "cross-machine SLA."
+        )
+    elif normalized_tier == "pr":
+        budget = PR_BUDGET
+        note = (
+            "Use this PR timing budget to keep the default agent pre-push gate "
+            "fast enough to be useful. Escalate broad coverage to broad-pr."
+        )
+    else:
         return None
-    target = QUICK_BUDGET["elapsed_seconds_target"]
+    target = budget["elapsed_seconds_target"]
     return {
         "elapsed_seconds_target": target,
         "elapsed_seconds_status": _target_status(elapsed_seconds, target),
-        "note": (
-            "Use this quick timing budget to spot drift. It is not a hard "
-            "cross-machine SLA."
-        ),
+        "note": note,
     }
 
 
@@ -114,7 +150,13 @@ def modules_for_tier(tier: str) -> list[str]:
             for module in modules
             if TEST_MODULE_CLASSIFICATIONS[module].primary_tier in PR_PRIMARY_TIERS
         ]
-    if normalized_tier in {"quick", "smoke", "integration"}:
+    if normalized_tier == "broad-pr":
+        return [
+            module
+            for module in modules
+            if TEST_MODULE_CLASSIFICATIONS[module].primary_tier in BROAD_PR_PRIMARY_TIERS
+        ]
+    if normalized_tier in {"quick", "pr", "broad", "smoke", "integration"}:
         return [
             module
             for module in modules
@@ -191,13 +233,10 @@ def build_tier_report(
             "module_count": len(modules),
             "test_count": sum(row["test_count"] for row in module_rows),
             "top_modules": top_modules,
-            "budget": (
-                quick_count_budget(
-                    module_count=len(modules),
-                    test_count=sum(row["test_count"] for row in module_rows),
-                )
-                if TIER_ALIASES.get(tier, tier) == "quick"
-                else None
+            "budget": count_budget_for_tier(
+                tier,
+                module_count=len(modules),
+                test_count=sum(row["test_count"] for row in module_rows),
             ),
         }
 
@@ -208,8 +247,9 @@ def build_tier_report(
         "tier_aliases": TIER_ALIASES,
         "tiers": report_tiers,
         "known_limitations": [
-            "fast remains a deprecated compatibility alias for pr; use quick for "
-            "the small inner loop and pr for the broad deterministic PR lane.",
+            "fast is a compatibility alias for the fast local pr gate; "
+            "deterministic and ci remain broad-pr aliases for the old broad "
+            "deterministic surface.",
         ],
     }
 
@@ -374,11 +414,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=TEST_TIERS,
         default="pr",
         help=(
-            "Test tier to run. Default is the broad deterministic PR lane. "
+            "Test tier to run. Default is the fast local PR gate. "
             "quick is the small local inner loop with a quick target of about "
             "46 modules, 330 tests, and 30s timing-report elapsed on current "
-            "local hardware; pr is the broad deterministic PR lane; fast is a "
-            "deprecated alias for pr."
+            "local hardware; pr targets about 70 modules, 500 tests, and 180s "
+            "for ordinary pre-push use; broad-pr keeps the old deterministic "
+            "smoke/integration coverage for CI or pre-merge use."
         ),
     )
     parser.add_argument(

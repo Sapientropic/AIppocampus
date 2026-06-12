@@ -124,17 +124,19 @@ planning material:
 
 ## Verification
 
-For ordinary repo changes, run the fast deterministic path from the repository
-root:
+For ordinary repo changes, plan verification from the changed surface first:
 
 ```powershell
+python tools\aippocampus\test_plan.py --json
 python tools\aippocampus\docs\check_docs_health.py --json
 python tools\aippocampus\run_tests.py --tier pr
 ```
 
-Before release, public-readiness, or broad refactor claims, also run
-`python tools\aippocampus\run_tests.py --tier full` or the specific slow /
-benchmark tier that owns the changed surface.
+`--tier pr` is the fast local pre-push gate, not the old broad deterministic
+suite. Let focused tests and the planner run first. Use
+`python tools\aippocampus\run_tests.py --tier broad-pr`, `--tier full`, or the
+specific slow / benchmark tier only when the changed surface or release claim
+owns that broader coverage.
 
 For public-readiness changes, also scan the repository for local paths and
 secret-like strings.

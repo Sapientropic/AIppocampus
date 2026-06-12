@@ -40,6 +40,7 @@ python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
 python tools/aippocampus/run_tests.py --tier quick
 python tools/aippocampus/run_tests.py --tier pr
+python tools/aippocampus/run_tests.py --tier broad-pr
 python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
 python tools/aippocampus/run_coverage.py --tier pr
 ```
