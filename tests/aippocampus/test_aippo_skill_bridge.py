@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.aippo import skill_bridge  # noqa: E402
+from aippocampus_runtime.aippo import skill_bridge, skill_observed_use  # noqa: E402
 
 
 class AIppoSkillBridgeTests(unittest.TestCase):
@@ -102,6 +102,74 @@ class AIppoSkillBridgeTests(unittest.TestCase):
             "recommended",
         )
         self.assertTrue(eval_candidacy["expensive_multi_arm_runs_require_operator_opt_in"])
+
+    def test_observed_use_promotes_selected_skill_clauses_into_ripe_aippo(self) -> None:
+        report = skill_observed_use.build_skill_observed_use_fixture_report(
+            REPO_ROOT / "skills" / "aippocampus" / "SKILL.md",
+            target_task="coding issue closeout with continuity-sensitive context",
+        )
+        seed = report["seed"]
+        contract = report["ripened_contract"]
+        packet = report["activation_packet"]
+        deepen = report["deepen_surface"]
+        encoded_packet = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
+        self.assertEqual(seed["kind"], "candidate_aippo_seed")
+        self.assertEqual(contract["kind"], "aippo_working_contract")
+        self.assertEqual(contract["package_status"], "partial")
+        self.assertEqual(packet["output_mode"], "working_contract")
+        self.assertEqual(packet["claim_permission"], "working_contract_allowed_no_fact_claim")
+        self.assertEqual(packet["next_action"], "use_hint")
+        self.assertIn("follow it before broad manual search", " ".join(packet["use_guidance"]))
+        self.assertLessEqual(report["metrics"]["activation_packet_bytes"], 700)
+        self.assertGreater(report["metrics"]["source_backed_clause_count"], 0)
+        self.assertGreater(report["metrics"]["skill_clause_ripened_count"], 0)
+        self.assertGreater(report["metrics"]["next_action_clarity_count"], 0)
+        self.assertGreater(report["metrics"]["unnecessary_deepen_suppression_count"], 0)
+        self.assertGreater(report["metrics"]["candidate_only_clause_count"], 0)
+        self.assertNotIn("source_refs", encoded_packet)
+        self.assertNotIn("source_support_ledger", encoded_packet)
+        self.assertNotIn("aippocampus health", encoded_packet)
+        self.assertNotIn("C:\\", encoded_packet)
+        self.assertGreater(
+            deepen["source_support_ledger"]["source_ref_count"],
+            packet["active_clause_count"],
+        )
+        self.assertEqual(report["red_lines"]["skill_instruction_promoted_without_observed_use_count"], 0)
+        self.assertEqual(report["red_lines"]["self_report_promoted_to_source_supported_count"], 0)
+        self.assertEqual(report["red_lines"]["source_trail_foreground_leak_count"], 0)
+
+    def test_unobserved_or_self_report_skill_clauses_remain_candidate_only(self) -> None:
+        report = skill_observed_use.build_skill_observed_use_fixture_report(
+            REPO_ROOT / "skills" / "aippocampus" / "SKILL.md"
+        )
+        contract = report["ripened_contract"]
+        active_ids = set(report["activation_packet"]["active_clause_ids"])
+        command_clauses = [
+            clause
+            for clause in contract["clauses"]
+            if clause["kind"] == "command"
+        ]
+        self_report_only_ids = {
+            row["clause_id"]
+            for row in report["observed_use_rows"]
+            if row["source_support"].get("self_report_only")
+        }
+
+        self.assertGreater(len(command_clauses), 0)
+        self.assertTrue(self_report_only_ids)
+        self.assertTrue(active_ids.isdisjoint(self_report_only_ids))
+        self.assertTrue(
+            all(
+                clause["support"]["support_grade"] == "candidate_only"
+                for clause in command_clauses
+                if clause["clause_id"] in self_report_only_ids
+            )
+        )
+        self.assertEqual(report["red_lines"]["overbroad_declared_clause_ripened_count"], 0)
+        self.assertEqual(report["metrics"]["skill_clause_ripening_candidate_count"], 2)
+        self.assertGreater(report["metrics"]["candidate_only_clause_count"], 0)
 
 
 if __name__ == "__main__":

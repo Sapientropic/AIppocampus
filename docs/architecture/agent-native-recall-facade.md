@@ -297,6 +297,16 @@ manual-search-after-packet. A #1256-style eval environment is only recommended
 after observed usefulness, repeated correction/risk, or operator selection; it
 is not a default cost for every imported skill.
 
+`aippocampus_runtime.aippo.skill_observed_use` is the first narrow ripening
+path. It keeps the seed as a lower-authority candidate, then compiles only
+source-backed observed-use rows into an `aippo_working_contract` package. The
+skill declaration and the observed-use feedback are both required source legs.
+A command list, self-report-only correction, or unsupported over-broad clause
+stays candidate-only or challenged, even if it came from a valid `SKILL.md`.
+The resulting foreground activation packet carries only compact working
+guidance; observed-use rows, source support, command details, and unsupported
+clauses remain behind `deepen` / `explain`.
+
 ## Output Mapping
 
 The facade preserves the existing action grammar instead of adding a new

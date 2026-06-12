@@ -79,7 +79,25 @@ def _bullet_text(line: str) -> str:
 
 
 def _bullets(lines: Iterable[str]) -> list[str]:
-    return [_bullet_text(line) for line in lines if _bullet_text(line)]
+    bullets: list[str] = []
+    current = ""
+    for line in lines:
+        bullet = _bullet_text(line)
+        stripped = line.strip()
+        if bullet:
+            if current:
+                bullets.append(current)
+            current = bullet
+            continue
+        if current and stripped and line.startswith((" ", "\t")):
+            current = f"{current} {stripped}"
+            continue
+        if current:
+            bullets.append(current)
+            current = ""
+    if current:
+        bullets.append(current)
+    return bullets
 
 
 def _code_spans(markdown: str) -> list[str]:
