@@ -65,6 +65,30 @@ class AgentOptInContinuityTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def _append_clean_rows(self, rows: list[dict[str, object]]) -> None:
+        with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    def _macro_state_path(
+        self,
+        *,
+        active_layer: str = "人",
+        momentum: dict[str, object] | None = None,
+    ) -> Path:
+        macro_path = self.cwd / f"macro-{active_layer}.jsonl"
+        entry = macro_state.build_macro_orientation_state(
+            project="AIppocampus",
+            hexagram="乾",
+            changing_lines=(1, 2, 3),
+            source_refs=({"source_id": f"macro-live-{active_layer}"},),
+            updated_at="2026-06-11T10:00:00Z",
+            active_layer=active_layer,
+            momentum=momentum,
+        )
+        macro_state.append_macro_orientation_state(macro_path, entry)
+        return macro_path
+
     def test_recall_returns_compact_packet_and_deepens_only_on_request(self) -> None:
         report = agent_continuity.recall(
             "agent-native recall opt-in SECRET_TOKEN=abc123",
@@ -244,6 +268,133 @@ class AgentOptInContinuityTests(unittest.TestCase):
             route_id_misuse["result"]["error"]["details"]["callable_handle_field"],
             "deepen_requests[].handle",
         )
+
+    def test_macro_orientation_changes_live_recall_fanout_and_ordering(self) -> None:
+        self._append_clean_rows(
+            [
+                {
+                    "message_id": "macro_benchmark",
+                    "turn_id": "turn_macro_benchmark",
+                    "source_line": 20,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 20,
+                    "is_final": True,
+                    "scope_labels": ["technical_work"],
+                    "text": "Macro route shared cue benchmark evidence fixture quality gate measured result.",
+                },
+                {
+                    "message_id": "macro_issue",
+                    "turn_id": "turn_macro_issue",
+                    "source_line": 21,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 21,
+                    "is_final": True,
+                    "scope_labels": ["technical_work"],
+                    "text": "Macro route shared cue issue backlog workflow handoff project triage next action.",
+                },
+                {
+                    "message_id": "macro_roadmap",
+                    "turn_id": "turn_macro_roadmap",
+                    "source_line": 22,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 22,
+                    "is_final": True,
+                    "scope_labels": ["technical_work"],
+                    "text": "Macro route shared cue roadmap north star product claim direction thesis.",
+                },
+            ]
+        )
+        human_path = self._macro_state_path(active_layer="人")
+        earth_path = self._macro_state_path(active_layer="地")
+
+        baseline = agent_continuity.recall(
+            "macro route shared cue",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=2,
+        )
+        human = agent_continuity.recall(
+            "macro route shared cue",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=2,
+            macro_state_path=human_path,
+        )
+        earth = agent_continuity.recall(
+            "macro route shared cue",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=2,
+            macro_state_path=earth_path,
+        )
+        encoded = json.dumps(human, ensure_ascii=False, sort_keys=True)
+
+        self.assertFalse(baseline["metrics"]["macro_orientation_applied"])
+        self.assertTrue(human["metrics"]["macro_orientation_applied"])
+        self.assertGreater(human["metrics"]["effective_max_routes"], 2)
+        self.assertGreater(len(human["memory_packets"]), len(baseline["memory_packets"]))
+        self.assertEqual(human["macro_navigation"]["active_layer"], "human")
+        self.assertEqual(earth["macro_navigation"]["active_layer"], "earth")
+        self.assertEqual(human["memory_packets"][0]["route_topic"], "issue_backlog_interpretation")
+        self.assertEqual(earth["memory_packets"][0]["route_topic"], "benchmark_claim_posture")
+        self.assertIn("macro_active_layer_human", encoded)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("macro-live", encoded)
+
+    def test_macro_momentum_recheck_stays_diagnostic_not_evidence(self) -> None:
+        self._append_clean_rows(
+            [
+                {
+                    "message_id": "macro_recheck_issue",
+                    "turn_id": "turn_macro_recheck",
+                    "source_line": 30,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 30,
+                    "is_final": True,
+                    "text": "Momentum recheck route issue workflow currentness before closeout.",
+                }
+            ]
+        )
+        macro_path = self._macro_state_path(
+            active_layer="人",
+            momentum={"basis": {"counter_evidence_delta": 0.2}},
+        )
+
+        recall = agent_continuity.recall(
+            "momentum recheck issue workflow",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=2,
+            macro_state_path=macro_path,
+        )
+        handle = recall["deepen_requests"][0]["handle"]
+        explanation = agent_continuity.explain(handle, macro_state_path=macro_path)
+        deepened = agent_continuity.deepen(
+            handle,
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            macro_state_path=macro_path,
+        )
+
+        self.assertEqual(recall["macro_navigation"]["authority_level"], "navigation_only")
+        self.assertIn("momentum_first_decay_recheck", recall["macro_navigation"]["recheck_on"])
+        self.assertIn(
+            "macro_momentum_recheck",
+            explanation["explanation"]["reason_codes"],
+        )
+        self.assertEqual(
+            explanation["explanation"]["claim_permission"],
+            "no_claim_before_reopen",
+        )
+        self.assertEqual(
+            deepened["macro_navigation_diagnostics"]["claim_permission"],
+            "no_claim_before_reopen",
+        )
+        self.assertFalse(deepened["macro_navigation_diagnostics"]["fact_claim_allowed"])
 
     def test_explain_is_public_safe(self) -> None:
         recall = agent_continuity.recall(
