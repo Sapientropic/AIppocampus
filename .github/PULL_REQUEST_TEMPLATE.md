@@ -24,6 +24,16 @@
 
 Closes or relates to:
 
+Closeout class:
+
+- [ ] `complete` - acceptance criteria are satisfied.
+- [ ] `complete_with_followups` - any remaining gaps are linked below.
+- [ ] `blocker_recorded` - this records useful blocker evidence; do not use a
+      closing keyword unless a follow-up issue owns the remaining work.
+- [ ] `narrow_slice_only` - use relates-to wording, not `Closes #...`.
+
+Remaining gap / follow-up issue:
+
 ## Notes For Reviewers
 
 -

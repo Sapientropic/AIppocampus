@@ -217,3 +217,29 @@ A useful PR should state:
 
 Use the repository PR template as the minimum receipt. For broader ideas,
 start with a GitHub Discussion or a focused issue before opening a large patch.
+
+## Issue Closeout Precision
+
+Closing an issue is a claim about that issue's acceptance criteria, not a reward
+for useful effort. A failure report, blocker record, diagnostic, or narrow slice
+can be valuable without making the parent issue done.
+
+Use these closeout classes in PR bodies or issue comments when the distinction
+matters:
+
+- `complete`: the issue's acceptance criteria are satisfied.
+- `complete_with_followups`: the issue can close because each known remaining
+  gap is explicitly owned by a linked follow-up issue.
+- `blocker_recorded`: useful blocker evidence landed; keep the original issue
+  open or link a follow-up that owns the remaining work.
+- `narrow_slice_only`: the PR advances the issue but should use relates-to
+  wording, not `Closes #...`.
+
+If a PR body uses `Closes #...` while also saying `diagnostic-only`, `failure
+report`, `blocker`, `not measured`, `not default`, or similar partial-scope
+language, include `remaining_gap:` or `followup_issue:` with an issue link. Run
+the local heuristic before opening broad closeout PRs:
+
+```sh
+python tools/aippocampus/github/closeout_audit.py --body-file .tmp/pr-body.md --json
+```
