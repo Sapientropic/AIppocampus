@@ -4,12 +4,13 @@ This is a public-safe deterministic smoke for GitHub #465. It also carries a
 narrow GitHub #201 readout for route actionability, source-reopen
 follow-through, default foreground route/cache delivery, foreground packet
 source-reopen follow-through, and a #201/#281/#309/#248 vague-cue candidate
-funnel readout. It compares three source-navigation arms on the same synthetic
+funnel readout. It compares four source-navigation arms on the same synthetic
 clean-source fixtures, plus one two-turn foreground-hook fixture:
 
 - direct `search_memory`
 - hook-only scent/card behavior
 - progressive `recall_context -> recall_deepen`
+- attention-router navigation-only over the same `recall_context` candidates
 - default foreground route/cache delivery under a simulated semantic timeout
 
 The runner is:
@@ -26,12 +27,14 @@ python tools\aippocampus\smoke\smoke_recall_navigation_promotion.py --json
 
 ## Fixture Coverage
 
-The smoke uses four public synthetic cases:
+The smoke uses five public synthetic cases:
 
 - vague same-thread reference to a "magic moment" source;
 - stale-handle fast rejection after clean-source fingerprint changes;
 - Chinese vague life-wide cue;
-- transliterated Russian vague cue.
+- transliterated Russian vague cue;
+- light Arabic continuity cue for the AIppocampus/little-hippocampus route
+  family.
 
 All cases use temporary fixtures only. The smoke writes temporary clean-source,
 SQLite, and cache files, but does not write to the repository or live registry.
@@ -62,6 +65,28 @@ default-ready. The report can close #1302 as a harness implementation, but it
 does not close #1185's broader default-session / natural-handoff usefulness
 gate by itself.
 
+For #1300, the harness now includes a public-safe `macro_navigation` fixture
+case. The macro arm uses the same route set and budgets as the baseline, consumes
+a scoped project macro state as a navigation prior, and reports:
+
+- `active_layer_order_delta_count=1`;
+- `hamming_fanout_delta_count=1`;
+- `momentum_recheck_diagnostic_count=1`;
+- `manual_search_fallback_reduction_count>=1`;
+- zero `stale_as_current` and zero `claim_without_source_reopen`.
+
+This is enough to show that scoped macro state can change route ordering,
+candidate fanout, and currentness/recheck diagnostics in the agent recall path.
+It is not enough to promote macro navigation to default-ready behavior.
+
+For #1301, `feature_navigation_only` consumes the
+`attention_router_navigation_only` comparison arm. That arm may select a
+route-family and report packet cost, but it is not source-backed success until
+the separate `feature_plus_deepen` arm reopens clean source. The attention
+activation readout also carries a pure Arabic deictic negative control: `هل في
+تصميمه عائق قاتل؟` should fall back to `clarify_or_recall`, not silently bind
+to whichever context is visible.
+
 ## Result Shape
 
 The report includes these metrics for each arm:
@@ -80,6 +105,8 @@ The report includes these metrics for each arm:
 - `source_reopen_follow_through`
 - `wrong_route_drag_count`
 - `scent_as_fact_violation`
+- `claim_without_source_reopen_count`
+- `selected_route_family`
 - `time_to_first_useful_source_observed_ms`
 - `input_token_proxy`
 
@@ -90,7 +117,7 @@ The `foreground_lift` fixture also reports:
 - source reopen after consuming the foreground packet's candidate ref;
 - evidence count and source-boundary preservation.
 
-The schema v4 `vague_cue_candidate_funnel` fixture also reports:
+The schema v5 `vague_cue_candidate_funnel` fixture also reports:
 
 - `core_candidate_count`
 - `sentinel_candidate_count`

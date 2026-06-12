@@ -14,6 +14,11 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.ops import recall_navigation_comparison_fixtures
+from aippocampus_runtime.ops.recall_navigation_comparison import ARM_ATTENTION_NAV
+from aippocampus_runtime.ops.recall_navigation_macro_fixture import (
+    fixture_macro_navigation_cases,
+    macro_navigation_readout,
+)
 from aippocampus_runtime.recall.continuity_usefulness import continuity_usefulness_metrics
 
 PROMOTION_KIND = "aippocampus_recall_navigation_promotion_harness"
@@ -31,6 +36,13 @@ RED_LINE_KEYS = (
     "claim_without_source_reopen_count",
     "stale_as_current_count",
 )
+SUMMARY_METRIC_NAMES = (
+    "feature_hurt_case_count feature_noop_case_count manual_search_fallback_count "
+    "wrong_source_route_count foreground_packet_bytes correct_but_useless_warning_count "
+    "route_family_selected_before_manual_search_count known_alias_cross_language_activation_count "
+    "macro_prior_applied_count macro_active_layer_order_delta_count "
+    "macro_hamming_fanout_delta_count macro_momentum_recheck_diagnostic_count"
+).split()
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -74,6 +86,9 @@ def _arm_row(
     selected_next_tool: str = "",
     expected_fail_closed: bool = False,
     failure_class: str = "",
+    selected_route_family: str = "",
+    route_family_selected_before_manual_search: bool = False,
+    known_alias_cross_language_activation: bool = False,
 ) -> dict[str, Any]:
     return {
         "source_backed_success": source_backed_success,
@@ -88,6 +103,9 @@ def _arm_row(
         "selected_next_tool": selected_next_tool,
         "expected_fail_closed": expected_fail_closed,
         "failure_class": failure_class,
+        "selected_route_family": selected_route_family,
+        "route_family_selected_before_manual_search": route_family_selected_before_manual_search,
+        "known_alias_cross_language_activation": known_alias_cross_language_activation,
         **_blank_red_lines(),
     }
 
@@ -95,18 +113,20 @@ def _arm_row(
 def _derived_case(row: Mapping[str, Any]) -> dict[str, Any]:
     arms = _as_dict(row.get("arms"))
     direct = _as_dict(arms.get("direct_search"))
+    attention = _as_dict(arms.get(ARM_ATTENTION_NAV))
     progressive = _as_dict(arms.get("progressive_recall"))
     case_id = str(row.get("case_id") or "")
     family = str(row.get("case_family") or "unspecified")
     expected_fail_closed = bool(progressive.get("expected_fail_closed"))
     nav_payload = {
         "case_id": case_id,
-        "route_count": progressive.get("route_count"),
-        "source_ref_count": progressive.get("source_ref_count"),
-        "selected_next_tool": progressive.get("selected_next_tool"),
+        "route_count": attention.get("route_count"),
+        "attention_route_packet_count": attention.get("attention_route_packet_count"),
+        "selected_next_tool": attention.get("selected_next_tool"),
+        "selected_route_family": attention.get("selected_route_family"),
     }
-    nav_actionable = bool(progressive.get("route_actionable"))
-    nav_warning = int(nav_actionable)
+    nav_actionable = bool(attention.get("route_actionable"))
+    nav_warning = _int(attention.get("correct_but_useless_warning_count"))
     plus_success = bool(progressive.get("source_backed_success"))
     baseline_success = bool(direct.get("source_backed_success"))
     manual_count = _int(direct.get("manual_query_invention_count"))
@@ -136,12 +156,20 @@ def _derived_case(row: Mapping[str, Any]) -> dict[str, Any]:
                 route_actionable=nav_actionable,
                 source_reopen_attempted=False,
                 source_reopen_follow_through=False,
-                wrong_route_drag_count=wrong_drag,
-                foreground_packet_bytes=_packet_bytes(nav_payload),
+                wrong_route_drag_count=_int(attention.get("wrong_route_drag_count")),
+                foreground_packet_bytes=_int(attention.get("foreground_packet_bytes"))
+                or _packet_bytes(nav_payload),
                 correct_but_useless_warning_count=nav_warning,
-                selected_next_tool=str(progressive.get("selected_next_tool") or ""),
-                expected_fail_closed=expected_fail_closed,
-                failure_class=str(progressive.get("failure_class") or ""),
+                selected_next_tool=str(attention.get("selected_next_tool") or ""),
+                expected_fail_closed=False,
+                failure_class=str(attention.get("failure_class") or ""),
+                selected_route_family=str(attention.get("selected_route_family") or ""),
+                route_family_selected_before_manual_search=bool(
+                    attention.get("route_family_selected_before_manual_search")
+                ),
+                known_alias_cross_language_activation=bool(
+                    attention.get("known_alias_cross_language_activation")
+                ),
             ),
             ARM_PLUS_DEEPEN: _arm_row(
                 source_backed_success=plus_success,
@@ -316,8 +344,14 @@ def _fixture_distractor_cases() -> list[dict[str, Any]]:
 
 
 def _case_rows(comparison_report: Mapping[str, Any]) -> list[dict[str, Any]]:
-    return [_derived_case(row) for row in _as_list(comparison_report.get("cases"))] + (
-        _fixture_distractor_cases()
+    return (
+        [_derived_case(row) for row in _as_list(comparison_report.get("cases"))]
+        + _fixture_distractor_cases()
+        + fixture_macro_navigation_cases(
+            arm_baseline=ARM_BASELINE,
+            arm_nav_only=ARM_NAV_ONLY,
+            arm_plus_deepen=ARM_PLUS_DEEPEN,
+        )
     )
 
 
@@ -332,6 +366,12 @@ def _aggregate_metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "wrong_route_drag_count": 0,
         "foreground_packet_bytes": 0,
         "correct_but_useless_warning_count": 0,
+        "route_family_selected_before_manual_search_count": 0,
+        "known_alias_cross_language_activation_count": 0,
+        "macro_prior_applied_count": 0,
+        "macro_active_layer_order_delta_count": 0,
+        "macro_hamming_fanout_delta_count": 0,
+        "macro_momentum_recheck_diagnostic_count": 0,
         **_blank_red_lines(),
     }
     for case in cases:
@@ -350,6 +390,22 @@ def _aggregate_metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
             metrics["foreground_packet_bytes"] += _int(arm.get("foreground_packet_bytes"))
             metrics["correct_but_useless_warning_count"] += _int(
                 arm.get("correct_but_useless_warning_count")
+            )
+            metrics["route_family_selected_before_manual_search_count"] += int(
+                bool(arm.get("route_family_selected_before_manual_search"))
+            )
+            metrics["known_alias_cross_language_activation_count"] += int(
+                bool(arm.get("known_alias_cross_language_activation"))
+            )
+            metrics["macro_prior_applied_count"] += int(bool(arm.get("macro_prior_applied")))
+            metrics["macro_active_layer_order_delta_count"] += int(
+                bool(arm.get("macro_active_layer_order_changed"))
+            )
+            metrics["macro_hamming_fanout_delta_count"] += int(
+                bool(arm.get("macro_hamming_fanout_delta"))
+            )
+            metrics["macro_momentum_recheck_diagnostic_count"] += int(
+                bool(arm.get("macro_momentum_recheck_diagnostic"))
             )
             for key in RED_LINE_KEYS:
                 metrics[key] += _int(arm.get(key))
@@ -433,6 +489,11 @@ def build_recall_navigation_promotion_report(
     coverage = _fixture_coverage(cases)
     usefulness = _usefulness(metrics, cases)
     blockers = _promotion_blockers(metrics, coverage, usefulness)
+    macro_readout = macro_navigation_readout(
+        cases,
+        arm_baseline=ARM_BASELINE,
+        arm_nav_only=ARM_NAV_ONLY,
+    )
     promotion_gate_ok = not blockers
     return {
         "kind": PROMOTION_KIND,
@@ -456,6 +517,7 @@ def build_recall_navigation_promotion_report(
                 "status": "candidate",
                 "promotion_issue": "#1301",
                 "uses_this_harness_before_default": True,
+                "comparison_arm": ARM_ATTENTION_NAV,
             },
             "macro_navigation": {
                 "status": "candidate",
@@ -467,6 +529,11 @@ def build_recall_navigation_promotion_report(
         "cases_by_id": {str(case["case_id"]): case for case in cases},
         "promotion_metrics": metrics,
         "usefulness_metrics": usefulness,
+        "attention_router_readout": {
+            **_as_dict(comparison_report.get("attention_router_activation")),
+            "comparison_arm": ARM_ATTENTION_NAV,
+        },
+        "macro_navigation_readout": macro_readout,
         "fixture_coverage": coverage,
         "comparison_source": {
             "kind": comparison_report.get("kind"),
@@ -506,6 +573,7 @@ def public_smoke_summary(report: Mapping[str, Any]) -> dict[str, Any]:
 
     promotion_gate_ok = bool(report.get("promotion_gate_ok"))
     default_allowed = bool(report.get("default_adoption_allowed"))
+    macro_readout = _as_dict(report.get("macro_navigation_readout"))
     return {
         "kind": PROMOTION_KIND,
         "schema_version": PROMOTION_SCHEMA_VERSION,
@@ -524,17 +592,27 @@ def public_smoke_summary(report: Mapping[str, Any]) -> dict[str, Any]:
             "red_line_count": len(RED_LINE_KEYS),
         },
         "feature_slots": {
-            "attention_router": {"uses_this_harness_before_default": True},
+            "attention_router": {
+                "uses_this_harness_before_default": True,
+                "comparison_arm": ARM_ATTENTION_NAV,
+            },
             "macro_navigation": {"uses_this_harness_before_default": True},
         },
-        "summary_metric_names": [
-            "feature_hurt_case_count",
-            "feature_noop_case_count",
-            "manual_search_fallback_count",
-            "wrong_source_route_count",
-            "foreground_packet_bytes",
-            "correct_but_useless_warning_count",
-        ],
+        "summary_metric_names": list(SUMMARY_METRIC_NAMES),
+        "macro_navigation_readout": {
+            "measured": bool(macro_readout.get("measured")),
+            "status": str(macro_readout.get("status") or ""),
+            "promotion_issue": str(macro_readout.get("promotion_issue") or "#1300"),
+            "active_layer_order_delta_count": _int(
+                macro_readout.get("active_layer_order_delta_count")
+            ),
+            "hamming_fanout_delta_count": _int(
+                macro_readout.get("hamming_fanout_delta_count")
+            ),
+            "momentum_recheck_diagnostic_count": _int(
+                macro_readout.get("momentum_recheck_diagnostic_count")
+            ),
+        },
         "distractor_families_required": list(DISTRACTOR_FAMILIES),
         "boundary": {
             "public_safe_fixture_only": True,
@@ -564,17 +642,3 @@ def render_text(report: Mapping[str, Any]) -> str:
         f"{metrics.get('correct_but_useless_warning_count', 0)}\n"
         "- Boundary: public fixture only; source reopen remains required.\n"
     )
-
-
-__all__ = [
-    "ARM_BASELINE",
-    "ARM_NAV_ONLY",
-    "ARM_PLUS_DEEPEN",
-    "PROMOTION_ARMS",
-    "PROMOTION_KIND",
-    "build_recall_navigation_promotion_report",
-    "fixture_recall_navigation_promotion_report",
-    "fixture_recall_navigation_promotion_summary",
-    "public_smoke_summary",
-    "render_text",
-]

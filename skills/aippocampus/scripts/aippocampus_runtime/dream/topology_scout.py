@@ -11,11 +11,13 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.macro import transform_orbit
 from aippocampus_runtime.ops import packet_topology_diagnostic
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_dream_topology_scout_report"
 CANDIDATE_KIND = "dream_topology_candidate"
+SHADOW_ROUTE_KIND = "dream_shadow_route_candidate"
 FORBIDDEN_MARKERS = (
     "PRIVATE_DREAM_TOPOLOGY_TEXT",
     "raw_private_source_text",
@@ -112,6 +114,144 @@ def _source_anchors(row: Mapping[str, Any]) -> list[str]:
     return anchors[:8]
 
 
+def _route_source_anchors(row: Mapping[str, Any], prefix: str) -> list[str]:
+    raw_values = (
+        _strings(row.get(f"{prefix}_source_anchors"))
+        or _strings(row.get(f"{prefix}_source_refs"))
+        or _strings(row.get(f"{prefix}_source_ref_ids"))
+    )
+    anchors: list[str] = []
+    for value in raw_values:
+        anchor = _safe_anchor(value)
+        if anchor and anchor not in anchors:
+            anchors.append(anchor)
+    return anchors[:8]
+
+
+def _has_transform_pair(row: Mapping[str, Any]) -> bool:
+    return bool(_text(row.get("visible_hexagram")) and _text(row.get("latent_hexagram")))
+
+
+def _transform_projection(
+    row: Mapping[str, Any],
+    *,
+    shadow_source_overlap: bool,
+) -> dict[str, Any]:
+    if not _has_transform_pair(row):
+        return {
+            "available": False,
+            "selected_for_deepen": False,
+            "default_ranking_effect": "none",
+        }
+    diagnostic = transform_orbit.macro_transform_orbit_diagnostic(
+        _text(row.get("visible_hexagram")),
+        _text(row.get("latent_hexagram")),
+    )
+    selected = bool(diagnostic["same_reversible_orbit"]) and shadow_source_overlap
+    return {
+        "available": True,
+        "selected_for_deepen": selected,
+        "relation": diagnostic["relation"],
+        "source_orbit_id": diagnostic["source_orbit_id"],
+        "target_orbit_id": diagnostic["target_orbit_id"],
+        "default_ranking_effect": "none",
+        "next_safe_action": "deepen_shadow_route_candidate" if selected else "explain_only",
+        "boundary": {
+            "orbit_membership_is_not_source_support": True,
+            "requires_shadow_source_overlap_for_deepen": True,
+        },
+    }
+
+
+def _shadow_route_candidate_or_control(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    shadow_probe = _safe_bool(row.get("shadow_route_probe")) or bool(
+        _text(row.get("visible_route_id")) and _text(row.get("latent_route_id"))
+    )
+    if not shadow_probe and not _has_transform_pair(row):
+        return None
+
+    case_id = _safe_case_id(row.get("case_id"))
+    visible_route_id = _label(row.get("visible_route_id"), fallback="visible_route")
+    latent_route_id = _label(row.get("latent_route_id"), fallback="latent_route")
+    visible_anchors = _route_source_anchors(row, "visible")
+    latent_anchors = _route_source_anchors(row, "latent")
+    source_overlap = sorted(set(visible_anchors) & set(latent_anchors))
+    route_residue_count = _safe_int(row.get("failed_route_residue_count") or row.get("route_residue_count"))
+    failed_residue = route_residue_count > 0 or _safe_bool(row.get("failed_route_residue"))
+    source_overlap_ok = bool(source_overlap)
+    residue_ok = failed_residue and bool(visible_anchors or latent_anchors)
+    shared_tokens = _strings(row.get("shared_topic_tokens"))
+    transform_projection = _transform_projection(
+        row,
+        shadow_source_overlap=source_overlap_ok or residue_ok,
+    )
+
+    reason_codes: list[str] = []
+    if source_overlap_ok:
+        reason_codes.append("source_overlap_between_visible_and_latent_routes")
+    if residue_ok:
+        reason_codes.append("failed_route_residue_reappeared")
+    glue_status = _label(row.get("local_global_result"), fallback="")
+    if glue_status == "partial_glue":
+        reason_codes.append("partial_glue_shadow_nomination")
+    if not reason_codes:
+        control_reasons = ["missing_source_overlap_or_failed_route_residue"]
+        if shared_tokens:
+            control_reasons.append("shared_vocabulary_without_source_or_residue")
+        return {
+            "kind": "dream_topology_control",
+            "schema_version": SCHEMA_VERSION,
+            "case_id": case_id,
+            "shape": "shadow_route",
+            "control_result": "no_shadow_candidate",
+            "reason_codes": sorted(control_reasons),
+            "shared_topic_token_count": len(shared_tokens),
+            "shared_vocabulary_counts_as_overlap": False,
+            "transform_orbit_candidate": transform_projection,
+            "candidate_emitted": False,
+        }
+
+    return {
+        "kind": SHADOW_ROUTE_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "case_id": case_id,
+        "candidate_id": "dream_shadow_route_" + stable_hash(
+            case_id,
+            visible_route_id,
+            latent_route_id,
+            *source_overlap,
+            route_residue_count,
+        ),
+        "visible_route_id": visible_route_id,
+        "latent_route_id": latent_route_id,
+        "visible_source_anchors": visible_anchors,
+        "latent_source_anchors": latent_anchors,
+        "source_overlap": source_overlap,
+        "source_overlap_count": len(source_overlap),
+        "failed_route_residue_count": route_residue_count,
+        "reason_codes": sorted(reason_codes),
+        "candidate_authority": "candidate_only",
+        "authority_level": "navigation_only",
+        "action_grammar": "direction_with_ref",
+        "claim_permission": "no_claim_before_reopen",
+        "fact_claim_allowed": False,
+        "foreground_eligible": False,
+        "source_reopen_required_before_claim": True,
+        "glue_status": glue_status or "not_evaluated",
+        "glued_route": False,
+        "transform_orbit_candidate": transform_projection,
+        "next_safe_action": "deepen_visible_and_latent_source_refs",
+        "boundary": {
+            "fei_fu_is_visible_latent_route_metaphor_only": True,
+            "not_hidden_user_intent": True,
+            "candidate_not_fact": True,
+            "source_overlap_or_residue_required": True,
+            "shared_vocabulary_not_enough": True,
+            "no_foreground_default": True,
+        },
+    }
+
+
 def _packet_shape(row: Mapping[str, Any]) -> str:
     explicit_shape = _label(row.get("shape"))
     if explicit_shape in SHAPE_TO_DREAM_FUNCTION or explicit_shape == "no_shape":
@@ -158,6 +298,9 @@ def _rejection_reasons(
 
 def candidate_or_rejection(row: Mapping[str, Any]) -> dict[str, Any]:
     case_id = _safe_case_id(row.get("case_id"))
+    shadow_candidate = _shadow_route_candidate_or_control(row)
+    if shadow_candidate is not None:
+        return shadow_candidate
     anchors = _source_anchors(row)
     shape = _packet_shape(row)
     rejection_reasons = _rejection_reasons(row, shape=shape, anchors=anchors)
@@ -243,6 +386,42 @@ def fixture_topology_rows() -> list[dict[str, Any]]:
             "source_anchors": ["issue:#163", "issue:#1250"],
         },
         {
+            "case_id": "shadow_route_repeated_failure_orbit",
+            "shadow_route_probe": True,
+            "visible_route_id": "visible-exact-line-repair",
+            "latent_route_id": "latent-semantic-cache-path",
+            "visible_source_anchors": ["issue:#1193", "issue:#1305"],
+            "latent_source_anchors": ["issue:#1305", "issue:#1313"],
+            "failed_route_residue_count": 2,
+            "visible_hexagram": "既济",
+            "latent_hexagram": "未济",
+        },
+        {
+            "case_id": "shadow_route_partial_glue",
+            "shadow_route_probe": True,
+            "visible_route_id": "visible-local-global",
+            "latent_route_id": "latent-dream-topology",
+            "visible_source_anchors": ["issue:#1270", "issue:#1268"],
+            "latent_source_anchors": ["issue:#1270", "issue:#1313"],
+            "local_global_result": "partial_glue",
+        },
+        {
+            "case_id": "shadow_route_generic_vocab_control",
+            "shadow_route_probe": True,
+            "visible_route_id": "visible-generic",
+            "latent_route_id": "latent-generic",
+            "shared_topic_tokens": ["dream", "bridge", "topology"],
+            "visible_hexagram": "既济",
+            "latent_hexagram": "未济",
+        },
+        {
+            "case_id": "transform_orbit_without_shadow_signal",
+            "visible_route_id": "visible-macro",
+            "latent_route_id": "latent-macro",
+            "visible_hexagram": "乾",
+            "latent_hexagram": "坤",
+        },
+        {
             "case_id": "healthy_no_shape_control",
             "packet_type": "memory_packet",
             "output_mode": "reopenable_route",
@@ -283,6 +462,7 @@ def build_dream_topology_scout_report(
     row_list = list(rows) if rows is not None else fixture_topology_rows()
     outputs = [candidate_or_rejection(row) for row in row_list]
     candidates = [item for item in outputs if item["kind"] == CANDIDATE_KIND]
+    shadow_candidates = [item for item in outputs if item["kind"] == SHADOW_ROUTE_KIND]
     controls = [item for item in outputs if item["kind"] == "dream_topology_control"]
     rejected = [item for item in outputs if item["kind"] == "dream_topology_rejection"]
     rejected_reasons = Counter(
@@ -302,10 +482,31 @@ def build_dream_topology_scout_report(
         1
         for item in controls
         if item.get("control_result") != "no_candidate"
+        and item.get("control_result") != "no_shadow_candidate"
+    )
+    shadow_generic_vocab_false_positive_count = sum(
+        1
+        for item in shadow_candidates
+        if "shared_vocabulary_without_source_or_residue" in item.get("reason_codes", [])
+    )
+    transform_orbit_deepen_candidate_count = sum(
+        1
+        for item in shadow_candidates
+        if item.get("transform_orbit_candidate", {}).get("selected_for_deepen")
+    )
+    shadow_claim_without_reopen_count = sum(
+        1 for item in shadow_candidates if item.get("fact_claim_allowed") is not False
     )
     metrics = {
         "case_count": len(outputs),
         "dream_topology_candidate_count": len(candidates),
+        "shadow_route_candidate_count": len(shadow_candidates),
+        "shadow_route_source_overlap_count": sum(
+            1 for item in shadow_candidates if item.get("source_overlap_count", 0) > 0
+        ),
+        "shadow_route_generic_vocab_false_positive_count": shadow_generic_vocab_false_positive_count,
+        "shadow_route_claim_without_reopen_count": shadow_claim_without_reopen_count,
+        "transform_orbit_deepen_candidate_count": transform_orbit_deepen_candidate_count,
         "dream_topology_source_anchor_coverage": round(
             sum(1 for item in candidates if item["source_anchor_count"] > 0)
             / max(1, len(candidates)),
@@ -336,14 +537,19 @@ def build_dream_topology_scout_report(
         "foreground_leak_count": foreground_leak_count,
         "private_interpretation_emitted_count": private_interpretation_count,
         "shape_false_positive_count": shape_false_positive_count,
+        "shadow_route_claim_without_reopen_count": shadow_claim_without_reopen_count,
     }
     expected_cases = {
         "stale_route_cycle",
         "missing_middle_cut_point",
         "weak_bridge_between_issues",
         "obligation_knot_needs_unlinking",
-        "islanded_useful_cluster",
-        "healthy_no_shape_control",
+            "islanded_useful_cluster",
+            "shadow_route_repeated_failure_orbit",
+            "shadow_route_partial_glue",
+            "shadow_route_generic_vocab_control",
+            "transform_orbit_without_shadow_signal",
+            "healthy_no_shape_control",
         "private_psych_interpretation",
         "user_diagnosis",
         "profile_claim",
@@ -366,6 +572,7 @@ def build_dream_topology_scout_report(
         "foreground_default": False,
         "truth_layer": False,
         "candidates": candidates,
+        "shadow_route_candidates": shadow_candidates,
         "controls": controls,
         "rejected": rejected,
         "metrics": metrics,
@@ -385,6 +592,9 @@ def build_dream_topology_scout_report(
             "foreground_disabled_by_default": True,
             "hard_negatives_rejected": True,
             "public_safe_substrate_for_163": True,
+            "shadow_route_candidates_are_candidate_only": True,
+            "source_overlap_or_residue_required_for_shadow_route": True,
+            "transform_orbit_requires_shadow_source_overlap_for_deepen": True,
         },
         "cannot_claim": [
             "live_dream_quality",
@@ -394,6 +604,9 @@ def build_dream_topology_scout_report(
             "profile_truth",
             "source_truth_without_reopen",
             "foreground_default_usefulness",
+            "shadow_route_as_hidden_fact_or_user_intent",
+            "transform_orbit_as_source_support",
+            "automatic_route_merge_from_partial_glue",
         ],
     }
 

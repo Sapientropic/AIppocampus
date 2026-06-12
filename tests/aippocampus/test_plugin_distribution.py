@@ -53,8 +53,8 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue((PLUGIN_ROOT / asset.removeprefix("./")).exists())
 
         server = mcp_config["mcpServers"]["aippocampus"]
-        self.assertEqual(server["command"], "python")
-        self.assertIn("aippocampus_runtime.mcp.server", " ".join(server["args"]))
+        self.assertEqual(server["command"], "aippocampus")
+        self.assertEqual(server["args"], ["mcp"])
 
     def test_build_package_copies_skill_mcp_config_and_package_hook_owners(self) -> None:
         output = REPO_ROOT / "dist" / "test-aippocampus-plugin"

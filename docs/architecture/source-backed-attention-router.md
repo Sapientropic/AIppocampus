@@ -264,6 +264,16 @@ This is enough to distinguish routes that share broad buckets such as
 semantic warming, familiarity-map scoring, trained topic inference, source
 support, or default foreground hooks.
 
+The #1301 bridge into the recall-navigation promotion harness is still
+diagnostic: `attention_router_navigation_only` runs the deterministic hot router
+over the same `recall_context` candidate set and records route-family selection,
+foreground packet bytes, and deictic fail-closed behavior. It does not reopen
+source, answer the question, or replace the live `recall_context` ordering. The
+public fixture includes a light Arabic continuity cue for the AIppocampus/little
+hippocampus route family plus a pure deictic Arabic negative control; the former
+may select a route before manual search, and the latter must ask to clarify or
+recall rather than bind to visible context.
+
 ROI status can reduce low-yield non-guard scout families to watch or diagnostic
 surfaces, but required guard families remain `guard_required`. Quiet privacy or
 evidence-gap guards are not retirement candidates merely because they rarely

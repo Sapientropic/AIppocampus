@@ -1,10 +1,9 @@
 {
   "mcpServers": {
     "aippocampus": {
-      "command": "python",
+      "command": "aippocampus",
       "args": [
-        "-c",
-        "import sys; sys.path.insert(0, './skills/aippocampus/scripts'); from aippocampus_runtime.mcp.server import main; raise SystemExit(main())"
+        "mcp"
       ]
     }
   }

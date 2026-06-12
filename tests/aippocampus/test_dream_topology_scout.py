@@ -35,6 +35,9 @@ class DreamTopologyScoutTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["dream_topology_foreground_leak_count"], 0)
         self.assertEqual(report["metrics"]["dream_topology_private_interpretation_count"], 0)
         self.assertEqual(report["metrics"]["dream_topology_shape_false_positive_count"], 0)
+        self.assertEqual(report["metrics"]["shadow_route_candidate_count"], 2)
+        self.assertEqual(report["metrics"]["shadow_route_generic_vocab_false_positive_count"], 0)
+        self.assertEqual(report["metrics"]["transform_orbit_deepen_candidate_count"], 1)
 
         self.assertEqual(candidates["stale_route_cycle"]["shape"], "cycle")
         self.assertEqual(candidates["stale_route_cycle"]["dream_function"], "compensatory")
@@ -57,6 +60,80 @@ class DreamTopologyScoutTests(unittest.TestCase):
             self.assertTrue(candidate["source_anchors"])
             self.assertTrue(candidate["source_reopen_required_before_claim"])
             self.assertEqual(candidate["next_safe_action"], "review_or_route_only")
+
+        shadow = {item["case_id"]: item for item in report["shadow_route_candidates"]}
+        self.assertEqual(
+            shadow["shadow_route_repeated_failure_orbit"]["kind"],
+            "dream_shadow_route_candidate",
+        )
+        self.assertEqual(
+            shadow["shadow_route_repeated_failure_orbit"]["candidate_authority"],
+            "candidate_only",
+        )
+        self.assertEqual(
+            shadow["shadow_route_repeated_failure_orbit"]["action_grammar"],
+            "direction_with_ref",
+        )
+        self.assertTrue(
+            shadow["shadow_route_repeated_failure_orbit"]["source_reopen_required_before_claim"]
+        )
+        self.assertFalse(shadow["shadow_route_repeated_failure_orbit"]["foreground_eligible"])
+        self.assertFalse(shadow["shadow_route_repeated_failure_orbit"]["fact_claim_allowed"])
+        self.assertIn(
+            "failed_route_residue_reappeared",
+            shadow["shadow_route_repeated_failure_orbit"]["reason_codes"],
+        )
+        self.assertTrue(
+            shadow["shadow_route_repeated_failure_orbit"]["transform_orbit_candidate"][
+                "selected_for_deepen"
+            ]
+        )
+        self.assertEqual(
+            shadow["shadow_route_partial_glue"]["glue_status"],
+            "partial_glue",
+        )
+        self.assertFalse(shadow["shadow_route_partial_glue"]["glued_route"])
+
+    def test_shadow_route_requires_source_overlap_or_residue_not_generic_vocabulary(self) -> None:
+        report = topology_scout.build_dream_topology_scout_report(
+            [
+                {
+                    "case_id": "generic_vocab_only",
+                    "shadow_route_probe": True,
+                    "visible_route_id": "dream-visible",
+                    "latent_route_id": "dream-latent",
+                    "shared_topic_tokens": ["dream", "bridge", "topology"],
+                    "visible_hexagram": "既济",
+                    "latent_hexagram": "未济",
+                },
+                {
+                    "case_id": "orbit_without_shadow_overlap",
+                    "visible_route_id": "macro-visible",
+                    "latent_route_id": "macro-latent",
+                    "visible_hexagram": "乾",
+                    "latent_hexagram": "坤",
+                },
+            ]
+        )
+        controls = {item["case_id"]: item for item in report["controls"]}
+
+        self.assertEqual(report["metrics"]["shadow_route_candidate_count"], 0)
+        self.assertEqual(report["metrics"]["shadow_route_generic_vocab_false_positive_count"], 0)
+        self.assertEqual(controls["generic_vocab_only"]["control_result"], "no_shadow_candidate")
+        self.assertIn(
+            "shared_vocabulary_without_source_or_residue",
+            controls["generic_vocab_only"]["reason_codes"],
+        )
+        self.assertEqual(
+            controls["generic_vocab_only"]["transform_orbit_candidate"]["selected_for_deepen"],
+            False,
+        )
+        self.assertEqual(
+            controls["orbit_without_shadow_overlap"]["transform_orbit_candidate"][
+                "default_ranking_effect"
+            ],
+            "none",
+        )
 
     def test_hard_negatives_are_rejected_instead_of_interpreted(self) -> None:
         report = topology_scout.build_dream_topology_scout_report(

@@ -33,6 +33,10 @@ MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 KIND = "aippocampus_agent_continuity_path"
 MAX_ROUTES = 5
 MACRO_HANDLE_PREFIX = "macro:project:"
+DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
+    Path(".aippocampus") / "macro-orientation.jsonl",
+    Path(".aippocampus") / "macro_orientation.jsonl",
+)
 FOREGROUND_FORBIDDEN_KEYS = {
     "source_refs",
     "source_handles",
@@ -291,8 +295,10 @@ def _load_macro_projection(
     *,
     project: str,
     macro_state_path: str | Path | None,
+    cwd: str | Path | None = None,
 ) -> dict[str, Any]:
-    if macro_state_path is None:
+    state_path = _resolve_macro_state_path(macro_state_path, cwd=cwd)
+    if state_path is None:
         return {
             "kind": "macro_orientation_latest_projection",
             "project": project,
@@ -302,8 +308,28 @@ def _load_macro_projection(
             "authority_level": macro_state.AUTHORITY_LEVEL,
             "claim_permission": macro_state.CLAIM_PERMISSION,
         }
-    entries = macro_state.load_macro_orientation_states(Path(macro_state_path).resolve())
+    entries = macro_state.load_macro_orientation_states(state_path)
     return macro_state.latest_project_macro_orientation(entries, project=project)
+
+
+def _resolve_macro_state_path(
+    macro_state_path: str | Path | None,
+    *,
+    cwd: str | Path | None = None,
+) -> Path | None:
+    if macro_state_path is not None and str(macro_state_path) != "":
+        return Path(macro_state_path).resolve()
+    if cwd is None:
+        return None
+    root = core.canonical_path(cwd)
+    # Default recall may consume only project-local macro state. Do not broaden
+    # this into global registry or private rollout discovery without a separate
+    # privacy review: macro is a navigation prior, not ambient evidence.
+    for relative in DEFAULT_MACRO_STATE_RELATIVE_PATHS:
+        candidate = root / relative
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
 
 
 def _macro_state_from_projection(projection: Mapping[str, Any]) -> Mapping[str, Any] | None:
@@ -570,7 +596,11 @@ def recall(
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
     registry_path = _as_path(registry_dir, Path()) if registry_dir else None
     requested_limit = max(1, min(25, int(max_routes or MAX_ROUTES)))
-    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_projection = _load_macro_projection(
+        project=project,
+        macro_state_path=macro_state_path,
+        cwd=cwd_path,
+    )
     macro_context = macro_live_recall.context_from_projection(macro_projection)
     effective_limit = macro_live_recall.effective_route_limit(
         requested_limit=requested_limit,
@@ -754,7 +784,11 @@ def deepen(
             max_matches=max(1, min(25, int(max_matches or MAX_ROUTES))),
         )
     except RecallNavigationError as exc:
-        macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+        macro_projection = _load_macro_projection(
+            project=project,
+            macro_state_path=macro_state_path,
+            cwd=cwd_path,
+        )
         macro_context = macro_live_recall.context_from_projection(macro_projection)
         return _public_payload(
             {
@@ -773,7 +807,11 @@ def deepen(
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
-    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_projection = _load_macro_projection(
+        project=project,
+        macro_state_path=macro_state_path,
+        cwd=cwd_path,
+    )
     macro_context = macro_live_recall.context_from_projection(macro_projection)
     return _public_payload(
         {

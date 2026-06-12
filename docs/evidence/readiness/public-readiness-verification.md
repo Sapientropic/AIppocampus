@@ -20,6 +20,40 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-12 Issue #279 E2E50 Public-safe 50-case Behavior Pack
+
+Issue #279's primary public path no longer depends on the private/local retained
+case shortfall. The checked-in behavior pack now reaches a 50-case public-safe
+target while keeping the same source/behavior-code contract boundary.
+
+Positive local evidence:
+
+- `benchmark_corpus/e2e50_silent_constraint/fixture.json` contains 50
+  public-safe synthetic annotated cases.
+- The pack covers binding constraint survival, rejected-route avoidance,
+  transient-concern extinction, superseded currentness, scope-limited
+  constraints, summary-overhang traps, benign no-remember negatives, and
+  source reopen before risky action.
+- `python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json`
+  reports `contract_gate_ok=true`, `quality_gate_ok=false`, 50/50 correct
+  cases, `public_e2e50_target_met=true`, `no_remember_negative_precision=1.0`,
+  zero unprompted overhang, zero stale revival, and zero confabulation.
+- `python -m unittest tests.aippocampus.test_benchmark_e2e50_silent_constraint -v`
+  passed with assertions for the 50-case target, required family coverage,
+  annotation/source-family coverage, no-remember negatives, sequence/load
+  boundaries, and private-readiness redaction.
+
+Supports:
+
+- This supersedes the 2026-06-10 20-case public behavior-pack row for current
+  public case count and coverage.
+
+Important limits:
+
+- The public pack remains contract evidence. Do not cite it as representative
+  E2E50 quality, private-history behavior lift, live host behavior,
+  semantic-judge quality, or public-dialogue continuity proof.
+
 ## 2026-06-10 Issue #1154 E2E50 Public-safe Behavior Pack Pivot
 
 Issue #1154 follows #994/#1086 by making the checked-in public behavior pack
@@ -55,7 +89,8 @@ Important limits:
 
 - The public pack is contract evidence only; do not cite it as representative
   E2E50 quality, private-history behavior lift, live host behavior,
-  semantic-judge quality, completed 50-case quality, or public-dialogue
+  semantic-judge quality, representative/live 50-case quality, or
+  public-dialogue
   continuity proof.
 
 ## 2026-06-10 Issue #1086 E2E50 Private / Local Seed Follow-up
@@ -84,8 +119,8 @@ Supports:
 Important limits:
 
 - The private/local annotation blocker remains. Do not cite this as
-  private-history behavior lift, completed private 20-case or 50-case E2E50
-  quality, representative E2E50 quality, live host behavior lift, or semantic
+  private-history behavior lift, completed private 20-case E2E50 quality,
+  representative/live 50-case quality, live host behavior lift, or semantic
   judge quality.
 
 ## 2026-06-09 Issue #994 E2E50 Public-safe 20-case Seed Pack
@@ -117,7 +152,7 @@ Interpretation:
   quality.
 - The pack remains public-safe synthetic contract evidence. It still cannot
   claim E2E50 behavior benchmark quality, private real-history behavior lift,
-  representative E2E50 sample quality, a completed 50-case sample, live host
+  representative E2E50 sample quality, representative/live 50-case quality, live host
   behavior lift, or semantic-judge quality.
 
 ## 2026-06-09 Issue #963 Track B Top-k Miss Repair

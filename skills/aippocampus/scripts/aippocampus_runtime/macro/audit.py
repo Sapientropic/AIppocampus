@@ -121,6 +121,32 @@ def primitive_role_table() -> list[dict[str, object]]:
             foreground_emitted=True,
         ),
         _primitive(
+            "najia_active_axis_timing",
+            "纳甲-like active-axis timing",
+            roles=("recheck_timing", "research_only"),
+            runtime_surface=("macro.timing", "ops.macro_timing_recheck_experiment"),
+            non_goals=(
+                "currentness_head_replacement",
+                "fact_or_truth_assignment",
+                "foreground_symbolic_prose",
+                "default_recall_ranking",
+            ),
+            usefulness_status="fixture_candidate_not_promoted",
+        ),
+        _primitive(
+            "guaqi_source_epoch_cadence",
+            "卦气-like source-epoch cadence",
+            roles=("recheck_timing", "research_only"),
+            runtime_surface=("macro.timing", "ops.macro_timing_recheck_experiment"),
+            non_goals=(
+                "literal_calendar_or_solar_term_system",
+                "temporal_head_replacement",
+                "scheduled_background_cost",
+                "foreground_symbolic_prose",
+            ),
+            usefulness_status="fixture_candidate_not_promoted",
+        ),
+        _primitive(
             "internal_line_topology",
             "乘 / 承 / 比 / 应 internal line topology",
             roles=("telepathy_handoff_compatibility", "deepen_explain_only"),

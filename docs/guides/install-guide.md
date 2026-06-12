@@ -184,10 +184,37 @@ That state means a foreground agent may need `aippocampus agent ...` or
 `python -m aippocampus_runtime...` fallbacks until the host plugin/MCP surface
 is actually enabled.
 
+When a real host smoke has already reloaded/listed tools and called an
+AIppocampus MCP tool, feed that sanitized report back into status:
+
+```sh
+aippocampus update status --host-probe-report <smoke-report.json> --json
+```
+
+A successful Codex app-server or Claude Code MCP probe upgrades
+`agent_callable_status` to `host_live_probe_ok`. That is a host-exposure claim:
+the current agent host can see and call the MCP/plugin tools. It is not a recall
+quality, benchmark, or source-answer correctness claim. If the packaged MCP
+artifact is current but its command does not resolve, status reports
+`mcp_command_repair_options` such as `aippocampus mcp`,
+`python3 -m aippocampus_runtime.cli.facade mcp`, or `uvx aippocampus mcp`
+instead of treating the artifact as foreground-ready.
+
+For Codex plugin readiness, status separates the repo-local package artifact
+from real local plugin layers. The plugin surface may include
+`local_marketplace`, `installed_cache`,
+`auto_detected_installed_cache_count`, `plugin_cache_recommended_actions`, and
+`cache_boundary`. A current `dist/aippocampus-plugin` package is not proof that
+the Codex app has installed or reloaded that package. A local marketplace copy
+is also not the same thing as the Codex installed plugin cache.
+
 Apply local package/effect surfaces explicitly:
 
 ```sh
 aippocampus update apply --surface skill
+aippocampus update apply --surface plugin
+aippocampus update apply --surface plugin --plugin-marketplace-dir <path-to-local-marketplace-or-plugin>
+aippocampus update apply --surface plugin --plugin-installed-dir <path-to-installed-cache-or-plugin>
 aippocampus update apply --surface hooks
 aippocampus update apply --all-local
 ```
@@ -195,6 +222,10 @@ aippocampus update apply --all-local
 `--all-local` syncs the installable skill, rebuilds the repo-local plugin
 package, and installs AIppocampus-owned Codex hooks. It does not copy private
 memory data, raw rollouts, generated indexes, sync bundles, or package caches.
+Plugin marketplace/cache refresh is opt-in through `--plugin-marketplace-dir`
+or `--plugin-installed-dir`. When an installed cache is refreshed, update apply
+preserves a portable existing `.mcp.json` and still reports that a host app
+reload or reinstall may be required before foreground agent tools are visible.
 It also does not read, print, or store API-key values. If `update status`
 reports the LLM surface as missing, set the reported environment variable
 (`DEEPSEEK_API_KEY` by default, or the configured OpenAI-compatible key env)
@@ -561,7 +592,10 @@ python ./plugins/aippocampus/smoke_plugin_install.py --repo-root . --json
 This stages the built plugin in a temporary plugin root, runs the bundled MCP
 tool catalog and a JSON-RPC `initialize` / `notifications/initialized` /
 `tools/list` / `tools/call` smoke from that installed location, then removes
-the staged plugin. It does not modify your real Codex plugin configuration.
+the staged plugin. The packaged MCP entrypoint is `aippocampus mcp`, matching
+the host registration docs; the package-level smoke may use an equivalent module
+fallback only to verify the installed bundle in a local test environment. It
+does not modify your real Codex plugin configuration.
 
 When you intentionally want to exercise the real Codex app-server plugin
 manager and host MCP path, run:
@@ -574,6 +608,20 @@ This creates a run-id-scoped local marketplace, installs the plugin through the
 real host, reloads MCP config, calls `sync_status`, then uninstalls the plugin
 and removes temporary marketplace/build/cache artifacts. It still is not a
 public marketplace submission or third-party fresh-clone review.
+
+For manual local-marketplace repair, prefer the update facade so the staged
+package, marketplace copy, installed cache, and agent-callable status stay
+auditable from the same readiness card:
+
+```sh
+aippocampus update status --plugin-marketplace-dir <path> --plugin-installed-dir <path> --json
+aippocampus update apply --surface plugin --plugin-marketplace-dir <path>
+aippocampus update apply --surface plugin --plugin-installed-dir <path>
+```
+
+Refreshing either cache layer updates local files only. It does not prove that
+the currently running Codex app has reloaded the plugin; use the real host smoke
+or a sanitized `--host-probe-report` before claiming foreground tool exposure.
 
 ### Uninstall and rollback
 

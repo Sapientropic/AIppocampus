@@ -94,8 +94,8 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   survival, known-bad route avoidance, transient-concern extinction,
   superseded-currentness, scope-limited constraints, summary-overhang trap
   avoidance, no-remember negative precision, and
-  source-reopen-before-risky-action. It scores a checked-in 20-case
-  public-safe synthetic behavior pack with explicit `annotation_status` and
+    source-reopen-before-risky-action. It scores a checked-in 50-case
+    public-safe synthetic behavior pack with explicit `annotation_status` and
   `source_family` coverage. It keeps `quality_gate_ok=false`: this pack is the
   primary public executable path, while private/local retained-case scarcity is
   optional diagnostic evidence, not the main public blocker. Its deterministic

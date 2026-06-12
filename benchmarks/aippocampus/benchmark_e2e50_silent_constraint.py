@@ -31,6 +31,7 @@ REPORT_KIND = "aippocampus_e2e50_silent_constraint_case_pack"
 CLAIM_LEVEL = "public_safe_behavior_pack_contract"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "e2e50_silent_constraint" / "fixture.json"
 MIN_ANNOTATED_SEED_CASES = 20
+PUBLIC_E2E50_TARGET_CASES = 50
 PRIVATE_ANNOTATION_SUMMARY_KIND = "aippocampus_e2e50_private_annotation_summary"
 SEED_SCAN_KIND = "aippocampus_e2e50_seed_candidate_scan"
 PRIVATE_ANNOTATION_PRIVACY = "hash_count_only_no_text_no_paths_no_ids_no_raw_refs"
@@ -85,7 +86,7 @@ CANNOT_CLAIM = [
     "completed_private_history_20_case_pack",
     "private_real_history_behavior_lift",
     "representative_e2e50_sample_quality",
-    "completed_50_case_e2e50_sample",
+    "representative_or_live_50_case_e2e50_quality",
     "live_host_behavior_lift",
     "live_host_timing_or_annoyance_lift",
     "semantic_judge_quality",
@@ -631,6 +632,8 @@ def run_benchmark(
     ]
     if summary["ok"] and int(summary["metrics"].get("total_cases") or 0) >= MIN_ANNOTATED_SEED_CASES:
         can_claim.append("public_safe_20_case_seed_pack_contract_scored")
+    if summary["ok"] and int(summary["metrics"].get("total_cases") or 0) >= PUBLIC_E2E50_TARGET_CASES:
+        can_claim.append("public_safe_50_case_behavior_pack_contract_scored")
     private_readiness = (
         private_annotation_readiness(private_annotation_summary)
         if private_annotation_summary is not None
@@ -660,6 +663,9 @@ def run_benchmark(
         "behavior_pack": {
             "fixture_id": str(loaded_case_pack.get("fixture_id") or "in_memory"),
             "min_public_cases": MIN_ANNOTATED_SEED_CASES,
+            "public_e2e50_target_cases": PUBLIC_E2E50_TARGET_CASES,
+            "public_e2e50_target_met": summary["metrics"]["total_cases"]
+            >= PUBLIC_E2E50_TARGET_CASES,
             "case_count": summary["metrics"]["total_cases"],
             "required_families": sorted(REQUIRED_FAMILIES),
             "missing_required_families": summary["coverage"]["missing_required_families"],

@@ -206,6 +206,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_macro_router_interface",
         "test_macro_stage_tracker",
         "test_macro_three_powers",
+        "test_macro_timing_recheck_experiment",
         "test_memory_evidence_drawer",
         "test_macos_install_smoke_workflow",
         "test_memory_candidate_router",

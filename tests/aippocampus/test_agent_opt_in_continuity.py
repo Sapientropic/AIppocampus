@@ -89,6 +89,25 @@ class AgentOptInContinuityTests(unittest.TestCase):
         macro_state.append_macro_orientation_state(macro_path, entry)
         return macro_path
 
+    def _append_default_macro_state(
+        self,
+        *,
+        active_layer: str = "人",
+        changing_lines: tuple[int, ...] = (1, 2, 3),
+    ) -> Path:
+        macro_path = self.cwd / ".aippocampus" / "macro-orientation.jsonl"
+        entry = macro_state.build_macro_orientation_state(
+            project="AIppocampus",
+            hexagram="乾",
+            changing_lines=changing_lines,
+            source_refs=({"source_id": f"default-macro-{active_layer}"},),
+            updated_at="2026-06-11T10:00:00Z",
+            active_layer=active_layer,
+            momentum={"basis": {"counter_evidence_delta": 0.2}},
+        )
+        macro_state.append_macro_orientation_state(macro_path, entry)
+        return macro_path
+
     def test_recall_returns_compact_packet_and_deepens_only_on_request(self) -> None:
         report = agent_continuity.recall(
             "agent-native recall opt-in SECRET_TOKEN=abc123",
@@ -343,6 +362,53 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("macro_active_layer_human", encoded)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("macro-live", encoded)
+
+    def test_recall_uses_default_scoped_macro_state_without_manual_path(self) -> None:
+        self._append_clean_rows(
+            [
+                {
+                    "message_id": "default_macro_benchmark",
+                    "turn_id": "turn_default_macro_benchmark",
+                    "source_line": 40,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 40,
+                    "is_final": True,
+                    "scope_labels": ["technical_work"],
+                    "text": "Default macro shared cue benchmark evidence fixture quality gate measured result.",
+                },
+                {
+                    "message_id": "default_macro_issue",
+                    "turn_id": "turn_default_macro_issue",
+                    "source_line": 41,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 41,
+                    "is_final": True,
+                    "scope_labels": ["technical_work"],
+                    "text": "Default macro shared cue issue backlog workflow handoff project triage next action.",
+                },
+            ]
+        )
+        macro_path = self._append_default_macro_state(active_layer="地")
+
+        report = agent_continuity.recall(
+            "default macro shared cue",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=2,
+        )
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(report["metrics"]["macro_orientation_applied"])
+        self.assertEqual(report["macro_navigation"]["status"], "applied")
+        self.assertEqual(report["macro_navigation"]["active_layer"], "earth")
+        self.assertGreater(report["metrics"]["effective_max_routes"], 2)
+        self.assertIn("momentum_first_decay_recheck", report["macro_navigation"]["recheck_on"])
+        self.assertEqual(report["memory_packets"][0]["route_topic"], "benchmark_claim_posture")
+        self.assertNotIn(str(macro_path), encoded)
+        self.assertNotIn("default-macro", encoded)
+        self.assertNotIn("source_refs", encoded)
 
     def test_macro_momentum_recheck_stays_diagnostic_not_evidence(self) -> None:
         self._append_clean_rows(

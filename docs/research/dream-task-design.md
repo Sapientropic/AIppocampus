@@ -611,6 +611,14 @@ substrate: it gives Dream evaluation a reproducible topology-candidate surface
 without claiming live Dream quality, private-history usefulness, or foreground
 default timing.
 
+The same scout now carries a public-safe #1313 shadow-route slice. It treats
+飞 / 伏 as visible-route / latent-route candidate language only: a
+`dream_shadow_route_candidate` requires source overlap or failed-route residue,
+keeps `candidate_authority="candidate_only"`, and never claims hidden user
+intent. Transform-orbit matches can become deepen candidates only when that
+shadow source/residue gate is already satisfied; pure shared vocabulary or
+pure orbit membership remains explain-only/no-candidate.
+
 ### Implemented Long-Context Dream Atlas Pack
 
 `aippocampus_runtime.dream.atlas_pack` is the deterministic #1269 prototype for

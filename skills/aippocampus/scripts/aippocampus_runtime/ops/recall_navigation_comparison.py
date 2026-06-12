@@ -21,14 +21,19 @@ from typing import Any
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 from aippocampus_runtime.ops import issue_route_quality, reopen_follow_through
+from aippocampus_runtime.ops.recall_navigation_attention import (
+    ARM_ATTENTION_NAV,
+    attention_router_activation_readout,
+    run_attention_router_navigation_only,
+)
 from aippocampus_runtime.recall.authority import trust_taxonomy
 
 COMPARISON_KIND = "aippocampus_recall_navigation_comparison"
-COMPARISON_SCHEMA_VERSION = 4
+COMPARISON_SCHEMA_VERSION = 5
 ARM_DIRECT = "direct_search"
 ARM_HOOK = "hook_only"
 ARM_PROGRESSIVE = "progressive_recall"
-ARMS = (ARM_DIRECT, ARM_HOOK, ARM_PROGRESSIVE)
+ARMS = (ARM_DIRECT, ARM_HOOK, ARM_PROGRESSIVE, ARM_ATTENTION_NAV)
 
 
 def _tool_payload(result: Mapping[str, Any]) -> dict[str, Any]:
@@ -78,6 +83,10 @@ def _select_deepen_route(routes: Sequence[Any]) -> tuple[int | None, dict[str, A
 
 def _elapsed_ms(start: float) -> int:
     return max(0, int(round((time.perf_counter() - start) * 1000)))
+
+
+def _packet_bytes(value: Mapping[str, Any]) -> int:
+    return len(json.dumps(dict(value), ensure_ascii=False, sort_keys=True).encode("utf-8"))
 
 
 def _source_ids(matches: Sequence[Any]) -> set[str]:
@@ -464,6 +473,7 @@ def _issue_readouts(
     aggregate: Mapping[str, Any],
     foreground_lift: Mapping[str, Any] | None = None,
     candidate_funnel: Mapping[str, Any] | None = None,
+    attention_router_activation: Mapping[str, Any] | None = None,
     presence_first_fixture_matrix: Mapping[str, Any] | None = None,
     same_thread_issue_comment_route_quality: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -541,6 +551,8 @@ def _issue_readouts(
     same_thread_readout = issue_route_quality.same_thread_issue_comment_readout(
         same_thread_issue_comment_route_quality
     )
+    attention_activation = _as_dict(attention_router_activation)
+    attention_metrics = _as_dict(attention_activation.get("metrics"))
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -599,6 +611,29 @@ def _issue_readouts(
                 "wrong_route_drag_from_sentinel_count"
             ),
             "default_vector_prefilter_enabled": bool(funnel.get("vector_prefilter_enabled")),
+            "closeout_eligible": False,
+        },
+        "github_1188": {
+            "attention_router_activation_measured": bool(attention_activation.get("measured")),
+            "multilingual_route_family_hit_rate": attention_metrics.get(
+                "multilingual_route_family_hit_rate"
+            ),
+            "known_alias_cross_language_activation_count": attention_metrics.get(
+                "known_alias_cross_language_activation_count"
+            ),
+            "deictic_wrong_visible_context_bind_count": attention_metrics.get(
+                "deictic_wrong_visible_context_bind_count"
+            ),
+            "live_route_producer_quality": "not_measured",
+            "closeout_eligible": False,
+        },
+        "github_1301": {
+            "attention_router_navigation_arm_measured": bool(
+                attention_activation.get("measured")
+            ),
+            "comparison_arm": attention_activation.get("comparison_arm"),
+            "default_attention_router_adoption": "not_enabled",
+            "live_default_quality": "not_measured",
             "closeout_eligible": False,
         },
         "github_248": {
@@ -697,6 +732,12 @@ def build_recall_navigation_comparison(
                 max_deepen_matches=max_deepen_matches,
                 after_context=(after_context_by_case_id or {}).get(case_id),
             ),
+            ARM_ATTENTION_NAV: run_attention_router_navigation_only(
+                case,
+                cwd=cwd_path,
+                clean_source_dir=clean_path,
+                max_routes=max_routes,
+            ),
         }
         rows.append(
             {
@@ -708,6 +749,12 @@ def build_recall_navigation_comparison(
         )
     aggregate = _aggregate(rows)
     candidate_funnel = _vague_cue_candidate_funnel(rows)
+    attention_router_activation = attention_router_activation_readout(
+        rows,
+        cwd=cwd_path,
+        clean_source_dir=clean_path,
+        max_routes=max_routes,
+    )
     presence_matrix = dict(presence_first_fixture_matrix or {"measured": False})
     same_thread_quality = dict(
         same_thread_issue_comment_route_quality or {"measured": False}
@@ -722,12 +769,14 @@ def build_recall_navigation_comparison(
         "aggregate": aggregate,
         "foreground_lift": dict(foreground_lift or {"measured": False}),
         "vague_cue_candidate_funnel": candidate_funnel,
+        "attention_router_activation": attention_router_activation,
         "presence_first_fixture_matrix": presence_matrix,
         "same_thread_issue_comment_route_quality": same_thread_quality,
         "issue_readouts": _issue_readouts(
             aggregate,
             foreground_lift,
             candidate_funnel,
+            attention_router_activation,
             presence_matrix,
             same_thread_quality,
         ),
@@ -784,6 +833,12 @@ def build_recall_navigation_comparison(
                 "navigation routes only; they cannot become evidence without source "
                 "reopen and do not enable default vector/question prefiltering."
             ),
+            "attention_router_navigation_only": (
+                "Fixture-backed #1188/#1301 arm that runs the deterministic "
+                "attention router over the same recall-context candidate routes. "
+                "It measures route-family selection and deictic fail-closed "
+                "behavior without source reopen, answer claims, or default adoption."
+            ),
             "presence_first_fixture_matrix": (
                 "Fixture-backed #797 behavior matrix over memory atmosphere, working "
                 "continuity brief, bounded evidence, source_open, source court, and "
@@ -807,6 +862,8 @@ def build_recall_navigation_comparison(
             "hook_scent_is_not_evidence": True,
             "candidate_pool_navigation_only": True,
             "cannot_claim_default_prefilter_safety": True,
+            "attention_router_not_default_selector": True,
+            "cannot_claim_attention_router_live_default_quality": True,
             "cannot_claim_live_same_thread_issue_comment_route_quality": True,
             "bounded_evidence_context_separate_from_scent_packet": True,
             "no_external_model_calls": True,
@@ -818,6 +875,9 @@ def build_recall_navigation_comparison(
             ),
             "same_thread_issue_comment_route_quality_public_safe": bool(
                 same_thread_quality.get("measured")
+            ),
+            "attention_router_activation_public_safe": bool(
+                attention_router_activation.get("measured")
             ),
         },
         "privacy": {

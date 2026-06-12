@@ -26,8 +26,16 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         positive = report["cases_by_id"]["vague_magic_moment"]
 
         self.assertEqual(report["kind"], recall_navigation_comparison.COMPARISON_KIND)
-        self.assertEqual(report["schema_version"], 4)
-        self.assertEqual(set(arms), {"direct_search", "hook_only", "progressive_recall"})
+        self.assertEqual(report["schema_version"], 5)
+        self.assertEqual(
+            set(arms),
+            {
+                "direct_search",
+                "hook_only",
+                "progressive_recall",
+                "attention_router_navigation_only",
+            },
+        )
         self.assertGreaterEqual(len(report["cases"]), 2)
         self.assertTrue(report["comparison_boundary"]["deterministic_proxy_only"])
         self.assertTrue(report["comparison_boundary"]["cannot_claim_live_cost_reduction"])
@@ -46,6 +54,15 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertTrue(progressive["source_reopen_follow_through"])
         self.assertEqual(progressive["manual_query_invention_count"], 0)
         self.assertEqual(progressive["selected_next_tool"], "recall_deepen")
+        attention = positive["arms"]["attention_router_navigation_only"]
+
+        self.assertTrue(attention["route_actionable"])
+        self.assertFalse(attention["source_backed_success"])
+        self.assertFalse(attention["source_reopen_attempted"])
+        self.assertEqual(attention["manual_query_invention_count"], 0)
+        self.assertEqual(attention["selected_next_tool"], "recall_deepen")
+        self.assertEqual(attention["claim_without_source_reopen_count"], 0)
+
         for arm in (direct, hook, progressive):
             self.assertIn("route_handle_present", arm)
             self.assertIn("source_join_present", arm)
@@ -53,6 +70,36 @@ class RecallNavigationComparisonTests(unittest.TestCase):
             self.assertIn("source_reopen_follow_through_eligible", arm)
             self.assertIn("expected_fail_closed", arm)
             self.assertIn("failure_class", arm)
+
+    def test_attention_router_arm_handles_multilingual_activation_without_evidence(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        arabic = report["cases_by_id"]["ar_little_hippocampus_light_continuity_cue"]
+        attention = arabic["arms"]["attention_router_navigation_only"]
+        activation = report["attention_router_activation"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(attention["route_actionable"])
+        self.assertFalse(attention["source_backed_success"])
+        self.assertFalse(attention["source_reopen_attempted"])
+        self.assertEqual(attention["selected_next_tool"], "recall_deepen")
+        self.assertEqual(attention["manual_query_invention_count"], 0)
+        self.assertTrue(attention["route_family_selected_before_manual_search"])
+        self.assertTrue(attention["known_alias_cross_language_activation"])
+        self.assertEqual(attention["claim_without_source_reopen_count"], 0)
+        self.assertEqual(attention["selected_route_family"], "aippocampus_little_hippocampus")
+
+        self.assertTrue(activation["measured"])
+        self.assertEqual(activation["metrics"]["multilingual_route_family_hit_rate"], 1.0)
+        self.assertEqual(activation["metrics"]["deictic_wrong_visible_context_bind_count"], 0)
+        self.assertEqual(
+            activation["pure_deictic_case"]["selected_next_tool"],
+            "clarify_or_recall",
+        )
+        self.assertTrue(activation["boundary"]["navigation_only_is_not_evidence"])
+        self.assertTrue(report["comparison_boundary"]["attention_router_not_default_selector"])
+        self.assertIn("attention_router_navigation_only", report["metric_notes"])
+        self.assertNotIn("aippo-nav:", encoded)
+        self.assertNotIn("SECRET_TOKEN", encoded)
 
     def test_stale_handle_case_is_rejected_without_leaking_handle_or_source_text(self) -> None:
         report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
@@ -136,7 +183,7 @@ class RecallNavigationComparisonTests(unittest.TestCase):
 
         self.assertTrue(readout["route_actionability_measured"])
         self.assertTrue(readout["source_reopen_follow_through_measured"])
-        self.assertEqual(readout["source_reopen_follow_through_eligible_count"], 3)
+        self.assertEqual(readout["source_reopen_follow_through_eligible_count"], 4)
         self.assertEqual(readout["source_reopen_fail_closed_count"], 1)
         self.assertEqual(
             readout["source_reopen_failure_classes"],
@@ -212,7 +259,7 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         text = recall_navigation_comparison.render_text(report)
 
         self.assertIn(
-            "source reopen follow-through 1.0 (3/3 eligible, 1 fail-closed)",
+            "source reopen follow-through 1.0 (4/4 eligible, 1 fail-closed)",
             text,
         )
 

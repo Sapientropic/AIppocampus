@@ -57,6 +57,10 @@ The #1193 report distinguishes the three product paths:
 | Warm query/candidate cache | `contract_defined_not_measured` | Cache key must include query hash, candidate hashes, prompt version, model/provider id, source or dataset fingerprint, and policy version. |
 | Source-side semantic cache | `not_measured_for_semantic_cache` / `not_run` | Must be built from source spans, not benchmark questions, before claiming hot-path latency or build cost. |
 
+Follow-up: #1305 now measures the warm query/candidate replay path in
+[`longmemeval-semantic-cache-path-2026-06-12.md`](longmemeval-semantic-cache-path-2026-06-12.md).
+This #1193 report remains the deterministic structural failure boundary.
+
 ## Claim Boundary
 
 This closes #1193 as a measured deterministic failure report plus cache-path
