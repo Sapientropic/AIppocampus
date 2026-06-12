@@ -23,6 +23,13 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _split_terms(values: Sequence[Any]) -> list[str]:
     seen: set[str] = set()
     terms: list[str] = []
@@ -135,6 +142,73 @@ def _token_terms(token: Mapping[str, Any]) -> set[str]:
     return set(_split_terms(_as_list(features.get("terms"))))
 
 
+def route_helpfulness_diagnostics(
+    *,
+    query: str,
+    route: Mapping[str, Any] | None,
+    packet: Mapping[str, Any] | None = None,
+    expected_route_family: str = "",
+) -> dict[str, Any]:
+    """Return public-safe diagnostics for whether a selected route helps choice.
+
+    This deliberately judges foreground guidance, not source truth. A route can
+    be source-reopenable and still be too generic for a fresh agent to choose
+    the right deepen call without broad manual search.
+    """
+
+    if route is None:
+        return {
+            "selected_query_term_overlap_count": 0,
+            "selected_route_label_specificity_score": 0.0,
+            "route_label_specificity_floor": 0.0,
+            "route_label_expected_family_match": False,
+            "explicit_bridge_reason_present": False,
+            "zero_overlap_without_bridge_reason": True,
+            "selected_why_may_matter_specific_enough": False,
+        }
+
+    query_terms = set(_split_terms([query]))
+    route_terms = set(attention_terms_for_route(route))
+    label_terms = set(_split_terms([route.get("route_label"), route.get("route_topic")]))
+    expected_terms = set(_split_terms([expected_route_family.replace("_", " ")]))
+    overlap_count = len(query_terms & route_terms)
+    raw_specificity = _float(route.get("route_label_specificity_score"))
+    if not raw_specificity and label_terms:
+        raw_specificity = 0.35
+    family_match = bool(expected_terms and expected_terms & label_terms)
+    specificity_floor = raw_specificity
+    if expected_terms and not family_match:
+        specificity_floor = 0.0
+    reason_codes = set(
+        _split_terms(
+            [
+                *(_as_list(_as_dict(packet).get("reason_codes"))),
+                *(_as_list(_as_dict(_as_dict(packet).get("router_diagnostics")).get("reason_codes"))),
+                *(_as_list(route.get("triage_rank_reason_codes"))),
+            ]
+        )
+    )
+    bridge_reason = bool(
+        overlap_count
+        or family_match
+        or {"action_cue_lift", "issue_id_match", "pending_path_match"} & reason_codes
+    )
+    why_terms = set(_split_terms([route.get("why_this_may_matter")]))
+    why_specific = bool(
+        specificity_floor >= 0.5
+        and (bridge_reason or bool(why_terms & (query_terms | label_terms | expected_terms)))
+    )
+    return {
+        "selected_query_term_overlap_count": overlap_count,
+        "selected_route_label_specificity_score": round(raw_specificity, 3),
+        "route_label_specificity_floor": round(specificity_floor, 3),
+        "route_label_expected_family_match": bool(family_match) if expected_terms else True,
+        "explicit_bridge_reason_present": bridge_reason,
+        "zero_overlap_without_bridge_reason": overlap_count == 0 and not bridge_reason,
+        "selected_why_may_matter_specific_enough": why_specific,
+    }
+
+
 def select_attention_packet(
     packets: Sequence[Mapping[str, Any]],
 ) -> tuple[int | None, dict[str, Any] | None]:
@@ -219,16 +293,37 @@ def rerank_routes_with_attention_router(
     if ranked:
         selected_score, selected_overlap, selected_specificity, selected_index, selected_packet_raw = ranked[0]
         selected_packet = dict(selected_packet_raw)
+        selected_route = (
+            original_routes[selected_index]
+            if selected_index is not None and selected_index < len(original_routes)
+            else None
+        )
     else:
         selected_score = 0.0
         selected_overlap = 0
         selected_specificity = 0
         selected_index = None
         selected_packet = None
+        selected_route = None
     selected_public = public_attention_packet(selected_packet)
     selected_route_id = str(selected_public.get("route_id") or "")
     original_top = str(original_routes[0].get("route_id") or "") if original_routes else ""
     new_top = str(reordered[0].get("route_id") or "") if reordered else ""
+    top_route_changed = bool(original_top and new_top and original_top != new_top)
+    helpfulness = route_helpfulness_diagnostics(
+        query=query,
+        route=selected_route,
+        packet=selected_packet,
+    )
+    applied_but_no_help = bool(
+        ranked_indexes
+        and not top_route_changed
+        and (
+            helpfulness["zero_overlap_without_bridge_reason"]
+            or helpfulness["route_label_specificity_floor"] < 0.5
+            or not helpfulness["selected_why_may_matter_specific_enough"]
+        )
+    )
     diagnostics = {
         "enabled": True,
         "applied": bool(ranked_indexes),
@@ -239,7 +334,9 @@ def rerank_routes_with_attention_router(
         "selected_score": selected_score,
         "selected_query_term_overlap_count": selected_overlap,
         "selected_route_term_count": selected_specificity,
-        "top_route_changed": bool(original_top and new_top and original_top != new_top),
+        "top_route_changed": top_route_changed,
+        "attention_router_applied_but_no_help": applied_but_no_help,
+        **helpfulness,
         "foreground_packet_bytes": packet_bytes(selected_public) if selected_public else 0,
         "selected_packet": selected_public,
         "boundary": {
@@ -275,6 +372,15 @@ def metrics_for_attention_navigation(diagnostics: Mapping[str, Any]) -> dict[str
         "attention_router_applied": bool(diagnostics.get("applied")),
         "attention_router_ranked_route_count": int(diagnostics.get("ranked_route_count") or 0),
         "attention_router_top_route_changed": bool(diagnostics.get("top_route_changed")),
+        "attention_router_applied_but_no_help_count": int(
+            bool(diagnostics.get("attention_router_applied_but_no_help"))
+        ),
+        "attention_router_zero_overlap_without_bridge_count": int(
+            bool(diagnostics.get("zero_overlap_without_bridge_reason"))
+        ),
+        "attention_router_route_label_specificity_floor": _float(
+            diagnostics.get("route_label_specificity_floor")
+        ),
         "attention_router_foreground_packet_bytes": int(
             diagnostics.get("foreground_packet_bytes") or 0
         ),
@@ -307,6 +413,7 @@ __all__ = [
     "packet_bytes",
     "public_attention_packet",
     "rerank_routes_with_attention_router",
+    "route_helpfulness_diagnostics",
     "select_attention_packet",
     "source_handles_for_attention_route",
 ]

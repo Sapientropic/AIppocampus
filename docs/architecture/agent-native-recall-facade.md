@@ -27,6 +27,7 @@ The first opt-in callable path lives in
 
 ```text
 aippocampus agent recall "<cue>" --json
+aippocampus agent recall "<cue>" --attention-router-mode auto --json
 aippocampus agent aippo --task "<work>" --json
 aippocampus agent deepen "<opaque handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque handle or deepen:aippo...>" --json
@@ -52,6 +53,16 @@ biases ordering through Three Powers route facets, and emits compact macro
 diagnostics in `macro_navigation`. It is an opt-in `agent_continuity` behavior,
 not a default MCP-core recall behavior, and the macro state remains a
 navigation prior rather than source evidence.
+
+Attention-router sorting has the same source boundary. `--attention-router`
+forces explicit opt-in sorting for already emitted reopenable routes.
+`--attention-router-mode auto` checks the shared promotion harness before
+enabling sorting; if the gate is blocked, baseline order is preserved and
+`attention_router_navigation.policy.promotion_blockers` explains why. Current
+promotion blockers include safe-but-unhelpful routing cases such as an applied
+router that keeps a generic top route, lacks query/route overlap or an explicit
+bridge reason, or emits route labels / `why_this_may_matter` text too vague for
+a fresh agent to choose the first deepen step.
 
 This is an explicit pull path for agents and operators. It is not a default
 hook, not every-turn recall, and not a stable TypeScript/Python SDK. The recall

@@ -14,6 +14,7 @@ from aippocampus_runtime.navigation.attention_route_projection import (
     attention_token_for_route,
     packet_bytes,
     public_attention_packet,
+    route_helpfulness_diagnostics,
     select_attention_packet,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
@@ -57,6 +58,19 @@ def _elapsed_ms(start: float) -> int:
     return max(0, int(round((time.perf_counter() - start) * 1000)))
 
 
+def _blank_helpfulness_diagnostics() -> dict[str, Any]:
+    return {
+        "selected_query_term_overlap_count": 0,
+        "selected_route_label_specificity_score": 0.0,
+        "route_label_specificity_floor": 0.0,
+        "route_label_expected_family_match": False,
+        "explicit_bridge_reason_present": False,
+        "zero_overlap_without_bridge_reason": True,
+        "selected_why_may_matter_specific_enough": False,
+        "attention_router_applied_but_no_help_count": 0,
+    }
+
+
 def _pure_deictic_requires_clarification(case: Mapping[str, Any]) -> bool:
     return bool(case.get("expected_no_source_bind")) or str(case.get("case_family") or "") == (
         "pure_deictic_ambiguous"
@@ -98,6 +112,7 @@ def run_attention_router_navigation_only(
             "error_code": "",
             "rejection_stage": "clarify_or_recall",
             "selected_packet": {},
+            **_blank_helpfulness_diagnostics(),
             "boundary": {
                 "navigation_only_is_not_evidence": True,
                 "source_reopen_required_for_claims": True,
@@ -144,6 +159,7 @@ def run_attention_router_navigation_only(
             "rejection_stage": "context",
             "time_to_first_useful_source_observed_ms": None,
             "selected_packet": {},
+            **_blank_helpfulness_diagnostics(),
             "boundary": {
                 "navigation_only_is_not_evidence": True,
                 "source_reopen_required_for_claims": True,
@@ -165,8 +181,25 @@ def run_attention_router_navigation_only(
     selected_index, selected_packet = select_attention_packet(packets)
     public_packet = public_attention_packet(selected_packet)
     actionable = selected_packet is not None
+    selected_route = (
+        routes[selected_index]
+        if selected_index is not None and selected_index < len(routes)
+        else None
+    )
+    helpfulness = route_helpfulness_diagnostics(
+        query=intent,
+        route=selected_route,
+        packet=selected_packet,
+        expected_route_family=str(case.get("expected_route_family") or ""),
+    )
     expected_route_family = str(case.get("expected_route_family") or "")
-    selected_route_family = expected_route_family if actionable and expected_route_family else ""
+    selected_route_family = (
+        expected_route_family
+        if actionable
+        and expected_route_family
+        and helpfulness["route_label_expected_family_match"]
+        else ""
+    )
     known_alias_activation = bool(
         actionable and expected_route_family and case.get("known_alias_language")
     )
@@ -203,6 +236,16 @@ def run_attention_router_navigation_only(
         ),
         "foreground_packet_bytes": packet_bytes(public_packet) if public_packet else 0,
         "correct_but_useless_warning_count": int(actionable and not public_packet.get("route_label")),
+        **helpfulness,
+        "attention_router_applied_but_no_help_count": int(
+            actionable
+            and selected_index == 0
+            and (
+                helpfulness["zero_overlap_without_bridge_reason"]
+                or helpfulness["route_label_specificity_floor"] < 0.5
+                or not helpfulness["selected_why_may_matter_specific_enough"]
+            )
+        ),
         "error_code": "",
         "rejection_stage": "" if actionable else "no_attention_route",
         "time_to_first_useful_source_observed_ms": _elapsed_ms(start) if actionable else None,
@@ -262,6 +305,42 @@ def attention_router_activation_readout(
             "known_alias_cross_language_activation_count": len(alias_cases),
             "deictic_wrong_visible_context_bind_count": int(
                 bool(pure_deictic.get("route_actionable"))
+            ),
+            "attention_router_applied_but_no_help_count": sum(
+                int(
+                    _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                        "attention_router_applied_but_no_help_count"
+                    )
+                    or 0
+                )
+                for row in rows
+            ),
+            "zero_overlap_without_bridge_reason_count": sum(
+                int(
+                    bool(
+                        _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                            "zero_overlap_without_bridge_reason"
+                        )
+                    )
+                )
+                for row in rows
+            ),
+            "route_label_specificity_below_floor_count": sum(
+                int(
+                    float(
+                        _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                            "route_label_specificity_floor"
+                        )
+                        or 0.0
+                    )
+                    < 0.5
+                    and bool(
+                        _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                            "route_actionable"
+                        )
+                    )
+                )
+                for row in rows
             ),
             "broad_search_after_router_available_count": sum(
                 int(

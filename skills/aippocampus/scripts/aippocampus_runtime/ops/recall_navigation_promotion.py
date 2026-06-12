@@ -40,6 +40,8 @@ SUMMARY_METRIC_NAMES = (
     "feature_hurt_case_count feature_noop_case_count manual_search_fallback_count "
     "wrong_source_route_count foreground_packet_bytes correct_but_useless_warning_count "
     "route_family_selected_before_manual_search_count known_alias_cross_language_activation_count "
+    "attention_router_applied_but_no_help_count zero_overlap_without_bridge_reason_count "
+    "route_label_specificity_below_floor_count why_may_matter_not_specific_count "
     "macro_prior_applied_count macro_active_layer_order_delta_count "
     "macro_hamming_fanout_delta_count macro_momentum_recheck_diagnostic_count"
 ).split()
@@ -89,6 +91,14 @@ def _arm_row(
     selected_route_family: str = "",
     route_family_selected_before_manual_search: bool = False,
     known_alias_cross_language_activation: bool = False,
+    attention_router_applied_but_no_help_count: int = 0,
+    selected_query_term_overlap_count: int = 1,
+    route_label_specificity_floor: float = 1.0,
+    route_label_expected_family_match: bool = True,
+    explicit_bridge_reason_present: bool = True,
+    zero_overlap_without_bridge_reason: bool = False,
+    selected_why_may_matter_specific_enough: bool = True,
+    attention_router_top_route_changed: bool = False,
 ) -> dict[str, Any]:
     return {
         "source_backed_success": source_backed_success,
@@ -106,6 +116,14 @@ def _arm_row(
         "selected_route_family": selected_route_family,
         "route_family_selected_before_manual_search": route_family_selected_before_manual_search,
         "known_alias_cross_language_activation": known_alias_cross_language_activation,
+        "attention_router_applied_but_no_help_count": attention_router_applied_but_no_help_count,
+        "selected_query_term_overlap_count": selected_query_term_overlap_count,
+        "route_label_specificity_floor": route_label_specificity_floor,
+        "route_label_expected_family_match": route_label_expected_family_match,
+        "explicit_bridge_reason_present": explicit_bridge_reason_present,
+        "zero_overlap_without_bridge_reason": zero_overlap_without_bridge_reason,
+        "selected_why_may_matter_specific_enough": selected_why_may_matter_specific_enough,
+        "attention_router_top_route_changed": attention_router_top_route_changed,
         **_blank_red_lines(),
     }
 
@@ -169,6 +187,27 @@ def _derived_case(row: Mapping[str, Any]) -> dict[str, Any]:
                 ),
                 known_alias_cross_language_activation=bool(
                     attention.get("known_alias_cross_language_activation")
+                ),
+                attention_router_applied_but_no_help_count=_int(
+                    attention.get("attention_router_applied_but_no_help_count")
+                ),
+                selected_query_term_overlap_count=_int(
+                    attention.get("selected_query_term_overlap_count")
+                ),
+                route_label_specificity_floor=float(
+                    attention.get("route_label_specificity_floor") or 0.0
+                ),
+                route_label_expected_family_match=bool(
+                    attention.get("route_label_expected_family_match")
+                ),
+                explicit_bridge_reason_present=bool(
+                    attention.get("explicit_bridge_reason_present")
+                ),
+                zero_overlap_without_bridge_reason=bool(
+                    attention.get("zero_overlap_without_bridge_reason")
+                ),
+                selected_why_may_matter_specific_enough=bool(
+                    attention.get("selected_why_may_matter_specific_enough")
                 ),
             ),
             ARM_PLUS_DEEPEN: _arm_row(
@@ -307,6 +346,53 @@ def _fixture_distractor_cases() -> list[dict[str, Any]]:
             },
         },
         {
+            "case_id": "attention_router_generic_top_no_help",
+            "case_family": "attention_router_no_help",
+            "expected_behavior": (
+                "When the baseline top route is generic and a lower route carries "
+                "the latent topic, the attention router must improve the first hop "
+                "or expose a no-help diagnostic before default promotion."
+            ),
+            "promotion_outcome": "feature_noop",
+            "arms": {
+                ARM_BASELINE: _arm_row(
+                    source_backed_success=True,
+                    route_actionable=True,
+                    source_reopen_attempted=False,
+                    source_reopen_follow_through=False,
+                    manual_search_fallback_count=1,
+                    foreground_packet_bytes=96,
+                    selected_next_tool="search_memory",
+                ),
+                ARM_NAV_ONLY: _arm_row(
+                    source_backed_success=False,
+                    route_actionable=True,
+                    source_reopen_attempted=False,
+                    source_reopen_follow_through=False,
+                    foreground_packet_bytes=224,
+                    correct_but_useless_warning_count=1,
+                    selected_next_tool="recall_deepen",
+                    selected_route_family="relationship_continuity",
+                    attention_router_applied_but_no_help_count=1,
+                    selected_query_term_overlap_count=0,
+                    route_label_specificity_floor=0.0,
+                    route_label_expected_family_match=False,
+                    explicit_bridge_reason_present=False,
+                    zero_overlap_without_bridge_reason=True,
+                    selected_why_may_matter_specific_enough=False,
+                    attention_router_top_route_changed=False,
+                ),
+                ARM_PLUS_DEEPEN: _arm_row(
+                    source_backed_success=True,
+                    route_actionable=True,
+                    source_reopen_attempted=True,
+                    source_reopen_follow_through=True,
+                    foreground_packet_bytes=260,
+                    selected_next_tool="recall_deepen",
+                ),
+            },
+        },
+        {
             "case_id": "exact_query_noop_control",
             "case_family": "positive_noop",
             "expected_behavior": "Exact query cases should be reported as no-op, not hidden wins.",
@@ -368,6 +454,12 @@ def _aggregate_metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "correct_but_useless_warning_count": 0,
         "route_family_selected_before_manual_search_count": 0,
         "known_alias_cross_language_activation_count": 0,
+        "attention_router_applied_but_no_help_count": 0,
+        "zero_overlap_without_bridge_reason_count": 0,
+        "route_label_specificity_below_floor_count": 0,
+        "why_may_matter_not_specific_count": 0,
+        "query_route_term_overlap_zero_count": 0,
+        "attention_router_top_route_unchanged_count": 0,
         "macro_prior_applied_count": 0,
         "macro_active_layer_order_delta_count": 0,
         "macro_hamming_fanout_delta_count": 0,
@@ -397,6 +489,25 @@ def _aggregate_metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
             metrics["known_alias_cross_language_activation_count"] += int(
                 bool(arm.get("known_alias_cross_language_activation"))
             )
+            if arm_name == ARM_NAV_ONLY and arm.get("route_actionable"):
+                metrics["attention_router_applied_but_no_help_count"] += _int(
+                    arm.get("attention_router_applied_but_no_help_count")
+                )
+                metrics["zero_overlap_without_bridge_reason_count"] += int(
+                    bool(arm.get("zero_overlap_without_bridge_reason"))
+                )
+                metrics["route_label_specificity_below_floor_count"] += int(
+                    float(arm.get("route_label_specificity_floor") or 0.0) < 0.5
+                )
+                metrics["why_may_matter_not_specific_count"] += int(
+                    not bool(arm.get("selected_why_may_matter_specific_enough"))
+                )
+                metrics["query_route_term_overlap_zero_count"] += int(
+                    _int(arm.get("selected_query_term_overlap_count")) == 0
+                )
+                metrics["attention_router_top_route_unchanged_count"] += int(
+                    not bool(arm.get("attention_router_top_route_changed"))
+                )
             metrics["macro_prior_applied_count"] += int(bool(arm.get("macro_prior_applied")))
             metrics["macro_active_layer_order_delta_count"] += int(
                 bool(arm.get("macro_active_layer_order_changed"))
@@ -475,6 +586,12 @@ def _promotion_blockers(
         blockers.append("feature_noop_cases_present")
     if set(coverage.get("distractor_families_present") or []) != set(DISTRACTOR_FAMILIES):
         blockers.append("distractor_coverage_incomplete")
+    if _int(metrics.get("attention_router_applied_but_no_help_count")):
+        blockers.append("attention_router_no_help_cases_present")
+    if _int(metrics.get("route_label_specificity_below_floor_count")):
+        blockers.append("attention_router_specificity_gate_not_satisfied")
+    if _int(metrics.get("zero_overlap_without_bridge_reason_count")):
+        blockers.append("attention_router_bridge_reason_gate_not_satisfied")
     if not usefulness.get("quality_gate_ok"):
         blockers.append("usefulness_gate_not_satisfied")
     blockers.append("fixture_only_not_live_default_path")

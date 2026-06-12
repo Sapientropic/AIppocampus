@@ -91,8 +91,35 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         self.assertFalse(nav_only["source_reopen_attempted"])
         self.assertEqual(nav_only["selected_next_tool"], "recall_deepen")
         self.assertEqual(nav_only["claim_without_source_reopen_count"], 0)
-        self.assertTrue(nav_only["route_family_selected_before_manual_search"])
+        self.assertFalse(nav_only["route_family_selected_before_manual_search"])
+        self.assertEqual(nav_only["route_label_specificity_floor"], 0.0)
+        self.assertFalse(nav_only["route_label_expected_family_match"])
+        self.assertEqual(nav_only["attention_router_applied_but_no_help_count"], 1)
+        self.assertIn("attention_router_no_help_cases_present", report["promotion_blockers"])
+        self.assertIn(
+            "attention_router_specificity_gate_not_satisfied",
+            report["promotion_blockers"],
+        )
         self.assertIn("fixture_only_not_live_default_path", report["promotion_blockers"])
+
+    def test_attention_router_no_help_fixture_blocks_default_promotion(self) -> None:
+        report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
+        metrics = report["promotion_metrics"]
+        case = report["cases_by_id"]["attention_router_generic_top_no_help"]
+        nav_only = case["arms"]["feature_navigation_only"]
+
+        self.assertEqual(case["case_family"], "attention_router_no_help")
+        self.assertGreaterEqual(metrics["attention_router_applied_but_no_help_count"], 1)
+        self.assertGreaterEqual(metrics["zero_overlap_without_bridge_reason_count"], 1)
+        self.assertGreaterEqual(metrics["route_label_specificity_below_floor_count"], 1)
+        self.assertEqual(nav_only["selected_query_term_overlap_count"], 0)
+        self.assertFalse(nav_only["explicit_bridge_reason_present"])
+        self.assertTrue(nav_only["zero_overlap_without_bridge_reason"])
+        self.assertFalse(nav_only["selected_why_may_matter_specific_enough"])
+        self.assertIn(
+            "attention_router_bridge_reason_gate_not_satisfied",
+            report["promotion_blockers"],
+        )
 
     def test_macro_navigation_readout_measures_default_prior_candidate(self) -> None:
         report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
