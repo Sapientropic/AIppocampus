@@ -22,6 +22,11 @@ from aippocampus_runtime.model.client import (
 )
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import split_query_terms
+from aippocampus_runtime.source.semantic_scope_labels import (
+    SEMANTIC_SCOPE_LABELS_FILENAME,
+    load_semantic_scope_labels,
+    semantic_labels_for_message,
+)
 from aippocampus_runtime.subconscious.candidate_router import match_working_memory
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import (
@@ -69,6 +74,7 @@ SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-
 SOURCE_SEMANTIC_CACHE_BUILDER_ID = "aippocampus-working-memory-surface-v1"
 STANDARD_CASE_CACHE_POLICY_VERSION = "standard-public-case-index-cache-v1"
 STANDARD_CASE_ADAPTER_VERSION = "standard-public-case-adapter-v1"
+STANDARD_CLEAN_SOURCE_MESSAGES_FILENAME = "messages.jsonl"
 LEXICAL_RERANKER_DIRECT_TERMS = {
     "adopt",
     "adopted",
@@ -259,6 +265,60 @@ def source_index_manifest(
     }
 
 
+def standard_clean_source_message_rows(
+    sqlite_path: Path, messages: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Return clean-source-compatible rows for benchmark source artifacts.
+
+    The benchmark source index is public fixture data, but source-side semantic
+    materializers still need the same stable `message_id` contract as real clean
+    source. Keep this identity tied to the source manifest route, not the local
+    cache path, so semantic-scope sidecars can be reused across runs.
+    """
+
+    source_key = standard_source_route_key(sqlite_path)
+    rows: list[dict[str, Any]] = []
+    for message in messages:
+        try:
+            line = int(message.get("line") or 0)
+        except (TypeError, ValueError):
+            line = 0
+        if line <= 0:
+            continue
+        message_id = f"{source_key}:line:{line}"
+        rows.append(
+            {
+                "message_id": message_id,
+                "id": message_id,
+                "turn_id": message_id,
+                "source_line": line,
+                "line": line,
+                "timestamp": str(message.get("timestamp") or ""),
+                "role": str(message.get("role") or ""),
+                "phase": str(message.get("phase") or ""),
+                "turn_index": int(message.get("turn_index") or 0),
+                "is_final": bool(message.get("is_final")),
+                "text": str(message.get("text") or ""),
+                "scope_labels": list(message.get("scope_labels") or []),
+            }
+        )
+    return rows
+
+
+def write_standard_clean_source_messages(
+    sqlite_path: Path, messages: list[dict[str, Any]]
+) -> Path:
+    output_path = sqlite_path.with_name(STANDARD_CLEAN_SOURCE_MESSAGES_FILENAME)
+    rows = standard_clean_source_message_rows(sqlite_path, messages)
+    tmp = output_path.with_name(f".{output_path.name}.{os.getpid()}.tmp")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tmp.open("w", encoding="utf-8", newline="\n") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    tmp.replace(output_path)
+    return output_path
+
+
 def prepare_standard_sqlite_index(
     sqlite_path: Path,
     *,
@@ -273,6 +333,7 @@ def prepare_standard_sqlite_index(
         existing = read_json_dict(manifest_path)
         if existing == manifest:
             cache_metrics["source_index_hit_count"] += 1
+            write_standard_clean_source_messages(sqlite_path, messages)
             return
         cache_metrics["source_index_manifest_mismatch_count"] += 1
     elif cache_enabled:
@@ -290,6 +351,7 @@ def prepare_standard_sqlite_index(
     if cache_enabled:
         cache_metrics["source_index_rebuild_count"] += 1
         write_json_atomic(manifest_path, manifest)
+        write_standard_clean_source_messages(sqlite_path, messages)
 
 
 def standard_content_query_terms(question: str, *, limit: int = 24) -> list[str]:
@@ -1157,6 +1219,17 @@ def source_index_manifest_fingerprint(sqlite_path: Path) -> str:
     return digest.hexdigest()
 
 
+def semantic_scope_sidecar_fingerprint(sqlite_path: Path) -> str:
+    sidecar_path = sqlite_path.with_name(SEMANTIC_SCOPE_LABELS_FILENAME)
+    if not sidecar_path.exists():
+        return ""
+    digest = hashlib.sha1()
+    with sidecar_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def standard_source_route_key(sqlite_path: Path) -> str:
     """Return a path-stable source route key for benchmark-derived sources.
 
@@ -1191,6 +1264,7 @@ def source_semantic_artifact_cache_key(
         "policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
         "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
         "source_index_manifest_sha1": source_index_manifest_fingerprint(sqlite_path),
+        "semantic_scope_sidecar_sha1": semantic_scope_sidecar_fingerprint(sqlite_path),
         "line_to_session_sha1": line_to_session_fingerprint(line_to_session),
     }
     return stable_json_sha1(material, length=20)
@@ -1209,6 +1283,7 @@ def source_semantic_cache_for_json(cache: dict[str, Any]) -> dict[str, Any]:
             "route_terms",
             "labels",
             "context_labels",
+            "semantic_scope_labels",
         ):
             value = profile.get(key)
             if isinstance(value, set):
@@ -1269,10 +1344,13 @@ def build_source_semantic_cache(
     working_memory_rows: list[dict[str, Any]] = []
     failed_count = 0
     source_key = standard_source_route_key(sqlite_path)
+    semantic_scope_sidecar = load_semantic_scope_labels(sqlite_path.parent)
+    semantic_scope_label_row_count = 0
     created_at = now_utc()
     for row in rows:
         try:
             line = int(row["line"])
+            message_id = f"{source_key}:line:{line}"
             session_id = line_to_session.get(str(line)) or ""
             previous_row = row_by_line.get(line - 1)
             next_row = row_by_line.get(line + 1)
@@ -1291,6 +1369,12 @@ def build_source_semantic_cache(
             previous_terms = lexical_line_reranker_terms(previous_text)
             next_terms = lexical_line_reranker_terms(next_text)
             labels = source_semantic_line_labels(text)
+            semantic_labels = semantic_labels_for_message(
+                {"message_id": message_id}, semantic_scope_sidecar
+            )
+            if semantic_labels:
+                semantic_scope_label_row_count += 1
+                labels = fts5_benchmark.unique_preserve([*labels, *semantic_labels])
             context_labels = set(source_semantic_line_labels(previous_text))
             context_labels.update(source_semantic_line_labels(next_text))
             route_terms = set(source_terms)
@@ -1306,47 +1390,49 @@ def build_source_semantic_cache(
             source_ref = {
                 "ref": f"{source_key}:line:{line}",
                 "thread_key": source_key,
-                "message_id": f"{source_key}:line:{line}",
-                "turn_id": f"{source_key}:line:{line}",
+                "message_id": message_id,
+                "turn_id": message_id,
                 "source_line": line,
                 "line": line,
                 "role": str(row.get("role") or ""),
                 "phase": str(row.get("phase") or ""),
             }
-            working_memory_rows.append(
-                {
-                    "schema_version": 1,
-                    "kind": "aippocampus_working_memory",
-                    "created_at": created_at,
-                    "status": "active",
-                    "route": "use_with_source",
-                    "ask_policy": "source_required",
-                    "risk": "low",
-                    "route_reason": "longmemeval_source_side_worker_surface",
-                    "candidate_key": "lm_worker_surface_"
-                    + sha1_text(f"{source_key}\n{line}\n{text}")[:18],
-                    "candidate_type": "project_memory",
-                    "title": f"source line {line}",
-                    "summary": (
-                        "Source-side route surface; reopen the clean-source "
-                        "line before using it as evidence."
-                    ),
-                    "recommendation": (
-                        "Use as navigation only; reopen the clean-source line "
-                        "before making factual claims."
-                    ),
-                    "confidence": 0.7,
-                    "trigger_terms": route_terms_list,
-                    "activation_cues": route_terms_list[:12],
-                    "concepts": route_terms_list[:16],
-                    "source_refs": [source_ref],
-                    "source_strength": {
-                        "level": "visible_source",
-                        "score": 1.0,
-                        "source_ref_count": 1,
-                    },
-                }
-            )
+            working_memory_row = {
+                "schema_version": 1,
+                "kind": "aippocampus_working_memory",
+                "created_at": created_at,
+                "status": "active",
+                "route": "use_with_source",
+                "ask_policy": "source_required",
+                "risk": "low",
+                "route_reason": "longmemeval_source_side_worker_surface",
+                "candidate_key": "lm_worker_surface_"
+                + sha1_text(f"{source_key}\n{line}\n{text}")[:18],
+                "candidate_type": "project_memory",
+                "title": f"source line {line}",
+                "summary": (
+                    "Source-side route surface; reopen the clean-source "
+                    "line before using it as evidence."
+                ),
+                "recommendation": (
+                    "Use as navigation only; reopen the clean-source line "
+                    "before making factual claims."
+                ),
+                "confidence": 0.7,
+                "trigger_terms": route_terms_list,
+                "activation_cues": route_terms_list[:12],
+                "concepts": route_terms_list[:16],
+                "source_refs": [source_ref],
+                "source_strength": {
+                    "level": "visible_source",
+                    "score": 1.0,
+                    "source_ref_count": 1,
+                },
+            }
+            if semantic_labels:
+                working_memory_row["scope_labels"] = semantic_labels
+                working_memory_row["semantic_scope_labels"] = semantic_labels
+            working_memory_rows.append(working_memory_row)
             profiles[line] = {
                 "line": line,
                 "role": str(row.get("role") or "").casefold(),
@@ -1357,6 +1443,7 @@ def build_source_semantic_cache(
                 "route_terms": route_terms,
                 "labels": set(labels),
                 "context_labels": context_labels,
+                "semantic_scope_labels": set(semantic_labels),
                 "source_text_sha1": sha1_text(text)[:16],
                 "previous_text_sha1": sha1_text(previous_text)[:16],
                 "next_text_sha1": sha1_text(next_text)[:16],
@@ -1401,6 +1488,10 @@ def build_source_semantic_cache(
             "cache_values_emitted": False,
             "line_to_session_sha1": line_to_session_fingerprint(line_to_session),
             "source_index_manifest_sha1": source_index_manifest_fingerprint(sqlite_path),
+            "semantic_scope_sidecar_sha1": semantic_scope_sidecar_fingerprint(sqlite_path),
+            "semantic_scope_sidecar_loaded": bool(semantic_scope_sidecar),
+            "semantic_scope_sidecar_row_count": len(semantic_scope_sidecar),
+            "semantic_scope_label_row_count": semantic_scope_label_row_count,
         },
     }
 
@@ -1504,6 +1595,17 @@ class SourceSemanticCacheStore:
             int(manifest.get("working_memory_row_count") or 0)
             for manifest in manifests
         )
+        semantic_scope_sidecar_count = sum(
+            1 for manifest in manifests if manifest.get("semantic_scope_sidecar_loaded")
+        )
+        semantic_scope_sidecar_row_count = sum(
+            int(manifest.get("semantic_scope_sidecar_row_count") or 0)
+            for manifest in manifests
+        )
+        semantic_scope_label_row_count = sum(
+            int(manifest.get("semantic_scope_label_row_count") or 0)
+            for manifest in manifests
+        )
         failed_count = sum(int(manifest.get("failed_count") or 0) for manifest in manifests)
         return {
             "status": "measured_source_side_cache_build" if manifests else "not_measured",
@@ -1523,6 +1625,9 @@ class SourceSemanticCacheStore:
             "message_count": message_count,
             "span_count": span_count,
             "working_memory_row_count": working_memory_row_count,
+            "semantic_scope_sidecar_count": semantic_scope_sidecar_count,
+            "semantic_scope_sidecar_row_count": semantic_scope_sidecar_row_count,
+            "semantic_scope_label_row_count": semantic_scope_label_row_count,
             "complete_count": span_count,
             "failed_count": failed_count,
             "cache_key_complete_rate": safe_rate(span_count, message_count),
