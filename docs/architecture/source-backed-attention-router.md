@@ -264,15 +264,28 @@ This is enough to distinguish routes that share broad buckets such as
 semantic warming, familiarity-map scoring, trained topic inference, source
 support, or default foreground hooks.
 
-The #1301 bridge into the recall-navigation promotion harness is still
+The #1301 bridge into the recall-navigation promotion harness began as a
 diagnostic: `attention_router_navigation_only` runs the deterministic hot router
 over the same `recall_context` candidate set and records route-family selection,
 foreground packet bytes, and deictic fail-closed behavior. It does not reopen
-source, answer the question, or replace the live `recall_context` ordering. The
-public fixture includes a light Arabic continuity cue for the AIppocampus/little
-hippocampus route family plus a pure deictic Arabic negative control; the former
-may select a route before manual search, and the latter must ask to clarify or
-recall rather than bind to visible context.
+source or answer the question. The public fixture includes a light Arabic
+continuity cue for the AIppocampus/little hippocampus route family plus a pure
+deictic Arabic negative control; the former may select a route before manual
+search, and the latter must ask to clarify or recall rather than bind to visible
+context.
+
+The first live agent-facing bridge is opt-in only:
+`aippocampus agent recall --attention-router` projects already emitted
+`recall_context` routes through
+`aippocampus_runtime.navigation.attention_route_projection`, then lets the
+deterministic hot router move only already emitted `reopenable_route` packets
+forward. All original recall routes remain present as fallback candidates in
+their original relative order. The foreground diagnostic is intentionally a
+public packet projection with counts and scores only; source refs, source
+handles, and head votes remain behind deepen/explain. This moves the router
+from report-only comparison into agent recall sorting, but it is still not
+default foreground adoption, source evidence, answer generation, or broad
+#1188 route-producer completion.
 
 ROI status can reduce low-yield non-guard scout families to watch or diagnostic
 surfaces, but required guard families remain `guard_required`. Quiet privacy or

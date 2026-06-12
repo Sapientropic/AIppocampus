@@ -539,6 +539,7 @@ The first packaged opt-in CLI path is:
 
 ```sh
 aippocampus agent recall "continue the old decision" --json
+aippocampus agent recall "continue the old decision" --attention-router --json
 aippocampus agent aippo --task "coding issue closeout" --json
 aippocampus agent deepen "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque recall handle or deepen:aippo...>" --json
@@ -553,6 +554,13 @@ into the foreground packet. `agent aippo` exposes only the narrow
 project/workflow working-contract activation. `agent feedback` records or
 returns calibration/routing evidence only; it cannot ripen a candidate-only,
 Dream-only, or stale clause without source support.
+
+`agent recall --attention-router` is an additive opt-in sorting path. It may
+reorder already emitted `recall_context` routes through the deterministic
+attention router and reports `attention_router_navigation` diagnostics, but it
+does not create new source authority, change default hook behavior, or remove
+the requirement to use `agent deepen` before exact, current, disputed,
+sensitive, or high-risk claims.
 
 For recall output, pass `deepen_requests[].handle` to `agent deepen`.
 `memory_packets[].deepen_route_id` is a display/correlation id, not the

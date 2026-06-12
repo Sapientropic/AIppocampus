@@ -10,6 +10,12 @@ from typing import Any
 
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.navigation import attention_hot_router
+from aippocampus_runtime.navigation.attention_route_projection import (
+    attention_token_for_route,
+    packet_bytes,
+    public_attention_packet,
+    select_attention_packet,
+)
 from aippocampus_runtime.recall.query_policy import split_query_terms
 
 ARM_ATTENTION_NAV = "attention_router_navigation_only"
@@ -49,121 +55,6 @@ def _safe_error(result: Mapping[str, Any], payload: Mapping[str, Any]) -> dict[s
 
 def _elapsed_ms(start: float) -> int:
     return max(0, int(round((time.perf_counter() - start) * 1000)))
-
-
-def _packet_bytes(value: Mapping[str, Any]) -> int:
-    return len(json.dumps(dict(value), ensure_ascii=False, sort_keys=True).encode("utf-8"))
-
-
-def _public_attention_packet(packet: Mapping[str, Any] | None) -> dict[str, Any]:
-    if packet is None:
-        return {}
-    diagnostics = _as_dict(packet.get("router_diagnostics"))
-    return {
-        "route_id": str(packet.get("route_id") or ""),
-        "output_mode": str(packet.get("output_mode") or ""),
-        "action_grammar": str(packet.get("action_grammar") or ""),
-        "claim_permission": str(packet.get("claim_permission") or ""),
-        "emitted": bool(packet.get("emitted")),
-        "route_label": str(packet.get("route_label") or ""),
-        "source_handle_count": len(_as_list(packet.get("source_handles"))),
-        "score": diagnostics.get("score"),
-        "threshold": diagnostics.get("threshold"),
-        "reason_codes": _as_list(diagnostics.get("reason_codes"))[:6],
-    }
-
-
-def _source_handles_for_attention_route(route: Mapping[str, Any]) -> list[dict[str, Any]]:
-    handles: list[dict[str, Any]] = []
-    for ref in _as_list(route.get("source_refs")):
-        if not isinstance(ref, Mapping):
-            continue
-        source_id = str(ref.get("source_id") or ref.get("thread_key") or "clean_source")
-        segment_id = str(
-            ref.get("message_id")
-            or ref.get("turn_id")
-            or ref.get("turn_index")
-            or route.get("route_id")
-            or "segment"
-        )
-        handle: dict[str, Any] = {
-            "source_id": source_id,
-            "segment_id": segment_id,
-            "reopen_required": True,
-        }
-        line = ref.get("line") or ref.get("source_line")
-        if line is not None:
-            try:
-                parsed = int(line)
-            except (TypeError, ValueError):
-                parsed = None
-            if parsed is not None:
-                handle["line_range"] = [parsed, parsed]
-        handles.append(handle)
-    return handles
-
-
-def _attention_terms_for_route(route: Mapping[str, Any]) -> list[str]:
-    text = " ".join(
-        str(value or "")
-        for value in (
-            route.get("route_label"),
-            route.get("route_topic"),
-            route.get("matched_cue_family"),
-            route.get("scope_bucket"),
-            route.get("summary"),
-            " ".join(str(label) for label in route.get("scope_labels") or []),
-            " ".join(str(code) for code in route.get("triage_rank_reason_codes") or []),
-        )
-    )
-    return split_query_terms([text])[:32]
-
-
-def _attention_token_for_route(route: Mapping[str, Any], *, index: int) -> dict[str, Any]:
-    metadata_currentness = "needs_reopen"
-    if str(route.get("currentness") or "").strip():
-        metadata_currentness = str(route.get("currentness"))
-    source_handles = _source_handles_for_attention_route(route)
-    return {
-        "kind": "aippocampus_attention_route_token",
-        "token_id": str(route.get("route_id") or f"attention_route_{index}"),
-        "route_token_level": "source_span_token" if source_handles else "episode_or_question_token",
-        "source_handles": source_handles,
-        "route_label": str(route.get("route_label") or ""),
-        "why_may_matter": str(route.get("why_this_may_matter") or ""),
-        "scope": "project:AIppocampus",
-        "risk_flags": _as_list(route.get("risk_flags")),
-        "triage_rank_reason_codes": _as_list(route.get("triage_rank_reason_codes")),
-        "route_metadata": {
-            "salience": "high" if index < 2 else "medium",
-            "currentness": metadata_currentness,
-            "privacy": "public",
-            "conflict": str(route.get("conflict") or "none"),
-        },
-        "route_features": {
-            "terms": _attention_terms_for_route(route),
-            "semantic_score": 0.45 if route.get("route_topic") else 0.25,
-            "evidence_packaging_score": 0.55 if source_handles else 0.0,
-        },
-    }
-
-
-def _select_attention_packet(
-    packets: Sequence[Mapping[str, Any]],
-) -> tuple[int | None, dict[str, Any] | None]:
-    ranked: list[tuple[float, int, Mapping[str, Any]]] = []
-    for index, packet in enumerate(packets):
-        if not packet.get("emitted"):
-            continue
-        if packet.get("output_mode") != "reopenable_route":
-            continue
-        score = float(_as_dict(packet.get("router_diagnostics")).get("score") or 0.0)
-        ranked.append((score, index, packet))
-    if not ranked:
-        return None, None
-    ranked.sort(key=lambda item: (-item[0], item[1]))
-    _, index, packet = ranked[0]
-    return index, dict(packet)
 
 
 def _pure_deictic_requires_clarification(case: Mapping[str, Any]) -> bool:
@@ -260,7 +151,7 @@ def run_attention_router_navigation_only(
         }
 
     routes = [route for route in _as_list(context_payload.get("routes")) if isinstance(route, Mapping)]
-    tokens = [_attention_token_for_route(route, index=index) for index, route in enumerate(routes)]
+    tokens = [attention_token_for_route(route, index=index) for index, route in enumerate(routes)]
     packets = attention_hot_router.route_attention(
         {
             "query": intent,
@@ -271,8 +162,8 @@ def run_attention_router_navigation_only(
         },
         tokens,
     )
-    selected_index, selected_packet = _select_attention_packet(packets)
-    public_packet = _public_attention_packet(selected_packet)
+    selected_index, selected_packet = select_attention_packet(packets)
+    public_packet = public_attention_packet(selected_packet)
     actionable = selected_packet is not None
     expected_route_family = str(case.get("expected_route_family") or "")
     selected_route_family = expected_route_family if actionable and expected_route_family else ""
@@ -310,7 +201,7 @@ def run_attention_router_navigation_only(
             for packet in packets
             if packet.get("masks_applied") and packet.get("source_handles")
         ),
-        "foreground_packet_bytes": _packet_bytes(public_packet) if public_packet else 0,
+        "foreground_packet_bytes": packet_bytes(public_packet) if public_packet else 0,
         "correct_but_useless_warning_count": int(actionable and not public_packet.get("route_label")),
         "error_code": "",
         "rejection_stage": "" if actionable else "no_attention_route",

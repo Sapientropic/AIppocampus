@@ -6,12 +6,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
+from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity  # noqa: E402
 
 
@@ -233,6 +235,110 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg_benchmark", encoded)
         self.assertNotIn(str(self.cwd), encoded)
+
+    def test_attention_router_projection_reorders_existing_routes_only(self) -> None:
+        routes = [
+            {
+                "route_id": "route_generic",
+                "kind": "source_ref",
+                "handle": "handle:generic",
+                "route_label": "generic technical route",
+                "route_topic": "",
+                "source_refs": [
+                    {"source_id": "src_generic", "message_id": "msg_generic", "line": 10}
+                ],
+            },
+            {
+                "route_id": "route_attention",
+                "kind": "source_ref",
+                "handle": "handle:attention",
+                "route_label": "attention router score fusion route",
+                "route_topic": "attention_router",
+                "source_refs": [
+                    {"source_id": "src_attention", "message_id": "msg_attention", "line": 12}
+                ],
+                "triage_rank_reason_codes": ["attention_router_route_selection"],
+            },
+        ]
+
+        reordered, diagnostics = attention_route_projection.rerank_routes_with_attention_router(
+            query="attention router score fusion hard masks route selection",
+            routes=routes,
+            max_routes=2,
+        )
+        encoded = json.dumps(diagnostics, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(reordered[0]["route_id"], "route_attention")
+        self.assertEqual(reordered[1]["route_id"], "route_generic")
+        self.assertTrue(diagnostics["applied"])
+        self.assertTrue(diagnostics["top_route_changed"])
+        self.assertEqual(diagnostics["ranked_route_count"], 2)
+        self.assertTrue(diagnostics["boundary"]["attention_score_is_not_evidence"])
+        self.assertTrue(diagnostics["boundary"]["source_reopen_required_for_claims"])
+        self.assertNotIn("source_handles", encoded)
+        self.assertNotIn("head_votes", encoded)
+        self.assertNotIn("src_attention", encoded)
+
+    def test_recall_can_opt_into_attention_router_route_selection(self) -> None:
+        routes = [
+            {
+                "route_id": "route_generic",
+                "kind": "source_ref",
+                "handle": "handle:generic",
+                "route_label": "generic technical route",
+                "route_topic": "",
+                "source_refs": [
+                    {"source_id": "src_generic", "message_id": "msg_generic", "line": 10}
+                ],
+            },
+            {
+                "route_id": "route_attention",
+                "kind": "source_ref",
+                "handle": "handle:attention",
+                "route_label": "attention router score fusion route",
+                "route_topic": "attention_router",
+                "source_refs": [
+                    {"source_id": "src_attention", "message_id": "msg_attention", "line": 12}
+                ],
+                "triage_rank_reason_codes": ["attention_router_route_selection"],
+            },
+        ]
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": routes,
+            "route_count": len(routes),
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            default_report = agent_continuity.recall(
+                "attention router score fusion route selection",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                max_routes=2,
+            )
+            routed_report = agent_continuity.recall(
+                "attention router score fusion route selection",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                max_routes=2,
+                attention_router=True,
+            )
+
+        encoded = json.dumps(routed_report, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(default_report["memory_packets"][0]["route_id"], "route_generic")
+        self.assertFalse(default_report["attention_router_navigation"]["enabled"])
+        self.assertEqual(routed_report["memory_packets"][0]["route_id"], "route_attention")
+        self.assertTrue(routed_report["attention_router_navigation"]["enabled"])
+        self.assertTrue(routed_report["attention_router_navigation"]["top_route_changed"])
+        self.assertTrue(routed_report["metrics"]["attention_router_applied"])
+        self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
+        self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
+        self.assertEqual(routed_report["red_lines"]["source_backed_claim_without_reopen"], 0)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("source_handles", encoded)
+        self.assertNotIn("head_votes", encoded)
+        self.assertNotIn("src_attention", encoded)
 
     def test_stale_and_malformed_deepen_cannot_verify(self) -> None:
         recall = agent_continuity.recall(

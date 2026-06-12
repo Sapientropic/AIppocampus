@@ -24,6 +24,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_context_packet,
     recall_deepen_packet,
 )
+from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import agent_facade_contract as facade
 from aippocampus_runtime.recall import feedback_events, macro_live_recall
@@ -589,6 +590,7 @@ def recall(
     macro_state_path: str | Path | None = None,
     project: str = "AIppocampus",
     max_routes: int = MAX_ROUTES,
+    attention_router: bool = False,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
 
@@ -659,6 +661,10 @@ def recall(
             requested_limit=requested_limit,
             effective_limit=effective_limit,
         )
+    routes, attention_navigation = attention_route_projection.maybe_rerank_routes_with_attention_router(
+        enabled=attention_router, query=str(query or ""), routes=routes,
+        max_routes=effective_limit, project=project,
+    )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
     deepen_requests = [
         _deepen_request_for_route(route, memory_packet)
@@ -677,6 +683,7 @@ def recall(
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
         "macro_navigation": macro_navigation,
+        "attention_router_navigation": attention_navigation,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": (
             deepen_requests[0].get("copy_paste_command") if deepen_requests else None
@@ -686,6 +693,7 @@ def recall(
             "memory_packet_count": len(memory_packets),
             "deepen_request_count": len(deepen_requests),
             "macro_orientation_applied": bool(macro_context is not None),
+            **attention_route_projection.metrics_for_attention_navigation(attention_navigation),
             "requested_max_routes": requested_limit,
             "effective_max_routes": effective_limit,
             "foreground_forbidden_key_count": forbidden_count,
@@ -1088,6 +1096,8 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--macro-state-jsonl")
     recall_parser.add_argument("--project", default="AIppocampus")
     recall_parser.add_argument("--max", type=int, default=MAX_ROUTES)
+    recall_parser.add_argument("--attention-router", action="store_true",
+                               help="Use attention router opt-in route sorting.")
     recall_parser.add_argument("--json", action="store_true")
 
     aippo_parser = sub.add_parser("aippo")
@@ -1139,6 +1149,7 @@ def main(argv: list[str] | None = None) -> int:
                 macro_state_path=args.macro_state_jsonl,
                 project=args.project,
                 max_routes=args.max,
+                attention_router=args.attention_router,
             )
         )
         return 0
