@@ -1324,7 +1324,7 @@ def build_source_semantic_cache(
                     "risk": "low",
                     "route_reason": "longmemeval_source_side_worker_surface",
                     "candidate_key": "lm_worker_surface_"
-                    + sha1_text(f"{sqlite_path}\n{line}\n{text}")[:18],
+                    + sha1_text(f"{source_key}\n{line}\n{text}")[:18],
                     "candidate_type": "project_memory",
                     "title": f"source line {line}",
                     "summary": (

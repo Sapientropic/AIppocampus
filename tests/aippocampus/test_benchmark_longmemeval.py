@@ -513,8 +513,11 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
 
         first_ref = caches[0]["working_memory_rows"][0]["source_refs"][0]
         second_ref = caches[1]["working_memory_rows"][0]["source_refs"][0]
+        first_row = caches[0]["working_memory_rows"][0]
+        second_row = caches[1]["working_memory_rows"][0]
         self.assertEqual(first_ref["message_id"], second_ref["message_id"])
         self.assertEqual(first_ref["thread_key"], second_ref["thread_key"])
+        self.assertEqual(first_row["candidate_key"], second_row["candidate_key"])
         self.assertTrue(first_ref["message_id"].startswith("standard_public:"))
         self.assertEqual(
             caches[0]["manifest"]["source_identity"],
@@ -525,6 +528,7 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
                 {
                     "source_identity": cache["manifest"]["source_identity"],
                     "source_refs": cache["working_memory_rows"][0]["source_refs"],
+                    "candidate_key": cache["working_memory_rows"][0]["candidate_key"],
                 }
                 for cache in caches
             ],
