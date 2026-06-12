@@ -416,7 +416,7 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertFalse(adapter_config["line_reranker_external_model"])
         self.assertEqual(
             adapter_config["line_reranker_metadata"]["cache_policy_version"],
-            "aippocampus-source-worker-surface-cache-v1",
+            standard_public.SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
         )
         metrics = payload["metrics"]
         self.assertEqual(metrics["line_reranker_usage"]["provider_call_count"], 0)
@@ -471,6 +471,66 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn(str(path), dumped)
         self.assertNotIn(str(cache_dir), dumped)
         self.assertNotIn("secret fixture answer marker", dumped)
+
+    def test_source_semantic_cache_route_keys_are_cache_root_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = [
+                standard_public.standard_message_for_sqlite(
+                    source_id="stable-question",
+                    line=1,
+                    role="user",
+                    text="The stable marker belongs to this source row.",
+                )
+            ]
+            manifest = standard_public.source_index_manifest(
+                dataset="longmemeval-v1-small",
+                source_id="stable-question",
+                question_id="stable-question",
+                messages=messages,
+            )
+            caches = []
+            for name in ("cache-a", "cache-b"):
+                sqlite_path = root / name / "source_index.sqlite"
+                metrics = standard_public.new_standard_case_cache_metrics(
+                    enabled=True,
+                    cache_key=name,
+                    rebuild_requested=False,
+                )
+                standard_public.prepare_standard_sqlite_index(
+                    sqlite_path,
+                    messages=messages,
+                    manifest=manifest,
+                    cache_metrics=metrics,
+                    rebuild_cache=False,
+                )
+                caches.append(
+                    standard_public.build_source_semantic_cache(
+                        sqlite_path,
+                        line_to_session={"1": "session-a"},
+                    )
+                )
+
+        first_ref = caches[0]["working_memory_rows"][0]["source_refs"][0]
+        second_ref = caches[1]["working_memory_rows"][0]["source_refs"][0]
+        self.assertEqual(first_ref["message_id"], second_ref["message_id"])
+        self.assertEqual(first_ref["thread_key"], second_ref["thread_key"])
+        self.assertTrue(first_ref["message_id"].startswith("standard_public:"))
+        self.assertEqual(
+            caches[0]["manifest"]["source_identity"],
+            caches[1]["manifest"]["source_identity"],
+        )
+        dumped = json.dumps(
+            [
+                {
+                    "source_identity": cache["manifest"]["source_identity"],
+                    "source_refs": cache["working_memory_rows"][0]["source_refs"],
+                }
+                for cache in caches
+            ],
+            ensure_ascii=False,
+        )
+        self.assertNotIn(str(root), dumped)
 
     def test_standard_case_cache_reuses_prepared_sqlite_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
