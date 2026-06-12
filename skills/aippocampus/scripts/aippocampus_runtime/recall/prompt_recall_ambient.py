@@ -247,7 +247,7 @@ def attach_ambient_recall(
             result["ambient_recall"]["source_registration"] = {
                 "status": "hook_seen_recorded",
                 "thread_ref": hook_seen_record.get("thread_ref"),
-                "next_action_if_missing": "registry_scan_hook_seen_only",
+                "next_action_if_missing": "registry_reconcile_hook_seen",
             }
         if policy_file:
             policy_events = load_policy_events(policy_file)

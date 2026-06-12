@@ -192,7 +192,7 @@ def registry_health_report(
         "ok": (
             status_counts["needs_maintenance"] == 0
             and status_counts["unknown"] == 0
-            and hook_seen_reconciliation["metrics"]["hook_seen_but_not_registered_count"] == 0
+            and hook_seen_reconciliation["status"] == "ok"
         ),
         "registry": str(registry_path) if include_paths else None,
         "thread_count": len(threads),
