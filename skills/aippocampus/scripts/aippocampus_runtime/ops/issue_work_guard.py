@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 
 SCHEMA_VERSION = "issue-work-active-pull-v0"
 

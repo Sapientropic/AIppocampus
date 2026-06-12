@@ -32,6 +32,7 @@ from aippocampus_runtime.subconscious.worker import (
 )
 from benchmark_statistics import binomial_rate_report
 
+from .capability_provenance import benchmark_capability_provenance
 from .defaults import (
     DEFAULT_STANDARD_CASE_CACHE_ROOT,
     DEFAULT_STANDARD_DATASET,
@@ -53,7 +54,6 @@ from .defaults import (
     STANDARD_QUERY_TERM_STOPWORDS,
     LineRerankerFn,
 )
-from .capability_provenance import benchmark_capability_provenance
 from .reporting import (
     now_utc,
     reciprocal_rank,
