@@ -84,6 +84,10 @@ COMMANDS = {
         "continuity_domain.py",
         "aippocampus_runtime.recall.continuity_domain_cli",
     ),
+    "work-guard": CommandSpec(
+        "issue_work_guard.py",
+        "aippocampus_runtime.ops.issue_work_guard",
+    ),
     "telepathy": CommandSpec(
         "telepathy_handoff_store.py",
         "aippocampus_runtime.ops.telepathy_handoff_store",
@@ -106,6 +110,7 @@ SCRIPT_MODULES = {
     "plugin.py": "aippocampus_runtime.update.plugin_installer",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
+    "issue_work_guard.py": "aippocampus_runtime.ops.issue_work_guard",
     "telepathy_handoff_store.py": "aippocampus_runtime.ops.telepathy_handoff_store",
     "agent_continuity.py": "aippocampus_runtime.recall.agent_continuity",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
@@ -333,6 +338,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  agent recall        Opt-in agent recall/AIppo/deepen/explain path", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
     print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
+    print("  work-guard          Agent issue-work active-pull orientation packet", file=target)
     print("  update status       Check personal core/magic readiness", file=target)
     print("  export              Export a portable AIppocampus bundle", file=target)
     print("  import              Import a portable AIppocampus bundle", file=target)

@@ -283,7 +283,7 @@ lexical rows remain the broader LongMemEval-S quality baselines.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `2026-06-12T18:10:20Z` | `longmemeval-v1-small` | retrieval-only + AIppocampus source worker-surface cache | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1494.10s | #1323 source-side measured; no provider calls |
+| `2026-06-12T18:10:20Z` | `longmemeval-v1-small` | retrieval-only + AIppocampus source worker-surface proxy | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1494.10s | worker-surface proxy measured; no provider calls; not canonical semantic warming |
 | `2026-06-12T16:43:38Z` | `longmemeval-v1-small` | retrieval-only + semantic LLM query/candidate upper bound | 500 | 95.80% | 85.18% | 94.15% | 94.36% | 1705.75s | #1323 LLM upper bound; 9 provider errors |
 | `2026-06-12T16:01:24Z` | `longmemeval-v1-small` | retrieval-only + lexical line-reranker 100Q comparison | 100 | 97.00% | 87.23% | 89.36% | 96.81% | 154.73s | #1323 lexical comparison; deterministic |
 | `2026-06-12T15:39:58Z` | `longmemeval-v1-small` | retrieval-only + semantic line-reranker query/cache 100Q progress | 100 | 97.00% | 87.23% | 96.81% | 96.81% | 767.25s | #1323 progress; superseded by 500Q rows |
@@ -451,15 +451,15 @@ Structural exact-line repair failure report for #1193:
   ceiling/debugging signal. Its cold online path averaged `7156.27ms`, used
   `225170` tokens, and projected to about `4503400` tokens and `59.64`
   single-worker minutes for 500 questions. #1305 measured warm
-  query/candidate replay separately, and #1323 below now measures both the
-  current AIppocampus source-side worker-memory surface and the 500Q
-  query/candidate LLM upper bound. A future DeepSeek source-side materializer
-  remains a separate productization question.
+  query/candidate replay separately, and the 500Q section below now measures both the
+  current worker-surface proxy and the 500Q query/candidate LLM upper bound. A
+  future DeepSeek source-side materializer remains a separate productization
+  question.
 - Decision: close #1193 as a deterministic failure report and cache-path
   boundary. Do not make cold online semantic rerank a default hook path, and do
-  not spend more effort on untuned structural heuristics. The later #1323
-  rows now provide the source-side and 500Q semantic measurements that #1193
-  left open.
+  not spend more effort on untuned structural heuristics. The later 500Q
+  rows now provide the worker-surface proxy and 500Q semantic measurements that
+  #1193 left open.
 
 Warm query/candidate cache replay for #1305:
 
@@ -499,7 +499,7 @@ Warm query/candidate cache replay for #1305:
   warming. Cold online semantic rerank remains explicit opt-in and is still not
   a default hook path.
 
-500Q source-side worker surface and LLM upper bound for #1323:
+500Q source-worker-surface proxy and LLM upper bound:
 
 - Summary:
   [`longmemeval-source-worker-surface-500q-2026-06-13.md`](longmemeval-source-worker-surface-500q-2026-06-13.md).
@@ -511,10 +511,11 @@ Warm query/candidate cache replay for #1305:
   messages `246,738`; direct JSON scan `244,651,645` characters, roughly
   `61.2M` to `81.6M` tokens by simple chars/4 to chars/3 ratios. This is a
   rough scale estimate, not tokenizer-measured usage.
-- Current AIppocampus source-side path: `--line-reranker source_semantic_cache`
-  builds `aippocampus_working_memory` navigation rows from clean source and
-  uses the existing hot matcher. It is not an LLM prompt/cache and it makes
-  no provider calls.
+- Current AIppocampus worker-surface proxy: `--line-reranker
+  source_semantic_cache` builds `aippocampus_working_memory` navigation rows
+  from clean source and uses the existing hot matcher. It is not an LLM
+  prompt/cache, not the canonical semantic-scope / subconscious /
+  warm-ambient materializer, and it makes no provider calls.
 - Source-side cold build: `500` source caches, `246,738` working-memory rows,
   complete rate `1.0`, failed rows `0`, provider calls/tokens `0`, and
   prewarm workers `64`.
@@ -535,17 +536,19 @@ Warm query/candidate cache replay for #1305:
 - LLM token/cache telemetry: `4,719,903` total tokens, `921,088` provider
   prefix-cache hit tokens, `3,101,946` miss tokens, hit rate `0.2290`.
   This provider prefix-cache telemetry is separate from product cache behavior.
-- Decision: #1323 is measured for the current AIppocampus source-side
-  worker-memory surface and for the query/candidate LLM upper bound. The
-  honest next product question is whether to build a better indexed/materialized
-  source-side semantic surface, not whether this current worker-surface path is
-  secretly equivalent to the LLM upper bound.
+- Decision: this row measures the current worker-surface proxy and the
+  query/candidate LLM upper bound. It does not show that the benchmark used the
+  canonical source-side semantic warming/materializer path
+  (`semantic_scope_labeling`, `semantic_scope_builder`, subconscious jobs,
+  warm ambient routes, and attention-router handoff). Treat the proxy as useful
+  evidence for worker-row shape and fusion behavior, not as the closeout of the
+  intended source-side semantic architecture.
 - Boundary: do not claim official LongMemEval QA score, answer-generation
   quality, SOTA, provider-independent quality, default foreground LLM rerank,
-  future DeepSeek source-side materializer quality, or broad life-history
+  canonical source-side semantic materializer quality, or broad life-history
   memory superiority from this row.
 
-100Q semantic query/candidate cache progress for #1323, superseded by the 500Q rows above:
+100Q semantic query/candidate cache progress, superseded by the 500Q rows above:
 
 - Summary:
   [`longmemeval-semantic-cache-100q-2026-06-12.md`](longmemeval-semantic-cache-100q-2026-06-12.md).
@@ -554,9 +557,9 @@ Warm query/candidate cache replay for #1305:
 - Run dates: lexical comparison `2026-06-12T16:01:24Z`, semantic first run
   `2026-06-12T15:39:58Z`, and semantic repeated provider-prefix replay
   `2026-06-12T15:45:30Z`.
-- This was progress toward #1323, not the final closeout. The 500Q rows above
-  now cover the full query/candidate LLM upper bound and the current
-  AIppocampus source-side worker-memory surface.
+- This was progress toward the semantic-cache question, not the canonical
+  source-side materializer result. The 500Q rows above cover the
+  query/candidate LLM upper bound and the current worker-surface proxy.
 - Same-cohort baseline: session R@10 `97/100`, evidence-line R@10
   `82/94 = 0.8723`, context-visible evidence R@10 `91/94 = 0.9681`, and
   evidence-line MRR `0.6481`.
@@ -582,8 +585,9 @@ Warm query/candidate cache replay for #1305:
   better candidates for broader routing or source-side semantic warming than
   for more foreground per-query reranking.
 - Boundary: this 100Q row remains useful for comparing workers=2 versus
-  workers=8 and provider prefix-cache behavior, but it is superseded as #1323
-  measurement evidence by the 500Q source-side and LLM rows above.
+  workers=8 and provider prefix-cache behavior, but it is superseded as
+  same-cohort measurement evidence by the 500Q worker-surface proxy and LLM
+  rows above.
 
 Optional semantic LLM line-reranker pilot for #1092:
 

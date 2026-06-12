@@ -14,6 +14,7 @@ PR_STEMS = frozenset(
         # lane when they are local-safe contract checks rather than full
         # benchmark mirrors. Keep the explicit override small so benchmark
         # naming does not silently hide PR coverage.
+        "test_benchmark_capability_provenance",
         "test_benchmark_graph_extraction_boundary",
     }
 )
@@ -58,6 +59,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_benchmark_attention_navigation_quality",
         "test_benchmark_attention_score_fusion_calibration",
         "test_benchmark_avatar_bounded_resonance",
+        "test_benchmark_capability_provenance",
         "test_benchmark_coding_decision_shadow",
         "test_benchmark_amemgym",
         "test_benchmark_amemgym_official",
@@ -184,6 +186,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_import_coupling",
         "test_install_lifecycle_hook",
         "test_install_prompt_hook",
+        "test_issue_work_guard",
         "test_journey_tracking",
         "test_knowledge_answer_gate",
         "test_knowledge_capability_conflicts",
@@ -302,6 +305,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_spend_doctor",
         "test_source_evidence_recall_eval",
         "test_source_intake_health",
+        "test_source_backed_lessons",
         "test_source_reopen_budget",
         "test_source_texture",
         "test_sparse_provenance_codebook",
@@ -363,8 +367,10 @@ QUICK_STEMS = frozenset(
         "test_cross_agent_isolation",
         "test_dream_delivery_eligibility",
         "test_benchmark_entrypoints",
+        "test_benchmark_capability_provenance",
         "test_foreground_usefulness_and_candidate_survival",
         "test_hook_agent_affordance",
+        "test_issue_work_guard",
         "test_local_global_compatibility",
         "test_magic_activation_policy",
         "test_memory_evidence_drawer",
@@ -385,6 +391,7 @@ QUICK_STEMS = frozenset(
         "test_run_tests_tiers",
         "test_semantic_warm_route_producer",
         "test_source_intake_health",
+        "test_source_backed_lessons",
         "test_source_reopen_budget",
         "test_source_texture",
         "test_sparse_provenance_codebook",

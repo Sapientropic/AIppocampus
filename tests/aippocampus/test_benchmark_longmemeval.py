@@ -338,6 +338,13 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertEqual(arm["prompt_version"], "llm-window-to-line-rerank-v1")
         self.assertFalse(arm["output_boundary"]["question_answering_allowed"])
         self.assertIn("gold_answer", arm["input_boundary"]["withheld_from_model"])
+        provenance = payload["evaluation"]["capability_provenance"]
+        self.assertEqual(
+            provenance["mode_classification"],
+            "query_time_llm_rerank_upper_bound",
+        )
+        self.assertFalse(provenance["can_claim_source_side_warming"])
+        self.assertIn("temporary_provider_prompt", provenance["benchmark_local_scaffolding"])
         adapter_config = payload["standard_adapter"]["config"]
         self.assertTrue(adapter_config["line_reranker_external_model"])
         self.assertEqual(
@@ -401,6 +408,10 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertEqual(arm["provider"], "local_aippocampus_runtime")
         self.assertFalse(arm["output_boundary"]["question_answering_allowed"])
         self.assertTrue(arm["output_boundary"]["source_reopen_required_for_claims"])
+        provenance = payload["evaluation"]["capability_provenance"]
+        self.assertEqual(provenance["mode_classification"], "source_worker_surface_proxy")
+        self.assertEqual(provenance["remaining_gap_issue"], "#1323")
+        self.assertFalse(provenance["can_claim_source_side_warming"])
         adapter_config = payload["standard_adapter"]["config"]
         self.assertFalse(adapter_config["line_reranker_external_model"])
         self.assertEqual(

@@ -121,6 +121,7 @@ from source_evidence.sharegpt_public import (
 )
 from source_evidence.standard_public import (
     best_rank,
+    benchmark_capability_provenance,
     build_locomo_messages,
     build_locomo_standard_cases,
     build_longmemeval_messages,
@@ -191,6 +192,7 @@ __all__ = [
     "STANDARD_DATASET_PATHS",
     "STANDARD_LINE_RERANKER_MODES",
     "add_sharegpt_public_case",
+    "benchmark_capability_provenance",
     "best_rank",
     "build_locomo_messages",
     "build_locomo_standard_cases",
