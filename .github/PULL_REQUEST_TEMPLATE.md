@@ -32,6 +32,19 @@ Closeout class:
       closing keyword unless a follow-up issue owns the remaining work.
 - [ ] `narrow_slice_only` - use relates-to wording, not `Closes #...`.
 
+Evidence level:
+
+- `contract_fixture`, `scripted_proxy`, `model_pilot`, `behavior_run`,
+  `scale_run`, or `default_adoption`
+
+Issue intent:
+
+- Fill this when closing a broad live/model-backed/behavior/default/scale issue,
+  e.g. `model-backed behavior`, `500Q scale run`, or `default adoption`.
+- Fixture/proxy work is valuable; if it is lower than the issue's evidence
+  goal, use `complete_with_followups` and link the remaining behavior or scale
+  owner below instead of silently closing the broader question.
+
 Remaining gap / follow-up issue:
 
 ## Notes For Reviewers
