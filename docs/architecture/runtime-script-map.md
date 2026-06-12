@@ -224,11 +224,14 @@ into one giant fixture file. Use this map when changing core recall behavior:
 | Warm ambient recall | `tests/aippocampus/test_warm_ambient_recall.py`, `tests/aippocampus/test_prewarm_planner.py`, `tests/aippocampus/test_query_pattern_enrichment.py`, `tests/aippocampus/test_prompt_hot_path_funnel.py`, `tests/aippocampus/test_benchmark_warm_ambient_recall.py`, `tests/aippocampus/test_benchmark_warm_ambient_sweep.py`, `tests/aippocampus/test_benchmark_state_dependent_preactivation.py` | Scout merge behavior, no-write prewarm/query-pattern work planning, action grammar for prewarm route handles, state-dependent preactivation fixtures, default onboarding query-pattern sidecar publication, foreground scent consumption, source validation, privacy guards, cache write policy, and benchmark payload contracts. |
 | Architecture and coupling guardrails | `tests/aippocampus/test_import_coupling.py`, `tests/aippocampus/test_architecture_boundaries.py`, `tests/aippocampus/test_compat_shim_inventory.py` | Import boundaries, no flat runtime scripts, large-module debt registration, and high-risk mypy coverage. |
 
-For ordinary documentation-only changes, the small inner-loop command is
-`python tools/aippocampus/run_tests.py --tier quick`; the broad deterministic PR
-lane is `python tools/aippocampus/run_tests.py --tier pr`. For targeted
-recall-policy work, run the relevant tests above in addition to the tier command
-when the change touches that surface.
+For ordinary changes, start with
+`python tools/aippocampus/test_plan.py --json` so agents run focused tests before
+escalating. The small inner-loop command is
+`python tools/aippocampus/run_tests.py --tier quick`; the fast local PR gate is
+`python tools/aippocampus/run_tests.py --tier pr`; the broader deterministic
+pre-merge lane is `python tools/aippocampus/run_tests.py --tier broad-pr`. For
+targeted recall-policy work, run the relevant tests above in addition to the
+tier command when the change touches that surface.
 
 ## Maintenance Rule
 

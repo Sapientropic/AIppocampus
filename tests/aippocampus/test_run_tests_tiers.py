@@ -16,7 +16,11 @@ TOOLS = REPO_ROOT / "tools" / "aippocampus"
 sys.path.insert(0, str(TOOLS))
 
 import run_tests  # noqa: E402
-from test_tier_manifest import PRIMARY_TIER_ORDER  # noqa: E402
+from test_tier_manifest import (  # noqa: E402
+    BROAD_PR_PRIMARY_TIERS,
+    PR_PRIMARY_TIERS,
+    PRIMARY_TIER_ORDER,
+)
 
 QUICK_FORBIDDEN_TAGS = {
     "browser",
@@ -42,13 +46,8 @@ BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
     "tests.aippocampus.test_e2e50_seed_candidates",
 }
 
-QUICK_TO_PR_INNER_LOOP_SPLITS = {
+PR_CRITICAL_MODULES = {
     "tests.aippocampus.test_benchmark_graph_extraction_boundary",
-    "tests.aippocampus.test_build_index",
-    "tests.aippocampus.test_continuity_domains",
-    "tests.aippocampus.test_docs_health",
-    "tests.aippocampus.test_recall_why_diagnostics",
-    "tests.aippocampus.test_semantic_recall_gate",
 }
 
 
@@ -158,10 +157,11 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_target"], 330)
         self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_status"], "within_target")
         self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_status"], "within_target")
-        self.assertEqual(report["tiers"]["pr"]["budget"], None)
+        self.assertEqual(report["tiers"]["pr"]["budget"]["module_count_target"], 70)
+        self.assertEqual(report["tiers"]["pr"]["budget"]["test_count_target"], 500)
         self.assertTrue(
             any(
-                "compatibility alias" in limitation
+                "broad-pr aliases" in limitation
                 for limitation in report["known_limitations"]
             ),
         )
@@ -271,7 +271,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(payload["test_count"], 5)
         self.assertEqual(payload["shard"], {"index": 1, "total": 2})
         self.assertEqual(payload["modules"], timing_rows)
-        self.assertEqual(payload["budget"], None)
+        self.assertEqual(payload["budget"]["elapsed_seconds_target"], 180.0)
 
     def test_quick_timings_report_exposes_inner_loop_drift_without_failing(self) -> None:
         rows = [
@@ -404,9 +404,10 @@ class RunTestsTierTests(unittest.TestCase):
         ):
             run_tests.modules_for_tier("pr")
 
-    def test_quick_is_small_inner_loop_and_excludes_operational_surfaces(self) -> None:
+    def test_pr_is_fast_local_gate_and_broad_pr_preserves_old_surface(self) -> None:
         quick = set(run_tests.modules_for_tier("quick"))
         pr = set(run_tests.modules_for_tier("pr"))
+        broad_pr = set(run_tests.modules_for_tier("broad-pr"))
         unexpected = [
             module
             for module in sorted(quick)
@@ -415,12 +416,20 @@ class RunTestsTierTests(unittest.TestCase):
 
         self.assertEqual(unexpected, [])
         self.assertLess(quick, pr)
-        self.assertLess(len(quick) * 4, len(pr))
-        self.assertTrue(QUICK_TO_PR_INNER_LOOP_SPLITS.isdisjoint(quick))
-        self.assertLessEqual(QUICK_TO_PR_INNER_LOOP_SPLITS, pr)
+        self.assertLess(pr, broad_pr)
+        self.assertLess(len(pr) * 3, len(broad_pr))
+        self.assertTrue(PR_CRITICAL_MODULES.isdisjoint(quick))
+        self.assertLessEqual(PR_CRITICAL_MODULES, pr)
 
     def test_fast_is_compatibility_alias_for_pr(self) -> None:
         self.assertEqual(run_tests.modules_for_tier("fast"), run_tests.modules_for_tier("pr"))
+
+    def test_ci_and_deterministic_aliases_keep_broad_pr_coverage(self) -> None:
+        self.assertEqual(run_tests.modules_for_tier("ci"), run_tests.modules_for_tier("broad-pr"))
+        self.assertEqual(
+            run_tests.modules_for_tier("deterministic"),
+            run_tests.modules_for_tier("broad-pr"),
+        )
 
     def test_tiers_partition_the_discovered_test_modules(self) -> None:
         discovered = set(run_tests.discover_modules())
@@ -439,12 +448,14 @@ class RunTestsTierTests(unittest.TestCase):
                     continue
                 self.assertEqual(primary_sets[left] & primary_sets[right], set())
         self.assertEqual(set().union(*primary_sets.values()), discovered)
-        self.assertEqual(set(run_tests.modules_for_tier("pr")), set().union(
-            primary_sets["quick"],
-            primary_sets["pr"],
-            primary_sets["smoke"],
-            primary_sets["integration"],
-        ))
+        self.assertEqual(
+            set(run_tests.modules_for_tier("pr")),
+            set().union(*(primary_sets[tier] for tier in PR_PRIMARY_TIERS)),
+        )
+        self.assertEqual(
+            set(run_tests.modules_for_tier("broad-pr")),
+            set().union(*(primary_sets[tier] for tier in BROAD_PR_PRIMARY_TIERS)),
+        )
 
     def test_benchmark_smoke_is_curated_public_lane(self) -> None:
         benchmark = set(run_tests.modules_for_tier("benchmark"))
@@ -469,12 +480,14 @@ class RunTestsTierTests(unittest.TestCase):
 
         self.assertIn("quick", help_text)
         self.assertIn("pr", help_text)
+        self.assertIn("broad-pr", help_text)
         self.assertIn("benchmark-smoke", help_text)
         self.assertIn("--benchmark-suite-profile", help_text)
         self.assertIn("--timings-json", help_text)
-        self.assertIn("quick target", help_text.lower())
+        self.assertIn("target of about", help_text.lower())
         self.assertIn("--shard-index", help_text)
         self.assertIn("--tier pr", workflow)
+        self.assertIn("--tier broad-pr", workflow)
         self.assertIn("concurrency:", workflow)
         self.assertIn("PR test tier with canonical coverage", workflow)
         self.assertIn("Python 3.13 quick compatibility tier", workflow)

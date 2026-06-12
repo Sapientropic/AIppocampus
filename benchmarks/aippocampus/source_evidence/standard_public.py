@@ -462,10 +462,15 @@ def build_locomo_standard_cases(
     *,
     corpus_path: Path,
     max_questions: int,
-    cache_metrics: dict[str, Any],
+    cache_metrics: dict[str, Any] | None = None,
     rebuild_cache: bool = False,
     case_progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cache_metrics = cache_metrics or new_standard_case_cache_metrics(
+        enabled=False,
+        cache_key=None,
+        rebuild_requested=rebuild_cache,
+    )
     cases: list[dict[str, Any]] = []
     corpus: dict[str, Any] = {
         "dataset": "locomo",
@@ -583,10 +588,15 @@ def build_longmemeval_v1_standard_cases(
     dataset: str,
     corpus_path: Path,
     max_questions: int,
-    cache_metrics: dict[str, Any],
+    cache_metrics: dict[str, Any] | None = None,
     rebuild_cache: bool = False,
     case_progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cache_metrics = cache_metrics or new_standard_case_cache_metrics(
+        enabled=False,
+        cache_key=None,
+        rebuild_requested=rebuild_cache,
+    )
     cases: list[dict[str, Any]] = []
     corpus: dict[str, Any] = {
         "dataset": dataset,
