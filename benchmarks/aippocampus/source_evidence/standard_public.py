@@ -94,6 +94,22 @@ LEXICAL_RERANKER_BRIDGE_TERMS = {
     "remember",
     "topic",
 }
+STRUCTURAL_RERANKER_VALUE_RE = re.compile(
+    r"\b\d[\w:./-]*\b|\b[A-Z][A-Za-z0-9_-]{2,}\b|[\"'`][^\"'`]{3,}[\"'`]"
+)
+STRUCTURAL_RERANKER_ANSWER_CUE_RE = re.compile(
+    r"(?i)\b(is|are|was|were|means|called|named|located|found|look|use|uses|"
+    r"prefer|prefers|bought|adopted|current|truth|number|code|email|phone|"
+    r"drawer|address|date|time|place|location)\b"
+)
+STRUCTURAL_RERANKER_QUESTION_CUE_RE = re.compile(
+    r"(?i)\b(what|where|when|which|who|whose|how|did|does|do|can|could|should|"
+    r"question|remind|remember)\b|\?"
+)
+STRUCTURAL_RERANKER_CONTINUATION_RE = re.compile(
+    r"(?i)\b(next line|following line|continues?|continuing|below|above|as follows|"
+    r"rest of|pick up|where we left off)\b"
+)
 
 
 def standard_content_query_terms(question: str, *, limit: int = 24) -> list[str]:
@@ -697,6 +713,124 @@ def run_lexical_line_reranker(
     }
 
 
+def structural_line_reranker_score(
+    question_terms: set[str],
+    candidate: dict[str, Any],
+) -> float:
+    """Score candidate lines with source-window structure, without gold labels.
+
+    This is deliberately a packaging heuristic, not an answer oracle. It can use
+    adjacent source lines and route metadata because those are what a foreground
+    packet can reopen, but it must not depend on expected-line fields. The large
+    continuation bonus is there for the LongMemEval failure family where FTS
+    lands on a clue/bridge line and the exact answer-bearing row is immediately
+    before or after it; removing that turns context-visible misses into broad
+    windows again.
+    """
+
+    text = str(candidate.get("text") or "")
+    text_terms = lexical_line_reranker_terms(text)
+    previous_text = str(candidate.get("previous_text") or "")
+    next_text = str(candidate.get("next_text") or "")
+    previous_terms = lexical_line_reranker_terms(previous_text)
+    next_terms = lexical_line_reranker_terms(next_text)
+    overlap = len(question_terms & text_terms)
+    previous_overlap = len(question_terms & previous_terms)
+    next_overlap = len(question_terms & next_terms)
+    nearest_hit_line = int(candidate.get("nearest_hit_line") or candidate.get("line") or 0)
+    line = int(candidate.get("line") or 0)
+    distance = abs(line - nearest_hit_line)
+    role = str(candidate.get("role") or "").casefold()
+    previous_role = str(candidate.get("previous_role") or "").casefold()
+    is_after_hit = bool(line > nearest_hit_line)
+    is_before_hit = bool(line < nearest_hit_line)
+    value_like = bool(STRUCTURAL_RERANKER_VALUE_RE.search(text))
+    answer_like = bool(STRUCTURAL_RERANKER_ANSWER_CUE_RE.search(text))
+    question_like = bool(STRUCTURAL_RERANKER_QUESTION_CUE_RE.search(text))
+    previous_continuation = bool(STRUCTURAL_RERANKER_CONTINUATION_RE.search(previous_text))
+    current_bridge = bool(
+        text_terms & LEXICAL_RERANKER_BRIDGE_TERMS
+        or STRUCTURAL_RERANKER_CONTINUATION_RE.search(text)
+    )
+    query_is_question = bool(STRUCTURAL_RERANKER_QUESTION_CUE_RE.search(" ".join(question_terms)))
+
+    score = lexical_line_reranker_score(question_terms, candidate)
+    if value_like:
+        score += 4.0
+    if answer_like:
+        score += 6.0
+    if role == "assistant" and previous_role == "user":
+        score += 4.0
+    if distance == 1 and is_after_hit:
+        score += 4.0
+    elif distance == 1 and is_before_hit:
+        score += 2.0
+    if previous_overlap and distance <= 2:
+        score += min(16.0, previous_overlap * 4.0)
+    if next_overlap and distance <= 2:
+        score += min(8.0, next_overlap * 3.0)
+    if previous_continuation and distance == 1:
+        score += 120.0
+    if previous_continuation and (value_like or answer_like):
+        score += 60.0
+    if query_is_question and question_like and not answer_like:
+        score -= 12.0
+    if current_bridge and not answer_like:
+        score -= 110.0
+    if overlap == 0 and (value_like or answer_like) and max(previous_overlap, next_overlap) >= 2:
+        score += 25.0
+    return score
+
+
+def run_structural_line_reranker(
+    question: str,
+    candidates: list[dict[str, Any]],
+    **_: object,
+) -> dict[str, Any]:
+    """Rank visible source lines with local structure and adjacent context."""
+
+    if not candidates:
+        return {"available": False, "ranked_lines": [], "errors": ["empty candidates"]}
+    question_terms = lexical_line_reranker_terms(question)
+    scored = [
+        (
+            structural_line_reranker_score(question_terms, candidate),
+            int(candidate.get("session_rank") or 10**6),
+            int(candidate.get("nearest_hit_rank") or 10**6),
+            int(candidate.get("context_distance") or 0),
+            int(candidate["line"]),
+        )
+        for candidate in candidates
+    ]
+    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3], item[4]))
+    ranked_lines = [int(item[-1]) for item in scored]
+    lead = scored[0][0] - scored[1][0] if len(scored) > 1 else scored[0][0]
+    return {
+        "available": True,
+        "ranked_lines": ranked_lines,
+        "confidence": clamp_confidence(0.38 + min(0.42, max(0.0, lead) / 140.0)),
+        "usage": {"local_scored_candidates": len(candidates)},
+        "metadata": {
+            "arm": "deterministic_source_window_structural_rerank",
+            "feature_boundary": [
+                "question_text",
+                "candidate_source_text",
+                "adjacent_source_text",
+                "route_rank_metadata",
+                "source_window_distance",
+            ],
+            "withheld_from_ranker": [
+                "gold_answer",
+                "expected_lines",
+                "expected_sessions",
+                "has_answer_labels",
+                "judge_labels",
+                "miss_taxonomy",
+            ],
+        },
+    }
+
+
 def build_standard_line_reranker_candidates(
     sqlite_path: Path,
     hits: list[dict[str, Any]],
@@ -787,11 +921,23 @@ def build_standard_line_reranker_candidates(
     candidates: list[dict[str, Any]] = []
     for line, meta in candidate_meta.items():
         row = row_by_line[line]
+        previous_row = row_by_line.get(line - 1)
+        next_row = row_by_line.get(line + 1)
         session_id = line_to_session.get(str(line)) or ""
         candidates.append(
             {
                 "line": line,
                 "role": row.get("role") or "",
+                "previous_role": (
+                    previous_row.get("role") or ""
+                    if previous_row and line_to_session.get(str(line - 1)) == session_id
+                    else ""
+                ),
+                "next_role": (
+                    next_row.get("role") or ""
+                    if next_row and line_to_session.get(str(line + 1)) == session_id
+                    else ""
+                ),
                 "session_id": session_id,
                 "session_rank": session_first_rank.get(session_id, 10**6),
                 "fts_rank": hit_rank_by_line.get(line),
@@ -800,6 +946,16 @@ def build_standard_line_reranker_candidates(
                 "context_distance": int(meta["context_distance"]),
                 "query_channels": sorted(str(item) for item in meta["query_channels"]),
                 "text": str(row.get("text") or ""),
+                "previous_text": (
+                    str(previous_row.get("text") or "")
+                    if previous_row and line_to_session.get(str(line - 1)) == session_id
+                    else ""
+                ),
+                "next_text": (
+                    str(next_row.get("text") or "")
+                    if next_row and line_to_session.get(str(line + 1)) == session_id
+                    else ""
+                ),
             }
         )
     candidates.sort(
@@ -1232,6 +1388,8 @@ def evaluate_standard_retrieval_case(
                 runner = line_reranker_fn
             elif resolved_reranker_mode == "lexical":
                 runner = run_lexical_line_reranker
+            elif resolved_reranker_mode == "structural":
+                runner = run_structural_line_reranker
             else:
                 runner = run_semantic_line_reranker
             reranker_payload = runner(
