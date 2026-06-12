@@ -329,6 +329,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/update/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_cache.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",

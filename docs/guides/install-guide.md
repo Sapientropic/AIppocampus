@@ -208,6 +208,30 @@ from real local plugin layers. The plugin surface may include
 the Codex app has installed or reloaded that package. A local marketplace copy
 is also not the same thing as the Codex installed plugin cache.
 
+For the normal Codex plugin happy path, use the one-command installer:
+
+```sh
+aippocampus plugin install --codex --verify
+```
+
+This builds the repo-local plugin package, refreshes the AIppocampus-owned
+local marketplace at `$CODEX_HOME/aippocampus-marketplace`, registers that
+marketplace with Codex, installs or reinstalls
+`aippocampus@aippocampus-local` when the installed copy is stale, asks the
+Codex app-server to reload MCP servers, and calls `sync_status` through the
+host. A successful verify reports `agent_callable_status:
+host_live_probe_ok`. This command does not enable hooks, copy private memory
+data, or configure LLM keys.
+
+Rollback is one command too:
+
+```sh
+aippocampus plugin uninstall --codex
+```
+
+Rollback removes the installed Codex plugin, unregisters the local marketplace,
+and deletes only the AIppocampus-owned marketplace directory.
+
 Apply local package/effect surfaces explicitly:
 
 ```sh
