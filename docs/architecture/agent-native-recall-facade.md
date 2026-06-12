@@ -33,6 +33,18 @@ aippocampus agent explain "<opaque handle or deepen:aippo...>" --json
 aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
 ```
 
+When a current project macro state is available, `agent recall` can consume it
+explicitly:
+
+```text
+aippocampus agent recall "<cue>" --macro-state-jsonl <path> --project AIppocampus --json
+```
+
+This widens the internal route candidate pool within the normal hard cap,
+biases ordering through Three Powers route facets, and emits compact macro
+diagnostics in `macro_navigation`. It is an opt-in `agent_continuity` behavior,
+not a default MCP-core recall behavior.
+
 This is an explicit pull path for agents and operators. It is not a default
 hook, not every-turn recall, and not a stable TypeScript/Python SDK. The recall
 command returns compact `MemoryPacket` values plus separate opaque deepen
@@ -202,6 +214,17 @@ If a Macro packet is rendered as an action instruction or evidence, that is a
 packet topology failure, not a reason to add Macro fields to the foreground
 MemoryPacket; see
 [`packet-topology-diagnostics.md`](packet-topology-diagnostics.md).
+
+The same source-backed macro state may also act as an opt-in live recall prior
+when passed to `agent recall --macro-state-jsonl`. Perturbation width controls
+bounded fanout, the active Three Powers layer changes route ordering, and
+momentum can add recheck/currentness reason codes. These signals remain
+`navigation_only` / `direction_only`; `explain` and `deepen` may report why the
+macro prior changed routing, but the prior itself never satisfies a fact claim,
+support ledger, or bounded-evidence requirement. Public-safe usefulness is
+tracked through route-selection proxies such as effective fanout,
+wrong-layer-route count, and blind-deepen reduction, not through private
+history quality claims.
 
 ## AIppo Working-Contract Packet
 

@@ -26,7 +26,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import agent_facade_contract as facade
-from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall import feedback_events, macro_live_recall
 
 SCHEMA_VERSION = "agent-opt-in-continuity-v0"
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
@@ -134,7 +134,10 @@ def _triage_reason_codes(route: Mapping[str, Any], output_mode: str) -> list[str
 
 
 def _triage_risk_flags(route: Mapping[str, Any], output_mode: str) -> list[str]:
+    raw_flags = route.get("risk_flags")
     flags: list[str] = []
+    if isinstance(raw_flags, list | tuple):
+        flags = [str(flag) for flag in raw_flags if str(flag).strip()]
     if output_mode == "reopenable_route":
         flags.append("source_reopen_required")
     currentness = str(route.get("currentness") or "").casefold()
@@ -143,7 +146,11 @@ def _triage_risk_flags(route: Mapping[str, Any], output_mode: str) -> list[str]:
         flags.append("check_currentness")
     if conflict and conflict not in {"none", "unknown"}:
         flags.append("conflict_requires_deepen")
-    return flags
+    result: list[str] = []
+    for flag in flags:
+        if flag not in result:
+            result.append(flag)
+    return result[:6]
 
 
 def _route_packet_from_navigation_route(route: Mapping[str, Any]) -> dict[str, Any]:
@@ -300,8 +307,7 @@ def _load_macro_projection(
 
 
 def _macro_state_from_projection(projection: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    state = projection.get("state")
-    return state if isinstance(state, Mapping) else None
+    return macro_live_recall.state_from_projection(projection)
 
 
 def _macro_state_has_route_delta(entry: Mapping[str, Any]) -> bool:
@@ -554,6 +560,8 @@ def recall(
     cwd: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
     registry_dir: str | Path | None = None,
+    macro_state_path: str | Path | None = None,
+    project: str = "AIppocampus",
     max_routes: int = MAX_ROUTES,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
@@ -561,13 +569,20 @@ def recall(
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
     registry_path = _as_path(registry_dir, Path()) if registry_dir else None
+    requested_limit = max(1, min(25, int(max_routes or MAX_ROUTES)))
+    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_context = macro_live_recall.context_from_projection(macro_projection)
+    effective_limit = macro_live_recall.effective_route_limit(
+        requested_limit=requested_limit,
+        context=macro_context,
+    )
     try:
         packet = recall_context_packet(
             intent=str(query or ""),
             cwd=cwd_path,
             clean_source_dir=source_dir,
             registry_dir=registry_path,
-            max_routes=max(1, min(25, int(max_routes or MAX_ROUTES))),
+            max_routes=effective_limit,
         )
     except RecallNavigationError as exc:
         return _public_payload(
@@ -581,11 +596,39 @@ def recall(
                 "memory_packets": [],
                 "deepen_requests": [],
                 "result": navigation_error_payload(exc),
+                "macro_navigation": macro_live_recall.navigation_diagnostics(
+                    projection=macro_projection,
+                    context=macro_context,
+                    requested_limit=requested_limit,
+                    effective_limit=effective_limit,
+                ),
                 "policy_boundary": _policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
-    routes = [route for route in packet.get("routes") or [] if isinstance(route, Mapping)]
+    routes: list[dict[str, Any]] = [
+        dict(route) for route in packet.get("routes") or [] if isinstance(route, Mapping)
+    ]
+    macro_navigation = macro_live_recall.navigation_diagnostics(
+        projection=macro_projection,
+        context=macro_context,
+        requested_limit=requested_limit,
+        effective_limit=effective_limit,
+    )
+    macro_metrics: dict[str, Any] = {
+        "macro_selected_route_count": 0,
+        "macro_wrong_layer_route_count": 0,
+        "macro_recheck_trigger_count": 0,
+        "macro_reason_code_count": len(macro_navigation["reason_codes"]),
+    }
+    if macro_context is not None:
+        routes, macro_navigation, macro_metrics = macro_live_recall.apply_recall_bias(
+            query=str(query or ""),
+            routes=routes,
+            context=macro_context,
+            requested_limit=requested_limit,
+            effective_limit=effective_limit,
+        )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
     deepen_requests = [
         _deepen_request_for_route(route, memory_packet)
@@ -603,6 +646,7 @@ def recall(
         "opt_in_required": True,
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
+        "macro_navigation": macro_navigation,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": (
             deepen_requests[0].get("copy_paste_command") if deepen_requests else None
@@ -611,8 +655,12 @@ def recall(
         "metrics": {
             "memory_packet_count": len(memory_packets),
             "deepen_request_count": len(deepen_requests),
+            "macro_orientation_applied": bool(macro_context is not None),
+            "requested_max_routes": requested_limit,
+            "effective_max_routes": effective_limit,
             "foreground_forbidden_key_count": forbidden_count,
             **triage_metrics,
+            **macro_metrics,
             "source_reopen_success_rate_observed": None,
             "wrong_or_stale_handle_rate_observed": None,
         },
@@ -669,6 +717,7 @@ def deepen(
     clean_source_dir: str | Path | None = None,
     registry_dir: str | Path | None = None,
     macro_state_path: str | Path | None = None,
+    project: str = "AIppocampus",
     max_matches: int = MAX_ROUTES,
 ) -> dict[str, Any]:
     """Deepen a recall navigation handle or project AIppo activation id."""
@@ -705,6 +754,8 @@ def deepen(
             max_matches=max(1, min(25, int(max_matches or MAX_ROUTES))),
         )
     except RecallNavigationError as exc:
+        macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+        macro_context = macro_live_recall.context_from_projection(macro_projection)
         return _public_payload(
             {
                 "kind": KIND,
@@ -713,10 +764,17 @@ def deepen(
                 "surface": "recall",
                 "status": "cannot_verify",
                 "result": navigation_error_payload(exc),
+                "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
+                    projection=macro_projection,
+                    context=macro_context,
+                    requested_limit=MAX_ROUTES,
+                ),
                 "policy_boundary": _policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
+    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_context = macro_live_recall.context_from_projection(macro_projection)
     return _public_payload(
         {
             "kind": KIND,
@@ -725,13 +783,23 @@ def deepen(
             "surface": "recall",
             "status": "ok",
             "result": payload,
+            "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
+                projection=macro_projection,
+                context=macro_context,
+                requested_limit=MAX_ROUTES,
+            ),
             "policy_boundary": _policy_boundary(),
             "cannot_claim": ["facts_outside_opened_source_scope"],
         }
     )
 
 
-def explain(handle: Any, *, macro_state_path: str | Path | None = None) -> dict[str, Any]:
+def explain(
+    handle: Any,
+    *,
+    macro_state_path: str | Path | None = None,
+    project: str = "AIppocampus",
+) -> dict[str, Any]:
     """Return public-safe reason codes for a recall handle or AIppo id."""
 
     if _is_aippo_deepen_id(handle):
@@ -756,6 +824,8 @@ def explain(handle: Any, *, macro_state_path: str | Path | None = None) -> dict[
     try:
         normalized = normalize_handle(handle)
     except RecallNavigationError as exc:
+        macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+        macro_context = macro_live_recall.context_from_projection(macro_projection)
         return _public_payload(
             {
                 "kind": KIND,
@@ -764,6 +834,11 @@ def explain(handle: Any, *, macro_state_path: str | Path | None = None) -> dict[
                 "surface": "recall",
                 "status": "cannot_verify",
                 "explanation": navigation_error_payload(exc),
+                "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
+                    projection=macro_projection,
+                    context=macro_context,
+                    requested_limit=MAX_ROUTES,
+                ),
                 "policy_boundary": _policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
@@ -777,6 +852,18 @@ def explain(handle: Any, *, macro_state_path: str | Path | None = None) -> dict[
         reason = "continuity_domain_route_available"
     elif kind == "active_recall_lock":
         reason = "active_recall_lock_route_available"
+    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_context = macro_live_recall.context_from_projection(macro_projection)
+    macro_diagnostics = macro_live_recall.navigation_diagnostics(
+        projection=macro_projection,
+        context=macro_context,
+        requested_limit=MAX_ROUTES,
+    )
+    reason_codes = [
+        reason,
+        "handle_is_navigation_not_fact",
+        *macro_diagnostics["reason_codes"],
+    ]
     return _public_payload(
         {
             "kind": KIND,
@@ -792,9 +879,14 @@ def explain(handle: Any, *, macro_state_path: str | Path | None = None) -> dict[
                 "output_mode": "reopenable_route",
                 "claim_permission": "no_claim_before_reopen",
                 "next_safe_action": "reopen_source",
-                "reason_codes": [reason, "handle_is_navigation_not_fact"],
+                "reason_codes": macro_live_recall.append_unique_codes(
+                    (),
+                    reason_codes,
+                    limit=6,
+                ),
                 "cannot_claim": ["source_truth_without_deepen", "foreground_packet_as_full_provenance"],
             },
+            "macro_navigation_diagnostics": macro_diagnostics,
             "policy_boundary": _policy_boundary(),
         }
     )
@@ -955,6 +1047,8 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--cwd")
     recall_parser.add_argument("--clean-source-dir")
     recall_parser.add_argument("--registry-dir")
+    recall_parser.add_argument("--macro-state-jsonl")
+    recall_parser.add_argument("--project", default="AIppocampus")
     recall_parser.add_argument("--max", type=int, default=MAX_ROUTES)
     recall_parser.add_argument("--json", action="store_true")
 
@@ -974,12 +1068,14 @@ def _parser() -> argparse.ArgumentParser:
     deepen_parser.add_argument("--clean-source-dir")
     deepen_parser.add_argument("--registry-dir")
     deepen_parser.add_argument("--macro-state-jsonl")
+    deepen_parser.add_argument("--project", default="AIppocampus")
     deepen_parser.add_argument("--max", type=int, default=MAX_ROUTES)
     deepen_parser.add_argument("--json", action="store_true")
 
     explain_parser = sub.add_parser("explain")
     explain_parser.add_argument("handle")
     explain_parser.add_argument("--macro-state-jsonl")
+    explain_parser.add_argument("--project", default="AIppocampus")
     explain_parser.add_argument("--json", action="store_true")
 
     feedback_parser = sub.add_parser("feedback")
@@ -1002,6 +1098,8 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=args.cwd,
                 clean_source_dir=args.clean_source_dir,
                 registry_dir=args.registry_dir,
+                macro_state_path=args.macro_state_jsonl,
+                project=args.project,
                 max_routes=args.max,
             )
         )
@@ -1026,12 +1124,19 @@ def main(argv: list[str] | None = None) -> int:
                 clean_source_dir=args.clean_source_dir,
                 registry_dir=args.registry_dir,
                 macro_state_path=args.macro_state_jsonl,
+                project=args.project,
                 max_matches=args.max,
             )
         )
         return 0
     if args.command == "explain":
-        _json_out(explain(args.handle, macro_state_path=args.macro_state_jsonl))
+        _json_out(
+            explain(
+                args.handle,
+                macro_state_path=args.macro_state_jsonl,
+                project=args.project,
+            )
+        )
         return 0
     if args.command == "feedback":
         _json_out(

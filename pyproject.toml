@@ -329,6 +329,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_path_packet.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_facade_contract.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/macro_live_recall.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cross_agent_isolation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/narrative_packet.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
