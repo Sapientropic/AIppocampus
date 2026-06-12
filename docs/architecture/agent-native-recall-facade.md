@@ -163,6 +163,17 @@ claims, and foreground-suppression false negatives live in
 [`packet-topology-diagnostics.md`](packet-topology-diagnostics.md). They are an
 explain/debug surface, not a foreground packet expansion.
 
+Local/global compatibility diagnostics live in
+`aippocampus_runtime.navigation.local_global_compatibility`. They consume
+packet-shaped MemoryPacket, Macro, Dream, Telepathy, and AIppo local sections
+and answer only whether the sections form `glued_route`, `partial_glue`,
+`obstruction`, or `blocked_boundary`. Their overlap basis is source ids or
+handles, scope, topic epoch, authority level, freshness, and privacy domain.
+Shared vocabulary alone is not overlap, and compatibility never upgrades
+authority or claim permission. Full output belongs behind explain/deepen or
+Campus diagnostics; the foreground packet should not grow a compatibility
+drawer.
+
 ## Macro Orientation Packet
 
 `aippocampus_runtime.recall.agent_continuity` can expose the latest
@@ -403,6 +414,10 @@ bounded summaries replace source evidence.
 - Post-packet relation diagnostics for MemoryPacket, Macro, route, narrative,
   Dream, and AIppo packet failures live in
   [`packet-topology-diagnostics.md`](packet-topology-diagnostics.md).
+- Local/global compatibility diagnostics for MemoryPacket, Macro, Dream,
+  Telepathy, and AIppo local sections live in
+  `aippocampus_runtime.navigation.local_global_compatibility`; they are
+  explain/deepen/Campus-first and do not make successful glue claim-ready.
 - Telepathy soft-lock and handoff-card packets live in
   [`telepathy-coordination-packets.md`](telepathy-coordination-packets.md); this
   facade may explain them later, but they are not default foreground recall

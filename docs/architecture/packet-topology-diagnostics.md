@@ -93,6 +93,10 @@ chain-of-thought, or private packet payloads.
   name an overreach shape; it does not change router weights.
 - [`agent-native-recall-facade.md`](agent-native-recall-facade.md) owns
   MemoryPacket foreground/deepen/explain shape and compact Macro packets.
+- `aippocampus_runtime.navigation.local_global_compatibility` owns V0
+  local/global compatibility checks across MemoryPacket, Macro, Dream,
+  Telepathy, and AIppo local sections. Packet topology may say a packet
+  overreached; it does not decide whether sections glue.
 - [`continuity-domains.md`](continuity-domains.md) points to the narrative
   packet runtime owner for #700 pathlets.
 - [`coordination-topology-diagnostics.md`](coordination-topology-diagnostics.md)
