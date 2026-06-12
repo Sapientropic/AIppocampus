@@ -300,6 +300,19 @@ def activation_packet_from_working_contract(
     compact["active_clause_ids"] = trimmed_ids
     use_guidance = compact.get("use_guidance")
     compact["use_guidance"] = use_guidance[:1] if isinstance(use_guidance, list) else []
+    if _json_bytes(compact) <= max_packet_bytes:
+        return compact
+    compact_guidance = compact.get("use_guidance")
+    guidance_items = compact_guidance if isinstance(compact_guidance, list) else []
+    compact["use_guidance"] = [_text(item, 96) for item in guidance_items if isinstance(item, str)]
+    if _json_bytes(compact) <= max_packet_bytes:
+        return compact
+    compact.pop("requires_reopen_for", None)
+    if _json_bytes(compact) <= max_packet_bytes:
+        return compact
+    compact_guidance = compact.get("use_guidance")
+    guidance_items = compact_guidance if isinstance(compact_guidance, list) else []
+    compact["use_guidance"] = [_text(item, 64) for item in guidance_items if isinstance(item, str)]
     return compact
 
 

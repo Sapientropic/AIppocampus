@@ -149,6 +149,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/text.py",
     "skills/aippocampus/scripts/aippocampus_runtime/aippo/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/aippo/skill_bridge.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/aippo/skill_observed_use.py",
     "skills/aippocampus/scripts/aippocampus_runtime/aippo/working_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/errors.py",
