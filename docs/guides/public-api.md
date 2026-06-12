@@ -76,7 +76,7 @@ language for future low-friction controls, not a claim of complete CLI coverage.
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Opt-in agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, and `agent feedback` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen handles, and low-authority feedback receipts | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, or feedback as source truth |
-| Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
+| Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
 | Agent-native fixture proposals | Linked architecture contracts such as `aippocampus_runtime.recall.agent_facade_contract`, `aippocampus_runtime.recall.agent_pull_gesture`, and `aippocampus_runtime.aippo.working_contract` | Current fixture-backed behavior and public-safe schema direction for trusted host experiments | Public SDK stability, hosted network endpoints, broad package internals, or claim-ready memory facts |
@@ -180,7 +180,7 @@ The CLI contract applies to documented operator commands, especially:
 
 - Personal/default path commands: `aippocampus health|search|onboard|export|import|update`.
 - Advanced/operator commands remain public and discoverable, but they are not
-  first-recall prerequisites: `aippocampus doctor|mcp|smoke|logs|storage|why-recall|why-not-recall|sync|object-sync|hooks`
+  first-recall prerequisites: `aippocampus doctor|mcp|smoke|logs|storage|telepathy|why-recall|why-not-recall|sync|object-sync|hooks`
 - `aippocampus continuity-domain produce|append|publish|report` as the
   explicit local producer, authoring, and snapshot-publish path for Contract v1
   continuity domains
@@ -194,6 +194,10 @@ The CLI contract applies to documented operator commands, especially:
   active locks, ambient cache, and semantic-gate state
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
+- `aippocampus telepathy create|list|deepen|release|diagnose` as the explicit
+  local handoff-card lifecycle over the Telepathy packet contract. MCP exposes
+  `list_telepathy_handoffs` and `deepen_telepathy_handoff` as read-only host
+  tools; create/release through MCP is intentionally unsupported.
 - `aippocampus logs status|rotate` as public-safe local log retention
   diagnostics and cleanup over artifact names and byte counts, not log contents
 - `aippocampus storage gc --apply --class rebuildable` as the explicit

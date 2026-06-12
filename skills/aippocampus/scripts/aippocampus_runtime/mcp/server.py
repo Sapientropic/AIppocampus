@@ -19,6 +19,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_deepen_packet,
 )
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
+from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
@@ -39,6 +40,7 @@ UNSUPPORTED_MUTATION_TOOLS = {
     "delete_memory",
     "enable_hook",
     "forget_memory",
+    "create_telepathy_handoff",
     "install_hook",
     "pull_sync",
     "push_sync",
@@ -47,6 +49,7 @@ UNSUPPORTED_MUTATION_TOOLS = {
     "sync_pull",
     "sync_push",
     "sync_repair",
+    "release_telepathy_handoff",
     "uninstall_hook",
     "update_memory",
     "write_memory",
@@ -496,6 +499,34 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
     return text_result(public_payload(arguments, payload))
 
 
+def call_list_telepathy_handoffs(arguments: dict[str, Any]) -> dict[str, Any]:
+    payload = telepathy_handoff_store.list_handoffs_payload(
+        cwd=cwd_arg(arguments),
+        store_path=arguments.get("store_path"),
+        scope=arguments.get("scope"),
+        status=str(arguments.get("status") or "active"),
+        limit=int_range(arguments.get("max"), default=20, minimum=1, maximum=100),
+    )
+    return text_result(public_payload(arguments, payload))
+
+
+def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
+    card_id = str(arguments.get("card_id") or "").strip()
+    if not card_id:
+        return tool_error(
+            "missing_telepathy_handoff_card_id",
+            "deepen_telepathy_handoff requires a card_id.",
+            arguments=arguments,
+            required=["card_id"],
+        )
+    payload = telepathy_handoff_store.deepen_handoff_payload(
+        card_id=card_id,
+        cwd=cwd_arg(arguments),
+        store_path=arguments.get("store_path"),
+    )
+    return text_result(public_payload(arguments, payload), is_error=not bool(payload.get("ok")))
+
+
 TOOL_CALLS = {
     "search_memory": call_search_memory,
     "recall_context": call_recall_context,
@@ -507,6 +538,8 @@ TOOL_CALLS = {
     "register_thread": call_register_thread,
     "sync_status": call_sync_status,
     "memory_health": call_memory_health,
+    "list_telepathy_handoffs": call_list_telepathy_handoffs,
+    "deepen_telepathy_handoff": call_deepen_telepathy_handoff,
 }
 
 
