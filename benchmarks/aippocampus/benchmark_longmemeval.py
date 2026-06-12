@@ -449,6 +449,9 @@ def run_longmemeval_benchmark(
     max_provider_total_tokens: int | None = None,
     max_provider_estimated_cost_usd: float | None = None,
     provider_cost_unknown: bool = False,
+    standard_cache_dir: Path | str | None = None,
+    use_standard_cache: bool = True,
+    rebuild_standard_cache: bool = False,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -590,6 +593,9 @@ def run_longmemeval_benchmark(
             line_reranker_workers=line_reranker_workers,
             progress_every=progress_every,
             progress_callback=handle_progress if track_progress else None,
+            standard_cache_dir=standard_cache_dir,
+            use_standard_cache=use_standard_cache,
+            rebuild_standard_cache=rebuild_standard_cache,
         )
     except KeyboardInterrupt:
         if partial_path is None:
@@ -728,6 +734,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
     )
+    parser.add_argument(
+        "--standard-cache-dir",
+        type=Path,
+        default=None,
+        help="Directory for reusable prepared standard cases/source indexes.",
+    )
+    parser.add_argument(
+        "--no-standard-cache",
+        action="store_true",
+        help="Disable reusable standard case/source-index cache and use a temporary build.",
+    )
+    parser.add_argument(
+        "--rebuild-standard-cache",
+        action="store_true",
+        help="Force rebuild of cached standard cases/source indexes.",
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--progress-every",
@@ -792,6 +814,9 @@ def main() -> int:
         max_provider_total_tokens=args.max_provider_total_tokens,
         max_provider_estimated_cost_usd=args.max_provider_estimated_cost_usd,
         provider_cost_unknown=args.provider_cost_unknown,
+        standard_cache_dir=args.standard_cache_dir,
+        use_standard_cache=not args.no_standard_cache,
+        rebuild_standard_cache=args.rebuild_standard_cache,
         progress_callback=stderr_progress if int(args.progress_every) > 0 else None,
     )
     if args.output:

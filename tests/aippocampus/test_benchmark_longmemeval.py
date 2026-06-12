@@ -418,6 +418,159 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn("retrieval marker", dumped)
         self.assertNotIn(str(path), dumped)
 
+    def test_source_semantic_cache_reuses_source_artifact_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path):
+                first = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                )
+                second = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                )
+
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        first_artifacts = first["metrics"]["source_semantic_cache"]["source_artifact_cache"]
+        second_artifacts = second["metrics"]["source_semantic_cache"]["source_artifact_cache"]
+        self.assertTrue(first_artifacts["enabled"])
+        self.assertEqual(first_artifacts["miss_count"], 1)
+        self.assertEqual(first_artifacts["rebuild_count"], 1)
+        self.assertEqual(first_artifacts["hit_count"], 0)
+        self.assertEqual(second_artifacts["hit_count"], 1)
+        self.assertEqual(second_artifacts["rebuild_count"], 0)
+        dumped = json.dumps(second, ensure_ascii=False)
+        self.assertNotIn(str(path), dumped)
+        self.assertNotIn(str(cache_dir), dumped)
+        self.assertNotIn("secret fixture answer marker", dumped)
+
+    def test_standard_case_cache_reuses_prepared_sqlite_indexes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_oracle_fixture(path, question_count=2)
+            with patched_oracle_split(path):
+                first = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=2,
+                    min_questions=2,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+                second = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=2,
+                    min_questions=2,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        first_cache = first["standard_adapter"]["corpus"]["case_cache"]
+        second_cache = second["standard_adapter"]["corpus"]["case_cache"]
+        self.assertTrue(first_cache["enabled"])
+        self.assertEqual(first_cache["source_index_hit_count"], 0)
+        self.assertEqual(first_cache["source_index_rebuild_count"], 2)
+        self.assertEqual(first_cache["source_index_hit_rate"], 0.0)
+        self.assertEqual(second_cache["source_index_hit_count"], 2)
+        self.assertEqual(second_cache["source_index_rebuild_count"], 0)
+        self.assertEqual(second_cache["source_index_hit_rate"], 1.0)
+        dumped = json.dumps(second, ensure_ascii=False)
+        self.assertNotIn(str(path), dumped)
+        self.assertNotIn(str(cache_dir), dumped)
+        self.assertNotIn("secret fixture answer marker", dumped)
+
+    def test_standard_case_cache_manifest_mismatch_rebuilds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path):
+                first = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+                manifest_path = next(cache_dir.rglob("source_index_manifest.json"))
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["policy_version"] = "stale-test-policy"
+                manifest_path.write_text(
+                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                second = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        cache = second["standard_adapter"]["corpus"]["case_cache"]
+        self.assertEqual(cache["source_index_manifest_mismatch_count"], 1)
+        self.assertEqual(cache["source_index_rebuild_count"], 1)
+        self.assertEqual(cache["source_index_hit_count"], 0)
+
+    def test_standard_case_cache_forced_rebuild_skips_hit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path):
+                benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+                payload = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                    rebuild_standard_cache=True,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        cache = payload["standard_adapter"]["corpus"]["case_cache"]
+        self.assertTrue(cache["rebuild_requested"])
+        self.assertEqual(cache["source_index_forced_rebuild_count"], 1)
+        self.assertEqual(cache["source_index_rebuild_count"], 1)
+        self.assertEqual(cache["source_index_hit_count"], 0)
+
     def test_fixed_evidence_rank_buckets_cover_near_miss_diagnostics(self) -> None:
         self.assertEqual(standard_public.evidence_rank_bucket(1), "rank_1")
         self.assertEqual(standard_public.evidence_rank_bucket(4), "rank_4_5")

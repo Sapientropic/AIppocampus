@@ -45,6 +45,9 @@ PUBLIC_SEMANTIC_SELECTION_METHOD = (
     "bounded ShareGPT clean-source subset with source-backed semantic sidecar rows"
 )
 DEFAULT_STANDARD_CORPUS_ROOT = (_paths.REPO_ROOT / "benchmark_corpus").resolve()
+DEFAULT_STANDARD_CASE_CACHE_ROOT = (
+    DEFAULT_STANDARD_CORPUS_ROOT / ".cache" / "standard-public-cases"
+).resolve()
 DEFAULT_STANDARD_DATASET = "locomo"
 DEFAULT_STANDARD_QA_CASES = 100
 DEFAULT_STANDARD_QA_MIN_CASES = 20
