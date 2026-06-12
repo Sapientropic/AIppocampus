@@ -107,6 +107,10 @@ promotes a public-safe result into the official evidence flow.
     superseded, missing-middle, deleted/no-recall, dead-lettered, or
     repeated-wrong cold navigation-map objects:
     [`benchmarks/map-rot-lifecycle-debt.md`](benchmarks/map-rot-lifecycle-debt.md).
+16. Need the #1195 benchmark-family promotion decision for the first public
+    cohort candidate targets, holdout/no-tuning-leak boundaries, usefulness
+    blockers, and gate separation:
+    [`benchmarks/benchmark-family-promotion-candidates-2026-06-12.md`](benchmarks/benchmark-family-promotion-candidates-2026-06-12.md).
 
 ## Maintainer Directory
 
@@ -215,6 +219,7 @@ instead of deriving priority from this directory map.
 | Dated command ledger | `docs/evidence/readiness/public-readiness-verification.md` | Summarized commands, dates, pass/fail interpretation, and scope notes. |
 | Benchmark design rationale | `docs/evidence/benchmarks/design/README.md` and `docs/evidence/benchmarks/design/benchmark-design-rationale.md` | Evaluation philosophy, track-family why, evidence-layer separation, and external-comparison boundaries. |
 | Benchmark maturity gates | `docs/evidence/benchmarks/design/benchmark-maturity-gates.md` and `benchmarks/aippocampus/benchmark_maturity.py` | Maturity ladder, sample-size floors, holdout/no-tuning-leakage fields, and promotion metadata separating `contract_gate_ok` from `quality_gate_ok`. |
+| Benchmark family promotion candidates | `docs/evidence/benchmarks/benchmark-family-promotion-candidates-2026-06-12.md` and `benchmarks/aippocampus/benchmark_family_promotion_candidates.py` | #1195 first-family promotion decision for agent continuity, attention navigation, and map-rot lifecycle debt; records target sample floors, family distribution, holdout/no-tuning-leakage, uncertainty policy, sanitization, and usefulness blockers without claiming public-quality results. |
 | Benchmark priority registry | `docs/evidence/benchmarks/design/benchmark-priority-map.md` | Operational priority, maturity, run-profile, claim-level, and claim-boundary guidance for benchmark and smoke surfaces. |
 | Benchmark runner methodology | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
 | External benchmark analysis | `docs/evidence/benchmarks/design/external-benchmark-map.md` | Layer-aware external benchmark and memory-system comparison candidates, blockers, and material limits. |
