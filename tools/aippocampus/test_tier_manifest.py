@@ -265,6 +265,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_recall_funnel_smoke",
         "test_recall_feedback_events",
         "test_recall_navigation_comparison",
+        "test_recall_navigation_promotion",
         "test_recall_scoring_policy",
         "test_recall_structure_time_features",
         "test_recall_why_diagnostics",

@@ -18,6 +18,12 @@ The runner is:
 python tools\aippocampus\smoke\smoke_recall_navigation_comparison.py --json
 ```
 
+The promotion harness for #1302 / #1185 is:
+
+```powershell
+python tools\aippocampus\smoke\smoke_recall_navigation_promotion.py --json
+```
+
 ## Fixture Coverage
 
 The smoke uses four public synthetic cases:
@@ -31,6 +37,30 @@ All cases use temporary fixtures only. The smoke writes temporary clean-source,
 SQLite, and cache files, but does not write to the repository or live registry.
 The report does not serialize raw cues, raw source snippets, route handles,
 local paths, or private registry data.
+
+## Promotion Harness Readout
+
+The promotion harness is the shared gate for recall-navigation features before
+they can be argued into default foreground behavior. It is intentionally stricter
+than the comparison smoke:
+
+- pre-registered arms: `baseline_flat_recall`, `feature_navigation_only`, and
+  `feature_plus_deepen`;
+- identical source corpus, query set, packet budget, and deepen budget across
+  arms;
+- required distractor families: stale, conflict, noise, and wrong-source;
+- explicit feature hurt / no-op accounting;
+- explicit manual-search fallback, wrong-source route, foreground byte, and
+  correct-but-useless warning counters;
+- hard red lines for privacy bypass, masked-source resurrection,
+  claim-without-source-reopen, and stale-as-current.
+
+The 2026-06-12 fixture run reports `promotion_decision=not_promoted`. This is
+the desired behavior for now: it gives #1300 Yi Macro Orientation and #1301
+Attention Router a reusable promotion gate without claiming either feature is
+default-ready. The report can close #1302 as a harness implementation, but it
+does not close #1185's broader default-session / natural-handoff usefulness
+gate by itself.
 
 ## Result Shape
 
