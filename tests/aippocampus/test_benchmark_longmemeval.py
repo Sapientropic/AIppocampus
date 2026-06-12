@@ -536,6 +536,94 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         )
         self.assertNotIn(str(root), dumped)
 
+    def test_source_semantic_cache_consumes_canonical_semantic_scope_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "case" / "source_index.sqlite"
+            messages = [
+                standard_public.standard_message_for_sqlite(
+                    source_id="semantic-sidecar-question",
+                    line=1,
+                    role="user",
+                    text="The source row describes a concrete implementation path.",
+                )
+            ]
+            manifest = standard_public.source_index_manifest(
+                dataset="longmemeval-v1-small",
+                source_id="semantic-sidecar-question",
+                question_id="semantic-sidecar-question",
+                messages=messages,
+            )
+            metrics = standard_public.new_standard_case_cache_metrics(
+                enabled=True,
+                cache_key="semantic-sidecar",
+                rebuild_requested=False,
+            )
+            standard_public.prepare_standard_sqlite_index(
+                sqlite_path,
+                messages=messages,
+                manifest=manifest,
+                cache_metrics=metrics,
+                rebuild_cache=False,
+            )
+            clean_messages_path = sqlite_path.with_name("messages.jsonl")
+            self.assertTrue(clean_messages_path.exists())
+            clean_message = json.loads(clean_messages_path.read_text(encoding="utf-8").splitlines()[0])
+            message_id = clean_message["message_id"]
+            self.assertTrue(message_id.startswith("standard_public:"))
+            key_without_sidecar = standard_public.source_semantic_artifact_cache_key(
+                sqlite_path,
+                line_to_session={"1": "session-a"},
+            )
+            sidecar_path = sqlite_path.with_name("semantic-scope-labels.jsonl")
+            sidecar_path.write_text(
+                json.dumps(
+                    {
+                        "message_id": message_id,
+                        "scope_labels": ["technical_work"],
+                        "confidence": 0.82,
+                        "label_evidence": [
+                            {
+                                "label": "technical_work",
+                                "reason": "The source row describes implementation work.",
+                                "confidence": 0.82,
+                            }
+                        ],
+                        "source_refs": [
+                            {
+                                "ref": message_id,
+                                "thread_key": "standard-public-fixture",
+                                "message_id": message_id,
+                                "turn_id": message_id,
+                                "source_line": 1,
+                                "role": "user",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            key_with_sidecar = standard_public.source_semantic_artifact_cache_key(
+                sqlite_path,
+                line_to_session={"1": "session-a"},
+            )
+            cache = standard_public.build_source_semantic_cache(
+                sqlite_path,
+                line_to_session={"1": "session-a"},
+            )
+
+        self.assertNotEqual(key_without_sidecar, key_with_sidecar)
+        profile = cache["profiles"][1]
+        row = cache["working_memory_rows"][0]
+        self.assertIn("technical_work", profile["labels"])
+        self.assertIn("technical_work", profile["semantic_scope_labels"])
+        self.assertIn("technical_work", row["semantic_scope_labels"])
+        self.assertTrue(cache["manifest"]["semantic_scope_sidecar_loaded"])
+        self.assertEqual(cache["manifest"]["semantic_scope_sidecar_row_count"], 1)
+        self.assertEqual(cache["manifest"]["semantic_scope_label_row_count"], 1)
+
     def test_standard_case_cache_reuses_prepared_sqlite_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
