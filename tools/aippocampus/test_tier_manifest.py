@@ -126,6 +126,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_capture_consolidation_boundary",
         "test_checkpoint",
         "test_cli_json_contract",
+        "test_closeout_audit",
         "test_claude_code_hooks",
         "test_codex_long_session_smoke",
         "test_coding_decision_events",

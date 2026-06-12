@@ -460,6 +460,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/source_validation.py",
     "tools/aippocampus/docs/check_docs_health.py",
     "tools/aippocampus/docs/compat_shim_inventory.py",
+    "tools/aippocampus/github/closeout_audit.py",
     "tools/aippocampus/github/planning_audit.py",
     "tools/aippocampus/github/project_triage.py",
     "tools/aippocampus/release/check_wheel_contract.py",

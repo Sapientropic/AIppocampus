@@ -55,6 +55,12 @@ jobs:
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json
 
+      - name: PR closeout audit
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python tools/aippocampus/github/closeout_audit.py --body-env PR_BODY --github-annotations
+
       - name: PR test tier with canonical coverage
         run: |
           python -m coverage run --branch --source=skills/aippocampus/scripts,tools/aippocampus,plugins/aippocampus tools/aippocampus/run_tests.py --tier pr
