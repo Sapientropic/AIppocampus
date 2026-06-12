@@ -6,8 +6,8 @@ eval, bounded model-backed compensatory/amplification/prospective worker paths,
 an active-imagination sandbox, constructive draft/prospective-invitation
 foreground affordances, a detached sleep-cycle Dream Dialogue design, and a
 retrospective prospective-validation harness covered by mocked tests;
-awaiting live smoke, cross-model validation, and measured user-visible
-recall/reflection impact.
+a first public-safe live long-context atlas pilot; still awaiting cross-model
+validation and measured user-visible recall/reflection impact.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
@@ -27,6 +27,11 @@ retrospectively against explicit later evidence; and
 real-history structural and user-visible ablation evals against plain
 question/frontier/Journey/working-memory surfaces with deterministic fallback
 or optional model-backed workers.
+`skills/aippocampus/scripts/aippocampus_runtime/dream/atlas_pack.py` builds
+public-safe long-context atlas packs, while
+`skills/aippocampus/scripts/aippocampus_runtime/dream/atlas_live_pilot.py`
+owns the opt-in live provider pilot that keeps provider usage/cache telemetry
+and routes live candidates through the background adjudicator.
 Related: [affect-side-channel.md](affect-side-channel.md),
 [compact-activation-signals.md](compact-activation-signals.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
@@ -610,8 +615,10 @@ default timing.
 
 `aippocampus_runtime.dream.atlas_pack` is the deterministic #1269 prototype for
 batching multiple `status="ready_for_dream_worker"` packs into one
-source-card-only long-context atlas. It targets the DeepSeek V4 family because
-the official [2026-04-24 DeepSeek V4 note](https://api-docs.deepseek.com/news/news260424)
+source-card-only long-context atlas. `aippocampus_runtime.dream.atlas_live_pilot`
+is the #1286 opt-in live/eval helper over that atlas pack. The live path targets
+the DeepSeek V4 family because the official
+[2026-04-24 DeepSeek V4 note](https://api-docs.deepseek.com/news/news260424)
 documents a 1M-token context window, and the official
 [KV-cache guide](https://api-docs.deepseek.com/guides/kv_cache) documents
 `usage.prompt_cache_hit_tokens` and `usage.prompt_cache_miss_tokens` as the
