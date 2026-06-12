@@ -57,7 +57,15 @@ DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES = 96
 DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT = 12
 DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS = 0
 DEFAULT_STANDARD_LINE_RERANKER_WORKERS = 0
-STANDARD_LINE_RERANKER_MODES = {"off", "custom", "lexical", "structural", "semantic"}
+DEFAULT_STANDARD_SOURCE_SEMANTIC_CACHE_PREWARM_WORKERS = 64
+STANDARD_LINE_RERANKER_MODES = {
+    "off",
+    "custom",
+    "lexical",
+    "structural",
+    "semantic",
+    "source_semantic_cache",
+}
 STANDARD_DATASET_PATHS = {
     "locomo": DEFAULT_STANDARD_CORPUS_ROOT / "locomo" / "locomo10.json",
     "longmemeval-v1-oracle": (

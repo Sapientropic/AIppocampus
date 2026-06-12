@@ -277,8 +277,16 @@ failures.
 
 ## Current Published Result
 
+This table is ordered by dated artifacts, not by claim strength. The newest
+rows may be narrower progress evidence; the 500-question retrieval-only and
+lexical rows remain the broader LongMemEval-S quality baselines.
+
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-12T18:10:20Z` | `longmemeval-v1-small` | retrieval-only + AIppocampus source worker-surface cache | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1494.10s | #1323 source-side measured; no provider calls |
+| `2026-06-12T16:43:38Z` | `longmemeval-v1-small` | retrieval-only + semantic LLM query/candidate upper bound | 500 | 95.80% | 85.18% | 94.15% | 94.36% | 1705.75s | #1323 LLM upper bound; 9 provider errors |
+| `2026-06-12T16:01:24Z` | `longmemeval-v1-small` | retrieval-only + lexical line-reranker 100Q comparison | 100 | 97.00% | 87.23% | 89.36% | 96.81% | 154.73s | #1323 lexical comparison; deterministic |
+| `2026-06-12T15:39:58Z` | `longmemeval-v1-small` | retrieval-only + semantic line-reranker query/cache 100Q progress | 100 | 97.00% | 87.23% | 96.81% | 96.81% | 767.25s | #1323 progress; superseded by 500Q rows |
 | `2026-06-12T10:10:57Z` | `longmemeval-v1-small` | retrieval-only + semantic line-reranker warm query/cache replay | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 240.30s | `semantic_warm_query_cache_path_replay_report`; #1305 warm cache |
 | `2026-06-12T05:56:12Z` | `longmemeval-v1-small` | retrieval-only + structural line-reranker failure report | 500 | 95.80% | 85.18% | 86.85% | 94.36% | 716.64s | `retrieval_sufficient`; #1193 failure report |
 | `2026-06-12T00:59:47Z` | `longmemeval-v1-small` | fixed-reader provider answer cleanup | 25 | 100.00% | 92.00% | - | 100.00% | 142.53s | `answer_scored`; expansion `no_go` |
@@ -303,6 +311,10 @@ python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report 
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json --output docs\evidence\benchmarks\longmemeval-semantic-cache-path-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 20 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-100-2026-06-12.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-100-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-timeout 45 --line-reranker-workers 2 --progress-every 10 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.budget.json --max-provider-calls 100 --max-provider-total-tokens 1500000 --provider-cost-unknown --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-timeout 45 --line-reranker-workers 8 --progress-every 10 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.budget.json --max-provider-calls 100 --max-provider-total-tokens 1500000 --provider-cost-unknown --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-100-2026-06-12.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.local-replay-analysis.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.json --json
 ```
@@ -437,16 +449,17 @@ Structural exact-line repair failure report for #1193:
   or source-side semantic support rather than more local line heuristics.
 - Semantic path boundary: the existing 25Q semantic pilot remains a quality
   ceiling/debugging signal. Its cold online path averaged `7156.27ms`, used
-  `225170` tokens, and projects to about `4503400` tokens and `59.64`
-  single-worker minutes for 500 questions. Warm query cache and source-side
-  semantic cache are documented as distinct paths, but their latency/build cost
-  were not yet measured in the #1193 artifact. The #1305 follow-up below now
-  measures the warm query/candidate replay path separately; source-side
-  semantic warming remains unmeasured.
+  `225170` tokens, and projected to about `4503400` tokens and `59.64`
+  single-worker minutes for 500 questions. #1305 measured warm
+  query/candidate replay separately, and #1323 below now measures both the
+  current AIppocampus source-side worker-memory surface and the 500Q
+  query/candidate LLM upper bound. A future DeepSeek source-side materializer
+  remains a separate productization question.
 - Decision: close #1193 as a deterministic failure report and cache-path
   boundary. Do not make cold online semantic rerank a default hook path, and do
-  not spend more effort on untuned structural heuristics before testing
-  source-side semantic warming or an explicitly budgeted 500Q semantic arm.
+  not spend more effort on untuned structural heuristics. The later #1323
+  rows now provide the source-side and 500Q semantic measurements that #1193
+  left open.
 
 Warm query/candidate cache replay for #1305:
 
@@ -485,6 +498,92 @@ Warm query/candidate cache replay for #1305:
   #1305, not the 500Q semantic-quality slice and not source-side semantic
   warming. Cold online semantic rerank remains explicit opt-in and is still not
   a default hook path.
+
+500Q source-side worker surface and LLM upper bound for #1323:
+
+- Summary:
+  [`longmemeval-source-worker-surface-500q-2026-06-13.md`](longmemeval-source-worker-surface-500q-2026-06-13.md).
+- Sanitized JSON:
+  [`longmemeval-source-worker-surface-500q-2026-06-13.json`](longmemeval-source-worker-surface-500q-2026-06-13.json).
+- Source-side run date: `2026-06-12T18:10:20Z`. LLM upper-bound run date:
+  `2026-06-12T16:43:38Z`.
+- Dataset scale: LongMemEval-S first `500` questions; runner-scanned source
+  messages `246,738`; direct JSON scan `244,651,645` characters, roughly
+  `61.2M` to `81.6M` tokens by simple chars/4 to chars/3 ratios. This is a
+  rough scale estimate, not tokenizer-measured usage.
+- Current AIppocampus source-side path: `--line-reranker source_semantic_cache`
+  builds `aippocampus_working_memory` navigation rows from clean source and
+  uses the existing hot matcher. It is not an LLM prompt/cache and it makes
+  no provider calls.
+- Source-side cold build: `500` source caches, `246,738` working-memory rows,
+  complete rate `1.0`, failed rows `0`, provider calls/tokens `0`, and
+  prewarm workers `64`.
+- Source-side hot path: source-worker search averaged `1044.5179ms` and maxed
+  `3464.3719ms`; candidate rerank after that averaged `1.18ms`.
+- Source-side quality: baseline evidence-line R@10 `408/479 = 0.8518`;
+  source-worker search alone R@10 `156/479 = 0.3257`; source-worker rerank
+  only R@10 `398/479 = 0.8309`; FTS-preserving fused R@10
+  `422/479 = 0.8810`; fused MRR `0.6734`; bridge lifts `14`; fused top-10
+  regressions `0`; source-only top-10 regressions `24`.
+- LLM query/candidate upper bound: `--line-reranker semantic` with
+  `--line-reranker-timeout 180 --line-reranker-workers 8` produced
+  semantic fused R@10 `451/479 = 0.9415`, MRR `0.8738`, and bridge lifts
+  `43`.
+- LLM timeout boundary: this was not the default `12s` timeout. The 500Q LLM
+  run explicitly set `180s`; it still reported `7` timeout errors and `2`
+  other line-reranker errors, with `470/479` available calls.
+- LLM token/cache telemetry: `4,719,903` total tokens, `921,088` provider
+  prefix-cache hit tokens, `3,101,946` miss tokens, hit rate `0.2290`.
+  This provider prefix-cache telemetry is separate from product cache behavior.
+- Decision: #1323 is measured for the current AIppocampus source-side
+  worker-memory surface and for the query/candidate LLM upper bound. The
+  honest next product question is whether to build a better indexed/materialized
+  source-side semantic surface, not whether this current worker-surface path is
+  secretly equivalent to the LLM upper bound.
+- Boundary: do not claim official LongMemEval QA score, answer-generation
+  quality, SOTA, provider-independent quality, default foreground LLM rerank,
+  future DeepSeek source-side materializer quality, or broad life-history
+  memory superiority from this row.
+
+100Q semantic query/candidate cache progress for #1323, superseded by the 500Q rows above:
+
+- Summary:
+  [`longmemeval-semantic-cache-100q-2026-06-12.md`](longmemeval-semantic-cache-100q-2026-06-12.md).
+- Sanitized JSON:
+  [`longmemeval-semantic-cache-100q-2026-06-12.json`](longmemeval-semantic-cache-100q-2026-06-12.json).
+- Run dates: lexical comparison `2026-06-12T16:01:24Z`, semantic first run
+  `2026-06-12T15:39:58Z`, and semantic repeated provider-prefix replay
+  `2026-06-12T15:45:30Z`.
+- This was progress toward #1323, not the final closeout. The 500Q rows above
+  now cover the full query/candidate LLM upper bound and the current
+  AIppocampus source-side worker-memory surface.
+- Same-cohort baseline: session R@10 `97/100`, evidence-line R@10
+  `82/94 = 0.8723`, context-visible evidence R@10 `91/94 = 0.9681`, and
+  evidence-line MRR `0.6481`.
+- Lexical comparison: lexical fused evidence-line R@10 `84/94 = 0.8936`,
+  MRR `0.6990`, and top-10 regression count `0`.
+- Semantic first run: semantic-only evidence-line R@10 `87/94 = 0.9255`,
+  semantic fused R@10 `91/94 = 0.9681`, fused MRR `0.9246`, and top-10
+  fused regression count `0`.
+- Query/candidate replay: `90/90` available semantic rows had complete cache
+  keys; second-pass warm replay hit `90/90`; warm local lookup averaged
+  `0.000063ms`; cold-fill provider latency averaged `11136.85ms` and used
+  `979237` tokens.
+- Provider prefix-cache telemetry is separate from product cache behavior:
+  the workers=2 first run reported prefix-cache hit rate `0.2514`, while the
+  workers=8 repeated run reported `0.9932` and reduced wall time from
+  `767.25s` to `273.35s`.
+- Hurt cases: semantic-only top-10 ranking regressed 4 baseline top-10 cases,
+  all in `multi_evidence_partial_hit`; the fused path preserved the original
+  FTS hits, so its `0` top-10 regression count is a fusion-rule property, not
+  pure model quality. The 4 semantic timeouts were all multi-session cases.
+- Remaining fused misses are `gold_line_low_rank_21_50`,
+  `same_session_wrong_line_top_k`, and `session_found_below_top_k`; these are
+  better candidates for broader routing or source-side semantic warming than
+  for more foreground per-query reranking.
+- Boundary: this 100Q row remains useful for comparing workers=2 versus
+  workers=8 and provider prefix-cache behavior, but it is superseded as #1323
+  measurement evidence by the 500Q source-side and LLM rows above.
 
 Optional semantic LLM line-reranker pilot for #1092:
 

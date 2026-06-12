@@ -232,6 +232,10 @@ def evaluation_metadata(
                 max_tokens=line_reranker_max_tokens,
             )
         )
+    elif resolved_line_reranker_mode == "source_semantic_cache":
+        metadata["source_semantic_cache_arm"] = (
+            retrieval_benchmark.source_semantic_cache_public_contract()
+        )
     return metadata
 
 
