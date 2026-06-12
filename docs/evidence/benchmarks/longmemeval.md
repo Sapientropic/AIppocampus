@@ -269,7 +269,11 @@ The #1282 fixed-reader cleanup rerun is summarized in
 It adds a privacy-safe failure review, v2 bounded-evidence reader prompt, and
 explicit expansion gate. The current decision is `no_go` for 100Q or 500Q
 provider answer runs until reader/provider errors, false abstentions on
-answerable bounded evidence, and unexplained judge mismatches are fixed.
+answerable bounded evidence, unexplained judge mismatches, and stale/currentness
+confusion blockers are fixed. The gate treats source-line packaging as
+applicable only when the LongMemEval case has exact line-gold evidence; no-line
+gold cases remain reader/retrieval diagnostics, not automatic packaging
+failures.
 
 ## Current Published Result
 
@@ -331,7 +335,9 @@ Fixed-reader cleanup for #1282:
   answerable bounded evidence, `1` deterministic-judge mismatch, and `1`
   true reader miss.
 - Expansion gate: `no_go` for 100Q or 500Q until the blocker categories above
-  are fixed and rerun on the 25Q slice.
+  are fixed and rerun on the 25Q slice. Currentness/stale-update confusion is
+  now a gate blocker; no-line-gold wrong answers are not counted as exact-line
+  packaging failures without line evidence.
 
 LongMemEval-S 500-question verification summary:
 

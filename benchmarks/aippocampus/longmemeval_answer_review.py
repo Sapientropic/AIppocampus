@@ -20,7 +20,10 @@ def refined_failure_category(row: dict[str, Any]) -> str:
         return "reader_provider_error"
     if not answer.get("context_sufficient"):
         return "retrieval_evidence_unavailable"
-    if not retrieval.get("candidate_contains_evidence"):
+    if (
+        bool(retrieval.get("has_line_evidence", True))
+        and not retrieval.get("candidate_contains_evidence")
+    ):
         return "insufficient_evidence_packaging"
     if reader.get("abstained"):
         return "over_abstention_boundary_false_negative"
@@ -125,6 +128,7 @@ def expansion_go_no_go(review: dict[str, Any]) -> dict[str, Any]:
         "insufficient_evidence_packaging",
         "retrieval_evidence_unavailable",
         "reader_empty_answer",
+        "stale_update_confusion",
     ]
     blockers = [key for key in blocker_keys if int(taxonomy.get(key) or 0) > 0]
     true_reader_miss_count = int(taxonomy.get("true_reader_miss") or 0)
@@ -163,6 +167,8 @@ def expansion_go_no_go(review: dict[str, Any]) -> dict[str, Any]:
                 "retrieval_evidence_unavailable",
                 0,
             )
+            == 0,
+            "no_stale_update_confusion": taxonomy.get("stale_update_confusion", 0)
             == 0,
         },
         "next_action": next_action,
