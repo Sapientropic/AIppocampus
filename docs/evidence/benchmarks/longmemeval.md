@@ -275,6 +275,7 @@ answerable bounded evidence, and unexplained judge mismatches are fixed.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-12T05:56:12Z` | `longmemeval-v1-small` | retrieval-only + structural line-reranker failure report | 500 | 95.80% | 85.18% | 86.85% | 94.36% | 716.64s | `retrieval_sufficient`; #1193 failure report |
 | `2026-06-12T00:59:47Z` | `longmemeval-v1-small` | fixed-reader provider answer cleanup | 25 | 100.00% | 92.00% | - | 100.00% | 142.53s | `answer_scored`; expansion `no_go` |
 | `2026-06-11T22:24:24Z` | `longmemeval-v1-small` | fixed-reader provider answer baseline | 25 | 100.00% | 92.00% | - | 100.00% | 192.69s | `answer_scored` |
 | `2026-06-10T07:26:53Z` | `longmemeval-v1-small` | retrieval-only + optional semantic LLM line reranker pilot | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 239.15s | `retrieval_sufficient` pilot |
@@ -292,6 +293,8 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 100 --min-questions 100 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-100.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 100 --top-k 10 --line-reranker structural --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-structural-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-structural-500.json
+python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --output docs\evidence\benchmarks\longmemeval-exact-line-repair-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.json --json
@@ -400,6 +403,39 @@ Optional lexical line-reranker 500-question follow-up for #1087:
 - Raw report location:
   `benchmark_corpus/reports/longmemeval-v1-small-lexical-500.json` locally,
   intentionally gitignored.
+
+Structural exact-line repair failure report for #1193:
+
+- Summary:
+  [`longmemeval-exact-line-repair-2026-06-12.md`](longmemeval-exact-line-repair-2026-06-12.md).
+- Sanitized JSON:
+  [`longmemeval-exact-line-repair-2026-06-12.json`](longmemeval-exact-line-repair-2026-06-12.json).
+- Run date: `2026-06-12T05:56:12Z`.
+- Command: same 500-question LongMemEval-S split and top-k as above, with
+  `--line-reranker structural --line-reranker-workers 8`.
+- The `structural` reranker uses only query text, candidate source text,
+  adjacent source-window text, route rank metadata, and context distance. It
+  withholds gold answers, expected lines/sessions, `has_answer` labels, judge
+  labels, and miss taxonomy.
+- It did not beat the same-split lexical 500Q baseline: structural fused
+  evidence-line R@10 was `416/479 = 0.8685` versus lexical `419/479 = 0.8747`;
+  structural MRR was `0.6663` versus lexical `0.6746`.
+- Context-visible conversion fell from lexical `10` to structural `8`;
+  same-session wrong-line reduction fell from lexical `11` to structural `8`.
+- Miss-family conclusion: 36 context-visible exact-line misses still had the
+  target line in the candidate pool but were not selected; 9 session-found-below
+  top-k cases and most low-rank/below-rank-50 cases need source-window routing
+  or source-side semantic support rather than more local line heuristics.
+- Semantic path boundary: the existing 25Q semantic pilot remains a quality
+  ceiling/debugging signal. Its cold online path averaged `7156.27ms`, used
+  `225170` tokens, and projects to about `4503400` tokens and `59.64`
+  single-worker minutes for 500 questions. Warm query cache and source-side
+  semantic cache are documented as distinct paths, but their latency/build cost
+  are not yet measured.
+- Decision: close #1193 as a deterministic failure report and cache-path
+  boundary. Do not make cold online semantic rerank a default hook path, and do
+  not spend more effort on untuned structural heuristics before testing
+  source-side semantic warming or an explicitly budgeted 500Q semantic arm.
 
 Optional semantic LLM line-reranker pilot for #1092:
 
