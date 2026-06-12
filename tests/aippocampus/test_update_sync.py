@@ -64,6 +64,41 @@ def write_minimal_repo(repo: Path) -> None:
     (skill / "scripts" / "runtime.py").write_text("print('ok')\n", encoding="utf-8")
 
 
+def write_plugin_package(
+    root: Path,
+    *,
+    version: str,
+    mcp_command: str = "aippocampus",
+    mcp_args: list[str] | None = None,
+    include_skill: bool = True,
+) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".codex-plugin").mkdir(exist_ok=True)
+    (root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "aippocampus", "version": version, "mcpServers": "./.mcp.json"}),
+        encoding="utf-8",
+    )
+    (root / ".mcp.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "aippocampus": {
+                        "command": mcp_command,
+                        "args": mcp_args if mcp_args is not None else ["mcp"],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    if include_skill:
+        (root / "skills" / "aippocampus").mkdir(parents=True, exist_ok=True)
+        (root / "skills" / "aippocampus" / "SKILL.md").write_text(
+            "# AIppocampus fixture\n",
+            encoding="utf-8",
+        )
+
+
 def aippocampus_hook_commands_by_event(hooks_path: Path) -> dict[str, list[str]]:
     data = json.loads(hooks_path.read_text(encoding="utf-8"))
     result: dict[str, list[str]] = {}
@@ -310,6 +345,136 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(agent["ready"])
         self.assertFalse(agent["host_plugin_installed_or_enabled"])
         self.assertFalse(agent["host_mcp_registered"])
+
+    def test_status_reports_mcp_repair_options_when_console_script_missing_but_python3_exists(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            mcp_config = root / ".mcp.json"
+            mcp_config.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "aippocampus": {
+                                "command": "aippocampus",
+                                "args": ["mcp"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_which(command: str) -> str | None:
+                if command == "python3":
+                    return "/usr/bin/python3"
+                return None
+
+            with patch.object(update_cli.shutil, "which", side_effect=fake_which):
+                code, payload = run_update(
+                    "status",
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--codex-home",
+                    str(codex_home),
+                    "--mcp-config",
+                    str(mcp_config),
+                    "--no-child-check",
+                )
+
+        self.assertEqual(code, 0)
+        mcp = payload["surfaces"]["mcp"]
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertEqual(mcp["status"], "current")
+        self.assertFalse(mcp["mcp_command_resolves"])
+        self.assertTrue(mcp["python3_available"])
+        self.assertIn(
+            "python3 -m aippocampus_runtime.cli.facade mcp",
+            mcp["mcp_command_repair_options"],
+        )
+        self.assertEqual(agent["status"], "artifact_current_host_not_exposed")
+        self.assertFalse(agent["ready"])
+
+    def test_status_reports_plugin_marketplace_and_installed_cache_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            marketplace = root / "local-marketplace" / "aippocampus"
+            installed = root / "codex-home" / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
+            write_plugin_package(marketplace, version="0.1.0")
+            write_plugin_package(installed, version="0.1.0", mcp_command="python", mcp_args=["-m", "old"])
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(root / "codex-home"),
+                "--plugin-marketplace-dir",
+                str(marketplace),
+                "--plugin-installed-dir",
+                str(installed),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        plugin = payload["surfaces"]["plugin"]
+        self.assertEqual(plugin["source_plugin_version"], "0.2.0")
+        self.assertEqual(plugin["local_marketplace"]["version"], "0.1.0")
+        self.assertEqual(plugin["local_marketplace"]["status"], "stale_version")
+        self.assertEqual(plugin["installed_cache"]["version"], "0.1.0")
+        self.assertEqual(plugin["installed_cache"]["status"], "stale_version")
+        self.assertTrue(plugin["cache_boundary"]["package_artifact_is_not_installed_cache"])
+        self.assertTrue(plugin["plugin_cache_recommended_actions"])
+
+    def test_status_uses_successful_host_probe_report_for_agent_callable_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {
+                            "tool_names": ["memory_health", "search_memory", "sync_status"]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {
+                            "status": "available_requires_sync_dir",
+                            "backend": "local_folder",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--host-probe-report",
+                str(probe),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertTrue(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(payload["summary"]["agent_callable_status"], "host_live_probe_ok")
+        self.assertTrue(agent["ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok")
+        self.assertEqual(agent["foreground_tools_visible"], True)
+        self.assertEqual(agent["foreground_tools_visibility_source"], "host_probe_report")
+        self.assertEqual(agent["host_live_probe"]["status"], "ok")
+        self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
+        self.assertEqual(agent["next_command"], "aippocampus update status --json")
+        by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
+        self.assertTrue(by_id["active_recall_ready"]["ready"])
+        self.assertEqual(by_id["active_recall_ready"]["status"], "ready")
 
     def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
         self,
@@ -816,6 +981,63 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertFalse((output / "plugin.egg-info").exists())
             self.assertFalse(payload["applied_surfaces"][0]["builder"]["hooks_auto_enabled"])
             self.assertTrue(payload["applied_surfaces"][0]["ok"])
+            self.assertFalse(payload["applied_surfaces"][0]["cache_refresh"]["requested"])
+
+    def test_plugin_apply_can_refresh_local_marketplace_and_installed_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            output = repo / "dist" / "aippocampus-plugin"
+            marketplace = root / "local-marketplace" / "aippocampus"
+            installed = root / "codex-home" / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
+            write_minimal_repo(repo)
+            plugin = repo / "plugins" / "aippocampus"
+            plugin.mkdir(parents=True)
+            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
+            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+            write_plugin_package(marketplace, version="0.1.0")
+            write_plugin_package(installed, version="0.1.0", mcp_command="python3", mcp_args=["-m", "aippocampus_runtime.mcp.server"])
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "plugin",
+                "--repo-root",
+                str(repo),
+                "--plugin-output",
+                str(output),
+                "--plugin-marketplace-dir",
+                str(marketplace),
+                "--plugin-installed-dir",
+                str(installed),
+                "--codex-home",
+                str(root / "codex-home"),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 0, payload)
+            applied = payload["applied_surfaces"][0]
+            self.assertTrue(applied["ok"])
+            self.assertTrue(applied["cache_refresh"]["requested"])
+            self.assertTrue(
+                applied["cache_refresh"]["refreshed"]["installed_cache"][
+                    "portable_mcp_config_preserved"
+                ]
+            )
+            marketplace_manifest = json.loads(
+                (marketplace / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+            )
+            installed_manifest = json.loads(
+                (installed / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+            )
+            installed_mcp = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(marketplace_manifest["version"], "0.2.0")
+        self.assertEqual(installed_manifest["version"], "0.2.0")
+        self.assertEqual(
+            installed_mcp["mcpServers"]["aippocampus"]["command"],
+            "python3",
+        )
 
 
 if __name__ == "__main__":

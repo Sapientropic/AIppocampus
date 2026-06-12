@@ -26,10 +26,14 @@ CHECKED_CLOSEOUT_CLASS_RE = re.compile(
     re.I | re.M,
 )
 UNCHECKED_TASK_RE = re.compile(r"^\s*[-*]\s*\[\s\]\s+")
+TASK_CONTINUATION_RE = re.compile(r"^\s{2,}\S")
+TASK_OR_MARKDOWN_BOUNDARY_RE = re.compile(r"^\s*(?:[-*]\s+(?:\[[ xX]\]\s+)?|#{1,6}\s+)")
 RISKY_CLOSEOUT_RE = re.compile(
     r"\b("
     r"diagnostic[- ]only|failure report|blocker(?: recorded)?|not measured|"
-    r"not default|cannot claim|can't claim|not proof|not proven|"
+    r"not default|(?:cannot|can't) claim (?:broad|product|sota|default|"
+    r"private[- ]history|live|general|universal|full|complete|issue|acceptance|quality)|"
+    r"not proof|not proven|"
     r"narrow slice|partial slice|slice only|opt[- ]in only"
     r")\b",
     re.I,
@@ -41,6 +45,13 @@ FOLLOWUP_RE = re.compile(
     r")\b",
     re.I,
 )
+FOLLOWUP_SECTION_RE = re.compile(
+    r"^\s*(?:#{1,6}\s*)?"
+    r"(?:remaining[_ -]?gap|followup[_ -]?issue|follow[- ]up issue|"
+    r"remaining\s+gap\s*/\s*follow[- ]up\s+issue)\s*:?\s*(?P<rest>.*)$",
+    re.I,
+)
+MARKDOWN_HEADING_RE = re.compile(r"^\s*#{1,6}\s+\S")
 
 
 def _unique_issue_numbers(matches: list[str]) -> list[int]:
@@ -64,13 +75,53 @@ def _closeout_class(body: str) -> str | None:
 
 
 def _has_followup_pointer(body: str) -> bool:
-    return bool(FOLLOWUP_RE.search(body) and ISSUE_REF_RE.search(body))
+    in_followup_section = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        section_match = FOLLOWUP_SECTION_RE.match(line)
+        if section_match:
+            # A template heading such as "Remaining gap / follow-up issue:" is
+            # only a pointer after a real issue ref is filled on that line or
+            # below it. Never borrow the PR's broad "Closes #..." reference.
+            in_followup_section = True
+            rest = section_match.group("rest")
+            if ISSUE_REF_RE.search(rest) and not CLOSING_REF_RE.search(rest):
+                return True
+            continue
+
+        if FOLLOWUP_RE.search(line) and ISSUE_REF_RE.search(line) and not CLOSING_REF_RE.search(line):
+            return True
+
+        if in_followup_section:
+            if MARKDOWN_HEADING_RE.match(line):
+                in_followup_section = False
+                continue
+            if not stripped:
+                continue
+            if ISSUE_REF_RE.search(line) and not CLOSING_REF_RE.search(line):
+                return True
+
+    return False
 
 
 def _selected_task_text(body: str) -> str:
     """Ignore unchecked PR-template task rows so default options do not become claims."""
 
-    return "\n".join(line for line in body.splitlines() if not UNCHECKED_TASK_RE.match(line))
+    selected_lines: list[str] = []
+    skipping_unchecked_task = False
+    for line in body.splitlines():
+        if UNCHECKED_TASK_RE.match(line):
+            skipping_unchecked_task = True
+            continue
+        if skipping_unchecked_task:
+            is_wrapped_continuation = bool(
+                TASK_CONTINUATION_RE.match(line) and not TASK_OR_MARKDOWN_BOUNDARY_RE.match(line)
+            )
+            if is_wrapped_continuation:
+                continue
+            skipping_unchecked_task = False
+        selected_lines.append(line)
+    return "\n".join(selected_lines)
 
 
 def audit_pr_body(body: str) -> dict[str, Any]:

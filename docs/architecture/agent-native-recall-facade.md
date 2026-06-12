@@ -33,17 +33,25 @@ aippocampus agent explain "<opaque handle or deepen:aippo...>" --json
 aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
 ```
 
-When a current project macro state is available, `agent recall` can consume it
-explicitly:
+When a current project macro state is available, `agent recall` can consume an
+explicit state file:
 
 ```text
 aippocampus agent recall "<cue>" --macro-state-jsonl <path> --project AIppocampus --json
 ```
 
+It can also consume the latest scoped project state from
+`.aippocampus/macro-orientation.jsonl` or
+`.aippocampus/macro_orientation.jsonl` under the supplied `--cwd` / current
+working directory. This default lookup is intentionally project-local and
+read-only; it does not search the global registry, private rollouts, or ambient
+history for macro state.
+
 This widens the internal route candidate pool within the normal hard cap,
 biases ordering through Three Powers route facets, and emits compact macro
 diagnostics in `macro_navigation`. It is an opt-in `agent_continuity` behavior,
-not a default MCP-core recall behavior.
+not a default MCP-core recall behavior, and the macro state remains a
+navigation prior rather than source evidence.
 
 This is an explicit pull path for agents and operators. It is not a default
 hook, not every-turn recall, and not a stable TypeScript/Python SDK. The recall

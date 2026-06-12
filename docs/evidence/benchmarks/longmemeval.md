@@ -279,6 +279,7 @@ failures.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-12T10:10:57Z` | `longmemeval-v1-small` | retrieval-only + semantic line-reranker warm query/cache replay | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 240.30s | `semantic_warm_query_cache_path_replay_report`; #1305 warm cache |
 | `2026-06-12T05:56:12Z` | `longmemeval-v1-small` | retrieval-only + structural line-reranker failure report | 500 | 95.80% | 85.18% | 86.85% | 94.36% | 716.64s | `retrieval_sufficient`; #1193 failure report |
 | `2026-06-12T00:59:47Z` | `longmemeval-v1-small` | fixed-reader provider answer cleanup | 25 | 100.00% | 92.00% | - | 100.00% | 142.53s | `answer_scored`; expansion `no_go` |
 | `2026-06-11T22:24:24Z` | `longmemeval-v1-small` | fixed-reader provider answer baseline | 25 | 100.00% | 92.00% | - | 100.00% | 192.69s | `answer_scored` |
@@ -300,6 +301,8 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 100 --top-k 10 --line-reranker structural --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-structural-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-structural-500.json
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --output docs\evidence\benchmarks\longmemeval-exact-line-repair-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json
+python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json --output docs\evidence\benchmarks\longmemeval-semantic-cache-path-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.json --json
 ```
@@ -437,11 +440,51 @@ Structural exact-line repair failure report for #1193:
   `225170` tokens, and projects to about `4503400` tokens and `59.64`
   single-worker minutes for 500 questions. Warm query cache and source-side
   semantic cache are documented as distinct paths, but their latency/build cost
-  are not yet measured.
+  were not yet measured in the #1193 artifact. The #1305 follow-up below now
+  measures the warm query/candidate replay path separately; source-side
+  semantic warming remains unmeasured.
 - Decision: close #1193 as a deterministic failure report and cache-path
   boundary. Do not make cold online semantic rerank a default hook path, and do
   not spend more effort on untuned structural heuristics before testing
   source-side semantic warming or an explicitly budgeted 500Q semantic arm.
+
+Warm query/candidate cache replay for #1305:
+
+- Summary:
+  [`longmemeval-semantic-cache-path-2026-06-12.md`](longmemeval-semantic-cache-path-2026-06-12.md).
+- Sanitized JSON:
+  [`longmemeval-semantic-cache-path-2026-06-12.json`](longmemeval-semantic-cache-path-2026-06-12.json).
+- Run date: `2026-06-12T10:10:57Z`.
+- The fresh 25Q semantic pilot now emits `line_reranker_candidate_pack_sha1`,
+  a hash of candidate line/routing metadata plus source-text hashes. The hash
+  is used as the candidate-window cache-key input without committing raw
+  candidate text, questions, answers, source text, provider responses,
+  credentials, or local paths.
+- Warm query/candidate replay status:
+  `measured_sanitized_warm_query_cache_replay`.
+- Complete cache keys: `24/24` available cold-fill calls. The key fields are
+  query hash, candidate window/span hash, reranker prompt version,
+  model/provider id, source or dataset fingerprint, and policy version.
+- Cold-fill provider path: `24` available calls, average `6308.67ms`, max
+  `21006.74ms`, `223947` tokens. Provider prefix-cache hit rate was `0.0000`
+  in this rerun, so the product query/cache path is measured separately from
+  provider prefix-cache behavior.
+- Warm replay: `24/24` hits, hit rate `1.0000`; average local lookup latency
+  `0.000079ms`; two-pass hit rate `0.5000` because the first pass fills and the
+  second pass hits.
+- Exact-line metrics on the 25Q pilot: first-stage evidence-line R@10
+  `23/25 = 0.9200`, semantic-only evidence-line R@10 `24/25 = 0.9600`,
+  fused reranked evidence-line R@1 `23/25 = 0.9200`, fused reranked
+  evidence-line R@3/R@5/R@10 `25/25 = 1.0000`, MRR `0.9600`, and
+  top-10 regression count `0`.
+- Miss-family breakdown: `context_visible_exact_line_miss` `2/2` recovered;
+  those same two cases are also the same-session wrong-line focus cases in this
+  narrow pilot. `exact_line_found_top_k` stayed `22/22`, and
+  `multi_evidence_partial_hit` stayed `1/1`.
+- Boundary: this completes the warm query/candidate cache measurement slice for
+  #1305, not the 500Q semantic-quality slice and not source-side semantic
+  warming. Cold online semantic rerank remains explicit opt-in and is still not
+  a default hook path.
 
 Optional semantic LLM line-reranker pilot for #1092:
 

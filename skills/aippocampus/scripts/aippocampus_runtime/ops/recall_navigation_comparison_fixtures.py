@@ -118,12 +118,30 @@ def _write_fixture(clean_source_dir: Path) -> None:
                 "should reopen source before a claim."
             ),
         ),
+        {
+            **_message(
+                message_id="msg_ar_little_hippocampus_final",
+                turn_id="turn_ar_little_hippocampus",
+                source_id="src_ar_little_hippocampus",
+                line=23,
+                ordinal=6,
+                turn_index=5,
+                text=(
+                    "AIppocampus little hippocampus public fixture: "
+                    "السياق السابق عن الحُصين الصغير says the design has no "
+                    "architecture fatal blocker; the blocker is release usefulness "
+                    "around foreground action and source-claim contract."
+                ),
+            ),
+            "scope_labels": ["technical_work"],
+        },
     ]
     turns = [
         _turn("turn_magic", 1, ["msg_magic_user", "msg_magic_final"]),
         _turn("turn_stale", 2, ["msg_stale_final"]),
         _turn("turn_zh", 3, ["msg_zh_final"]),
         _turn("turn_ru", 4, ["msg_ru_final"]),
+        _turn("turn_ar_little_hippocampus", 5, ["msg_ar_little_hippocampus_final"]),
     ]
     _write_jsonl(clean_source_dir / "messages.jsonl", messages)
     _write_jsonl(clean_source_dir / "turns.jsonl", turns)
@@ -540,6 +558,24 @@ def fixture_cases() -> list[dict[str, Any]]:
             "expected_behavior": (
                 "Progressive recall should expose a source route for a transliterated "
                 "Russian cue, while hook-only remains non-evidence."
+            ),
+        },
+        {
+            "case_id": "ar_little_hippocampus_light_continuity_cue",
+            "case_family": "fresh_thread_multilingual_vague_cue",
+            "expected_source_id": "src_ar_little_hippocampus",
+            "expected_route_family": "aippocampus_little_hippocampus",
+            "known_alias_language": "ar",
+            "intent": "بالاعتماد على السياق السابق عن الحُصين الصغير، هل في تصميمه عائق قاتل؟",
+            "direct_search_queries": [
+                "الحُصين الصغير عائق قاتل",
+                "AIppocampus little hippocampus foreground action source claim contract",
+            ],
+            "hook_card": {"support_level": "scent", "token_proxy": 9},
+            "expected_behavior": (
+                "Attention-router navigation should select the AIppocampus/little-"
+                "hippocampus route family before broad manual search, while source "
+                "reopen remains required before answering."
             ),
         },
     ]

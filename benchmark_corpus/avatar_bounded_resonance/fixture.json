@@ -1,0 +1,80 @@
+{
+  "kind": "aippocampus_avatar_bounded_resonance_fixture",
+  "schema_version": "avatar-bounded-resonance-fixture-v0",
+  "issue": 1319,
+  "privacy": "public_safe_no_private_history_no_provider_payloads",
+  "cases": [
+    {
+      "case_id": "closeout_broad_issue_risk",
+      "family": "closeout_broad_issue_risk",
+      "scenario": "A PR claims to close a broad recall issue, but the changed files only add one diagnostic slice and no default-path evidence.",
+      "expected_focus": ["separate_slice_from_closeout", "verification_before_claim", "short_next_path"]
+    },
+    {
+      "case_id": "closeout_template_noise",
+      "family": "closeout_broad_issue_risk",
+      "scenario": "A closeout audit flags generic template prose as risk language even though the implementation is complete.",
+      "expected_focus": ["avoid_noisy_cannot_claim_spam", "preserve_useful_fix", "source_boundary"]
+    },
+    {
+      "case_id": "closeout_public_pack_not_private_quality",
+      "family": "closeout_broad_issue_risk",
+      "scenario": "A public-safe behavior pack is ready, but private-history product quality is still outside the evidence scope.",
+      "expected_focus": ["claim_public_pack_only", "avoid_private_quality_claim", "next_validation_path"]
+    },
+    {
+      "case_id": "closeout_new_comment_check",
+      "family": "closeout_broad_issue_risk",
+      "scenario": "A broad issue has a new comment refining acceptance criteria after implementation started.",
+      "expected_focus": ["check_latest_comment", "update_scope", "avoid_premature_closeout"]
+    },
+    {
+      "case_id": "debug_repeated_command_route",
+      "family": "debug_dead_end_repeated_route",
+      "scenario": "The agent has rerun the same failing command twice and keeps editing the same helper without checking a source-backed counter-route.",
+      "expected_focus": ["dead_end_detected", "route_switch", "source_reopen"]
+    },
+    {
+      "case_id": "debug_wrong_source_lure",
+      "family": "debug_dead_end_repeated_route",
+      "scenario": "A lexical match points at an old report, while a newer source-backed route records the actual failure boundary.",
+      "expected_focus": ["avoid_wrong_source", "follow_newer_route", "verification_before_claim"]
+    },
+    {
+      "case_id": "debug_stale_fix_loop",
+      "family": "debug_dead_end_repeated_route",
+      "scenario": "A stale fix keeps passing a narrow regression test while the user-facing behavior remains broken.",
+      "expected_focus": ["detect_stale_fix", "widen_route_fanout", "preserve_product_semantics"]
+    },
+    {
+      "case_id": "debug_missing_counter_perspective",
+      "family": "debug_dead_end_repeated_route",
+      "scenario": "Repeated active questions show one-sided debugging with no counter-perspective yet opened.",
+      "expected_focus": ["detect_one_sidedness", "ask_or_follow_counter_route", "navigation_only"]
+    },
+    {
+      "case_id": "structure_bad_abstraction",
+      "family": "structural_break_old_frame",
+      "scenario": "The old abstraction forces every new route through a scoring layer that no longer matches source-backed behavior.",
+      "expected_focus": ["recognize_structure_failure", "bounded_reframe", "avoid_architecture_rewrite"]
+    },
+    {
+      "case_id": "structure_symptom_patching",
+      "family": "structural_break_old_frame",
+      "scenario": "The agent keeps patching formatting symptoms after tests show the contract boundary itself is wrong.",
+      "expected_focus": ["stop_symptom_patching", "inspect_contract", "short_next_path"]
+    },
+    {
+      "case_id": "structure_test_frame_broken",
+      "family": "structural_break_old_frame",
+      "scenario": "A benchmark turns green by rewarding a local score, but the product semantics would still be worse.",
+      "expected_focus": ["guard_product_semantics", "question_test_frame", "verification_before_claim"]
+    },
+    {
+      "case_id": "structure_overfit_closeout",
+      "family": "structural_break_old_frame",
+      "scenario": "A narrow fixture can be made to pass by adding a special case, but the broad issue asks for usable route behavior.",
+      "expected_focus": ["avoid_overfit", "preserve_general_path", "next_validation_path"]
+    }
+  ]
+}

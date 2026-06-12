@@ -70,6 +70,8 @@ def mcp_command_from_config(plugin_dir: Path) -> list[str]:
     args = [str(arg) for arg in server.get("args") or []]
     if not command or not args:
         raise ValueError("plugin MCP config must declare command and args")
+    if command == "aippocampus" and shutil.which(command) is None:
+        return [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args]
     executable = sys.executable if command in {"python", "python3"} else command
     return [executable, *args]
 

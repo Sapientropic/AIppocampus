@@ -172,11 +172,11 @@ python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json
 ```
 
 This #279/#1154 contract scores hash/count-only annotated behavior-code cases.
-The checked-in pack is the primary public path: 20 public-safe synthetic cases
+The checked-in pack is the primary public path: 50 public-safe synthetic cases
 with `annotation_status` and `source_family` coverage, no-remember negatives,
 scope-limited constraints, and summary-overhang traps. Private/local annotation
 summaries remain optional diagnostics, not the public gate. The report keeps
-`quality_gate_ok=false`: this is not representative 50-case E2E50 quality,
+`quality_gate_ok=false`: this is not representative or live 50-case E2E50 quality,
 private real-history behavior lift, or live host evidence.
 
 Run the public-safe multimodal corpus-style retrieval contract:

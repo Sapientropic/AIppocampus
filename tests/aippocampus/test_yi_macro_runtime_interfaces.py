@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import audit  # noqa: E402
+from aippocampus_runtime.macro import audit, hexagram, transform_orbit  # noqa: E402
 
 
 class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
@@ -32,6 +32,8 @@ class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
                 "xiao_xi_momentum",
                 "internal_line_topology",
                 "proper_or_improper_position",
+                "najia_active_axis_timing",
+                "guaqi_source_epoch_cadence",
             }.issubset(primitive_ids)
         )
 
@@ -81,6 +83,56 @@ class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
             topology_sheaf["consumer_contract"]["global_glue_boundary"],
             "source_reopen_required_before_claim",
         )
+
+    def test_transform_orbit_reports_reversible_relation_without_authority_upgrade(self) -> None:
+        inventory = transform_orbit.reversible_orbit_inventory()
+
+        self.assertEqual(inventory["operation_set"], "cr_reversible")
+        self.assertEqual(inventory["orbit_count"], 20)
+        self.assertEqual(inventory["size_distribution"], {2: 8, 4: 12})
+        self.assertEqual(transform_orbit.apply_operation("乾", "opposite").name, "坤")
+        self.assertEqual(transform_orbit.apply_operation("既济", "reverse").name, "未济")
+
+        packet = transform_orbit.macro_transform_orbit_diagnostic("既济", "未济")
+        self.assertEqual(packet["relation"], "same_reversible_orbit")
+        self.assertEqual(packet["authority_level"], "navigation_only")
+        self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
+        self.assertFalse(packet["fact_claim_allowed"])
+        self.assertFalse(packet["foreground_emitted"])
+
+    def test_transform_orbit_keeps_line_flips_and_nuclear_out_of_reversible_orbit(self) -> None:
+        qian = hexagram.hexagram_by_name("乾")
+        neighbor = transform_orbit.line_flip_neighbors(qian)[0]
+
+        self.assertEqual(transform_orbit.relation_label(qian, neighbor), "adjacent_flip")
+        self.assertEqual(transform_orbit.relation_label("乾", "坎"), "different_route_family")
+        self.assertNotIn("nuclear", transform_orbit.REVERSIBLE_OPERATION_SETS["cr_reversible"])
+
+        nuclear_counterexamples = [
+            item
+            for item in hexagram.HEXAGRAMS
+            if item.nuclear.name
+            not in {member["name"] for member in transform_orbit.reversible_orbit_members(item)}
+        ]
+        self.assertTrue(nuclear_counterexamples)
+        nuclear_report = transform_orbit.nuclear_basin_inventory()
+        self.assertEqual(nuclear_report["basin_count"], 4)
+        self.assertEqual(nuclear_report["basin_size_distribution"], {16: 4})
+
+    def test_timing_primitives_are_report_only_and_do_not_replace_currentness_or_temporal_heads(self) -> None:
+        rows = {row["primitive_id"]: row for row in audit.primitive_role_table()}
+        active_axis = rows["najia_active_axis_timing"]
+        cadence = rows["guaqi_source_epoch_cadence"]
+
+        self.assertIn("recheck_timing", active_axis["roles"])
+        self.assertIn("research_only", active_axis["roles"])
+        self.assertIn("recheck_timing", cadence["roles"])
+        self.assertFalse(active_axis["foreground_emitted"])
+        self.assertFalse(cadence["foreground_emitted"])
+        self.assertFalse(active_axis["fact_claim_allowed"])
+        self.assertFalse(cadence["fact_claim_allowed"])
+        self.assertIn("currentness_head_replacement", active_axis["non_goals"])
+        self.assertIn("literal_calendar_or_solar_term_system", cadence["non_goals"])
 
 
 if __name__ == "__main__":

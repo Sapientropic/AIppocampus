@@ -1,0 +1,80 @@
+{
+  "kind": "aippocampus_avatar_bounded_resonance_pilot_summary",
+  "schema_version": "avatar-bounded-resonance-pilot-summary-v0",
+  "run_date": "2026-06-12",
+  "issue": 1319,
+  "claim_level": "exploratory_public_safe_deterministic_proxy",
+  "execution": {
+    "mode": "deterministic_scripted_proxy_v0",
+    "live_model_calls": 0,
+    "provider_payload_stored": false
+  },
+  "coverage": {
+    "case_count": 12,
+    "arm_count": 5,
+    "case_arm_count": 60,
+    "family_counts": {
+      "closeout_broad_issue_risk": 4,
+      "debug_dead_end_repeated_route": 4,
+      "structural_break_old_frame": 4
+    }
+  },
+  "arms": {
+    "A_explicit_instruction": {
+      "average_helpfulness_score": 4.5,
+      "completion_success_rate": 1.0,
+      "manual_search_count": 8,
+      "off_topic_archetype_expansion_count": 0
+    },
+    "B_neutral_posture": {
+      "average_helpfulness_score": 1.083333,
+      "completion_success_rate": 0.0,
+      "manual_search_count": 12,
+      "off_topic_archetype_expansion_count": 0
+    },
+    "C_archetype_alias_only": {
+      "average_helpfulness_score": -1.833333,
+      "completion_success_rate": 0.0,
+      "manual_search_count": 24,
+      "off_topic_archetype_expansion_count": 12
+    },
+    "D_bounded_resonance": {
+      "average_helpfulness_score": 5.666667,
+      "completion_success_rate": 1.0,
+      "manual_search_count": 0,
+      "off_topic_archetype_expansion_count": 0
+    },
+    "E_random_symbolic_control": {
+      "average_helpfulness_score": 0.75,
+      "completion_success_rate": 0.0,
+      "manual_search_count": 12,
+      "off_topic_archetype_expansion_count": 0
+    }
+  },
+  "metrics": {
+    "best_proxy_arm": "D_bounded_resonance",
+    "bounded_resonance_beats_explicit_instruction_proxy": true,
+    "bounded_resonance_beats_neutral_posture_proxy": true,
+    "alias_only_drifts_more_than_bounded_resonance": true
+  },
+  "red_lines": {
+    "bounded_resonance_off_topic_archetype_expansion_count": 0,
+    "bounded_resonance_archetype_used_as_authority_count": 0,
+    "factual_claim_from_resonance_count": 0,
+    "private_or_sensitive_context_used_count": 0
+  },
+  "recommendation": {
+    "default_runtime_recommended": false,
+    "next_step": "model_backed_public_safe_repeat_before_any_foreground_runtime",
+    "standalone_alias_policy": "do_not_foreground_aliases_without_neutral_posture_and_gloss"
+  },
+  "cannot_claim": [
+    "bounded_resonance_improves_production_agent_behavior",
+    "live_llm_or_host_behavior_lift",
+    "default_foreground_avatar_runtime_readiness",
+    "private_history_avatar_quality",
+    "archetype_or_resonance_as_authority",
+    "source_truth_from_posture_or_resonance",
+    "broad_avatar_persona_quality"
+  ]
+}

@@ -70,6 +70,47 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["findings"][0]["kind"], "risky_closeout_missing_followup")
 
+    def test_empty_template_followup_heading_cannot_borrow_closing_ref(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds a useful failure report, but this is diagnostic-only and not default.
+
+            Closes #1193.
+
+            Closeout class:
+
+            - [ ] `complete` - acceptance criteria are satisfied.
+            - [ ] `complete_with_followups` - any remaining gaps are linked below.
+            - [ ] `blocker_recorded` - useful blocker evidence landed; do not use a
+                  closing keyword unless a follow-up issue owns the remaining work.
+            - [ ] `narrow_slice_only` - use relates-to wording, not `Closes #...`.
+
+            Remaining gap / follow-up issue:
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertFalse(report["has_followup_pointer"], report)
+        self.assertEqual(report["findings"][0]["kind"], "risky_closeout_missing_followup")
+
+    def test_checked_source_boundary_cannot_claim_text_is_not_closeout_risk(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Fixes a straightforward bug.
+
+            Closes #1304.
+
+            ## Source And Privacy Boundary
+
+            - [x] Any public benchmark or readiness claim states what it cannot claim.
+            """
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["risk_terms"], [])
+
     def test_complete_with_followups_accepts_remaining_gap_issue(self) -> None:
         report = closeout_audit.audit_pr_body(
             """

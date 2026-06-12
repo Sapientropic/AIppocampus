@@ -28,6 +28,7 @@ from aippocampus_runtime.core import now_utc
 SCHEMA_VERSION = 1
 DEFAULT_FULL_RUN_QUESTIONS = 500
 RERANK_LADDER_KS = (1, 3, 5, 10, 20, 50)
+SEMANTIC_QUERY_CACHE_POLICY_VERSION = "longmemeval-semantic-query-cache-replay-v1"
 SEMANTIC_CACHE_KEY_FIELDS = [
     "query_hash",
     "candidate_window_or_span_hashes",
@@ -402,15 +403,253 @@ def _semantic_help_families(
     return dict(sorted(counts.items()))
 
 
+def _hash_json(value: Any, *, length: int = 16) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:length]
+
+
+def _latency_summary(values: Sequence[float]) -> dict[str, Any]:
+    if not values:
+        return {"count": 0}
+    return {
+        "count": len(values),
+        "avg_ms": round(sum(values) / len(values), 6),
+        "max_ms": round(max(values), 6),
+    }
+
+
+def _report_fingerprint(report: Mapping[str, Any]) -> str:
+    benchmark = report.get("benchmark") or {}
+    return _hash_json(
+        {
+            "name": benchmark.get("name"),
+            "split": benchmark.get("split"),
+            "dataset_version": benchmark.get("dataset_version"),
+        }
+    )
+
+
+def _row_reranker_metadata(
+    row: Mapping[str, Any],
+    fallback: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    metadata = row.get("line_reranker_metadata")
+    return metadata if isinstance(metadata, Mapping) and metadata else fallback
+
+
+def _semantic_query_cache_key(
+    row: Mapping[str, Any],
+    *,
+    fallback_metadata: Mapping[str, Any],
+    report_fingerprint: str,
+) -> tuple[str, bool]:
+    metadata = _row_reranker_metadata(row, fallback_metadata)
+    candidate_pack_hash = str(row.get("line_reranker_candidate_pack_sha1") or "")
+    key_material = {
+        "query_hash": str(row.get("query_sha1") or row.get("question_id_sha1") or ""),
+        "candidate_window_or_span_hashes": [candidate_pack_hash]
+        if candidate_pack_hash
+        else [],
+        "reranker_prompt_version": str(metadata.get("prompt_version") or ""),
+        "model_provider_id": ":".join(
+            [
+                str(metadata.get("provider") or "unknown"),
+                str(metadata.get("model") or "unknown"),
+            ]
+        ),
+        "source_or_dataset_fingerprint": str(
+            row.get("source_id_sha1") or report_fingerprint
+        ),
+        "policy_version": SEMANTIC_QUERY_CACHE_POLICY_VERSION,
+    }
+    complete = all(
+        [
+            key_material["query_hash"],
+            key_material["candidate_window_or_span_hashes"],
+            key_material["reranker_prompt_version"],
+            key_material["model_provider_id"] != "unknown:unknown",
+            key_material["source_or_dataset_fingerprint"],
+            key_material["policy_version"],
+        ]
+    )
+    return _hash_json(key_material), complete
+
+
+def _semantic_cache_replay_value(row: Mapping[str, Any], *, top_k: int) -> dict[str, Any]:
+    return {
+        "result_sha1": _hash_json(
+            {
+                "semantic_only_evidence_rank": row.get("semantic_only_evidence_rank"),
+                "reranked_evidence_rank": row.get("reranked_evidence_rank"),
+                f"reranked_evidence_hit_top{top_k}": row.get(
+                    f"reranked_evidence_hit_top{top_k}"
+                ),
+                "line_reranker_confidence": row.get("line_reranker_confidence"),
+            }
+        ),
+        "raw_ranked_lines_emitted": False,
+    }
+
+
+def _warm_query_cache_contract() -> dict[str, Any]:
+    return {
+        "status": "contract_defined_not_measured",
+        "cache_key_fields": SEMANTIC_CACHE_KEY_FIELDS,
+        "boundary": (
+            "valid only as warm query/candidate cache; do not report as cold online latency"
+        ),
+    }
+
+
+def _semantic_warm_query_cache_replay(
+    semantic_pilot_report: Mapping[str, Any] | None,
+    *,
+    top_k: int,
+) -> dict[str, Any]:
+    if not semantic_pilot_report:
+        return _warm_query_cache_contract()
+
+    cases = [
+        row
+        for row in _as_cases(semantic_pilot_report)
+        if row.get("has_line_evidence", True)
+    ]
+    available_cases = [row for row in cases if row.get("line_reranker_available")]
+    fallback_metadata = _metadata(semantic_pilot_report)
+    report_fingerprint = _report_fingerprint(semantic_pilot_report)
+    cold_metrics = semantic_pilot_report.get("metrics") or {}
+    cold_latency = cold_metrics.get("line_reranker_latency_ms") or {}
+    cold_usage = cold_metrics.get("line_reranker_usage") or {}
+
+    key_complete_count = 0
+    candidate_pack_hash_count = 0
+    first_pass_miss_count = 0
+    cache: dict[str, dict[str, Any]] = {}
+    replay_keys: list[str] = []
+    fill_lookup_durations: list[float] = []
+    for row in available_cases:
+        if row.get("line_reranker_candidate_pack_sha1"):
+            candidate_pack_hash_count += 1
+        key, complete = _semantic_query_cache_key(
+            row,
+            fallback_metadata=fallback_metadata,
+            report_fingerprint=report_fingerprint,
+        )
+        if not complete:
+            continue
+        key_complete_count += 1
+        started = time.perf_counter()
+        if key not in cache:
+            first_pass_miss_count += 1
+            cache[key] = _semantic_cache_replay_value(row, top_k=top_k)
+        replay_keys.append(key)
+        fill_lookup_durations.append((time.perf_counter() - started) * 1000)
+
+    warm_hit_count = 0
+    warm_lookup_durations: list[float] = []
+    for key in replay_keys:
+        started = time.perf_counter()
+        cached = cache.get(key)
+        warm_lookup_durations.append((time.perf_counter() - started) * 1000)
+        if cached:
+            warm_hit_count += 1
+
+    status = (
+        "measured_sanitized_warm_query_cache_replay"
+        if key_complete_count
+        else "pilot_missing_candidate_pack_hash"
+    )
+    return {
+        "status": status,
+        "cache_key_fields": SEMANTIC_CACHE_KEY_FIELDS,
+        "cache_policy_version": SEMANTIC_QUERY_CACHE_POLICY_VERSION,
+        "case_count": len(cases),
+        "available_case_count": len(available_cases),
+        "cache_key_complete_count": key_complete_count,
+        "cache_key_complete_rate": _rate(key_complete_count, len(available_cases))[
+            "rate"
+        ],
+        "cold_fill_miss_count": first_pass_miss_count,
+        "warm_replay_hit_count": warm_hit_count,
+        "warm_replay_hit_rate": _rate(warm_hit_count, len(replay_keys))["rate"],
+        "two_pass_hit_rate": _rate(
+            warm_hit_count,
+            first_pass_miss_count + warm_hit_count,
+        )["rate"],
+        "warm_lookup_latency_ms": _latency_summary(warm_lookup_durations),
+        "cache_fill_lookup_latency_ms": _latency_summary(fill_lookup_durations),
+        "cold_fill_latency_ms": {
+            "count": cold_latency.get("count"),
+            "avg_ms": cold_latency.get("avg"),
+            "max_ms": cold_latency.get("max"),
+        },
+        "cold_fill_tokens": {
+            "total_tokens": cold_usage.get("total_tokens"),
+            "prompt_cache_hit_tokens": cold_usage.get("prompt_cache_hit_tokens"),
+            "prompt_cache_miss_tokens": cold_usage.get("prompt_cache_miss_tokens"),
+        },
+        "candidate_hash_boundary": {
+            "candidate_pack_sha1_required_for_product_cache": True,
+            "candidate_pack_hash_present_count": candidate_pack_hash_count,
+            "candidate_pack_hash_present_rate": _rate(
+                candidate_pack_hash_count,
+                len(available_cases),
+            )["rate"],
+            "raw_candidate_text_emitted": False,
+            "cache_key_samples_emitted": False,
+            "cache_values_emitted": False,
+        },
+        "exact_line_metrics": {
+            "reranked_evidence_recall_by_k": _recall_by_k(
+                cases,
+                "reranked_evidence_rank",
+            ),
+            "reranked_evidence_mrr": _mrr(cases, "reranked_evidence_rank"),
+            "semantic_only_evidence_recall_by_k": _recall_by_k(
+                cases,
+                "semantic_only_evidence_rank",
+            ),
+            "semantic_only_evidence_mrr": _mrr(cases, "semantic_only_evidence_rank"),
+            "rerank_regression_count_top_k": _regression_count(cases, top_k=top_k),
+        },
+        "case_type_breakdown": _case_type_metrics(cases),
+        "per_miss_taxonomy": _miss_taxonomy_metrics(cases, top_k=top_k),
+        "invalidation": {
+            "status": "static_replay_no_source_mutation_observed"
+            if key_complete_count
+            else "not_measured",
+            "count": 0 if key_complete_count else None,
+            "required_invalidation_inputs": [
+                "source_fingerprint",
+                "candidate_pack_sha1",
+                "prompt_version",
+                "model_provider_id",
+                "policy_version",
+            ],
+        },
+        "default_hook_path": False,
+        "boundary": (
+            "This measures an identical-query local cache replay over sanitized "
+            "semantic pilot rows. It separates warm lookup mechanics from cold "
+            "provider latency, but it is not a 500Q semantic-quality run."
+        ),
+    }
+
+
 def _semantic_cache_path_evaluation(
     report: Mapping[str, Any],
     *,
     semantic_pilot_report: Mapping[str, Any] | None = None,
+    top_k: int = 10,
 ) -> dict[str, Any]:
     pilot_metrics = (semantic_pilot_report or {}).get("metrics") or {}
     cold_latency = pilot_metrics.get("line_reranker_latency_ms") or {}
     cold_usage = pilot_metrics.get("line_reranker_usage") or {}
     cold_cache = pilot_metrics.get("line_reranker_cache") or {}
+    warm_query_cache = _semantic_warm_query_cache_replay(
+        semantic_pilot_report,
+        top_k=top_k,
+    )
     return {
         "cold_online_semantic_latency": {
             "status": "measured_pilot" if cold_latency else "not_run_in_this_report",
@@ -420,13 +659,7 @@ def _semantic_cache_path_evaluation(
             "total_tokens": cold_usage.get("total_tokens"),
             "boundary": "external provider call at query time; explicit opt-in only",
         },
-        "warm_query_cache_latency": {
-            "status": "contract_defined_not_measured",
-            "cache_key_fields": SEMANTIC_CACHE_KEY_FIELDS,
-            "boundary": (
-                "valid only as warm query/candidate cache; do not report as cold online latency"
-            ),
-        },
+        "warm_query_cache_latency": warm_query_cache,
         "source_side_cache_hot_path_latency": {
             "status": "not_measured_for_semantic_cache",
             "deterministic_report_elapsed_ms": report.get("elapsed_ms"),
@@ -542,6 +775,11 @@ def analyze_rerank_report(
         if baseline_report and baseline_report_path
         else None
     )
+    semantic_cache_path_evaluation = _semantic_cache_path_evaluation(
+        report,
+        semantic_pilot_report=semantic_pilot_report,
+        top_k=top_k,
+    )
     status = "pilot_analyzed_full_run_not_default"
     source_issue = "https://github.com/Sapientropic/AIppocampus/issues/1092"
     if baseline_comparison:
@@ -551,6 +789,13 @@ def analyze_rerank_report(
             if baseline_comparison["decision"] == "improved_over_baseline"
             else "full_split_exact_line_repair_failure_report"
         )
+    if (
+        baseline_comparison
+        and semantic_cache_path_evaluation["warm_query_cache_latency"]["status"]
+        == "measured_sanitized_warm_query_cache_replay"
+    ):
+        source_issue = "https://github.com/Sapientropic/AIppocampus/issues/1305"
+        status = "semantic_warm_query_cache_path_replay_report"
     projection_metrics = (
         (semantic_pilot_report or {}).get("metrics") if semantic_pilot_report else metrics
     ) or {}
@@ -577,6 +822,13 @@ def analyze_rerank_report(
         "kind": "aippocampus_longmemeval_rerank_analysis",
         "generated_at": now_utc(),
         "source_issue": source_issue,
+        "related_issues": sorted(
+            {
+                "https://github.com/Sapientropic/AIppocampus/issues/1092",
+                "https://github.com/Sapientropic/AIppocampus/issues/1193",
+                source_issue,
+            }
+        ),
         "source_report": {
             "kind": report.get("kind"),
             "status": report.get("status"),
@@ -584,6 +836,21 @@ def analyze_rerank_report(
             "input_report_sha1": _file_sha1(report_path),
             "local_path_emitted": False,
         },
+        "semantic_pilot_report": (
+            {
+                "kind": semantic_pilot_report.get("kind"),
+                "status": semantic_pilot_report.get("status"),
+                "generated_at": semantic_pilot_report.get("generated_at"),
+                "input_report_sha1": _file_sha1(semantic_pilot_report_path),
+                "question_count": int(
+                    ((semantic_pilot_report.get("metrics") or {}).get("question_count"))
+                    or len(_as_cases(semantic_pilot_report))
+                ),
+                "local_path_emitted": False,
+            }
+            if semantic_pilot_report and semantic_pilot_report_path
+            else None
+        ),
         "status": status,
         "ok": bool(report.get("ok", True)),
         "benchmark": {
@@ -639,10 +906,7 @@ def analyze_rerank_report(
             "reranked_reported_hit_top_k": int(metrics.get(reranked_top_k) or 0),
         },
         "baseline_comparison": baseline_comparison,
-        "semantic_cache_path_evaluation": _semantic_cache_path_evaluation(
-            report,
-            semantic_pilot_report=semantic_pilot_report,
-        ),
+        "semantic_cache_path_evaluation": semantic_cache_path_evaluation,
         "full_500_projection": _project_full_run(
             metrics=projection_metrics,
             pilot_question_count=projection_question_count,
@@ -669,8 +933,14 @@ def analyze_rerank_report(
                 "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split "
                 "longmemeval-v1-small --download --questions 25 --min-questions 25 "
                 "--top-k 10 --line-reranker semantic --line-reranker-workers 1 "
-                "--line-reranker-timeout 30 --progress-every 5 --output "
-                "benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25.json"
+                "--line-reranker-timeout 30 --progress-every 5 "
+                "--max-provider-calls 25 --max-provider-total-tokens 300000 "
+                "--provider-cost-unknown --provider-budget-checkpoint "
+                "benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.budget.json "
+                "--partial-output "
+                "benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.partial.json "
+                "--output "
+                "benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.json"
             ),
             "full_500_explicit_opt_in": (
                 "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split "
@@ -686,7 +956,7 @@ def analyze_rerank_report(
                 "--baseline-report "
                 "benchmark_corpus\\reports\\longmemeval-v1-small-lexical-500.json "
                 "--semantic-pilot-report "
-                "benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25.json "
+                "benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.json "
                 "--json"
             ),
         },
@@ -713,6 +983,8 @@ def analyze_rerank_report(
                 "sota_or_external_baseline_superiority",
                 "provider_independent_quality",
                 "broad_reranker_safety",
+                "warm_cache_replay_as_500q_semantic_quality",
+                "warm_cache_replay_as_live_hook_latency",
             }
         ),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),

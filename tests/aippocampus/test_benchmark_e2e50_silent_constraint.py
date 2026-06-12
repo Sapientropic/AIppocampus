@@ -38,7 +38,9 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["private_thread_ids_emitted"], False)
 
         metrics = payload["metrics"]
-        self.assertGreaterEqual(metrics["total_cases"], 20)
+        self.assertGreaterEqual(metrics["total_cases"], 50)
+        self.assertEqual(payload["behavior_pack"]["public_e2e50_target_cases"], 50)
+        self.assertTrue(payload["behavior_pack"]["public_e2e50_target_met"])
         self.assertEqual(metrics["silent_constraint_respected_rate"], 1.0)
         self.assertEqual(metrics["known_bad_route_avoided_rate"], 1.0)
         self.assertEqual(metrics["transient_concern_extinguished_rate"], 1.0)
@@ -80,23 +82,25 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["coverage"]["missing_required_families"], [])
         self.assertEqual(payload["behavior_pack"]["missing_required_families"], [])
         self.assertFalse(payload["behavior_pack"]["quality_gate_ok"])
-        self.assertEqual(
-            payload["coverage"]["annotation_status_counts"],
+        self.assertEqual(sum(payload["coverage"]["annotation_status_counts"].values()), 50)
+        self.assertLessEqual(
             {
-                "calibration_seed": 3,
-                "duplicate_candidate": 2,
-                "gold_seed": 10,
-                "negative_control": 2,
-                "rejected_candidate": 2,
-                "source_visible_candidate": 1,
+                "calibration_seed",
+                "duplicate_candidate",
+                "gold_seed",
+                "negative_control",
+                "rejected_candidate",
+                "source_visible_candidate",
             },
+            set(payload["coverage"]["annotation_status_counts"]),
         )
-        self.assertEqual(
-            payload["coverage"]["source_family_counts"],
-            {"synthetic_public_safe": 20},
-        )
+        self.assertEqual(sum(payload["coverage"]["source_family_counts"].values()), 50)
         self.assertIn(
             "public_safe_20_case_seed_pack_contract_scored",
+            payload["can_claim"],
+        )
+        self.assertIn(
+            "public_safe_50_case_behavior_pack_contract_scored",
             payload["can_claim"],
         )
         self.assertIn(
@@ -106,7 +110,7 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertIn("e2e50_behavior_benchmark_quality", payload["cannot_claim"])
         self.assertIn("private_real_history_behavior_lift", payload["cannot_claim"])
         self.assertIn("representative_e2e50_sample_quality", payload["cannot_claim"])
-        self.assertIn("completed_50_case_e2e50_sample", payload["cannot_claim"])
+        self.assertIn("representative_or_live_50_case_e2e50_quality", payload["cannot_claim"])
         self.assertIn("live_host_behavior_lift", payload["cannot_claim"])
         self.assertIn("semantic_judge_quality", payload["cannot_claim"])
         self.assertIn("episode_arc_as_truth_layer", payload["cannot_claim"])

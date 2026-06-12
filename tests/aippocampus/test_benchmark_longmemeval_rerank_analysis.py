@@ -75,41 +75,71 @@ def _fixture_report() -> dict[str, object]:
             {
                 "case_id": "case-a",
                 "case_type": "longmemeval_single-session-user",
+                "source_id_sha1": "source-a",
+                "query_sha1": "query-a",
                 "evidence_rank": 12,
                 "evidence_rank_bucket": "rank_11_20",
                 "evidence_hit_top10": False,
                 "evidence_context_rescue_top10": True,
                 "same_session_wrong_line_top10": True,
+                "line_reranker_available": True,
+                "line_reranker_candidate_count": 8,
+                "line_reranker_candidate_pack_sha1": "candidatepacka01",
+                "line_reranker_metadata": {
+                    "provider": "deepseek",
+                    "model": "deepseek-v4-flash",
+                    "prompt_version": "llm-window-to-line-rerank-v1",
+                },
+                "line_reranker_cache": {"available": True, "hit_tokens": 90, "miss_tokens": 10},
                 "reranked_evidence_rank": 1,
                 "reranked_evidence_hit_top10": True,
                 "semantic_bridge_lift_top10": True,
                 "line_reranker_error_kinds": [],
+                "evidence_miss_category": "context_visible_exact_line_miss",
             },
             {
                 "case_id": "case-b",
                 "case_type": "longmemeval_multi-session",
+                "source_id_sha1": "source-b",
+                "query_sha1": "query-b",
                 "evidence_rank": 1,
                 "evidence_rank_bucket": "rank_1",
                 "evidence_hit_top10": True,
                 "evidence_context_rescue_top10": False,
                 "same_session_wrong_line_top10": False,
+                "line_reranker_available": True,
+                "line_reranker_candidate_count": 7,
+                "line_reranker_candidate_pack_sha1": "candidatepackb01",
+                "line_reranker_metadata": {
+                    "provider": "deepseek",
+                    "model": "deepseek-v4-flash",
+                    "prompt_version": "llm-window-to-line-rerank-v1",
+                },
+                "line_reranker_cache": {"available": True, "hit_tokens": 0, "miss_tokens": 100},
                 "reranked_evidence_rank": 21,
                 "reranked_evidence_hit_top10": False,
                 "semantic_bridge_lift_top10": False,
                 "line_reranker_error_kinds": [],
+                "evidence_miss_category": "exact_line_found_top_k",
             },
             {
                 "case_id": "case-c",
                 "case_type": "longmemeval_multi-session",
+                "source_id_sha1": "source-c",
+                "query_sha1": "query-c",
                 "evidence_rank": None,
                 "evidence_rank_bucket": "not_retrieved",
                 "evidence_hit_top10": False,
                 "evidence_context_rescue_top10": False,
                 "same_session_wrong_line_top10": False,
+                "line_reranker_available": False,
+                "line_reranker_candidate_count": 4,
+                "line_reranker_candidate_pack_sha1": "candidatepackc01",
                 "reranked_evidence_rank": None,
                 "reranked_evidence_hit_top10": False,
                 "semantic_bridge_lift_top10": False,
                 "line_reranker_error_kinds": ["timeout"],
+                "evidence_miss_category": "source_window_not_recovered",
             },
         ],
         "privacy_boundary": {
@@ -306,6 +336,55 @@ class LongMemEvalRerankAnalysisTests(unittest.TestCase):
         self.assertIn("source_side_cache_build_cost", cache_paths)
         self.assertIn("semantic_cache_hit_rate", cache_paths)
         self.assertIn("semantic_cache_invalidation_count", cache_paths)
+
+    def test_semantic_pilot_replay_measures_warm_query_cache_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            current_path = Path(tmp) / "structural.json"
+            lexical_path = Path(tmp) / "lexical.json"
+            semantic_path = Path(tmp) / "semantic-pilot.json"
+            current_path.write_text(json.dumps(_structural_report()), encoding="utf-8")
+            lexical_path.write_text(
+                json.dumps(_lexical_baseline_report()),
+                encoding="utf-8",
+            )
+            semantic_path.write_text(json.dumps(_fixture_report()), encoding="utf-8")
+
+            payload = analysis.analyze_rerank_report(
+                current_path,
+                baseline_report_path=lexical_path,
+                semantic_pilot_report_path=semantic_path,
+                full_run_questions=3,
+            )
+
+        self.assertEqual(payload["source_issue"].split("/")[-1], "1305")
+        warm = payload["semantic_cache_path_evaluation"]["warm_query_cache_latency"]
+        self.assertEqual(warm["status"], "measured_sanitized_warm_query_cache_replay")
+        self.assertEqual(warm["cache_key_complete_count"], 2)
+        self.assertEqual(warm["warm_replay_hit_rate"], 1.0)
+        self.assertEqual(warm["cold_fill_miss_count"], 2)
+        self.assertEqual(warm["warm_lookup_latency_ms"]["count"], 2)
+        self.assertEqual(warm["cold_fill_latency_ms"]["avg_ms"], 1000.0)
+        self.assertEqual(warm["cold_fill_tokens"]["total_tokens"], 3000)
+        self.assertFalse(warm["default_hook_path"])
+        self.assertIn("candidate_window_or_span_hashes", warm["cache_key_fields"])
+        self.assertTrue(
+            warm["candidate_hash_boundary"]["candidate_pack_sha1_required_for_product_cache"]
+        )
+        self.assertIn("longmemeval_multi-session", warm["case_type_breakdown"])
+        self.assertIn("context_visible_exact_line_miss", warm["per_miss_taxonomy"])
+        self.assertEqual(
+            warm["exact_line_metrics"]["reranked_evidence_recall_by_k"]["r_at_10"][
+                "denominator"
+            ],
+            3,
+        )
+        self.assertEqual(
+            warm["invalidation"]["status"],
+            "static_replay_no_source_mutation_observed",
+        )
+        rendered = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(str(REPO_ROOT), rendered)
+        self.assertNotIn("candidatepacka01", rendered)
 
 
 if __name__ == "__main__":

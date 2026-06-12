@@ -24,6 +24,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_context_packet,
     recall_deepen_packet,
 )
+from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import agent_facade_contract as facade
 from aippocampus_runtime.recall import feedback_events, macro_live_recall
@@ -33,6 +34,10 @@ MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 KIND = "aippocampus_agent_continuity_path"
 MAX_ROUTES = 5
 MACRO_HANDLE_PREFIX = "macro:project:"
+DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
+    Path(".aippocampus") / "macro-orientation.jsonl",
+    Path(".aippocampus") / "macro_orientation.jsonl",
+)
 FOREGROUND_FORBIDDEN_KEYS = {
     "source_refs",
     "source_handles",
@@ -291,8 +296,10 @@ def _load_macro_projection(
     *,
     project: str,
     macro_state_path: str | Path | None,
+    cwd: str | Path | None = None,
 ) -> dict[str, Any]:
-    if macro_state_path is None:
+    state_path = _resolve_macro_state_path(macro_state_path, cwd=cwd)
+    if state_path is None:
         return {
             "kind": "macro_orientation_latest_projection",
             "project": project,
@@ -302,8 +309,28 @@ def _load_macro_projection(
             "authority_level": macro_state.AUTHORITY_LEVEL,
             "claim_permission": macro_state.CLAIM_PERMISSION,
         }
-    entries = macro_state.load_macro_orientation_states(Path(macro_state_path).resolve())
+    entries = macro_state.load_macro_orientation_states(state_path)
     return macro_state.latest_project_macro_orientation(entries, project=project)
+
+
+def _resolve_macro_state_path(
+    macro_state_path: str | Path | None,
+    *,
+    cwd: str | Path | None = None,
+) -> Path | None:
+    if macro_state_path is not None and str(macro_state_path) != "":
+        return Path(macro_state_path).resolve()
+    if cwd is None:
+        return None
+    root = core.canonical_path(cwd)
+    # Default recall may consume only project-local macro state. Do not broaden
+    # this into global registry or private rollout discovery without a separate
+    # privacy review: macro is a navigation prior, not ambient evidence.
+    for relative in DEFAULT_MACRO_STATE_RELATIVE_PATHS:
+        candidate = root / relative
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
 
 
 def _macro_state_from_projection(projection: Mapping[str, Any]) -> Mapping[str, Any] | None:
@@ -563,6 +590,7 @@ def recall(
     macro_state_path: str | Path | None = None,
     project: str = "AIppocampus",
     max_routes: int = MAX_ROUTES,
+    attention_router: bool = False,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
 
@@ -570,7 +598,11 @@ def recall(
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
     registry_path = _as_path(registry_dir, Path()) if registry_dir else None
     requested_limit = max(1, min(25, int(max_routes or MAX_ROUTES)))
-    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_projection = _load_macro_projection(
+        project=project,
+        macro_state_path=macro_state_path,
+        cwd=cwd_path,
+    )
     macro_context = macro_live_recall.context_from_projection(macro_projection)
     effective_limit = macro_live_recall.effective_route_limit(
         requested_limit=requested_limit,
@@ -629,6 +661,10 @@ def recall(
             requested_limit=requested_limit,
             effective_limit=effective_limit,
         )
+    routes, attention_navigation = attention_route_projection.maybe_rerank_routes_with_attention_router(
+        enabled=attention_router, query=str(query or ""), routes=routes,
+        max_routes=effective_limit, project=project,
+    )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
     deepen_requests = [
         _deepen_request_for_route(route, memory_packet)
@@ -647,6 +683,7 @@ def recall(
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
         "macro_navigation": macro_navigation,
+        "attention_router_navigation": attention_navigation,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": (
             deepen_requests[0].get("copy_paste_command") if deepen_requests else None
@@ -656,6 +693,7 @@ def recall(
             "memory_packet_count": len(memory_packets),
             "deepen_request_count": len(deepen_requests),
             "macro_orientation_applied": bool(macro_context is not None),
+            **attention_route_projection.metrics_for_attention_navigation(attention_navigation),
             "requested_max_routes": requested_limit,
             "effective_max_routes": effective_limit,
             "foreground_forbidden_key_count": forbidden_count,
@@ -754,7 +792,11 @@ def deepen(
             max_matches=max(1, min(25, int(max_matches or MAX_ROUTES))),
         )
     except RecallNavigationError as exc:
-        macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+        macro_projection = _load_macro_projection(
+            project=project,
+            macro_state_path=macro_state_path,
+            cwd=cwd_path,
+        )
         macro_context = macro_live_recall.context_from_projection(macro_projection)
         return _public_payload(
             {
@@ -773,7 +815,11 @@ def deepen(
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
-    macro_projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    macro_projection = _load_macro_projection(
+        project=project,
+        macro_state_path=macro_state_path,
+        cwd=cwd_path,
+    )
     macro_context = macro_live_recall.context_from_projection(macro_projection)
     return _public_payload(
         {
@@ -1050,6 +1096,8 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--macro-state-jsonl")
     recall_parser.add_argument("--project", default="AIppocampus")
     recall_parser.add_argument("--max", type=int, default=MAX_ROUTES)
+    recall_parser.add_argument("--attention-router", action="store_true",
+                               help="Use attention router opt-in route sorting.")
     recall_parser.add_argument("--json", action="store_true")
 
     aippo_parser = sub.add_parser("aippo")
@@ -1101,6 +1149,7 @@ def main(argv: list[str] | None = None) -> int:
                 macro_state_path=args.macro_state_jsonl,
                 project=args.project,
                 max_routes=args.max,
+                attention_router=args.attention_router,
             )
         )
         return 0

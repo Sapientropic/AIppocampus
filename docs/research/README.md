@@ -84,6 +84,10 @@ from looking like a control tower.
     five-tone intuition-layer experiments.
   - Treat this as experiment evidence for research navigation, not as a runtime
     contract.
+- [Avatar Bounded Resonance Pilot, 2026-06-12](avatar-bounded-resonance-pilot-2026-06-12.md)
+  - Exploratory public-safe proxy for bounded resonance posture prompts.
+  - Treat this as a harness/report slice only; it is not runtime avatar
+    adoption evidence.
 
 ## Evidence Levels
 

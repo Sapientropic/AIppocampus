@@ -32,6 +32,10 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         self.assertEqual(prereg["deepen_budget_per_arm"], 5)
         self.assertIn("macro_navigation", report["feature_slots"])
         self.assertIn("attention_router", report["feature_slots"])
+        self.assertEqual(
+            report["feature_slots"]["attention_router"]["comparison_arm"],
+            "attention_router_navigation_only",
+        )
 
     def test_promotion_harness_blocks_default_until_usefulness_and_red_lines_pass(self) -> None:
         report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
@@ -71,6 +75,49 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         self.assertGreater(nav_only["wrong_source_route_count"], 0)
         self.assertEqual(plus_deepen["wrong_source_route_count"], 0)
         self.assertTrue(plus_deepen["source_reopen_follow_through"])
+
+    def test_attention_navigation_only_arm_is_measured_but_not_promoted(self) -> None:
+        report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
+        case = report["cases_by_id"]["ar_little_hippocampus_light_continuity_cue"]
+        nav_only = case["arms"]["feature_navigation_only"]
+
+        self.assertTrue(report["attention_router_readout"]["measured"])
+        self.assertEqual(
+            report["attention_router_readout"]["comparison_arm"],
+            "attention_router_navigation_only",
+        )
+        self.assertTrue(nav_only["route_actionable"])
+        self.assertFalse(nav_only["source_backed_success"])
+        self.assertFalse(nav_only["source_reopen_attempted"])
+        self.assertEqual(nav_only["selected_next_tool"], "recall_deepen")
+        self.assertEqual(nav_only["claim_without_source_reopen_count"], 0)
+        self.assertTrue(nav_only["route_family_selected_before_manual_search"])
+        self.assertIn("fixture_only_not_live_default_path", report["promotion_blockers"])
+
+    def test_macro_navigation_readout_measures_default_prior_candidate(self) -> None:
+        report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
+        readout = report["macro_navigation_readout"]
+        case = report["cases_by_id"]["macro_active_layer_and_fanout_prior"]
+        nav_only = case["arms"]["feature_navigation_only"]
+        plus_deepen = case["arms"]["feature_plus_deepen"]
+
+        self.assertTrue(readout["measured"])
+        self.assertEqual(readout["promotion_issue"], "#1300")
+        self.assertEqual(readout["status"], "fixture_candidate_not_promoted")
+        self.assertEqual(readout["active_layer_order_delta_count"], 1)
+        self.assertEqual(readout["hamming_fanout_delta_count"], 1)
+        self.assertEqual(readout["momentum_recheck_diagnostic_count"], 1)
+        self.assertEqual(readout["stale_as_current_count"], 0)
+        self.assertEqual(readout["claim_without_source_reopen_count"], 0)
+        self.assertGreaterEqual(readout["manual_search_fallback_reduction_count"], 1)
+        self.assertTrue(nav_only["macro_prior_applied"])
+        self.assertTrue(nav_only["macro_active_layer_order_changed"])
+        self.assertTrue(nav_only["macro_hamming_fanout_delta"])
+        self.assertTrue(nav_only["macro_momentum_recheck_diagnostic"])
+        self.assertFalse(nav_only["source_backed_success"])
+        self.assertTrue(plus_deepen["source_reopen_follow_through"])
+        self.assertEqual(nav_only["selected_route_family"], "issue")
+        self.assertIn("fixture_only_not_live_default_path", report["promotion_blockers"])
 
     def test_cli_smoke_emits_promotion_json(self) -> None:
         proc = subprocess.run(

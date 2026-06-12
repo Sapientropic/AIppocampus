@@ -493,6 +493,26 @@ The caller-facing MCP failure boundary is:
 - Tool results redact local paths by default. Local operators may request
   private locators only through documented `include_private_paths` fields.
 
+`aippocampus update status --host-probe-report <json>` is the public readiness
+bridge from host smokes back into the local status card. It may report
+`agent_callable_status: "host_live_probe_ok"` after a sanitized Codex app-server
+or Claude Code MCP report proves tool listing plus a real MCP tool call. That
+status is additive host-exposure evidence only; it does not change the MCP tool
+schema, imply recall quality, or promote retrieval/answer claims. Packaged
+plugin MCP config uses `aippocampus mcp`; if that command is missing from PATH,
+status reports repair options instead of treating the package artifact as
+foreground agent-callable.
+
+The plugin readiness portion of `aippocampus update status` is a local operator
+contract, not a marketplace API. It may report `local_marketplace`,
+`installed_cache`, `auto_detected_installed_cache_count`, and
+`plugin_cache_recommended_actions` so an operator can see whether the repo
+package, local marketplace copy, and Codex installed cache are separate and
+current. `aippocampus update apply --surface plugin` rebuilds the repo-local
+package; it refreshes marketplace/cache layers only when
+`--plugin-marketplace-dir` or `--plugin-installed-dir` is supplied. Even then,
+host reload or reinstall evidence is still separate from package freshness.
+
 `recall_context` and `recall_deepen` are the progressive recall navigation
 tools. `recall_context` accepts a fuzzy intent or query and returns small route
 handles, related source-window candidates, scope labels, evidence levels, and
@@ -519,6 +539,7 @@ The first packaged opt-in CLI path is:
 
 ```sh
 aippocampus agent recall "continue the old decision" --json
+aippocampus agent recall "continue the old decision" --attention-router --json
 aippocampus agent aippo --task "coding issue closeout" --json
 aippocampus agent deepen "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque recall handle or deepen:aippo...>" --json
@@ -533,6 +554,13 @@ into the foreground packet. `agent aippo` exposes only the narrow
 project/workflow working-contract activation. `agent feedback` records or
 returns calibration/routing evidence only; it cannot ripen a candidate-only,
 Dream-only, or stale clause without source support.
+
+`agent recall --attention-router` is an additive opt-in sorting path. It may
+reorder already emitted `recall_context` routes through the deterministic
+attention router and reports `attention_router_navigation` diagnostics, but it
+does not create new source authority, change default hook behavior, or remove
+the requirement to use `agent deepen` before exact, current, disputed,
+sensitive, or high-risk claims.
 
 For recall output, pass `deepen_requests[].handle` to `agent deepen`.
 `memory_packets[].deepen_route_id` is a display/correlation id, not the

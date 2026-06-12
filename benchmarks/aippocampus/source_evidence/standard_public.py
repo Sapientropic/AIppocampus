@@ -969,6 +969,40 @@ def build_standard_line_reranker_candidates(
     return candidates[: max(1, int(max_candidates))]
 
 
+def standard_line_reranker_candidate_pack_sha1(
+    candidates: list[dict[str, Any]],
+) -> str:
+    """Hash the source-window candidate pack without serializing source text.
+
+    Query/candidate caches must invalidate when the actual source spans change,
+    not merely when candidate counts stay the same. Keep the raw text out of
+    reports, but include text hashes plus line/routing metadata in the pack
+    digest so warm-cache readouts can distinguish real candidate windows from
+    weaker source-id/count surrogates.
+    """
+
+    material = []
+    for candidate in candidates:
+        material.append(
+            {
+                "line": int(candidate.get("line") or 0),
+                "role": str(candidate.get("role") or ""),
+                "session_rank": candidate.get("session_rank"),
+                "nearest_hit_rank": candidate.get("nearest_hit_rank"),
+                "context_distance": candidate.get("context_distance"),
+                "query_channels": sorted(
+                    str(channel) for channel in (candidate.get("query_channels") or [])
+                ),
+                "text_sha1": sha1_text(str(candidate.get("text") or ""))[:16],
+                "previous_text_sha1": sha1_text(
+                    str(candidate.get("previous_text") or "")
+                )[:16],
+                "next_text_sha1": sha1_text(str(candidate.get("next_text") or ""))[:16],
+            }
+        )
+    return sha1_text(json.dumps(material, ensure_ascii=False, sort_keys=True))[:16]
+
+
 def semantic_line_reranker_available(api_key_env: str = "DEEPSEEK_API_KEY") -> bool:
     return bool(os.environ.get(api_key_env))
 
@@ -1383,6 +1417,7 @@ def evaluate_standard_retrieval_case(
         source_joined_candidate_contains_evidence = bool(
             expected_lines & {int(candidate["line"]) for candidate in candidates}
         )
+        candidate_pack_sha1 = standard_line_reranker_candidate_pack_sha1(candidates)
         try:
             if line_reranker_fn is not None:
                 runner = line_reranker_fn
@@ -1442,6 +1477,7 @@ def evaluate_standard_retrieval_case(
                 "line_reranker_attempted": True,
                 "line_reranker_available": bool(reranker_payload.get("available")),
                 "line_reranker_candidate_count": len(candidates),
+                "line_reranker_candidate_pack_sha1": candidate_pack_sha1,
                 "line_reranker_candidate_contains_evidence": bool(
                     expected_lines & {int(candidate["line"]) for candidate in candidates}
                 ),

@@ -1643,11 +1643,8 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertTrue(row["semantic_only_evidence_hit_top1"])
         self.assertTrue(row["semantic_bridge_lift_top1"])
         self.assertTrue(row["source_joined_candidate_contains_evidence"])
-        metrics = benchmark.summarize_standard_retrieval_results(
-            [row],
-            top_k=1,
-            context_radius=1,
-        )
+        self.assertEqual(len(row["line_reranker_candidate_pack_sha1"]), 16)
+        metrics = benchmark.summarize_standard_retrieval_results([row], top_k=1, context_radius=1)
         self.assertEqual(metrics["semantic_bridge_lift_top1"], 1)
         self.assertEqual(metrics["semantic_bridge_lift_rate_top1"], 1.0)
         self.assertEqual(metrics["source_joined_candidate_evidence_coverage"], 1)
