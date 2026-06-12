@@ -1,10 +1,13 @@
 {
   "name": "aippocampus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Source-backed continuity memory for Codex agents across threads, projects, devices, and life-wide conversations.",
   "author": {
-    "name": "AIppocampus contributors"
+    "name": "AIppocampus contributors",
+    "url": "https://www.aippocampus.com"
   },
+  "homepage": "https://www.aippocampus.com",
+  "repository": "https://github.com/Sapientropic/AIppocampus",
   "license": "Apache-2.0",
   "keywords": [
     "memory",
@@ -19,7 +22,7 @@
   "interface": {
     "displayName": "AIppocampus",
     "shortDescription": "Recover source-backed conversation memory without pretending the model has innate memory.",
-    "longDescription": "AIppocampus packages the installable skill and local MCP tools for source-backed continuity. Hook installers and optional DeepSeek-compatible routes are included, but hooks and external-model paths require explicit user action after reviewing the privacy boundary.",
+    "longDescription": "AIppocampus is the friendly install wrapper for the skill and local MCP tools that provide source-backed continuity across agent threads. It helps agents reopen local source trails without pretending the base model has innate memory. Hook installers and optional DeepSeek-compatible routes are included, but hooks and external-model paths require explicit user action after reviewing the privacy boundary.",
     "developerName": "AIppocampus contributors",
     "category": "Productivity",
     "capabilities": [
@@ -31,6 +34,12 @@
       "Show the latest reply from this Codex thread.",
       "Check AIppocampus memory health before continuing."
     ],
+    "websiteURL": "https://www.aippocampus.com",
+    "privacyPolicyURL": "https://www.aippocampus.com/privacy/",
+    "termsOfServiceURL": "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/plugin-terms-boundary.md",
+    "composerIcon": "./assets/aippocampus-small.svg",
+    "logo": "./assets/aippocampus-logo.svg",
+    "screenshots": [],
     "brandColor": "#256D85"
   }
 }

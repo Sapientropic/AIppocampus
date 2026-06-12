@@ -4,6 +4,7 @@ import json
 import shutil
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -22,17 +23,34 @@ class PluginDistributionTests(unittest.TestCase):
         manifest = json.loads(
             (PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
+        package = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         mcp_config = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["name"], "aippocampus")
+        self.assertEqual(manifest["version"], package["project"]["version"])
+        self.assertEqual(manifest["homepage"], "https://www.aippocampus.com")
+        self.assertEqual(manifest["repository"], "https://github.com/Sapientropic/AIppocampus")
         self.assertEqual(manifest["license"], "Apache-2.0")
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertEqual(manifest["mcpServers"], "./.mcp.json")
         self.assertNotIn("hooks", manifest)
-        self.assertIn("privacy", manifest["interface"]["longDescription"].casefold())
-        self.assertIn("explicit", manifest["interface"]["longDescription"].casefold())
-        self.assertLessEqual(len(manifest["interface"]["defaultPrompt"]), 3)
-        self.assertTrue(all(len(item) <= 128 for item in manifest["interface"]["defaultPrompt"]))
+        interface = manifest["interface"]
+        self.assertIn("privacy", interface["longDescription"].casefold())
+        self.assertIn("explicit", interface["longDescription"].casefold())
+        self.assertIn("install wrapper", interface["longDescription"].casefold())
+        self.assertLessEqual(len(interface["defaultPrompt"]), 3)
+        self.assertTrue(all(len(item) <= 128 for item in interface["defaultPrompt"]))
+        self.assertEqual(interface["websiteURL"], "https://www.aippocampus.com")
+        self.assertEqual(interface["privacyPolicyURL"], "https://www.aippocampus.com/privacy/")
+        self.assertEqual(
+            interface["termsOfServiceURL"],
+            "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/plugin-terms-boundary.md",
+        )
+        self.assertEqual(interface["screenshots"], [])
+        for key in ("composerIcon", "logo"):
+            asset = interface[key]
+            self.assertTrue(asset.startswith("./assets/"))
+            self.assertTrue((PLUGIN_ROOT / asset.removeprefix("./")).exists())
 
         server = mcp_config["mcpServers"]["aippocampus"]
         self.assertEqual(server["command"], "python")
