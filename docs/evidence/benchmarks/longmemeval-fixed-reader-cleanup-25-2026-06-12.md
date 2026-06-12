@@ -39,6 +39,9 @@ and boundary metadata.
   unavailability, source-line packaging misses, false abstention on answerable
   bounded evidence, empty reader answers, deterministic-judge mismatches, and
   true reader misses.
+- Source-line packaging misses apply only when a case has exact line-gold
+  evidence. No-line-gold answer failures stay in reader/retrieval taxonomy
+  buckets instead of becoming automatic packaging failures.
 - The report now carries a sanitized `failure_review` plus an
   `expansion_gate`.
 
@@ -140,16 +143,18 @@ Expansion criteria:
 
 - Keep 500Q no-go while any 25Q review contains provider errors,
   unexplained judge mismatches, false abstentions on answerable bounded
-  evidence, source-line packaging failures, or retrieval evidence unavailable
-  for answerable cases.
+  evidence, stale/currentness update confusion, source-line packaging failures
+  with exact line-gold evidence, or retrieval evidence unavailable for
+  answerable cases.
 - After the 25Q blockers are fixed, run 100Q before 500Q. The 100Q report must
   keep retrieval, answer, latency, token/cache, and cost layers separate and
   must pass sanitized report validation.
 - Only consider 500Q after a 100Q report has no provider errors, no
   unexplained judge mismatches, no false abstentions on answerable bounded
-  evidence, no packaging failures, and no retrieval-unavailable answer cases.
-  Remaining true reader misses can be reported as answer-model quality limits,
-  not as retrieval or packaging defects.
+  evidence, no stale/currentness update confusion, no line-gold packaging
+  failures, and no retrieval-unavailable answer cases. Remaining true reader
+  misses can be reported as answer-model quality limits, not as retrieval or
+  packaging defects.
 
 ## Supports
 
@@ -157,9 +162,9 @@ Expansion criteria:
   and the cleanup rerun.
 - The reader prompt and candidate packaging now explicitly distinguish
   answerable bounded evidence from unsupported context.
-- Tests cover numeric-equivalent answer normalization, bounded evidence that
-  should not trigger false abstention, packaging failures, and expansion-gate
-  blockers.
+- Tests cover numeric-equivalent answer normalization, negated numeric answers,
+  bounded evidence that should not trigger false abstention, exact-line
+  packaging failures, no-line-gold reader misses, and expansion-gate blockers.
 
 ## Material Limits
 

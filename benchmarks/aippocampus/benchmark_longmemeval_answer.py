@@ -166,7 +166,7 @@ def has_negation_trap(answer_text: str, gold_answer: str) -> bool:
     gold = set(content_tokens(gold_answer))
     if not tokens or not gold:
         return False
-    stemmed = [stem_token(token) for token in tokens]
+    stemmed = [stem_token(canonical_answer_token(token)) for token in tokens]
     for index, token in enumerate(stemmed):
         if token not in gold:
             continue
@@ -559,6 +559,7 @@ def classify_failure(
     quality: dict[str, Any],
     context_sufficient: bool,
     answer_correct: bool,
+    has_line_evidence: bool,
     candidate_contains_evidence: bool,
     top_k: int,
 ) -> str:
@@ -570,7 +571,7 @@ def classify_failure(
         return "reader_provider_error"
     if not context_sufficient:
         return "retrieval_evidence_unavailable"
-    if not candidate_contains_evidence:
+    if has_line_evidence and not candidate_contains_evidence:
         return "insufficient_evidence_packaging"
     if prediction.abstained:
         return "over_abstention_boundary_false_negative"
@@ -580,7 +581,7 @@ def classify_failure(
         return "stale_update_confusion"
     if float(quality.get("token_overlap_rate") or 0.0) >= 0.45:
         return "deterministic_judge_mismatch"
-    if retrieval_row.get(f"evidence_context_hit_top{top_k}"):
+    if retrieval_row.get(f"evidence_context_hit_top{top_k}") or context_sufficient:
         return "true_reader_miss"
     return "retrieval_evidence_unavailable"
 
@@ -616,12 +617,20 @@ def score_answer_case(
     candidate_contains_evidence = bool(
         set(case.get("expected", {}).get("lines") or []) & candidate_lines
     )
+    candidate_evidence_status = (
+        "contains_exact_line_gold"
+        if candidate_contains_evidence
+        else "missing_exact_line_gold"
+        if has_line_evidence
+        else "not_applicable_no_line_gold"
+    )
     failure_category = classify_failure(
         retrieval_row=retrieval_row,
         prediction=prediction,
         quality=quality,
         context_sufficient=context_sufficient,
         answer_correct=answer_correct,
+        has_line_evidence=has_line_evidence,
         candidate_contains_evidence=candidate_contains_evidence,
         top_k=top_k,
     )
@@ -643,7 +652,9 @@ def score_answer_case(
             ),
             "evidence_miss_category": retrieval_row.get("evidence_miss_category"),
             "candidate_count": len(candidates),
+            "has_line_evidence": has_line_evidence,
             "candidate_contains_evidence": candidate_contains_evidence,
+            "candidate_evidence_status": candidate_evidence_status,
             "candidate_latency_ms": candidate_latency_ms,
             "warning_count": int(retrieval_row.get("warning_count") or 0)
             + int(candidate_warning_count),

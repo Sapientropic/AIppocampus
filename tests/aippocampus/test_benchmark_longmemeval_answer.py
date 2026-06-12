@@ -58,6 +58,17 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
         self.assertTrue(quality["strong_match"], quality)
         self.assertGreaterEqual(quality["token_overlap_rate"], 0.8)
 
+    def test_answer_quality_catches_negated_numeric_equivalents(self) -> None:
+        single_digit = benchmark.answer_quality("not 9", "nine")
+        drawer_digit = benchmark.answer_quality("not drawer 9", "drawer nine")
+        positive = benchmark.answer_quality("drawer 9", "drawer nine")
+
+        self.assertTrue(single_digit["strong_match"], single_digit)
+        self.assertTrue(single_digit["negation_trap"], single_digit)
+        self.assertTrue(drawer_digit["negation_trap"], drawer_digit)
+        self.assertTrue(positive["strong_match"], positive)
+        self.assertFalse(positive["negation_trap"], positive)
+
     def test_reader_prompt_marks_bounded_evidence_as_answerable_when_supported(self) -> None:
         messages = benchmark.reader_messages(
             "Where did the blue badge note say to look?",
@@ -97,6 +108,7 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             quality={"token_overlap_rate": 0.0},
             context_sufficient=True,
             answer_correct=False,
+            has_line_evidence=True,
             candidate_contains_evidence=True,
             top_k=10,
         )
@@ -114,6 +126,7 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             quality={"token_overlap_rate": 0.0},
             context_sufficient=True,
             answer_correct=False,
+            has_line_evidence=True,
             candidate_contains_evidence=True,
             top_k=10,
         )
@@ -165,6 +178,51 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
             row["answer"]["failure_category"],
             "insufficient_evidence_packaging",
         )
+
+    def test_no_line_gold_session_sufficient_wrong_answer_is_reader_miss(self) -> None:
+        row = benchmark.score_answer_case(
+            case={
+                "case_id": "case-no-line-gold",
+                "expected": {"sessions": ["session-a"]},
+            },
+            retrieval_row={
+                "case_type": "longmemeval_multi-session-user",
+                "source_id_sha1": "sourcehash",
+                "question_id_sha1": "questionhash",
+                "query_sha1": "queryhash",
+                "has_line_evidence": False,
+                "session_rank": 1,
+                "evidence_rank": None,
+                "evidence_context_rank": None,
+                "session_hit_top10": True,
+                "evidence_hit_top10": False,
+                "evidence_context_hit_top10": False,
+                "evidence_miss_category": "no_line_gold",
+            },
+            candidates=[
+                {
+                    "line": 1,
+                    "role": "assistant",
+                    "session_rank": 1,
+                    "nearest_hit_rank": 1,
+                    "context_distance": 0,
+                }
+            ],
+            candidate_latency_ms=0.1,
+            candidate_warning_count=0,
+            gold={"answer": "drawer nine"},
+            prediction=benchmark.ReaderPrediction(
+                attempted=True,
+                status="answered",
+                answer_text="cabinet eight",
+            ),
+            top_k=10,
+        )
+
+        self.assertFalse(row["retrieval"]["has_line_evidence"])
+        self.assertEqual(row["retrieval"]["candidate_evidence_status"], "not_applicable_no_line_gold")
+        self.assertFalse(row["retrieval"]["candidate_contains_evidence"])
+        self.assertEqual(row["answer"]["failure_category"], "true_reader_miss")
 
     def test_failure_review_and_expansion_gate_are_public_safe(self) -> None:
         payload = {
@@ -272,6 +330,19 @@ class LongMemEvalAnswerBenchmarkTests(unittest.TestCase):
         self.assertEqual(gate["status"], "no_go")
         self.assertIn("reader_provider_error", gate["blockers"])
         self.assertNotIn("raw question", dumped)
+
+    def test_stale_update_confusion_blocks_expansion_gate(self) -> None:
+        review = {
+            "taxonomy_counts": {
+                "stale_update_confusion": 1,
+            }
+        }
+
+        gate = benchmark.expansion_go_no_go(review)
+
+        self.assertEqual(gate["status"], "no_go")
+        self.assertIn("stale_update_confusion", gate["blockers"])
+        self.assertFalse(gate["gate_policy"]["no_stale_update_confusion"])
 
     def test_missing_dataset_returns_answer_claim_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
