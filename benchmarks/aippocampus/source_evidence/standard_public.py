@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -20,6 +21,7 @@ from aippocampus_runtime.model.client import (
 )
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import split_query_terms
+from aippocampus_runtime.subconscious.candidate_router import match_working_memory
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
@@ -42,6 +44,7 @@ from .defaults import (
     DEFAULT_STANDARD_QA_MIN_CASES,
     DEFAULT_STANDARD_QA_MIN_SESSION_HIT_RATE,
     DEFAULT_STANDARD_QA_TOP_K,
+    DEFAULT_STANDARD_SOURCE_SEMANTIC_CACHE_PREWARM_WORKERS,
     SCHEMA_VERSION,
     STANDARD_DATASET_PATHS,
     STANDARD_LINE_RERANKER_MODES,
@@ -58,6 +61,9 @@ from .reporting import (
 EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
 SEMANTIC_LINE_RERANKER_ARM = "llm_window_to_line_rerank"
 SEMANTIC_LINE_RERANKER_PROMPT_VERSION = "llm-window-to-line-rerank-v1"
+SOURCE_SEMANTIC_CACHE_ARM = "aippocampus_source_worker_surface_cache"
+SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-v1"
+SOURCE_SEMANTIC_CACHE_BUILDER_ID = "aippocampus-working-memory-surface-v1"
 LEXICAL_RERANKER_DIRECT_TERMS = {
     "adopt",
     "adopted",
@@ -109,6 +115,18 @@ STRUCTURAL_RERANKER_QUESTION_CUE_RE = re.compile(
 STRUCTURAL_RERANKER_CONTINUATION_RE = re.compile(
     r"(?i)\b(next line|following line|continues?|continuing|below|above|as follows|"
     r"rest of|pick up|where we left off)\b"
+)
+SOURCE_SEMANTIC_PREFERENCE_RE = re.compile(
+    r"(?i)\b(prefer|prefers|favorite|favourite|like|likes|dislike|avoid|use|uses|"
+    r"usually|always|never|rather)\b"
+)
+SOURCE_SEMANTIC_CURRENTNESS_RE = re.compile(
+    r"(?i)\b(current|currently|now|latest|new|old|updated?|changed?|switched|"
+    r"before|after|previous|later|today|yesterday|tomorrow)\b"
+)
+SOURCE_SEMANTIC_TASK_RE = re.compile(
+    r"(?i)\b(issue|bug|fix|test|code|repo|branch|pr|pull request|benchmark|"
+    r"report|docs?|design|runner|cache|timeout)\b"
 )
 
 
@@ -831,6 +849,558 @@ def run_structural_line_reranker(
     }
 
 
+def source_semantic_cache_public_contract() -> dict[str, Any]:
+    return {
+        "arm": SOURCE_SEMANTIC_CACHE_ARM,
+        "builder": "aippocampus_worker_surface",
+        "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
+        "prompt_version": None,
+        "cache_policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+        "provider": "local_aippocampus_runtime",
+        "model": "none",
+        "base_url_sha1": "",
+        "cache_contract": NO_PROVIDER_CACHE_CONTRACT,
+        "cost_status": "no_provider_calls",
+        "input_boundary": {
+            "offline_build_visible": [
+                "source_line_number",
+                "source_role",
+                "source_text",
+                "adjacent_source_text_in_same_session",
+                "source_session_id",
+            ],
+            "hot_query_visible": [
+                "query_terms",
+                "aippocampus_working_memory_trigger_terms",
+                "candidate_line_number",
+                "candidate_route_rank_metadata",
+                "candidate_context_distance",
+            ],
+            "withheld_from_builder_and_hot_path": [
+                "gold_answer",
+                "expected_lines",
+                "expected_sessions",
+                "has_answer_labels",
+                "judge_labels",
+                "miss_taxonomy",
+                "raw_report_cases",
+            ],
+        },
+        "output_boundary": {
+            "source_side_search_allowed": True,
+            "ranked_lines_filtered_to_source_side_candidate_set": True,
+            "question_answering_allowed": False,
+            "working_memory_rows_are_navigation_only": True,
+            "source_reopen_required_for_claims": True,
+            "cache_values_emitted": False,
+            "raw_source_text_emitted": False,
+        },
+    }
+
+
+def source_semantic_line_labels(text: str) -> list[str]:
+    labels: list[str] = []
+    if SOURCE_SEMANTIC_PREFERENCE_RE.search(text):
+        labels.append("preference")
+    if SOURCE_SEMANTIC_CURRENTNESS_RE.search(text):
+        labels.append("currentness_or_temporal")
+    if SOURCE_SEMANTIC_TASK_RE.search(text):
+        labels.append("technical_or_task")
+    if STRUCTURAL_RERANKER_ANSWER_CUE_RE.search(text):
+        labels.append("answer_like_statement")
+    if STRUCTURAL_RERANKER_QUESTION_CUE_RE.search(text):
+        labels.append("question_like")
+    if STRUCTURAL_RERANKER_CONTINUATION_RE.search(text):
+        labels.append("continuation_bridge")
+    if STRUCTURAL_RERANKER_VALUE_RE.search(text):
+        labels.append("value_like")
+    return sorted(set(labels))
+
+
+def source_semantic_query_labels(question: str) -> set[str]:
+    labels = set(source_semantic_line_labels(question))
+    if "question_like" in labels:
+        labels.remove("question_like")
+    return labels
+
+
+def build_source_semantic_cache(
+    sqlite_path: Path,
+    *,
+    line_to_session: dict[str, str],
+) -> dict[str, Any]:
+    """Build AIppocampus source-side worker surfaces for a local hot path.
+
+    This deliberately does not see query text or gold labels. It materializes
+    the same navigation-only row shape read by the foreground AIppocampus
+    working-memory/semantic-trigger surfaces, then the hot path uses existing
+    matchers to reopen candidate source lines. Do not replace this with
+    query/candidate provider calls; #1323 is about source-side prewarmed
+    surfaces, not foreground LLM reranking.
+    """
+
+    started = time.perf_counter()
+    rows = load_standard_message_rows(sqlite_path)
+    row_by_line = {int(row["line"]): row for row in rows}
+    profiles: dict[int, dict[str, Any]] = {}
+    working_memory_rows: list[dict[str, Any]] = []
+    failed_count = 0
+    source_key = f"longmemeval-source:{sha1_text(str(sqlite_path))[:16]}"
+    created_at = now_utc()
+    for row in rows:
+        try:
+            line = int(row["line"])
+            session_id = line_to_session.get(str(line)) or ""
+            previous_row = row_by_line.get(line - 1)
+            next_row = row_by_line.get(line + 1)
+            previous_text = (
+                str(previous_row.get("text") or "")
+                if previous_row and line_to_session.get(str(line - 1)) == session_id
+                else ""
+            )
+            next_text = (
+                str(next_row.get("text") or "")
+                if next_row and line_to_session.get(str(line + 1)) == session_id
+                else ""
+            )
+            text = str(row.get("text") or "")
+            source_terms = lexical_line_reranker_terms(text)
+            previous_terms = lexical_line_reranker_terms(previous_text)
+            next_terms = lexical_line_reranker_terms(next_text)
+            labels = source_semantic_line_labels(text)
+            context_labels = set(source_semantic_line_labels(previous_text))
+            context_labels.update(source_semantic_line_labels(next_text))
+            route_terms = set(source_terms)
+            route_terms.update(previous_terms)
+            route_terms.update(next_terms)
+            route_terms.update(str(label).casefold() for label in labels)
+            route_terms.update(str(label).casefold() for label in context_labels)
+            route_terms_list = [
+                term
+                for term in sorted(route_terms)
+                if term and term not in STANDARD_QUERY_TERM_STOPWORDS
+            ][:48]
+            source_ref = {
+                "thread_key": source_key,
+                "message_id": f"{source_key}:line:{line}",
+                "turn_id": f"{source_key}:line:{line}",
+                "source_line": line,
+                "line": line,
+                "role": str(row.get("role") or ""),
+                "phase": str(row.get("phase") or ""),
+            }
+            working_memory_rows.append(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_working_memory",
+                    "created_at": created_at,
+                    "status": "active",
+                    "route": "use_with_source",
+                    "ask_policy": "source_required",
+                    "risk": "low",
+                    "route_reason": "longmemeval_source_side_worker_surface",
+                    "candidate_key": "lm_worker_surface_"
+                    + sha1_text(f"{sqlite_path}\n{line}\n{text}")[:18],
+                    "candidate_type": "project_memory",
+                    "title": f"source line {line}",
+                    "summary": (
+                        "Source-side route surface; reopen the clean-source "
+                        "line before using it as evidence."
+                    ),
+                    "recommendation": (
+                        "Use as navigation only; reopen the clean-source line "
+                        "before making factual claims."
+                    ),
+                    "confidence": 0.7,
+                    "trigger_terms": route_terms_list,
+                    "activation_cues": route_terms_list[:12],
+                    "concepts": route_terms_list[:16],
+                    "source_refs": [source_ref],
+                    "source_strength": {
+                        "level": "visible_source",
+                        "score": 1.0,
+                        "source_ref_count": 1,
+                    },
+                }
+            )
+            profiles[line] = {
+                "line": line,
+                "role": str(row.get("role") or "").casefold(),
+                "session_id_sha1": sha1_text(session_id)[:16] if session_id else "",
+                "source_terms": source_terms,
+                "previous_terms": previous_terms,
+                "next_terms": next_terms,
+                "route_terms": route_terms,
+                "labels": set(labels),
+                "context_labels": context_labels,
+                "source_text_sha1": sha1_text(text)[:16],
+                "previous_text_sha1": sha1_text(previous_text)[:16],
+                "next_text_sha1": sha1_text(next_text)[:16],
+                "route_profile_sha1": sha1_text(
+                    " ".join(
+                        [
+                            " ".join(sorted(source_terms))[:256],
+                            " ".join(labels),
+                        ]
+                    )
+                )[:16],
+            }
+        except Exception:  # pragma: no cover - defensive for malformed corpora
+            failed_count += 1
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    return {
+        "profiles": profiles,
+        "working_memory_rows": working_memory_rows,
+        "manifest": {
+            "schema_version": 1,
+            "kind": "source_side_semantic_cache_manifest",
+            "builder": "aippocampus_worker_surface",
+            "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
+            "cache_policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+            "source_index_sha1": sha1_text(str(sqlite_path))[:16],
+            "message_count": len(rows),
+            "span_count": len(profiles),
+            "working_memory_row_count": len(working_memory_rows),
+            "complete_count": len(profiles),
+            "failed_count": failed_count,
+            "complete_rate": safe_rate(len(profiles), len(rows)),
+            "build_latency_ms": elapsed_ms,
+            "provider_call_count": 0,
+            "provider_total_tokens": 0,
+            "hot_query_provider_call_count": 0,
+            "raw_source_text_emitted": False,
+            "cache_values_emitted": False,
+        },
+    }
+
+
+class SourceSemanticCacheStore:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._caches: dict[str, dict[str, Any]] = {}
+
+    def get(
+        self,
+        sqlite_path: Path,
+        *,
+        line_to_session: dict[str, str],
+    ) -> dict[str, Any]:
+        key = str(Path(sqlite_path).resolve())
+        with self._lock:
+            cached = self._caches.get(key)
+        if cached is not None:
+            return cached
+        built = build_source_semantic_cache(
+            Path(sqlite_path),
+            line_to_session=line_to_session,
+        )
+        with self._lock:
+            return self._caches.setdefault(key, built)
+
+    def summary(self) -> dict[str, Any]:
+        with self._lock:
+            caches = list(self._caches.values())
+        manifests = [cache.get("manifest") or {} for cache in caches]
+        build_latencies = [
+            float(manifest.get("build_latency_ms") or 0.0)
+            for manifest in manifests
+            if isinstance(manifest.get("build_latency_ms"), int | float)
+        ]
+        message_count = sum(int(manifest.get("message_count") or 0) for manifest in manifests)
+        span_count = sum(int(manifest.get("span_count") or 0) for manifest in manifests)
+        working_memory_row_count = sum(
+            int(manifest.get("working_memory_row_count") or 0)
+            for manifest in manifests
+        )
+        failed_count = sum(int(manifest.get("failed_count") or 0) for manifest in manifests)
+        return {
+            "status": "measured_source_side_cache_build" if manifests else "not_measured",
+            "arm": SOURCE_SEMANTIC_CACHE_ARM,
+            "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
+            "cache_policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+            "source_cache_count": len(manifests),
+            "message_count": message_count,
+            "span_count": span_count,
+            "working_memory_row_count": working_memory_row_count,
+            "complete_count": span_count,
+            "failed_count": failed_count,
+            "cache_key_complete_rate": safe_rate(span_count, message_count),
+            "build_latency_ms": {
+                "count": len(build_latencies),
+                "total": round(sum(build_latencies), 2) if build_latencies else 0.0,
+                "avg": round(sum(build_latencies) / len(build_latencies), 2)
+                if build_latencies
+                else 0.0,
+                "max": round(max(build_latencies), 2) if build_latencies else 0.0,
+            },
+            "provider_call_count": 0,
+            "provider_total_tokens": 0,
+            "hot_query_provider_call_count": 0,
+            "cost_status": "no_provider_calls",
+            "raw_source_text_emitted": False,
+            "cache_values_emitted": False,
+            "default_hook_path": False,
+        }
+
+
+def source_semantic_cache_score(
+    question_terms: set[str],
+    query_labels: set[str],
+    candidate: dict[str, Any],
+    profile: dict[str, Any],
+) -> float:
+    source_terms = set(profile.get("source_terms") or set())
+    previous_terms = set(profile.get("previous_terms") or set())
+    next_terms = set(profile.get("next_terms") or set())
+    labels = set(profile.get("labels") or set())
+    context_labels = set(profile.get("context_labels") or set())
+    source_overlap = len(question_terms & source_terms)
+    previous_overlap = len(question_terms & previous_terms)
+    next_overlap = len(question_terms & next_terms)
+    context_overlap = previous_overlap + next_overlap
+    coverage = source_overlap / max(1, len(question_terms))
+    label_overlap = len(query_labels & labels)
+    context_label_overlap = len(query_labels & context_labels)
+    nearest_hit_rank = int(candidate.get("nearest_hit_rank") or 10**6)
+    context_distance = int(candidate.get("context_distance") or 0)
+    fts_rank = candidate.get("fts_rank")
+    role = str(profile.get("role") or "")
+
+    score = source_overlap * 100.0
+    score += coverage * 30.0
+    score += context_overlap * 34.0
+    score += label_overlap * 12.0
+    score += context_label_overlap * 5.0
+    if "content" in {str(channel) for channel in candidate.get("query_channels") or []}:
+        score += 16.0
+    if fts_rank is not None:
+        score += max(0.0, 12.0 - float(fts_rank))
+    if role == "user":
+        score += 4.0
+    if "answer_like_statement" in labels:
+        score += 8.0
+    if "value_like" in labels:
+        score += 6.0
+    if "question_like" in labels and "answer_like_statement" not in labels:
+        score -= 12.0
+    if "continuation_bridge" in labels and source_overlap == 0:
+        score -= 22.0
+    if source_terms & LEXICAL_RERANKER_BRIDGE_TERMS and source_overlap < max(1, context_overlap):
+        score -= 18.0
+    if context_overlap and ("answer_like_statement" in labels or "value_like" in labels):
+        score += min(36.0, context_overlap * 8.0)
+    score -= context_distance * 1.25
+    score -= nearest_hit_rank * 0.05
+    return score
+
+
+def source_semantic_cache_search_score(
+    question_terms: set[str],
+    query_labels: set[str],
+    profile: dict[str, Any],
+) -> float:
+    """Score source-side cached profiles before candidate construction.
+
+    This is the hot-query retrieval half of the source-side arm. It can inspect
+    only cached source-derived route terms/labels and the current query terms.
+    It deliberately cannot inspect gold evidence, miss categories, or any
+    benchmark answer labels; that boundary is what lets source prewarm stay a
+    product-shaped path instead of a query-specific oracle.
+    """
+
+    source_terms = set(profile.get("source_terms") or set())
+    previous_terms = set(profile.get("previous_terms") or set())
+    next_terms = set(profile.get("next_terms") or set())
+    route_terms = set(profile.get("route_terms") or set())
+    labels = set(profile.get("labels") or set())
+    context_labels = set(profile.get("context_labels") or set())
+    source_overlap = len(question_terms & source_terms)
+    context_overlap = len(question_terms & previous_terms) + len(question_terms & next_terms)
+    route_overlap = len(question_terms & route_terms)
+    label_overlap = len(query_labels & labels)
+    context_label_overlap = len(query_labels & context_labels)
+    coverage = route_overlap / max(1, len(question_terms))
+
+    score = route_overlap * 80.0
+    score += source_overlap * 34.0
+    score += context_overlap * 24.0
+    score += coverage * 30.0
+    score += label_overlap * 18.0
+    score += context_label_overlap * 7.0
+    if str(profile.get("role") or "") == "user":
+        score += 3.0
+    if "answer_like_statement" in labels:
+        score += 8.0
+    if "value_like" in labels:
+        score += 5.0
+    if "question_like" in labels and "answer_like_statement" not in labels:
+        score -= 10.0
+    if "continuation_bridge" in labels and route_overlap == 0:
+        score -= 18.0
+    return score
+
+
+def search_source_semantic_cache(
+    question: str,
+    cache: dict[str, Any],
+    *,
+    limit: int,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    working_rows = [
+        row
+        for row in (cache.get("working_memory_rows") or [])
+        if isinstance(row, dict)
+    ]
+    if not working_rows:
+        return {
+            "available": False,
+            "hits": [],
+            "errors": ["empty source worker surface cache"],
+            "latency_ms": round((time.perf_counter() - started) * 1000, 4),
+        }
+
+    def source_ref_lines(row: dict[str, Any]) -> list[int]:
+        lines: list[int] = []
+        for ref in row.get("source_refs") or []:
+            if not isinstance(ref, dict):
+                continue
+            raw = ref.get("line") if ref.get("line") is not None else ref.get("source_line")
+            try:
+                line = int(raw)
+            except (TypeError, ValueError):
+                continue
+            lines.append(line)
+        return lines
+
+    matched_rows = match_working_memory(
+        question,
+        working_rows,
+        limit=max(1, int(limit)),
+    )
+    scored_by_line: dict[int, float] = {}
+    for rank, row in enumerate(matched_rows, start=1):
+        matched_terms = [str(term) for term in row.get("matched_terms") or []]
+        base_score = float(row.get("score") or 0.0) * 10.0
+        base_score += len(matched_terms) * 5.0
+        base_score += max(0.0, float(row.get("confidence") or 0.0) * 4.0)
+        base_score += max(0.0, 4.0 - rank * 0.02)
+        for line in source_ref_lines(row):
+            scored_by_line[line] = max(scored_by_line.get(line, 0.0), base_score)
+    scored = sorted(scored_by_line.items(), key=lambda item: (-item[1], item[0]))
+    hits = [
+        {
+            "line": int(line),
+            "rank_score": round(-score, 6),
+            "source_semantic_score": round(score, 6),
+        }
+        for line, score in scored[: max(1, int(limit))]
+    ]
+    manifest = cache.get("manifest") or {}
+    return {
+        "available": True,
+        "hits": hits,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 4),
+        "cache": {
+            "available": True,
+            "kind": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+            "source_cache_message_count": int(manifest.get("message_count") or 0),
+            "source_cache_span_count": int(manifest.get("span_count") or 0),
+            "working_memory_row_count": int(manifest.get("working_memory_row_count") or 0),
+            "working_memory_match_count": len(matched_rows),
+            "semantic_trigger_projection_count": 0,
+            "cache_key_complete_rate": manifest.get("complete_rate"),
+            "hot_query_provider_call_count": 0,
+        },
+    }
+
+
+def run_source_semantic_cache_line_reranker(
+    question: str,
+    candidates: list[dict[str, Any]],
+    *,
+    source_semantic_cache: dict[str, Any] | None = None,
+    **_: object,
+) -> dict[str, Any]:
+    """Rank candidate lines from source-side AIppocampus worker surfaces.
+
+    The hot path receives query text, but it does not call a provider. The cold
+    build has already published navigation-only working-memory rows with source
+    refs; this stage only reorders candidate lines and still requires source
+    reopen before any factual claim.
+    """
+
+    started = time.perf_counter()
+    if not candidates:
+        return {"available": False, "ranked_lines": [], "errors": ["empty candidates"]}
+    cache = source_semantic_cache or {}
+    profiles: dict[int, dict[str, Any]] = {
+        int(line): profile
+        for line, profile in (cache.get("profiles") or {}).items()
+    }
+    question_terms = lexical_line_reranker_terms(question)
+    query_labels = source_semantic_query_labels(question)
+    scored: list[tuple[float, int, int, int, int]] = []
+    hit_count = 0
+    miss_count = 0
+    for candidate in candidates:
+        line = int(candidate["line"])
+        profile = profiles.get(line)
+        if profile is None:
+            miss_count += 1
+            profile = {
+                "source_terms": set(),
+                "previous_terms": set(),
+                "next_terms": set(),
+                "labels": set(),
+                "context_labels": set(),
+            }
+        else:
+            hit_count += 1
+        scored.append(
+            (
+                source_semantic_cache_score(
+                    question_terms,
+                    query_labels,
+                    candidate,
+                    profile,
+                ),
+                int(candidate.get("session_rank") or 10**6),
+                int(candidate.get("nearest_hit_rank") or 10**6),
+                int(candidate.get("context_distance") or 0),
+                line,
+            )
+        )
+    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3], item[4]))
+    lead = scored[0][0] - scored[1][0] if len(scored) > 1 else scored[0][0]
+    manifest = cache.get("manifest") or {}
+    return {
+        "available": True,
+        "ranked_lines": [int(item[-1]) for item in scored],
+        "confidence": clamp_confidence(0.4 + min(0.4, max(0.0, lead) / 150.0)),
+        "usage": {
+            "local_scored_candidates": len(candidates),
+            "source_semantic_profile_lookups": len(candidates),
+            "provider_call_count": 0,
+            "provider_total_tokens": 0,
+            "hot_query_provider_call_count": 0,
+        },
+        "latency_ms": round((time.perf_counter() - started) * 1000, 4),
+        "cache": {
+            "available": True,
+            "kind": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
+            "hit_count": hit_count,
+            "miss_count": miss_count,
+            "hit_rate": safe_rate(hit_count, hit_count + miss_count),
+            "source_cache_message_count": int(manifest.get("message_count") or 0),
+            "source_cache_span_count": int(manifest.get("span_count") or 0),
+            "working_memory_row_count": int(manifest.get("working_memory_row_count") or 0),
+            "cache_key_complete_rate": manifest.get("complete_rate"),
+        },
+        "metadata": source_semantic_cache_public_contract(),
+    }
+
+
 def build_standard_line_reranker_candidates(
     sqlite_path: Path,
     hits: list[dict[str, Any]],
@@ -841,6 +1411,7 @@ def build_standard_line_reranker_candidates(
     context_radius: int,
     top_sessions: int,
     max_candidates: int,
+    hit_context_limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Build source-visible line candidates from top sessions and hit contexts.
 
@@ -881,8 +1452,9 @@ def build_standard_line_reranker_candidates(
             if previous_rank is None or rank < previous_rank:
                 hit_rank_by_line[line] = rank
     candidate_meta: dict[int, dict[str, Any]] = {}
+    context_hit_limit = max(1, int(hit_context_limit if hit_context_limit is not None else top_k))
     for channel, channel_hits in hit_lists:
-        for hit_rank, hit in enumerate(channel_hits[:top_k], start=1):
+        for hit_rank, hit in enumerate(channel_hits[:context_hit_limit], start=1):
             raw_line = hit.get("line")
             if raw_line is None:
                 continue
@@ -1048,11 +1620,28 @@ def summarize_line_reranker_latency(rows: list[dict[str, Any]]) -> dict[str, Any
     }
 
 
+def summarize_numeric_latency(rows: list[dict[str, Any]], key: str) -> dict[str, Any]:
+    values = [
+        float(row[key])
+        for row in rows
+        if isinstance(row.get(key), int | float)
+    ]
+    if not values:
+        return {"count": 0}
+    return {
+        "count": len(values),
+        "avg": round(sum(values) / len(values), 4),
+        "max": round(max(values), 4),
+    }
+
+
 def summarize_line_reranker_cache(rows: list[dict[str, Any]]) -> dict[str, Any]:
     kind_counts: dict[str, int] = {}
     available_count = 0
     hit_tokens = 0
     miss_tokens = 0
+    hit_count = 0
+    miss_count = 0
     for row in rows:
         cache = row.get("line_reranker_cache")
         if not isinstance(cache, dict) or not cache:
@@ -1063,13 +1652,19 @@ def summarize_line_reranker_cache(rows: list[dict[str, Any]]) -> dict[str, Any]:
             available_count += 1
         hit_tokens += int(cache.get("hit_tokens") or 0)
         miss_tokens += int(cache.get("miss_tokens") or 0)
+        hit_count += int(cache.get("hit_count") or 0)
+        miss_count += int(cache.get("miss_count") or 0)
     total = hit_tokens + miss_tokens
+    local_total = hit_count + miss_count
     return {
         "available_count": available_count,
         "kind_counts": kind_counts,
         "hit_tokens": hit_tokens,
         "miss_tokens": miss_tokens,
         "hit_rate": round(hit_tokens / total, 4) if total else 0.0,
+        "profile_hit_count": hit_count,
+        "profile_miss_count": miss_count,
+        "profile_hit_rate": round(hit_count / local_total, 4) if local_total else 0.0,
     }
 
 
@@ -1296,6 +1891,7 @@ def evaluate_standard_retrieval_case(
     line_reranker_max_candidates: int = DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES,
     line_reranker_timeout: int = DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
     line_reranker_max_tokens: int = DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
+    source_semantic_cache_store: SourceSemanticCacheStore | None = None,
 ) -> dict[str, Any]:
     expected = case.get("expected") or {}
     hits, warnings = fts5_benchmark.search_fts5_only(
@@ -1382,6 +1978,9 @@ def evaluate_standard_retrieval_case(
         raise ValueError(f"unsupported line reranker mode: {line_reranker_mode}")
     if resolved_reranker_mode != "off":
         content_hits: list[dict[str, Any]] = []
+        source_semantic_cache: dict[str, Any] | None = None
+        source_semantic_cache_hits: list[dict[str, Any]] = []
+        source_semantic_search_payload: dict[str, Any] = {}
         content_terms = standard_content_query_terms(str(case.get("query") or ""))
         if content_terms and content_terms != list(case.get("query_terms") or []):
             content_hits, content_warnings = fts5_benchmark.search_fts5_only(
@@ -1392,15 +1991,41 @@ def evaluate_standard_retrieval_case(
             )
             warnings.extend(content_warnings)
             row["warning_count"] = len(warnings)
+        if resolved_reranker_mode == "source_semantic_cache":
+            cache_store = source_semantic_cache_store or SourceSemanticCacheStore()
+            source_semantic_cache = cache_store.get(
+                Path(case["sqlite_path"]),
+                line_to_session=line_to_session,
+            )
+            source_semantic_search_payload = search_source_semantic_cache(
+                str(case.get("query") or ""),
+                source_semantic_cache,
+                limit=max(top_k, candidate_limit),
+            )
+            source_semantic_cache_hits = [
+                dict(hit)
+                for hit in (source_semantic_search_payload.get("hits") or [])
+                if isinstance(hit, dict)
+            ]
+        extra_hit_lists: list[tuple[str, list[dict[str, Any]]]] = []
+        if content_hits:
+            extra_hit_lists.append(("content", content_hits))
+        if source_semantic_cache_hits:
+            extra_hit_lists.append(("source_semantic_cache", source_semantic_cache_hits))
         candidates = build_standard_line_reranker_candidates(
             case["sqlite_path"],
             hits,
-            extra_hit_lists=[("content", content_hits)] if content_hits else None,
+            extra_hit_lists=extra_hit_lists or None,
             line_to_session=line_to_session,
             top_k=top_k,
             context_radius=context_radius,
             top_sessions=line_reranker_top_sessions,
             max_candidates=line_reranker_max_candidates,
+            hit_context_limit=(
+                max(top_k, candidate_limit)
+                if resolved_reranker_mode == "source_semantic_cache"
+                else None
+            ),
         )
         semantic_lines: list[int] = []
         reranker_payload: dict[str, Any] = {}
@@ -1425,13 +2050,20 @@ def evaluate_standard_retrieval_case(
                 runner = run_lexical_line_reranker
             elif resolved_reranker_mode == "structural":
                 runner = run_structural_line_reranker
+            elif resolved_reranker_mode == "source_semantic_cache":
+                runner = run_source_semantic_cache_line_reranker
             else:
                 runner = run_semantic_line_reranker
+            runner_kwargs = {
+                "timeout": line_reranker_timeout,
+                "max_tokens": line_reranker_max_tokens,
+            }
+            if resolved_reranker_mode == "source_semantic_cache":
+                runner_kwargs["source_semantic_cache"] = source_semantic_cache
             reranker_payload = runner(
                 str(case.get("query") or ""),
                 candidates,
-                timeout=line_reranker_timeout,
-                max_tokens=line_reranker_max_tokens,
+                **runner_kwargs,
             )
             semantic_lines = ranked_unique_lines(
                 list(reranker_payload.get("ranked_lines") or []),
@@ -1471,6 +2103,13 @@ def evaluate_standard_retrieval_case(
         # but it should not hide a row already surfaced by first-stage FTS. Keep
         # semantic-only metrics separate so regressions remain visible.
         reranked_rank = best_rank(evidence_rank, semantic_only_rank)
+        source_semantic_cache_rank = rank_expected_line(
+            source_semantic_cache_hits,
+            expected_lines,
+        ) if source_semantic_cache_hits else None
+        source_semantic_cache_hit_top_k = bool(
+            source_semantic_cache_rank and source_semantic_cache_rank <= top_k
+        )
         row.update(
             {
                 "line_reranker_mode": resolved_reranker_mode,
@@ -1507,6 +2146,20 @@ def evaluate_standard_retrieval_case(
                 "line_reranker_cache": reranker_payload.get("cache") or {},
                 "line_reranker_metadata": (
                     reranker_payload.get("metadata") or reranker_metadata
+                ),
+                "source_semantic_cache_search_available": bool(
+                    source_semantic_search_payload.get("available")
+                ),
+                "source_semantic_cache_hit_count": len(source_semantic_cache_hits),
+                "source_semantic_cache_latency_ms": source_semantic_search_payload.get(
+                    "latency_ms"
+                ),
+                "source_semantic_cache_evidence_rank": source_semantic_cache_rank,
+                f"source_semantic_cache_evidence_hit_top{top_k}": (
+                    source_semantic_cache_hit_top_k
+                ),
+                "source_semantic_cache_hot_path": (
+                    source_semantic_search_payload.get("cache") or {}
                 ),
                 "source_joined_candidate_contains_evidence": (
                     source_joined_candidate_contains_evidence
@@ -1732,6 +2385,11 @@ def summarize_standard_retrieval_results(
             / len(reranker_cases),
             4,
         )
+        source_semantic_cache_cases = [
+            row
+            for row in reranker_cases
+            if row.get("line_reranker_mode") == "source_semantic_cache"
+        ]
         metrics.update(
             {
                 "line_reranker_attempted_count": len(reranker_cases),
@@ -1806,6 +2464,92 @@ def summarize_standard_retrieval_results(
                 "reranked_evidence_mrr_delta": round(reranked_mrr - evidence_mrr, 4),
             }
         )
+        if source_semantic_cache_cases:
+            source_search_hits = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get(f"source_semantic_cache_evidence_hit_top{top_k}")
+            )
+            source_only_hits = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get(f"semantic_only_evidence_hit_top{top_k}")
+            )
+            source_fused_hits = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get(f"reranked_evidence_hit_top{top_k}")
+            )
+            source_search_mrr = round(
+                sum(
+                    reciprocal_rank(row.get("source_semantic_cache_evidence_rank"))
+                    for row in source_semantic_cache_cases
+                )
+                / len(source_semantic_cache_cases),
+                4,
+            )
+            source_only_mrr = round(
+                sum(
+                    reciprocal_rank(row.get("semantic_only_evidence_rank"))
+                    for row in source_semantic_cache_cases
+                )
+                / len(source_semantic_cache_cases),
+                4,
+            )
+            source_fused_mrr = round(
+                sum(
+                    reciprocal_rank(row.get("reranked_evidence_rank"))
+                    for row in source_semantic_cache_cases
+                )
+                / len(source_semantic_cache_cases),
+                4,
+            )
+            metrics.update(
+                {
+                    "source_semantic_cache_case_count": len(source_semantic_cache_cases),
+                    "source_semantic_cache_search_available_count": sum(
+                        1
+                        for row in source_semantic_cache_cases
+                        if row.get("source_semantic_cache_search_available")
+                    ),
+                    "source_semantic_cache_search_hit_count_avg": round(
+                        sum(
+                            int(row.get("source_semantic_cache_hit_count") or 0)
+                            for row in source_semantic_cache_cases
+                        )
+                        / len(source_semantic_cache_cases),
+                        2,
+                    ),
+                    "source_semantic_cache_hot_path_latency_ms": (
+                        summarize_numeric_latency(
+                            source_semantic_cache_cases,
+                            "source_semantic_cache_latency_ms",
+                        )
+                    ),
+                    f"source_semantic_cache_search_evidence_hit_top{top_k}": (
+                        source_search_hits
+                    ),
+                    f"source_semantic_cache_search_evidence_hit_rate_top{top_k}": (
+                        safe_rate(source_search_hits, len(source_semantic_cache_cases))
+                    ),
+                    "source_semantic_cache_search_evidence_mrr": source_search_mrr,
+                    f"source_semantic_cache_only_evidence_hit_top{top_k}": (
+                        source_only_hits
+                    ),
+                    f"source_semantic_cache_only_evidence_hit_rate_top{top_k}": (
+                        safe_rate(source_only_hits, len(source_semantic_cache_cases))
+                    ),
+                    "source_semantic_cache_only_evidence_mrr": source_only_mrr,
+                    f"source_semantic_cache_fused_evidence_hit_top{top_k}": (
+                        source_fused_hits
+                    ),
+                    f"source_semantic_cache_fused_evidence_hit_rate_top{top_k}": (
+                        safe_rate(source_fused_hits, len(source_semantic_cache_cases))
+                    ),
+                    "source_semantic_cache_fused_evidence_mrr": source_fused_mrr,
+                    "source_semantic_cache_hot_query_provider_call_count": 0,
+                }
+            )
     return metrics
 
 
@@ -1972,6 +2716,12 @@ def run_standard_retrieval_qa_benchmark(
             timeout=line_reranker_timeout,
             max_tokens=line_reranker_max_tokens,
         )
+    if resolved_line_reranker_mode == "source_semantic_cache":
+        config["line_reranker_metadata"] = source_semantic_cache_public_contract()
+        config["source_semantic_cache_prewarmed"] = True
+        config["source_semantic_cache_prewarm_workers"] = int(
+            DEFAULT_STANDARD_SOURCE_SEMANTIC_CACHE_PREWARM_WORKERS
+        )
     if dataset == "longmemeval-v2":
         return skipped_standard_retrieval_payload(
             dataset=dataset,
@@ -2032,6 +2782,44 @@ def run_standard_retrieval_qa_benchmark(
             total_cases=len(cases),
             corpus=corpus,
         )
+        source_semantic_cache_store = (
+            SourceSemanticCacheStore()
+            if resolved_line_reranker_mode == "source_semantic_cache"
+            else None
+        )
+        if source_semantic_cache_store is not None:
+            prewarm_workers = min(
+                max(1, int(DEFAULT_STANDARD_SOURCE_SEMANTIC_CACHE_PREWARM_WORKERS)),
+                max(1, len(cases)),
+            )
+
+            def prewarm(case: dict[str, Any]) -> None:
+                expected = case.get("expected") or {}
+                source_semantic_cache_store.get(
+                    Path(case["sqlite_path"]),
+                    line_to_session={
+                        str(k): str(v)
+                        for k, v in (expected.get("line_to_session") or {}).items()
+                    },
+                )
+
+            if prewarm_workers > 1:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=prewarm_workers
+                ) as executor:
+                    list(executor.map(prewarm, cases))
+            else:
+                for case in cases:
+                    prewarm(case)
+            emit_standard_progress(
+                progress_callback,
+                started=started,
+                phase="source_semantic_cache_prewarmed",
+                config=config,
+                cases_built=len(cases),
+                total_cases=len(cases),
+                corpus=corpus,
+            )
 
         def evaluate(case: dict[str, Any]) -> dict[str, Any]:
             return evaluate_standard_retrieval_case(
@@ -2046,6 +2834,7 @@ def run_standard_retrieval_qa_benchmark(
                 line_reranker_max_candidates=line_reranker_max_candidates,
                 line_reranker_timeout=line_reranker_timeout,
                 line_reranker_max_tokens=line_reranker_max_tokens,
+                source_semantic_cache_store=source_semantic_cache_store,
             )
 
         if resolved_line_reranker_mode != "off" and resolved_reranker_workers > 1:
@@ -2095,6 +2884,12 @@ def run_standard_retrieval_qa_benchmark(
         top_k=top_k,
         context_radius=context_radius,
     )
+    if resolved_line_reranker_mode == "source_semantic_cache":
+        metrics["source_semantic_cache"] = (
+            source_semantic_cache_store.summary()
+            if source_semantic_cache_store is not None
+            else SourceSemanticCacheStore().summary()
+        )
     status = standard_retrieval_status(
         metrics,
         min_questions=min_questions,

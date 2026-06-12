@@ -374,6 +374,50 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn("retrieval marker", dumped)
         self.assertNotIn(str(path), dumped)
 
+    def test_source_semantic_cache_uses_aippocampus_worker_surface_without_provider(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "longmemeval_oracle.json"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path), patch(
+                "source_evidence.standard_public.call_chat_json",
+                side_effect=AssertionError("source-side cache must not call provider"),
+            ):
+                payload = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["evaluation"]["line_reranker_mode"], "source_semantic_cache")
+        arm = payload["evaluation"]["source_semantic_cache_arm"]
+        self.assertEqual(arm["builder"], "aippocampus_worker_surface")
+        self.assertEqual(arm["provider"], "local_aippocampus_runtime")
+        self.assertFalse(arm["output_boundary"]["question_answering_allowed"])
+        self.assertTrue(arm["output_boundary"]["source_reopen_required_for_claims"])
+        adapter_config = payload["standard_adapter"]["config"]
+        self.assertFalse(adapter_config["line_reranker_external_model"])
+        self.assertEqual(
+            adapter_config["line_reranker_metadata"]["cache_policy_version"],
+            "aippocampus-source-worker-surface-cache-v1",
+        )
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["line_reranker_usage"]["provider_call_count"], 0)
+        self.assertEqual(metrics["source_semantic_cache_hot_query_provider_call_count"], 0)
+        self.assertEqual(metrics["source_semantic_cache"]["provider_call_count"], 0)
+        self.assertFalse(metrics["source_semantic_cache"]["raw_source_text_emitted"])
+        self.assertFalse(metrics["source_semantic_cache"]["cache_values_emitted"])
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("secret fixture answer marker", dumped)
+        self.assertNotIn("retrieval marker", dumped)
+        self.assertNotIn(str(path), dumped)
+
     def test_fixed_evidence_rank_buckets_cover_near_miss_diagnostics(self) -> None:
         self.assertEqual(standard_public.evidence_rank_bucket(1), "rank_1")
         self.assertEqual(standard_public.evidence_rank_bucket(4), "rank_4_5")
