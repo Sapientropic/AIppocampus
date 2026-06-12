@@ -11,7 +11,12 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.model.routing import DEEPSEEK_PREFIX_CACHE_CONTRACT
+from aippocampus_runtime.model.routing import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    deepseek_base_url,
+    flash_model,
+)
 from aippocampus_runtime.safety import deepseek_cache_metrics_from_usage
 
 SCHEMA_VERSION = 1
@@ -497,6 +502,22 @@ def build_dream_atlas_report(
     }
 
 
+def run_live_atlas_pilot(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Compatibility facade for the opt-in live pilot helper.
+
+    Keep deterministic atlas construction import-light. The live provider path
+    owns model routing, prompt construction, and adjudication diagnostics in the
+    sibling module so this builder does not become a mixed offline/live
+    coordinator again.
+    """
+
+    from aippocampus_runtime.dream.atlas_live_pilot import (
+        run_live_atlas_pilot as _run_live_atlas_pilot,
+    )
+
+    return _run_live_atlas_pilot(*args, **kwargs)
+
+
 def load_rows(path: Path) -> list[Mapping[str, Any]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(data, list):
@@ -512,15 +533,53 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", help="JSON file with Dream pack rows.")
     parser.add_argument("--fixture", action="store_true", help="Use the built-in fixture.")
     parser.add_argument("--json", action="store_true", help="Emit JSON report.")
+    parser.add_argument(
+        "--live-pilot",
+        action="store_true",
+        help="Run or skip the opt-in live provider atlas pilot.",
+    )
+    parser.add_argument(
+        "--skip-if-missing-key",
+        action="store_true",
+        help="Emit a skipped report instead of failing when the API key is absent.",
+    )
+    parser.add_argument("--model-route", default="flash")
+    parser.add_argument("--model", default=flash_model())
+    parser.add_argument("--base-url", default=deepseek_base_url())
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
+    parser.add_argument("--max-tokens", type=int, default=1400)
+    parser.add_argument("--max-samples", type=int, default=2)
+    parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--dream-model-thinking", default="auto")
+    parser.add_argument("--dream-model-reasoning-effort", default="auto")
+    parser.add_argument("--input-cost-per-million", type=float)
+    parser.add_argument("--output-cost-per-million", type=float)
     args = parser.parse_args(argv)
 
     rows = load_rows(Path(args.input)) if args.input else None
-    report = build_dream_atlas_report(rows)
+    if args.live_pilot:
+        from aippocampus_runtime.dream.atlas_live_pilot import config_from_args
+
+        config, model_route, skip_reason = config_from_args(args)
+        report = run_live_atlas_pilot(
+            rows=rows,
+            config=config,
+            max_samples=args.max_samples,
+            input_cost_per_million=args.input_cost_per_million,
+            output_cost_per_million=args.output_cost_per_million,
+            model_route=model_route,
+            skip_reason=skip_reason,
+        )
+    else:
+        report = build_dream_atlas_report(rows)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("dream atlas pack: " + ("ok" if report["ok"] else "blocked"))
         print(f"metrics: {report['metrics']}")
+        if args.live_pilot:
+            print(f"live_pilot: {report['live_pilot']['status']}")
     return 0 if report["safety_gate_ok"] else 1
 
 

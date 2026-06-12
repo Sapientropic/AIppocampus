@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,20 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.dream import atlas_pack  # noqa: E402
+from aippocampus_runtime.model.client import (  # noqa: E402
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    ChatClientConfig,
+)
+
+
+def config() -> ChatClientConfig:
+    return ChatClientConfig(
+        api_key="test",
+        model="deepseek-v4-flash",
+        base_url="https://example.invalid",
+        cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
+        timeout=11,
+    )
 
 
 class DreamAtlasPackTests(unittest.TestCase):
@@ -157,6 +172,239 @@ class DreamAtlasPackTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_DREAM_ATLAS_TEXT", encoded)
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("source://private/raw-ref", encoded)
+
+    def test_live_pilot_runs_provider_output_through_background_adjudication(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_model_call(
+            messages: list[dict[str, str]], call_config: ChatClientConfig
+        ) -> dict[str, object]:
+            captured["messages"] = messages
+            captured["config"] = call_config
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "cross_thread_resonance",
+                                            "title": "Atlas sees a route-cycle resonance",
+                                            "summary": (
+                                                "The source cards connect a repeated route cycle "
+                                                "to a topology bridge without making either a fact."
+                                            ),
+                                            "activation_cues": [
+                                                "route cycle resonance",
+                                                "topology bridge",
+                                            ],
+                                            "confidence": 0.71,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "Two atlas source refs support the bridge candidate.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                        },
+                                        {
+                                            "candidate_kind": "unsupported_symbol",
+                                            "title": "Unsupported",
+                                            "summary": "This should be rejected by the worker contract.",
+                                            "activation_cues": ["unsupported"],
+                                            "confidence": 0.6,
+                                            "source_ref_ids": [],
+                                            "bridge_claims": [],
+                                        },
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 220,
+                    "completion_tokens": 80,
+                    "total_tokens": 300,
+                    "prompt_cache_hit_tokens": 120,
+                    "prompt_cache_miss_tokens": 100,
+                },
+            }
+
+        report = atlas_pack.run_live_atlas_pilot(
+            rows=atlas_pack.fixture_pack_rows(),
+            config=config(),
+            model_call=fake_model_call,
+            max_samples=2,
+            input_cost_per_million=0.20,
+            output_cost_per_million=0.80,
+        )
+
+        self.assertTrue(report["ok"], json.dumps(report, indent=2))
+        self.assertEqual(report["live_pilot"]["status"], "live_provider_completed")
+        self.assertEqual(captured["config"].cache_contract, "deepseek_prefix_v1")
+        messages = captured["messages"]
+        self.assertEqual([message["role"] for message in messages], ["system", "user", "user"])
+        self.assertIn("stable_dream_worker_contract", messages[0]["content"])
+        self.assertIn("stable_atlas_source_card_payload", messages[1]["content"])
+        self.assertIn("variable_run_directive", messages[2]["content"])
+
+        worker = report["live_pilot"]["worker_run"]
+        self.assertEqual(worker["status"], "candidate_emitted")
+        self.assertEqual(worker["counts"]["findings"], 1)
+        self.assertEqual(worker["counts"]["accepted"], 1)
+        self.assertEqual(worker["counts"]["rejected"], 1)
+        self.assertEqual(worker["usage"]["prompt_cache_hit_tokens"], 120)
+        self.assertAlmostEqual(worker["cache"]["hit_rate"], 120 / 220, places=4)
+        self.assertEqual(worker["no_write"], True)
+
+        comparison = report["live_pilot"]["comparison"]
+        self.assertEqual(comparison["bounded_pack"]["candidate_count"], 0)
+        self.assertEqual(comparison["atlas"]["candidate_count"], 2)
+        self.assertEqual(comparison["live_atlas"]["candidate_count"], 1)
+        self.assertEqual(comparison["live_atlas"]["accepted_count"], 1)
+        self.assertEqual(comparison["live_atlas"]["unsupported_candidate_count"], 1)
+        self.assertEqual(comparison["live_atlas"]["source_ref_validity_rate"], 1.0)
+        self.assertGreaterEqual(comparison["latency_ms"], 0.0)
+        self.assertEqual(comparison["token_use"]["total_tokens"], 300)
+        self.assertAlmostEqual(comparison["cost"]["estimated_cost_usd"], 0.000108)
+        self.assertEqual(report["cache_telemetry"]["source"], "provider_usage")
+        self.assertIn(
+            "provider_usage_and_adjudicated_candidate_comparison",
+            report["supports"],
+        )
+        self.assertIn("broad_live_deepseek_quality", report["cannot_claim"])
+        self.assertIn("broad_long_context_candidate_quality", report["cannot_claim"])
+
+    def test_live_pilot_cli_skips_missing_key_without_inventing_usage(self) -> None:
+        env = dict(os.environ)
+        env.pop("AIPPOCAMPUS_TEST_MISSING_KEY_1286", None)
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.dream.atlas_pack",
+                "--fixture",
+                "--live-pilot",
+                "--skip-if-missing-key",
+                "--api-key-env",
+                "AIPPOCAMPUS_TEST_MISSING_KEY_1286",
+                "--json",
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+            cwd=REPO_ROOT,
+            env=env,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["ok"], json.dumps(payload, indent=2))
+        self.assertEqual(payload["live_pilot"]["status"], "skipped_missing_api_key")
+        self.assertEqual(payload["live_pilot"]["worker_run"], None)
+        self.assertEqual(payload["cache_telemetry"]["available"], False)
+        self.assertIsNone(payload["cache_telemetry"]["hit_rate"])
+        self.assertIsNone(
+            payload["live_pilot"]["comparison"]["cost"]["estimated_cost_usd"]
+        )
+        self.assertEqual(
+            payload["live_pilot"]["comparison"]["cost"]["mode"],
+            "no_provider_usage",
+        )
+
+    def test_live_pilot_keeps_provider_usage_when_output_is_rejected(self) -> None:
+        def fake_model_call(
+            messages: list[dict[str, str]], call_config: ChatClientConfig
+        ) -> dict[str, object]:
+            return {
+                "choices": [{"message": {"content": ""}}],
+                "usage": {
+                    "prompt_tokens": 100,
+                    "completion_tokens": 20,
+                    "total_tokens": 120,
+                    "prompt_cache_hit_tokens": 80,
+                    "prompt_cache_miss_tokens": 20,
+                },
+            }
+
+        report = atlas_pack.run_live_atlas_pilot(
+            rows=atlas_pack.fixture_pack_rows(),
+            config=config(),
+            model_call=fake_model_call,
+            max_samples=2,
+        )
+        worker = report["live_pilot"]["worker_run"]
+
+        self.assertEqual(worker["status"], "model_output_rejected")
+        self.assertEqual(worker["counts"]["rejected"], 1)
+        self.assertEqual(worker["usage"]["total_tokens"], 120)
+        self.assertEqual(worker["cache"]["hit_rate"], 0.8)
+        self.assertEqual(report["cache_telemetry"]["source"], "provider_usage")
+        self.assertEqual(report["live_pilot"]["comparison"]["token_use"]["total_tokens"], 120)
+
+    def test_live_pilot_source_ref_validity_is_not_confused_with_other_audit_failures(self) -> None:
+        def fake_model_call(
+            messages: list[dict[str, str]], call_config: ChatClientConfig
+        ) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "cross_thread_resonance",
+                                            "title": "Refs resolve but artifact is unsupported",
+                                            "summary": "The source refs resolve; an extra artifact field should park the finding.",
+                                            "activation_cues": ["route cycle resonance"],
+                                            "confidence": 0.71,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "Both source refs support the route candidate.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                            "constructive_artifact": {
+                                                "artifact_kind": "draft",
+                                                "draft_text": "Unsupported for amplification.",
+                                            },
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 100,
+                    "completion_tokens": 50,
+                    "total_tokens": 150,
+                    "prompt_cache_hit_tokens": 75,
+                    "prompt_cache_miss_tokens": 25,
+                },
+            }
+
+        report = atlas_pack.run_live_atlas_pilot(
+            rows=atlas_pack.fixture_pack_rows(),
+            config=config(),
+            model_call=fake_model_call,
+            max_samples=1,
+        )
+        worker = report["live_pilot"]["worker_run"]
+
+        self.assertEqual(worker["status"], "candidate_parked")
+        self.assertIn(
+            "constructive_artifact_unsupported_dream_function",
+            worker["findings"][0]["source_ref_audit"]["failed_checks"],
+        )
+        self.assertEqual(
+            report["live_pilot"]["comparison"]["live_atlas"]["source_ref_validity_rate"],
+            1.0,
+        )
 
 
 if __name__ == "__main__":

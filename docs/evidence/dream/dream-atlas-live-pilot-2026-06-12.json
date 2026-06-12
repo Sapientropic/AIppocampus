@@ -1,0 +1,1286 @@
+{
+  "kind": "aippocampus_dream_long_context_atlas_report",
+  "schema_version": 1,
+  "ok": true,
+  "contract_gate_ok": true,
+  "safety_gate_ok": true,
+  "atlas_pack": {
+    "kind": "dream_long_context_atlas_pack",
+    "schema_version": 1,
+    "model_family": "deepseek_v4",
+    "candidate_models": [
+      "deepseek-v4-flash",
+      "deepseek-v4-pro"
+    ],
+    "context_window_tokens": 1000000,
+    "cache_contract": "deepseek_prefix_v1",
+    "prompt_order": [
+      "stable_dream_worker_contract",
+      "stable_atlas_source_card_payload",
+      "variable_run_directive"
+    ],
+    "privacy_mode": "source_cards_only",
+    "selected_pack_count": 4,
+    "source_ref_count": 8,
+    "source_thread_count": 4,
+    "estimated_token_budget": 1994,
+    "raw_source_text_included": false,
+    "source_cards": [
+      {
+        "pack_id": "bounded_cycle_pack_a",
+        "topic_epoch": "route-cycle",
+        "project_scope": "project:aippocampus",
+        "freshness": "current",
+        "roi_score": 0.82,
+        "source_ref_ids": [
+          "public:cycle:a1",
+          "public:cycle:a2"
+        ],
+        "source_thread_count": 1,
+        "cycle_key": "manual_search_loop",
+        "bridge_key": null,
+        "bounded_detected_shapes": []
+      },
+      {
+        "pack_id": "bounded_cycle_pack_b",
+        "topic_epoch": "route-cycle",
+        "project_scope": "project:aippocampus",
+        "freshness": "current",
+        "roi_score": 0.78,
+        "source_ref_ids": [
+          "public:cycle:b1",
+          "public:cycle:b2"
+        ],
+        "source_thread_count": 1,
+        "cycle_key": "manual_search_loop",
+        "bridge_key": null,
+        "bounded_detected_shapes": []
+      },
+      {
+        "pack_id": "bridge_pack_b",
+        "topic_epoch": "topology-bridge",
+        "project_scope": "project:aippocampus",
+        "freshness": "current",
+        "roi_score": 0.74,
+        "source_ref_ids": [
+          "public:bridge:b1",
+          "public:bridge:b2"
+        ],
+        "source_thread_count": 1,
+        "cycle_key": null,
+        "bridge_key": "topology_usefulness",
+        "bounded_detected_shapes": []
+      },
+      {
+        "pack_id": "bridge_pack_a",
+        "topic_epoch": "topology-bridge",
+        "project_scope": "project:aippocampus",
+        "freshness": "current",
+        "roi_score": 0.7,
+        "source_ref_ids": [
+          "public:bridge:a1",
+          "public:bridge:a2"
+        ],
+        "source_thread_count": 1,
+        "cycle_key": null,
+        "bridge_key": "topology_usefulness",
+        "bounded_detected_shapes": []
+      }
+    ],
+    "official_deepseek_sources": [
+      "https://api-docs.deepseek.com/news/news260424",
+      "https://api-docs.deepseek.com/guides/kv_cache"
+    ],
+    "official_source_checked_on": "2026-06-11"
+  },
+  "atlas_candidates": [
+    {
+      "kind": "dream_atlas_candidate",
+      "schema_version": 1,
+      "candidate_id": "dream_atlas_ed72ae3b5b4197cf",
+      "candidate_type": "cross_pack_cycle",
+      "shape": "cycle",
+      "authority": "dream_synthesized_candidate_not_fact",
+      "source_ref_ids": [
+        "public:cycle:a1",
+        "public:cycle:a2",
+        "public:cycle:b1",
+        "public:cycle:b2"
+      ],
+      "source_ref_count": 4,
+      "source_thread_count": 2,
+      "source_pack_ids": [
+        "bounded_cycle_pack_a",
+        "bounded_cycle_pack_b"
+      ],
+      "bounded_pack_detected": false,
+      "foreground_eligible": false,
+      "source_reopen_required_before_claim": true,
+      "next_safe_action": "review_or_route_only",
+      "unsupported_candidate": false
+    },
+    {
+      "kind": "dream_atlas_candidate",
+      "schema_version": 1,
+      "candidate_id": "dream_atlas_134a64a846274173",
+      "candidate_type": "cross_pack_bridge",
+      "shape": "weak_bridge",
+      "authority": "dream_synthesized_candidate_not_fact",
+      "source_ref_ids": [
+        "public:bridge:a1",
+        "public:bridge:a2",
+        "public:bridge:b1",
+        "public:bridge:b2"
+      ],
+      "source_ref_count": 4,
+      "source_thread_count": 2,
+      "source_pack_ids": [
+        "bridge_pack_b",
+        "bridge_pack_a"
+      ],
+      "bounded_pack_detected": false,
+      "foreground_eligible": false,
+      "source_reopen_required_before_claim": true,
+      "next_safe_action": "review_or_route_only",
+      "unsupported_candidate": false
+    }
+  ],
+  "rejected_packs": [],
+  "metrics": {
+    "selected_pack_count": 4,
+    "source_ref_count": 8,
+    "source_thread_count": 4,
+    "estimated_token_budget": 1994,
+    "bounded_pack_candidate_count": 0,
+    "atlas_candidate_count": 2,
+    "atlas_unique_candidate_count": 2,
+    "bounded_pack_missed_bridge_or_cycle_count": 2,
+    "source_ref_validity_rate": 1.0,
+    "bridge_quality_proxy_count": 1,
+    "unsupported_candidate_count": 0,
+    "hard_negative_rejected_count": 0,
+    "source_free_symbolic_claim_rejected_count": 0,
+    "profile_claim_rejected_count": 0,
+    "missing_source_refs_rejected_count": 0,
+    "latency_cost_mode": "provider_usage_attached"
+  },
+  "evaluation": {
+    "command": "python -m aippocampus_runtime.dream.atlas_pack --fixture --live-pilot --json",
+    "comparison": {
+      "bounded_pack_candidate_count": 0,
+      "atlas_candidate_count": 2,
+      "candidate_survival_count": 2,
+      "source_ref_validity_rate": 1.0,
+      "bridge_quality_proxy_count": 1,
+      "unsupported_candidate_count": 0,
+      "latency_cost_mode": "deterministic_estimate_only"
+    },
+    "live_provider_cache_fields": [
+      "usage.prompt_cache_hit_tokens",
+      "usage.prompt_cache_miss_tokens"
+    ]
+  },
+  "cache_telemetry": {
+    "available": true,
+    "source": "provider_usage",
+    "prompt_cache_hit_tokens": 3328,
+    "prompt_cache_miss_tokens": 67,
+    "hit_rate": 0.9803
+  },
+  "red_lines": {
+    "raw_private_text_emitted_count": 0,
+    "local_path_emitted_count": 0,
+    "raw_source_ref_emitted_count": 0,
+    "raw_source_text_included_count": 0,
+    "unsupported_candidate_count": 0,
+    "cache_hit_rate_invented_count": 0
+  },
+  "privacy_boundary": {
+    "raw_private_text_emitted": false,
+    "local_paths_emitted": false,
+    "raw_source_refs_emitted": false,
+    "raw_source_text_included": false,
+    "forbidden_marker_count": 0
+  },
+  "contract": {
+    "stable_prefix_payload_before_variable_directive": true,
+    "deepseek_v4_1m_context_officially_verified": true,
+    "cache_telemetry_only_from_provider_usage": true,
+    "raw_source_text_default_excluded": true,
+    "candidates_remain_dream_synthesized_not_fact": true,
+    "foreground_disabled_by_default": true
+  },
+  "cannot_claim": [
+    "provider_cache_hit_rate_without_usage",
+    "private_history_atlas_quality",
+    "long_context_candidate_quality",
+    "foreground_default_usefulness",
+    "source_truth_without_reopen",
+    "broad_live_deepseek_quality",
+    "broad_long_context_candidate_quality"
+  ],
+  "live_pilot": {
+    "kind": "aippocampus_dream_atlas_live_pilot",
+    "status": "live_provider_completed",
+    "model_route": {
+      "route": "flash",
+      "tier": "flash",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "base_url": "https://api.deepseek.com",
+      "capabilities": {
+        "api_compatibility": "openai_chat_completions",
+        "supports_json_response": true,
+        "supports_user_id": true,
+        "supports_thinking": true,
+        "cache_metrics_kind": "deepseek_prefix",
+        "safe_default_concurrency": 4,
+        "supports_reasoning_effort": true,
+        "default_thinking": "enabled",
+        "default_reasoning_effort": "high",
+        "reasoning_content_handling": "discard_without_storage"
+      },
+      "cache_contract": "deepseek_prefix_v1",
+      "api_key_env_omitted": true
+    },
+    "worker_pack_summary": {
+      "pack_id": "dream_atlas_live_3de05abc82712d40",
+      "source_ref_count": 8,
+      "source_thread_count": 4,
+      "raw_source_text_included": false
+    },
+    "worker_run": {
+      "schema_version": 1,
+      "kind": "aippocampus_dream_atlas_live_worker_run",
+      "status": "candidate_emitted",
+      "pack_id": "dream_atlas_live_3de05abc82712d40",
+      "dream_function": "amplification",
+      "execution_mode": "detached_background_eval",
+      "foreground_eligible": false,
+      "live_model_allowed_in_foreground": false,
+      "cache_contract": "deepseek_prefix_v1",
+      "prompt_order": [
+        "stable_dream_worker_contract",
+        "stable_atlas_source_card_payload",
+        "variable_run_directive"
+      ],
+      "findings": [
+        {
+          "schema_version": 1,
+          "kind": "aippocampus_dream_finding",
+          "finding_kind": "dream_synthesized",
+          "dream_function": "amplification",
+          "dream_phase": "phase4_model_backed_pack_worker",
+          "candidate_kind": "cross_thread_resonance",
+          "support_level": "candidate",
+          "review_state": "needs_review",
+          "foreground_eligible": false,
+          "human_review_required": false,
+          "formal_memory_eligible": false,
+          "clean_source_mutation": false,
+          "fingerprint": "dream_model_77b7c6ab4aba913e24",
+          "title": "Cycle-Bridge Overlap in Manual Search Loops",
+          "summary": "Both bounded cycle packs (a and b) describe manual search loops that may share a common blockage: the search fails to transition into a bridge topology. The bridge packs (a and b) hint at a 'topology_usefulness' bridge that could unblock the cycle. This suggests that the cycle packs and bridge packs are not independent but may be two sides of the same route-cycle problem.",
+          "activation_cues": [
+            "manual search loop stuck",
+            "cycle fails to bridge",
+            "topology_usefulness as unblock",
+            "cycle and bridge packs overlap"
+          ],
+          "confidence": 0.65,
+          "source_refs": [
+            {
+              "thread_key": "thread-cycle-a",
+              "message_id": "public:cycle:a1",
+              "line": 1,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_a"
+            },
+            {
+              "thread_key": "thread-cycle-a",
+              "message_id": "public:cycle:a2",
+              "line": 2,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_a"
+            },
+            {
+              "thread_key": "thread-cycle-b",
+              "message_id": "public:cycle:b1",
+              "line": 3,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_b"
+            },
+            {
+              "thread_key": "thread-cycle-b",
+              "message_id": "public:cycle:b2",
+              "line": 4,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b1",
+              "line": 5,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b2",
+              "line": 6,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a1",
+              "line": 7,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a2",
+              "line": 8,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            }
+          ],
+          "source_ref_audit": {
+            "status": "model_candidate_source_ref_validated",
+            "source_ref_count": 8,
+            "source_thread_count": 4,
+            "clean_source_resolution": "not_reopened_by_model_worker",
+            "failed_checks": []
+          },
+          "source_pack_id": "dream_atlas_live_3de05abc82712d40",
+          "source_seed_ids": [
+            "bounded_cycle_pack_a",
+            "bounded_cycle_pack_b",
+            "bridge_pack_b",
+            "bridge_pack_a"
+          ],
+          "bridge_claims": [
+            {
+              "claim": "Cycle packs a and b both involve manual search loops that may be stuck in a cycle without bridging.",
+              "source_refs": [
+                {
+                  "thread_key": "thread-cycle-a",
+                  "message_id": "public:cycle:a1",
+                  "line": 1,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_a"
+                },
+                {
+                  "thread_key": "thread-cycle-a",
+                  "message_id": "public:cycle:a2",
+                  "line": 2,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_a"
+                },
+                {
+                  "thread_key": "thread-cycle-b",
+                  "message_id": "public:cycle:b1",
+                  "line": 3,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_b"
+                },
+                {
+                  "thread_key": "thread-cycle-b",
+                  "message_id": "public:cycle:b2",
+                  "line": 4,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_b"
+                }
+              ]
+            },
+            {
+              "claim": "Bridge packs a and b share a 'topology_usefulness' bridge key that may be relevant to unblocking the cycle.",
+              "source_refs": [
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b1",
+                  "line": 5,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b2",
+                  "line": 6,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a1",
+                  "line": 7,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a2",
+                  "line": 8,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                }
+              ]
+            }
+          ],
+          "downstream_use": [
+            "working_memory",
+            "ambient_recall_card",
+            "reflection_space"
+          ],
+          "truth_boundary": "dream_synthesized_candidate_not_fact",
+          "stance_boundary": {
+            "source_body_stance_is_navigation_only": true,
+            "not_same_persistent_model_self": true,
+            "source_reopen_required_for_exact_claims": true
+          },
+          "worker_validation": {
+            "status": "passed",
+            "failed_checks": [],
+            "max_model_confidence": 0.86
+          },
+          "journey_bridge_hypothesis": {
+            "bridge_kind": "shared_blockage",
+            "source_journey_refs": [
+              "journey:cycle-a",
+              "journey:cycle-b"
+            ],
+            "shared_pattern": "Both journeys involve manual search loops that may be cycling without reaching a useful topology bridge.",
+            "possible_reason": "The cycle packs may lack a bridge key, while the bridge packs have one but are not connected to the cycle context.",
+            "unblock_condition": "If a future agent introduces a topology_usefulness bridge into the cycle context, the cycle may resolve.",
+            "falsification_cues": [
+              "Cycle packs show no evidence of being stuck",
+              "Bridge packs are unrelated to search loops",
+              "Introducing bridge does not change cycle behavior"
+            ],
+            "status": "dream_bridge_not_source_fact",
+            "truth_boundary": "dream_bridge_not_source_fact",
+            "source_refs": [
+              {
+                "thread_key": "thread-cycle-a",
+                "message_id": "public:cycle:a1",
+                "line": 1,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_a"
+              },
+              {
+                "thread_key": "thread-cycle-a",
+                "message_id": "public:cycle:a2",
+                "line": 2,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_a"
+              },
+              {
+                "thread_key": "thread-cycle-b",
+                "message_id": "public:cycle:b1",
+                "line": 3,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_b"
+              },
+              {
+                "thread_key": "thread-cycle-b",
+                "message_id": "public:cycle:b2",
+                "line": 4,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b1",
+                "line": 5,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b2",
+                "line": 6,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a1",
+                "line": 7,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a2",
+                "line": 8,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              }
+            ],
+            "foreground_use": "journey_unblock_probe_not_evidence",
+            "requires_source_reopen_before_claim": true
+          },
+          "foreground_affordance": "A future agent could test whether introducing a topology_usefulness bridge into the manual search loop reduces cycle repetition.",
+          "source_body_shape": "Two cycle packs (each 2 refs) and two bridge packs (each 2 refs) from project:aippocampus, all current freshness, ROI 0.7-0.82.",
+          "agent_position": "Facing the intersection of cycle and bridge packs, needing to decide whether to merge them.",
+          "atmosphere_tags": [
+            "resonance",
+            "unblock",
+            "cross-pack"
+          ],
+          "waking_path": "source_reopen",
+          "what_not_to_overclaim": "Do not claim the cycle packs are actually stuck or that the bridge packs are the solution; this is a hypothesis for testing."
+        },
+        {
+          "schema_version": 1,
+          "kind": "aippocampus_dream_finding",
+          "finding_kind": "dream_synthesized",
+          "dream_function": "amplification",
+          "dream_phase": "phase4_model_backed_pack_worker",
+          "candidate_kind": "theme_deepening",
+          "support_level": "candidate",
+          "review_state": "needs_review",
+          "foreground_eligible": false,
+          "human_review_required": false,
+          "formal_memory_eligible": false,
+          "clean_source_mutation": false,
+          "fingerprint": "dream_model_a4d8ea97cea398ee8b",
+          "title": "Topology Usefulness as a Cycle Exit Condition",
+          "summary": "The bridge packs emphasize 'topology_usefulness' as a bridge key. This may be a deeper theme: that cycles in manual search loops are resolved when the search recognizes a useful topology. The cycle packs may be missing this recognition. Deepening the theme could involve exploring what 'usefulness' means in the context of route-cycle.",
+          "activation_cues": [
+            "topology_usefulness as cycle exit",
+            "usefulness recognition in search",
+            "cycle resolved by bridge",
+            "theme deepening topology"
+          ],
+          "confidence": 0.6,
+          "source_refs": [
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b1",
+              "line": 5,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b2",
+              "line": 6,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a1",
+              "line": 7,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a2",
+              "line": 8,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            }
+          ],
+          "source_ref_audit": {
+            "status": "failed",
+            "source_ref_count": 4,
+            "source_thread_count": 2,
+            "clean_source_resolution": "not_reopened_by_model_worker",
+            "failed_checks": [
+              "constructive_artifact_unsupported_dream_function"
+            ]
+          },
+          "source_pack_id": "dream_atlas_live_3de05abc82712d40",
+          "source_seed_ids": [
+            "bounded_cycle_pack_a",
+            "bounded_cycle_pack_b",
+            "bridge_pack_b",
+            "bridge_pack_a"
+          ],
+          "bridge_claims": [
+            {
+              "claim": "Bridge packs a and b both use 'topology_usefulness' as a bridge key, suggesting it is a recurring concept.",
+              "source_refs": [
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b1",
+                  "line": 5,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b2",
+                  "line": 6,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a1",
+                  "line": 7,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a2",
+                  "line": 8,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                }
+              ]
+            }
+          ],
+          "downstream_use": [
+            "working_memory",
+            "ambient_recall_card",
+            "reflection_space"
+          ],
+          "truth_boundary": "dream_synthesized_candidate_not_fact",
+          "stance_boundary": {
+            "source_body_stance_is_navigation_only": true,
+            "not_same_persistent_model_self": true,
+            "source_reopen_required_for_exact_claims": true
+          },
+          "worker_validation": {
+            "status": "failed",
+            "failed_checks": [
+              "constructive_artifact_unsupported_dream_function"
+            ],
+            "max_model_confidence": 0.86
+          },
+          "constructive_artifact": {
+            "artifact_kind": "draft_probe",
+            "draft_text": "What does 'topology_usefulness' mean in the context of manual search loops? Could it be the condition that breaks a cycle?",
+            "draft_origin": "Derived from bridge packs a and b, which share the bridge key 'topology_usefulness'.",
+            "intended_use": "foreground_probe",
+            "status": "dream_draft_not_source",
+            "truth_boundary": "dream_draft_not_source",
+            "source_refs": [
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b1",
+                "line": 5,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b2",
+                "line": 6,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a1",
+                "line": 7,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a2",
+                "line": 8,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              }
+            ],
+            "counter_evidence": [
+              "Bridge packs may not be about search loops at all",
+              "Topology_usefulness may be a generic label"
+            ],
+            "when_not_to_use": [
+              "When exact source claims are needed",
+              "When the user expects factual answers"
+            ],
+            "foreground_use": "optional_probe_not_evidence",
+            "requires_source_reopen_before_claim": true
+          },
+          "foreground_affordance": "A future agent could probe what 'topology_usefulness' means in practice and whether it can be applied to cycle packs.",
+          "source_body_shape": "Two bridge packs with identical bridge key, suggesting a shared conceptual anchor.",
+          "agent_position": "Standing at the bridge packs, looking toward the cycle packs to see if the concept transfers.",
+          "atmosphere_tags": [
+            "deepening",
+            "concept",
+            "bridge"
+          ],
+          "waking_path": "user_probe",
+          "what_not_to_overclaim": "Do not claim that topology_usefulness is the actual solution; it is a candidate theme for exploration."
+        }
+      ],
+      "adjudicated_findings": [
+        {
+          "schema_version": 1,
+          "kind": "aippocampus_dream_finding",
+          "finding_kind": "dream_synthesized",
+          "dream_function": "amplification",
+          "dream_phase": "phase4_model_backed_pack_worker",
+          "candidate_kind": "cross_thread_resonance",
+          "support_level": "candidate",
+          "review_state": "agent_adjudicated",
+          "foreground_eligible": false,
+          "human_review_required": false,
+          "formal_memory_eligible": false,
+          "clean_source_mutation": false,
+          "fingerprint": "dream_model_77b7c6ab4aba913e24",
+          "title": "Cycle-Bridge Overlap in Manual Search Loops",
+          "summary": "Both bounded cycle packs (a and b) describe manual search loops that may share a common blockage: the search fails to transition into a bridge topology. The bridge packs (a and b) hint at a 'topology_usefulness' bridge that could unblock the cycle. This suggests that the cycle packs and bridge packs are not independent but may be two sides of the same route-cycle problem.",
+          "activation_cues": [
+            "manual search loop stuck",
+            "cycle fails to bridge",
+            "topology_usefulness as unblock",
+            "cycle and bridge packs overlap"
+          ],
+          "confidence": 0.65,
+          "source_refs": [
+            {
+              "thread_key": "thread-cycle-a",
+              "message_id": "public:cycle:a1",
+              "line": 1,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_a"
+            },
+            {
+              "thread_key": "thread-cycle-a",
+              "message_id": "public:cycle:a2",
+              "line": 2,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_a"
+            },
+            {
+              "thread_key": "thread-cycle-b",
+              "message_id": "public:cycle:b1",
+              "line": 3,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_b"
+            },
+            {
+              "thread_key": "thread-cycle-b",
+              "message_id": "public:cycle:b2",
+              "line": 4,
+              "project_label": "project:aippocampus",
+              "title": "bounded_cycle_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b1",
+              "line": 5,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b2",
+              "line": 6,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a1",
+              "line": 7,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a2",
+              "line": 8,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            }
+          ],
+          "source_ref_audit": {
+            "status": "model_candidate_source_ref_validated",
+            "source_ref_count": 8,
+            "source_thread_count": 4,
+            "clean_source_resolution": "not_reopened_by_model_worker",
+            "failed_checks": []
+          },
+          "source_pack_id": "dream_atlas_live_3de05abc82712d40",
+          "source_seed_ids": [
+            "bounded_cycle_pack_a",
+            "bounded_cycle_pack_b",
+            "bridge_pack_b",
+            "bridge_pack_a"
+          ],
+          "bridge_claims": [
+            {
+              "claim": "Cycle packs a and b both involve manual search loops that may be stuck in a cycle without bridging.",
+              "source_refs": [
+                {
+                  "thread_key": "thread-cycle-a",
+                  "message_id": "public:cycle:a1",
+                  "line": 1,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_a"
+                },
+                {
+                  "thread_key": "thread-cycle-a",
+                  "message_id": "public:cycle:a2",
+                  "line": 2,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_a"
+                },
+                {
+                  "thread_key": "thread-cycle-b",
+                  "message_id": "public:cycle:b1",
+                  "line": 3,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_b"
+                },
+                {
+                  "thread_key": "thread-cycle-b",
+                  "message_id": "public:cycle:b2",
+                  "line": 4,
+                  "project_label": "project:aippocampus",
+                  "title": "bounded_cycle_pack_b"
+                }
+              ]
+            },
+            {
+              "claim": "Bridge packs a and b share a 'topology_usefulness' bridge key that may be relevant to unblocking the cycle.",
+              "source_refs": [
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b1",
+                  "line": 5,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b2",
+                  "line": 6,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a1",
+                  "line": 7,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a2",
+                  "line": 8,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                }
+              ]
+            }
+          ],
+          "downstream_use": [
+            "working_memory",
+            "ambient_recall_card",
+            "reflection_space"
+          ],
+          "truth_boundary": "dream_synthesized_candidate_not_fact",
+          "stance_boundary": {
+            "source_body_stance_is_navigation_only": true,
+            "not_same_persistent_model_self": true,
+            "source_reopen_required_for_exact_claims": true
+          },
+          "worker_validation": {
+            "status": "passed",
+            "failed_checks": [],
+            "max_model_confidence": 0.86
+          },
+          "journey_bridge_hypothesis": {
+            "bridge_kind": "shared_blockage",
+            "source_journey_refs": [
+              "journey:cycle-a",
+              "journey:cycle-b"
+            ],
+            "shared_pattern": "Both journeys involve manual search loops that may be cycling without reaching a useful topology bridge.",
+            "possible_reason": "The cycle packs may lack a bridge key, while the bridge packs have one but are not connected to the cycle context.",
+            "unblock_condition": "If a future agent introduces a topology_usefulness bridge into the cycle context, the cycle may resolve.",
+            "falsification_cues": [
+              "Cycle packs show no evidence of being stuck",
+              "Bridge packs are unrelated to search loops",
+              "Introducing bridge does not change cycle behavior"
+            ],
+            "status": "dream_bridge_not_source_fact",
+            "truth_boundary": "dream_bridge_not_source_fact",
+            "source_refs": [
+              {
+                "thread_key": "thread-cycle-a",
+                "message_id": "public:cycle:a1",
+                "line": 1,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_a"
+              },
+              {
+                "thread_key": "thread-cycle-a",
+                "message_id": "public:cycle:a2",
+                "line": 2,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_a"
+              },
+              {
+                "thread_key": "thread-cycle-b",
+                "message_id": "public:cycle:b1",
+                "line": 3,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_b"
+              },
+              {
+                "thread_key": "thread-cycle-b",
+                "message_id": "public:cycle:b2",
+                "line": 4,
+                "project_label": "project:aippocampus",
+                "title": "bounded_cycle_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b1",
+                "line": 5,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b2",
+                "line": 6,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a1",
+                "line": 7,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a2",
+                "line": 8,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              }
+            ],
+            "foreground_use": "journey_unblock_probe_not_evidence",
+            "requires_source_reopen_before_claim": true
+          },
+          "foreground_affordance": "A future agent could test whether introducing a topology_usefulness bridge into the manual search loop reduces cycle repetition.",
+          "source_body_shape": "Two cycle packs (each 2 refs) and two bridge packs (each 2 refs) from project:aippocampus, all current freshness, ROI 0.7-0.82.",
+          "agent_position": "Facing the intersection of cycle and bridge packs, needing to decide whether to merge them.",
+          "atmosphere_tags": [
+            "resonance",
+            "unblock",
+            "cross-pack"
+          ],
+          "waking_path": "source_reopen",
+          "what_not_to_overclaim": "Do not claim the cycle packs are actually stuck or that the bridge packs are the solution; this is a hypothesis for testing.",
+          "adjudication_source": "dream_atlas_live_pilot",
+          "adjudication_result": {
+            "status": "accepted",
+            "passed_checks": [
+              "dream_finding_kind",
+              "source_refs_present",
+              "source_ref_audit",
+              "bridge_claims_source_refs",
+              "confidence_floor",
+              "sensitive_use_gate",
+              "source_pack_ready",
+              "source_pack_overlap"
+            ],
+            "failed_checks": [],
+            "policy": "background_source_guard_v1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "kind": "aippocampus_dream_finding",
+          "finding_kind": "dream_synthesized",
+          "dream_function": "amplification",
+          "dream_phase": "phase4_model_backed_pack_worker",
+          "candidate_kind": "theme_deepening",
+          "support_level": "candidate",
+          "review_state": "needs_review",
+          "foreground_eligible": false,
+          "human_review_required": false,
+          "formal_memory_eligible": false,
+          "clean_source_mutation": false,
+          "fingerprint": "dream_model_a4d8ea97cea398ee8b",
+          "title": "Topology Usefulness as a Cycle Exit Condition",
+          "summary": "The bridge packs emphasize 'topology_usefulness' as a bridge key. This may be a deeper theme: that cycles in manual search loops are resolved when the search recognizes a useful topology. The cycle packs may be missing this recognition. Deepening the theme could involve exploring what 'usefulness' means in the context of route-cycle.",
+          "activation_cues": [
+            "topology_usefulness as cycle exit",
+            "usefulness recognition in search",
+            "cycle resolved by bridge",
+            "theme deepening topology"
+          ],
+          "confidence": 0.6,
+          "source_refs": [
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b1",
+              "line": 5,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-b",
+              "message_id": "public:bridge:b2",
+              "line": 6,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_b"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a1",
+              "line": 7,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            },
+            {
+              "thread_key": "thread-bridge-a",
+              "message_id": "public:bridge:a2",
+              "line": 8,
+              "project_label": "project:aippocampus",
+              "title": "bridge_pack_a"
+            }
+          ],
+          "source_ref_audit": {
+            "status": "failed",
+            "source_ref_count": 4,
+            "source_thread_count": 2,
+            "clean_source_resolution": "not_reopened_by_model_worker",
+            "failed_checks": [
+              "constructive_artifact_unsupported_dream_function"
+            ]
+          },
+          "source_pack_id": "dream_atlas_live_3de05abc82712d40",
+          "source_seed_ids": [
+            "bounded_cycle_pack_a",
+            "bounded_cycle_pack_b",
+            "bridge_pack_b",
+            "bridge_pack_a"
+          ],
+          "bridge_claims": [
+            {
+              "claim": "Bridge packs a and b both use 'topology_usefulness' as a bridge key, suggesting it is a recurring concept.",
+              "source_refs": [
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b1",
+                  "line": 5,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-b",
+                  "message_id": "public:bridge:b2",
+                  "line": 6,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_b"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a1",
+                  "line": 7,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                },
+                {
+                  "thread_key": "thread-bridge-a",
+                  "message_id": "public:bridge:a2",
+                  "line": 8,
+                  "project_label": "project:aippocampus",
+                  "title": "bridge_pack_a"
+                }
+              ]
+            }
+          ],
+          "downstream_use": [
+            "working_memory",
+            "ambient_recall_card",
+            "reflection_space"
+          ],
+          "truth_boundary": "dream_synthesized_candidate_not_fact",
+          "stance_boundary": {
+            "source_body_stance_is_navigation_only": true,
+            "not_same_persistent_model_self": true,
+            "source_reopen_required_for_exact_claims": true
+          },
+          "worker_validation": {
+            "status": "failed",
+            "failed_checks": [
+              "constructive_artifact_unsupported_dream_function"
+            ],
+            "max_model_confidence": 0.86
+          },
+          "constructive_artifact": {
+            "artifact_kind": "draft_probe",
+            "draft_text": "What does 'topology_usefulness' mean in the context of manual search loops? Could it be the condition that breaks a cycle?",
+            "draft_origin": "Derived from bridge packs a and b, which share the bridge key 'topology_usefulness'.",
+            "intended_use": "foreground_probe",
+            "status": "dream_draft_not_source",
+            "truth_boundary": "dream_draft_not_source",
+            "source_refs": [
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b1",
+                "line": 5,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-b",
+                "message_id": "public:bridge:b2",
+                "line": 6,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_b"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a1",
+                "line": 7,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              },
+              {
+                "thread_key": "thread-bridge-a",
+                "message_id": "public:bridge:a2",
+                "line": 8,
+                "project_label": "project:aippocampus",
+                "title": "bridge_pack_a"
+              }
+            ],
+            "counter_evidence": [
+              "Bridge packs may not be about search loops at all",
+              "Topology_usefulness may be a generic label"
+            ],
+            "when_not_to_use": [
+              "When exact source claims are needed",
+              "When the user expects factual answers"
+            ],
+            "foreground_use": "optional_probe_not_evidence",
+            "requires_source_reopen_before_claim": true
+          },
+          "foreground_affordance": "A future agent could probe what 'topology_usefulness' means in practice and whether it can be applied to cycle packs.",
+          "source_body_shape": "Two bridge packs with identical bridge key, suggesting a shared conceptual anchor.",
+          "agent_position": "Standing at the bridge packs, looking toward the cycle packs to see if the concept transfers.",
+          "atmosphere_tags": [
+            "deepening",
+            "concept",
+            "bridge"
+          ],
+          "waking_path": "user_probe",
+          "what_not_to_overclaim": "Do not claim that topology_usefulness is the actual solution; it is a candidate theme for exploration.",
+          "adjudication_source": "dream_atlas_live_pilot",
+          "adjudication_result": {
+            "status": "parked",
+            "passed_checks": [
+              "dream_finding_kind",
+              "source_refs_present",
+              "bridge_claims_source_refs",
+              "confidence_floor",
+              "sensitive_use_gate",
+              "source_pack_ready",
+              "source_pack_overlap"
+            ],
+            "failed_checks": [
+              "source_ref_audit"
+            ],
+            "policy": "background_source_guard_v1"
+          }
+        }
+      ],
+      "dream_working_memory_rows": [],
+      "rejected_candidates": [],
+      "counts": {
+        "findings": 2,
+        "accepted": 1,
+        "parked": 1,
+        "rejected": 0
+      },
+      "usage": {
+        "prompt_tokens": 3395,
+        "completion_tokens": 1303,
+        "total_tokens": 4698,
+        "prompt_tokens_details": {
+          "cached_tokens": 3328
+        },
+        "prompt_cache_hit_tokens": 3328,
+        "prompt_cache_miss_tokens": 67
+      },
+      "cache": {
+        "available": true,
+        "hit_tokens": 3328,
+        "miss_tokens": 67,
+        "hit_rate": 0.9803,
+        "kind": "deepseek_prefix"
+      },
+      "no_write": true,
+      "policy": {
+        "foreground_model_calls_allowed": false,
+        "clean_source_mutation_allowed": false,
+        "requires_background_adjudication": true,
+        "max_samples": 2,
+        "source_cards_only": true
+      }
+    },
+    "comparison": {
+      "bounded_pack": {
+        "candidate_count": 0,
+        "bridge_detected_count": 0,
+        "cycle_detected_count": 0
+      },
+      "atlas": {
+        "candidate_count": 2,
+        "bridge_detected_count": 1,
+        "cycle_detected_count": 1,
+        "unsupported_candidate_count": 0,
+        "source_ref_validity_rate": 1.0
+      },
+      "live_atlas": {
+        "candidate_count": 2,
+        "accepted_count": 1,
+        "parked_count": 1,
+        "unsupported_candidate_count": 0,
+        "source_ref_validity_rate": 1.0,
+        "bridge_claim_count": 3,
+        "cycle_detected_count": 2
+      },
+      "latency_ms": 13417.244,
+      "token_use": {
+        "prompt_tokens": 3395,
+        "completion_tokens": 1303,
+        "total_tokens": 4698,
+        "prompt_tokens_details": {
+          "cached_tokens": 3328
+        },
+        "prompt_cache_hit_tokens": 3328,
+        "prompt_cache_miss_tokens": 67
+      },
+      "cost": {
+        "mode": "provider_pricing_not_configured",
+        "estimated_cost_usd": null,
+        "prompt_tokens": 3395,
+        "completion_tokens": 1303,
+        "input_cost_per_million": null,
+        "output_cost_per_million": null
+      }
+    },
+    "limits": [
+      "small_bounded_pilot_not_broad_quality_claim",
+      "model_candidates_remain_dream_synthesized_not_source_truth",
+      "cost_is_unknown_without_explicit_price_inputs"
+    ]
+  },
+  "supports": [
+    "live_or_skipped_eval_command_for_atlas_packs",
+    "provider_usage_and_adjudicated_candidate_comparison"
+  ]
+}
