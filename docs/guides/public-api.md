@@ -620,16 +620,19 @@ generic arbitrary-file ingest endpoint.
 This is not a generic arbitrary-file ingest endpoint.
 
 For Codex hook dogfood, registry-wide health may report
-`hook_seen_but_not_registered` when the prompt hook saw a thread but the
-registry has no clean-source entry for it. The operator repair path is:
+`pending_repair`, `stale_ledger_row`, or `blocked_or_unsupported` when the
+prompt hook saw a thread but the registry has no durable clean-source entry for
+it, or when the row must fail closed. The lightweight reconciliation path is:
 
 ```text
-python -m aippocampus_runtime.registry.api scan-sessions --hook-seen-only --dry-run --json
+python -m aippocampus_runtime.registry.api reconcile-hook-seen --dry-run --json
 ```
 
-Then rerun without `--dry-run` after reviewing the plan. This reuses provider
-rollout discovery and clean-source registration; it does not treat hook output,
-warm cache cards, or sanitized prompt traces as source-backed evidence.
+Then rerun without `--dry-run` after reviewing the plan. The command reuses
+provider rollout discovery and clean-source registration, defaults to
+clean-source-only durability, and runs heavier SQLite/RAG-lite index rebuilds
+only when `--build-index` is explicit. It does not treat hook output, warm cache
+cards, or sanitized prompt traces as source-backed evidence.
 
 MCP JSON output defaults to public-safe local-path redaction for tool results
 that can be forwarded through host agents. Callers that are acting as local

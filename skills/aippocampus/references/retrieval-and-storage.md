@@ -442,11 +442,19 @@ Common commands:
 - `python -m aippocampus_runtime.registry.api register --cwd "$PWD" --build-index`
 - `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`
 - `python -m aippocampus_runtime.registry.api scan-sessions --dry-run`
+- `python -m aippocampus_runtime.registry.api reconcile-hook-seen --dry-run --json`
 - `python -m aippocampus_runtime.registry.api list`
 - `python -m aippocampus_runtime.registry.api search "terms"`
 - `python -m aippocampus_runtime.registry.api search --metadata-only "terms"`
 
 In a new thread, check the registry before saying old memory is unavailable.
+
+`reconcile-hook-seen` is the repair bridge for fresh short Codex threads that a
+prompt hook observed before lifecycle registration finished. It follows provider
+rollout discovery and then writes durable registry clean source by default; it
+does not use hook output, warm cache cards, or prompt traces as evidence, and it
+does not build heavier SQLite/RAG-lite indexes unless `--build-index` is
+explicit.
 
 `semantic_cues.jsonl` and `semantic_triggers.jsonl` are search-hint sidecars.
 They can provide multilingual/domain aliases to the foreground hook and

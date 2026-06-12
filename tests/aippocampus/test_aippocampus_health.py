@@ -22,6 +22,7 @@ for _path in (
 from aippocampus_runtime import health as health  # noqa: E402
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
     hook_seen_ledger_path_for_registry,
+    hook_seen_thread_ref,
     record_hook_seen_thread,
 )
 
@@ -713,6 +714,22 @@ class AippocampusHealthTests(unittest.TestCase):
                 thread_id="missing-fresh-thread",
                 workspace="private-workspace",
             )
+            with ledger_path.open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "kind": "aippocampus_hook_seen_thread",
+                            "schema_version": 1,
+                            "recorded_at": "1970-01-01T00:00:00Z",
+                            "thread_ref": hook_seen_thread_ref("session:very-old-missing"),
+                            "workspace_ref": "workspace_test",
+                            "registration_expectation": "registry_clean_source_or_blocked",
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
 
             payload = health.registry_health_report(registry_dir=registry_dir)
 
@@ -724,13 +741,16 @@ class AippocampusHealthTests(unittest.TestCase):
         reconciliation = payload["source_intake"]["hook_seen_registry_reconciliation"]
         self.assertEqual(
             reconciliation["metrics"]["hook_seen_but_not_registered_count"],
-            1,
+            2,
         )
-        self.assertEqual(reconciliation["candidates"][0]["status"], "hook_seen_but_not_registered")
+        candidate_states = {item["state"] for item in reconciliation["candidates"]}
+        self.assertIn("pending_repair", candidate_states)
+        self.assertIn("stale_ledger_row", candidate_states)
         thread = payload["top_threads"][0]
         self.assertIn("thread_ref", thread)
         self.assertNotIn("private-thread-title", json.dumps(payload))
         self.assertNotIn("missing-fresh-thread", json.dumps(payload))
+        self.assertNotIn("very-old-missing", json.dumps(payload))
         self.assertNotIn("thread_dir", thread)
 
     def test_registry_wide_cli_can_emit_json(self) -> None:

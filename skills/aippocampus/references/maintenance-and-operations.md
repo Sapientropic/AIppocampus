@@ -62,6 +62,15 @@ raw or clean-source message bodies. Default output must not expose private
 thread titles, raw snippets, or absolute local paths; `--include-paths` is a
 local maintainer diagnostic switch.
 
+Registry-wide health also surfaces hook-seen source-intake states without
+writing artifacts: `registered`, `pending_repair`, `stale_ledger_row`, and
+`blocked_or_unsupported`. Use
+`python -m aippocampus_runtime.registry.api reconcile-hook-seen --dry-run --json`
+to preview the automatic clean-source repair plan, then rerun without
+`--dry-run` when the provider-discovered source should become durable. This
+repair path is clean-source-only by default; `--build-index` is an explicit
+heavier follow-up, not the foreground or health default.
+
 `health_trajectory` must not convert age alone into rebuild pressure. A quiet,
 unchanged index may report `index_age_hours` and `clean_source_age_hours` with
 `expected_degradation=low` while leaving `preemptive_actions` empty. Lifecycle

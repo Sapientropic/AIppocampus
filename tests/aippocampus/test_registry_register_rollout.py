@@ -26,6 +26,7 @@ from aippocampus_runtime import core as aippocampuslib  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
     hook_seen_ledger_path_for_registry,
+    hook_seen_thread_ref,
     record_hook_seen_thread,
 )
 from conversation_sources import CodexConversationProvider  # noqa: E402
@@ -229,6 +230,76 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertEqual(result["hook_seen_filter"]["seen_thread_count"], 1)
         self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
 
+    def test_reconcile_hook_seen_threads_registers_short_session_clean_source_only(
+        self,
+    ) -> None:
+        self._copy_rollout_into_codex_sessions()
+        ledger_path = hook_seen_ledger_path_for_registry(self.registry_dir / "threads.json")
+        record_hook_seen_thread(
+            ledger_path,
+            thread_id="session-other",
+            workspace=str(self.cwd),
+        )
+
+        result = registry.reconcile_hook_seen_threads(
+            registry_dir=self.registry_dir,
+            hook_seen_ledger=ledger_path,
+            provider=CodexConversationProvider(self.root),
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["metrics"]["automatic_clean_source_registration_count"], 1)
+        self.assertEqual(result["metrics"]["manual_thread_id_investigation_reduced_count"], 1)
+        self.assertFalse(result["artifact_policy"]["heavy_index_rebuild_requested"])
+        self.assertEqual(result["states"][0]["state"], "registered")
+        self.assertNotIn("session-other", json.dumps(result))
+
+        registry_data = json.loads(
+            (self.registry_dir / "threads.json").read_text(encoding="utf-8")
+        )
+        entry = registry_data["threads"][0]
+        self.assertEqual(entry["thread_key"], "session:session-other")
+        clean_messages = Path(entry["paths"]["clean_source_messages_jsonl"])
+        self.assertTrue(clean_messages.exists())
+        self.assertIn("旧线程已经注册", clean_messages.read_text(encoding="utf-8"))
+        thread_store = Path(entry["paths"]["registry_thread_store"])
+        self.assertFalse((thread_store / "index" / "manifest.json").exists())
+
+    def test_reconcile_hook_seen_threads_fail_closed_for_unsupported_row(self) -> None:
+        ledger_path = hook_seen_ledger_path_for_registry(self.registry_dir / "threads.json")
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        ledger_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_hook_seen_thread",
+                    "schema_version": 1,
+                    "recorded_at": aippocampuslib.now_utc(),
+                    "thread_ref": hook_seen_thread_ref("session:unsupported-private"),
+                    "workspace_ref": "workspace_test",
+                    "registration_expectation": "blocked_or_unsupported",
+                    "unsupported_reason": "provider_missing_or_private_boundary",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = registry.reconcile_hook_seen_threads(
+            registry_dir=self.registry_dir,
+            hook_seen_ledger=ledger_path,
+            provider=CodexConversationProvider(self.root),
+        )
+
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["metrics"]["blocked_or_unsupported_count"], 1)
+        self.assertEqual(result["metrics"]["automatic_clean_source_registration_count"], 0)
+        self.assertEqual(result["candidates"][0]["state"], "blocked_or_unsupported")
+        self.assertEqual(result["candidates"][0]["next_action"], "inspect_hook_seen_support_boundary")
+        self.assertNotIn("unsupported-private", json.dumps(result))
+        self.assertFalse((self.registry_dir / "threads.json").exists())
+
     def test_registry_cli_scan_sessions_accepts_explicit_provider(self) -> None:
         self._copy_rollout_into_codex_sessions()
 
@@ -256,6 +327,46 @@ class RegisterRolloutTests(unittest.TestCase):
         data = json.loads(proc.stdout)
         self.assertEqual(data["count"], 1)
         self.assertEqual(data["planned"][0]["thread_key"], "session:session-other")
+
+    def test_registry_cli_reconcile_hook_seen_dry_run_accepts_explicit_provider(
+        self,
+    ) -> None:
+        self._copy_rollout_into_codex_sessions()
+        ledger_path = hook_seen_ledger_path_for_registry(self.registry_dir / "threads.json")
+        record_hook_seen_thread(
+            ledger_path,
+            thread_id="session-other",
+            workspace=str(self.cwd),
+        )
+
+        proc = subprocess.run(
+            [
+                *REGISTRY_CMD,
+                "--registry-dir",
+                str(self.registry_dir),
+                "reconcile-hook-seen",
+                "--provider",
+                "codex",
+                "--hook-seen-ledger",
+                str(ledger_path),
+                "--dry-run",
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            cwd=SCRIPTS,
+            env={**os.environ, "CODEX_HOME": str(self.root)},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["metrics"]["planned_clean_source_registration_count"], 1)
+        self.assertEqual(data["planned"][0]["thread_ref"], hook_seen_thread_ref("session:session-other"))
+        self.assertFalse(data["artifact_policy"]["heavy_index_rebuild_requested"])
+        self.assertNotIn("session-other", proc.stdout)
 
     def test_registry_cli_register_source_dry_run_validates_generic_jsonl(self) -> None:
         transcript = self.root / "generic-import.jsonl"

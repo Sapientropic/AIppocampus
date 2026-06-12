@@ -30,6 +30,7 @@ from aippocampus_runtime.registry.common import (
     run_json,
     unique_preserve,
 )
+from aippocampus_runtime.registry.hook_seen_reconciliation import reconcile_hook_seen_threads
 from aippocampus_runtime.registry.provider import current_thread_build_cmd, thread_key_for
 from aippocampus_runtime.registry.search import (
     REGISTRY_SEARCH_DEEP_BUDGET,
@@ -63,6 +64,7 @@ from aippocampus_runtime.registry.store import (
     upsert_thread,
 )
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
+    DEFAULT_HOOK_SEEN_STALE_AFTER_SECONDS,
     hook_seen_ledger_path_for_registry,
     hook_seen_thread_ref,
     hook_seen_thread_refs,
@@ -474,6 +476,25 @@ def main() -> int:
     )
     scan.add_argument("--json", action="store_true", dest="json_output")
 
+    reconcile_hook_seen = sub.add_parser("reconcile-hook-seen")
+    reconcile_hook_seen.add_argument(
+        "--build-index", action="store_true",
+        help="Also build heavier SQLite/RAG-lite indexes. Default is clean-source only."
+    )
+    reconcile_hook_seen.add_argument("--max", type=int)
+    reconcile_hook_seen.add_argument("--provider", choices=PROVIDER_CHOICES, default="codex")
+    reconcile_hook_seen.add_argument("--dry-run", action="store_true")
+    reconcile_hook_seen.add_argument("--hook-seen-ledger")
+    reconcile_hook_seen.add_argument(
+        "--stale-after-seconds", type=int, default=DEFAULT_HOOK_SEEN_STALE_AFTER_SECONDS,
+        help="Mark non-discoverable hook-seen rows older than this as stale.",
+    )
+    reconcile_hook_seen.add_argument(
+        "--include-private-keys", action="store_true",
+        help="Local diagnostic: include raw thread keys and local paths in output.",
+    )
+    reconcile_hook_seen.add_argument("--json", action="store_true", dest="json_output")
+
     list_cmd = sub.add_parser("list")
     list_cmd.add_argument("--json", action="store_true", dest="json_output")
     list_cmd.add_argument("--redact-paths", action="store_true")
@@ -608,6 +629,47 @@ def main() -> int:
                 print(
                     f"- {item.get('thread_key')} | {item.get('title') or item.get('timestamp')} | {item.get('cwd') or item.get('paths', {}).get('workspace')}"
                 )
+        return 0
+
+    if args.command == "reconcile-hook-seen":
+        try:
+            result = reconcile_hook_seen_threads(
+                registry_dir=registry_dir,
+                build_index=args.build_index,
+                max_count=args.max,
+                dry_run=args.dry_run,
+                hook_seen_ledger=Path(args.hook_seen_ledger) if args.hook_seen_ledger else None,
+                stale_after_seconds=args.stale_after_seconds,
+                include_private_keys=args.include_private_keys,
+                provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
+            )
+        except RegistryWriteBusyError as exc:
+            return report_registry_writer_busy(exc, json_output=args.json_output)
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            verb = "would register" if args.dry_run else "registered"
+            count = (
+                result["metrics"]["planned_clean_source_registration_count"]
+                if args.dry_run
+                else result["metrics"]["automatic_clean_source_registration_count"]
+            )
+            print(f"{verb}: {count} hook-seen session(s)")
+            print(f"registry: {result['registry']}")
+            print(f"ledger: {result['ledger']}")
+            print(
+                "states: "
+                + ", ".join(
+                    f"{key}={value}"
+                    for key, value in result["metrics"]["state_counts"].items()
+                )
+            )
+            if result["candidates"]:
+                print("remaining attention:")
+                for item in result["candidates"][:20]:
+                    print(
+                        f"- {item.get('thread_ref')} | {item.get('state')} | {item.get('diagnostic')}"
+                    )
         return 0
 
     registry = load_registry(json_path)

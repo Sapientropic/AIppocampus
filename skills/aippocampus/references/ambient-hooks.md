@@ -980,6 +980,12 @@ Installed events:
 - `PostCompact`: report the latest emergency snapshot in sanitized diagnostics
   and refresh after compaction unless a compact pass just ran.
 
+Lifecycle or explicit repair lanes may run hook-seen reconciliation after
+provider discovery is available, but the foreground `UserPromptSubmit` hook must
+stay hash-only and non-mutating. Reconciliation writes durable clean source
+through registry provider registration; it does not promote warm ambient cards
+or hook traces into evidence, and heavier index rebuilds remain opt-in.
+
 Lifecycle JSON exposes effective cooldown, preemptive action ids, reason codes,
 and taken/skipped preemptive outcomes. These diagnostics are for route decisions
 only: keep them to ids, counts, and reason codes rather than raw prompts,
