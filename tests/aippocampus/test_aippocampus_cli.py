@@ -47,6 +47,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("storage gc", proc.stdout)
         self.assertIn("doctor config", proc.stdout)
         self.assertIn("doctor spend", proc.stdout)
+        self.assertIn("telepathy", proc.stdout)
         self.assertIn("why-recall", proc.stdout)
         self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
 
@@ -246,6 +247,15 @@ class AippocampusCliTests(unittest.TestCase):
             continuity_domain_append.args,
             ["append", "--event-json", "{}", "--json"],
         )
+
+        telepathy_list = facade.resolve_command(["telepathy", "list", "--json"])
+        self.assertEqual(telepathy_list.command, "telepathy")
+        self.assertEqual(
+            telepathy_list.module_name,
+            "aippocampus_runtime.ops.telepathy_handoff_store",
+        )
+        self.assertEqual(telepathy_list.script_name, "telepathy_handoff_store.py")
+        self.assertEqual(telepathy_list.args, ["list", "--json"])
 
         continuity_domain_produce = facade.resolve_command(
             ["continuity-domain", "produce", "--dry-run", "--json"]

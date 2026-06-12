@@ -138,6 +138,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_continuity_domains",
         "test_coordination_topology",
         "test_telepathy_coordination_packet",
+        "test_telepathy_handoff_store",
         "test_cross_agent_isolation",
         "test_correction_reconsolidation",
         "test_cognitive_load_sidecar",

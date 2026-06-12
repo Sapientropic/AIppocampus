@@ -51,6 +51,34 @@ way: packet fields can be diagnosed for collision, handoff-knot, orphan, or
 boundary-crossing shape, but topology diagnostics do not assign work or upgrade
 packet authority.
 
+## Opt-In Local Handoff Workflow
+
+The first executable lifecycle surface is
+`aippocampus_runtime.ops.telepathy_handoff_store` and the facade command:
+
+```sh
+aippocampus telepathy create --scope project:AIppocampus#issue:1287 --owner codex-a --json
+aippocampus telepathy list --json
+aippocampus telepathy deepen <card_id> --json
+aippocampus telepathy release <card_id> --json
+```
+
+The store is an explicit append-only JSONL event log under the thread registry
+by default, or under `--store-path` for public fixtures and local tests. It is
+append-only so release/create history remains auditably visible to the local
+operator; released cards no longer appear in the default active list.
+
+MCP intentionally exposes only `list_telepathy_handoffs` and
+`deepen_telepathy_handoff`. Creating and releasing cards stays a CLI-only,
+local-operator action until MCP write semantics have separate proof for user
+control, provenance, idempotence, and privacy. Source refs stored on a card are
+sanitized to stable selector fields or fingerprints; raw source handles, local
+paths, private text, and chain-of-thought are not a handoff channel.
+
+Candidate-only handoffs remain `navigation_only_not_fact`. A card can tell the
+next agent where to reopen source, but it cannot upgrade another agent's note
+into evidence merely because it entered the handoff store.
+
 ## Fixture Coverage
 
 The deterministic fixture covers:

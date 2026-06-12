@@ -147,4 +147,27 @@ TOOLS: list[dict[str, Any]] = [
         "Run the local AIppocampus health check for a workspace.",
         {"cwd": {"type": "string"}, "include_private_paths": {"type": "boolean"}},
     ),
+    tool_schema(
+        "list_telepathy_handoffs",
+        "List opt-in local Telepathy handoff cards without writing coordination state.",
+        {
+            "cwd": {"type": "string"},
+            "store_path": {"type": "string"},
+            "scope": {"type": "string"},
+            "status": {"type": "string"},
+            "max": {"type": "integer", "minimum": 1, "maximum": 100},
+            "include_private_paths": {"type": "boolean"},
+        },
+    ),
+    tool_schema(
+        "deepen_telepathy_handoff",
+        "Return one Telepathy handoff card with sanitized source selectors for reopen.",
+        {
+            "card_id": {"type": "string"},
+            "cwd": {"type": "string"},
+            "store_path": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
+        },
+        ["card_id"],
+    ),
 ]

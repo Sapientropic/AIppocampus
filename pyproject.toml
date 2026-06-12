@@ -299,6 +299,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/observatory_control_authority.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/packet_topology_diagnostic.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/telepathy_coordination_packet.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/telepathy_handoff_store.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/generation_eviction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/graphify_corpus.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/log_retention.py",

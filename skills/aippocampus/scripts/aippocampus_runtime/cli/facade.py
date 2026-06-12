@@ -83,6 +83,10 @@ COMMANDS = {
         "continuity_domain.py",
         "aippocampus_runtime.recall.continuity_domain_cli",
     ),
+    "telepathy": CommandSpec(
+        "telepathy_handoff_store.py",
+        "aippocampus_runtime.ops.telepathy_handoff_store",
+    ),
 }
 
 SCRIPT_MODULES = {
@@ -100,6 +104,7 @@ SCRIPT_MODULES = {
     "update.py": "aippocampus_runtime.update.cli",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
+    "telepathy_handoff_store.py": "aippocampus_runtime.ops.telepathy_handoff_store",
     "agent_continuity.py": "aippocampus_runtime.recall.agent_continuity",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
@@ -339,6 +344,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  observatory         Read-only route-readiness observatory report", file=target)
     print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)
+    print("  telepathy           Opt-in local handoff card lifecycle", file=target)
     print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)

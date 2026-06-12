@@ -22,6 +22,7 @@ for _path in (
 
 from aippocampus_runtime import core  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
+from aippocampus_runtime.ops import telepathy_handoff_store  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 from conversation_sources import ConversationSourceRef  # noqa: E402
@@ -109,6 +110,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "register_thread",
                 "sync_status",
                 "memory_health",
+                "list_telepathy_handoffs",
+                "deepen_telepathy_handoff",
             },
         )
 
@@ -843,7 +846,14 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["error"]["details"]["requested_tool"], "delete_memory")
 
     def test_unsupported_mutation_tool_family_uses_stable_error_code(self) -> None:
-        mutating_tools = ["store_memory", "write_memory", "sync_push", "install_hook"]
+        mutating_tools = [
+            "store_memory",
+            "write_memory",
+            "sync_push",
+            "install_hook",
+            "create_telepathy_handoff",
+            "release_telepathy_handoff",
+        ]
         for index, tool_name in enumerate(mutating_tools):
             with self.subTest(tool_name=tool_name):
                 response = mcp.handle_request(
@@ -859,6 +869,64 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 payload = self.tool_payload(response)
                 self.assertEqual(payload["error"]["code"], "unsupported_mutation")
                 self.assertEqual(payload["error"]["details"]["requested_tool"], tool_name)
+
+    def test_telepathy_handoff_mcp_lists_and_deepens_without_writes_or_paths(self) -> None:
+        store = self.cwd / "handoffs.jsonl"
+        created = telepathy_handoff_store.create_handoff(
+            scope="project:AIppocampus#issue:1287",
+            owner="codex-a",
+            source_refs=[
+                {
+                    "message_id": "msg_user",
+                    "path": str(self.cwd / "private-rollout.jsonl"),
+                    "source": "source://private/raw-handle",
+                }
+            ],
+            store_path=store,
+            cwd=self.cwd,
+        )
+        card_id = created["card"]["card_id"]
+
+        list_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 71,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_telepathy_handoffs",
+                    "arguments": {"cwd": str(self.cwd), "store_path": str(store)},
+                },
+            }
+        )
+        list_payload = self.tool_payload(list_response)
+
+        deepen_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 72,
+                "method": "tools/call",
+                "params": {
+                    "name": "deepen_telepathy_handoff",
+                    "arguments": {
+                        "cwd": str(self.cwd),
+                        "store_path": str(store),
+                        "card_id": card_id,
+                    },
+                },
+            }
+        )
+        deepen_payload = self.tool_payload(deepen_response)
+        encoded = json.dumps([list_payload, deepen_payload], ensure_ascii=False, sort_keys=True)
+
+        self.assertFalse(list_response["result"].get("isError", False))
+        self.assertFalse(deepen_response["result"].get("isError", False))
+        self.assertEqual(list_payload["kind"], "aippocampus_telepathy_handoff_list")
+        self.assertEqual(list_payload["cards"][0]["card_id"], card_id)
+        self.assertEqual(deepen_payload["kind"], "aippocampus_telepathy_handoff_deepen")
+        self.assertEqual(deepen_payload["source_reopen"]["source_refs"][0]["message_id"], "msg_user")
+        self.assertEqual(list_payload["store_path"], mcp.LOCAL_PATH_REDACTION)
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("source://private/raw-handle", encoded)
 
     def test_tools_call_rejects_malformed_arguments(self) -> None:
         response = mcp.handle_request(
