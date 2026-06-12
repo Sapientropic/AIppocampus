@@ -41,6 +41,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("search", proc.stdout)
         self.assertIn("agent recall", proc.stdout)
         self.assertIn("continuity-domain", proc.stdout)
+        self.assertIn("work-guard", proc.stdout)
         self.assertIn("update status", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("smoke recall-funnel", proc.stdout)
@@ -162,6 +163,16 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(why_not_invocation.command, "why-not-recall")
         self.assertEqual(why_not_invocation.module_name, "aippocampus_runtime.recall.why_cli")
         self.assertEqual(why_not_invocation.args, ["why-not-recall", "continue memory"])
+
+        work_guard_invocation = facade.resolve_command(
+            ["work-guard", "--title", "Fix LongMemEval source-side cache", "--json"]
+        )
+        self.assertEqual(work_guard_invocation.command, "work-guard")
+        self.assertEqual(
+            work_guard_invocation.module_name,
+            "aippocampus_runtime.ops.issue_work_guard",
+        )
+        self.assertEqual(work_guard_invocation.script_name, "issue_work_guard.py")
 
         conversation_import = facade.resolve_command(
             [

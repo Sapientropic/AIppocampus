@@ -32,6 +32,7 @@ from aippocampus_runtime.subconscious.worker import (
 )
 from benchmark_statistics import binomial_rate_report
 
+from .capability_provenance import benchmark_capability_provenance
 from .defaults import (
     DEFAULT_STANDARD_CASE_CACHE_ROOT,
     DEFAULT_STANDARD_DATASET,
@@ -2942,6 +2943,7 @@ def skipped_standard_retrieval_payload(
         "status": reason,
         "ok": True,
         "config": config,
+        "capability_provenance": config.get("capability_provenance", {}),
         "corpus": {
             "dataset": dataset,
             "corpus_path_sha1": sha1_text(str(corpus_path))[:16],
@@ -3097,6 +3099,9 @@ def run_standard_retrieval_qa_benchmark(
             "cache_root_emitted": False,
             "rebuild_requested": bool(rebuild_standard_cache),
         },
+        "capability_provenance": benchmark_capability_provenance(
+            resolved_line_reranker_mode
+        ),
     }
     if resolved_line_reranker_mode == "semantic":
         config["line_reranker_metadata"] = semantic_line_reranker_public_contract(
@@ -3318,6 +3323,7 @@ def run_standard_retrieval_qa_benchmark(
         "status": status,
         "ok": status == "sufficient",
         "config": config,
+        "capability_provenance": config["capability_provenance"],
         "corpus": corpus,
         "metrics": metrics,
         "cases": results,

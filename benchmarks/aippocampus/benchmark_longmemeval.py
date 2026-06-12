@@ -224,6 +224,11 @@ def evaluation_metadata(
         "underlying_adapter": (
             "benchmarks/aippocampus/benchmark_source_evidence_retrieval.py"
         ),
+        "capability_provenance": (
+            retrieval_benchmark.benchmark_capability_provenance(
+                resolved_line_reranker_mode
+            )
+        ),
     }
     if resolved_line_reranker_mode == "semantic":
         metadata["llm_rerank_arm"] = (

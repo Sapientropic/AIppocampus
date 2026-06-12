@@ -118,6 +118,10 @@ planning material:
 - After creating or updating issues, add only short pointers from docs when
   needed. Do not mirror the full issue body into docs or duplicate long rules
   across files.
+- Before implementing or closing benchmark, recall, architecture, AIppo,
+  source-side, or LongMemEval issues, pull an AIppocampus orientation or deepen
+  route first. If the work uses benchmark-local scaffolding, label it as such
+  and do not close a broader runtime-capability issue from that proxy result.
 - During closeout, report which docs became issues, which stayed as background
   context, which were archived or left for review, and what cannot yet be
   claimed.

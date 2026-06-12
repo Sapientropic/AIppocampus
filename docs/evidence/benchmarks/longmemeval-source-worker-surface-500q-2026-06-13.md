@@ -1,14 +1,16 @@
-# LongMemEval #1323 Source-Side Worker-Surface Closeout
+# LongMemEval Source-Worker-Surface Proxy Baseline
 
 Run date: 2026-06-13 local / 2026-06-12 UTC.
 
-This closes the measurement gap from #1323 for the current public
-AIppocampus path. It separates two things that must not be conflated:
+This records a 500-question proxy baseline for the current public
+source-worker surface. It does not close the canonical source-side semantic
+warming/materializer route. It separates two things that must not be conflated:
 
-- `source_semantic_cache`: current AIppocampus source-side worker-memory
-  surface. It materializes `aippocampus_working_memory` navigation rows from
-  clean source, uses the existing hot matcher, requires source reopen, and
-  makes no provider calls.
+- `source_semantic_cache`: current worker-surface proxy. It materializes
+  `aippocampus_working_memory` navigation rows from clean source, uses the
+  existing hot matcher, requires source reopen, and makes no provider calls.
+  It is not the canonical semantic-scope / subconscious / warm-ambient
+  materializer path.
 - `semantic`: opt-in DeepSeek query/candidate LLM reranker. This is a stronger
   query-time upper bound, not evidence that AIppocampus has a source-side LLM
   cache.
@@ -64,9 +66,12 @@ Cold build / hot path:
 
 Boundary:
 
-- This is current AIppocampus source-side worker-memory surface evidence.
+- This is current AIppocampus source-worker-surface proxy evidence.
 - It is navigation-only: worker rows are source refs and route terms, not
   factual answers.
+- It does not show that benchmark work used `semantic_scope_labeling`,
+  `semantic_scope_builder`, subconscious jobs, warm ambient routes, or the
+  attention router as the source-side materializer.
 - It does not claim a future DeepSeek source-side semantic materializer would
   have the same quality.
 - It does not make foreground LLM reranking default.
@@ -115,8 +120,8 @@ The honest reading is:
   this 246k-row surface. If this becomes product-critical, the next engineering
   work is indexing/packing the worker surface, not another foreground LLM call.
 - A future DeepSeek source-side materializer may still be worth testing, but
-  that is a new materializer/productization question. It should not be counted
-  as already proven by this worker-surface run.
+  that remains a materializer/productization question. This proxy run should
+  not be counted as already proving it.
 
 Sanitized JSON summary:
 [`longmemeval-source-worker-surface-500q-2026-06-13.json`](longmemeval-source-worker-surface-500q-2026-06-13.json).

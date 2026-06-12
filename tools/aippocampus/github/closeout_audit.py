@@ -63,6 +63,39 @@ RISKY_CLOSEOUT_RE = re.compile(
     r")\b",
     re.I,
 )
+BENCHMARK_SOURCE_SIDE_RE = re.compile(
+    r"\b("
+    r"longmemeval|benchmark|source[-_ ]side|semantic cache|source_semantic_cache|"
+    r"line[-_ ]rerank|reranker|warming|warm ambient|attention router"
+    r")\b",
+    re.I,
+)
+SOURCE_SIDE_ORIENTATION_REQUIRED_RE = re.compile(
+    r"\b("
+    r"longmemeval|source_semantic_cache|semantic cache|source[-_ ]side "
+    r"(?:semantic|warming|cache|worker|benchmark)|warm ambient|attention router"
+    r")\b",
+    re.I,
+)
+BENCHMARK_LOCAL_SCAFFOLD_RE = re.compile(
+    r"\b("
+    r"temporary provider prompt|provider prompt|benchmark[-_ ]local|"
+    r"local scaffold|source route label|route_text|route label"
+    r")\b",
+    re.I,
+)
+AIPPOCAMPUS_ORIENTATION_RE = re.compile(
+    r"\b("
+    r"aippocampus orientation|active[-_ ]pull|agent[_ -]?recall|agent[_ -]?deepen|"
+    r"route[-_ ]first|semantic_scope_builder|semantic scope builder|"
+    r"warm_ambient|warm ambient|attention router"
+    r")\b",
+    re.I,
+)
+ISOLATED_EXPERIMENT_RE = re.compile(
+    r"\b(isolated[_ -]?experiment|proxy[_ -]?baseline|narrow[_ -]?experiment)\b",
+    re.I,
+)
 FOLLOWUP_RE = re.compile(
     r"\b("
     r"remaining[_ -]?gap|followup[_ -]?issue|follow[- ]up issue|"
@@ -269,6 +302,20 @@ def audit_pr_body(
     required_evidence_levels = _flatten_required_levels(issue_intent_levels)
     risky_terms = sorted({match.group(1).casefold() for match in RISKY_CLOSEOUT_RE.finditer(text)})
     has_followup_pointer = _has_followup_pointer(text)
+    benchmark_source_side_terms = sorted(
+        {match.group(1).casefold() for match in BENCHMARK_SOURCE_SIDE_RE.finditer(text)}
+    )
+    source_side_orientation_required_terms = sorted(
+        {
+            match.group(1).casefold()
+            for match in SOURCE_SIDE_ORIENTATION_REQUIRED_RE.finditer(text)
+        }
+    )
+    benchmark_local_scaffold_terms = sorted(
+        {match.group(1).casefold() for match in BENCHMARK_LOCAL_SCAFFOLD_RE.finditer(text)}
+    )
+    has_aippocampus_orientation = bool(AIPPOCAMPUS_ORIENTATION_RE.search(text))
+    has_isolated_experiment_label = bool(ISOLATED_EXPERIMENT_RE.search(text))
     findings: list[dict[str, Any]] = []
 
     if closing_issues and closeout_class == "narrow_slice_only":
@@ -307,6 +354,47 @@ def audit_pr_body(
 
     if (
         closing_issues
+        and source_side_orientation_required_terms
+        and evidence_level in {"scale_run", "default_adoption"}
+        and not has_aippocampus_orientation
+    ):
+        findings.append(
+            {
+                "kind": "missing_aippocampus_orientation",
+                "severity": "error",
+                "message": (
+                    "Benchmark/source-side closeouts need an AIppocampus "
+                    "orientation or deepen note before broad manual implementation."
+                ),
+                "closing_issues": closing_issues,
+                "benchmark_terms": source_side_orientation_required_terms,
+            }
+        )
+
+    if (
+        closing_issues
+        and source_side_orientation_required_terms
+        and benchmark_local_scaffold_terms
+        and not (has_isolated_experiment_label and has_followup_pointer)
+    ):
+        findings.append(
+            {
+                "kind": "benchmark_local_scaffold_closes_source_side",
+                "severity": "error",
+                "message": (
+                    "Benchmark-local provider prompts or route-label scaffolds "
+                    "cannot close source-side warming/capability issues unless "
+                    "they are labeled isolated_experiment/proxy and a canonical "
+                    "follow-up issue owns the remaining gap."
+                ),
+                "closing_issues": closing_issues,
+                "benchmark_terms": source_side_orientation_required_terms,
+                "scaffold_terms": benchmark_local_scaffold_terms,
+            }
+        )
+
+    if (
+        closing_issues
         and required_evidence_levels
         and not _evidence_level_satisfies(evidence_level, required_evidence_levels)
         and not _honest_lower_evidence_followup(closeout_class, has_followup_pointer)
@@ -336,6 +424,11 @@ def audit_pr_body(
         "required_evidence_levels": required_evidence_levels,
         "issue_intent_levels": issue_intent_levels,
         "risk_terms": risky_terms,
+        "benchmark_source_side_terms": benchmark_source_side_terms,
+        "source_side_orientation_required_terms": source_side_orientation_required_terms,
+        "benchmark_local_scaffold_terms": benchmark_local_scaffold_terms,
+        "has_aippocampus_orientation": has_aippocampus_orientation,
+        "has_isolated_experiment_label": has_isolated_experiment_label,
         "has_followup_pointer": has_followup_pointer,
         "findings": findings,
         "policy": {
@@ -347,6 +440,7 @@ def audit_pr_body(
                 "narrow_slice_only",
             ],
             "evidence_levels": list(EVIDENCE_LEVELS),
+            "benchmark_source_side_orientation_required": True,
             "heuristic_only": True,
         },
     }

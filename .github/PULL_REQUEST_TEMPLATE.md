@@ -20,7 +20,13 @@
 - [ ] No raw rollouts, private registry exports, local paths, credentials, or
       private conversation text are included.
 - [ ] New source-backed claims point to docs, fixtures, reports, or tests.
-- [ ] Any public benchmark or readiness claim states what it cannot claim.
+- [ ] Public benchmark/readiness claims lead with measured result, support, and
+      material limits; compatibility `cannot_claim` lists stay short.
+- [ ] Benchmark, recall, architecture, AIppo, source-side, or LongMemEval PRs
+      record AIppocampus orientation/deepen use, or explain why the change is
+      trivial and route context would not change the patch.
+- [ ] Benchmark reports separate actual AIppocampus runtime capabilities from
+      benchmark-local scaffolding or isolated experiments.
 
 ## Issue / Roadmap Link
 

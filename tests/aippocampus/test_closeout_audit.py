@@ -197,6 +197,68 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertEqual(report["evidence_level"], "contract_fixture")
         self.assertIn("behavior_run", report["required_evidence_levels"])
 
+    def test_benchmark_source_side_closeout_requires_aippocampus_orientation(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds a LongMemEval source-side semantic cache result.
+
+            Evidence level: scale_run
+
+            Closes #1323.
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(
+            report["findings"][0]["kind"],
+            "missing_aippocampus_orientation",
+        )
+
+    def test_benchmark_local_provider_prompt_cannot_close_source_side_warming(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Uses a temporary provider prompt to label source route text for a
+            LongMemEval source-side warming result.
+
+            Evidence level: scale_run
+            AIppocampus orientation: checked semantic_scope_builder.
+
+            Closes #1323.
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(
+            report["findings"][0]["kind"],
+            "benchmark_local_scaffold_closes_source_side",
+        )
+
+    def test_benchmark_local_provider_prompt_passes_as_isolated_experiment_with_followup(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Uses a temporary provider prompt as an isolated_experiment for
+            LongMemEval source-side semantic cache research.
+
+            Closeout class: complete_with_followups
+            Evidence level: scale_run
+            AIppocampus orientation: checked semantic_scope_builder and warm_ambient.
+            remaining_gap: #1323 owns canonical source-side semantic materialization.
+
+            Closes #1328.
+            """
+        )
+
+        self.assertTrue(report["ok"], report)
+
     def test_issue_metadata_file_can_supply_intent_when_pr_body_omits_it(self) -> None:
         report = closeout_audit.audit_pr_body(
             """
