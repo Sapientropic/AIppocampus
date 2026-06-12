@@ -27,11 +27,12 @@ import benchmark_longmemeval as retrieval_runner
 import benchmark_source_evidence_retrieval as retrieval_benchmark
 import provider_execution_budget
 from claim_boundary_refs import claim_boundary_ref
+from longmemeval_answer_review import build_failure_review, expansion_go_no_go
 from source_evidence import standard_public
 
 SCHEMA_VERSION = 1
-READER_PROMPT_VERSION = "longmemeval-s-fixed-reader-v1"
-DETERMINISTIC_JUDGE_MODEL = "deterministic_longmemeval_answer_overlap_v1"
+READER_PROMPT_VERSION = "longmemeval-s-fixed-reader-v2"
+DETERMINISTIC_JUDGE_MODEL = "deterministic_longmemeval_answer_overlap_v2"
 DEFAULT_READER_MODE = "dry-run"
 DEFAULT_READER_API_KEY_ENV = "AIPPOCAMPUS_LONGMEMEVAL_READER_API_KEY"
 DEFAULT_READER_MODEL = (
@@ -61,6 +62,39 @@ LIGHT_STOPWORDS = {
     "were",
 }
 NEGATION_TOKENS = {"no", "not", "never", "none", "without", "n't"}
+NUMBER_TOKEN_ALIASES = {
+    "0": "zero",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+    "11": "eleven",
+    "12": "twelve",
+    "13": "thirteen",
+    "14": "fourteen",
+    "15": "fifteen",
+    "16": "sixteen",
+    "17": "seventeen",
+    "18": "eighteen",
+    "19": "nineteen",
+    "20": "twenty",
+    "1st": "first",
+    "2nd": "second",
+    "3rd": "third",
+    "4th": "fourth",
+    "5th": "fifth",
+    "6th": "sixth",
+    "7th": "seventh",
+    "8th": "eighth",
+    "9th": "ninth",
+    "10th": "tenth",
+}
 
 
 @dataclass(frozen=True)
@@ -114,9 +148,14 @@ def stem_token(token: str) -> str:
     return token
 
 
+def canonical_answer_token(token: str) -> str:
+    lowered = token.casefold()
+    return NUMBER_TOKEN_ALIASES.get(lowered, lowered)
+
+
 def content_tokens(text: str) -> list[str]:
     return [
-        stem_token(token)
+        stem_token(canonical_answer_token(token))
         for token in answer_tokens(text)
         if token and token not in LIGHT_STOPWORDS
     ]
@@ -200,6 +239,8 @@ def reader_config_metadata(config: ReaderConfig) -> dict[str, Any]:
                 "session_rank",
                 "nearest_hit_rank",
                 "context_distance",
+                "salience_hint",
+                "bounded_answer_policy",
             ],
             "withheld_from_model": [
                 "gold_answer",
@@ -374,6 +415,14 @@ def build_reader_candidates(
     return candidates, round((time.perf_counter() - started) * 1000, 2), len(warnings)
 
 
+def candidate_salience_hint(candidate: dict[str, Any]) -> str:
+    if int(candidate.get("context_distance") or 0) == 0:
+        return "direct_retrieval_hit"
+    if int(candidate.get("nearest_hit_rank") or 0) <= 3:
+        return "nearby_context_high_rank"
+    return "nearby_context"
+
+
 def reader_messages(question: str, candidates: list[dict[str, Any]]) -> list[dict[str, str]]:
     candidate_rows = [
         {
@@ -382,6 +431,7 @@ def reader_messages(question: str, candidates: list[dict[str, Any]]) -> list[dic
             "session_rank": int(candidate.get("session_rank") or 0),
             "nearest_hit_rank": int(candidate.get("nearest_hit_rank") or 0),
             "context_distance": int(candidate.get("context_distance") or 0),
+            "salience_hint": candidate_salience_hint(candidate),
             "text": str(candidate.get("text") or ""),
         }
         for candidate in candidates
@@ -389,6 +439,13 @@ def reader_messages(question: str, candidates: list[dict[str, Any]]) -> list[dic
     payload = {
         "prompt_version": READER_PROMPT_VERSION,
         "question": question,
+        "source_support_scope": "bounded_evidence_answerable_when_lines_support",
+        "answer_policy": [
+            "answer_only_from_candidate_source_lines",
+            "do_not_abstain_merely_because_context_is_bounded",
+            "abstain_only_when_the_visible_lines_do_not_support_an_answer",
+            "prefer_direct_retrieval_hit_lines_then_nearby_context",
+        ],
         "candidate_source_lines": candidate_rows,
         "output_schema": {
             "answer": "string; answer only from candidate_source_lines",
@@ -403,7 +460,10 @@ def reader_messages(question: str, candidates: list[dict[str, Any]]) -> list[dic
             "content": (
                 "You are the fixed LongMemEval-S reader for AIppocampus. "
                 "Use only the provided source lines. Return strict JSON. "
-                "If the source lines do not support an answer, abstain."
+                "The source lines are bounded by design; do not abstain just "
+                "because the full conversation is not visible. If the bounded "
+                "lines support an answer, answer concisely. If they do not "
+                "support an answer, abstain."
             ),
         },
         {
@@ -499,23 +559,30 @@ def classify_failure(
     quality: dict[str, Any],
     context_sufficient: bool,
     answer_correct: bool,
+    candidate_contains_evidence: bool,
     top_k: int,
 ) -> str:
     if answer_correct:
         return "answered_correctly"
     if not prediction.attempted:
         return prediction.status
+    if prediction.status == "reader_error" or prediction.error_kind:
+        return "reader_provider_error"
     if not context_sufficient:
-        return "retrieval_miss"
-    if prediction.abstained or not prediction.answer_text.strip():
-        return "abstention_unanswerable_boundary"
+        return "retrieval_evidence_unavailable"
+    if not candidate_contains_evidence:
+        return "insufficient_evidence_packaging"
+    if prediction.abstained:
+        return "over_abstention_boundary_false_negative"
+    if not prediction.answer_text.strip():
+        return "reader_empty_answer"
     if "knowledge-update" in str(retrieval_row.get("case_type") or ""):
         return "stale_update_confusion"
     if float(quality.get("token_overlap_rate") or 0.0) >= 0.45:
-        return "evaluation_mismatch"
+        return "deterministic_judge_mismatch"
     if retrieval_row.get(f"evidence_context_hit_top{top_k}"):
-        return "evidence_visible_reader_miss"
-    return "retrieval_miss"
+        return "true_reader_miss"
+    return "retrieval_evidence_unavailable"
 
 
 def score_answer_case(
@@ -546,12 +613,16 @@ def score_answer_case(
     )
     candidate_lines = {int(candidate["line"]) for candidate in candidates}
     cited_candidate_lines = sorted(set(prediction.citation_lines) & candidate_lines)
+    candidate_contains_evidence = bool(
+        set(case.get("expected", {}).get("lines") or []) & candidate_lines
+    )
     failure_category = classify_failure(
         retrieval_row=retrieval_row,
         prediction=prediction,
         quality=quality,
         context_sufficient=context_sufficient,
         answer_correct=answer_correct,
+        candidate_contains_evidence=candidate_contains_evidence,
         top_k=top_k,
     )
     return {
@@ -572,9 +643,7 @@ def score_answer_case(
             ),
             "evidence_miss_category": retrieval_row.get("evidence_miss_category"),
             "candidate_count": len(candidates),
-            "candidate_contains_evidence": bool(
-                set(case.get("expected", {}).get("lines") or []) & candidate_lines
-            ),
+            "candidate_contains_evidence": candidate_contains_evidence,
             "candidate_latency_ms": candidate_latency_ms,
             "warning_count": int(retrieval_row.get("warning_count") or 0)
             + int(candidate_warning_count),
@@ -689,6 +758,24 @@ def summarize_answer_cases(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "abstention_count": abstained,
         "abstention_rate": safe_rate(abstained, attempted),
         "failure_taxonomy_counts": taxonomy_counts,
+        "reader_provider_error_count": taxonomy_counts.get("reader_provider_error", 0),
+        "deterministic_judge_mismatch_count": taxonomy_counts.get(
+            "deterministic_judge_mismatch",
+            0,
+        ),
+        "over_abstention_boundary_false_negative_count": taxonomy_counts.get(
+            "over_abstention_boundary_false_negative",
+            0,
+        ),
+        "insufficient_evidence_packaging_count": taxonomy_counts.get(
+            "insufficient_evidence_packaging",
+            0,
+        ),
+        "true_reader_miss_count": taxonomy_counts.get("true_reader_miss", 0),
+        "retrieval_evidence_unavailable_count": taxonomy_counts.get(
+            "retrieval_evidence_unavailable",
+            0,
+        ),
     }
 
 
@@ -1261,6 +1348,9 @@ def run_longmemeval_answer_benchmark(
                 checkpoint_path,
                 budget_summary,
             )
+    failure_review = build_failure_review(payload)
+    payload["failure_review"] = failure_review
+    payload["expansion_gate"] = expansion_go_no_go(failure_review)
     validation = validate_sanitized_report(payload, forbidden_texts=forbidden_texts)
     payload["sanitized_report_validation"] = validation
     payload["report_generation_ok"] = validation["ok"]

@@ -264,10 +264,18 @@ preserves the fixed reader config, prompt version, model/provider metadata,
 token/cost telemetry, sanitized report validation, and retrieval-vs-answer
 claim separation.
 
+The #1282 fixed-reader cleanup rerun is summarized in
+[`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
+It adds a privacy-safe failure review, v2 bounded-evidence reader prompt, and
+explicit expansion gate. The current decision is `no_go` for 100Q or 500Q
+provider answer runs until reader/provider errors, false abstentions on
+answerable bounded evidence, and unexplained judge mismatches are fixed.
+
 ## Current Published Result
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-12T00:59:47Z` | `longmemeval-v1-small` | fixed-reader provider answer cleanup | 25 | 100.00% | 92.00% | - | 100.00% | 142.53s | `answer_scored`; expansion `no_go` |
 | `2026-06-11T22:24:24Z` | `longmemeval-v1-small` | fixed-reader provider answer baseline | 25 | 100.00% | 92.00% | - | 100.00% | 192.69s | `answer_scored` |
 | `2026-06-10T07:26:53Z` | `longmemeval-v1-small` | retrieval-only + optional semantic LLM line reranker pilot | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 239.15s | `retrieval_sufficient` pilot |
 | `2026-06-10T04:15:44Z` | `longmemeval-v1-small` | retrieval-only + optional lexical line reranker | 500 | 95.80% | 85.18% | 87.47% | 94.36% | 737.84s | `retrieval_sufficient` |
@@ -286,6 +294,7 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.json --json
 ```
 
 Fixed-reader answer baseline for #1194:
@@ -305,6 +314,21 @@ Fixed-reader answer baseline for #1194:
   responses, or credentials.
 - Boundary: this is not the official LongMemEval judge, not LongMemEval-V2,
   not SOTA/leaderboard evidence, and not default reader/provider adoption.
+
+Fixed-reader cleanup for #1282:
+
+- Summary:
+  [`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
+- Reader attempted: `25/25`; deterministic answer-correct count:
+  `19/25 = 0.7600`.
+- Retrieval/reference layer in the same run stayed unchanged from the baseline:
+  session R@10 `25/25`, evidence-line R@10 `23/25`, and context-visible
+  evidence R@10 `25/25`.
+- Failure review: `3` reader/provider errors, `1` false abstention on
+  answerable bounded evidence, `1` deterministic-judge mismatch, and `1`
+  true reader miss.
+- Expansion gate: `no_go` for 100Q or 500Q until the blocker categories above
+  are fixed and rerun on the 25Q slice.
 
 LongMemEval-S 500-question verification summary:
 
