@@ -49,6 +49,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("doctor spend", proc.stdout)
         self.assertIn("telepathy", proc.stdout)
         self.assertIn("why-recall", proc.stdout)
+        self.assertIn("plugin install", proc.stdout)
         self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
 
     def test_package_facade_is_the_public_python_entrypoint(self) -> None:
@@ -118,6 +119,15 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(update_invocation.module_name, "aippocampus_runtime.update.cli")
         self.assertEqual(update_invocation.script_name, "update.py")
         self.assertEqual(update_invocation.args, ["status", "--json"])
+
+        plugin_invocation = facade.resolve_command(["plugin", "install", "--codex", "--verify"])
+        self.assertEqual(plugin_invocation.command, "plugin")
+        self.assertEqual(
+            plugin_invocation.module_name,
+            "aippocampus_runtime.update.plugin_installer",
+        )
+        self.assertEqual(plugin_invocation.script_name, "plugin.py")
+        self.assertEqual(plugin_invocation.args, ["install", "--codex", "--verify"])
 
         smoke_invocation = facade.resolve_command(
             ["smoke", "recall-funnel", "progressive recall", "--json"]

@@ -51,6 +51,7 @@ COMMANDS = {
     "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
     "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.provider_doctor"),
     "update": CommandSpec("update.py", "aippocampus_runtime.update.cli"),
+    "plugin": CommandSpec("plugin.py", "aippocampus_runtime.update.plugin_installer"),
     "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
     "logs": CommandSpec("log_retention.py", "aippocampus_runtime.ops.log_retention"),
     "storage": CommandSpec(
@@ -102,6 +103,7 @@ SCRIPT_MODULES = {
         "aippocampus_runtime.coding.episode_arc_private_adjudication"
     ),
     "update.py": "aippocampus_runtime.update.cli",
+    "plugin.py": "aippocampus_runtime.update.plugin_installer",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
     "telepathy_handoff_store.py": "aippocampus_runtime.ops.telepathy_handoff_store",
@@ -351,6 +353,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  why-not-recall      Explain why a recall route stayed silent", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
+    print("  plugin install      Install/verify the local Codex plugin", file=target)
     print(
         "  hooks [kind]        Host hook status/install/uninstall surfaces",
         file=target,

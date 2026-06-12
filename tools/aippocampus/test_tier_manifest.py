@@ -229,6 +229,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_path_identity",
         "test_planning_audit",
         "test_plugin_distribution",
+        "test_plugin_installer",
         "test_prewarm_planner",
         "test_project_triage",
         "test_prompt_context_render",
