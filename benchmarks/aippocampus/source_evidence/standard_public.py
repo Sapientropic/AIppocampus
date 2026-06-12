@@ -65,7 +65,7 @@ EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
 SEMANTIC_LINE_RERANKER_ARM = "llm_window_to_line_rerank"
 SEMANTIC_LINE_RERANKER_PROMPT_VERSION = "llm-window-to-line-rerank-v1"
 SOURCE_SEMANTIC_CACHE_ARM = "aippocampus_source_worker_surface_cache"
-SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-v1"
+SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-v2"
 SOURCE_SEMANTIC_CACHE_BUILDER_ID = "aippocampus-working-memory-surface-v1"
 STANDARD_CASE_CACHE_POLICY_VERSION = "standard-public-case-index-cache-v1"
 STANDARD_CASE_ADAPTER_VERSION = "standard-public-case-adapter-v1"
@@ -362,7 +362,12 @@ def standard_message_for_sqlite(
     timestamp: str = "",
 ) -> dict[str, Any]:
     identity = "|".join([source_id, str(line), role, text])
+    source_id_sha1 = sha1_text(source_id)[:16]
+    message_id = f"standard:{source_id_sha1}:line:{int(line)}"
     return {
+        "message_id": message_id,
+        "source_ref": message_id,
+        "source_id_sha1": source_id_sha1,
         "line": line,
         "timestamp": timestamp,
         "role": role,
@@ -1145,7 +1150,36 @@ def source_index_manifest_fingerprint(sqlite_path: Path) -> str:
     manifest = read_json_dict(sqlite_path.with_name("source_index_manifest.json"))
     if manifest:
         return stable_json_sha1(manifest, length=40)
-    return sha1_text(str(sqlite_path.resolve()))
+    digest = hashlib.sha1()
+    with sqlite_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def standard_source_route_key(sqlite_path: Path) -> str:
+    """Return a path-stable source route key for benchmark-derived sources.
+
+    Source-side benchmark artifacts need the same identity discipline as real
+    clean source. If this key depends on the temporary/cache SQLite path, repeat
+    runs over the same public source look like different memory routes and
+    cannot safely join later semantic-scope sidecars or warm-route artifacts.
+    """
+
+    manifest = read_json_dict(sqlite_path.with_name("source_index_manifest.json")) or {}
+    dataset = str(manifest.get("dataset") or "standard_public")
+    source_id_sha1 = str(manifest.get("source_id_sha1") or "").strip()
+    question_id_sha1 = str(manifest.get("question_id_sha1") or "").strip()
+    if source_id_sha1 or question_id_sha1:
+        return ":".join(
+            [
+                "standard_public",
+                dataset,
+                f"source:{source_id_sha1 or 'unknown'}",
+                f"question:{question_id_sha1 or 'unknown'}",
+            ]
+        )
+    return "standard_public:manifest:" + source_index_manifest_fingerprint(sqlite_path)[:20]
 
 
 def source_semantic_artifact_cache_key(
@@ -1234,7 +1268,7 @@ def build_source_semantic_cache(
     profiles: dict[int, dict[str, Any]] = {}
     working_memory_rows: list[dict[str, Any]] = []
     failed_count = 0
-    source_key = f"longmemeval-source:{sha1_text(str(sqlite_path))[:16]}"
+    source_key = standard_source_route_key(sqlite_path)
     created_at = now_utc()
     for row in rows:
         try:
@@ -1270,6 +1304,7 @@ def build_source_semantic_cache(
                 if term and term not in STANDARD_QUERY_TERM_STOPWORDS
             ][:48]
             source_ref = {
+                "ref": f"{source_key}:line:{line}",
                 "thread_key": source_key,
                 "message_id": f"{source_key}:line:{line}",
                 "turn_id": f"{source_key}:line:{line}",
@@ -1346,7 +1381,12 @@ def build_source_semantic_cache(
             "builder": "aippocampus_worker_surface",
             "builder_id": SOURCE_SEMANTIC_CACHE_BUILDER_ID,
             "cache_policy_version": SOURCE_SEMANTIC_CACHE_POLICY_VERSION,
-            "source_index_sha1": sha1_text(str(sqlite_path))[:16],
+            "source_index_sha1": source_index_manifest_fingerprint(sqlite_path)[:16],
+            "source_identity": {
+                "kind": "standard_public_manifest_route_key",
+                "route_key_sha1": sha1_text(source_key)[:16],
+                "stable_across_cache_roots": True,
+            },
             "message_count": len(rows),
             "span_count": len(profiles),
             "working_memory_row_count": len(working_memory_rows),
