@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">AIppocampus logo</title>
+  <desc id="desc">A route through source-backed continuity nodes.</desc>
+  <rect width="256" height="256" rx="48" fill="#256D85"/>
+  <path d="M64 166c35 0 39-78 74-78 23 0 36 18 36 41 0 33-29 58-76 58" fill="none" stroke="#F8FAFC" stroke-width="17" stroke-linecap="round"/>
+  <path d="M88 112c11-21 26-38 50-38 37 0 58 25 58 57 0 21-8 40-24 55" fill="none" stroke="#9FE3D2" stroke-width="9" stroke-linecap="round" opacity=".9"/>
+  <circle cx="64" cy="166" r="19" fill="#F2A541"/>
+  <circle cx="138" cy="88" r="19" fill="#9FE3D2"/>
+  <circle cx="172" cy="186" r="19" fill="#F8FAFC"/>
+  <path d="M58 204h92" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+  <path d="M176 204h22" stroke="#F2A541" stroke-width="8" stroke-linecap="round" opacity=".85"/>
+</svg>

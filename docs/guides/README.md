@@ -29,6 +29,7 @@ material. It should help a reader choose a path without reading every guide.
 | --- | --- |
 | [demo-scenarios.md](demo-scenarios.md) | Public-safe demo flows using synthetic memory data. |
 | [privacy-security-checklist.md](privacy-security-checklist.md) | Public-readiness privacy and security checklist. |
+| [plugin-terms-boundary.md](plugin-terms-boundary.md) | Temporary plugin terms pointer and install-surface boundary. |
 | [community-channel-launch.md](community-channel-launch.md) | Community channel launch, moderation, and privacy go/no-go checklist. |
 
 Keep long status matrices and dated command evidence out of this folder unless
