@@ -270,9 +270,16 @@ over the same `recall_context` candidate set and records route-family selection,
 foreground packet bytes, and deictic fail-closed behavior. It does not reopen
 source or answer the question. The public fixture includes a light Arabic
 continuity cue for the AIppocampus/little hippocampus route family plus a pure
-deictic Arabic negative control; the former may select a route before manual
-search, and the latter must ask to clarify or recall rather than bind to visible
-context.
+deictic Arabic negative control. The current fixture intentionally records that
+the Arabic cue activates the router but does not yet select a specific enough
+route family; this is a no-help signal, not a correctness success.
+
+Promotion therefore includes fresh-agent usefulness gates: an applied router
+that leaves the top route generic, has zero query/route overlap without an
+explicit bridge reason, falls below the route-label specificity floor, or emits
+a weak `why_this_may_matter` blocks default adoption. These gates are measured
+on public/synthetic fixtures so private local history is not required to explain
+why the feature remains opt-in.
 
 The first live agent-facing bridge is opt-in only:
 `aippocampus agent recall --attention-router` projects already emitted
@@ -286,6 +293,27 @@ handles, and head votes remain behind deepen/explain. This moves the router
 from report-only comparison into agent recall sorting, but it is still not
 default foreground adoption, source evidence, answer generation, or broad
 #1188 route-producer completion.
+
+Current consumer inventory:
+
+- `attention_hot_router.build_hot_router_fixture_report`: contract fixture only.
+- `semantic_warm_route_producer`: background/cached route-token material, not
+  foreground selection by itself.
+- `recall_navigation_attention.run_attention_router_navigation_only`:
+  promotion/comparison diagnostic over the same public-safe recall-context
+  cases.
+- `agent_continuity.recall(..., attention_router=True|"auto")`: the current
+  foreground-facing opt-in or gated-auto route-ordering consumer.
+
+`aippocampus agent recall --attention-router-mode auto` is the default-adoption
+policy boundary for the same path. It consults the shared recall-navigation
+promotion harness and enables sorting only when `default_adoption_allowed` is
+true. Until then, normal recall keeps baseline ordering and emits promotion
+blockers such as `attention_router_no_help_cases_present`,
+`attention_router_specificity_gate_not_satisfied`, and
+`attention_router_bridge_reason_gate_not_satisfied` in
+`attention_router_navigation.policy` instead of silently pretending the router
+is default-ready.
 
 ROI status can reduce low-yield non-guard scout families to watch or diagnostic
 surfaces, but required guard families remain `guard_required`. Quiet privacy or

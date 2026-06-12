@@ -83,14 +83,26 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertFalse(attention["source_reopen_attempted"])
         self.assertEqual(attention["selected_next_tool"], "recall_deepen")
         self.assertEqual(attention["manual_query_invention_count"], 0)
-        self.assertTrue(attention["route_family_selected_before_manual_search"])
+        self.assertFalse(attention["route_family_selected_before_manual_search"])
         self.assertTrue(attention["known_alias_cross_language_activation"])
         self.assertEqual(attention["claim_without_source_reopen_count"], 0)
-        self.assertEqual(attention["selected_route_family"], "aippocampus_little_hippocampus")
+        self.assertEqual(attention["selected_route_family"], "")
+        self.assertEqual(attention["route_label_specificity_floor"], 0.0)
+        self.assertFalse(attention["route_label_expected_family_match"])
+        self.assertFalse(attention["selected_why_may_matter_specific_enough"])
+        self.assertEqual(attention["attention_router_applied_but_no_help_count"], 1)
 
         self.assertTrue(activation["measured"])
-        self.assertEqual(activation["metrics"]["multilingual_route_family_hit_rate"], 1.0)
+        self.assertEqual(activation["metrics"]["multilingual_route_family_hit_rate"], 0.0)
         self.assertEqual(activation["metrics"]["deictic_wrong_visible_context_bind_count"], 0)
+        self.assertGreaterEqual(
+            activation["metrics"]["attention_router_applied_but_no_help_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            activation["metrics"]["route_label_specificity_below_floor_count"],
+            1,
+        )
         self.assertEqual(
             activation["pure_deictic_case"]["selected_next_tool"],
             "clarify_or_recall",

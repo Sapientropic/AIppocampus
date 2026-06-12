@@ -540,6 +540,7 @@ The first packaged opt-in CLI path is:
 ```sh
 aippocampus agent recall "continue the old decision" --json
 aippocampus agent recall "continue the old decision" --attention-router --json
+aippocampus agent recall "continue the old decision" --attention-router-mode auto --json
 aippocampus agent aippo --task "coding issue closeout" --json
 aippocampus agent deepen "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque recall handle or deepen:aippo...>" --json
@@ -561,6 +562,16 @@ attention router and reports `attention_router_navigation` diagnostics, but it
 does not create new source authority, change default hook behavior, or remove
 the requirement to use `agent deepen` before exact, current, disputed,
 sensitive, or high-risk claims.
+`--attention-router-mode auto` is the gated-adoption path: it checks the shared
+public-safe promotion harness and enables router sorting only when that harness
+allows default adoption. When the gate blocks adoption, recall keeps the
+baseline order and reports blocker names under
+`attention_router_navigation.policy`. Those blocker names may include
+no-help/specificity diagnostics such as
+`attention_router_no_help_cases_present`,
+`attention_router_specificity_gate_not_satisfied`, and
+`attention_router_bridge_reason_gate_not_satisfied`; consumers should treat
+them as additive diagnostics, not fatal command errors.
 
 For recall output, pass `deepen_requests[].handle` to `agent deepen`.
 `memory_packets[].deepen_route_id` is a display/correlation id, not the
