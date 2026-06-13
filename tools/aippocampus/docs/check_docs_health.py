@@ -35,11 +35,12 @@ from source_kernel_guard import source_kernel_contract_issues
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
 
-# 220 remains the slim-entrypoint pressure line. The hard budget is a little
-# higher so SKILL.md can carry agent-native packet decoding guidance without
-# forcing foreground agents into reference docs for every ordinary hook packet.
-SKILL_LINE_WARNING_THRESHOLD = 220
-MAX_SKILL_LINES = 260
+# SKILL.md should stay slim, but 220 proved too tight once the agent-native
+# packet decoder and route-first grammar became part of the ordinary bootstrap
+# path. Keep 300 as the practical maintenance budget; larger operational
+# detail still belongs in focused references.
+SKILL_LINE_WARNING_THRESHOLD = 300
+MAX_SKILL_LINES = 300
 MAX_SKILL_WORDS = 2600
 MAX_SKILL_CODE_FENCES = 2
 
@@ -87,15 +88,15 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
 REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
-    "docs/architecture/legacy-alias-inventory.md",
+    "docs/architecture/ops/legacy-alias-inventory.md",
     "docs/evidence/README.md",
     "docs/evidence/benchmark-evidence-map.md",
     "docs/evidence/current-claims.md",
     "docs/evidence/readiness/stage-0-5-readiness.md",
     "docs/planning/next-iteration-plan.md",
     "docs/architecture/runtime-script-map.md",
-    "docs/architecture/gb-scale-roadmap.md",
-    "docs/architecture/wukong-mining-notes.md",
+    "docs/architecture/ops/gb-scale-roadmap.md",
+    "docs/architecture/future/wukong-mining-notes.md",
     "docs/planning/technical-differentiation-analysis.md",
 ]
 
@@ -209,14 +210,14 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
     "docs/evidence/readiness/public-readiness-verification.md": (
         "benchmark evidence map missing dated verification ledger pointer"
     ),
-    "docs/evidence/benchmarks/memory-decision-benchmark-plan.md": (
+    "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md": (
         "benchmark evidence map missing benchmark methodology pointer"
     ),
     "benchmark_corpus/README.md": "benchmark evidence map missing corpus README pointer",
     "benchmark_corpus/sharegpt_manifest.json": (
         "benchmark evidence map missing corpus manifest pointer"
     ),
-    "docs/evidence/benchmarks/memory-pain-fixture-report.md": (
+    "docs/evidence/benchmarks/reports/field-journey/memory-pain-fixture-report.md": (
         "benchmark evidence map missing memory-pain fixture report pointer"
     ),
     "docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md": (
@@ -361,7 +362,7 @@ REQUIRED_PUBLIC_READINESS_DOCS = [
     "docs/guides/public-core-boundary.md",
     "docs/guides/install-guide.md",
     "docs/guides/demo-scenarios.md",
-    "docs/guides/privacy-security-checklist.md",
+    "docs/guides/community/privacy-security-checklist.md",
     "docs/evidence/readiness/public-readiness-verification.md",
 ]
 
@@ -485,7 +486,7 @@ SAFE_ENV_DOC_TERMS = {
 }
 
 HOST_HOOK_BOUNDARY_DOC_TERMS = {
-    "docs/architecture/provider-entrypoint-inventory.md": {
+    "docs/architecture/host/provider-entrypoint-inventory.md": {
         "## Host Integration Matrix": "provider inventory missing host integration matrix",
         "configuration-mutating installers": (
             "provider inventory missing configuration-mutating installer classification"
@@ -499,7 +500,7 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
             "runtime script map missing Codex-only hook installer boundary"
         ),
     },
-    "docs/guides/claude-code-mcp.md": {
+    "docs/guides/setup/claude-code-mcp.md": {
         "`aippocampus hooks claude-code status --json`": (
             "Claude Code MCP guide missing Claude hook status command"
         ),
@@ -712,7 +713,7 @@ def benchmark_evidence_entrypoints(repo_root: Path) -> list[str]:
     benchmark_dir = repo_root / "benchmarks" / "aippocampus"
     if benchmark_dir.exists():
         paths.extend(sorted(benchmark_dir.glob("benchmark_*.py")))
-        warm_case_builder = benchmark_dir / "build_warm_ambient_trace_cases.py"
+        warm_case_builder = benchmark_dir / "builders" / "build_warm_ambient_trace_cases.py"
         if warm_case_builder.exists():
             paths.append(warm_case_builder)
 
@@ -898,9 +899,9 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
     if build_requires != ["setuptools==82.0.1"]:
         issues.append("pyproject.toml build-system requires must pin setuptools==82.0.1")
 
-    contract = repo_root / "docs" / "guides" / "dependency-contract.md"
+    contract = repo_root / "docs" / "guides" / "setup" / "dependency-contract.md"
     if not contract.exists():
-        issues.append("missing dependency contract doc: docs/guides/dependency-contract.md")
+        issues.append("missing dependency contract doc: docs/guides/setup/dependency-contract.md")
     else:
         text = contract.read_text(encoding="utf-8")
         for term, issue in DEPENDENCY_CONTRACT_DOC_TERMS.items():
@@ -908,7 +909,7 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
                 issues.append(issue)
 
     docs_readme = repo_root / "docs" / "README.md"
-    if docs_readme.exists() and "guides/dependency-contract.md" not in docs_readme.read_text(
+    if docs_readme.exists() and "guides/setup/dependency-contract.md" not in docs_readme.read_text(
         encoding="utf-8"
     ):
         issues.append("docs README missing dependency contract pointer")
@@ -916,7 +917,7 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
     readme = repo_root / "README.md"
     if readme.exists():
         readme_text = readme.read_text(encoding="utf-8")
-        if "docs/guides/dependency-contract.md" not in readme_text:
+        if "docs/guides/setup/dependency-contract.md" not in readme_text:
             issues.append("README missing dependency contract pointer")
         if 'python -m pip install -e ".[dev]"' not in readme_text:
             issues.append("README missing dev extra contributor install path")
@@ -933,7 +934,7 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
         if re.search(r"pip install --upgrade pip\s+ruff", install_text):
             issues.append("install guide must not use floating Ruff/mypy install")
 
-    release_checklist = repo_root / "docs" / "guides" / "release-checklist.md"
+    release_checklist = repo_root / "docs" / "guides" / "setup" / "release-checklist.md"
     if release_checklist.exists() and 'python -m pip install -e ".[release]"' not in (
         release_checklist.read_text(encoding="utf-8")
     ):
@@ -1021,9 +1022,9 @@ def safe_environment_issues(repo_root: Path) -> list[str]:
         for key in sorted(SAFE_ENV_REQUIRED_KEYS - seen_keys):
             issues.append(f".env.example missing supported environment variable: {key}")
 
-    safe_doc = repo_root / "docs" / "guides" / "safe-environment.md"
+    safe_doc = repo_root / "docs" / "guides" / "setup" / "safe-environment.md"
     if not safe_doc.exists():
-        issues.append("missing safe environment guide: docs/guides/safe-environment.md")
+        issues.append("missing safe environment guide: docs/guides/setup/safe-environment.md")
     else:
         safe_text = safe_doc.read_text(encoding="utf-8")
         for term, issue in SAFE_ENV_DOC_TERMS.items():
@@ -1031,11 +1032,11 @@ def safe_environment_issues(repo_root: Path) -> list[str]:
                 issues.append(issue)
 
     for rel_path, required in {
-        "README.md": ["docs/guides/safe-environment.md", ".env.example"],
-        "docs/README.md": ["guides/safe-environment.md"],
-        "docs/guides/install-guide.md": ["safe-environment.md", ".env.example"],
+        "README.md": ["docs/guides/setup/safe-environment.md", ".env.example"],
+        "docs/README.md": ["guides/setup/safe-environment.md"],
+        "docs/guides/install-guide.md": ["setup/safe-environment.md", ".env.example"],
         "docs/guides/public-api.md": [".env.example"],
-        "docs/guides/privacy-security-checklist.md": [".env.example", ".env"],
+        "docs/guides/community/privacy-security-checklist.md": [".env.example", ".env"],
     }.items():
         path = repo_root / rel_path
         if not path.exists():

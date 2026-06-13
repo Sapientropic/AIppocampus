@@ -8,7 +8,7 @@ Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Correction Reconsolidation](correction-reconsolidation.md),
 [Dream Task Design](dream-task-design.md),
 [Journey Tracking](journey-tracking.md),
-[Memory Decision Benchmark Plan](../evidence/benchmarks/memory-decision-benchmark-plan.md).
+[Memory Decision Benchmark Plan](../evidence/benchmarks/design/memory-decision-benchmark-plan.md).
 
 ## Thesis
 
@@ -308,7 +308,7 @@ same-surface duplicate suppression, and recent negative feedback. The #763
 slice now names `codex-desktop-hidden-route-lifecycle` as the first host
 surface and records a public-safe feedback ledger contract for usefulness,
 annoyance, dismissal, and later correction signals. See
-[`agency-host-surface-codex-desktop-2026-06-05.md`](../evidence/benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
+[`agency-host-surface-codex-desktop-2026-06-05.md`](../evidence/benchmarks/reports/fresh-thread/agency-host-surface-codex-desktop-2026-06-05.md).
 This is host-faithful replay evidence only; it does not prove live host timing
 or real annoyance calibration.
 

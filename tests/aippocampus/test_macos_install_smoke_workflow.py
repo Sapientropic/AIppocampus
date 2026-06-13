@@ -9,7 +9,7 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "macos-install-smoke.yml"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml"
 INSTALL_GUIDE = REPO_ROOT / "docs" / "guides" / "install-guide.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
-RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "release-checklist.md"
+RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "setup" / "release-checklist.md"
 README = REPO_ROOT / "README.md"
 READINESS = REPO_ROOT / "docs" / "evidence" / "readiness" / "stage-0-5-readiness.md"
 

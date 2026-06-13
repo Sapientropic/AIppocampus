@@ -27,8 +27,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import provider_execution_budget  # noqa: E402
-from amemgym_official_local_provider import (  # noqa: E402
+from benchmarks.aippocampus.adapters.amemgym_official_local_provider import (  # noqa: E402
     LOCAL_SCRIPTED_PROVIDER,
     local_scripted_llm_config_update,
     local_scripted_provider_env,
@@ -36,7 +35,7 @@ from amemgym_official_local_provider import (  # noqa: E402
     provider_plan_environment,
     provider_runtime_for_provider,
 )
-from amemgym_official_public_state import (  # noqa: E402
+from benchmarks.aippocampus.adapters.amemgym_official_public_state import (  # noqa: E402
     aippocampus_official_adapter_protocol,
     build_fixed_arm_execution,
     completed_surface_from_output,
@@ -48,10 +47,11 @@ from amemgym_official_public_state import (  # noqa: E402
     skipped_complete_run_result,
     write_checkpoint_file,
 )
-from amemgym_openrouter_preflight import (  # noqa: E402
+from benchmarks.aippocampus.adapters.amemgym_openrouter_preflight import (  # noqa: E402
     openrouter_route_preflight_summary,
     probe_openrouter_chat_route,
 )
+from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"
@@ -428,7 +428,8 @@ def write_aippocampus_adapter_overlay(
         encoding="utf-8",
     )
     (overlay_assistants / "aippocampus_agent.py").write_text(
-        "from amemgym_aippocampus_adapter import AIppocampusAMemGymAgent\n\n"
+        "from benchmarks.aippocampus.adapters.amemgym_aippocampus_adapter import "
+        "AIppocampusAMemGymAgent\n\n"
         "AIppocampusOfficialAgent = AIppocampusAMemGymAgent\n",
         encoding="utf-8",
     )
@@ -513,14 +514,14 @@ def adapter_runtime_for_arm(
     entries = []
     if overlay.get("pythonpath"):
         entries.append(str(overlay["pythonpath"]))
-    entries.extend([str(Path(__file__).resolve().parent), str(_paths.SKILL_SCRIPTS)])
+    entries.extend([str(_paths.REPO_ROOT), str(_paths.SKILL_SCRIPTS)])
     return {
         "status": overlay["status"],
         "pythonpath_entries": entries,
         "metadata": {
             "official_factory_overlay": overlay["status"] == "ready",
             "overlay_label": overlay.get("label"),
-            "repo_adapter_module": "benchmarks/aippocampus/amemgym_aippocampus_adapter.py",
+            "repo_adapter_module": "benchmarks/aippocampus/adapters/amemgym_aippocampus_adapter.py",
             "aippocampus_skill_scripts": "skills/aippocampus/scripts",
             "registration": overlay.get("registration"),
         },

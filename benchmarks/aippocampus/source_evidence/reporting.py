@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from benchmark_memory_decision_gate import sha1_text as legacy_sha1_text
-from benchmark_statistics import binomial_rate_report
-from claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 from .defaults import QUERY_ORIGIN_TAXONOMY, TRACK_B_QUERY_ORIGIN_ISSUES
 
@@ -193,11 +193,11 @@ def source_evidence_validation_guidance(
             "count": len(parent_claims),
         },
         "boundary_ref": (
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
         "claim_boundary_ref": claim_boundary_ref(
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
     }

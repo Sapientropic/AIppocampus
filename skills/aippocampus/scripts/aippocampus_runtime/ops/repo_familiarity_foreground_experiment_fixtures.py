@@ -70,7 +70,7 @@ def fixture_source_rows() -> list[dict[str, Any]]:
                 "files": ["skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py"],
                 "tests": ["tests/aippocampus/test_aippocampus_prompt_hook.py"],
             },
-            source_path="docs/architecture/cognitive-runtime-architecture.md",
+            source_path="docs/architecture/runtime/cognitive-runtime-architecture.md",
             source_line=160,
             first_source_to_reopen="skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py",
             source_hash="hash-hook",
@@ -190,7 +190,7 @@ def current_checkout_source_rows(
                 "files": [hook_path],
                 "tests": [_repo_rel("tests/aippocampus/test_aippocampus_prompt_hook.py")],
             },
-            source_path=_repo_rel("docs/architecture/cognitive-runtime-architecture.md"),
+            source_path=_repo_rel("docs/architecture/runtime/cognitive-runtime-architecture.md"),
             source_line=160,
             why_now="May affect hook timeout and route visibility decisions.",
             action_delta_required=(
@@ -202,7 +202,7 @@ def current_checkout_source_rows(
             repo_commit=commit,
             invalidation_files=_current_invalidation_files(
                 root,
-                "docs/architecture/cognitive-runtime-architecture.md",
+                "docs/architecture/runtime/cognitive-runtime-architecture.md",
                 hook_path,
             ),
         ),
@@ -212,22 +212,22 @@ def current_checkout_source_rows(
             route_terms=["compat", "shim", "package owner"],
             boundary="Flat shims are temporary unless documented as direct commands.",
             route={
-                "docs": [_repo_rel("docs/architecture/compatibility-shim-inventory.md")],
+                "docs": [_repo_rel("docs/architecture/ops/compatibility-shim-inventory.md")],
                 "tests": [_repo_rel("tests/aippocampus/test_compat_shim_inventory.py")],
             },
-            source_path=_repo_rel("docs/architecture/compatibility-shim-inventory.md"),
+            source_path=_repo_rel("docs/architecture/ops/compatibility-shim-inventory.md"),
             source_line=1,
             why_now="Relevant when deleting flat runtime scripts or changing packaging exposure.",
             action_delta_required="Run the inventory before deleting another flat shim.",
             first_source_to_reopen=_repo_rel(
-                "docs/architecture/compatibility-shim-inventory.md"
+                "docs/architecture/ops/compatibility-shim-inventory.md"
             ),
             stop_after="Stop after inventory explains the shim bucket and removal condition.",
             do_not_use_for=["current code claims without inventory output"],
             repo_commit=commit,
             invalidation_files=_current_invalidation_files(
                 root,
-                "docs/architecture/compatibility-shim-inventory.md",
+                "docs/architecture/ops/compatibility-shim-inventory.md",
             ),
         ),
         _source_row(
@@ -243,7 +243,7 @@ def current_checkout_source_rows(
                 ],
                 "tests": [_repo_rel("tests/aippocampus/test_storage_governance.py")],
             },
-            source_path=_repo_rel("docs/architecture/gb-scale-roadmap.md"),
+            source_path=_repo_rel("docs/architecture/ops/gb-scale-roadmap.md"),
             source_line=90,
             why_now="Relevant when touching storage GC or cache eviction contracts.",
             action_delta_required=(
@@ -257,7 +257,7 @@ def current_checkout_source_rows(
             repo_commit=commit,
             invalidation_files=_current_invalidation_files(
                 root,
-                "docs/architecture/gb-scale-roadmap.md",
+                "docs/architecture/ops/gb-scale-roadmap.md",
                 "tests/aippocampus/test_storage_governance.py",
             ),
         ),

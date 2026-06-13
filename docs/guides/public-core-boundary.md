@@ -9,7 +9,7 @@ For supported CLI, MCP, JSON, environment-variable, and Python import stability,
 see [public-api.md](public-api.md).
 For the product profile split between personal defaults, optional diagnostics,
 and governed/enterprise behavior, see
-[product-profiles.md](../architecture/product-profiles.md).
+[product-profiles.md](../architecture/host/product-profiles.md).
 
 ## Licensing Decision
 
@@ -178,7 +178,7 @@ importers.
 These shapes are the stable public contract. Field names may grow, but existing
 meaning should not be silently reused for a different concept.
 When adding optional metadata, follow
-[`schema-field-profiles.md`](../architecture/schema-field-profiles.md): minimal
+[`schema-field-profiles.md`](../architecture/runtime/schema-field-profiles.md): minimal
 identity, retrieval runtime, governance, diagnostic, and high-risk projections
 must remain separate instead of widening every base record.
 
@@ -456,7 +456,7 @@ Knowledge update events are append-only lifecycle overlays for governed source
 changes. They are the public record shape for added, changed, superseded,
 retracted, and rollback source versions. The detailed state machine, rollback
 boundary, and high-stakes review-gate behavior are owned by
-[knowledge-source-lifecycle.md](../architecture/knowledge-source-lifecycle.md).
+[knowledge-source-lifecycle.md](../architecture/source/knowledge-source-lifecycle.md).
 
 Required semantics:
 
@@ -475,7 +475,7 @@ Required semantics:
 ### High-Risk Answer Gate Policy
 
 High-risk answer-time use of governed knowledge claims is owned by
-[high-risk-answer-gates.md](../architecture/high-risk-answer-gates.md). The
+[high-risk-answer-gates.md](../architecture/host/high-risk-answer-gates.md). The
 policy is a deterministic local gate over already selected claims and evidence:
 it requires source reopen, applicability context, lifecycle eligibility, visible
 conflict handling, and privacy-safe cannot-claim boundaries before a claim can
@@ -487,7 +487,7 @@ must not export raw source text or claim text in its report.
 Typed agent-skill capability manifests are currently an architecture prototype,
 not part of the minimal public schema contract. Their canonical design boundary
 lives in
-[agent-skill-capability-contracts.md](../architecture/agent-skill-capability-contracts.md).
+[agent-skill-capability-contracts.md](../architecture/host/agent-skill-capability-contracts.md).
 They may describe execution permissions, privacy partitions, tool profiles, and
 evaluation protocols for a skill path, but source manifests, claim records,
 source refs, and answer gates remain the public-core proof surfaces.

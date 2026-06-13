@@ -13,7 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "aippocampus" / "release"))
 import check_wheel_contract as wheel_contract  # noqa: E402
 
 PYPROJECT = REPO_ROOT / "pyproject.toml"
-RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "release-checklist.md"
+RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "setup" / "release-checklist.md"
 PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-agent-discovery.yml"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml"
 

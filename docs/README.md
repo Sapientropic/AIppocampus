@@ -15,6 +15,7 @@ Use this page only as the folder map.
 | I just want to install and see one recall moment. | [`start-here.md#first-recall`](start-here.md#first-recall) |
 | I am evaluating AIppocampus for coding-agent work. | [`start-here.md#coding-agent-user`](start-here.md#coding-agent-user) |
 | I am changing runtime, search, hooks, or sync. | [`start-here.md#maintainer`](start-here.md#maintainer) |
+| I am lost in the newer architecture concepts. | [`architecture/source-shape-runtime-spine.md`](architecture/source-shape-runtime-spine.md) |
 | I am checking benchmark or release claims. | [`start-here.md#benchmark-or-claim-reviewer`](start-here.md#benchmark-or-claim-reviewer) |
 | I am exploring the broader continuity idea. | [`start-here.md#continuity-and-research-reader`](start-here.md#continuity-and-research-reader) |
 
@@ -47,6 +48,11 @@ before promoting a heavier mechanism into the ordinary user path.
 Keep long rules, status matrices, and command logs in one authoritative place.
 Other docs should link to that place and add only local context.
 
+When two docs appear to disagree, prefer the current runtime contract or the
+owner issue named by the local folder index. Research notes preserve design
+context; they do not override `skills/aippocampus/`, `docs/architecture/`, or
+the current evidence ledger.
+
 ## Guarded Pointers
 
 These links stay visible here because docs-health checks treat them as critical
@@ -57,12 +63,12 @@ navigation anchors, even though their detailed inventories live in local indexes
 | Benchmark map | [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md) |
 | Proof-slice maturity | [`evidence/readiness/proof-slice-maturity.md`](evidence/readiness/proof-slice-maturity.md) |
 | Source-backed kernel contract | [`architecture/architecture-overview.md#source-backed-kernel-contract`](architecture/architecture-overview.md#source-backed-kernel-contract) |
-| Product profile boundary | [`architecture/product-profiles.md`](architecture/product-profiles.md) |
-| Legacy alias inventory | [`architecture/legacy-alias-inventory.md`](architecture/legacy-alias-inventory.md) |
-| Path identity | [`architecture/path-identity.md`](architecture/path-identity.md) |
-| Clean-source redaction profiles | [`architecture/clean-source-redaction-profiles.md`](architecture/clean-source-redaction-profiles.md) |
-| Dependency contract | [`guides/dependency-contract.md`](guides/dependency-contract.md) |
-| Safe environment | [`guides/safe-environment.md`](guides/safe-environment.md) |
+| Product profile boundary | [`architecture/host/product-profiles.md`](architecture/host/product-profiles.md) |
+| Legacy alias inventory | [`architecture/ops/legacy-alias-inventory.md`](architecture/ops/legacy-alias-inventory.md) |
+| Path identity | [`architecture/source/path-identity.md`](architecture/source/path-identity.md) |
+| Clean-source redaction profiles | [`architecture/source/clean-source-redaction-profiles.md`](architecture/source/clean-source-redaction-profiles.md) |
+| Dependency contract | [`guides/setup/dependency-contract.md`](guides/setup/dependency-contract.md) |
+| Safe environment | [`guides/setup/safe-environment.md`](guides/setup/safe-environment.md) |
 
 ## Boundary
 

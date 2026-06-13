@@ -268,7 +268,7 @@ above. The canonical command details live in
   Desktop UI marketplace click-through remain unclaimed unless separately
   verified.
 - #27/#28 add public-safe memory pain fixture evidence and a short report in
-  `docs/evidence/benchmarks/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
+  `docs/evidence/benchmarks/reports/field-journey/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
   source-backed recall and unsupported-memory suppression, not competitor
   superiority, live semantic-model quality, real-history pain coverage, or a
   real Track D runtime compaction-continuity proof.

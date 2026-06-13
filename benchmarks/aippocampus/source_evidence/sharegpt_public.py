@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 
 import benchmark_fts5_recall as fts5_benchmark
-import sharegpt_sampling
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import split_query_terms
-from benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared import sharegpt_sampling
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
 
 from .defaults import (
     CONTINUATION_RE,

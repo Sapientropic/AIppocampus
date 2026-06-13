@@ -7,7 +7,7 @@ repo-owned test / benchmark / tool harnesses. It is not a scorecard and it does
 not replace source-backed design decisions.
 
 Full budget metadata lives in
-[`docs/evidence/architecture-debt-snapshot-2026-06-04.md`](../evidence/architecture-debt-snapshot-2026-06-04.md).
+[`docs/evidence/reports/architecture-debt-snapshot-2026-06-04.md`](../evidence/reports/architecture-debt-snapshot-2026-06-04.md).
 Generate the current count/status report with:
 
 ```powershell
@@ -113,9 +113,9 @@ Do not add new runner-local caveat catalogs by default. Keep active run-level
 or track-local `cannot_claim` entries only where a reader could over-read that
 specific output; for inherited or inactive caveats, prefer `claim_boundary_ref`
 or the parent evidence owner instead of mirroring full lists. The canonical rule
-remains [`schema-field-profiles.md#cannot-claim`](./schema-field-profiles.md#cannot-claim).
+remains [`schema-field-profiles.md#cannot-claim`](runtime/schema-field-profiles.md#cannot-claim).
 Runner and smoke pressure files should consume
-`benchmarks/aippocampus/claim_boundary_refs.py` unless they are the current
+`benchmarks/aippocampus/shared/claim_boundary_refs.py` unless they are the current
 aggregation owner (`benchmark_suite.py`) or a documented successor. That keeps
 the canonical pointer movable without turning domain-specific runner caveats
 into a new global claim schema.
@@ -130,7 +130,7 @@ Current local helper pressure points:
 | `benchmarks/aippocampus/benchmark_longmemeval_answer.py` | `cannot_claim` | Keep fixed-reader answer/latency caveats local to the opt-in harness; do not promote answer-run boundaries into retrieval-only or generic external-benchmark policy. |
 | `benchmarks/aippocampus/benchmark_longmemeval_v2_context.py` | `cannot_claim` | Keep V2 context-mapping pilot caveats local and diagnostic; do not promote pilot status into suite-level quality claims. |
 | `benchmarks/aippocampus/benchmark_memoryagentbench.py` | `stage3_claim_boundary` | Keep Stage 3 dry-run boundaries inside MemoryAgentBench until official scoring inputs are wired. |
-| `benchmarks/aippocampus/memory_pain_companions.py` | `companion_cannot_claim` | Keep memory-pain companion caveats tied to the memory-pain fixture report; do not turn this helper into a second suite-level claim-boundary layer. |
+| `benchmarks/aippocampus/shared/memory_pain_companions.py` | `companion_cannot_claim` | Keep memory-pain companion caveats tied to the memory-pain fixture report; do not turn this helper into a second suite-level claim-boundary layer. |
 | `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` | `cannot_claim` | Keep segmented-merge caveats owned by the merge-policy fixture report; split only if another segment runner reuses the same policy. |
 | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` | `cannot_claim` | Prefer source-evidence track ownership and `cannot_claim_by_track`; avoid copying Track B caveats into unrelated runners. |
 | `benchmarks/aippocampus/benchmark_suite.py` | `collect_cannot_claim`, `collect_cannot_claim_by_track`, `suite_level_cannot_claims`, `profile_cannot_claims`, `claim_boundary_policy` | This is the current aggregation owner. Extend this policy before adding a second suite-level caveat layer. |

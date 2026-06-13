@@ -32,7 +32,7 @@ orientation, let `working_continuity_brief` guide the next action, and reserve
 high-risk escalation. The detailed contract lives in
 [`skills/aippocampus/references/ambient-hooks.md`](../skills/aippocampus/references/ambient-hooks.md).
 For attention-style routing, use
-[`docs/architecture/source-backed-attention-router.md`](architecture/source-backed-attention-router.md):
+[`docs/architecture/recall/source-backed-attention-router.md`](architecture/recall/source-backed-attention-router.md):
 attention may choose where to look, but reopened source decides what can be
 claimed.
 
@@ -149,7 +149,7 @@ navigation sidecars. They write local memory artifacts, so do not run them
 without user consent. For the exact support boundary, use
 [`ecosystem-integration-matrix.md`](guides/ecosystem-integration-matrix.md);
 for Claude Code setup, use
-[`claude-code-mcp.md`](guides/claude-code-mcp.md).
+[`claude-code-mcp.md`](guides/setup/claude-code-mcp.md).
 
 For the first recall, try an exact phrase first. If the user only remembers a
 vague cue, search a project cue or a time cue and label the result as candidate

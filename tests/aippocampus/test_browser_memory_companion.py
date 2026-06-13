@@ -88,9 +88,13 @@ class BrowserMemoryCompanionTests(unittest.TestCase):
     def test_userscript_has_visible_controls_and_boundary_notes(self) -> None:
         source = USERSCRIPT.read_text(encoding="utf-8")
         readme = (USERSCRIPT.parent / "README.md").read_text(encoding="utf-8")
-        design = (REPO_ROOT / "docs" / "architecture" / "browser-extension-design.md").read_text(
-            encoding="utf-8"
-        )
+        design = (
+            REPO_ROOT
+            / "docs"
+            / "architecture"
+            / "host"
+            / "browser-extension-design.md"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("@match        https://claude.ai/*", source)
         self.assertIn("data-aippocampus-enable", source)

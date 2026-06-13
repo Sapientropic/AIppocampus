@@ -24,8 +24,11 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmark_statistics import binomial_rate_report, lower_bound_gate
-from vcs_source_disambiguation import (
+from benchmarks.aippocampus.shared.benchmark_statistics import (
+    binomial_rate_report,
+    lower_bound_gate,
+)
+from benchmarks.aippocampus.shared.vcs_source_disambiguation import (
     SOURCE_DISAMBIGUATION_INPUT_FIELDS,
     event_has_unsupported_signal,
     event_requests_behavior_source,

@@ -115,7 +115,10 @@ class PluginInstallerTests(unittest.TestCase):
                     / "aippocampus"
                     / result["plugin"]["version"]
                 )
-                self.assertEqual(Path(result["plugin"]["installed_cache"]), installed_cache)
+                self.assertEqual(
+                    Path(result["plugin"]["installed_cache"]).resolve(),
+                    installed_cache.resolve(),
+                )
                 self.assertTrue((installed_cache / ".codex-plugin" / "plugin.json").exists())
                 self.assertTrue(
                     result["cache_refresh"]["refreshed"]["installed_cache"]["target_path"],

@@ -25,7 +25,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
 
 SCHEMA_VERSION = 1
 DEFAULT_DATASET = (_paths.REPO_ROOT / "benchmark_corpus" / "locomo" / "locomo10.json").resolve()

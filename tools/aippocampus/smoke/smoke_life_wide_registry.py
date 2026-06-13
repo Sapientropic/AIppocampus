@@ -19,11 +19,12 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
+
 from aippocampus_runtime.core import aippocampus_registry_dir
 from aippocampus_runtime.navigation.project_timeline import build_project_timeline
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
-from claim_boundary_refs import claim_boundary_ref
 
 NON_TECHNICAL_LIFE_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
 

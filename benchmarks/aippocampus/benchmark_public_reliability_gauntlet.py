@@ -25,10 +25,10 @@ import smoke_long_thread_segment_soak
 import smoke_question_tracking_scale
 import smoke_synthetic_scale_capacity
 
-import auto_hook_pollution
 import benchmark_knowledge_pollution
 import benchmark_semantic_robustness
 from aippocampus_runtime.core import now_utc
+from benchmarks.aippocampus.shared import auto_hook_pollution
 
 SCHEMA_VERSION = 1
 LONGMEMEVAL_500_SOURCE_REPORT = "docs/evidence/benchmarks/longmemeval.md#current-published-result"

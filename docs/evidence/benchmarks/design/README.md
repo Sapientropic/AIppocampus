@@ -30,9 +30,9 @@ Dated command evidence belongs in
 - [`atm-bench-hard-protocol-boundary.md`](atm-bench-hard-protocol-boundary.md)
   owns the verified ATM-Bench Hard protocol boundary for the #528 multimodal
   source-backed recall track.
-- [`../memory-decision-benchmark-plan.md`](../memory-decision-benchmark-plan.md)
+- [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md)
   remains the detailed Track A-D methodology and runner-plan owner.
-- [`../hippocampal-recall-plan.md`](../hippocampal-recall-plan.md) owns the
+- [`hippocampal-recall-plan.md`](hippocampal-recall-plan.md) owns the
   H-series recall-discrimination design.
 - [`../public-longitudinal-users.md`](../public-longitudinal-users.md) owns the
   public longitudinal and VCS hard-event benchmark direction.

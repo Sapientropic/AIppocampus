@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 for _path in (
+    REPO_ROOT,
     SCRIPTS,
     REPO_ROOT / "benchmarks" / "aippocampus",
     REPO_ROOT / "tools" / "aippocampus" / "smoke",
@@ -39,14 +40,18 @@ HIGH_RISK_MYPY_SCRIPTS = {
 }
 DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
 DEBT_SNAPSHOT = (
-    REPO_ROOT / "docs" / "evidence" / "architecture-debt-snapshot-2026-06-04.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reports"
+    / "architecture-debt-snapshot-2026-06-04.md"
 )
 DEBT_REPORT = REPO_ROOT / "tools" / "aippocampus" / "docs" / "debt_report.py"
 PROVIDER_ENTRYPOINT_INVENTORY = (
-    REPO_ROOT / "docs" / "architecture" / "provider-entrypoint-inventory.md"
+    REPO_ROOT / "docs" / "architecture" / "host" / "provider-entrypoint-inventory.md"
 )
 RUNTIME_SCRIPT_MAP = REPO_ROOT / "docs" / "architecture" / "runtime-script-map.md"
-ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "encrypted-sync-v2.md"
+ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "ops" / "encrypted-sync-v2.md"
 LARGE_RUNTIME_THRESHOLD = 600
 LARGE_TEST_THRESHOLD = 1500
 LARGE_BENCHMARK_THRESHOLD = 1200
@@ -186,6 +191,8 @@ def tool_python_files() -> list[Path]:
 def claim_boundary_helper_files() -> list[Path]:
     files = [
         *benchmark_python_files(),
+        *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "shared").glob("*.py")),
+        *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "families").glob("*.py")),
         *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "source_evidence").glob("*.py")),
         *sorted((REPO_ROOT / "tools" / "aippocampus" / "smoke").glob("*.py")),
     ]
@@ -472,7 +479,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             f"test modules: {LARGE_TEST_THRESHOLD}",
             f"benchmark runners: {LARGE_BENCHMARK_THRESHOLD}",
             f"repo tools and smokes: {LARGE_TOOL_THRESHOLD}",
-            "docs/evidence/architecture-debt-snapshot-2026-06-04.md",
+            "docs/evidence/reports/architecture-debt-snapshot-2026-06-04.md",
             "not a scorecard",
             "At least one real boundary split",
             "test_import_coupling.py",
@@ -539,10 +546,10 @@ class ArchitectureBoundaryTests(unittest.TestCase):
     def test_claim_boundary_helpers_share_canonical_ref(self) -> None:
         import importlib
 
-        refs = importlib.import_module("claim_boundary_refs")
+        refs = importlib.import_module("benchmarks.aippocampus.shared.claim_boundary_refs")
         self.assertEqual(
             refs.CANONICAL_CANNOT_CLAIM_REF,
-            "docs/architecture/schema-field-profiles.md#cannot-claim",
+            "docs/architecture/runtime/schema-field-profiles.md#cannot-claim",
         )
         missing = [
             path.relative_to(REPO_ROOT).as_posix()
@@ -570,7 +577,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertTrue(report["ok"], report)
         self.assertIn("docs/architecture/architecture-debt-register.md", report["sources"])
         self.assertIn(
-            "docs/evidence/architecture-debt-snapshot-2026-06-04.md",
+            "docs/evidence/reports/architecture-debt-snapshot-2026-06-04.md",
             report["sources"],
         )
         self.assertGreater(report["entry_count"], 40)

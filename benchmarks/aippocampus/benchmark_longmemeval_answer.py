@@ -25,9 +25,12 @@ _paths.ensure_paths()
 
 import benchmark_longmemeval as retrieval_runner
 import benchmark_source_evidence_retrieval as retrieval_benchmark
-import provider_execution_budget
-from claim_boundary_refs import claim_boundary_ref
-from longmemeval_answer_review import build_failure_review, expansion_go_no_go
+from benchmarks.aippocampus.families.longmemeval_answer_review import (
+    build_failure_review,
+    expansion_go_no_go,
+)
+from benchmarks.aippocampus.shared import provider_execution_budget
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 from source_evidence import standard_public
 
 SCHEMA_VERSION = 1

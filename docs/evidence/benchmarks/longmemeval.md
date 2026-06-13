@@ -127,7 +127,7 @@ The pilot path is deliberately small:
 - no raw questions, answers, trajectory text, screenshots, URLs, local paths,
   raw reader responses, or credentials in AIppocampus reports.
 
-`benchmarks/aippocampus/longmemeval_v2_aippocampus_adapter.py` provides the
+`benchmarks/aippocampus/adapters/longmemeval_v2_aippocampus_adapter.py` provides the
 minimal text-only Memory adapter shape for that pilot. The official harness
 registers memory backends from its own `memory_modules` package, so a real
 pilot should copy or import the adapter inside an ignored official checkout
@@ -275,14 +275,14 @@ LongMemEval downloads or generated JSON reports unless a future change promotes
 a small curated artifact with provenance and license notes.
 
 The first dated LongMemEval-S answer/latency baseline is summarized in
-[`longmemeval-fixed-reader-answer-25-2026-06-12.md`](longmemeval-fixed-reader-answer-25-2026-06-12.md).
+[`longmemeval-fixed-reader-answer-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-answer-25-2026-06-12.md).
 The raw generated report remains local and gitignored; the committed summary
 preserves the fixed reader config, prompt version, model/provider metadata,
 token/cost telemetry, sanitized report validation, and retrieval-vs-answer
 claim separation.
 
 The #1282 fixed-reader cleanup rerun is summarized in
-[`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
+[`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
 It adds a privacy-safe failure review, v2 bounded-evidence reader prompt, and
 explicit expansion gate. The current decision is `no_go` for 100Q or 500Q
 provider answer runs until reader/provider errors, false abstentions on
@@ -326,10 +326,10 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --progress-every 25 --partial-output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 100 --top-k 10 --line-reranker structural --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-structural-500.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-structural-500.json
-python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --output docs\evidence\benchmarks\longmemeval-exact-line-repair-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --output docs\evidence\benchmarks\reports\longmemeval\longmemeval-exact-line-repair-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.budget.json --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json
-python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json --output docs\evidence\benchmarks\longmemeval-semantic-cache-path-2026-06-12.json --json
+python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25-cachehash.json --output docs\evidence\benchmarks\reports\longmemeval\longmemeval-semantic-cache-path-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 20 --partial-output benchmark_corpus\reports\longmemeval-v1-small-lexical-100-2026-06-12.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-lexical-100-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-timeout 45 --line-reranker-workers 2 --progress-every 10 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.budget.json --max-provider-calls 100 --max-provider-total-tokens 1500000 --provider-cost-unknown --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-timeout 45 --line-reranker-workers 8 --progress-every 10 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.budget.json --max-provider-calls 100 --max-provider-total-tokens 1500000 --provider-cost-unknown --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.json --json
@@ -343,7 +343,7 @@ python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeva
 Fixed-reader answer baseline for #1194:
 
 - Summary:
-  [`longmemeval-fixed-reader-answer-25-2026-06-12.md`](longmemeval-fixed-reader-answer-25-2026-06-12.md).
+  [`longmemeval-fixed-reader-answer-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-answer-25-2026-06-12.md).
 - Reader attempted: `25/25`; deterministic answer-correct count:
   `20/25 = 0.8000`.
 - Retrieval/reference layer in the same run: session R@10 `25/25`, evidence-line
@@ -361,7 +361,7 @@ Fixed-reader answer baseline for #1194:
 Fixed-reader cleanup for #1282:
 
 - Summary:
-  [`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
+  [`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
 - Reader attempted: `25/25`; deterministic answer-correct count:
   `19/25 = 0.7600`.
 - Retrieval/reference layer in the same run stayed unchanged from the baseline:
@@ -378,7 +378,7 @@ Fixed-reader cleanup for #1282:
 LongMemEval-S 500-question verification summary:
 
 - Public artifact trail:
-  [`longmemeval-500-retrieval-artifact-2026-06-11.json`](longmemeval-500-retrieval-artifact-2026-06-11.json).
+  [`longmemeval-500-retrieval-artifact-2026-06-11.json`](reports/longmemeval/longmemeval-500-retrieval-artifact-2026-06-11.json).
   This manifest records the deterministic rerun metadata, dataset checksum,
   command shape, report SHA-256, aggregate metrics, privacy checks, and schema
   preview without committing the raw dataset or full generated report.
@@ -449,9 +449,9 @@ Optional lexical line-reranker 500-question follow-up for #1087:
 Structural exact-line repair failure report for #1193:
 
 - Summary:
-  [`longmemeval-exact-line-repair-2026-06-12.md`](longmemeval-exact-line-repair-2026-06-12.md).
+  [`longmemeval-exact-line-repair-2026-06-12.md`](reports/longmemeval/longmemeval-exact-line-repair-2026-06-12.md).
 - Sanitized JSON:
-  [`longmemeval-exact-line-repair-2026-06-12.json`](longmemeval-exact-line-repair-2026-06-12.json).
+  [`longmemeval-exact-line-repair-2026-06-12.json`](reports/longmemeval/longmemeval-exact-line-repair-2026-06-12.json).
 - Run date: `2026-06-12T05:56:12Z`.
 - Command: same 500-question LongMemEval-S split and top-k as above, with
   `--line-reranker structural --line-reranker-workers 8`.
@@ -485,9 +485,9 @@ Structural exact-line repair failure report for #1193:
 Warm query/candidate cache replay for #1305:
 
 - Summary:
-  [`longmemeval-semantic-cache-path-2026-06-12.md`](longmemeval-semantic-cache-path-2026-06-12.md).
+  [`longmemeval-semantic-cache-path-2026-06-12.md`](reports/longmemeval/longmemeval-semantic-cache-path-2026-06-12.md).
 - Sanitized JSON:
-  [`longmemeval-semantic-cache-path-2026-06-12.json`](longmemeval-semantic-cache-path-2026-06-12.json).
+  [`longmemeval-semantic-cache-path-2026-06-12.json`](reports/longmemeval/longmemeval-semantic-cache-path-2026-06-12.json).
 - Run date: `2026-06-12T10:10:57Z`.
 - The fresh 25Q semantic pilot now emits `line_reranker_candidate_pack_sha1`,
   a hash of candidate line/routing metadata plus source-text hashes. The hash
@@ -523,9 +523,9 @@ Warm query/candidate cache replay for #1305:
 500Q source-worker-surface proxy and LLM upper bound:
 
 - Summary:
-  [`longmemeval-source-worker-surface-500q-2026-06-13.md`](longmemeval-source-worker-surface-500q-2026-06-13.md).
+  [`longmemeval-source-worker-surface-500q-2026-06-13.md`](reports/longmemeval/longmemeval-source-worker-surface-500q-2026-06-13.md).
 - Sanitized JSON:
-  [`longmemeval-source-worker-surface-500q-2026-06-13.json`](longmemeval-source-worker-surface-500q-2026-06-13.json).
+  [`longmemeval-source-worker-surface-500q-2026-06-13.json`](reports/longmemeval/longmemeval-source-worker-surface-500q-2026-06-13.json).
 - Source-side run date: `2026-06-12T18:10:20Z`. LLM upper-bound run date:
   `2026-06-12T16:43:38Z`.
 - Dataset scale: LongMemEval-S first `500` questions; runner-scanned source
@@ -572,9 +572,9 @@ Warm query/candidate cache replay for #1305:
 100Q semantic query/candidate cache progress, superseded by the 500Q rows above:
 
 - Summary:
-  [`longmemeval-semantic-cache-100q-2026-06-12.md`](longmemeval-semantic-cache-100q-2026-06-12.md).
+  [`longmemeval-semantic-cache-100q-2026-06-12.md`](reports/longmemeval/longmemeval-semantic-cache-100q-2026-06-12.md).
 - Sanitized JSON:
-  [`longmemeval-semantic-cache-100q-2026-06-12.json`](longmemeval-semantic-cache-100q-2026-06-12.json).
+  [`longmemeval-semantic-cache-100q-2026-06-12.json`](reports/longmemeval/longmemeval-semantic-cache-100q-2026-06-12.json).
 - Run dates: lexical comparison `2026-06-12T16:01:24Z`, semantic first run
   `2026-06-12T15:39:58Z`, and semantic repeated provider-prefix replay
   `2026-06-12T15:45:30Z`.
@@ -629,7 +629,7 @@ Optional semantic LLM line-reranker pilot for #1092:
   `25/25`; fused evidence-line MRR `1.0000`, up `0.3652` over first-stage
   evidence-line MRR `0.6348`.
 - Sanitized analysis report:
-  [`longmemeval-semantic-rerank-analysis-2026-06-10.json`](longmemeval-semantic-rerank-analysis-2026-06-10.json).
+  [`longmemeval-semantic-rerank-analysis-2026-06-10.json`](reports/longmemeval/longmemeval-semantic-rerank-analysis-2026-06-10.json).
 - Reranked evidence-line ladder from the analysis report: R@1/R@3/R@5/R@10/R@20/R@50
   all `25/25 = 1.0000`. Baseline ladder for the same 25 cases was R@1
   `12/25 = 0.4800`, R@3 `18/25 = 0.7200`, R@5 `21/25 = 0.8400`, R@10

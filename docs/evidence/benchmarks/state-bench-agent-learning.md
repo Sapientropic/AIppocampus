@@ -109,7 +109,7 @@ no-memory task baseline.
 ## 2026-06-10 One-Domain Execution Preflight
 
 Machine-readable report:
-`docs/evidence/benchmarks/state-bench-agent-learning-preflight-2026-06-10.json`.
+`docs/evidence/benchmarks/reports/state-bench/state-bench-agent-learning-preflight-2026-06-10.json`.
 
 Official source snapshot:
 
@@ -124,7 +124,7 @@ Official source snapshot:
 Preflight command shape:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_state_bench_agent_learning.py --state-bench-root .tmp\state-bench-upstream-lf --domain customer_support --write-adapter --adapter-output-dir .tmp\state-bench-upstream-lf\agents --learnings-output .tmp\state-bench-upstream-lf\agents\learnings.json --prepare-matched-run --matched-run-output-dir .tmp\state-bench-aippocampus\outputs --matched-task-ids 1-return_partial_order --agent-model-name gpt-5.4-mini --output docs\evidence\benchmarks\state-bench-agent-learning-preflight-2026-06-10.json --json
+python benchmarks\aippocampus\benchmark_state_bench_agent_learning.py --state-bench-root .tmp\state-bench-upstream-lf --domain customer_support --write-adapter --adapter-output-dir .tmp\state-bench-upstream-lf\agents --learnings-output .tmp\state-bench-upstream-lf\agents\learnings.json --prepare-matched-run --matched-run-output-dir .tmp\state-bench-aippocampus\outputs --matched-task-ids 1-return_partial_order --agent-model-name gpt-5.4-mini --output docs\evidence\benchmarks\reports\state-bench\state-bench-agent-learning-preflight-2026-06-10.json --json
 ```
 
 Sanitized result:

@@ -27,7 +27,7 @@ from aippocampus_runtime.recall.scoring_policy import (  # noqa: E402
     SegmentMergePolicy,
 )
 from aippocampus_runtime.recall.segment_search import merge_topk_with_diagnostics  # noqa: E402
-from claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 SCHEMA_VERSION = 1
 DEFAULT_FIXTURE = (

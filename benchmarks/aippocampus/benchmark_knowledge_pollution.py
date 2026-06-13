@@ -22,7 +22,7 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.knowledge import answer_gate, capability_contract
-from benchmark_statistics import binomial_rate_report, rounded_rate
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report, rounded_rate
 
 SCHEMA_VERSION = 1
 DEFAULT_FIXTURE = (

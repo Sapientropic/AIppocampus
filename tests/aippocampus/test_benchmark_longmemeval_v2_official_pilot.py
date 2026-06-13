@@ -8,10 +8,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
+for _path in (REPO_ROOT, BENCHMARKS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+from benchmarks.aippocampus.adapters import (
+    longmemeval_v2_aippocampus_adapter as adapter,  # noqa: E402
+)
 
 import benchmark_longmemeval_v2_official_pilot as decision  # noqa: E402
-import longmemeval_v2_aippocampus_adapter as adapter  # noqa: E402
 
 
 class LongMemEvalV2OfficialPilotTests(unittest.TestCase):

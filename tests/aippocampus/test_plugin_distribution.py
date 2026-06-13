@@ -44,7 +44,7 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertEqual(interface["privacyPolicyURL"], "https://www.aippocampus.com/privacy/")
         self.assertEqual(
             interface["termsOfServiceURL"],
-            "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/plugin-terms-boundary.md",
+            "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/community/plugin-terms-boundary.md",
         )
         self.assertEqual(interface["screenshots"], [])
         for key in ("composerIcon", "logo"):

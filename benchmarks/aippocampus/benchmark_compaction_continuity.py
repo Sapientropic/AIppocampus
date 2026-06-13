@@ -24,7 +24,7 @@ _paths.ensure_paths()
 
 from aippocampus_runtime.core import benchmark_text_is_sensitive
 from aippocampus_runtime.reflection import reconsolidation as corr
-from benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
 
 SCHEMA_VERSION = corr.SCHEMA_VERSION
 HOOK_STAGES = corr.HOOK_STAGES

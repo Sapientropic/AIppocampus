@@ -41,7 +41,7 @@ def repo_row(
             "files": ["skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py"],
             "tests": ["tests/aippocampus/test_aippocampus_prompt_hook.py"],
         },
-        "source_refs": [{"path": "docs/architecture/cognitive-runtime-architecture.md", "line": 160}],
+        "source_refs": [{"path": "docs/architecture/runtime/cognitive-runtime-architecture.md", "line": 160}],
         "freshness": freshness,
         "invalidation": {
             "commit": "abc123",

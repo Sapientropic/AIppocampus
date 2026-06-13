@@ -49,7 +49,7 @@ class BenchmarkEntrypointTests(unittest.TestCase):
         self.assertIn("benchmark_source_evidence_retrieval.py", result.stdout)
 
     def test_memory_pain_companion_helpers_explain_library_only_contract(self) -> None:
-        for helper in ("memory_hygiene.py", "note_memory_drift.py"):
+        for helper in ("shared/memory_hygiene.py", "shared/note_memory_drift.py"):
             with self.subTest(helper=helper):
                 help_result = run_repo_python(f"benchmarks/aippocampus/{helper}", "--help")
                 json_result = run_repo_python(f"benchmarks/aippocampus/{helper}", "--json")

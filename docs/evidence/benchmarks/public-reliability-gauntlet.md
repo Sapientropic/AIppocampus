@@ -26,7 +26,7 @@ quality, and pollution hygiene fail in different ways; a single aggregate
 number would make those failures harder to see.
 
 Related gate: the #1111
-[`attention-navigation-quality.md`](attention-navigation-quality.md) benchmark
+[`attention-navigation-quality.md`](reports/recall-navigation/attention-navigation-quality.md) benchmark
 separately covers route precision, hard masks, stale/currentness, conflict,
 action-time, anti-nag, and bounded-evidence red lines for the attention router.
 It can inform future gauntlet discussions, but it is not folded into the three
@@ -35,7 +35,7 @@ axes above or any single aggregate score.
 ## Current Dated Result
 
 The current report is:
-[`public-reliability-gauntlet-2026-06-10.json`](public-reliability-gauntlet-2026-06-10.json).
+[`public-reliability-gauntlet-2026-06-10.json`](reports/public-reliability/public-reliability-gauntlet-2026-06-10.json).
 
 Summary:
 
@@ -56,7 +56,7 @@ python benchmarks\aippocampus\benchmark_public_reliability_gauntlet.py --json
 Write the current dated report:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_public_reliability_gauntlet.py --output docs\evidence\benchmarks\public-reliability-gauntlet-2026-06-10.json
+python benchmarks\aippocampus\benchmark_public_reliability_gauntlet.py --output docs\evidence\benchmarks\reports\public-reliability\public-reliability-gauntlet-2026-06-10.json
 ```
 
 Optional physical-file segmented search soak:

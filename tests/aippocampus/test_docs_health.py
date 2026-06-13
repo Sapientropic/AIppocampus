@@ -86,7 +86,7 @@ def write_classifier_policy(repo: Path) -> None:
 
 
 def write_classifier_release_checklist(repo: Path) -> None:
-    path = repo / "docs" / "guides" / "release-checklist.md"
+    path = repo / "docs" / "guides" / "setup" / "release-checklist.md"
     path.parent.mkdir(parents=True)
     path.write_text(
         "\n".join(classifier_policy_guard.CLASSIFIER_RELEASE_CHECKLIST_TERMS) + "\n",
@@ -189,7 +189,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("missing public-readiness doc: docs/architecture/architecture-overview.md", result)
         self.assertNotIn("missing public-readiness doc: docs/guides/install-guide.md", result)
         self.assertNotIn("missing public-readiness doc: docs/guides/demo-scenarios.md", result)
-        self.assertNotIn("missing public-readiness doc: docs/guides/privacy-security-checklist.md", result)
+        self.assertNotIn("missing public-readiness doc: docs/guides/community/privacy-security-checklist.md", result)
         self.assertNotIn(
             "missing public-readiness doc: "
             "docs/evidence/readiness/public-readiness-verification.md",
@@ -304,11 +304,13 @@ class DocsHealthTests(unittest.TestCase):
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
             (architecture / "contract.md").write_text(
-                "# Contract\n\nRole: current contract.\n",
+                "# Contract\n\nRole: vague.\n",
                 encoding="utf-8",
             )
-            (architecture / "missing-from-index.md").write_text(
-                "# Missing\n\nRole: active design.\n",
+            topic = architecture / "topic"
+            topic.mkdir()
+            (topic / "contract.md").write_text(
+                "# Topic Contract\n\nRole: current contract.\n",
                 encoding="utf-8",
             )
             (architecture / "README.md").write_text(
@@ -316,10 +318,13 @@ class DocsHealthTests(unittest.TestCase):
                     [
                         "# Architecture Index",
                         "",
-                        "| File | Role | Use |",
-                        "| --- | --- | --- |",
-                        "| [contract.md](contract.md) | vague | bad role |",
-                        "| [gone.md](gone.md) | current contract | stale pointer |",
+                        "## Topic Layers",
+                        "",
+                        "| Layer | Use |",
+                        "| --- | --- |",
+                        "| [missing/](missing/) | Missing topic. |",
+                        "",
+                        "## Roles",
                     ]
                 ),
                 encoding="utf-8",
@@ -328,25 +333,21 @@ class DocsHealthTests(unittest.TestCase):
             issues = docs_health.architecture_index_issues(repo)
 
         self.assertIn(
-            "architecture index has unsupported role for contract.md: vague; "
+            "architecture doc has unsupported Role for contract.md: vague; "
             "use one of "
             + str(sorted(architecture_index_guard.ARCHITECTURE_INDEX_ROLES)),
             issues,
         )
         self.assertIn(
-            "architecture index missing docs/architecture/missing-from-index.md",
+            "architecture topic folder missing README: docs/architecture/topic/README.md",
             issues,
         )
         self.assertIn(
-            "architecture index references missing file: docs/architecture/gone.md",
+            "architecture index missing source-backed kernel contract pointer",
             issues,
         )
         self.assertIn(
-            "architecture doc Role mismatch for contract.md: doc has current contract, index has vague",
-            issues,
-        )
-        self.assertIn(
-            "architecture index missing role section: ## Current Contracts",
+            "architecture index missing source-shape spine pointer",
             issues,
         )
 
@@ -526,7 +527,7 @@ class DocsHealthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             alias = "CODEX_MEMORY_" + "NEW_THING"
-            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory = repo / "docs" / "architecture" / "ops" / "legacy-alias-inventory.md"
             inventory.parent.mkdir(parents=True)
             inventory.write_text("# Legacy Alias Inventory\n", encoding="utf-8")
             script = repo / "skills" / "aippocampus" / "scripts" / "new_surface.py"
@@ -537,14 +538,14 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertIn(
             "legacy/provider-specific env or path missing inventory classification: "
-            f"{alias}; update docs/architecture/legacy-alias-inventory.md",
+            f"{alias}; update docs/architecture/ops/legacy-alias-inventory.md",
             issues,
         )
 
     def test_legacy_alias_inventory_rejects_public_doc_first_choice_setup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory = repo / "docs" / "architecture" / "ops" / "legacy-alias-inventory.md"
             inventory.parent.mkdir(parents=True)
             inventory.write_text("`CODEX_MEMORY_VAULT`\n", encoding="utf-8")
             install_doc = repo / "docs" / "guides" / "install-guide.md"
@@ -557,7 +558,7 @@ class DocsHealthTests(unittest.TestCase):
             "public docs present legacy alias as first-choice setup: "
             "CODEX_MEMORY_VAULT in docs/guides/install-guide.md:1; "
             "prefer canonical AIPPOCAMPUS_* docs and link "
-            "docs/architecture/legacy-alias-inventory.md",
+            "docs/architecture/ops/legacy-alias-inventory.md",
             issues,
         )
 
@@ -565,7 +566,7 @@ class DocsHealthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             alias = "CODEX_MEMORY_" + "VAULT"
-            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory = repo / "docs" / "architecture" / "ops" / "legacy-alias-inventory.md"
             inventory.parent.mkdir(parents=True)
             inventory.write_text(
                 "\n".join(
@@ -587,14 +588,14 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertIn(
             f"legacy/provider-specific env or path inventory row incomplete: {alias} "
-            "(missing classification); update docs/architecture/legacy-alias-inventory.md",
+            "(missing classification); update docs/architecture/ops/legacy-alias-inventory.md",
             issues,
         )
 
     def test_legacy_alias_inventory_reports_misspelled_aippocampus_alias(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory = repo / "docs" / "architecture" / "ops" / "legacy-alias-inventory.md"
             inventory.parent.mkdir(parents=True)
             inventory.write_text("# Legacy Alias Inventory\n", encoding="utf-8")
             script = repo / "skills" / "aippocampus" / "scripts" / "scheduler.py"
@@ -609,7 +610,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn(
             "legacy/provider-specific env or path missing inventory classification: "
             "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK; "
-            "update docs/architecture/legacy-alias-inventory.md",
+            "update docs/architecture/ops/legacy-alias-inventory.md",
             issues,
         )
 
@@ -617,7 +618,7 @@ class DocsHealthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             alias = "CODEX_MEMORY_" + "NEW_THING"
-            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory = repo / "docs" / "architecture" / "ops" / "legacy-alias-inventory.md"
             inventory.parent.mkdir(parents=True)
             inventory.write_text(
                 "\n".join(
@@ -941,18 +942,18 @@ class DocsHealthTests(unittest.TestCase):
     def test_host_hook_boundary_reports_missing_boundary_docs_and_code_markers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            (repo / "docs" / "architecture").mkdir(parents=True)
-            (repo / "docs" / "guides").mkdir(parents=True)
+            (repo / "docs" / "architecture" / "host").mkdir(parents=True)
+            (repo / "docs" / "guides" / "setup").mkdir(parents=True)
             (repo / ".claude" / "skills" / "aippocampus").mkdir(parents=True)
             hooks = repo / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "hooks"
             hooks.mkdir(parents=True)
-            (repo / "docs" / "architecture" / "provider-entrypoint-inventory.md").write_text(
+            (repo / "docs" / "architecture" / "host" / "provider-entrypoint-inventory.md").write_text(
                 "# Provider Entrypoint Inventory\n", encoding="utf-8"
             )
             (repo / "docs" / "architecture" / "runtime-script-map.md").write_text(
                 "# Runtime Script Map\n", encoding="utf-8"
             )
-            (repo / "docs" / "guides" / "claude-code-mcp.md").write_text(
+            (repo / "docs" / "guides" / "setup" / "claude-code-mcp.md").write_text(
                 "# Claude Code\n", encoding="utf-8"
             )
             (repo / "docs" / "guides" / "public-api.md").write_text(
@@ -1613,7 +1614,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("missing public-readiness doc: docs/architecture/architecture-overview.md", issues)
         self.assertIn("missing public-readiness doc: docs/guides/install-guide.md", issues)
         self.assertIn("missing public-readiness doc: docs/guides/demo-scenarios.md", issues)
-        self.assertIn("missing public-readiness doc: docs/guides/privacy-security-checklist.md", issues)
+        self.assertIn("missing public-readiness doc: docs/guides/community/privacy-security-checklist.md", issues)
         self.assertIn(
             "missing public-readiness doc: "
             "docs/evidence/readiness/public-readiness-verification.md",

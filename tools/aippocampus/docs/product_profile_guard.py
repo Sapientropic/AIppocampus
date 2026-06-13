@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-PRODUCT_PROFILES_DOC = "docs/architecture/product-profiles.md"
+PRODUCT_PROFILES_DOC = "docs/architecture/host/product-profiles.md"
 PUBLIC_CORE_BOUNDARY_DOC = "docs/guides/public-core-boundary.md"
 
 REQUIRED_PRODUCT_PROFILE_TERMS = {
@@ -21,7 +21,7 @@ PRODUCT_PROFILE_POINTER_DOCS = (
     "docs/guides/public-api.md",
     "docs/guides/install-guide.md",
     "docs/guides/coding-agent-memory.md",
-    "docs/architecture/high-risk-answer-gates.md",
+    "docs/architecture/host/high-risk-answer-gates.md",
     PUBLIC_CORE_BOUNDARY_DOC,
 )
 

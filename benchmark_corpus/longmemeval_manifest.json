@@ -18,7 +18,7 @@
   "answer_runner": "benchmarks/aippocampus/benchmark_longmemeval_answer.py",
   "v2_context_mapping_runner": "benchmarks/aippocampus/benchmark_longmemeval_v2_context.py",
   "v2_official_pilot_decision_runner": "benchmarks/aippocampus/benchmark_longmemeval_v2_official_pilot.py",
-  "v2_official_pilot_adapter": "benchmarks/aippocampus/longmemeval_v2_aippocampus_adapter.py",
+  "v2_official_pilot_adapter": "benchmarks/aippocampus/adapters/longmemeval_v2_aippocampus_adapter.py",
   "evidence_page": "docs/evidence/benchmarks/longmemeval.md",
   "checksum_note": "sha256 values are Hugging Face LFS content oids and should match the downloaded file hash; the resolved download URL ETag may differ.",
   "splits": [

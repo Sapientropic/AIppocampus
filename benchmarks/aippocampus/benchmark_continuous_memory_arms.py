@@ -20,11 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-SKILL_SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-if str(SKILL_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SKILL_SCRIPTS))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SKILL_SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path[:0] = [str(path) for path in (REPO_ROOT, SKILL_SCRIPTS) if str(path) not in sys.path]
 
-from continuous_memory_preregistered_slices import (
+from benchmarks.aippocampus.families.continuous_memory_preregistered_slices import (
     CONTRACT_SMOKE_RUNNER_PROFILE,
     PREREGISTERED_REPEAT_RUNNER_PROFILE,
     PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM,

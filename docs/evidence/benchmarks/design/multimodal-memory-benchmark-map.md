@@ -67,15 +67,15 @@ claim.
 | Future profile/persona fixtures | PersonaVLM / Persona-MME plus HippoCamp profiling tasks. | Profile inference must stay source-backed and reversible; profile benchmarks are useful only if they preserve evidence and update boundaries. |
 
 The #541 runtime source contract is
-[`../../../architecture/multimodal-source-manifests.md`](../../../architecture/multimodal-source-manifests.md).
+[`../../../architecture/multimodal-source-manifests.md`](../../../architecture/source/multimodal-source-manifests.md).
 It keeps captions, OCR, tags, and schema rows as navigation artifacts while
 original source anchors remain the audit boundary.
 The #542 provider-routing contract is
-[`../../../architecture/multimodal-provider-routing.md`](../../../architecture/multimodal-provider-routing.md).
+[`../../../architecture/multimodal-provider-routing.md`](../../../architecture/host/multimodal-provider-routing.md).
 It keeps text-only, vision-capable, local/offline, and external routes distinct
 before any source-reopen or answer gate tries to use the result.
 The #543 answer-time gate is
-[`../../../architecture/multimodal-answer-gate.md`](../../../architecture/multimodal-answer-gate.md).
+[`../../../architecture/multimodal-answer-gate.md`](../../../architecture/host/multimodal-answer-gate.md).
 It keeps candidate packets bounded, requires source reopen for visual/document
 claims, and abstains when the requested detail is not source-backed.
 

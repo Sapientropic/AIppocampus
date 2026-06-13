@@ -5,7 +5,7 @@ complete visual product or foreground runtime contract.
 Origin: user observation, 2026-05-28.
 Related: [journey-tracking.md](journey-tracking.md) — Journey 数据结构,
 [dream-task-design.md](dream-task-design.md) — 整合型任务（compensatory/prospective/amplification）,
-[affect-side-channel.md](affect-side-channel.md) — hexagram 直觉层,
+[affect-side-channel.md](frontiers/affect-side-channel.md) — hexagram 直觉层,
 [ambient-associative-recall.md](ambient-associative-recall.md) — AAR 管线.
 
 ## Implementation Status
@@ -32,12 +32,12 @@ The first MVP lives in
 - The first #484 AAR v2 slice lives in
   `skills/aippocampus/scripts/aippocampus_runtime/reflection/aar_v2.py`, with
   its object/boundary contract in
-  [AAR v2 Action-Time Nudges](../architecture/aar-v2-action-time-nudges.md).
+  [AAR v2 Action-Time Nudges](../architecture/coordination/aar-v2-action-time-nudges.md).
   It provides a no-write report over source-backed corrections/postmortems,
   one deterministic action-time match for specific memory/source claims from
   weak context, and feedback metrics for later pruning.
 - The #332 feedback-to-AAR hardening closeout is recorded in
-  [Reflection AAR V2 Hardening Review](../evidence/reflection-aar-v2-hardening-2026-06-05.md).
+  [Reflection AAR V2 Hardening Review](../evidence/reports/reflection-aar-v2-hardening-2026-06-05.md).
   The AAR v2 reader now blocks stale, unsupported, and rejected review rows
   before they can become strategy nudges.
 

@@ -17,7 +17,7 @@ artifact_index:
   - README.md
   - docs/guides/install-guide.md
   - docs/guides/public-api.md
-  - docs/guides/claude-code-mcp.md
+  - docs/guides/setup/claude-code-mcp.md
   - docs/architecture/runtime-script-map.md
   - docs/evidence/readiness/public-readiness-verification.md
   - docs/planning/standalone-binary-packaging.md

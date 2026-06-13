@@ -73,7 +73,7 @@ Acceptance criteria:
 - Current sync evidence is split rather than re-owned here: #104 owns
   post-migration live provider sync smoke when real credentials and an
   ephemeral provider target are available, while #306 is now tracked through
-  [`docs/architecture/encrypted-sync-v2.md`](../architecture/encrypted-sync-v2.md)
+  [`docs/architecture/ops/encrypted-sync-v2.md`](../architecture/ops/encrypted-sync-v2.md)
   for encrypted sync v2 recovery, conflict, revocation, key-provider,
   plaintext/debug, and manifest-hardening decisions. #307 owns external
   install, Codex Desktop UI, and provider/client claim-matrix readiness gaps.

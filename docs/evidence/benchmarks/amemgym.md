@@ -232,7 +232,7 @@ the whole fixed arm.
 
 Checkpoint/resume audit for #1083 on 2026-06-10:
 
-[`amemgym-official-live-provider-1083-checkpoint-2026-06-10.md`](amemgym-official-live-provider-1083-checkpoint-2026-06-10.md)
+[`amemgym-official-live-provider-1083-checkpoint-2026-06-10.md`](reports/amemgym/amemgym-official-live-provider-1083-checkpoint-2026-06-10.md)
 used the #1052 `--resume` / `--checkpoint` path against the existing ignored
 live-provider partial outputs without restarting long provider surfaces. The
 audit skipped the already-complete `random` surface, wrote a public-safe
@@ -243,7 +243,7 @@ as a precise blocker/progress report, not as an AMemGym score.
 
 #1232 follow-up route blocker on 2026-06-11:
 
-[`amemgym-official-live-provider-1232-blocker-2026-06-11.md`](amemgym-official-live-provider-1232-blocker-2026-06-11.md)
+[`amemgym-official-live-provider-1232-blocker-2026-06-11.md`](reports/amemgym/amemgym-official-live-provider-1232-blocker-2026-06-11.md)
 resumed the same OpenRouter Native fixed-arm path after provider-budget
 adoption and account top-up. The follow-up diagnosis added a tiny OpenRouter
 route preflight and showed the required OpenAI-family routes fail even on a
@@ -437,7 +437,7 @@ Cannot claim now:
 ## Deferred Work
 
 The 2026-06-09 blocker note
-[`amemgym-official-live-provider-blocker-2026-06-09.md`](amemgym-official-live-provider-blocker-2026-06-09.md)
+[`amemgym-official-live-provider-blocker-2026-06-09.md`](reports/amemgym/amemgym-official-live-provider-blocker-2026-06-09.md)
 closes #958 as the ownerless deferred slice. #1052 added the bounded/resumable
 execution shell and public-safe checkpoint report, but full live-provider
 official-runner evidence remains blocked until a later dated note records a

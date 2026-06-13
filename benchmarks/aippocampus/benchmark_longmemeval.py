@@ -24,8 +24,8 @@ import _paths
 _paths.ensure_paths()
 
 import benchmark_source_evidence_retrieval as retrieval_benchmark
-import provider_execution_budget
-from claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared import provider_execution_budget
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 from source_evidence.semantic_sidecars import (
     SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
     SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS,

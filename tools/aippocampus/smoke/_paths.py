@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -28,9 +29,14 @@ REPO_ROOT = _paths.repo_root
 SKILL_ROOT = _paths.skill_root
 SKILL_SCRIPTS = _paths.skill_scripts
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 
 def ensure_paths() -> None:
     _repo_paths.ensure_repo_imports(
         Path(__file__).resolve(),
         include_benchmark_tools=True,
     )
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))

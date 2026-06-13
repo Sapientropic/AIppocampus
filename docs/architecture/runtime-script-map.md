@@ -17,7 +17,7 @@ python tools\aippocampus\docs\compat_shim_inventory.py --json
 ```
 
 For the exact inventory of remaining Codex-specific raw-rollout/default-home
-call sites, see `docs/architecture/provider-entrypoint-inventory.md`.
+call sites, see `docs/architecture/host/provider-entrypoint-inventory.md`.
 
 ## High-Level Runtime Flow
 

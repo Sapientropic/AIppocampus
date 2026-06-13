@@ -19,13 +19,13 @@ import _paths
 
 _paths.ensure_paths()
 
-import benchmark_maturity
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation import (
     attention_evidence_packager,
     attention_hot_router,
     attention_router_contract,
 )
+from benchmarks.aippocampus.shared import benchmark_maturity
 
 SCHEMA_VERSION = 1
 PUBLIC_COHORT_FAMILIES = (

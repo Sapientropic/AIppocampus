@@ -146,7 +146,7 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
   `aippocampus onboard --provider claude-code --format json`.
 - For exact host boundaries, use the repository docs
   `docs/guides/ecosystem-integration-matrix.md` and
-  `docs/guides/claude-code-mcp.md`; Claude Code onboarding does not imply
+  `docs/guides/setup/claude-code-mcp.md`; Claude Code onboarding does not imply
   AIppocampus Claude hook support.
 - Register an old rollout:
   `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
@@ -191,7 +191,7 @@ in the repository `docs/` folder, not in this installable runtime reference
 set. Load those only when the task is roadmap, research, or public positioning.
 For public CLI/MCP/API stability, use `docs/guides/public-api.md`. For typed
 agent-skill capability boundaries, use
-`docs/architecture/agent-skill-capability-contracts.md`; `SKILL.md` remains the
+`docs/architecture/host/agent-skill-capability-contracts.md`; `SKILL.md` remains the
 bootstrap guidance surface.
 
 If a detail appears in more than one place, keep only the stable rule here and

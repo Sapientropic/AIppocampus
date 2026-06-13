@@ -5,15 +5,17 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARK_REPORTS = REPO_ROOT / "docs" / "evidence" / "benchmarks"
+PUBLIC_LONGITUDINAL_REPORTS = (
+    REPO_ROOT / "docs" / "evidence" / "benchmarks" / "reports" / "public-longitudinal"
+)
 
 
 class PublishedBenchmarkReportsTests(unittest.TestCase):
     def test_react_vcs_report_exposes_ci_and_zero_violation_upper_bound(self) -> None:
         report = json.loads(
-            (BENCHMARK_REPORTS / "react-real-vcs-100-gold-2026-05-31.json").read_text(
-                encoding="utf-8",
-            )
+            (
+                PUBLIC_LONGITUDINAL_REPORTS / "react-real-vcs-100-gold-2026-05-31.json"
+            ).read_text(encoding="utf-8")
         )
         source_window = report["arms"]["source_window"]["rate_estimates"]
         candidate_bias = report["candidate_discovery_bias"]
@@ -43,9 +45,9 @@ class PublishedBenchmarkReportsTests(unittest.TestCase):
         )
         self.assertFalse(report["anti_drift_controls"]["legacy_cross_family_tags_available"])
 
-        markdown = (BENCHMARK_REPORTS / "react-real-vcs-100-gold-2026-05-31.md").read_text(
-            encoding="utf-8",
-        )
+        markdown = (
+            PUBLIC_LONGITUDINAL_REPORTS / "react-real-vcs-100-gold-2026-05-31.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("95% Wilson CI 96.47%-100.00%, n=105", markdown)
         self.assertIn("95% Wilson upper bound 3.53% (n=105)", markdown)
         self.assertIn("Candidate Discovery Bias", markdown)
@@ -55,7 +57,8 @@ class PublishedBenchmarkReportsTests(unittest.TestCase):
     def test_public_longitudinal_report_marks_small_contract_smokes(self) -> None:
         report = json.loads(
             (
-                BENCHMARK_REPORTS / "public-longitudinal-users-measurement-2026-05-31.json"
+                PUBLIC_LONGITUDINAL_REPORTS
+                / "public-longitudinal-users-measurement-2026-05-31.json"
             ).read_text(encoding="utf-8")
         )
         tracks = report["tracks"]
@@ -86,7 +89,8 @@ class PublishedBenchmarkReportsTests(unittest.TestCase):
         )
 
         markdown = (
-            BENCHMARK_REPORTS / "public-longitudinal-users-measurement-2026-05-31.md"
+            PUBLIC_LONGITUDINAL_REPORTS
+            / "public-longitudinal-users-measurement-2026-05-31.md"
         ).read_text(encoding="utf-8")
         self.assertIn("low-inference contract-smoke", markdown)
         self.assertIn("95% Wilson upper bound 56.15% (n=3)", markdown)

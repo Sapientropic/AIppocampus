@@ -35,13 +35,17 @@ class KnowledgeRuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(runtime_modules_importing_knowledge(), [])
 
         high_risk_doc = (
-            REPO_ROOT / "docs" / "architecture" / "high-risk-answer-gates.md"
+            REPO_ROOT / "docs" / "architecture" / "host" / "high-risk-answer-gates.md"
         ).read_text(encoding="utf-8")
         public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
             encoding="utf-8"
         )
         capability_doc = (
-            REPO_ROOT / "docs" / "architecture" / "agent-skill-capability-contracts.md"
+            REPO_ROOT
+            / "docs"
+            / "architecture"
+            / "host"
+            / "agent-skill-capability-contracts.md"
         ).read_text(encoding="utf-8")
 
         self.assertIn("## Adoption Status", high_risk_doc)

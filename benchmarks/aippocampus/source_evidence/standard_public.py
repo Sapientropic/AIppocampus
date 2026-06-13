@@ -35,7 +35,7 @@ from aippocampus_runtime.subconscious.worker import (
     clamp_confidence,
     parse_model_json,
 )
-from benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
 
 from .capability_provenance import benchmark_capability_provenance
 from .defaults import (

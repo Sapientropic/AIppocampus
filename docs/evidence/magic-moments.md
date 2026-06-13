@@ -161,7 +161,7 @@ The claim-bounded benchmark slice for turning these reports into reproducible
 fixture coverage is
 [#454](https://github.com/Sapientropic/AIppocampus/issues/454), with its public
 fixture report in
-[`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
+[`benchmarks/reports/field-journey/field-continuity-fixture-report.md`](benchmarks/reports/field-journey/field-continuity-fixture-report.md).
 The broader Field Continuity Eval design for public reproducibility tracks,
 baselines, metrics, and private-dogfood boundaries is
 [`benchmarks/field-continuity-eval-design.md`](benchmarks/field-continuity-eval-design.md).

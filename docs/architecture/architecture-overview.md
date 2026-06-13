@@ -210,21 +210,21 @@ Product direction remains in `docs/roadmap.md`.
 The public-core license, adapter, and schema boundary lives in
 `docs/guides/public-core-boundary.md`.
 Field-budget and profile discipline for minimal, runtime, high-risk, governance,
-and diagnostic projections lives in `docs/architecture/schema-field-profiles.md`.
+and diagnostic projections lives in `docs/architecture/runtime/schema-field-profiles.md`.
 Optional clean-source redaction profiles and source-fidelity boundaries live in
-`docs/architecture/clean-source-redaction-profiles.md`.
+`docs/architecture/source/clean-source-redaction-profiles.md`.
 Path identity, display spelling, and privacy-safe path projection boundaries live
-in `docs/architecture/path-identity.md`.
+in `docs/architecture/source/path-identity.md`.
 Runtime script ownership and dependency navigation lives in
 `docs/architecture/runtime-script-map.md`.
 The Rust deterministic-core migration boundary lives in
-`docs/architecture/rust-deterministic-core.md`; Rust ports must replay frozen
+`docs/architecture/future/rust-deterministic-core.md`; Rust ports must replay frozen
 Python-owned source-backed contracts before becoming authoritative.
 Typed execution boundaries for composable agent skills live in
-`docs/architecture/agent-skill-capability-contracts.md`.
+`docs/architecture/host/agent-skill-capability-contracts.md`.
 Multimodal source identity, media-origin policy, and derived-artifact truth
-boundaries live in `docs/architecture/multimodal-source-manifests.md`.
+boundaries live in `docs/architecture/source/multimodal-source-manifests.md`.
 Multimodal provider route capability and media-origin gating lives in
-`docs/architecture/multimodal-provider-routing.md`.
+`docs/architecture/host/multimodal-provider-routing.md`.
 Answer-time multimodal source reopen, cross-modal join packets, and abstention
-metrics live in `docs/architecture/multimodal-answer-gate.md`.
+metrics live in `docs/architecture/host/multimodal-answer-gate.md`.

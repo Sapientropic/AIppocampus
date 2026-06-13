@@ -33,24 +33,24 @@ Related implementation surfaces:
   fixtures and raw PR metadata are not checked in as a redistributable corpus.
 
 Latest dated measurement:
-[`public-longitudinal-users-measurement-2026-05-31.md`](public-longitudinal-users-measurement-2026-05-31.md).
+[`public-longitudinal-users-measurement-2026-05-31.md`](reports/public-longitudinal/public-longitudinal-users-measurement-2026-05-31.md).
 
 Latest real public VCS smoke:
-[`react-real-vcs-smoke-2026-05-31.md`](react-real-vcs-smoke-2026-05-31.md).
+[`react-real-vcs-smoke-2026-05-31.md`](reports/public-longitudinal/react-real-vcs-smoke-2026-05-31.md).
 
 Latest 100+ gold real public VCS measurement:
-[`react-real-vcs-100-gold-2026-05-31.md`](react-real-vcs-100-gold-2026-05-31.md).
+[`react-real-vcs-100-gold-2026-05-31.md`](reports/public-longitudinal/react-real-vcs-100-gold-2026-05-31.md).
 
 Latest adversarial React VCS measurement:
-[`react-real-vcs-adversarial-v2-2026-05-31.md`](react-real-vcs-adversarial-v2-2026-05-31.md).
+[`react-real-vcs-adversarial-v2-2026-05-31.md`](reports/public-longitudinal/react-real-vcs-adversarial-v2-2026-05-31.md).
 
 Latest non-oracle React VCS source-disambiguation follow-up:
-[`react-real-vcs-production-like-disambiguation-2026-06-04.md`](react-real-vcs-production-like-disambiguation-2026-06-04.md).
+[`react-real-vcs-production-like-disambiguation-2026-06-04.md`](reports/public-longitudinal/react-real-vcs-production-like-disambiguation-2026-06-04.md).
 
 Latest rollout behavior route-chain/actionability top-k calibration:
-[`rollout-hard-event-route-chain-2026-06-12.md`](rollout-hard-event-route-chain-2026-06-12.md).
+[`rollout-hard-event-route-chain-2026-06-12.md`](reports/public-longitudinal/rollout-hard-event-route-chain-2026-06-12.md).
 Latest broader public-safe rollout hard-event cohort:
-[`rollout-hard-event-cohort-v2-2026-06-12.md`](rollout-hard-event-cohort-v2-2026-06-12.md).
+[`rollout-hard-event-cohort-v2-2026-06-12.md`](reports/public-longitudinal/rollout-hard-event-cohort-v2-2026-06-12.md).
 
 ## Purpose
 
@@ -352,20 +352,20 @@ license and redistribution boundary are explicit; use local ignored reports for
 large curated rows.
 
 The first real public VCS smoke is now
-[`react-real-vcs-smoke-2026-05-31.md`](react-real-vcs-smoke-2026-05-31.md).
+[`react-real-vcs-smoke-2026-05-31.md`](reports/public-longitudinal/react-real-vcs-smoke-2026-05-31.md).
 It runs this scaffold on three curated `facebook/react` event clusters and
 separate source-window, empty, source-stripped closed-book, and counterfactual
 perturbation arms.
 
 The first 100+ gold real public VCS measurement is now
-[`react-real-vcs-100-gold-2026-05-31.md`](react-real-vcs-100-gold-2026-05-31.md).
+[`react-real-vcs-100-gold-2026-05-31.md`](reports/public-longitudinal/react-real-vcs-100-gold-2026-05-31.md).
 It runs the builder on 105 curated `facebook/react` gold events plus 105
 anti-drift negatives, keeps source-window / empty / closed-book arms separate,
 adds a 105-event counterfactual perturbation control, and reports
 `rejected_route`, `reopen_condition`, and `workaround_rationale` separately.
 
 The sharper adversarial follow-up is
-[`react-real-vcs-adversarial-v2-2026-05-31.md`](react-real-vcs-adversarial-v2-2026-05-31.md).
+[`react-real-vcs-adversarial-v2-2026-05-31.md`](reports/public-longitudinal/react-real-vcs-adversarial-v2-2026-05-31.md).
 It adds dual-source counterfactuals, temporal override chains, family
 cross-contamination, behavior-only rollout gold, adversarial paraphrase,
 lexical near-miss anti-drift, narrative-only negatives, and abstention cases.
@@ -374,7 +374,7 @@ keyword-surface matching produces 57 false positives, and overactive all-flags
 gets 0% anti-drift pass.
 
 The first non-oracle production-like source-disambiguation follow-up is
-[`react-real-vcs-production-like-disambiguation-2026-06-04.md`](react-real-vcs-production-like-disambiguation-2026-06-04.md).
+[`react-real-vcs-production-like-disambiguation-2026-06-04.md`](reports/public-longitudinal/react-real-vcs-production-like-disambiguation-2026-06-04.md).
 It reuses the adversarial V2 fixture, builds a local past-window source index,
 and ranks candidates without using `required_past_source_ids` as prediction
 input. The run picks the current/effective source on the dual-source and
@@ -384,14 +384,14 @@ evidence,
 not live model quality or wild VCS corpus quality.
 
 The first rollout behavior route-chain/actionability calibration is
-[`rollout-hard-event-route-chain-2026-06-12.md`](rollout-hard-event-route-chain-2026-06-12.md).
+[`rollout-hard-event-route-chain-2026-06-12.md`](reports/public-longitudinal/rollout-hard-event-route-chain-2026-06-12.md).
 It uses the public synthetic rollout fixture and compares top-k 1, 2, and 3.
 Top-k 2 recovers all three two-source support chains with no wrong-source
 evidence, while top-k 3 starts admitting narrative decoys. Treat it as a
 candidate-budget and actionability boundary, not representative live quality.
 
 The first broader public-safe rollout hard-event cohort is
-[`rollout-hard-event-cohort-v2-2026-06-12.md`](rollout-hard-event-cohort-v2-2026-06-12.md).
+[`rollout-hard-event-cohort-v2-2026-06-12.md`](reports/public-longitudinal/rollout-hard-event-cohort-v2-2026-06-12.md).
 It adds 17 synthetic agent-behavior projects and 34 future events covering
 temporal override, cross-scope drift, cross-project contamination,
 post-compaction gaps, forget boundaries, Dream candidate boundaries,
@@ -543,8 +543,8 @@ python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tm
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
 
 Fixture:
@@ -566,7 +566,7 @@ It keeps the same boundary while expanding the public-safe #1197 hard-event
 pack to 17 projects and 34 future events.
 
 Builder:
-[`benchmarks/aippocampus/build_vcs_future_event_fixture.py`](../../../benchmarks/aippocampus/build_vcs_future_event_fixture.py).
+[`benchmarks/aippocampus/builders/build_vcs_future_event_fixture.py`](../../../benchmarks/aippocampus/builders/build_vcs_future_event_fixture.py).
 It converts already-curated public VCS or rollout event-link rows into the
 scoring schema. It can also join clean-source `events.jsonl` behavior rows with
 a curated link file. It deliberately does not scrape public datasets or infer

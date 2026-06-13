@@ -21,6 +21,9 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
+
 from aippocampus_runtime.core import aippocampus_registry_dir
 from aippocampus_runtime.navigation.project_timeline import build_project_timeline
 from aippocampus_runtime.recall.retrieval import (
@@ -41,8 +44,6 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     merged_scope_labels,
     semantic_labels_for_message,
 )
-from benchmark_statistics import binomial_rate_report
-from claim_boundary_refs import claim_boundary_ref
 
 PROMPT_KIND = "fuzzy_life_wide_source_evidence"
 NON_TECHNICAL_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
@@ -930,7 +931,7 @@ def selection_explanation(
                 "it is not global recall quality or semantic completeness."
             ),
             "claim_boundary_ref": claim_boundary_ref(
-                "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+                "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
                 "#track-b-source-evidence-retrieval"
             ),
             "next_action": next_action,
@@ -955,7 +956,7 @@ def selection_explanation(
             "results, even when hit-rate and sample gates pass."
         ),
         "claim_boundary_ref": claim_boundary_ref(
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
         "next_action": (
@@ -1049,7 +1050,7 @@ def run_source_evidence_recall_eval(
         if status == "sufficient"
         else "diagnostic_only",
         "claim_boundary_ref": claim_boundary_ref(
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
         "cannot_claim": cannot_claim(

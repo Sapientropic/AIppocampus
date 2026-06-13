@@ -13,11 +13,11 @@ matrix and Python import layer policy live in that public API document so the
 stability boundary has one owner.
 Safe local configuration starts from
 [`../../.env.example`](../../.env.example) and
-[safe-environment.md](safe-environment.md).
+[safe-environment.md](setup/safe-environment.md).
 The runtime and tooling dependency taxonomy lives in
-[dependency-contract.md](dependency-contract.md).
+[dependency-contract.md](setup/dependency-contract.md).
 The product friction budget lives in
-[product-profiles.md](../architecture/product-profiles.md): first recall should
+[product-profiles.md](../architecture/host/product-profiles.md): first recall should
 stay `personal_default`; core hook setup is the consented next step for ambient
 continuity, while diagnostics, sync, governance, and research surfaces stay
 operator or opt-in paths unless a user explicitly needs them.
@@ -80,7 +80,7 @@ lifecycle hooks are the Codex trusted setup that keeps AIppocampus from feeling
 like a manual grep tool in the next Codex conversation. Claude Code currently
 uses local-history onboarding plus MCP/project-skill setup instead; see
 [`ecosystem-integration-matrix.md`](ecosystem-integration-matrix.md) and
-[`claude-code-mcp.md`](claude-code-mcp.md).
+[`claude-code-mcp.md`](setup/claude-code-mcp.md).
 
 Review local readiness before changing Codex hook state:
 
@@ -821,7 +821,7 @@ PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.objec
 For Cloudflare R2, set `AIPPOCAMPUS_OBJECT_PROVIDER=r2` and
 `AIPPOCAMPUS_OBJECT_ACCOUNT_ID=<account id>`; the default region is `auto`.
 For Google Cloud Storage, set `AIPPOCAMPUS_OBJECT_PROVIDER=gcs-xml` and use XML
-API interoperability HMAC keys. See `docs/guides/object-storage-providers.md` for the
+API interoperability HMAC keys. See `docs/guides/setup/object-storage-providers.md` for the
 provider-specific pitfalls.
 
 Raw rollouts are still excluded from plaintext object-storage sync. Use

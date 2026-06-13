@@ -4,7 +4,7 @@ Status: philosophical foundation note.
 Origin: user insight, 2026-05-29.
 Related: [pearl-of-presence.md](pearl-of-presence.md),
 [dream-task-design.md](dream-task-design.md),
-[affect-side-channel.md](affect-side-channel.md),
+[affect-side-channel.md](frontiers/affect-side-channel.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
 
 ## The Core Claim

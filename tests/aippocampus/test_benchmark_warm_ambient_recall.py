@@ -11,11 +11,15 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (BENCHMARKS, SCRIPTS):
-    sys.path.insert(0, str(_path))
+for _path in (REPO_ROOT, BENCHMARKS, SCRIPTS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+from benchmarks.aippocampus.builders import (
+    build_warm_ambient_trace_cases as trace_builder,  # noqa: E402
+)
 
 import benchmark_warm_ambient_recall as benchmark  # noqa: E402
-import build_warm_ambient_trace_cases as trace_builder  # noqa: E402
 
 
 class WarmAmbientRecallBenchmarkTests(unittest.TestCase):

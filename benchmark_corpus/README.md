@@ -6,6 +6,20 @@ AIppocampus benchmark work.
 For the cross-repository map of benchmark runners, smoke evidence, and dated
 records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence/benchmark-evidence-map.md).
 
+## Tracking Boundary
+
+Checked-in folders here are curated public-safe fixtures, manifests, and
+converter inputs. Local caches and generated outputs are workspace artifacts,
+not corpus assets:
+
+- `.cache/` holds downloaded or derived local caches.
+- `output/` and `outputs/` hold generated clean-source conversions.
+- `reports/` holds local benchmark output JSON.
+- `sharegpt_raw/` holds local raw imports.
+
+These paths are ignored by git. Promote anything from them only after an
+explicit provenance, privacy, license, and storage decision.
+
 ## Contents
 
 - `convert_to_aippocampus.py` converts public conversation datasets into
@@ -140,7 +154,7 @@ duplicate nearby recap suppression, and stale/superseded currentness for
 `SEGMENT_MERGE_POLICY`. It is diagnostic policy calibration, not real
 long-thread recall quality or source-evidence retrieval proof. The report owner
 is
-[`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`](../docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md).
+[`docs/evidence/benchmarks/reports/fresh-thread/segmented-merge-policy-fixture-report.md`](../docs/evidence/benchmarks/reports/fresh-thread/segmented-merge-policy-fixture-report.md).
 
 Run the public-safe Field Continuity / magic-moment reproducibility contract:
 
@@ -153,7 +167,7 @@ correction, external-state restraint, long-thread fuzzy self-reference, and
 cross-thread prompt/tool-failure provenance as scenario contracts. It does not
 claim live quality, private real-history recall quality, or foreground-hook-only
 sufficiency. The report owner is
-[`docs/evidence/benchmarks/field-continuity-fixture-report.md`](../docs/evidence/benchmarks/field-continuity-fixture-report.md).
+[`docs/evidence/benchmarks/reports/field-journey/field-continuity-fixture-report.md`](../docs/evidence/benchmarks/reports/field-journey/field-continuity-fixture-report.md).
 
 Run the deterministic coding decision-shadow A-E contract:
 
@@ -194,7 +208,7 @@ cross-modal join, unsupported visual abstention, and retrieval recall@3. It
 does not claim ATM-Bench Hard support, live vision quality, conversational
 media-upload recall, full-device indexing, or product privacy behavior. The
 report owner is
-[`docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`](../docs/evidence/benchmarks/multimodal-corpus-fixture-report.md).
+[`docs/evidence/benchmarks/reports/multimodal/multimodal-corpus-fixture-report.md`](../docs/evidence/benchmarks/reports/multimodal/multimodal-corpus-fixture-report.md).
 
 Run the public-safe conversational media-ingest recall contract:
 
@@ -210,7 +224,7 @@ resolution, visual source reopen, text-hint leakage, stale-label correction,
 unsupported visual claims, and hidden durable writes. It does not claim
 background scanning, cross-domain reuse, live vision quality, face-recognition
 identity graphs, or product privacy behavior. The report owner is
-[`docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`](../docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md).
+[`docs/evidence/benchmarks/reports/multimodal/conversational-media-ingest-fixture-report.md`](../docs/evidence/benchmarks/reports/multimodal/conversational-media-ingest-fixture-report.md).
 
 Run the public-safe NIAH-style multimodal evidence-pool contract:
 
@@ -227,7 +241,7 @@ the correct source is present, proving the slice catches reasoning failures
 rather than only retrieval misses. It does not claim retrieval quality,
 ATM-Bench Hard support or score, live vision quality, conversational
 media-upload recall, or product privacy behavior. The report owner is
-[`docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md`](../docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md).
+[`docs/evidence/benchmarks/reports/multimodal/multimodal-niah-evidence-pool-report.md`](../docs/evidence/benchmarks/reports/multimodal/multimodal-niah-evidence-pool-report.md).
 
 Run the public longitudinal pseudo-user contract smoke for coding implicit
 knowledge:
@@ -247,7 +261,7 @@ commit revert, patchset supersession, and SATD/workaround removal. See
 [`docs/evidence/benchmarks/public-longitudinal-users.md`](../docs/evidence/benchmarks/public-longitudinal-users.md)
 for the methodology and claim boundary. The latest dated local measurement is
 recorded in
-[`docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](../docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
+[`docs/evidence/benchmarks/reports/public-longitudinal/public-longitudinal-users-measurement-2026-05-31.md`](../docs/evidence/benchmarks/reports/public-longitudinal/public-longitudinal-users-measurement-2026-05-31.md).
 
 Run the LoCoMo same-conversation evidence control:
 
@@ -372,7 +386,7 @@ not source-backed recovery.
 Build a local fixture from already-curated public event-link rows:
 
 ```powershell
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\vcs-future-events-built.jsonl --allow-non-cc0-dataset --json
 ```
 
@@ -384,7 +398,7 @@ source and provide a separate curated link file:
 
 ```powershell
 python skills\aippocampus\scripts\build_clean_source.py --cwd . --output-dir .tmp\clean-source --json
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
 
 Run the optional public-corpus Track B source-evidence baseline over the broad
@@ -611,9 +625,9 @@ current-thread echo activation, and topic epoch voting can be tightened without
 one label policy masking another:
 
 ```powershell
-python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json
-python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-echo.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy echo_guard --json
-python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy topic_epoch_vote --json
+python benchmarks\aippocampus\builders\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json
+python benchmarks\aippocampus\builders\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-echo.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy echo_guard --json
+python benchmarks\aippocampus\builders\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy topic_epoch_vote --json
 python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file .tmp\warm-sharegpt-coding-100-source-ref.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress-source-ref --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --max-workers-list 20,50 --timeouts 15,30 --json
 python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-all --case-workers 1 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 30 --min-available-rate 0 --json
 ```
