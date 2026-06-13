@@ -158,6 +158,38 @@ class ContinuityDomainSalienceAdapterTests(unittest.TestCase):
         self.assertEqual(disabled["write_report"]["status"], "disabled_by_policy")
         self.assertFalse(events_path.exists())
 
+    def test_boundary_and_targeted_currentness_require_resolving_source_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = _write_clean_source(root, message_count=3)
+            rows = [
+                _salience_row(
+                    "explicit_user_correction",
+                    index=1,
+                    reason_codes=["scope_boundary_explicit", "user_correction"],
+                ),
+                {
+                    **_salience_row("supersession_or_currentness", index=2),
+                    "target_domain_id": "cd-existing-route",
+                },
+                _salience_row("failed_command_or_test", index=99),
+            ]
+
+            report = salience_rows_to_continuity_domain_events(
+                rows,
+                clean_source_dir=clean,
+            )
+
+        events = report["candidate_events"]
+        self.assertEqual(
+            [event["event_kind"] for event in events],
+            ["boundary_pinned", "domain_superseded"],
+        )
+        self.assertEqual(events[0]["boundary_kind"], "explicit_user_correction")
+        self.assertEqual(events[0]["effect"], "require_source_reopen")
+        self.assertEqual(events[1]["domain_id"], "cd-existing-route")
+        self.assertIn("continuity_event_not_source_resolving", report["deferred_reason_counts"])
+
     def test_enabled_write_appends_dedupes_and_publishes_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

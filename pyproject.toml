@@ -229,6 +229,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/coding/code_state_anchors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arc_private_adjudication.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arc_route_producer.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arcs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/rejected_route_probes.py",

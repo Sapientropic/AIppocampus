@@ -40,7 +40,7 @@ def add_continuity_domain_salience_args(parser: Any) -> None:
             CONTINUITY_DOMAIN_SALIENCE_REPORT_MODE,
             CONTINUITY_DOMAIN_SALIENCE_WRITE_MODE,
         ],
-        default="off",
+        default=None,
     )
     parser.add_argument("--continuity-domain-events-output")
     parser.add_argument("--continuity-domain-snapshot-dir")

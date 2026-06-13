@@ -27,6 +27,7 @@ DEFAULT_CONTINUITY_DOMAIN_SALIENCE_MODE = os.environ.get(
     "AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION",
     "off",
 )
+CONTINUITY_DOMAIN_SALIENCE_MODES = {"off", "report", "write_when_enabled"}
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,11 @@ def default_event_salience_output_path(
         return registry_path.resolve().parent / DEFAULT_EVENT_SALIENCE_OUTPUT_NAME
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / DEFAULT_EVENT_SALIENCE_OUTPUT_NAME
+
+
+def default_continuity_domain_salience_mode() -> str:
+    mode = str(os.environ.get("AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION") or "off").strip()
+    return mode if mode in CONTINUITY_DOMAIN_SALIENCE_MODES else "off"
 
 
 def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
@@ -138,9 +144,9 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         getattr(
             args,
             "continuity_domain_salience_mode",
-            DEFAULT_CONTINUITY_DOMAIN_SALIENCE_MODE,
+            None,
         )
-        or "off"
+        or default_continuity_domain_salience_mode()
     )
     return JobsRunConfig(
         jobs=job_names(args.job),

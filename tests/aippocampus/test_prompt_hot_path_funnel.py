@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aippocampus_runtime.recall.prompt_recall_hot_path import run_hot_path_funnel
+from aippocampus_runtime.recall.prompt_recall_hot_path import (
+    candidate_indexes_from_registry,
+    run_hot_path_funnel,
+)
 
 
 def write_index(path: Path, messages: list[tuple[int, str, str]]) -> None:
@@ -236,6 +239,68 @@ class PromptHotPathFunnelTests(unittest.TestCase):
         self.assertEqual(cue_stage["status"], "skip")
         self.assertEqual(cue_stage["fallback_reason"], "already_hit")
         self.assertEqual(result["query_pattern_routes"]["diagnostics"]["live_llm_call_count"], 0)
+
+    def test_source_factual_alias_artifact_can_wake_basic_fact_route_without_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            alias_path = root / "source-factual-aliases.jsonl"
+            alias_path.write_text(
+                "{"
+                '"thread_key":"session:keepsake",'
+                '"source_refs":[{"thread_key":"session:keepsake","message_id":"msg-2","line":20}],'
+                '"query_aliases":["keepsake","souvenir","where"],'
+                '"route_terms":["drawer","location","jade"]'
+                "}\n",
+                encoding="utf-8",
+            )
+            candidates = candidate_indexes_from_registry(
+                {
+                    "threads": [
+                        {
+                            "thread_key": "session:keepsake",
+                            "paths": {"source_factual_aliases_jsonl": str(alias_path)},
+                        }
+                    ]
+                }
+            )
+            result = run_hot_path_funnel(
+                prompt="Where did I keep the jade keepsake?",
+                query_terms=["jade", "keepsake", "where"],
+                candidate_indexes=candidates,
+            )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["candidate_ids"], ["session:keepsake"])
+        self.assertEqual(result["candidate_reasons"]["session:keepsake"], "source_factual_aliases")
+        self.assertEqual(result["evidence"], [])
+        alias_stage = next(stage for stage in result["stages"] if stage["stage"] == "source_factual_aliases")
+        self.assertEqual(alias_stage["status"], "hit")
+        self.assertEqual(result["candidate_refs"][0]["line"], 20)
+        self.assertTrue(result["source_boundary"]["source_reopen_required_for_facts"])
+
+    def test_source_factual_alias_stage_does_not_wake_plain_same_name_work(self) -> None:
+        result = run_hot_path_funnel(
+            prompt="Rename the jade module and adjust imports.",
+            query_terms=["jade", "module", "imports"],
+            candidate_indexes=[
+                {
+                    "thread_key": "session:jade-fact",
+                    "source_refs": [{"thread_key": "session:jade-fact", "line": 20}],
+                    "source_factual_aliases": [
+                        {
+                            "query_aliases": ["jade", "keepsake", "where"],
+                            "route_terms": ["drawer", "location"],
+                            "source_refs": [{"thread_key": "session:jade-fact", "line": 20}],
+                        }
+                    ],
+                }
+            ],
+        )
+
+        alias_stage = next(stage for stage in result["stages"] if stage["stage"] == "source_factual_aliases")
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(alias_stage["status"], "skip")
+        self.assertEqual(alias_stage["fallback_reason"], "prompt_lacks_factual_route_intent")
 
 
 if __name__ == "__main__":

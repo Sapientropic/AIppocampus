@@ -57,6 +57,19 @@ deterministic continuity maintenance does not require repeated per-event
 confirmation, and report/write status is visible without a separate manual
 append chore.
 
+## ADHD-Friction Acceptance Checks
+
+- Enabled deterministic continuity production must not ask for per-event
+  confirmation when refs resolve and the event family is already in the
+  conservative adapter map.
+- The ordinary path must not require a diagnostic/status detour before the
+  first continuity moment. Diagnostics such as `--help`, `--dry-run`, status
+  probes, and manual append remain useful repair/operator surfaces, not the
+  headline workflow.
+- The kill switch remains simple: set the producer policy to `off`, run with
+  `--no-write` / `--dry-run`, or rebuild snapshots from the append-only event
+  log after repair.
+
 ## Open Follow-Ups
 
 - Root README, Start Here, Agent Context, Public API, and the install guide now

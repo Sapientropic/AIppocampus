@@ -27,18 +27,20 @@ def _stderr_lines(stderr_tail: Any) -> list[str]:
 
 def _classify_line(line: str, *, validation_ok: bool) -> str:
     lower = line.casefold()
+    if any(token in lower for token in ("fatal", "traceback", "panic")):
+        return "fatal_failures"
     if "ignoring interface.defaultprompt" in lower:
         return "unrelated_host_or_plugin_noise"
-    if "resources/templates/list" in lower or "resources/list" in lower:
+    if validation_ok and (
+        "resources/templates/list" in lower or "resources/list" in lower
+    ):
         return "benign_host_probe_warnings"
-    if "failed to kill mcp process group" in lower or "no such process" in lower:
+    if validation_ok and "failed to kill mcp process group" in lower:
         return "benign_host_probe_warnings"
-    if "state db discrepancy" in lower and "falling_back" in lower:
+    if validation_ok and "state db discrepancy" in lower and "falling_back" in lower:
         return "benign_host_probe_warnings"
     if validation_ok and "aippocampus" not in lower:
         return "unrelated_host_or_plugin_noise"
-    if any(token in lower for token in ("fatal", "traceback", "panic")):
-        return "fatal_failures"
     if "aippocampus" in lower and any(token in lower for token in ("warn", "error", "failed")):
         return "aippocampus_actionable_warnings"
     return "unclassified_stderr"

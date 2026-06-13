@@ -38,6 +38,7 @@ HIGH_RISK_COVERAGE_CELLS = (
     ("PostCompact", "horizon_lost", "uncertain"),
 )
 SPEC_COMPLETE_NO_HARM_CASE_TYPES = {"spec_complete_short_task_no_harm"}
+SILENT_RECORDING_STAGES = {"SubagentStop", "Stop", "PreCompact"}
 
 @dataclass(frozen=True)
 class FixtureEvent:
@@ -153,6 +154,22 @@ class TrackDCase:
         return payload
 
 
+@dataclass(frozen=True)
+class TrackDSequenceCase:
+    sequence_id: str
+    thread_id: str
+    sequence_type: str
+    steps: tuple[TrackDCase, ...]
+
+    def event_link_chain_valid(self) -> bool:
+        if len(self.steps) < 2:
+            return False
+        return all(
+            current.source_event_id == later.correction_event_id
+            for current, later in zip(self.steps, self.steps[1:], strict=False)
+        )
+
+
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -217,6 +234,42 @@ def make_case(
         expected_emit=expected_emit,
         expected_anchor_recall=expected_anchor_recall,
         anchor_already_injected=anchor_already_injected,
+    )
+
+
+def make_sequence_step(
+    *,
+    sequence_id: str,
+    thread_id: str,
+    step_name: str,
+    case_type: str,
+    hook_stage: str,
+    compaction_state: str,
+    adjudication_status: str,
+    correction_event: FixtureEvent,
+    source_event: FixtureEvent,
+    correction_text: str,
+    anchor_relevant: bool,
+    visible_context_has_source: bool,
+    expected_emit: bool,
+    expected_anchor_recall: bool = False,
+) -> TrackDCase:
+    return TrackDCase(
+        case_id=f"{sequence_id}:{step_name}",
+        thread_id=thread_id,
+        case_type=case_type,
+        hook_stage=hook_stage,
+        compaction_state=compaction_state,
+        adjudication_status=adjudication_status,
+        correction_text=correction_text,
+        source_ref=source_event.source_ref,
+        correction_event_id=correction_event.event_id,
+        source_event_id=source_event.event_id,
+        fixture_events=(correction_event, source_event),
+        anchor_relevant=anchor_relevant,
+        visible_context_has_source=visible_context_has_source,
+        expected_emit=expected_emit,
+        expected_anchor_recall=expected_anchor_recall,
     )
 
 
@@ -434,15 +487,532 @@ def fixture_cases() -> list[TrackDCase]:
             visible_context_has_source=False,
             expected_emit=False,
         ),
+        make_case(
+            case_id="track_d_user_prompt_post_compaction_rehydrate",
+            case_type="user_prompt_post_compaction_rehydrate",
+            hook_stage="UserPromptSubmit",
+            compaction_state="post_compaction",
+            adjudication_status="valid_adopted",
+            correction_text="The user returns after compaction and the accepted route constraint is no longer visible.",
+            source_ref="thread:track-d-demo#line:161",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
+        make_case(
+            case_id="track_d_user_prompt_horizon_rehydrate",
+            case_type="user_prompt_horizon_lost_rehydrate",
+            hook_stage="UserPromptSubmit",
+            compaction_state="horizon_lost",
+            adjudication_status="valid_adopted",
+            correction_text="The user resumes a long thread after horizon loss and the adopted correction still controls the task.",
+            source_ref="thread:track-d-demo#line:165",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
+        make_case(
+            case_id="track_d_user_prompt_post_compaction_uncertain",
+            case_type="user_prompt_uncertain_confirm",
+            hook_stage="UserPromptSubmit",
+            compaction_state="post_compaction",
+            adjudication_status="uncertain",
+            correction_text="The old correction may matter after compaction, but the source evidence is ambiguous.",
+            source_ref="thread:track-d-demo#line:169",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_user_prompt_post_compaction_local_only",
+            case_type="local_only_reentry_after_compaction",
+            hook_stage="UserPromptSubmit",
+            compaction_state="post_compaction",
+            adjudication_status="local_only",
+            correction_text="A branch-local workaround becomes relevant again after compaction but should not be injected as fact.",
+            source_ref="thread:track-d-demo#line:173",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_pre_tool_visible_valid_ignored",
+            case_type="pre_tool_visible_ignored_suppression",
+            hook_stage="PreToolUse",
+            compaction_state="visible",
+            adjudication_status="valid_ignored",
+            correction_text="A rejected tool route is visible in the prompt while another tool call is pending.",
+            source_ref="thread:track-d-demo#line:181",
+            anchor_relevant=True,
+            visible_context_has_source=True,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_pre_tool_visible_valid_adopted",
+            case_type="pre_tool_visible_adopted_suppression",
+            hook_stage="PreToolUse",
+            compaction_state="visible",
+            adjudication_status="valid_adopted",
+            correction_text="An adopted tool constraint is still visible and should not be echoed before the call.",
+            source_ref="thread:track-d-demo#line:185",
+            anchor_relevant=True,
+            visible_context_has_source=True,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_pre_tool_post_compaction_relevant",
+            case_type="pre_tool_post_compaction_relevant_anchor",
+            hook_stage="PreToolUse",
+            compaction_state="post_compaction",
+            adjudication_status="valid_adopted",
+            correction_text="The pending command risks violating an adopted post-compaction scope correction.",
+            source_ref="thread:track-d-demo#line:189",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
+        make_case(
+            case_id="track_d_pre_tool_post_compaction_refuted",
+            case_type="pre_tool_refuted_stale_suppression",
+            hook_stage="PreToolUse",
+            compaction_state="post_compaction",
+            adjudication_status="refuted",
+            correction_text="A stale pre-tool route was refuted by later test output.",
+            source_ref="thread:track-d-demo#line:193",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_pre_tool_horizon_refuted",
+            case_type="pre_tool_horizon_refuted_suppression",
+            hook_stage="PreToolUse",
+            compaction_state="horizon_lost",
+            adjudication_status="refuted",
+            correction_text="A refuted tool-route anchor is no longer visible but must still stay suppressed.",
+            source_ref="thread:track-d-demo#line:197",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_pre_tool_horizon_superseded",
+            case_type="pre_tool_horizon_superseded_suppression",
+            hook_stage="PreToolUse",
+            compaction_state="horizon_lost",
+            adjudication_status="superseded",
+            correction_text="A later user turn superseded the old tool guidance before horizon loss.",
+            source_ref="thread:track-d-demo#line:201",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_post_tool_post_compaction_adopted",
+            case_type="post_tool_post_compaction_evidence_link",
+            hook_stage="PostToolUse",
+            compaction_state="post_compaction",
+            adjudication_status="valid_adopted",
+            correction_text="Sanitized tool output after compaction confirms the user's corrected route.",
+            source_ref="thread:track-d-demo#line:211",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
+        make_case(
+            case_id="track_d_post_tool_horizon_adopted",
+            case_type="post_tool_horizon_evidence_relink",
+            hook_stage="PostToolUse",
+            compaction_state="horizon_lost",
+            adjudication_status="valid_adopted",
+            correction_text="Sanitized tool output relinks an accepted correction after horizon loss.",
+            source_ref="thread:track-d-demo#line:215",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
+        make_case(
+            case_id="track_d_post_tool_post_compaction_refuted",
+            case_type="post_tool_refuted_evidence_link",
+            hook_stage="PostToolUse",
+            compaction_state="post_compaction",
+            adjudication_status="refuted",
+            correction_text="Tool output after compaction refutes a pending correction window.",
+            source_ref="thread:track-d-demo#line:219",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_post_tool_horizon_refuted",
+            case_type="post_tool_horizon_refuted_evidence_link",
+            hook_stage="PostToolUse",
+            compaction_state="horizon_lost",
+            adjudication_status="refuted",
+            correction_text="Tool output after horizon loss refutes the old correction instead of reviving it.",
+            source_ref="thread:track-d-demo#line:223",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_post_tool_post_compaction_uncertain",
+            case_type="semantic_disagreement_confirm",
+            hook_stage="PostToolUse",
+            compaction_state="post_compaction",
+            adjudication_status="uncertain",
+            correction_text="Deterministic evidence looks positive but mocked semantic adjudication remains uncertain.",
+            source_ref="thread:track-d-demo#line:227",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+            outcome_text="Mock semantic adjudication disagrees with deterministic-looking tool evidence.",
+        ),
+        make_case(
+            case_id="track_d_postcompact_valid_ignored_redundant",
+            case_type="rejected_route_horizon_second_warning",
+            hook_stage="PostCompact",
+            compaction_state="horizon_lost",
+            adjudication_status="valid_ignored",
+            correction_text="A second rejected implementation path should warn before retry after horizon loss.",
+            source_ref="thread:track-d-demo#line:235",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
+        make_case(
+            case_id="track_d_postcompact_refuted_redundant",
+            case_type="refuted_clean_source_horizon_guard",
+            hook_stage="PostCompact",
+            compaction_state="horizon_lost",
+            adjudication_status="refuted",
+            correction_text="Later clean source refuted the old correction before it fell out of horizon.",
+            source_ref="thread:track-d-demo#line:239",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_postcompact_superseded_redundant",
+            case_type="superseded_scope_horizon_guard",
+            hook_stage="PostCompact",
+            compaction_state="horizon_lost",
+            adjudication_status="superseded",
+            correction_text="A later scope correction replaced the previous one before horizon loss.",
+            source_ref="thread:track-d-demo#line:243",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_postcompact_uncertain_redundant",
+            case_type="ambiguous_evidence_horizon_confirm",
+            hook_stage="PostCompact",
+            compaction_state="horizon_lost",
+            adjudication_status="uncertain",
+            correction_text="Horizon loss left the correction evidence ambiguous, so the agent should confirm.",
+            source_ref="thread:track-d-demo#line:247",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_postcompact_horizon_local_only",
+            case_type="local_only_expiry_after_horizon_loss",
+            hook_stage="PostCompact",
+            compaction_state="horizon_lost",
+            adjudication_status="local_only",
+            correction_text="A one-off experiment correction survived in staging but should expire after horizon loss.",
+            source_ref="thread:track-d-demo#line:251",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_precompact_refuted_flush",
+            case_type="precompact_refuted_flush",
+            hook_stage="PreCompact",
+            compaction_state="post_compaction",
+            adjudication_status="refuted",
+            correction_text="Flush refutation evidence before rewrite so a stale anchor cannot revive later.",
+            source_ref="thread:track-d-demo#line:261",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_precompact_superseded_flush",
+            case_type="precompact_superseded_flush",
+            hook_stage="PreCompact",
+            compaction_state="post_compaction",
+            adjudication_status="superseded",
+            correction_text="Flush successor links before rewrite so the old scope remains suppressed.",
+            source_ref="thread:track-d-demo#line:265",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_precompact_uncertain_late_window",
+            case_type="precompact_uncertain_late_window",
+            hook_stage="PreCompact",
+            compaction_state="horizon_lost",
+            adjudication_status="uncertain",
+            correction_text="A late pre-rewrite window keeps ambiguous source refs without injecting guidance.",
+            source_ref="thread:track-d-demo#line:269",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_stop_valid_adopted_closeout",
+            case_type="stop_valid_adopted_closeout",
+            hook_stage="Stop",
+            compaction_state="post_compaction",
+            adjudication_status="valid_adopted",
+            correction_text="Closeout records that final work adopted the correction for later compaction behavior.",
+            source_ref="thread:track-d-demo#line:281",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_stop_valid_ignored_closeout",
+            case_type="stop_valid_ignored_closeout",
+            hook_stage="Stop",
+            compaction_state="post_compaction",
+            adjudication_status="valid_ignored",
+            correction_text="Closeout records an ignored route without foreground prompt guidance.",
+            source_ref="thread:track-d-demo#line:285",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_stop_refuted_closeout",
+            case_type="stop_refuted_closeout",
+            hook_stage="Stop",
+            compaction_state="post_compaction",
+            adjudication_status="refuted",
+            correction_text="Final verification refuted the correction and the closeout stores that result silently.",
+            source_ref="thread:track-d-demo#line:289",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_stop_superseded_closeout",
+            case_type="stop_superseded_closeout",
+            hook_stage="Stop",
+            compaction_state="post_compaction",
+            adjudication_status="superseded",
+            correction_text="Closeout records that a later source superseded the earlier correction.",
+            source_ref="thread:track-d-demo#line:293",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_subagent_start_visible_adopted",
+            case_type="subagent_visible_echo_suppression",
+            hook_stage="SubagentStart",
+            compaction_state="visible",
+            adjudication_status="valid_adopted",
+            correction_text="The delegated task already sees the adopted correction in visible context.",
+            source_ref="thread:track-d-demo#line:301",
+            anchor_relevant=True,
+            visible_context_has_source=True,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_subagent_start_horizon_irrelevant",
+            case_type="subagent_irrelevant_delegation_suppression",
+            hook_stage="SubagentStart",
+            compaction_state="horizon_lost",
+            adjudication_status="valid_adopted",
+            correction_text="The active anchor is real but unrelated to the delegated subtask.",
+            source_ref="thread:track-d-demo#line:305",
+            anchor_relevant=False,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_subagent_start_horizon_refuted",
+            case_type="subagent_refuted_propagation_suppression",
+            hook_stage="SubagentStart",
+            compaction_state="horizon_lost",
+            adjudication_status="refuted",
+            correction_text="A refuted anchor must not propagate into delegated work after horizon loss.",
+            source_ref="thread:track-d-demo#line:309",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_subagent_start_horizon_superseded",
+            case_type="subagent_superseded_propagation_suppression",
+            hook_stage="SubagentStart",
+            compaction_state="horizon_lost",
+            adjudication_status="superseded",
+            correction_text="A superseded anchor must not propagate into delegated work after horizon loss.",
+            source_ref="thread:track-d-demo#line:313",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_subagent_start_post_compaction_ignored",
+            case_type="subagent_rejected_route_warning_propagation",
+            hook_stage="SubagentStart",
+            compaction_state="post_compaction",
+            adjudication_status="valid_ignored",
+            correction_text="Delegated work risks repeating a route the user rejected before compaction.",
+            source_ref="thread:track-d-demo#line:317",
+            anchor_relevant=True,
+            visible_context_has_source=False,
+            expected_emit=True,
+            expected_anchor_recall=True,
+        ),
     ]
+
+
+def sequence_cases() -> list[TrackDSequenceCase]:
+    sequences: list[TrackDSequenceCase] = []
+    for suffix, final_status, final_emit, final_type in (
+        ("adopted", "valid_adopted", True, "subagent_sequence_adopted_rehydrate"),
+        ("refuted", "refuted", False, "subagent_sequence_refuted_suppression"),
+    ):
+        sequence_id = f"track_d_subagent_sequence_{suffix}"
+        thread_id = f"track-d-thread:{sequence_id}"
+        activation = FixtureEvent(
+            event_id=f"{sequence_id}:activation",
+            event_type="correction_activation_event",
+            hook_stage="UserPromptSubmit",
+            source_ref=f"thread:track-d-sequence-{suffix}#line:10",
+            text="User corrects the route before delegated work begins.",
+        )
+        hot_anchor = FixtureEvent(
+            event_id=f"{sequence_id}:hot_anchor",
+            event_type="hot_anchor_event",
+            hook_stage="UserPromptSubmit",
+            source_ref=f"thread:track-d-sequence-{suffix}#line:12",
+            text="The accepted correction becomes a task anchor after compaction.",
+            related_event_id=activation.event_id,
+        )
+        propagated = FixtureEvent(
+            event_id=f"{sequence_id}:propagated_anchor",
+            event_type="subagent_anchor_propagation_event",
+            hook_stage="SubagentStart",
+            source_ref=f"thread:track-d-sequence-{suffix}#line:18",
+            text="The relevant active anchor is propagated into delegated work.",
+            related_event_id=hot_anchor.event_id,
+        )
+        subagent_outcome = FixtureEvent(
+            event_id=f"{sequence_id}:subagent_outcome",
+            event_type="subagent_reconciliation_event",
+            hook_stage="SubagentStop",
+            source_ref=f"thread:track-d-sequence-{suffix}#line:26",
+            text=f"The subagent returns with a {final_status} reconciliation.",
+            related_event_id=propagated.event_id,
+        )
+        postcompact = FixtureEvent(
+            event_id=f"{sequence_id}:postcompact_outcome",
+            event_type="postcompact_anchor_decision_event",
+            hook_stage="PostCompact",
+            source_ref=f"thread:track-d-sequence-{suffix}#line:34",
+            text="PostCompact either rehydrates the adopted anchor or keeps a refuted one suppressed.",
+            related_event_id=subagent_outcome.event_id,
+        )
+        steps = (
+            make_sequence_step(
+                sequence_id=sequence_id,
+                thread_id=thread_id,
+                step_name="01_user_prompt",
+                case_type="subagent_sequence_user_prompt_activation",
+                hook_stage="UserPromptSubmit",
+                compaction_state="post_compaction",
+                adjudication_status="valid_adopted",
+                correction_event=activation,
+                source_event=hot_anchor,
+                correction_text="User correction activates a hot anchor after compaction.",
+                anchor_relevant=True,
+                visible_context_has_source=False,
+                expected_emit=True,
+                expected_anchor_recall=True,
+            ),
+            make_sequence_step(
+                sequence_id=sequence_id,
+                thread_id=thread_id,
+                step_name="02_subagent_start",
+                case_type="subagent_sequence_start_propagation",
+                hook_stage="SubagentStart",
+                compaction_state="horizon_lost",
+                adjudication_status="valid_adopted",
+                correction_event=hot_anchor,
+                source_event=propagated,
+                correction_text="The active anchor is task-relevant for delegated work.",
+                anchor_relevant=True,
+                visible_context_has_source=False,
+                expected_emit=True,
+                expected_anchor_recall=True,
+            ),
+            make_sequence_step(
+                sequence_id=sequence_id,
+                thread_id=thread_id,
+                step_name="03_subagent_stop",
+                case_type="subagent_sequence_stop_reconciliation",
+                hook_stage="SubagentStop",
+                compaction_state="post_compaction",
+                adjudication_status=final_status,
+                correction_event=propagated,
+                source_event=subagent_outcome,
+                correction_text="SubagentStop reconciles delegated work without injecting foreground guidance.",
+                anchor_relevant=True,
+                visible_context_has_source=False,
+                expected_emit=False,
+            ),
+            make_sequence_step(
+                sequence_id=sequence_id,
+                thread_id=thread_id,
+                step_name="04_postcompact",
+                case_type=final_type,
+                hook_stage="PostCompact",
+                compaction_state="horizon_lost",
+                adjudication_status=final_status,
+                correction_event=subagent_outcome,
+                source_event=postcompact,
+                correction_text="PostCompact applies the subagent reconciliation after horizon loss.",
+                anchor_relevant=True,
+                visible_context_has_source=False,
+                expected_emit=final_emit,
+                expected_anchor_recall=final_emit,
+            ),
+        )
+        sequences.append(
+            TrackDSequenceCase(
+                sequence_id=sequence_id,
+                thread_id=thread_id,
+                sequence_type=final_type,
+                steps=steps,
+            )
+        )
+    return sequences
 
 
 def should_emit_anchor(case: TrackDCase) -> bool:
     # Track D adds benchmark-only stage/actionability expectations around the
-    # production anchor gate. PreCompact should flush events, not surface a
-    # prompt anchor, and irrelevant corrections should remain quiet at any
-    # stage even when their adjudication status is otherwise valid.
-    if case.hook_stage == "PreCompact" or not case.anchor_relevant:
+    # production anchor gate. Silent recording stages flush or reconcile event
+    # state for later compaction handling; making them emit prompt anchors would
+    # hide closeout/subagent over-propagation regressions behind a passing gate.
+    # Irrelevant corrections stay quiet even when their status is otherwise
+    # active, because Track D measures task continuity rather than global memory.
+    if case.hook_stage in SILENT_RECORDING_STAGES or not case.anchor_relevant:
         return False
     candidate = {
         "kind": corr.ADJUDICATION_KIND,
@@ -529,6 +1099,56 @@ def evaluate_case(case: TrackDCase, *, include_private_text: bool) -> dict[str, 
     return row
 
 
+def evaluate_sequence_case(
+    sequence: TrackDSequenceCase,
+    *,
+    include_private_text: bool,
+) -> dict[str, Any]:
+    step_rows = [
+        {
+            **evaluate_case(step, include_private_text=include_private_text),
+            "sequence_step_index": index,
+        }
+        for index, step in enumerate(sequence.steps, start=1)
+    ]
+    final_row = step_rows[-1] if step_rows else {}
+    event_link_chain_valid = sequence.event_link_chain_valid()
+    step_cases_correct = all(bool(row.get("correct")) for row in step_rows)
+    final_status = str(final_row.get("adjudication_status") or "")
+    adopted_rehydrated = (
+        final_status == "valid_adopted"
+        and bool(final_row.get("emitted_anchor"))
+        and bool(final_row.get("anchor_recalled"))
+    )
+    refuted_suppressed = final_status == "refuted" and not bool(
+        final_row.get("emitted_anchor")
+    )
+    payload: dict[str, Any] = {
+        "sequence_id_sha1": sha1_text(sequence.sequence_id)[:16],
+        "thread_id_sha1": sha1_text(sequence.thread_id)[:16],
+        "sequence_type": sequence.sequence_type,
+        "step_count": len(step_rows),
+        "covered_stages": sorted({str(row.get("hook_stage")) for row in step_rows}),
+        "event_link_chain_valid": event_link_chain_valid,
+        "step_cases_correct": step_cases_correct,
+        "final_adjudication_status": final_status,
+        "final_expected_emit": bool(final_row.get("expected_emit")),
+        "final_emitted_anchor": bool(final_row.get("emitted_anchor")),
+        "adopted_rehydrated": adopted_rehydrated,
+        "refuted_suppressed": refuted_suppressed,
+        "correct": bool(event_link_chain_valid and step_cases_correct),
+        "steps": step_rows,
+    }
+    if include_private_text:
+        payload.update(
+            {
+                "sequence_id": sequence.sequence_id,
+                "thread_id": sequence.thread_id,
+            }
+        )
+    return payload
+
+
 def safe_rate(numerator: int | float, denominator: int | float) -> float:
     return round(float(numerator) / float(denominator), 4) if denominator else 0.0
 
@@ -577,6 +1197,7 @@ def coverage_density_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     sparse_high_risk = [
         cell for cell in high_risk_required if counts.get(cell, 0) == 1
     ]
+    high_risk_counts = [counts.get(cell, 0) for cell in high_risk_required]
     return {
         "axes": ["hook_stage", "compaction_state", "adjudication_status"],
         "possible_cell_count": len(possible_cells),
@@ -585,6 +1206,7 @@ def coverage_density_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "missing_cell_count": len(missing_cells),
         "singleton_cell_count": len(singleton_cells),
         "max_cell_count": max(counts.values(), default=0),
+        "min_high_risk_cell_count": min(high_risk_counts, default=0),
         "observed_cells": observed_cells,
         "sparse_cells": singleton_cells,
         "missing_cell_examples": [
@@ -606,6 +1228,35 @@ def coverage_density_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "notes": [
             "Density is diagnostic only; Track D remains a synthetic runner and does not claim full cross-product coverage.",
             "High-risk cells focus on post-compaction horizon-lost stale/superseded/refuted/uncertain anchor behavior.",
+        ],
+    }
+
+
+def sequence_coverage_summary(sequence_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    covered_stages = sorted(
+        {
+            str(step.get("hook_stage"))
+            for sequence in sequence_rows
+            for step in sequence.get("steps", [])
+        }
+    )
+    return {
+        "sequence_count": len(sequence_rows),
+        "covered_stages": covered_stages,
+        "valid_sequence_count": sum(
+            1 for sequence in sequence_rows if sequence.get("correct")
+        ),
+        "invalid_sequence_count": sum(
+            1 for sequence in sequence_rows if not sequence.get("correct")
+        ),
+        "adopted_rehydration_count": sum(
+            1 for sequence in sequence_rows if sequence.get("adopted_rehydrated")
+        ),
+        "refuted_suppression_count": sum(
+            1 for sequence in sequence_rows if sequence.get("refuted_suppressed")
+        ),
+        "notes": [
+            "Sequence diagnostics validate related-event links across stages; they remain synthetic and do not claim live subagent host wiring.",
         ],
     }
 
@@ -882,7 +1533,11 @@ def run_benchmark(
     case_limit: int | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
-    all_cases = fixture_cases()
+    all_sequences = sequence_cases()
+    all_sequence_steps = [
+        step for sequence in all_sequences for step in sequence.steps
+    ]
+    all_cases = fixture_cases() + all_sequence_steps
     cases = all_cases
     if case_limit and case_limit > 0:
         cases = cases[:case_limit]
@@ -891,10 +1546,22 @@ def run_benchmark(
         evaluate_case(case, include_private_text=include_private_text)
         for case in cases
     ]
+    sequence_rows = (
+        []
+        if diagnostic_subset
+        else [
+            evaluate_sequence_case(
+                sequence,
+                include_private_text=include_private_text,
+            )
+            for sequence in all_sequences
+        ]
+    )
     metrics = summarize_results(rows)
     metrics["no_harm_when_spec_complete"] = no_harm_when_spec_complete(rows)
     coverage = coverage_summary(rows)
     coverage_density = coverage_density_summary(rows)
+    sequence_coverage = sequence_coverage_summary(sequence_rows)
     required_stage_coverage = set(HOOK_STAGES) <= set(coverage["hook_stages"])
     required_state_coverage = set(COMPACTION_STATES) <= set(coverage["compaction_states"])
     required_status_coverage = set(ADJUDICATION_STATUSES) <= set(
@@ -950,7 +1617,9 @@ def run_benchmark(
         "benchmark_framing": benchmark_framing(),
         "coverage": coverage,
         "coverage_density": coverage_density,
+        "sequence_coverage": sequence_coverage,
         "cases": rows,
+        "sequences": sequence_rows,
         "privacy_boundary": {
             "raw_correction_text_emitted": bool(include_private_text),
             "raw_source_refs_emitted": bool(include_private_text),

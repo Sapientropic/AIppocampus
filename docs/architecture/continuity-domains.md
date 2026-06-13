@@ -130,9 +130,10 @@ python -m aippocampus_runtime.subconscious.jobs \
 ```
 
 `AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION=report|write_when_enabled` can set the
-same policy for configured job runners. `report` is no-write. `write_when_enabled`
-appends through the existing continuity-domain event path only when writes are
-not otherwise disabled by `--dry-run` or `--no-write`.
+same policy for configured job runners when the salience gate is enabled.
+`report` is no-write. `write_when_enabled` appends through the existing
+continuity-domain event path only when writes are not otherwise disabled by
+`--dry-run` or `--no-write`.
 
 ## Producer Capability Matrix
 
