@@ -142,6 +142,10 @@ def infer_active_layer(
             "active_layer": layer,
             "label": _LAYER_LABELS[layer],
             "source": "explicit",
+            "scores": {item: 0 for item in _LAYERS},
+            "candidate_layers": [layer],
+            "score_margin": None,
+            "ambiguity_status": "explicit_override",
             "reason_codes": [f"explicit_layer_{layer}"],
         }
 
@@ -156,16 +160,28 @@ def infer_active_layer(
             "active_layer": "human",
             "label": _LAYER_LABELS["human"],
             "source": "default",
+            "scores": scores,
+            "candidate_layers": ["human"],
+            "score_margin": None,
+            "ambiguity_status": "default",
             "reason_codes": ["default_human_current_task_route"],
         }
     winners = [layer for layer in _LAYERS if scores[layer] == best_score]
+    second_score = max((score for layer, score in scores.items() if layer not in winners), default=0)
     layer = "human" if "human" in winners and len(winners) > 1 else winners[0]
+    ambiguous = len(winners) > 1
     return {
         "active_layer": layer,
         "label": _LAYER_LABELS[layer],
         "source": "inferred",
         "scores": scores,
-        "reason_codes": [f"query_cue_{layer}"],
+        "candidate_layers": winners,
+        "score_margin": best_score - second_score,
+        "ambiguity_status": "ambiguous_tie" if ambiguous else "clear",
+        "reason_codes": [
+            *(["ambiguous_layer_tie"] if ambiguous else []),
+            *(f"query_cue_{item}" for item in winners),
+        ],
     }
 
 

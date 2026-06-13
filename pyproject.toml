@@ -281,6 +281,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/journey/live.py",
     "skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py",
     "skills/aippocampus/scripts/aippocampus_runtime/macro/audit.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/macro/cross_grain.py",
     "skills/aippocampus/scripts/aippocampus_runtime/macro/state.py",
     "skills/aippocampus/scripts/aippocampus_runtime/macro/stage_tracker.py",
     "skills/aippocampus/scripts/aippocampus_runtime/macro/three_powers.py",

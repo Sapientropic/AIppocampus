@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from aippocampus_runtime.macro import line_topology, signal_scales
+from aippocampus_runtime.macro import line_topology, signal_scales, three_powers
 from aippocampus_runtime.macro import momentum as momentum_runtime
 from aippocampus_runtime.macro.hexagram import HexagramRef, change_lines, resolve_hexagram
 from aippocampus_runtime.macro.perturbation import (
@@ -245,6 +245,14 @@ def validate_macro_orientation_state(entry: Mapping[str, object]) -> dict[str, o
         errors.append("action_grammar_must_be_direction_only")
     if entry.get("claim_permission") != CLAIM_PERMISSION:
         errors.append("claim_permission_must_require_reopen")
+    relation = entry.get("relation_position")
+    if not isinstance(relation, Mapping):
+        errors.append("relation_position_must_be_mapping")
+    else:
+        try:
+            three_powers.normalize_layer(relation.get("active_layer") or "human")
+        except ValueError:
+            errors.append("relation_position_active_layer_invalid")
     if _parse_updated_at(entry.get("updated_at")) is None:
         errors.append("updated_at_must_be_iso_datetime")
     if _has_forbidden_raw_key(entry):

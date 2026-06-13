@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import audit, hexagram, transform_orbit  # noqa: E402
+from aippocampus_runtime.macro import audit, cross_grain, hexagram, transform_orbit  # noqa: E402
 
 
 class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
@@ -133,6 +133,46 @@ class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
         self.assertFalse(cadence["fact_claim_allowed"])
         self.assertIn("currentness_head_replacement", active_axis["non_goals"])
         self.assertIn("literal_calendar_or_solar_term_system", cadence["non_goals"])
+
+    def test_cross_grain_projection_reports_layer_line_trigram_and_orbit_without_authority_upgrade(self) -> None:
+        broken = cross_grain.project_cross_grain_projection((1, 0, 1, 0, 1, 0))
+        orbit = cross_grain.project_cross_grain_projection("既济", target="未济")
+
+        self.assertEqual(broken["kind"], "yi_macro_cross_grain_projection")
+        self.assertEqual([item["layer"] for item in broken["three_powers_projection"]], ["earth", "human", "heaven"])
+        self.assertIn("broken_coupling_earth_heaven", broken["six_line_projection"]["reason_codes"])
+        self.assertTrue(broken["trigram_projection"]["not_full_hexagram_state"])
+        self.assertEqual(orbit["transform_orbit_projection"]["relation"], "same_reversible_orbit")
+        for packet in (broken, orbit):
+            self.assertEqual(packet["authority_level"], "navigation_only")
+            self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
+            self.assertFalse(packet["fact_claim_allowed"])
+            self.assertFalse(packet["ranking_weight_changes"])
+
+    def test_change_line_transition_records_local_medium_and_inversion_without_advice(self) -> None:
+        local = cross_grain.macro_transition_record("乾", (1,), source_refs=[{"source_id": "local"}])
+        medium = cross_grain.macro_transition_record("乾", (1, 2, 3), source_refs=[{"source_id": "medium"}])
+        inversion = cross_grain.macro_transition_record("乾", (1, 2, 3, 4, 5, 6), source_refs=[{"source_id": "inversion"}])
+
+        self.assertEqual(local["perturbation_band"], "local")
+        self.assertEqual(medium["perturbation_band"], "medium")
+        self.assertEqual(inversion["perturbation_band"], "inversion")
+        self.assertTrue(inversion["review_policy"]["requires_conflict_review_before_action"])
+        for packet in (local, medium, inversion):
+            self.assertEqual(packet["authority_level"], "navigation_only")
+            self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
+            self.assertFalse(packet["fact_claim_allowed"])
+            self.assertFalse(packet["foreground_advice_allowed"])
+
+    def test_nuclear_basin_is_locked_to_explain_only_without_route_merge_or_ranking_effect(self) -> None:
+        policy = cross_grain.nuclear_basin_explain_policy("乾")
+
+        self.assertEqual(policy["decision"], "explain_only_lock")
+        self.assertEqual(policy["projection_kind"], "non_invertible_nuclear_projection")
+        self.assertFalse(policy["route_merge_allowed"])
+        self.assertFalse(policy["ranking_weight_changes"])
+        self.assertFalse(policy["source_support_from_basin_membership"])
+        self.assertFalse(policy["foreground_emitted"])
 
 
 if __name__ == "__main__":
