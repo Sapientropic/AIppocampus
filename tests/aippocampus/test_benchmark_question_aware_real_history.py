@@ -547,9 +547,78 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertFalse(
             prereg["arms"]["question_blind_structural"]["true_retrieval_baseline"]
         )
+        self.assertTrue(
+            prereg["arms"]["no_question_retrieval_answer"]["true_retrieval_baseline"]
+        )
         self.assertIn(
             "question_aware_over_question_blind_delta",
             prereg["primary_readouts"],
+        )
+        self.assertIn(
+            "retrieval_recall_delta",
+            prereg["primary_readouts"],
+        )
+        retrieval_baseline = payload["no_question_retrieval_answer_baseline"]
+        self.assertEqual(
+            retrieval_baseline["kind"],
+            "question_aware_public_shadow_no_question_retrieval_answer_baseline",
+        )
+        self.assertEqual(retrieval_baseline["status"], "fair_baseline_shape_ready")
+        self.assertFalse(
+            retrieval_baseline["arms"]["no_question_retrieval_answer"][
+                "question_metadata_visible"
+            ]
+        )
+        self.assertTrue(
+            retrieval_baseline["arms"]["question_aware_retrieval_answer"][
+                "question_metadata_visible"
+            ]
+        )
+        self.assertEqual(
+            retrieval_baseline["retrieval_selection"]["no_question_retrieval_answer"][
+                "forbidden_fields"
+            ],
+            [
+                "question_text",
+                "question_short",
+                "linked_question_short",
+                "linked_questions",
+                "theme_short",
+                "theme_label",
+                "theme_cluster_id",
+            ],
+        )
+        self.assertEqual(
+            retrieval_baseline["metrics"]["no_question_retrieval_recall"],
+            0.5,
+        )
+        self.assertEqual(
+            retrieval_baseline["metrics"]["question_aware_retrieval_recall"],
+            1.0,
+        )
+        self.assertEqual(
+            retrieval_baseline["metrics"]["retrieval_recall_delta"],
+            0.5,
+        )
+        self.assertEqual(
+            payload["metrics"]["no_question_retrieval_recall"],
+            0.5,
+        )
+        self.assertEqual(
+            payload["metrics"]["retrieval_recall_delta"],
+            0.5,
+        )
+        self.assertIn(
+            "public_shadow_true_no_question_retrieval_baseline_shape_recorded",
+            payload["can_claim"],
+        )
+        self.assertNotIn(
+            "true_no_question_aware_retrieval_baseline",
+            payload["cannot_claim"],
+        )
+        self.assertIn(
+            "broad_no_question_aware_retrieval_baseline",
+            payload["cannot_claim"],
         )
         review_evidence = payload["materialization_review_evidence"]
         self.assertEqual(
@@ -573,7 +642,7 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
             "observed",
         )
         self.assertIn("private_real_history_answer_quality", payload["cannot_claim"])
-        self.assertIn("true_no_question_aware_retrieval_baseline", payload["cannot_claim"])
+        self.assertIn("broad_no_question_aware_retrieval_baseline", payload["cannot_claim"])
         self.assertIn("live_user_visible_recall_improvement", payload["cannot_claim"])
         self.assertIn(
             "private_history_materialization_quality",

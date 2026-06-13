@@ -12,6 +12,8 @@ import hashlib
 from collections.abc import Iterable, Mapping
 from typing import Any, Literal
 
+from aippocampus_runtime.navigation import attention_route_tokens
+
 ACTION_GRAMMARS = {
     "direction_only",
     "reopenable_route",
@@ -115,6 +117,9 @@ def _copy_triage_preview_fields(packet: dict[str, Any], candidate: Mapping[str, 
         values = _strings(candidate.get(key), limit=6)
         if values:
             packet[key] = values
+    route_hints = attention_route_tokens.route_hints_from_sources(candidate)
+    if route_hints:
+        packet["route_hints"] = route_hints
 
 
 def _summary_fallback_reason_codes(summary: Mapping[str, Any] | None) -> list[str]:

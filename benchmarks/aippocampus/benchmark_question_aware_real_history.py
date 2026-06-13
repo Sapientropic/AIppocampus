@@ -1115,7 +1115,8 @@ def public_shadow_negative_control_readout(
 ) -> list[dict[str, Any]]:
     readout: list[dict[str, Any]] = []
     for index, item in enumerate(negative_controls, start=1):
-        turn = item.get("turn") if isinstance(item.get("turn"), Mapping) else {}
+        raw_turn = item.get("turn")
+        turn: Mapping[str, Any] = raw_turn if isinstance(raw_turn, Mapping) else {}
         observed_reason = question_extraction_skip_reason(turn)
         expected_reason = str(item.get("expected_skip_reason") or "").strip()
         passed = bool(observed_reason) and (
@@ -1156,7 +1157,10 @@ def run_question_aware_public_shadow_benchmark(
         -float(review_metrics.get("mean_extra_verification_steps_delta") or 0.0),
         4,
     )
-    metadata = fixture.get("metadata") if isinstance(fixture.get("metadata"), Mapping) else {}
+    raw_metadata = fixture.get("metadata")
+    metadata: Mapping[str, Any] = (
+        raw_metadata if isinstance(raw_metadata, Mapping) else {}
+    )
     negative_controls = [
         item for item in fixture.get("negative_controls") or [] if isinstance(item, Mapping)
     ]
@@ -1169,6 +1173,14 @@ def run_question_aware_public_shadow_benchmark(
         negative_controls=negative_control_readout,
         threshold_readout=threshold_readout,
     )
+    no_question_retrieval_answer_baseline = (
+        public_shadow_support.true_no_question_retrieval_answer_baseline(
+            fixture=fixture,
+            structural=structural,
+            review_metrics=review_metrics,
+        )
+    )
+    no_question_metrics = no_question_retrieval_answer_baseline["metrics"]
     public_case_count = int(
         metadata.get("public_case_count")
         or len({str(row.get("case_id") or "") for row in review_rows if row.get("case_id")})
@@ -1188,6 +1200,18 @@ def run_question_aware_public_shadow_benchmark(
         "answer_usefulness_delta": review_metrics.get("answer_usefulness_delta"),
         "manual_query_reduction_delta": manual_query_reduction_delta,
         "question_aware_wrong_hint_rate": review_metrics.get("question_aware_wrong_hint_rate"),
+        "no_question_retrieval_recall": no_question_metrics["no_question_retrieval_recall"],
+        "question_aware_retrieval_recall": no_question_metrics[
+            "question_aware_retrieval_recall"
+        ],
+        "retrieval_recall_delta": no_question_metrics["retrieval_recall_delta"],
+        "no_question_answer_support_proxy": no_question_metrics[
+            "no_question_answer_support_proxy"
+        ],
+        "question_aware_answer_support_proxy": no_question_metrics[
+            "question_aware_answer_support_proxy"
+        ],
+        "answer_support_proxy_delta": no_question_metrics["answer_support_proxy_delta"],
         "negative_control_pass_count": sum(1 for item in negative_control_readout if item["passed"]),
         "threshold_dynamic_false_split_count": threshold_readout["dynamic_six_axis_threshold"].get(
             "false_split_count"
@@ -1226,6 +1250,7 @@ def run_question_aware_public_shadow_benchmark(
             "known_failure_modes": structural["known_failure_modes"],
         },
         "baseline_preregistration": baseline_preregistration,
+        "no_question_retrieval_answer_baseline": no_question_retrieval_answer_baseline,
         "answer_quality_review": structural["answer_quality_review"],
         "materialization_review_evidence": materialization_review_evidence,
         "negative_controls": negative_control_readout,
@@ -1239,13 +1264,14 @@ def run_question_aware_public_shadow_benchmark(
         "can_claim": [
             "public_shadow_question_aware_source_reopen_comparison_recorded",
             "public_shadow_selected_baseline_preregistered",
+            "public_shadow_true_no_question_retrieval_baseline_shape_recorded",
             "public_shadow_materialization_review_evidence_recorded",
             "public_shadow_threshold_readout_recorded",
             "public_shadow_negative_controls_recorded",
         ],
         "cannot_claim": [
             "private_real_history_answer_quality",
-            "true_no_question_aware_retrieval_baseline",
+            "broad_no_question_aware_retrieval_baseline",
             "live_user_visible_recall_improvement",
             "theme_resonance_calibration",
             "default_prefilter_adoption",

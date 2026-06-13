@@ -1915,7 +1915,7 @@ def source_semantic_cache_score(
     score += label_overlap * 12.0
     score += context_label_overlap * 5.0
     score += semantic_scope_overlap * 32.0
-    score += factual_alias_overlap * 46.0
+    score += factual_alias_overlap * 112.0
     score += answer_bearing_overlap * 12.0
     if "content" in {str(channel) for channel in candidate.get("query_channels") or []}:
         score += 16.0
@@ -1938,7 +1938,12 @@ def source_semantic_cache_score(
     if semantic_scope_overlap and labels:
         score += min(12.0, semantic_scope_overlap * 3.0)
     if factual_alias_overlap and ("answer_like_statement" in labels or "value_like" in labels):
-        score += min(18.0, factual_alias_overlap * 6.0)
+        # Factual aliases are source-local route handles, not source truth. When
+        # a query asks with a paraphrase such as "keepsake kept" and the source
+        # line says "souvenir stored", this boost lets the bounded candidate
+        # reranker prefer the answer-bearing row over a nearby topical row
+        # without widening the foreground source window.
+        score += min(64.0, factual_alias_overlap * 24.0)
     score -= context_distance * 1.25
     score -= nearest_hit_rank * 0.05
     return score
@@ -2420,11 +2425,27 @@ def source_window_coverage_diagnostic(
     candidate_missing = 0
     reranker_visible = 0
     candidate_coverage = 0
+    factual_alias_candidate_lift = 0
+    factual_alias_fused_lift = 0
+    factual_alias_candidate_missing_miss = 0
+    factual_alias_reranker_visible_miss = 0
+    fused_regression_count = 0
     miss_family_counts: dict[str, int] = {}
     reranker_attempted_count = 0
     for row in rows:
         evidence_rank = _positive_rank(row.get("evidence_rank"))
         reranked_rank = _positive_rank(row.get("reranked_evidence_rank")) or evidence_rank
+        baseline_hit = bool(evidence_rank and evidence_rank <= top_k)
+        fused_hit = bool(reranked_rank and reranked_rank <= top_k)
+        factual_alias_candidate_contains = bool(
+            row.get("source_semantic_factual_alias_candidate_evidence_contains")
+        )
+        if baseline_hit and not fused_hit:
+            fused_regression_count += 1
+        if not baseline_hit and factual_alias_candidate_contains:
+            factual_alias_candidate_lift += 1
+            if fused_hit:
+                factual_alias_fused_lift += 1
         if row.get("line_reranker_attempted"):
             reranker_attempted_count += 1
             if row.get("line_reranker_candidate_contains_evidence"):
@@ -2434,8 +2455,12 @@ def source_window_coverage_diagnostic(
             if row.get("line_reranker_attempted"):
                 if row.get("line_reranker_candidate_contains_evidence"):
                     reranker_visible += 1
+                    if factual_alias_candidate_contains:
+                        factual_alias_reranker_visible_miss += 1
                 else:
                     candidate_missing += 1
+                    if int(row.get("source_semantic_factual_alias_line_count") or 0) > 0:
+                        factual_alias_candidate_missing_miss += 1
             if row.get(f"same_session_wrong_line_top{top_k}"):
                 miss_family_counts["same_session_wrong_line_top_k"] = (
                     miss_family_counts.get("same_session_wrong_line_top_k", 0) + 1
@@ -2468,6 +2493,11 @@ def source_window_coverage_diagnostic(
         "fused_miss_count": fused_miss_count,
         "candidate_missing_miss_count": candidate_missing,
         "reranker_visible_miss_count": reranker_visible,
+        "factual_alias_candidate_lift_count": factual_alias_candidate_lift,
+        "factual_alias_fused_lift_count": factual_alias_fused_lift,
+        "factual_alias_candidate_missing_miss_count": factual_alias_candidate_missing_miss,
+        "factual_alias_reranker_visible_miss_count": factual_alias_reranker_visible_miss,
+        "fused_regression_count": fused_regression_count,
         "miss_family_counts": dict(sorted(miss_family_counts.items())),
         "line_reranker_candidate_evidence_coverage": {
             "numerator": candidate_coverage,
@@ -2475,6 +2505,7 @@ def source_window_coverage_diagnostic(
             "rate": safe_rate(candidate_coverage, reranker_attempted_count),
         },
         "candidate_rows_are_routes_not_claims": True,
+        "foreground_window_growth_policy": "bounded_candidate_routes_only",
         "raw_text_emitted": False,
     }
 
@@ -3711,6 +3742,25 @@ def summarize_standard_retrieval_results(
                 for row in source_semantic_cache_cases
                 if int(row.get("source_semantic_answer_bearing_line_count") or 0) > 0
             )
+            source_factual_alias_candidate_lifts = sum(
+                1
+                for row in source_semantic_cache_cases
+                if not row.get(f"evidence_hit_top{top_k}")
+                and row.get("source_semantic_factual_alias_candidate_evidence_contains")
+            )
+            source_factual_alias_fused_lifts = sum(
+                1
+                for row in source_semantic_cache_cases
+                if not row.get(f"evidence_hit_top{top_k}")
+                and row.get(f"reranked_evidence_hit_top{top_k}")
+                and row.get("source_semantic_factual_alias_candidate_evidence_contains")
+            )
+            source_fused_regressions = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get(f"evidence_hit_top{top_k}")
+                and not row.get(f"reranked_evidence_hit_top{top_k}")
+            )
             metrics.update(
                 {
                     "source_semantic_cache_case_count": len(source_semantic_cache_cases),
@@ -3855,6 +3905,30 @@ def summarize_standard_retrieval_results(
                     ),
                     "source_semantic_answer_bearing_case_count": (
                         source_factual_answer_bearing_cases
+                    ),
+                    f"source_semantic_factual_alias_candidate_lift_top{top_k}": (
+                        source_factual_alias_candidate_lifts
+                    ),
+                    f"source_semantic_factual_alias_candidate_lift_rate_top{top_k}": (
+                        safe_rate(
+                            source_factual_alias_candidate_lifts,
+                            len(source_semantic_cache_cases),
+                        )
+                    ),
+                    f"source_semantic_factual_alias_fused_lift_top{top_k}": (
+                        source_factual_alias_fused_lifts
+                    ),
+                    f"source_semantic_factual_alias_fused_lift_rate_top{top_k}": (
+                        safe_rate(
+                            source_factual_alias_fused_lifts,
+                            len(source_semantic_cache_cases),
+                        )
+                    ),
+                    f"source_semantic_cache_fused_regression_top{top_k}": (
+                        source_fused_regressions
+                    ),
+                    f"source_semantic_cache_fused_regression_rate_top{top_k}": (
+                        safe_rate(source_fused_regressions, len(source_semantic_cache_cases))
                     ),
                 }
             )

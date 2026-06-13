@@ -40,6 +40,12 @@ python -m ruff check benchmarks\aippocampus\benchmark_question_aware_real_histor
 - Question-aware term coverage: 1.0
 - Question-aware over question-blind delta: 0.75
 - Answer-usefulness delta: 1.0
+- No-question retrieval recall: 0.5
+- Question-aware retrieval recall: 1.0
+- Retrieval recall delta: 0.5
+- No-question answer-support proxy: 0.5
+- Question-aware answer-support proxy: 1.0
+- Answer-support proxy delta: 0.5
 - Manual-query-reduction delta: 1.5
 - Question-aware wrong-hint rate: 0.0
 - Negative controls passed: 2/2 (`noise` and `code_heavy` skip reasons)
@@ -49,15 +55,21 @@ Baseline preregistration and materialization-review readout:
 - Preregistered cohort: checked-in `question_aware_public_shadow_v1`, with
   public VCS-style and public agent-trajectory cases.
 - Compared arms: question-blind same-row structural baseline, selected plain
-  answer-review baseline, and question-aware source-reopen review.
+  answer-review baseline, deterministic no-question retrieval/answer proxy
+  baseline, and question-aware source-reopen review.
 - Primary readouts: question-aware over question-blind structural delta,
-  answer-usefulness delta, manual-query-reduction delta, and question-aware
-  wrong-hint rate.
+  answer-usefulness delta, retrieval-recall delta, answer-support proxy delta,
+  manual-query-reduction delta, and question-aware wrong-hint rate.
+- No-question retrieval scoring fields: source-ref count, confidence, and
+  created_at only. It does not score using question text, question labels,
+  linked-question payloads, theme labels, or theme ids.
 - Materialization review status: `public_shadow_review_evidence_ready`.
 - Reviewer usefulness categories observed: source-reopen usefulness,
   manual-search reduction, bounded wrong-route drag, selected
   candidate/link/theme materialization, and dynamic-threshold regression guard.
-- Boundary: this is not a true no-question-aware retrieval baseline.
+- Boundary: this is a public deterministic no-question retrieval/answer
+  baseline shape, not a broad public/private calibration or live answer-quality
+  claim.
 
 Threshold readout from the selected calibration fixture:
 
@@ -70,7 +82,10 @@ Threshold readout from the selected calibration fixture:
 This retires the public-replayable shadow-case gap added to #248 on
 2026-06-08. It shows a checked-in source-replayable path for question-aware
 source reopen, answer-review deltas, adaptive-threshold readout, and
-noise/code negative controls.
+noise/code negative controls. It also records the fair #1367 public baseline
+shape: the no-question arm retrieves from the same public candidate pool
+without question/theme labels and reports retrieval plus answer-support proxy
+metrics.
 
 Do not close #248 from this slice. The benchmark still uses selected public
 fixtures, not a broad public corpus, private-history answer-quality cohort, or
@@ -87,6 +102,9 @@ vector prefilter adoption.
 - The report preregisters the selected public baseline/cohort and records
   materialization-review categories for manual-search reduction and wrong-route
   drag.
+- The report records a deterministic no-question retrieval/answer proxy arm
+  whose scoring excludes question/theme fields, with retrieval-recall delta
+  0.5 and answer-support proxy delta 0.5 on the checked-in fixture.
 - The public shadow report records static-threshold and adaptive-threshold
   behavior so regressions do not silently collapse back to fixed-threshold
   matching.
@@ -95,7 +113,8 @@ vector prefilter adoption.
 ## Cannot Claim
 
 - Private real-history answer quality.
-- True no-question-aware retrieval baseline.
+- Broad no-question-aware retrieval baseline beyond this checked-in public
+  fixture shape.
 - Live user-visible recall improvement.
 - Broad question-tracking quality.
 - Theme-resonance calibration.

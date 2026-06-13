@@ -394,6 +394,7 @@ def route_attention(
                 else None,
                 "source_open": token_id in source_open_ids,
                 "bounded_scope": token_id in bounded_scope_ids,
+                "route_hints": token.get("route_hints"),
                 **_triage_preview_fields(
                     token,
                     metadata=metadata,

@@ -34,11 +34,17 @@ as failure.
 | Deterministic salience rows with resolving refs after the producer is enabled | `move_to_enable_policy` | `continuity_domain_salience_adapter.py` can run in `report` or `write_when_enabled`. |
 | Per-event confirmation for deterministic correction/counter/boundary events | `replace_with_auditability` | Use stable event ids, duplicate suppression, append-only logs, and public count summaries. |
 | `aippocampus continuity-domain produce --append` as the normal user workflow | `debug_only` | Keep it for operator backfill, repair, and tests; do not present it as the primary ADHD-facing path. |
-| Registry producer emitting only `domain_created` | `known_gap` | Salience adapter now covers correction, counter, boundary, and cautious repeated-ref preference routes. |
-| Split/merge/reinterpretation/pathlet lifecycle automation | `operator_authored_or_future` | Do not imply these are currently auto-produced. |
+| Registry producer emitting only `domain_created` before the salience adapter | `replace_with_auditability` | Treat as the pilot gap now addressed by #1432: enabled deterministic salience can write through the auditable event path instead of asking for manual append. |
+| Split/merge/reinterpretation/pathlet lifecycle automation | `debug_only` | Keep as operator-authored or future automation until source-ref mapping and user-facing recovery semantics are stronger. |
 | Help-first install probes before a continuity moment | `move_to_enable_policy` | Public docs should lead toward an agent-mediated plugin/setup path, then one source-backed recall moment, with probes as diagnostics. |
 | Optional provider-key setup | `move_to_enable_policy` | Ask once for LLM-backed semantic/background routes; no-key fallback remains source-backed. |
 | Magic-moment examples living only in evidence review paths | `move_to_enable_policy` | Link them from first-run/product paths as product feel, not benchmark proof. |
+
+These are the only classifications used for this closeout: `must_keep`,
+`move_to_enable_policy`, `replace_with_auditability`, `debug_only`, and
+`remove_or_relax`. No first-pass boundary currently needs `remove_or_relax`
+alone; the harmful cases above become safer by moving consent to enable policy
+or replacing confirmation with auditability.
 
 ## Pilot Change
 
@@ -56,6 +62,12 @@ This pilot satisfies the first ADHD-friction check for this track: enabled
 deterministic continuity maintenance does not require repeated per-event
 confirmation, and report/write status is visible without a separate manual
 append chore.
+
+Implementation issue #1432 is closed with this pilot implemented, and #1433 is
+closed with the continuity-domain producer capability / UX-tier docs updated.
+The linked docs now frame explicit `aippocampus continuity-domain
+produce --append` and manual append/publish commands as trusted local
+debug/operator/backfill surfaces, not the ordinary user path.
 
 ## ADHD-Friction Acceptance Checks
 
@@ -85,3 +97,10 @@ append chore.
   aggregate and sanitized.
 
 Related issues: #1432, #1433, #1434, #1435, #1421, #1417, #1185.
+
+## Closeout Status
+
+#1435 can close as a docs/audit slice if the linked public onboarding docs keep
+the same ordering: agent-mediated Codex plugin path first, hooks after machine
+trust, one explicit LLM-key choice, useful no-key fallback, and diagnostics or
+manual CLI commands only as probes, repair, automation, or operator fallback.

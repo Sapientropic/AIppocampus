@@ -190,6 +190,23 @@ All token levels carry optional route metadata slots for `salience`,
 `currentness`, `privacy`, and `conflict`. Missing slots stay `unknown`; callers
 must not invent certainty to make a head score cleaner.
 
+Route tokens may also carry a compact `route_hints` object for sidecar material
+that helps route selection without becoming source support. The allowed hint
+families and fields are:
+
+| Family | Allowed fields | Authority |
+| --- | --- | --- |
+| `semantic_warming` | `semantic_score`, `semantic_aliases`, `scout_family_votes`, `source_ref_fingerprints`, `candidate_fingerprint`, `topic_epoch_label`, `guard_status`, `cache_status`, `source_bridge_status` | Terms and semantic-head input only; no raw prompt, raw source, or model reasoning. |
+| `familiarity_map` | `first_source_to_reopen`, `stop_after`, `freshness`, `invalidation_present`, `decision_shadow_present`, `rejected_route`, `route_terms`, `do_not_use_for`, `source_ref_count` | Cold route sidecar for choosing the next reopen path; not current-code truth. |
+| `topology_explain_only` | `topology_shape`, `risk_reason_codes`, `explain_only` | Explain route risk or ambiguity only; no ranking-weight, score, authority, or evidence upgrade. |
+
+These hints may improve top-1/top-2 ordering among already emitted route
+candidates or explain why a route needs cautious deepen. They must keep
+`claim_permission="no_claim_before_reopen"` unless source is separately opened
+and bounded by the normal evidence path. Raw source text, local machine paths,
+private ids, raw semantic reasoning, and arbitrary extra hint fields are
+dropped at projection time.
+
 ## Deterministic Hot Router V0
 
 The first router prototype lives in

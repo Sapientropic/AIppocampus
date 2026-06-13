@@ -56,6 +56,58 @@ class AttentionRouteTokenTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["event_token_count"], 1)
         self.assertEqual(report["metrics"]["episode_or_question_token_count"], 1)
 
+    def test_allowed_route_hints_are_sanitized_and_navigation_only(self) -> None:
+        report = tokens.project_hierarchical_route_tokens(
+            [
+                {
+                    "event_id": "event_hint_route",
+                    "source_id": "clean:public-hints",
+                    "segment_id": "msg-hints",
+                    "turn_id": "turn-hints",
+                    "route_hints": {
+                        "semantic_warming": {
+                            "semantic_score": 0.81,
+                            "semantic_aliases": ["route packet hint integration"],
+                            "raw_model_reasoning": "PRIVATE_REASONING_SENTINEL",
+                        },
+                        "familiarity_map": {
+                            "first_source_to_reopen": "docs/architecture/source-backed-attention-router.md",
+                            "route_terms": ["route-packet", "hint"],
+                            "local_path": "C:\\Users\\Example\\private.txt",
+                        },
+                        "topology_explain_only": {
+                            "topology_shape": "route_cycle",
+                            "risk_reason_codes": ["blind_deepen_risk"],
+                            "ranking_weight_changes": ["forbidden"],
+                        },
+                        "unknown_hint": {"leak": "PRIVATE_UNKNOWN_SENTINEL"},
+                    },
+                }
+            ]
+        )
+        event = {row["token_id"]: row for row in report["tokens"]}["event_hint_route"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(event["claim_permission"], "no_claim_before_reopen")
+        self.assertTrue(event["token_contract"]["route_token_is_not_evidence"])
+        self.assertEqual(
+            set(event["route_hints"]),
+            {"semantic_warming", "familiarity_map", "topology_explain_only"},
+        )
+        self.assertEqual(
+            event["route_hints"]["semantic_warming"]["semantic_aliases"],
+            ["route packet hint integration"],
+        )
+        self.assertEqual(
+            event["route_hints"]["familiarity_map"]["route_terms"],
+            ["route-packet", "hint"],
+        )
+        self.assertTrue(event["route_hints"]["topology_explain_only"]["explain_only"])
+        self.assertNotIn("PRIVATE_REASONING_SENTINEL", encoded)
+        self.assertNotIn("PRIVATE_UNKNOWN_SENTINEL", encoded)
+        self.assertNotIn("C:\\", encoded)
+        self.assertNotIn("ranking_weight_changes", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

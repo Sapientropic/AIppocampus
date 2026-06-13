@@ -92,6 +92,10 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
     "aippocampus_runtime.ops.recall_navigation_promotion": {
         "aippocampus_runtime.recall.continuity_usefulness",
     },
+    "aippocampus_runtime.ops.source_joined_routing_decision": {
+        "aippocampus_runtime.recall",
+        "aippocampus_runtime.recall.score_fusion",
+    },
     "aippocampus_runtime.ops.route_readiness": {
         "aippocampus_runtime.recall.active_recall_lock_lifecycle",
     },
@@ -118,13 +122,13 @@ def debt_register_entries(*, prefixes: tuple[str, ...] | None = None) -> dict[st
         text = source.read_text(encoding="utf-8")
         for match in re.finditer(
             r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
-            r"\|\s*(?P<budget>\d+)\s*\|",
+            r"\|\s*(?P<first>\d+)\s*\|(?:\s*(?P<second>\d+)\s*\|)?",
             text,
             flags=re.MULTILINE,
         ):
             if prefixes and not match.group("path").startswith(prefixes):
                 continue
-            entries[match.group("path")] = int(match.group("budget"))
+            entries[match.group("path")] = int(match.group("second") or match.group("first"))
     return entries
 
 

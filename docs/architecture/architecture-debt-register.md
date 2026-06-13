@@ -64,7 +64,7 @@ this main action queue.
 
 ## Test, Benchmark, And Tool Debt Budgets
 
-Last counted: 2026-06-11.
+Last counted: 2026-06-14.
 Counting method: `script_line_count()` from
 `tests/aippocampus/test_architecture_boundaries.py`: nonblank lines excluding
 lines whose first non-space character is `#`.
@@ -94,6 +94,7 @@ Current non-runtime action rows:
 | `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | 2216 | 2250 | #378 / #996 | Split scenario catalog or report projection from runner orchestration before adding another decision family or residual taxonomy. |
 | `benchmarks/aippocampus/benchmark_compaction_continuity.py` | 1695 | 1800 | #1351 | Split Track D scenario catalog or sequence-diagnostic fixtures before adding another hook/state/status family; keep runner scoring and public report projection together until the #1351 coverage closeout is stable. |
 | `tests/aippocampus/test_continuity_domains.py` | 1607 | 1750 | #973 / #926 | Split continuity-domain producer fixtures or route-projection assertions before adding another domain family, source-opening surface, or MCP handle contract. |
+| `tests/aippocampus/test_benchmark_longmemeval.py` | 1578 | 1650 | #1323 / #1424 / #1426 | Split source-index fixture builders or factual-alias hot-path assertions before adding another source-window, alias, or LongMemEval rerank family. |
 | `tests/aippocampus/test_import_coupling.py` | 107 | 2500 | #658 / #659 | Continue moving reusable analysis helpers into `import_coupling_helpers.py`; invert remaining shim-preservation assertions toward explicit public allowlists. |
 | `benchmarks/aippocampus/benchmark_amemgym_official.py` | 1570 | 1650 | #742 / #1052 / #1229 | #1052 split public execution-state, checkpoint, runner-plan, and protocol projection into `amemgym_official_public_state.py`; #1229 kept shared provider-budget preflight and timeout handling inside the official-bridge owner because it guards the same `openrouter --run` execution surface. Split score-output discovery, provider-budget/openrouter surface orchestration, or provider-specific usage parsing before adding more AMemGym arms, raw cost/latency extraction, or provider metadata extraction. |
 | `benchmarks/aippocampus/benchmark_locomo_qa.py` | 1310 | 1400 | #1158 / #1229 | Keep the fixed-reader text-QA adapter, provider-budget preflight, static dry-run path, citation scoring, and sanitized report projection together while this remains one opt-in LoCoMo answer harness. Split provider/report projection helpers or LoCoMo answer-scoring taxonomy before adding more reader arms, multimodal LoCoMo behavior, or raw provider usage extraction. |

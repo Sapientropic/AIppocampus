@@ -5,6 +5,16 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+NO_QUESTION_RETRIEVAL_FORBIDDEN_FIELDS = [
+    "question_text",
+    "question_short",
+    "linked_question_short",
+    "linked_questions",
+    "theme_short",
+    "theme_label",
+    "theme_cluster_id",
+]
+
 
 def baseline_preregistration(*, fixture: Mapping[str, Any]) -> dict[str, Any]:
     raw_metadata = fixture.get("metadata")
@@ -28,14 +38,25 @@ def baseline_preregistration(*, fixture: Mapping[str, Any]) -> dict[str, Any]:
                 "question_metadata_visible": False,
                 "true_retrieval_baseline": False,
             },
+            "no_question_retrieval_answer": {
+                "description": (
+                    "deterministic public retrieval and answer-proxy arm scored without "
+                    "question/theme text or labels"
+                ),
+                "question_metadata_visible": False,
+                "true_retrieval_baseline": True,
+            },
             "question_aware_source_reopen": {
                 "description": "selected public review arm with question-aware route and source reopen",
+                "question_metadata_visible": True,
                 "source_reopen_required": True,
             },
         },
         "primary_readouts": [
             "question_aware_over_question_blind_delta",
             "answer_usefulness_delta",
+            "retrieval_recall_delta",
+            "answer_support_proxy_delta",
             "manual_query_reduction_delta",
             "question_aware_wrong_hint_rate",
         ],
@@ -46,9 +67,139 @@ def baseline_preregistration(*, fixture: Mapping[str, Any]) -> dict[str, Any]:
             "raw_private_or_source_text_not_emitted",
         ],
         "claim_boundary": (
-            "public selected-fixture baseline, not broad private-history calibration "
-            "or true no-question-aware retrieval baseline"
+            "public selected-fixture plus deterministic no-question retrieval baseline shape, "
+            "not broad private-history calibration"
         ),
+    }
+
+
+def source_ref_count(row: Mapping[str, Any]) -> int:
+    refs = row.get("source_refs")
+    return len(refs) if isinstance(refs, Sequence) and not isinstance(refs, str) else 0
+
+
+def parse_float(value: Any, *, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def true_no_question_retrieval_answer_baseline(
+    *,
+    fixture: Mapping[str, Any],
+    structural: Mapping[str, Any],
+    review_metrics: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the public fair-baseline shape without reading question/theme labels.
+
+    The no-question arm intentionally scores only generic source-backed features
+    that a question-blind retriever could know before question tracking exists.
+    Do not add question/theme labels, linked question payloads, or theme ids to
+    the sort key: that would turn this back into the selected structural proxy
+    #1367 was opened to replace.
+    """
+
+    rows = [row for row in fixture.get("job_rows") or [] if isinstance(row, Mapping)]
+    source_backed_rows = [row for row in rows if source_ref_count(row) > 0]
+    complete_cases = int(review_metrics.get("complete_comparison_case_count") or 0)
+    retrieval_budget = max(1, complete_cases)
+    no_question_rows = sorted(
+        source_backed_rows,
+        key=lambda row: (
+            -source_ref_count(row),
+            -parse_float(row.get("confidence")),
+            str(row.get("created_at") or ""),
+        ),
+    )[:retrieval_budget]
+    raw_structural_metrics = structural.get("metrics")
+    structural_metrics: Mapping[str, Any] = (
+        raw_structural_metrics if isinstance(raw_structural_metrics, Mapping) else {}
+    )
+    raw_kind_counts = structural_metrics.get("source_seed_kind_counts")
+    kind_counts: Mapping[str, Any] = raw_kind_counts if isinstance(raw_kind_counts, Mapping) else {}
+    question_aware_count = int(kind_counts.get("question_candidate") or 0)
+    selected_count = sum(
+        int(value or 0)
+        for value in kind_counts.values()
+    )
+    total_candidates = max(1, len(source_backed_rows))
+    no_question_recall = round(len(no_question_rows) / total_candidates, 4)
+    question_aware_recall = round(selected_count / total_candidates, 4)
+    question_aware_supported_rate = parse_float(
+        review_metrics.get("question_aware_answer_supported_rate")
+    )
+    no_question_answer_support_proxy = round(
+        no_question_recall * question_aware_supported_rate,
+        4,
+    )
+    question_aware_answer_support_proxy = round(
+        question_aware_recall * question_aware_supported_rate,
+        4,
+    )
+    return {
+        "kind": "question_aware_public_shadow_no_question_retrieval_answer_baseline",
+        "status": "fair_baseline_shape_ready"
+        if source_backed_rows and complete_cases
+        else "fair_baseline_shape_needs_review",
+        "arms": {
+            "no_question_retrieval_answer": {
+                "question_metadata_visible": False,
+                "true_retrieval_baseline": True,
+                "answer_measurement": "deterministic_answer_support_proxy",
+            },
+            "question_aware_retrieval_answer": {
+                "question_metadata_visible": True,
+                "source_reopen_required": True,
+                "answer_measurement": "selected_source_reopened_review",
+            },
+        },
+        "retrieval_selection": {
+            "no_question_retrieval_answer": {
+                "strategy": "generic_source_backed_public_rows_by_ref_count_confidence_time",
+                "retrieval_budget": retrieval_budget,
+                "candidate_count": len(source_backed_rows),
+                "selected_count": len(no_question_rows),
+                "allowed_scoring_fields": [
+                    "source_refs_count",
+                    "confidence",
+                    "created_at",
+                ],
+                "forbidden_fields": NO_QUESTION_RETRIEVAL_FORBIDDEN_FIELDS,
+            },
+            "question_aware_retrieval_answer": {
+                "strategy": "existing_question_aware_public_shadow_pack_selection",
+                "selected_count": selected_count,
+                "question_candidate_count": question_aware_count,
+            },
+        },
+        "metrics": {
+            "no_question_retrieval_recall": no_question_recall,
+            "question_aware_retrieval_recall": question_aware_recall,
+            "retrieval_recall_delta": round(question_aware_recall - no_question_recall, 4),
+            "no_question_answer_support_proxy": no_question_answer_support_proxy,
+            "question_aware_answer_support_proxy": question_aware_answer_support_proxy,
+            "answer_support_proxy_delta": round(
+                question_aware_answer_support_proxy - no_question_answer_support_proxy,
+                4,
+            ),
+        },
+        "privacy": {
+            "raw_source_text_emitted": False,
+            "raw_answer_text_emitted": False,
+            "raw_source_refs_emitted": False,
+            "question_or_theme_labels_used_for_no_question_scoring": False,
+        },
+        "can_claim": [
+            "public_shadow_true_no_question_retrieval_baseline_shape_recorded",
+            "no_question_arm_scoring_excludes_question_theme_labels",
+        ],
+        "cannot_claim": [
+            "private_history_retrieval_quality",
+            "broad_no_question_aware_retrieval_baseline",
+            "live_model_answer_quality",
+            "user_visible_recall_improvement",
+        ],
     }
 
 

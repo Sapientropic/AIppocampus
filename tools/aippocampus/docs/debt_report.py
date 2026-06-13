@@ -17,7 +17,7 @@ ARCHITECTURE_DEBT_SNAPSHOT = (
 )
 BUDGET_ROW = re.compile(
     r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
-    r"\|\s*(?P<budget>\d+)\s*\|",
+    r"\|\s*(?P<first>\d+)\s*\|(?:\s*(?P<second>\d+)\s*\|)?",
     re.MULTILINE,
 )
 
@@ -41,7 +41,7 @@ def budget_entries() -> dict[str, int]:
     for source in inventory_sources():
         text = source.read_text(encoding="utf-8")
         for match in BUDGET_ROW.finditer(text):
-            entries[match.group("path")] = int(match.group("budget"))
+            entries[match.group("path")] = int(match.group("second") or match.group("first"))
     return dict(sorted(entries.items()))
 
 

@@ -299,6 +299,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_search_clean_source",
         "test_search_decision_adapter",
         "test_search_segments",
+        "test_source_joined_routing_decision",
         "test_semantic_cue_cache",
         "test_semantic_paraphrase_reuse_smoke",
         "test_semantic_recall_gate",
