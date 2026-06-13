@@ -89,7 +89,7 @@ as a conversation starts, and lifecycle hooks refresh clean source and indexes
 after session events. Claude Code currently has local-history onboarding plus
 the MCP/project-skill path, not AIppocampus Claude hook support; see the
 [Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md)
-and [Claude Code MCP guide](docs/guides/claude-code-mcp.md). Hooks are never
+and [Claude Code MCP guide](docs/guides/setup/claude-code-mcp.md). Hooks are never
 installed silently; review status first, then install them only when this
 machine is allowed to let AIppocampus touch Codex hooks:
 
@@ -132,7 +132,7 @@ If you are deciding which AIppocampus surface another tool should depend on,
 use the [10-minute public API path](docs/guides/public-api.md#ten-minute-public-path).
 If you are deciding whether a feature belongs in the low-friction personal path
 or in governed/high-risk opt-in behavior, use
-[Product Profiles](docs/architecture/product-profiles.md).
+[Product Profiles](docs/architecture/host/product-profiles.md).
 Repository checks for maintainers live in
 [Operator And Maintainer Paths](#operator-and-maintainer-paths).
 
@@ -236,7 +236,7 @@ continuity resumed.
   [llms.txt](llms.txt).
 - Runtime shape and metaphor boundaries:
   [Architecture Overview](docs/architecture/architecture-overview.md) and
-  [Cognitive Runtime Architecture](docs/architecture/cognitive-runtime-architecture.md).
+  [Cognitive Runtime Architecture](docs/architecture/runtime/cognitive-runtime-architecture.md).
 - Current claim boundary:
   [Stage 0-5 readiness](docs/evidence/readiness/stage-0-5-readiness.md).
 - Default product lane and layer map:
@@ -251,7 +251,7 @@ continuity resumed.
   [Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md).
 - Security and release hygiene:
   [SECURITY.md](SECURITY.md),
-  [Release Checklist](docs/guides/release-checklist.md), and
+  [Release Checklist](docs/guides/setup/release-checklist.md), and
   [maintainer shipping lanes](CONTRIBUTING.md#maintainer-shipping-lanes).
 - Full documentation map: [docs/README.md](docs/README.md).
 
@@ -290,9 +290,9 @@ the documented baseline before running source-checkout verification.
 - Supported CLI, MCP, JSON, environment variables, and import policy:
   [Public API](docs/guides/public-api.md).
 - Safe configuration: [.env.example](.env.example) and
-  [Safe Environment](docs/guides/safe-environment.md).
+  [Safe Environment](docs/guides/setup/safe-environment.md).
 - Dependency ownership:
-  [Dependency Contract](docs/guides/dependency-contract.md).
+  [Dependency Contract](docs/guides/setup/dependency-contract.md).
 - MCP, plugin, sync, and object-storage details:
   [docs/README.md](docs/README.md).
 
@@ -308,7 +308,7 @@ keeps one canonical Ubuntu Python 3.12 `pr` lane with coverage, a Python 3.13
 `quick` compatibility lane, and a focused macOS default TMPDIR path-identity
 gate; Ubuntu green alone is not a broad cross-platform path-identity claim. The
 broader boundary lives in
-[docs/architecture/path-identity.md](docs/architecture/path-identity.md).
+[docs/architecture/source/path-identity.md](docs/architecture/source/path-identity.md).
 
 ## Privacy Boundary
 

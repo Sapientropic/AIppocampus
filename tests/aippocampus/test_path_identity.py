@@ -110,7 +110,7 @@ class PathIdentityTests(unittest.TestCase):
         )
 
     def test_path_identity_contract_doc_links_broader_regression_family(self) -> None:
-        doc = REPO_ROOT / "docs" / "architecture" / "path-identity.md"
+        doc = REPO_ROOT / "docs" / "architecture" / "source" / "path-identity.md"
         text = doc.read_text(encoding="utf-8")
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         docs_index = (REPO_ROOT / "docs" / "README.md").read_text(encoding="utf-8")
@@ -126,7 +126,7 @@ class PathIdentityTests(unittest.TestCase):
             "bind mount",
         ):
             self.assertIn(term, text)
-        self.assertIn("architecture/path-identity.md", readme)
+        self.assertIn("architecture/source/path-identity.md", readme)
         self.assertIn("path-identity.md", docs_index)
 
 

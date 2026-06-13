@@ -100,7 +100,7 @@ ATM-Bench staged-corpus QA, because the conversation trace itself can carry
 labels, intent, or ambiguity that later recall must reopen.
 
 The public-safe deterministic contract smoke is documented in
-[`../conversational-media-ingest-fixture-report.md`](../conversational-media-ingest-fixture-report.md).
+[`../reports/multimodal/conversational-media-ingest-fixture-report.md`](../reports/multimodal/conversational-media-ingest-fixture-report.md).
 
 ### Oracle-Style Answer Synthesis
 
@@ -124,7 +124,7 @@ the right source anchors, handles conflict/recency, and abstains when the
 question asks for unsupported details.
 
 The public-safe deterministic contract smoke for #533 is documented in
-[`../multimodal-niah-evidence-pool-report.md`](../multimodal-niah-evidence-pool-report.md).
+[`../reports/multimodal/multimodal-niah-evidence-pool-report.md`](../reports/multimodal/multimodal-niah-evidence-pool-report.md).
 
 ### Benchmark-Map Context
 

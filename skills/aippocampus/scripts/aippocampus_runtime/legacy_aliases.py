@@ -203,5 +203,5 @@ def legacy_alias_diagnostics(
         "shadowed_count": env_report["shadowed_count"],
         "value_printed": False,
         "local_paths_included": False,
-        "inventory": "docs/architecture/legacy-alias-inventory.md",
+        "inventory": "docs/architecture/ops/legacy-alias-inventory.md",
     }

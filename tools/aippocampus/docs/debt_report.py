@@ -13,7 +13,11 @@ ARCHITECTURE_DEBT_REGISTER = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
 )
 ARCHITECTURE_DEBT_SNAPSHOT = (
-    REPO_ROOT / "docs" / "evidence" / "architecture-debt-snapshot-2026-06-04.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reports"
+    / "architecture-debt-snapshot-2026-06-04.md"
 )
 BUDGET_ROW = re.compile(
     r"^\|\s*`(?P<path>[^`]+\.py)`\s*"

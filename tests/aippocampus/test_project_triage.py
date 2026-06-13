@@ -61,7 +61,7 @@ def test_sync_child_issue_gets_full_ready_fields() -> None:
         issue(
             36,
             "Run physical second-machine cross-device sync smoke",
-            "Parent: #21\n\n## Source docs and tools\n\n- `docs/architecture/encrypted-sync-v1.md`",
+            "Parent: #21\n\n## Source docs and tools\n\n- `docs/architecture/ops/encrypted-sync-v1.md`",
         )
     )
 
@@ -170,7 +170,7 @@ def test_design_benchmark_issue_with_source_docs_has_no_warning() -> None:
         issue(
             218,
             "Replace first-N ShareGPT benchmark slices with seeded stratified sampling",
-            "Parent: #216\n\n## Source\n\n- `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`",
+            "Parent: #216\n\n## Source\n\n- `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`",
         )
     )
 
@@ -364,7 +364,7 @@ def test_active_recall_lock_issue_stays_runtime_despite_benchmark_source_docs() 
             "Harden active recall lock lifecycle, freshness, and ROI telemetry",
             "Active recall lock hardening.\n\n## Source docs\n\n"
             "- `docs/research/ambient-associative-recall.md`\n"
-            "- `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`",
+            "- `docs/evidence/benchmarks/reports/fresh-thread/fresh-thread-recall-demo-2026-05-31.md`",
             labels=("documentation", "enhancement"),
         )
     )

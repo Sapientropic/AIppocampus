@@ -106,7 +106,7 @@ def development_status_classifier_issues(repo_root: Path) -> list[str]:
             if term not in policy_text:
                 issues.append(issue)
 
-    checklist_path = repo_root / "docs" / "guides" / "release-checklist.md"
+    checklist_path = repo_root / "docs" / "guides" / "setup" / "release-checklist.md"
     if not checklist_path.exists():
         issues.append("missing release checklist for classifier contract")
     else:

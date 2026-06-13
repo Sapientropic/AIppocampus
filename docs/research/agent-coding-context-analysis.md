@@ -7,7 +7,7 @@ Related: [Agency From Cognitive Maps](agency-from-cognitive-map.md),
 [Correction Reconsolidation](correction-reconsolidation.md),
 [Journey Tracking](journey-tracking.md),
 [Ambient Associative Recall](ambient-associative-recall.md),
-[Memory Decision Benchmark Plan](../evidence/benchmarks/memory-decision-benchmark-plan.md).
+[Memory Decision Benchmark Plan](../evidence/benchmarks/design/memory-decision-benchmark-plan.md).
 
 ## Thesis
 

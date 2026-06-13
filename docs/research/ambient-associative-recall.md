@@ -3,7 +3,7 @@
 Status: design memo with implementation tracker; not the full runtime contract.
 Origin: user/product discussion, 2026-05-27.
 Related: [The Pearl of Presence](pearl-of-presence.md),
-[Thread Intuition Layer](affect-side-channel.md),
+[Thread Intuition Layer](frontiers/affect-side-channel.md),
 [Dream Task Design](dream-task-design.md).
 
 ## The Problem

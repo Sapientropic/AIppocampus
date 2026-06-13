@@ -24,7 +24,7 @@ handoff context.
 | Kept active and relabeled | `next-iteration-plan.md`, `agent-discoverability-release.md`, `standalone-binary-packaging.md` | These remain active handoff docs, with explicit Role / Status lines added so they are not mistaken for evidence ledgers or broad current contracts. |
 | Kept but demoted by label | `technical-differentiation-analysis.md` | It remains in place for stable source routes, but is labeled exploratory strategy rather than active implementation truth. |
 | Kept as implemented bridge | `encrypted-sync-follow-up-rfc.md` | It already points current sync work to #104, #306, and #307 rather than acting as the live queue itself. |
-| Needs later review | `docs/evidence/benchmarks/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/hippocampal-recall-plan.md`, `docs/architecture/browser-extension-design.md`, `docs/architecture/rust-deterministic-core.md`, `docs/research/compact-activation-signals.md` | Not audited deeply in this sweep. Treat these as targeted follow-up audits before moving anything, because dated evidence, active designs, and research notes often have old issue links that need replacement pointers. |
+| Needs later review | `docs/evidence/benchmarks/reports/public-longitudinal/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/reports/hippocampal/hippocampal-recall-plan.md`, `docs/architecture/host/browser-extension-design.md`, `docs/architecture/future/rust-deterministic-core.md`, `docs/research/frontiers/compact-activation-signals.md` | Not audited deeply in this sweep. Treat these as targeted follow-up audits before moving anything, because dated evidence, active designs, and research notes often have old issue links that need replacement pointers. |
 
 ## Maintenance Rule
 

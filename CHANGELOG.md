@@ -83,7 +83,7 @@ merged PRs after the v0.1.1 release PR.
 - This changelog prepares the 0.2.0 release notes; it does not create the tag,
   publish PyPI, update MCP Registry metadata, or create a GitHub release.
 - Before tagging, run the full release checklist in
-  `docs/guides/release-checklist.md`, including build, release extra install,
+  `docs/guides/setup/release-checklist.md`, including build, release extra install,
   docs health, agent-discovery release check, Ruff, mypy, quick/pr/benchmark
   smoke, coverage, full tier, and privacy/secret scans.
 - Current evidence does not claim interactive Codex Desktop marketplace

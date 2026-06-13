@@ -15,7 +15,7 @@ lives in [public-api.md](public-api.md), install details live in
 [current-claims.md](../evidence/current-claims.md) plus the
 [proof-slice maturity board](../evidence/readiness/proof-slice-maturity.md).
 Product profile boundaries live in
-[product-profiles.md](../architecture/product-profiles.md); this lane is the
+[product-profiles.md](../architecture/host/product-profiles.md); this lane is the
 `personal_default`/agent-memory path, not the enterprise-governed path.
 
 ## Who This Is For
@@ -54,7 +54,7 @@ MCP/progressive recall, plugin packaging, and opt-in prompt/lifecycle hooks.
 Claude Code has local-history onboarding plus the MCP/project-skill path; it
 does not have AIppocampus Claude hook support. Keep the precise support table in
 [`ecosystem-integration-matrix.md`](ecosystem-integration-matrix.md), with
-Claude Code setup details in [`claude-code-mcp.md`](claude-code-mcp.md).
+Claude Code setup details in [`claude-code-mcp.md`](setup/claude-code-mcp.md).
 
 The important product boundary is that source is evidence. Summaries, semantic
 labels, hook scents, route handles, benchmark metrics, and familiarity cards are
@@ -73,7 +73,7 @@ ambient cards, Active Path Packets, active locks, `recall_context`,
 search. Deepen only when a candidate route can change the work.
 
 Agent hosts that want a smaller mental model can treat
-[`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md)
+[`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md)
 as the recall/deepen/explain front door: foreground packets orient action,
 `deepen` exposes source routes or bounded evidence, and `explain` reports why a
 route did or did not surface without making route metadata source truth.
@@ -139,7 +139,7 @@ python tools\aippocampus\smoke\smoke_repo_familiarity.py --json
 ## Evidence Drawer
 
 The foreground explanation contract for recall packets lives in
-[`memory-evidence-drawer.md`](../architecture/memory-evidence-drawer.md). Use
+[`memory-evidence-drawer.md`](../architecture/recall/memory-evidence-drawer.md). Use
 that contract when you need to inspect why a recall surfaced, what is only
 navigation, what can be used as bounded evidence, and which suppress / correct /
 pin / deepen affordances are available. The table below is product evidence for
@@ -151,9 +151,9 @@ Read these in order:
 | --- | --- | --- |
 | [Magic Moments, Claim-Bounded](../evidence/magic-moments.md), [Discussion #98](https://github.com/Sapientropic/AIppocampus/discussions/98), [Discussion #428](https://github.com/Sapientropic/AIppocampus/discussions/428), and [#422](https://github.com/Sapientropic/AIppocampus/issues/422) | Product-shaped examples where source-backed continuity felt useful before the benchmark wall. | Universal fresh-thread recall quality, base-model innate memory, or hook-only sufficiency. |
 | [Current Evidence Claims](../evidence/current-claims.md) and [Proof-Slice Maturity Board](../evidence/readiness/proof-slice-maturity.md) | The dated claim snapshot and maturity vocabulary for current proof slices. | Permission to upgrade diagnostic or fixture rows into broad product-readiness claims. |
-| [Field Continuity Fixture Report](../evidence/benchmarks/field-continuity-fixture-report.md) and [#553](https://github.com/Sapientropic/AIppocampus/pull/553) | Public-safe scenario-family contracts derived from second-user magic-moment reports. | Real-history recall quality, hosted-service readiness, or live semantic-model quality. |
-| [Recall Navigation Comparison Smoke](../evidence/benchmarks/recall-navigation-comparison-2026-06-03.md) and [#552](https://github.com/Sapientropic/AIppocampus/pull/552) | A deterministic comparison of direct search, hook-only scent, and progressive `recall_context -> recall_deepen` navigation. | Live user quality improvement, token/tool-call reduction, or production selector superiority. |
-| [Source-Backed Familiarity Map](../architecture/source-backed-familiarity-map.md) and [#551](https://github.com/Sapientropic/AIppocampus/pull/551) | A no-write deterministic contract for small repo-familiarity packets with stale rejection and source-reopen rules. | Current-code claims without source reopen, broad cognitive-map quality, or live agent cost reduction. |
+| [Field Continuity Fixture Report](../evidence/benchmarks/reports/field-journey/field-continuity-fixture-report.md) and [#553](https://github.com/Sapientropic/AIppocampus/pull/553) | Public-safe scenario-family contracts derived from second-user magic-moment reports. | Real-history recall quality, hosted-service readiness, or live semantic-model quality. |
+| [Recall Navigation Comparison Smoke](../evidence/benchmarks/reports/recall-navigation/recall-navigation-comparison-2026-06-03.md) and [#552](https://github.com/Sapientropic/AIppocampus/pull/552) | A deterministic comparison of direct search, hook-only scent, and progressive `recall_context -> recall_deepen` navigation. | Live user quality improvement, token/tool-call reduction, or production selector superiority. |
+| [Source-Backed Familiarity Map](../architecture/recall/source-backed-familiarity-map.md) and [#551](https://github.com/Sapientropic/AIppocampus/pull/551) | A no-write deterministic contract for small repo-familiarity packets with stale rejection and source-reopen rules. | Current-code claims without source reopen, broad cognitive-map quality, or live agent cost reduction. |
 
 ## Recommend / Do Not Recommend
 

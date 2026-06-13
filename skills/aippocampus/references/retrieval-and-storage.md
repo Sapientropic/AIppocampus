@@ -175,7 +175,7 @@ debug provenance into `messages.jsonl`; use sidecars joined by `message_id`,
 
 Continuity domains are the Contract v1 source-trailed abstraction layer above
 clean source. The canonical contract lives at
-`docs/architecture/continuity-domains.md`; this reference owns only the runtime
+`docs/architecture/recall/continuity-domains.md`; this reference owns only the runtime
 storage route.
 
 The event log is append-only and lives beside clean source:
@@ -771,7 +771,7 @@ package owner and package-only
 `aippocampus_runtime.sync.object_storage.providers`; provider mode covers
 generic HTTP bearer-token endpoints, S3-compatible SigV4, Cloudflare R2 region
 `auto`, and Google Cloud Storage XML HMAC signing. Provider-specific setup
-notes live in `docs/guides/object-storage-providers.md`.
+notes live in `docs/guides/setup/object-storage-providers.md`.
 
 Raw rollout files are excluded from plaintext sync. Normal raw rollout transfer
 requires encrypted sync. Pull never overwrites conflicting local files; it

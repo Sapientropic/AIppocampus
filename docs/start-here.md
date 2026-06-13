@@ -12,7 +12,7 @@ Goal: install or probe AIppocampus and see one source-backed recall moment.
    [first recall path](guides/install-guide.md#first-recall-path).
 2. Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) if you want
    a short product-feel example before the machinery.
-3. Use [Product Profiles](architecture/product-profiles.md) before promoting
+3. Use [Product Profiles](architecture/host/product-profiles.md) before promoting
    hooks, sync, Dream, or governed/high-risk behavior into the ordinary path.
 
 You do not need benchmark ledgers, Dream design, cognitive maps, or release
@@ -37,9 +37,13 @@ Goal: change runtime, search, hook, sync, registry, or storage behavior.
 
 1. Start with [Architecture Index](architecture/README.md) to find the current
    contract or implementation map.
-2. Use [Runtime Script Map](architecture/runtime-script-map.md) before changing
+2. If the work crosses Macro/Yi, Dream, local/global compatibility,
+   familiarity cards, avatar illumination, or active recall, use
+   [Source-Shape Runtime Spine](architecture/source-shape-runtime-spine.md)
+   before reading individual design memos.
+3. Use [Runtime Script Map](architecture/runtime-script-map.md) before changing
    high-risk runtime entrypoints.
-3. Use the relevant skill reference under `skills/aippocampus/references/`
+4. Use the relevant skill reference under `skills/aippocampus/references/`
    when the behavior is part of the installable agent-facing runtime.
 
 Planning docs are handoff context, not the final contract. Evidence docs show

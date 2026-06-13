@@ -8,9 +8,9 @@ Basis: `gh api repos/Sapientropic/AIppocampus/code-scanning/alerts` on
 Canonical context checked:
 
 - `SECURITY.md`
-- `docs/guides/privacy-security-checklist.md`
+- `docs/guides/community/privacy-security-checklist.md`
 - `docs/guides/public-core-boundary.md`
-- `docs/guides/release-checklist.md`
+- `docs/guides/setup/release-checklist.md`
 
 This file is an evidence log for the initial CodeQL pass, not a new privacy
 contract. The source docs above still own the public/private boundary.

@@ -3,9 +3,9 @@
 Status: research memo plus deterministic P1-P3 core and first live-row replay fixture.
 Origin: user observation + Claude research, 2026-05-28.
 Related: [dream-task-design.md](dream-task-design.md) — 不 impose 叙事结构，但 recognize 旅程模式,
-[affect-side-channel.md](affect-side-channel.md) — hexagram arc 作为直觉编码,
+[affect-side-channel.md](frontiers/affect-side-channel.md) — hexagram arc 作为直觉编码,
 [ambient-associative-recall.md](ambient-associative-recall.md) — AAR 管线,
-[compact-activation-signals.md](compact-activation-signals.md) — cognitive portrait 概念.
+[compact-activation-signals.md](frontiers/compact-activation-signals.md) — cognitive portrait 概念.
 
 ## Implementation Status
 
@@ -48,7 +48,7 @@ Current code implements the source-backed P1-P3 Journey core in
   high-risk exact-claim controls. It reports counts and decisions only, excludes
   future rows before the horizon, and does not serialize raw row text, source
   refs, message ids, future rows, or private route handles. See
-  [`journey-public-time-sliced-replay.md`](../evidence/benchmarks/journey-public-time-sliced-replay.md).
+  [`journey-public-time-sliced-replay.md`](../evidence/benchmarks/reports/field-journey/journey-public-time-sliced-replay.md).
 - #834 frontier-probe slice:
   `skills/aippocampus/scripts/aippocampus_runtime/navigation/frontier_probe.py`
   maps Journey `current_frontier` text and source refs into bounded

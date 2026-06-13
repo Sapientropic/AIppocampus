@@ -240,8 +240,8 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
      source-backed baseline shows a scale bottleneck.
 
 10. Retrieval score fusion contract
-   - Source: `docs/architecture/wukong-mining-notes.md`, `docs/architecture/gb-scale-roadmap.md`,
-     `docs/architecture/question-tracking-subconscious.md`, and `docs/guides/public-api.md`.
+   - Source: `docs/architecture/future/wukong-mining-notes.md`, `docs/architecture/ops/gb-scale-roadmap.md`,
+     `docs/architecture/recall/question-tracking-subconscious.md`, and `docs/guides/public-api.md`.
    - First internal policy is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py`: it preserves the
      existing text score formula, blends optional vector and graph scores with
@@ -257,7 +257,7 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
 
 11. Correction reconsolidation events
    - Source: `docs/research/correction-reconsolidation.md` and
-     `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`.
+     `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`.
    - First runtime helper is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py`: it builds and
      appends source-backed `correction_activation_event` /
@@ -269,7 +269,7 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
 
 12. Coding decision events
    - Source: `docs/research/agent-coding-context-analysis.md` and
-     `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`.
+     `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`.
    - First deterministic extractor is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py`: it reads clean
      source messages, emits staging `decision_event` candidates with source
@@ -297,8 +297,8 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
 
 14. Question salience and adaptive separation/completion thresholds
    - Source: `docs/planning/technical-differentiation-analysis.md`,
-     `docs/architecture/question-tracking-subconscious.md`, and
-     `docs/architecture/cognitive-runtime-architecture.md`.
+     `docs/architecture/recall/question-tracking-subconscious.md`, and
+     `docs/architecture/runtime/cognitive-runtime-architecture.md`.
    - First deterministic slice is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`: parsed
      `question_candidate` rows receive salience profiles, low-information
@@ -319,9 +319,9 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
      them as live timing or quality claims.
 
 15. Cognitive portrait structured-text benchmark
-   - Source: `docs/research/compact-activation-signals.md`,
+   - Source: `docs/research/frontiers/compact-activation-signals.md`,
      `docs/research/README.md`, and
-     `docs/architecture/question-tracking-subconscious.md`.
+     `docs/architecture/recall/question-tracking-subconscious.md`.
    - First deterministic benchmark is implemented in
      `benchmarks/aippocampus/benchmark_cognitive_portrait.py`: it builds a
      compact structured-text portrait from source-backed
@@ -361,7 +361,7 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
 
 16. Journey Tracking P1-P3 core
    - Source: `docs/research/journey-tracking.md`,
-     `docs/architecture/question-tracking-subconscious.md`, and the hexagram validation
+     `docs/architecture/recall/question-tracking-subconscious.md`, and the hexagram validation
      study pack.
    - First deterministic core is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py`: it defines source-backed
@@ -389,7 +389,7 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
 17. Dream runtime substrate plus bounded sleep-cycle path
    - Source: `docs/research/dream-task-design.md`,
      `docs/research/source-as-world.md`, and
-     `docs/architecture/cognitive-runtime-architecture.md`.
+     `docs/architecture/runtime/cognitive-runtime-architecture.md`.
    - First deterministic helper is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/dream/compensatory.py`: it consumes
      source-backed single-thread extraction rows, discards unsourced or prior
@@ -442,7 +442,7 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
    - Source: `docs/research/reflection-space.md`,
      `docs/research/journey-tracking.md`,
      `docs/research/dream-task-design.md`, and
-     `docs/research/affect-side-channel.md`.
+     `docs/research/frontiers/affect-side-channel.md`.
    - First deterministic helper is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`: it builds a small
      inspectable Journey/Waypoint/current-frontier topology, exposes
@@ -459,7 +459,7 @@ Child issues are the execution queue; closed #279 is no longer a current owner.
      advisory action-time nudges. Stale, unsupported, and rejected review rows
      are ignored before they become strategy records; the scripted closeout
      lives in
-     `docs/evidence/reflection-aar-v2-hardening-2026-06-05.md`.
+     `docs/evidence/reports/reflection-aar-v2-hardening-2026-06-05.md`.
    - Next hardening: run live/human review for usefulness, annoyance,
      calibrated timing, and reflection-mode UI behavior before claiming
      star-map, constellation, or foreground behavior lift.

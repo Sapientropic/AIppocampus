@@ -305,11 +305,17 @@ class AippocampusLibTests(unittest.TestCase):
         self.assertNotIn("safety.py", projected)
 
     def test_clean_source_redaction_profile_design_doc_links_policy_surfaces(self) -> None:
-        doc = REPO_ROOT / "docs" / "architecture" / "clean-source-redaction-profiles.md"
+        doc = (
+            REPO_ROOT
+            / "docs"
+            / "architecture"
+            / "source"
+            / "clean-source-redaction-profiles.md"
+        )
         text = doc.read_text(encoding="utf-8")
         docs_index = (REPO_ROOT / "docs" / "README.md").read_text(encoding="utf-8")
         privacy_checklist = (
-            REPO_ROOT / "docs" / "guides" / "privacy-security-checklist.md"
+            REPO_ROOT / "docs" / "guides" / "community" / "privacy-security-checklist.md"
         ).read_text(encoding="utf-8")
 
         for term in (

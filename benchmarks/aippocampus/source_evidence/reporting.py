@@ -193,11 +193,11 @@ def source_evidence_validation_guidance(
             "count": len(parent_claims),
         },
         "boundary_ref": (
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
         "claim_boundary_ref": claim_boundary_ref(
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#track-b-source-evidence-retrieval"
         ),
     }

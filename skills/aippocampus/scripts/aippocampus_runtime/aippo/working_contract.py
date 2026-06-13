@@ -391,7 +391,7 @@ def _fixture_source_rows() -> list[dict[str, Any]]:
             "source_refs": [
                 {"source_ref": "issue:#1131", "path": "issues/1131", "kind": "accepted_issue"},
                 {"source_ref": "issue:#1130", "path": "issues/1130", "kind": "accepted_issue"},
-                {"source_ref": "doc:agent-native-recall-facade", "path": "docs/architecture/agent-native-recall-facade.md", "line": 43},
+                {"source_ref": "doc:agent-native-recall-facade", "path": "docs/architecture/recall/agent-native-recall-facade.md", "line": 43},
             ],
             "independent_trail_count": 2,
             "support_types": ["accepted_issue_pattern", "current_claim_boundary", "test_acceptance"],

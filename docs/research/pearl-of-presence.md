@@ -2,7 +2,7 @@
 
 Status: philosophical foundation note.
 Origin: user insight, 2026-05-27.
-Related: [dream-task-design.md](dream-task-design.md), [affect-side-channel.md](affect-side-channel.md).
+Related: [dream-task-design.md](dream-task-design.md), [affect-side-channel.md](frontiers/affect-side-channel.md).
 
 ## The Gap That Started Everything
 
@@ -305,6 +305,6 @@ it transforms relationship into something that survives.
 - Almaas, A.H. "Essence" (1986) — the nature of essential aspects
 - [dream-task-design.md](dream-task-design.md) — Jung-inspired subconscious
   consolidation architecture
-- [affect-side-channel.md](affect-side-channel.md) — thread intuition layer
+- [affect-side-channel.md](frontiers/affect-side-channel.md) — thread intuition layer
   and two-layer memory
 - [未干的地图.md](../未干的地图.md) — AIppocampus origin essay

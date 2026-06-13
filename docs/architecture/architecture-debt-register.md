@@ -7,7 +7,7 @@ repo-owned test / benchmark / tool harnesses. It is not a scorecard and it does
 not replace source-backed design decisions.
 
 Full budget metadata lives in
-[`docs/evidence/architecture-debt-snapshot-2026-06-04.md`](../evidence/architecture-debt-snapshot-2026-06-04.md).
+[`docs/evidence/reports/architecture-debt-snapshot-2026-06-04.md`](../evidence/reports/architecture-debt-snapshot-2026-06-04.md).
 Generate the current count/status report with:
 
 ```powershell
@@ -113,7 +113,7 @@ Do not add new runner-local caveat catalogs by default. Keep active run-level
 or track-local `cannot_claim` entries only where a reader could over-read that
 specific output; for inherited or inactive caveats, prefer `claim_boundary_ref`
 or the parent evidence owner instead of mirroring full lists. The canonical rule
-remains [`schema-field-profiles.md#cannot-claim`](./schema-field-profiles.md#cannot-claim).
+remains [`schema-field-profiles.md#cannot-claim`](runtime/schema-field-profiles.md#cannot-claim).
 Runner and smoke pressure files should consume
 `benchmarks/aippocampus/claim_boundary_refs.py` unless they are the current
 aggregation owner (`benchmark_suite.py`) or a documented successor. That keeps

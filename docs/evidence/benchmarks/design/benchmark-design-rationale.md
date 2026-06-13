@@ -64,7 +64,7 @@ contract-review capability prototype without claiming legal quality or typed
 capability taxonomy completeness.
 
 The #518 typed capability-contract architecture is owned by
-[`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/agent-skill-capability-contracts.md).
+[`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/host/agent-skill-capability-contracts.md).
 Benchmark docs should point there instead of mirroring the full taxonomy.
 
 ### 4. Scent, Evidence, And Fact Are Different Surfaces
@@ -144,9 +144,9 @@ for comparison candidates and blockers.
 ## Canonical Detail Owners
 
 - Full Track A-D methodology and profiles:
-  [`../memory-decision-benchmark-plan.md`](../memory-decision-benchmark-plan.md).
+  [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md).
 - H-series recall-discrimination design:
-  [`../hippocampal-recall-plan.md`](../hippocampal-recall-plan.md).
+  [`../reports/hippocampal/hippocampal-recall-plan.md`](../reports/hippocampal/hippocampal-recall-plan.md).
 - Public longitudinal and VCS hard-event benchmark direction:
   [`../public-longitudinal-users.md`](../public-longitudinal-users.md).
 - Memory-system pain taxonomy and negative-fixture motivation:
@@ -156,6 +156,6 @@ for comparison candidates and blockers.
 - Dated verification ledger:
   [`../../readiness/public-readiness-verification.md`](../../readiness/public-readiness-verification.md).
 - Typed agent-skill capability contracts:
-  [`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/agent-skill-capability-contracts.md).
+  [`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/host/agent-skill-capability-contracts.md).
 - ATM-Bench Hard protocol boundary for multimodal source-backed recall:
   [`atm-bench-hard-protocol-boundary.md`](atm-bench-hard-protocol-boundary.md).

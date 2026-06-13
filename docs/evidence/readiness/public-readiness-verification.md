@@ -17,7 +17,7 @@ the broad deterministic pre-merge lane.
 For the navigation map that connects benchmark runners, smoke scripts, corpus
 records, and this ledger, see `docs/evidence/benchmark-evidence-map.md`.
 
-Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not paste
+Stable privacy rules live in `docs/guides/community/privacy-security-checklist.md`. Do not paste
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
@@ -110,7 +110,7 @@ Positive local evidence:
   control/seed cases: 4 gold, 2 calibration, and 1 negative control. The
   retained/control shortfall is 13 against the 20-case private target.
 - The report is recorded in
-  [`../benchmarks/e2e50-private-local-seed-followup-2026-06-10.md`](../benchmarks/e2e50-private-local-seed-followup-2026-06-10.md).
+  [`../benchmarks/reports/e2e50/e2e50-private-local-seed-followup-2026-06-10.md`](../benchmarks/reports/e2e50/e2e50-private-local-seed-followup-2026-06-10.md).
 
 Supports:
 
@@ -517,21 +517,21 @@ only sanitized ids, hashes, metrics, and claim boundaries.
 
 Latest verification for this slice:
 
-- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 1 --json --output docs\evidence\benchmarks\rollout-hard-event-route-chain-topk1-2026-06-12.json`:
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 1 --json --output docs\evidence\benchmarks\reports\public-longitudinal\rollout-hard-event-route-chain-topk1-2026-06-12.json`:
   exited nonzero as expected for the quality gate. It found flag-worthy events
   but recovered 0/3 complete required source chains, with 3 source-support
   failures.
-- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json --output docs\evidence\benchmarks\rollout-hard-event-route-chain-topk2-2026-06-12.json`:
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json --output docs\evidence\benchmarks\reports\public-longitudinal\rollout-hard-event-route-chain-topk2-2026-06-12.json`:
   exited zero. It recovered 3/3 complete chains with recall 1.0, precision 1.0,
   wrong-source evidence 0, stale-source top-k rate 0, and foreground action
   false positives 0.
-- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 3 --json --output docs\evidence\benchmarks\rollout-hard-event-route-chain-topk3-2026-06-12.json`:
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 3 --json --output docs\evidence\benchmarks\reports\public-longitudinal\rollout-hard-event-route-chain-topk3-2026-06-12.json`:
   exited zero for the main gate but admitted narrative/stale decoys into the
   top source set, with wrong-source evidence 2/3 and stale-source top-k rate
   2/3.
 
 The committed report is
-`docs/evidence/benchmarks/rollout-hard-event-route-chain-2026-06-12.md`.
+`docs/evidence/benchmarks/reports/public-longitudinal/rollout-hard-event-route-chain-2026-06-12.md`.
 This is route-chain/actionability calibration over a small public synthetic
 fixture. It is not representative #1197 public-quality evidence, live agent
 quality, private real-history quality, or wild VCS corpus quality.
@@ -551,14 +551,14 @@ Latest verification for this slice:
   recovery tests.
 - `python -m ruff check benchmarks\aippocampus\benchmark_vcs_future_event_recall.py tests\aippocampus\test_benchmark_vcs_future_event_recall.py`:
   passed.
-- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json --output docs\evidence\benchmarks\rollout-hard-event-cohort-v2-topk2-2026-06-12.json`:
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json --output docs\evidence\benchmarks\reports\public-longitudinal\rollout-hard-event-cohort-v2-topk2-2026-06-12.json`:
   exited zero. It measured 17/17 recall, 17/17 precision, 17/17 complete
   two-source chains, 0 source-support failures, wrong-source evidence rate
   0.0, stale-source top-k rate 0.0, foreground action false positives 0,
   anti-drift violations 0, and current-vs-stale pairwise wins 34/34.
 
 The committed report is
-`docs/evidence/benchmarks/rollout-hard-event-cohort-v2-2026-06-12.md`.
+`docs/evidence/benchmarks/reports/public-longitudinal/rollout-hard-event-cohort-v2-2026-06-12.md`.
 This closes the public-safe cohort-building gap for #1197, while preserving
 the limits: no live agent quality, private real-history quality, wild public
 VCS corpus quality, or #1195 benchmark-family promotion claim.
@@ -587,7 +587,7 @@ Latest verification for this slice:
   `hard_negative_suppression_rate=1.0` over 30 lexical near-miss controls.
 
 The committed aggregate report is
-`docs/evidence/benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md`.
+`docs/evidence/benchmarks/reports/public-longitudinal/react-real-vcs-production-like-disambiguation-2026-06-04.md`.
 This is source-disambiguation evidence with a deterministic, explicit-cue
 hard-negative suppression contract. It is not broad semantic near-miss
 understanding, live model quality, wild VCS corpus quality, private
@@ -626,7 +626,7 @@ Latest verification for that slice:
 
 Issues #27/#28 added public-safe memory-system pain fixtures and a short report
 without turning public competitor issue references into a leaderboard. The
-canonical report is `docs/evidence/benchmarks/memory-pain-fixture-report.md`.
+canonical report is `docs/evidence/benchmarks/reports/field-journey/memory-pain-fixture-report.md`.
 
 Verification for that slice:
 
@@ -892,7 +892,7 @@ pretending Codex is no longer a supported provider.
 
 Latest verification for this slice:
 
-- `docs/architecture/provider-entrypoint-inventory.md` classifies remaining
+- `docs/architecture/host/provider-entrypoint-inventory.md` classifies remaining
   `locate_rollout(...)`, `iter_rollouts(...)`, `codex_home()`, and
   `provider or codex_provider(...)` call sites as provider-aware,
   clean-source/registry, Codex host integration, or Codex-only raw audit/debug

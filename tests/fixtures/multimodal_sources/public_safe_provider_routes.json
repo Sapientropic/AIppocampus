@@ -2,7 +2,7 @@
   "schema_version": "aippocampus.multimodal_provider_routes.v1",
   "fixture_license": "CC0-1.0-synthetic",
   "source_manifest": "tests/fixtures/multimodal_sources/public_safe_manifest.json",
-  "capability_contract": "docs/architecture/agent-skill-capability-contracts.md",
+  "capability_contract": "docs/architecture/host/agent-skill-capability-contracts.md",
   "boundary": {
     "fixture_public_safe": true,
     "raw_private_media_included": false,

@@ -294,7 +294,7 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(profile_metadata["selected_profile"]["name"], "public-fast")
         self.assertEqual(
             profile_metadata["docs"],
-            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
             "#benchmark-suite-profiles",
         )
         self.assertIn(
@@ -318,7 +318,7 @@ class BenchmarkSuiteTests(unittest.TestCase):
             profile_metadata["docs"],
         )
         self.assertIn(
-            "docs/architecture/schema-field-profiles.md#cannot-claim",
+            "docs/architecture/runtime/schema-field-profiles.md#cannot-claim",
             payload["claim_boundary_policy"]["canonical_rule"],
         )
         self.assertIn(

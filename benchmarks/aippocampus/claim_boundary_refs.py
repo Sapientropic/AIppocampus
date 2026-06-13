@@ -8,7 +8,7 @@ owning evidence page.
 
 from __future__ import annotations
 
-CANONICAL_CANNOT_CLAIM_REF = "docs/architecture/schema-field-profiles.md#cannot-claim"
+CANONICAL_CANNOT_CLAIM_REF = "docs/architecture/runtime/schema-field-profiles.md#cannot-claim"
 BENCHMARK_PRIORITY_REF = "docs/evidence/benchmarks/design/benchmark-priority-map.md"
 
 

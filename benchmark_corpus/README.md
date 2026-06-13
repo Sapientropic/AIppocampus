@@ -140,7 +140,7 @@ duplicate nearby recap suppression, and stale/superseded currentness for
 `SEGMENT_MERGE_POLICY`. It is diagnostic policy calibration, not real
 long-thread recall quality or source-evidence retrieval proof. The report owner
 is
-[`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`](../docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md).
+[`docs/evidence/benchmarks/reports/fresh-thread/segmented-merge-policy-fixture-report.md`](../docs/evidence/benchmarks/reports/fresh-thread/segmented-merge-policy-fixture-report.md).
 
 Run the public-safe Field Continuity / magic-moment reproducibility contract:
 
@@ -153,7 +153,7 @@ correction, external-state restraint, long-thread fuzzy self-reference, and
 cross-thread prompt/tool-failure provenance as scenario contracts. It does not
 claim live quality, private real-history recall quality, or foreground-hook-only
 sufficiency. The report owner is
-[`docs/evidence/benchmarks/field-continuity-fixture-report.md`](../docs/evidence/benchmarks/field-continuity-fixture-report.md).
+[`docs/evidence/benchmarks/reports/field-journey/field-continuity-fixture-report.md`](../docs/evidence/benchmarks/reports/field-journey/field-continuity-fixture-report.md).
 
 Run the deterministic coding decision-shadow A-E contract:
 
@@ -194,7 +194,7 @@ cross-modal join, unsupported visual abstention, and retrieval recall@3. It
 does not claim ATM-Bench Hard support, live vision quality, conversational
 media-upload recall, full-device indexing, or product privacy behavior. The
 report owner is
-[`docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`](../docs/evidence/benchmarks/multimodal-corpus-fixture-report.md).
+[`docs/evidence/benchmarks/reports/multimodal/multimodal-corpus-fixture-report.md`](../docs/evidence/benchmarks/reports/multimodal/multimodal-corpus-fixture-report.md).
 
 Run the public-safe conversational media-ingest recall contract:
 
@@ -210,7 +210,7 @@ resolution, visual source reopen, text-hint leakage, stale-label correction,
 unsupported visual claims, and hidden durable writes. It does not claim
 background scanning, cross-domain reuse, live vision quality, face-recognition
 identity graphs, or product privacy behavior. The report owner is
-[`docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`](../docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md).
+[`docs/evidence/benchmarks/reports/multimodal/conversational-media-ingest-fixture-report.md`](../docs/evidence/benchmarks/reports/multimodal/conversational-media-ingest-fixture-report.md).
 
 Run the public-safe NIAH-style multimodal evidence-pool contract:
 
@@ -227,7 +227,7 @@ the correct source is present, proving the slice catches reasoning failures
 rather than only retrieval misses. It does not claim retrieval quality,
 ATM-Bench Hard support or score, live vision quality, conversational
 media-upload recall, or product privacy behavior. The report owner is
-[`docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md`](../docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md).
+[`docs/evidence/benchmarks/reports/multimodal/multimodal-niah-evidence-pool-report.md`](../docs/evidence/benchmarks/reports/multimodal/multimodal-niah-evidence-pool-report.md).
 
 Run the public longitudinal pseudo-user contract smoke for coding implicit
 knowledge:
@@ -247,7 +247,7 @@ commit revert, patchset supersession, and SATD/workaround removal. See
 [`docs/evidence/benchmarks/public-longitudinal-users.md`](../docs/evidence/benchmarks/public-longitudinal-users.md)
 for the methodology and claim boundary. The latest dated local measurement is
 recorded in
-[`docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](../docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
+[`docs/evidence/benchmarks/reports/public-longitudinal/public-longitudinal-users-measurement-2026-05-31.md`](../docs/evidence/benchmarks/reports/public-longitudinal/public-longitudinal-users-measurement-2026-05-31.md).
 
 Run the LoCoMo same-conversation evidence control:
 

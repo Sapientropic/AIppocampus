@@ -16,7 +16,7 @@ from claim_boundary_refs import claim_boundary_ref
 
 ReportRunner = Callable[..., dict[str, Any]]
 COMPANION_CLAIM_BOUNDARY_REF = claim_boundary_ref(
-    "docs/evidence/benchmarks/memory-pain-fixture-report.md"
+    "docs/evidence/benchmarks/reports/field-journey/memory-pain-fixture-report.md"
 )
 
 

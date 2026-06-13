@@ -6,15 +6,15 @@ import re
 import subprocess
 from pathlib import Path
 
-LEGACY_ALIAS_INVENTORY_DOC = "docs/architecture/legacy-alias-inventory.md"
+LEGACY_ALIAS_INVENTORY_DOC = "docs/architecture/ops/legacy-alias-inventory.md"
 
 LEGACY_ALIAS_POINTER_DOCS = {
     "docs/README.md": (
-        "architecture/legacy-alias-inventory.md",
+        "architecture/ops/legacy-alias-inventory.md",
         "docs README missing legacy alias inventory pointer",
     ),
     "docs/guides/public-api.md": (
-        "../architecture/legacy-alias-inventory.md",
+        "../architecture/ops/legacy-alias-inventory.md",
         "public API doc missing legacy alias inventory pointer",
     ),
 }

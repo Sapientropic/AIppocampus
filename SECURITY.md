@@ -47,6 +47,6 @@ claim boundaries.
   material into a sync directory, object-storage prefix, demo bundle, issue, or
   documentation example.
 
-Use `docs/guides/privacy-security-checklist.md` and
-`docs/guides/release-checklist.md` before publishing a release, demo, or plugin
+Use `docs/guides/community/privacy-security-checklist.md` and
+`docs/guides/setup/release-checklist.md` before publishing a release, demo, or plugin
 package.

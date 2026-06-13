@@ -47,7 +47,7 @@ PROFILE_CHOICES = (
     RELEASE_EVIDENCE_PROFILE,
 )
 PROFILE_DOCS = (
-    "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+    "docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md"
     "#benchmark-suite-profiles"
 )
 PROFILE_LADDER: tuple[dict[str, Any], ...] = (
@@ -490,7 +490,7 @@ def profile_ladder_summary(profile: dict[str, Any]) -> dict[str, Any]:
 
 def claim_boundary_policy() -> dict[str, Any]:
     return {
-        "canonical_rule": "docs/architecture/schema-field-profiles.md#cannot-claim",
+        "canonical_rule": "docs/architecture/runtime/schema-field-profiles.md#cannot-claim",
         "runner_json": "emit active run-level and track-local cannot_claim entries",
         "selected_profile": "may include its default_cannot_claim list",
         "inactive_profile_ladder": "emit counts plus claim_boundary_ref, not mirrored caveat lists",

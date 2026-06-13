@@ -12,7 +12,7 @@ verified ecosystem claims, see
 [ecosystem-integration-matrix.md](ecosystem-integration-matrix.md).
 For the friction budget between ordinary personal recall, optional diagnostics,
 and governed/high-risk controls, see
-[product-profiles.md](../architecture/product-profiles.md).
+[product-profiles.md](../architecture/host/product-profiles.md).
 
 ## Ten-Minute Public Path
 
@@ -87,7 +87,7 @@ language for future low-friction controls, not a claim of complete CLI coverage.
 
 Agent hosts that want one minimal source-backed continuity move should copy the
 `source_backed_continuity_gesture_v1` workflow from
-[`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md):
+[`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md):
 
 ```text
 detect continuity-sensitive task
@@ -154,13 +154,13 @@ The supported public surfaces are:
   eligibility and claim promotion records, not a public knowledge-ingest,
   ranking, or answer-generation API.
 - The Memory Evidence Drawer contract documented in
-  [memory-evidence-drawer.md](../architecture/memory-evidence-drawer.md) is the
+  [memory-evidence-drawer.md](../architecture/recall/memory-evidence-drawer.md) is the
   current contract for additive foreground explanation packets. Drawer JSON may
   explain why a route surfaced, expose source refs/reopen affordances, and
   declare suppress/correct/pin/deepen metadata; it is not a source-truth API,
   memory-write API, or confidence-as-authority layer.
 - The high-risk answer gate policy documented in
-  [high-risk-answer-gates.md](../architecture/high-risk-answer-gates.md) as a
+  [high-risk-answer-gates.md](../architecture/host/high-risk-answer-gates.md) as a
   staged deterministic contract prototype and trusted local cannot-claim
   boundary, not as default foreground behavior, generated professional advice,
   or a public answer API.
@@ -415,12 +415,12 @@ Repo-maintenance commands under `tools/aippocampus/` and
 unless a public doc explicitly promotes a command.
 
 Remaining Codex raw-rollout/default-home script surfaces are classified in
-[provider-entrypoint-inventory.md](../architecture/provider-entrypoint-inventory.md).
+[provider-entrypoint-inventory.md](../architecture/host/provider-entrypoint-inventory.md).
 General recall should use clean-source search, provider-aware onboarding, MCP
 tools, or registry paths; raw Codex audit helpers are not generic
 cross-agent-provider APIs.
 The fixture-backed cross-agent read-path isolation boundary is documented in
-[`cross-agent-recall-isolation.md`](../architecture/cross-agent-recall-isolation.md).
+[`cross-agent-recall-isolation.md`](../architecture/coordination/cross-agent-recall-isolation.md).
 It proves deterministic hard-negative coverage for search/recall/deepen/cache
 style surfaces, not enterprise multi-tenant authorization.
 
@@ -537,7 +537,7 @@ reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
 instead of silently becoming evidence.
 
 The minimal agent-native shape over these tools is documented in
-[`agent-native-recall-facade.md`](../architecture/agent-native-recall-facade.md):
+[`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md):
 `recall(query, context) -> MemoryPacket[]`,
 `deepen(route_id) -> SourceRoute | SourceBackedEvidence | Blocked | CannotVerify`,
 and `explain(route_id) -> WhyRecall | WhyNotRecall`. This is a small
@@ -597,14 +597,14 @@ misuse, broad search before recall, and safe route evidence demoted back to
 
 The foreground size, no-profile-dump, review-needed, and anti-nag budget for
 those packets lives in
-[`foreground-memory-ux-budget.md`](../architecture/foreground-memory-ux-budget.md).
+[`foreground-memory-ux-budget.md`](../architecture/recall/foreground-memory-ux-budget.md).
 The companion source-reopen budget lives in
-[`source-reopen-budget.md`](../architecture/source-reopen-budget.md); it
+[`source-reopen-budget.md`](../architecture/source/source-reopen-budget.md); it
 separates hot bounded-route orientation, warm selected-span verification, and
 cold source-court reopen work, and keeps foreground timeout behavior
 fail-open-without-claim.
 Cross-agent read-path isolation fixtures live in
-[`cross-agent-recall-isolation.md`](../architecture/cross-agent-recall-isolation.md)
+[`cross-agent-recall-isolation.md`](../architecture/coordination/cross-agent-recall-isolation.md)
 and require scope filtering before a packet, route, source handle, cached
 summary, or semantic sidecar becomes visible.
 
@@ -788,7 +788,7 @@ means documented and stable enough to configure. It does not mean the variable
 value is safe to publish.
 
 Legacy env/path names that remain accepted for migration are classified in the
-[legacy alias inventory](../architecture/legacy-alias-inventory.md). New setup
+[legacy alias inventory](../architecture/ops/legacy-alias-inventory.md). New setup
 docs should prefer the canonical names below and link that inventory only when
 explaining compatibility fallback behavior.
 

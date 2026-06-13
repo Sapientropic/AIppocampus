@@ -86,7 +86,7 @@ still a handle (`reopen_required_before_claim`) or already bounded evidence
 When a host or user needs a compact explanation of why a card/path surfaced and
 what can be done with it, project the existing surface through the Memory
 Evidence Drawer contract in
-`docs/architecture/memory-evidence-drawer.md`. The drawer is an opt-in
+`docs/architecture/recall/memory-evidence-drawer.md`. The drawer is an opt-in
 explanation packet; default hooks should not expand every emission into a large
 drawer payload.
 

@@ -32,8 +32,8 @@ public-safe long-context atlas packs, while
 `skills/aippocampus/scripts/aippocampus_runtime/dream/atlas_live_pilot.py`
 owns the opt-in live provider pilot that keeps provider usage/cache telemetry
 and routes live candidates through the background adjudicator.
-Related: [affect-side-channel.md](affect-side-channel.md),
-[compact-activation-signals.md](compact-activation-signals.md),
+Related: [affect-side-channel.md](frontiers/affect-side-channel.md),
+[compact-activation-signals.md](frontiers/compact-activation-signals.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
 
 ## TL;DR
@@ -1150,9 +1150,9 @@ everything else being stable.
   prospective dream functions
 - Jung, C.G. "Psychology and Alchemy" (1944) — amplification method
 - Campbell, J. "The Hero with a Thousand Faces" (1949) — monomyth structure
-- [affect-side-channel.md](affect-side-channel.md) — thread intuition layer,
+- [affect-side-channel.md](frontiers/affect-side-channel.md) — thread intuition layer,
   hexagram arcs, two-layer memory architecture
-- [compact-activation-signals.md](compact-activation-signals.md) — cognitive
+- [compact-activation-signals.md](frontiers/compact-activation-signals.md) — cognitive
   portrait as activation signal
 - Anthropic Managed Agents Dreams (Research Preview, 2026) — memory store
   reorganization from prior sessions:
