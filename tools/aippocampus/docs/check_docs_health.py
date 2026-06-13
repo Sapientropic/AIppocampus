@@ -713,7 +713,7 @@ def benchmark_evidence_entrypoints(repo_root: Path) -> list[str]:
     benchmark_dir = repo_root / "benchmarks" / "aippocampus"
     if benchmark_dir.exists():
         paths.extend(sorted(benchmark_dir.glob("benchmark_*.py")))
-        warm_case_builder = benchmark_dir / "build_warm_ambient_trace_cases.py"
+        warm_case_builder = benchmark_dir / "builders" / "build_warm_ambient_trace_cases.py"
         if warm_case_builder.exists():
             paths.append(warm_case_builder)
 
