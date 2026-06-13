@@ -94,6 +94,11 @@ from looking like a control tower.
   - Treat this as mixed/negative pilot evidence: red lines stayed clear, but
     bounded resonance did not beat the neutral or alias-only arms on the
     scripted scoring rubric.
+- [E2E50 Live-Model Behavior Pilot, 2026-06-13](e2e50-live-behavior-pilot-2026-06-13.md)
+  - Public-safe 100-call DeepSeek run over the 50-case E2E50 behavior pack,
+    comparing baseline minimal context with an AIppocampus packet arm.
+  - Treat this as modest positive behavior evidence, not default foreground
+    adoption evidence.
 
 ## Evidence Levels
 
