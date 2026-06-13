@@ -20,6 +20,11 @@ def _ratio(numerator: int | float, denominator: int | float) -> float:
     return round(float(numerator) / float(denominator), 6) if denominator else 0.0
 
 
+def _mapping_field(row: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    value = row.get(key)
+    return value if isinstance(value, Mapping) else {}
+
+
 def _public_cases() -> list[dict[str, Any]]:
     return [
         {
@@ -95,6 +100,7 @@ def _public_cases() -> list[dict[str, Any]]:
                 "route_lift": False,
                 "action_delta": "quiet",
                 "no_harm": True,
+                "outcome_class": "no_help_quiet",
             },
         },
         {
@@ -121,15 +127,88 @@ def _public_cases() -> list[dict[str, Any]]:
                 "route_lift": False,
                 "action_delta": "quiet",
                 "no_harm": True,
+                "outcome_class": "regression_risk_suppressed",
             },
         },
     ]
 
 
+def _candidate_review_cases() -> list[dict[str, Any]]:
+    """Reviewed public-safe candidate classes for #1365.
+
+    These rows intentionally keep only sanitized candidate families and source
+    support shape. They are a quality-review table for Dream nomination, not
+    Dream truth or a private-history transcript.
+    """
+
+    return [
+        {
+            "candidate_id": "dream_review_rejected_route",
+            "candidate_family": "rejected_route_recovery",
+            "review_verdict": "useful",
+            "false_positive_category": "none",
+            "source_overlap": True,
+            "source_reopenable": True,
+            "foreground_eligible_after_source_support": True,
+            "privacy_blocked": False,
+        },
+        {
+            "candidate_id": "dream_review_currentness_check",
+            "candidate_family": "stale_hypothesis_demoted",
+            "review_verdict": "useful",
+            "false_positive_category": "none",
+            "source_overlap": True,
+            "source_reopenable": True,
+            "foreground_eligible_after_source_support": True,
+            "privacy_blocked": False,
+        },
+        {
+            "candidate_id": "dream_review_temporary_concern",
+            "candidate_family": "temporary_concern_extinction",
+            "review_verdict": "quiet_no_help",
+            "false_positive_category": "none",
+            "source_overlap": True,
+            "source_reopenable": True,
+            "foreground_eligible_after_source_support": False,
+            "privacy_blocked": False,
+        },
+        {
+            "candidate_id": "dream_review_stale_route",
+            "candidate_family": "superseded_route",
+            "review_verdict": "rejected",
+            "false_positive_category": "stale_route",
+            "source_overlap": True,
+            "source_reopenable": True,
+            "foreground_eligible_after_source_support": False,
+            "privacy_blocked": False,
+        },
+        {
+            "candidate_id": "dream_review_generic_vocab_bridge",
+            "candidate_family": "generic_semantic_bridge",
+            "review_verdict": "rejected",
+            "false_positive_category": "noisy_generic_vocab",
+            "source_overlap": False,
+            "source_reopenable": False,
+            "foreground_eligible_after_source_support": False,
+            "privacy_blocked": False,
+        },
+        {
+            "candidate_id": "dream_review_sensitive_private_hint",
+            "candidate_family": "sensitive_boundary",
+            "review_verdict": "blocked",
+            "false_positive_category": "privacy_or_safety_boundary",
+            "source_overlap": True,
+            "source_reopenable": False,
+            "foreground_eligible_after_source_support": False,
+            "privacy_blocked": True,
+        },
+    ]
+
+
 def _case_row(case: Mapping[str, Any]) -> dict[str, Any]:
-    baseline = case.get("baseline") if isinstance(case.get("baseline"), Mapping) else {}
-    dream = case.get("dream") if isinstance(case.get("dream"), Mapping) else {}
-    expected = case.get("expected") if isinstance(case.get("expected"), Mapping) else {}
+    baseline = _mapping_field(case, "baseline")
+    dream = _mapping_field(case, "dream")
+    expected = _mapping_field(case, "expected")
     route_lift = bool(
         expected.get("route_lift")
         and dream.get("source_backed_route_found")
@@ -154,6 +233,12 @@ def _case_row(case: Mapping[str, Any]) -> dict[str, Any]:
         "dream_action_delta": str(expected.get("action_delta") or ""),
         "dream_action_delta_useful": expected.get("action_delta") == "useful",
         "dream_no_harm": bool(expected.get("no_harm")),
+        "dream_outcome_class": str(expected.get("outcome_class") or ""),
+        "dream_no_help": expected.get("outcome_class") == "no_help_quiet",
+        "dream_regression": expected.get("outcome_class") == "visible_regression",
+        "suppressed_regression_risk": (
+            expected.get("outcome_class") == "regression_risk_suppressed"
+        ),
         "dream_visible_hint": bool(dream.get("visible_hint")),
         "dream_wrong_hint": bool(dream.get("wrong_hint")),
         "suppressed_wrong_hint": bool(dream.get("suppressed_wrong_hint")),
@@ -170,6 +255,11 @@ def _metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     visible_hint_count = sum(1 for row in cases if row.get("dream_visible_hint"))
     no_harm_count = sum(1 for row in cases if row.get("dream_no_harm"))
     suppressed_wrong_hint_count = sum(1 for row in cases if row.get("suppressed_wrong_hint"))
+    no_help_count = sum(1 for row in cases if row.get("dream_no_help"))
+    regression_count = sum(1 for row in cases if row.get("dream_regression"))
+    suppressed_regression_risk_count = sum(
+        1 for row in cases if row.get("suppressed_regression_risk")
+    )
     source_reopen_required_count = sum(1 for row in cases if row.get("source_reopen_required"))
     verification_cost_delta_total = sum(
         int(row.get("dream_verification_cost_delta") or 0) for row in cases
@@ -178,6 +268,10 @@ def _metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "case_count": case_count,
         "dream_route_lift_count": route_lift_count,
         "dream_route_lift_rate": _ratio(route_lift_count, case_count),
+        "dream_win_count": route_lift_count,
+        "dream_no_help_count": no_help_count,
+        "dream_regression_count": regression_count,
+        "suppressed_regression_risk_count": suppressed_regression_risk_count,
         "dream_action_delta_useful_count": useful_action_count,
         "dream_action_delta_useful_rate": _ratio(useful_action_count, case_count),
         "dream_verification_cost_delta_total": verification_cost_delta_total,
@@ -190,14 +284,57 @@ def _metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _candidate_review_metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    total = len(cases)
+    useful = sum(1 for row in cases if row.get("review_verdict") == "useful")
+    quiet_no_help = sum(1 for row in cases if row.get("review_verdict") == "quiet_no_help")
+    rejected_or_blocked = sum(
+        1 for row in cases if row.get("review_verdict") in {"rejected", "blocked"}
+    )
+    reopenable = sum(1 for row in cases if row.get("source_reopenable"))
+    foreground_leak = sum(
+        1
+        for row in cases
+        if row.get("foreground_eligible_after_source_support")
+        and not row.get("source_reopenable")
+    )
+    false_positive_categories = [
+        str(row.get("false_positive_category"))
+        for row in cases
+        if row.get("false_positive_category") not in {None, "", "none"}
+    ]
+    return {
+        "reviewed_candidate_count": total,
+        "useful_candidate_count": useful,
+        "quiet_no_help_candidate_count": quiet_no_help,
+        "false_positive_candidate_count": rejected_or_blocked,
+        "false_positive_candidate_rate": _ratio(rejected_or_blocked, total),
+        "source_reopenable_candidate_count": reopenable,
+        "source_reopenable_rate": _ratio(reopenable, total),
+        "foreground_leak_count": foreground_leak,
+        "stale_route_false_positive_count": false_positive_categories.count("stale_route"),
+        "noisy_generic_vocab_false_positive_count": false_positive_categories.count(
+            "noisy_generic_vocab"
+        ),
+        "privacy_or_safety_blocked_count": false_positive_categories.count(
+            "privacy_or_safety_boundary"
+        ),
+        "false_positive_categories": sorted(set(false_positive_categories)),
+    }
+
+
 def build_public_dream_vs_baseline_shadow_report() -> dict[str, Any]:
     cases = [_case_row(case) for case in _public_cases()]
     metrics = _metrics(cases)
+    candidate_review_cases = _candidate_review_cases()
+    candidate_review_metrics = _candidate_review_metrics(candidate_review_cases)
     ok = bool(
         metrics["dream_route_lift_count"] >= 2
         and metrics["dream_action_delta_useful_count"] >= 2
         and metrics["dream_wrong_hint_count"] == 0
         and metrics["suppressed_wrong_hint_count"] >= 1
+        and candidate_review_metrics["false_positive_candidate_count"] >= 2
+        and candidate_review_metrics["foreground_leak_count"] == 0
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -207,9 +344,20 @@ def build_public_dream_vs_baseline_shadow_report() -> dict[str, Any]:
         "claim_level": "public_synthetic_dream_vs_baseline_shadow",
         "metrics": metrics,
         "cases": cases,
+        "candidate_quality_review": {
+            "kind": "public_synthetic_dream_candidate_quality_review",
+            "claim_level": "sanitized_public_candidate_review_table",
+            "metrics": candidate_review_metrics,
+            "cases": candidate_review_cases,
+            "source_reachability_boundary": (
+                "Dream may nominate candidate routes, but source-backed support "
+                "and source reopen decide foreground use."
+            ),
+        },
         "issue_readouts": {
             "github_163": {
                 "public_dream_vs_baseline_shadow_measured": True,
+                "public_candidate_quality_review_measured": True,
                 "dream_route_lift_count": metrics["dream_route_lift_count"],
                 "dream_action_delta_useful_count": metrics[
                     "dream_action_delta_useful_count"
@@ -217,7 +365,35 @@ def build_public_dream_vs_baseline_shadow_report() -> dict[str, Any]:
                 "dream_wrong_hint_rate": metrics["dream_wrong_hint_rate"],
                 "live_delivered_quality_measured": False,
                 "private_real_history_quality_measured": False,
+                "public_safe_closeout_slice_ready": True,
                 "closeout_eligible": False,
+            },
+            "github_1364": {
+                "cohort_defined_before_report": True,
+                "baseline_arms": ["no_dream_baseline", "bounded_dream_hint"],
+                "dream_win_count": metrics["dream_win_count"],
+                "dream_no_help_count": metrics["dream_no_help_count"],
+                "dream_regression_count": metrics["dream_regression_count"],
+                "suppressed_regression_risk_count": metrics[
+                    "suppressed_regression_risk_count"
+                ],
+                "claim_level": "public_safe_shadow_not_live_default",
+                "closeout_eligible": True,
+            },
+            "github_1365": {
+                "review_table_recorded": True,
+                "reviewed_candidate_count": candidate_review_metrics[
+                    "reviewed_candidate_count"
+                ],
+                "false_positive_candidate_count": candidate_review_metrics[
+                    "false_positive_candidate_count"
+                ],
+                "false_positive_categories": candidate_review_metrics[
+                    "false_positive_categories"
+                ],
+                "source_reopenable_rate": candidate_review_metrics["source_reopenable_rate"],
+                "foreground_leak_count": candidate_review_metrics["foreground_leak_count"],
+                "closeout_eligible": True,
             }
         },
         "metric_notes": {
@@ -232,6 +408,10 @@ def build_public_dream_vs_baseline_shadow_report() -> dict[str, Any]:
             "dream_wrong_hint_rate": (
                 "Visible Dream hints marked stale, irrelevant, or over-personalized. "
                 "Suppressed wrong-hint controls are counted separately."
+            ),
+            "candidate_quality_review": (
+                "Sanitized candidate review counts useful, quiet/no-help, stale, noisy, "
+                "and privacy/safety-blocked Dream nominations without raw private text."
             ),
         },
         "policy_boundary": {

@@ -206,27 +206,30 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   0.75, answer-usefulness delta 1.0, no-question retrieval recall 0.5,
   question-aware retrieval recall 1.0, retrieval-recall delta 0.5,
   answer-support proxy delta 0.5, manual-query-reduction delta 1.5,
-  question-aware wrong-hint rate 0.0, and dynamic-threshold false merge/split
-  both 0. The report now also records a selected public baseline/cohort
+  question-aware wrong-hint rate 0.0, stale question carryover 0, missed
+  resurfacing without question tracking 2, wrong-route drag 0, noise false
+  positives 0, and dynamic-threshold false merge/split both 0. The report now
+  also records a selected public baseline/cohort
   preregistration, a deterministic no-question retrieval/answer proxy arm whose
   scoring excludes question/theme fields, and materialization-review categories
   for source-reopen usefulness, manual-search reduction, wrong-route drag,
-  candidate/link/theme materialization, and threshold regression guard. This
-  retires the public shadow-case gap and gives #1367/#1369 a bounded public
-  slice, but it is still selected fixture evidence rather than broad
-  private-history quality, live user-visible lift, theme-resonance calibration,
-  default prefilter adoption, or #248 closeout.
+  candidate/link/theme materialization, threshold regression guard, and
+  public-safe local calibration classes for false positives and false negatives.
+  This retires #1367, #1368, and #1369 as bounded public-safe slices, making
+  #248 closeable as a public-safe owner closeout. It is still selected fixture
+  evidence rather than broad private-history quality, live user-visible lift,
+  theme-resonance calibration, or default prefilter adoption.
 - Closed first-slice queue: umbrella #133 and focused #134 through #139 are
   implementation evidence for the first deterministic/question-health/theme/
   ambient/sidecar/structural slices. Do not route remaining work back there.
-- #248 remains open after 2026-06-08: extraction gates, prefilter
-  reporting/parity, selected private answer-quality review plumbing, default
-  borderline auto-materialization, and theme-resonance absence reporting all
-  exist. The 2026-06-10 public shadow fixture adds replayable extraction/
-  linking/source-reopen/negative-control evidence, selected public baseline
-  preregistration, public materialization-review categories, and the #1367
-  fair no-question retrieval/answer baseline shape, but broader private-history
-  calibration and theme/user-review lift evidence remain unresolved.
+- #248 can close after the 2026-06-14 public-shadow refresh: extraction gates,
+  prefilter reporting/parity, selected answer-quality review plumbing, default
+  borderline auto-materialization, theme-resonance absence reporting, fair
+  no-question retrieval/answer baseline shape, public materialization-review
+  categories, and public-safe calibration classes all exist. Broader
+  private-history calibration, live/default usefulness, and theme/user-review
+  lift are not claimed; future work should reopen as a narrower product-quality
+  issue rather than keeping #248 as an umbrella.
 - Adjacent user-visible symptoms: #201 and #281 cover places where vague or
   fresh-thread recall still feels too much like manual source search.
 - Designed/deferred under #248: real-user / private real-history calibration
@@ -1295,10 +1298,11 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   `docs/evidence/question/question-aware-public-shadow-2026-06-10.md` records
   checked-in public/source-replayable extraction, linking, source-reopened
   answer-review, fair no-question retrieval/answer proxy, adaptive-threshold,
-  and negative-control evidence. It advances the public reproducibility
-  requirement in #248 and gives #1367 a closable public shape, but it is
-  selected fixture evidence only; default prefilter adoption, private/live
-  usefulness, and theme/user-review lift remain future work.
+  negative-control evidence, and public-safe calibration classes for stale
+  carryover, missed resurfacing, wrong-route drag, false positives, and false
+  negatives. It closes the bounded public-safe #248 owner track; default
+  prefilter adoption, private/live usefulness, and theme/user-review lift remain
+  future narrower work.
 - Deferred: real-user calibration beyond selected fixtures and the one
   sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals

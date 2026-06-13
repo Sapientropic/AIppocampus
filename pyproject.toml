@@ -264,6 +264,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/dream/macro_guidance.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/one_sidedness.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/precision_policy.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/public_shadow_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/queue.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/real_history_eval.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/retrospective_lifecycle.py",

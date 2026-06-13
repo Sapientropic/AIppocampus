@@ -128,8 +128,9 @@ adopting it by default: complete rejected-route chains may produce compact
 guidance. The report serializes family names, event-kind order, gap labels,
 source-ref hash counts, and aggregate metrics only; it does not serialize raw
 source text, source refs, event ids, thread ids, registry paths, or local paths.
-This closes the public deterministic route-producer/evidence slice, not live
-host behavior lift or the #663 owner track.
+This closes the public deterministic route-producer/evidence slice and the
+bounded #663 owner track, not live host behavior lift or default route-producer
+adoption.
 
 The sequence-packet reopen helper is intentionally stricter than the arc
 builder. A packet cannot reopen source by itself because it only carries compact
@@ -152,7 +153,6 @@ ids, local paths, or registry paths. The first dated evidence slice is
 
 This slice cannot claim:
 
-- the broader #663 Episode/Arc owner track is complete;
 - live private-history behavior lift;
 - private-history generality beyond the aggregate cohort;
 - Journey instantiation quality;

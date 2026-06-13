@@ -48,6 +48,10 @@ python -m ruff check benchmarks\aippocampus\benchmark_question_aware_real_histor
 - Answer-support proxy delta: 0.5
 - Manual-query-reduction delta: 1.5
 - Question-aware wrong-hint rate: 0.0
+- Stale question carryover count: 0
+- Missed resurfacing without question tracking count: 2
+- Wrong-route drag count: 0
+- Noise false-positive count: 0
 - Negative controls passed: 2/2 (`noise` and `code_heavy` skip reasons)
 
 Baseline preregistration and materialization-review readout:
@@ -67,6 +71,11 @@ Baseline preregistration and materialization-review readout:
 - Reviewer usefulness categories observed: source-reopen usefulness,
   manual-search reduction, bounded wrong-route drag, selected
   candidate/link/theme materialization, and dynamic-threshold regression guard.
+- Public-safe local calibration status: `public_safe_local_calibration_ready`.
+- False-positive classes recorded: stale question carryover,
+  noise/code promoted to question, and wrong-route drag.
+- False-negative classes recorded: missed resurfacing without question tracking
+  and over-split recurring question.
 - Boundary: this is a public deterministic no-question retrieval/answer
   baseline shape, not a broad public/private calibration or live answer-quality
   claim.
@@ -87,10 +96,12 @@ shape: the no-question arm retrieves from the same public candidate pool
 without question/theme labels and reports retrieval plus answer-support proxy
 metrics.
 
-Do not close #248 from this slice. The benchmark still uses selected public
-fixtures, not a broad public corpus, private-history answer-quality cohort, or
-live user-visible trial. It also does not decide default question-index or
-vector prefilter adoption.
+This slice makes #1368 closeable through the issue's public-safe extracted
+fixture path. Together with the already-landed #1367 and #1369 slices, #248 can
+close as a bounded public-safe question-tracking owner closeout. That closeout
+does not mean broad private-history calibration, live user-visible recall lift,
+theme-resonance quality, default prefilter adoption, or source truth from
+question/theme rows.
 
 ## Can Claim
 
@@ -109,6 +120,8 @@ vector prefilter adoption.
   behavior so regressions do not silently collapse back to fixed-threshold
   matching.
 - The fixture includes multilingual/noise and code negative controls.
+- The public-safe calibration readout records stale-carryover, missed-
+  resurfacing, wrong-route-drag, false-positive, and false-negative classes.
 
 ## Cannot Claim
 
@@ -120,4 +133,3 @@ vector prefilter adoption.
 - Theme-resonance calibration.
 - Default prefilter adoption.
 - Source truth from question, theme, or frontier rows.
-- #248 closeout.

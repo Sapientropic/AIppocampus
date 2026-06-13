@@ -80,7 +80,20 @@ secrets, or answer strings into committed output.
 ## Issue Boundary
 
 This is the source-side factual artifact and hot-path bridge requested by
-#1424, #1425, and #1426. It does not close broader LongMemEval or live-history
-quality tracks by itself; those require public or shareable benchmark evidence
-that candidate coverage, fused top-k, latency, cache behavior, and regressions
-improve without weakening source-reopen boundaries.
+#1424, #1425, and #1426. The 25Q LongMemEval slice proves the mechanics; the
+2026-06-14 500Q public replay
+[`longmemeval-source-factual-alias-500-2026-06-14.md`](../evidence/benchmarks/longmemeval-source-factual-alias-500-2026-06-14.md)
+adds the broader source-side evidence needed to close #1424 and the bounded
+#1323/#1327 owner questions:
+
+- candidate evidence coverage reaches `463/479 = 0.9666`;
+- fused evidence-line R@10 is `422/479 = 0.8810`;
+- factual-alias candidate lift top-10 is `16`;
+- factual-alias fused lift top-10 is `2`;
+- hot-path provider calls are `0`;
+- fused top-10 regressions are `0`.
+
+That closeout is still a retrieval/source-routing claim. It does not claim
+answer generation, official LongMemEval QA score, live-history quality, default
+foreground adoption, perfect exact-line citation, or factual truth from aliases
+without reopening source.

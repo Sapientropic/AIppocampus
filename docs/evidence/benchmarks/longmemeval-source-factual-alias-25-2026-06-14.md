@@ -64,17 +64,17 @@ candidate coverage, factual-alias coverage, fused top-k, regressions, latency,
 cache behavior, and provider-call counts. Fused evidence top-10 improved over
 baseline on this bounded slice, with no fused top-10 regressions.
 
-It does not prove a broad factual-alias lift. The factual alias query-overlap
-signal is present but sparse on the first 25 public cases: alias-specific
-candidate lift and fused lift are both `0`. So #1323-style 100Q/500Q repair
-still needs broader measurement and likely richer source-local extraction
-before promotion.
+It does not prove a broad factual-alias lift by itself. The factual alias
+query-overlap signal is present but sparse on the first 25 public cases:
+alias-specific candidate lift and fused lift are both `0`. The broader
+measurement is now the 500Q replay in
+[`longmemeval-source-factual-alias-500-2026-06-14.md`](longmemeval-source-factual-alias-500-2026-06-14.md).
 
 Cannot claim:
 
 - answer-generation quality;
 - official LongMemEval score;
 - LongMemEval-V2 behavior;
-- broad source-side factual recall closure;
+- broad source-side factual recall closure from this 25Q slice alone;
 - 100Q/500Q LongMemEval factual-alias lift;
 - private-history quality.

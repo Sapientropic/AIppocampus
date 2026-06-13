@@ -276,3 +276,234 @@ def materialization_review_evidence(
             "live_user_review_lift",
         ],
     }
+
+
+def public_safe_local_calibration_readout(
+    *,
+    no_question_baseline: Mapping[str, Any],
+    review_metrics: Mapping[str, Any],
+    negative_controls: Sequence[Mapping[str, Any]],
+    threshold_readout: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Summarize #1368 calibration axes from the public shadow fixture.
+
+    #1368 asks for broader private/local calibration, but the public repo should
+    not require private history to make progress. This readout treats the
+    checked-in public fixture as a local-history equivalent and records the
+    false-positive/false-negative classes explicitly instead of burying them in
+    answer-review and threshold subreports.
+    """
+
+    retrieval = no_question_baseline.get("retrieval_selection", {})
+    no_question_selection = (
+        retrieval.get("no_question_retrieval_answer", {})
+        if isinstance(retrieval, Mapping)
+        else {}
+    )
+    candidate_count = int(no_question_selection.get("candidate_count") or 0)
+    no_question_selected_count = int(no_question_selection.get("selected_count") or 0)
+    missed_resurfacing_count = max(0, candidate_count - no_question_selected_count)
+    complete_cases = int(review_metrics.get("complete_comparison_case_count") or 0)
+    wrong_hint_rate = parse_float(review_metrics.get("question_aware_wrong_hint_rate"))
+    wrong_route_drag_count = round(wrong_hint_rate * complete_cases)
+    dynamic_threshold = threshold_readout.get("dynamic_six_axis_threshold", {})
+    dynamic_false_merge_count = int(dynamic_threshold.get("false_merge_count") or 0)
+    dynamic_false_split_count = int(dynamic_threshold.get("false_split_count") or 0)
+    negative_pass_count = sum(1 for item in negative_controls if item.get("passed"))
+    negative_control_count = len(negative_controls)
+    noise_false_positive_count = negative_control_count - negative_pass_count
+    question_aware_metrics = (
+        no_question_baseline.get("metrics", {})
+        if isinstance(no_question_baseline.get("metrics"), Mapping)
+        else {}
+    )
+
+    false_positive_classes = {
+        "stale_question_carryover": {
+            "observed_count": dynamic_false_merge_count,
+            "metric_source": "dynamic_six_axis_threshold.false_merge_count",
+        },
+        "noise_or_code_promoted_to_question": {
+            "observed_count": noise_false_positive_count,
+            "metric_source": "negative_control_skip_reason_readout",
+        },
+        "wrong_route_drag": {
+            "observed_count": wrong_route_drag_count,
+            "metric_source": "question_aware_wrong_hint_rate",
+        },
+    }
+
+    false_negative_classes = {
+        "missed_resurfacing_without_question_tracking": {
+            "observed_count": missed_resurfacing_count,
+            "metric_source": "true_no_question_retrieval_answer_baseline",
+        },
+        "over_split_recurring_question": {
+            "observed_count": dynamic_false_split_count,
+            "metric_source": "dynamic_six_axis_threshold.false_split_count",
+        },
+    }
+    safe_public_ready = bool(
+        complete_cases > 0
+        and negative_pass_count == negative_control_count
+        and dynamic_false_merge_count == 0
+        and dynamic_false_split_count == 0
+        and wrong_route_drag_count == 0
+        and parse_float(question_aware_metrics.get("retrieval_recall_delta")) > 0
+    )
+    maturity = (
+        "public_safe_local_calibration_ready"
+        if safe_public_ready
+        else "public_safe_local_calibration_needs_review"
+    )
+    return {
+        "kind": "question_aware_public_safe_local_calibration_readout",
+        "status": maturity,
+        "claim_level": "public_safe_extracted_fixture_calibration",
+        "metrics": {
+            "stale_question_carryover_count": dynamic_false_merge_count,
+            "missed_resurfacing_without_question_tracking_count": missed_resurfacing_count,
+            "wrong_route_drag_count": wrong_route_drag_count,
+            "noise_false_positive_count": noise_false_positive_count,
+            "over_split_false_negative_count": dynamic_false_split_count,
+            "negative_control_pass_count": negative_pass_count,
+            "negative_control_count": negative_control_count,
+            "retrieval_recall_delta": question_aware_metrics.get("retrieval_recall_delta"),
+            "answer_support_proxy_delta": question_aware_metrics.get(
+                "answer_support_proxy_delta"
+            ),
+        },
+        "false_positive_classes": false_positive_classes,
+        "false_negative_classes": false_negative_classes,
+        "privacy_and_deletion_boundary": {
+            "raw_private_text_emitted": False,
+            "local_paths_emitted": False,
+            "source_refs_emitted": False,
+            "deletion_or_no_recall_boundary": (
+                "question rows are navigation only and must be dropped or reopened "
+                "when source state is deleted, conflicted, or outside scope"
+            ),
+        },
+        "issue_readouts": {
+            "github_1368": {
+                "sanitized_calibration_report": "public_safe_extracted_fixture",
+                "false_positive_classes_recorded": sorted(false_positive_classes),
+                "false_negative_classes_recorded": sorted(false_negative_classes),
+                "maturity": maturity,
+                "closeout_eligible": safe_public_ready,
+            },
+            "github_248": {
+                "public_safe_calibration_maturity": maturity,
+                "private_or_live_calibration_measured": False,
+                "closeout_scope": "public_safe_owner_closeout_only",
+                "owner_closeout_eligible": safe_public_ready,
+            },
+        },
+        "can_claim": [
+            "public_safe_question_tracking_calibration_classes_recorded",
+            "public_safe_stale_carryover_missed_resurfacing_wrong_route_drag_readout_recorded",
+        ],
+        "cannot_claim": [
+            "broad_private_history_calibration",
+            "live_default_question_tracking_quality",
+            "theme_resonance_calibration",
+            "source_truth_from_question_tracking_rows",
+        ],
+    }
+
+
+def public_shadow_metrics(
+    *,
+    metadata: Mapping[str, Any],
+    review_rows: Sequence[Mapping[str, Any]],
+    negative_controls: Sequence[Mapping[str, Any]],
+    structural: Mapping[str, Any],
+    review_metrics: Mapping[str, Any],
+    no_question_baseline: Mapping[str, Any],
+    calibration_readout: Mapping[str, Any],
+    threshold_readout: Mapping[str, Any],
+    negative_control_readout: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Project the public-shadow report metrics without keeping them in the runner."""
+
+    raw_structural_metrics = structural.get("metrics")
+    structural_metrics: Mapping[str, Any] = (
+        raw_structural_metrics if isinstance(raw_structural_metrics, Mapping) else {}
+    )
+    raw_no_question_metrics = no_question_baseline.get("metrics")
+    no_question_metrics: Mapping[str, Any] = (
+        raw_no_question_metrics if isinstance(raw_no_question_metrics, Mapping) else {}
+    )
+    raw_calibration_metrics = calibration_readout.get("metrics")
+    calibration_metrics: Mapping[str, Any] = (
+        raw_calibration_metrics if isinstance(raw_calibration_metrics, Mapping) else {}
+    )
+    dynamic_threshold = threshold_readout.get("dynamic_six_axis_threshold", {})
+    threshold_metrics: Mapping[str, Any] = (
+        dynamic_threshold if isinstance(dynamic_threshold, Mapping) else {}
+    )
+    public_case_count = int(
+        metadata.get("public_case_count")
+        or len({str(row.get("case_id") or "") for row in review_rows if row.get("case_id")})
+        + len(negative_controls)
+    )
+    return {
+        "public_case_count": public_case_count,
+        "negative_control_count": len(negative_controls),
+        "pack_count": structural_metrics["pack_count"],
+        "source_ref_fidelity_rate": structural_metrics["source_ref_fidelity_rate"],
+        "plain_term_coverage": structural_metrics["plain_term_coverage"],
+        "question_blind_term_coverage": structural_metrics["question_blind_term_coverage"],
+        "question_aware_term_coverage": structural_metrics["question_aware_term_coverage"],
+        "question_aware_over_question_blind_delta": structural_metrics[
+            "question_aware_over_question_blind_delta"
+        ],
+        "answer_usefulness_delta": review_metrics.get("answer_usefulness_delta"),
+        "manual_query_reduction_delta": review_metrics.get("manual_query_reduction_delta"),
+        "question_aware_wrong_hint_rate": review_metrics.get("question_aware_wrong_hint_rate"),
+        "no_question_retrieval_recall": no_question_metrics["no_question_retrieval_recall"],
+        "question_aware_retrieval_recall": no_question_metrics[
+            "question_aware_retrieval_recall"
+        ],
+        "retrieval_recall_delta": no_question_metrics["retrieval_recall_delta"],
+        "no_question_answer_support_proxy": no_question_metrics[
+            "no_question_answer_support_proxy"
+        ],
+        "question_aware_answer_support_proxy": no_question_metrics[
+            "question_aware_answer_support_proxy"
+        ],
+        "answer_support_proxy_delta": no_question_metrics["answer_support_proxy_delta"],
+        "negative_control_pass_count": sum(
+            1 for item in negative_control_readout if item.get("passed")
+        ),
+        "threshold_dynamic_false_split_count": threshold_metrics.get("false_split_count"),
+        "threshold_dynamic_false_merge_count": threshold_metrics.get("false_merge_count"),
+        "stale_question_carryover_count": calibration_metrics[
+            "stale_question_carryover_count"
+        ],
+        "missed_resurfacing_without_question_tracking_count": calibration_metrics[
+            "missed_resurfacing_without_question_tracking_count"
+        ],
+        "wrong_route_drag_count": calibration_metrics["wrong_route_drag_count"],
+        "noise_false_positive_count": calibration_metrics["noise_false_positive_count"],
+    }
+
+
+def public_shadow_status(
+    *,
+    structural: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    negative_control_readout: Sequence[Mapping[str, Any]],
+) -> str:
+    answer_review = structural.get("answer_quality_review", {})
+    answer_review_status = (
+        answer_review.get("status") if isinstance(answer_review, Mapping) else None
+    )
+    ready = (
+        str(structural.get("status") or "").startswith("structural_proxy_ready")
+        and answer_review_status == "selected_source_reopened_answer_quality_review_ready"
+        and all(item.get("passed") for item in negative_control_readout)
+        and int(metrics["threshold_dynamic_false_split_count"] or 0) == 0
+        and int(metrics["threshold_dynamic_false_merge_count"] or 0) == 0
+    )
+    return "public_shadow_ready" if ready else "public_shadow_needs_review"

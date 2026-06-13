@@ -277,9 +277,8 @@ Live agent recall now has a narrow route-producer slice: clean-source recall
 hits can be projected into compact foreground packets with fixed-vocabulary
 `route_topic`, `route_label`, `label_granularity`, and specificity metrics.
 This is enough to distinguish routes that share broad buckets such as
-`technical_work`, but it is not the full #1188 promotion. It does not add fresh
-semantic warming, familiarity-map scoring, trained topic inference, source
-support, or default foreground hooks.
+`technical_work`. It does not add trained topic inference, answer support, or
+default foreground hooks.
 
 The #1301 bridge into the recall-navigation promotion harness began as a
 diagnostic: `attention_router_navigation_only` runs the deterministic hot router
@@ -309,7 +308,7 @@ public packet projection with counts and scores only; source refs, source
 handles, and head votes remain behind deepen/explain. This moves the router
 from report-only comparison into agent recall sorting, but it is still not
 default foreground adoption, source evidence, answer generation, or broad
-#1188 route-producer completion.
+live/default route-producer quality.
 
 Current consumer inventory:
 

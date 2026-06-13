@@ -1180,55 +1180,33 @@ def run_question_aware_public_shadow_benchmark(
             review_metrics=review_metrics,
         )
     )
-    no_question_metrics = no_question_retrieval_answer_baseline["metrics"]
-    public_case_count = int(
-        metadata.get("public_case_count")
-        or len({str(row.get("case_id") or "") for row in review_rows if row.get("case_id")})
-        + len(negative_controls)
+    public_safe_calibration_readout = (
+        public_shadow_support.public_safe_local_calibration_readout(
+            no_question_baseline=no_question_retrieval_answer_baseline,
+            review_metrics=review_metrics,
+            negative_controls=negative_control_readout,
+            threshold_readout=threshold_readout,
+        )
     )
-    metrics = {
-        "public_case_count": public_case_count,
-        "negative_control_count": len(negative_controls),
-        "pack_count": structural["metrics"]["pack_count"],
-        "source_ref_fidelity_rate": structural["metrics"]["source_ref_fidelity_rate"],
-        "plain_term_coverage": structural["metrics"]["plain_term_coverage"],
-        "question_blind_term_coverage": structural["metrics"]["question_blind_term_coverage"],
-        "question_aware_term_coverage": structural["metrics"]["question_aware_term_coverage"],
-        "question_aware_over_question_blind_delta": structural["metrics"][
-            "question_aware_over_question_blind_delta"
-        ],
-        "answer_usefulness_delta": review_metrics.get("answer_usefulness_delta"),
+    review_metrics_with_delta = {
+        **review_metrics,
         "manual_query_reduction_delta": manual_query_reduction_delta,
-        "question_aware_wrong_hint_rate": review_metrics.get("question_aware_wrong_hint_rate"),
-        "no_question_retrieval_recall": no_question_metrics["no_question_retrieval_recall"],
-        "question_aware_retrieval_recall": no_question_metrics[
-            "question_aware_retrieval_recall"
-        ],
-        "retrieval_recall_delta": no_question_metrics["retrieval_recall_delta"],
-        "no_question_answer_support_proxy": no_question_metrics[
-            "no_question_answer_support_proxy"
-        ],
-        "question_aware_answer_support_proxy": no_question_metrics[
-            "question_aware_answer_support_proxy"
-        ],
-        "answer_support_proxy_delta": no_question_metrics["answer_support_proxy_delta"],
-        "negative_control_pass_count": sum(1 for item in negative_control_readout if item["passed"]),
-        "threshold_dynamic_false_split_count": threshold_readout["dynamic_six_axis_threshold"].get(
-            "false_split_count"
-        ),
-        "threshold_dynamic_false_merge_count": threshold_readout["dynamic_six_axis_threshold"].get(
-            "false_merge_count"
-        ),
     }
-    status = (
-        "public_shadow_ready"
-        if structural["status"].startswith("structural_proxy_ready")
-        and structural["answer_quality_review"]["status"]
-        == "selected_source_reopened_answer_quality_review_ready"
-        and all(item["passed"] for item in negative_control_readout)
-        and int(metrics["threshold_dynamic_false_split_count"] or 0) == 0
-        and int(metrics["threshold_dynamic_false_merge_count"] or 0) == 0
-        else "public_shadow_needs_review"
+    metrics = public_shadow_support.public_shadow_metrics(
+        metadata=metadata,
+        review_rows=review_rows,
+        negative_controls=negative_controls,
+        structural=structural,
+        review_metrics=review_metrics_with_delta,
+        no_question_baseline=no_question_retrieval_answer_baseline,
+        calibration_readout=public_safe_calibration_readout,
+        threshold_readout=threshold_readout,
+        negative_control_readout=negative_control_readout,
+    )
+    status = public_shadow_support.public_shadow_status(
+        structural=structural,
+        metrics=metrics,
+        negative_control_readout=negative_control_readout,
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1253,6 +1231,8 @@ def run_question_aware_public_shadow_benchmark(
         "no_question_retrieval_answer_baseline": no_question_retrieval_answer_baseline,
         "answer_quality_review": structural["answer_quality_review"],
         "materialization_review_evidence": materialization_review_evidence,
+        "public_safe_calibration_readout": public_safe_calibration_readout,
+        "issue_readouts": public_safe_calibration_readout["issue_readouts"],
         "negative_controls": negative_control_readout,
         "privacy": {
             "raw_source_text_emitted": False,
@@ -1266,6 +1246,8 @@ def run_question_aware_public_shadow_benchmark(
             "public_shadow_selected_baseline_preregistered",
             "public_shadow_true_no_question_retrieval_baseline_shape_recorded",
             "public_shadow_materialization_review_evidence_recorded",
+            "public_safe_question_tracking_calibration_classes_recorded",
+            "issue_248_public_safe_owner_closeout",
             "public_shadow_threshold_readout_recorded",
             "public_shadow_negative_controls_recorded",
         ],
@@ -1277,7 +1259,7 @@ def run_question_aware_public_shadow_benchmark(
             "default_prefilter_adoption",
             "source_truth_from_question_theme_rows",
             "broad_question_tracking_quality",
-            "issue_248_closeout",
+            "private_or_live_issue_248_closeout",
         ],
     }
 

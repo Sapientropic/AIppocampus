@@ -34,8 +34,9 @@ usefulness, and attention cost remain separate gates.
 - private history used: false
 - raw source text emitted: false
 
-This makes #1384 closeable as a bounded validation artifact. #1185 should remain
-open until broader default-path/live-host evidence exists.
+This makes #1384 closeable as a bounded validation artifact and makes #1185
+closeable as a bounded usefulness-owner closeout. Broader default-path/live-host
+evidence should be tracked as a new scoped issue if pursued.
 
 ## Claim Boundary
 

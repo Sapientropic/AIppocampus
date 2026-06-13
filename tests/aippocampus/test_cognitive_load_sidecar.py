@@ -306,6 +306,45 @@ class CognitiveLoadSidecarTests(unittest.TestCase):
         self.assertNotIn("anxious", serialized)
         self.assertNotIn("stressed", serialized)
 
+    def test_public_default_path_usefulness_report_can_keep_track_diagnostic_only(
+        self,
+    ) -> None:
+        report = sidecar.build_public_default_path_usefulness_report(
+            now="2026-06-14T00:00:00Z",
+        )
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(
+            report["kind"],
+            sidecar.PUBLIC_DEFAULT_PATH_USEFULNESS_REPORT_KIND,
+        )
+        self.assertEqual(report["status"], "validated_diagnostic_result")
+        self.assertEqual(report["recommended_maturity"], "dogfood_diagnostic_only")
+        self.assertEqual(report["metrics"]["case_count"], 4)
+        self.assertEqual(report["metrics"]["useful_hint_count"], 1)
+        self.assertEqual(report["metrics"]["wrong_route_drag_reduction_count"], 1)
+        self.assertEqual(report["metrics"]["blind_deepen_reduction_count"], 1)
+        self.assertEqual(report["metrics"]["no_hint_pass_count"], 2)
+        self.assertEqual(report["metrics"]["default_path_regression_count"], 1)
+        self.assertEqual(
+            report["issue_readouts"]["github_1375"]["closeout_eligible"],
+            True,
+        )
+        self.assertTrue(
+            report["issue_readouts"]["github_575"]["diagnostic_only_recommended"]
+        )
+        self.assertFalse(
+            report["issue_readouts"]["github_575"]["bounded_adoption_recommended"]
+        )
+        self.assertIn(
+            "default_foreground_weighting_ready_when_regressions_exist",
+            report["cannot_claim"],
+        )
+        self.assertFalse(report["privacy_boundary"]["raw_source_handles_emitted"])
+        self.assertNotIn("public:load", encoded)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("C:\\", encoded)
+
     def test_private_history_calibration_measures_clean_source_without_leaking_text(self) -> None:
         messages = [
             {

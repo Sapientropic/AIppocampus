@@ -648,6 +648,54 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
             "private_history_materialization_quality",
             review_evidence["cannot_claim"],
         )
+        calibration = payload["public_safe_calibration_readout"]
+        self.assertEqual(
+            calibration["kind"],
+            "question_aware_public_safe_local_calibration_readout",
+        )
+        self.assertEqual(
+            calibration["status"],
+            "public_safe_local_calibration_ready",
+        )
+        self.assertEqual(
+            calibration["metrics"][
+                "missed_resurfacing_without_question_tracking_count"
+            ],
+            2,
+        )
+        self.assertEqual(calibration["metrics"]["stale_question_carryover_count"], 0)
+        self.assertEqual(calibration["metrics"]["wrong_route_drag_count"], 0)
+        self.assertEqual(calibration["metrics"]["noise_false_positive_count"], 0)
+        github_248 = calibration["issue_readouts"]["github_248"]
+        self.assertEqual(
+            github_248["closeout_scope"],
+            "public_safe_owner_closeout_only",
+        )
+        self.assertFalse(github_248["private_or_live_calibration_measured"])
+        self.assertTrue(github_248["owner_closeout_eligible"])
+        self.assertIn("issue_248_public_safe_owner_closeout", payload["can_claim"])
+        self.assertIn("private_or_live_issue_248_closeout", payload["cannot_claim"])
+        self.assertNotIn("issue_248_closeout", payload["cannot_claim"])
+        self.assertIn(
+            "stale_question_carryover",
+            calibration["false_positive_classes"],
+        )
+        self.assertIn(
+            "noise_or_code_promoted_to_question",
+            calibration["false_positive_classes"],
+        )
+        self.assertIn(
+            "missed_resurfacing_without_question_tracking",
+            calibration["false_negative_classes"],
+        )
+        self.assertTrue(
+            calibration["issue_readouts"]["github_1368"]["closeout_eligible"]
+        )
+        self.assertTrue(payload["issue_readouts"]["github_1368"]["closeout_eligible"])
+        self.assertIn(
+            "public_safe_question_tracking_calibration_classes_recorded",
+            payload["can_claim"],
+        )
         self.assertFalse(payload["privacy"]["raw_source_text_emitted"])
         self.assertFalse(payload["privacy"]["local_path_emitted"])
         self.assertNotIn("PUBLIC_SOURCE_TEXT_SENTINEL", rendered)
