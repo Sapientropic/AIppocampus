@@ -300,6 +300,7 @@ lexical rows remain the broader LongMemEval-S quality baselines.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-13T19:00:57Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 64.98s | #1424/#1425/#1426 slice; no provider calls; cache policy v6; factual-alias query-overlap remains sparse at 2/25; see [`longmemeval-source-factual-alias-25-2026-06-14.md`](longmemeval-source-factual-alias-25-2026-06-14.md) |
 | `2026-06-13T13:12:36Z` | `longmemeval-v1-small` | retrieval-only + contract-aware full-source semantic-scope warming | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1167.30s | #1323 full-source warming; source-index cache hit 500/500; 500 cold-fill provider calls; hot path provider 0; sidecar coverage improved but fused R@10 unchanged |
 | `2026-06-13T10:44:40Z` | `longmemeval-v1-small` | retrieval-only + materialized semantic-scope sidecar diagnostic | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 2559.04s | #1323 negative diagnostic; 0 rank delta vs worker-surface proxy; sidecar coverage/label-overlap bottleneck |
 | `2026-06-12T18:10:20Z` | `longmemeval-v1-small` | retrieval-only + AIppocampus source worker-surface proxy | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1494.10s | worker-surface proxy measured; no provider calls; not canonical semantic warming |

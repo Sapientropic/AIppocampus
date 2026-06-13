@@ -18,6 +18,10 @@ and governed/high-risk controls, see
 
 Use this path when an external user, agent host, or downstream script needs the
 smallest dependable AIppocampus surface before learning the research features.
+For an ordinary Codex setup where the user has asked an agent to install
+AIppocampus locally, the product-first path is the
+[agent-mediated Codex plugin path](install-guide.md#agent-mediated-codex-plugin-path);
+this section remains the no-clone/API-stability path.
 
 1. Verify the packaged CLI without cloning or writing local memory artifacts:
 
@@ -612,17 +616,28 @@ Contract v1 continuity domains use this same progressive path. `recall_context`
 may return a `continuity_domain` route when a source-trailed working conclusion
 matches the cue; the route is still navigation only. `recall_deepen` may then
 open the domain brief and representative clean-source trail. Default context
-packets must not expose the domain working conclusion body. The current public
-surface is a runtime/read substrate: hooks and MCP read existing domain
-snapshots, but they do not automatically author durable domain events. Durable
-event writes go through explicit trusted producers such as
-`aippocampus continuity-domain produce --append` or
-`aippocampus continuity-domain append`; `produce --dry-run` is public-safe by
-default and hashes/redacts domain labels unless local detail is explicitly
-requested. `produce --append` refreshes the existing query-pattern route
-sidecar before candidate generation; `produce --dry-run` does not write sidecars
-unless `--refresh-query-pattern-routes` is explicit. Reviewed, local-offline, or
-external-model generated aliases may supply candidate labels only when their
+packets must not expose the domain working conclusion body. The read surface
+remains MCP/hook friendly: hooks and MCP read existing domain snapshots, but
+prompt hooks do not author durable domain events while the user is typing.
+
+Durable event writes have two trusted paths:
+
+- Explicit operator/debug/backfill commands such as
+  `aippocampus continuity-domain produce --append` or
+  `aippocampus continuity-domain append`. `produce --dry-run` is public-safe by
+  default and hashes/redacts domain labels unless local detail is explicitly
+  requested. `produce --append` refreshes the existing query-pattern route
+  sidecar before candidate generation; `produce --dry-run` does not write
+  sidecars unless `--refresh-query-pattern-routes` is explicit.
+- Opt-in subconscious job production:
+  `--event-salience-gate --continuity-domain-salience-mode report|write_when_enabled`.
+  `report` is no-write. `write_when_enabled` translates deterministic
+  salience rows into continuity-domain events through the existing append and
+  publish path, skips duplicate event ids, and exposes only counts/status in
+  public job JSON. `--dry-run` and `--no-write` still suppress writes.
+
+Reviewed, local-offline, external-model generated aliases, and deterministic
+salience rows may supply candidate labels or lifecycle events only when their
 source refs resolve back to registry clean source; they do not become evidence
 owners. `recall_deepen` may follow registry-backed `thread_key` refs, but
 blocked, stale, superseded, or retired domains remain non-reopenable as domain
@@ -810,7 +825,7 @@ explaining compatibility fallback behavior.
 | `AIPPOCAMPUS_WARM_RECALL_TIMEOUT`, `AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT`, `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS`, `AIPPOCAMPUS_WARM_RECALL_BACKGROUND`, `AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`, `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS`, `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY` | Warm ambient recall limits | Local operators tuning background recall cost and latency | Built-in defaults; explicit CLI/config should own product tuning | Timing/concurrency policy may reveal local workflow shape | Public operator configuration for limits only |
 | `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`, `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL`, `DEEPSEEK_API_KEY` | Optional DeepSeek route | Operators enabling optional external-model work | DeepSeek defaults where unset; legacy `DEEPSEEK_*` model vars may remain fallback-only | `DEEPSEEK_API_KEY` is secret; base URL/model may reveal provider choice | Public optional route configuration; external-model features remain optional |
 | `AIPPOCAMPUS_OPENAI_COMPAT_ROUTE`, `AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER`, `AIPPOCAMPUS_OPENAI_COMPAT_MODEL`, `AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL`, `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV`, `AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT`, `AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING`, `AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT`, `AIPPOCAMPUS_OPENAI_COMPAT_REASONING_CONTENT_HANDLING`, `AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND` | Optional OpenAI-compatible route | Operators testing provider portability | Only active when a complete compatible route is configured; DeepSeek-only extensions are omitted unless the route explicitly opts in | API-key variable name and base URL may reveal provider setup; referenced key value is secret | Public optional route configuration |
-| `AIPPOCAMPUS_SUBCONSCIOUS_HOOK`, `AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB` | Subconscious/background jobs | Trusted local operators and repo-maintenance smokes | Conservative defaults; jobs still require explicit commands or hook conditions | May reveal private background-work policy | Diagnostic/operator configuration, not a broad hosted-service API |
+| `AIPPOCAMPUS_SUBCONSCIOUS_HOOK`, `AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB`, `AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION` | Subconscious/background jobs and opt-in continuity-domain production | Trusted local operators and repo-maintenance smokes | Conservative defaults; continuity-domain production defaults to `off` and accepts `report` or `write_when_enabled` only after the runner is configured | May reveal private background-work policy and local continuity-maintenance policy | Diagnostic/operator configuration, not a broad hosted-service API |
 | `AIPPOCAMPUS_DREAM_DELIVERY_MODE`, `AIPPOCAMPUS_DREAM_SHADOW_AB`, `AIPPOCAMPUS_DREAM_SHADOW_AB_SALT`, `AIPPOCAMPUS_DREAM_ROLLOUT_RATE` | Dream/research delivery policy | Trusted local operators evaluating research features | Defaults keep research surfaces conservative unless explicitly enabled | Salt/rollout policy may reveal experiment setup | Experimental diagnostic configuration |
 | `AIPPOCAMPUS_PROJECTS_TOKEN`, `GH_TOKEN`, `GITHUB_REPOSITORY`, `AIPPOCAMPUS_PROJECT_OWNER`, `AIPPOCAMPUS_PROJECT_NUMBER` | GitHub Project triage and planning audit | Repository maintainers and GitHub Actions | Workflow token/env defaults where available; local maintainer tools may also use `gh auth token` when env tokens are absent | Tokens are secret; repo/project ids are public or repo-maintenance metadata | Public maintenance configuration, not end-user runtime API |
 

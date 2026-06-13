@@ -53,9 +53,31 @@ For role-based documentation paths, use
 
 ## Quick Start
 
-Start with the first source-backed recall moment, then decide whether to let
-AIppocampus keep that doorway warm for future sessions. The first check is
-read-only:
+If you are using Codex and you have an agent that can run local setup commands,
+the ordinary path is agent-mediated: ask the agent to install the local
+AIppocampus plugin, verify that Codex can call the MCP tools, then enable the
+core hooks only after you trust this machine:
+
+```sh
+aippocampus plugin install --codex --verify
+aippocampus update apply --surface hooks
+```
+
+That path should end in one source-backed recall moment, not a diagnostics
+maze. Rollback stays explicit:
+
+```sh
+aippocampus plugin uninstall --codex
+aippocampus hooks prompt uninstall
+aippocampus hooks lifecycle uninstall
+```
+
+External-model semantic/background routes are a separate first-run choice. Ask
+once whether to enable an LLM-backed route with a key; if the answer is no or
+the key is missing, keep the no-key source-backed search, MCP, plugin, and hook
+path useful.
+
+For a no-clone or non-Codex probe, use the read-only package check:
 
 ```sh
 uvx aippocampus --help

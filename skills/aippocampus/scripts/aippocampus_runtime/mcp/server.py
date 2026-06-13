@@ -570,8 +570,9 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if method == "initialize":
         return jsonrpc_result(request_id, initialize_result(params))
-    if method == "tools/list":
-        return jsonrpc_result(request_id, {"tools": TOOLS})
+    if method in {"tools/list", "resources/list", "resources/templates/list"}:
+        result = {"tools": TOOLS} if method == "tools/list" else {"resources": []} if method == "resources/list" else {"resourceTemplates": []}
+        return jsonrpc_result(request_id, result)
     if method == "tools/call":
         if raw_params is not None and not isinstance(raw_params, dict):
             return jsonrpc_result(

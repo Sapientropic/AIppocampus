@@ -32,6 +32,20 @@ macro packet into source evidence.
 | 乘 / 承 / 比 / 应 internal line topology | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.line_topology`, `macro.three_powers` | No ranking-weight change, source support, or mathematical topology claim. |
 | 当位 / 不当位 | `research_only` | none | No foreground signal, route control, or claim support until usefulness is proven. |
 
+## Shi/Ying Restriction Edge Decision
+
+Local/global compatibility keeps Shi/Ying restriction edges as V0
+project-scoped navigation hints. The runtime may record
+`shi_ying_v0_project_role_hint` when a Macro or Telepathy section carries
+project relation-position metadata, but it does not load classical bagua
+position tables or infer exact classical Shi/Ying line semantics.
+
+This decision keeps the current product surface grounded: Shi/Ying can help
+explain why two local sections need handoff/restriction review, but it cannot
+alter source truth, rank routes, assign agent identity, infer user intent, or
+grant foreground claim permission. Classical position infrastructure should be
+a future issue only if a concrete usefulness fixture needs it.
+
 ## Runtime Audit
 
 The executable audit lives in `aippocampus_runtime.macro.audit`:

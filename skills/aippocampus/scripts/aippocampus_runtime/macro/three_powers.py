@@ -6,6 +6,9 @@ from typing import Any, Literal, TypeAlias
 
 from aippocampus_runtime.macro import line_topology
 from aippocampus_runtime.macro.hexagram import HexagramRef
+from aippocampus_runtime.navigation.parallel_derivation_bundle import (
+    preflattening_gate_for_route_affordance,
+)
 
 Layer: TypeAlias = Literal["earth", "human", "heaven"]
 
@@ -314,6 +317,7 @@ def apply_three_powers_fanout(
     active_layer: object | None = None,
     perturbation_packet: Mapping[str, Any] | None = None,
     topology_hexagram: HexagramRef | None = None,
+    parallel_derivation_bundle: Mapping[str, Any] | None = None,
     base_candidate_limit: int = 1,
 ) -> dict[str, object]:
     layer_profile = infer_active_layer(query, explicit_layer=active_layer)
@@ -337,6 +341,22 @@ def apply_three_powers_fanout(
         base_candidate_limit=max(0, base_candidate_limit),
     )
     limit = _mapping_int(policy, "candidate_limit")
+    preflattening_gate = (
+        preflattening_gate_for_route_affordance(parallel_derivation_bundle)
+        if parallel_derivation_bundle is not None
+        else None
+    )
+    if preflattening_gate is not None and not preflattening_gate["flattening_allowed"]:
+        narrowed_policy = dict(policy)
+        original_limit = limit
+        if preflattening_gate.get("status") == "tension":
+            limit = min(limit, 1)
+        else:
+            limit = 0
+        narrowed_policy["candidate_limit"] = limit
+        narrowed_policy["candidate_limit_after_review"] = original_limit
+        narrowed_policy["parallel_derivation_preflattening_gate"] = preflattening_gate
+        policy = narrowed_policy
     selected = ranked[:limit] if limit > 0 else []
     counts = _facet_counts(projected)
     diagnostics = _diagnostics(
@@ -353,6 +373,11 @@ def apply_three_powers_fanout(
         reason_codes = topology.get("reason_codes")
         if isinstance(reason_codes, list):
             diagnostics.extend(str(code) for code in reason_codes)
+    if preflattening_gate is not None and not preflattening_gate["flattening_allowed"]:
+        diagnostics.extend(
+            f"parallel_derivation_{code}"
+            for code in preflattening_gate.get("reason_codes") or []
+        )
     return {
         "kind": "macro_three_powers_route_fanout",
         "schema_version": SCHEMA_VERSION,
@@ -362,6 +387,7 @@ def apply_three_powers_fanout(
         "ranked_candidates": ranked,
         "selected_route_ids": [str(candidate["route_id"]) for candidate in selected],
         "fanout_policy": policy,
+        "parallel_derivation_preflattening_gate": preflattening_gate,
         "facet_counts": counts,
         "topology_diagnostics": topology,
         "diagnostics": diagnostics,

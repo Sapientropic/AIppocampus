@@ -33,16 +33,22 @@ Roles:
 | [foreground-memory-ux-budget.md](foreground-memory-ux-budget.md) | current contract | Foreground memory packet size, review-needed, anti-nag, and no-profile-dump budget. |
 | [high-risk-answer-gates.md](high-risk-answer-gates.md) | current contract | High-risk answer gating and source authority boundary. |
 | [knowledge-source-lifecycle.md](knowledge-source-lifecycle.md) | current contract | Knowledge source lifecycle, eligibility, and claim promotion boundary. |
+| [local-global-compatibility.md](local-global-compatibility.md) | current contract | Typed Section, restriction narrowing, time-window, obstruction-cause, and adjudicated-metric contract for local/global compatibility diagnostics. |
 | [memory-evidence-drawer.md](memory-evidence-drawer.md) | current contract | Foreground recall explanation packet, action grammar, and source-reopen affordance boundary. |
 | [multimodal-answer-gate.md](multimodal-answer-gate.md) | current contract | Multimodal answer source and gate contract. |
 | [multimodal-provider-routing.md](multimodal-provider-routing.md) | current contract | Provider capability-routing contract and public-safe fixture boundary. |
 | [multimodal-source-manifests.md](multimodal-source-manifests.md) | current contract | Multimodal source manifest fields and provenance boundary. |
+| [opt-in-continuity-boundary-audit.md](opt-in-continuity-boundary-audit.md) | current contract | Enable-policy, auditability, and debug/operator boundaries for low-friction continuity production. |
+| [parallel-derivation-compatibility.md](parallel-derivation-compatibility.md) | current contract | Source-basis, dependency-DAG, compatibility, and pre-flattening gate contract for macro-derived navigation signals. |
 | [packet-topology-diagnostics.md](packet-topology-diagnostics.md) | current contract | Post-packet relation diagnostics for route, narrative, Macro, Dream, and AIppo packets. |
 | [path-identity.md](path-identity.md) | current contract | Identity keys, display paths, and privacy-safe path handling. |
 | [product-profiles.md](product-profiles.md) | current contract | Personal default, power-user optional, and enterprise-governed profiles. |
 | [runtime-envelope-and-failure-taxonomy.md](runtime-envelope-and-failure-taxonomy.md) | current contract | Public runtime envelope, failure families, and config registry boundary. |
+| [runtime-recheck-events.md](runtime-recheck-events.md) | current contract | Shared direction-only recheck event shape for macro, Dream, active recall, source-shape, and continuity-domain lifecycle diagnostics. |
 | [schema-field-profiles.md](schema-field-profiles.md) | current contract | Field-budget and projection discipline for runtime surfaces. |
 | [source-backed-attention-router.md](source-backed-attention-router.md) | current contract | Hard-mask, route-packet, output-level, and claim-permission boundaries for attention-style navigation. |
+| [source-side-factual-recall.md](source-side-factual-recall.md) | current contract | Local factual alias/answer-bearing retrieval handles for source-side recall without public raw-text leakage or claim permission. |
+| [source-shape-runtime-spine.md](source-shape-runtime-spine.md) | current contract | Source-shape descriptor owner, temporal semantics, guard order, foreground boundary, and active-recall priority adapter. |
 | [source-intake-health.md](source-intake-health.md) | current contract | Source-intake health diagnostics for hook fragility, source pollution, and fallback posture. |
 | [sparse-provenance-codebook.md](sparse-provenance-codebook.md) | current contract | V0 content-addressed sparse provenance codebook for route handles, rehydration proofs, lifecycle/privacy masks, and topology preservation. |
 | [source-reopen-budget.md](source-reopen-budget.md) | current contract | Hot/warm/cold source-reopen policy, timeout fail-open behavior, and reopen red lines. |

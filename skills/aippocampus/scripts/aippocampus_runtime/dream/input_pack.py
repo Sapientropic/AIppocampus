@@ -160,6 +160,7 @@ def merge_refs(seeds: Iterable[DreamSeed], *, limit: int = 24) -> list[dict[str,
 def row_id(row: Mapping[str, Any], *, prefix: str) -> str:
     for key in (
         "fingerprint",
+        "event_id",
         "source_finding_id",
         "journey_id",
         "residue_id",
@@ -571,6 +572,39 @@ def agency_or_coding_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     )
 
 
+def runtime_recheck_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    if row.get("kind") != "runtime_recheck_event":
+        return None
+    if "dream_seed" not in {str(item) for item in string_values(row.get("target_surfaces"))}:
+        return None
+    refs = refs_from_row(row)
+    if not refs:
+        return None
+    reason = compact_text(str(row.get("reason_code") or "runtime_recheck"), 100)
+    source_shape_id = compact_text(str(row.get("source_shape_id") or ""), 140)
+    scope = row.get("scope") if isinstance(row.get("scope"), Mapping) else {}
+    scope_values = list(scope.values()) if isinstance(scope, Mapping) else []
+    concepts = unique_preserve([reason, source_shape_id, *scope_values], limit=12)
+    return DreamSeed(
+        seed_id=row_id(row, prefix="rre"),
+        seed_kind="runtime_recheck",
+        title=compact_text(f"Runtime recheck: {reason}", 160),
+        summary=compact_text(
+            "Navigation-only recheck seed; Dream may use it as a constraint, not as source truth.",
+            360,
+        ),
+        source_refs=refs,
+        source_finding_ids=(str(row.get("event_id") or row_id(row, prefix="rre")),),
+        frontiers=(reason,),
+        themes=tuple(concepts),
+        concepts=tuple(concepts),
+        negative_contexts=(
+            "runtime recheck event is direction-only navigation",
+            "reopen clean source before any factual claim",
+        ),
+    )
+
+
 def texture_seed_from_signal(signal: Mapping[str, Any]) -> DreamSeed | None:
     refs = normalize_source_refs(signal.get("source_refs"))
     if not refs:
@@ -612,6 +646,7 @@ def seed_from_row(row: Mapping[str, Any]) -> DreamSeed | None:
         or recall_miss_seed(row)
         or reflection_seed(row)
         or agency_or_coding_seed(row)
+        or runtime_recheck_seed(row)
     )
 
 

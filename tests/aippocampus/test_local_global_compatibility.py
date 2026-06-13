@@ -36,12 +36,15 @@ class LocalGlobalCompatibilityTests(unittest.TestCase):
         self.assertEqual(report["claim_permission"], "navigation_only_not_fact")
         self.assertEqual(report["authority_level"], "navigation_only")
         self.assertEqual(report["metrics"]["glued_route_count"], 1)
-        self.assertEqual(report["metrics"]["partial_glue_count"], 1)
-        self.assertEqual(report["metrics"]["obstruction_count"], 2)
+        self.assertEqual(report["metrics"]["partial_glue_count"], 2)
+        self.assertEqual(report["metrics"]["obstruction_count"], 6)
         self.assertEqual(report["metrics"]["blocked_boundary_count"], 2)
         self.assertEqual(report["metrics"]["authority_upgrade_blocked_count"], 1)
         self.assertEqual(report["metrics"]["claim_permission_upgrade_count"], 0)
         self.assertEqual(report["metrics"]["foreground_projection_count"], 0)
+        self.assertEqual(report["metrics"]["useful_obstruction_later_used_count"], 1)
+        self.assertEqual(report["metrics"]["false_glue_regression_count"], 1)
+        self.assertEqual(report["metrics"]["ambiguous_correlation_only_count"], 1)
 
         self.assertEqual(by_case["successful_macro_telepathy_glue"]["result"], "glued_route")
         self.assertEqual(by_case["dream_topology_partial_glue"]["result"], "partial_glue")
@@ -49,6 +52,12 @@ class LocalGlobalCompatibilityTests(unittest.TestCase):
         self.assertEqual(by_case["privacy_blocked_boundary"]["result"], "blocked_boundary")
         self.assertEqual(by_case["authority_escalation_attempt"]["result"], "blocked_boundary")
         self.assertEqual(by_case["shared_vocabulary_only"]["result"], "obstruction")
+        self.assertEqual(
+            by_case["broad_obstruction_with_narrowed_glue"]["restriction_narrowing"][
+                "narrowed_result"
+            ],
+            "glued_route",
+        )
 
         for row in report["compatibility_rows"]:
             self.assertEqual(row["claim_permission"], "navigation_only_not_fact")
@@ -57,6 +66,7 @@ class LocalGlobalCompatibilityTests(unittest.TestCase):
             self.assertFalse(row["foreground_projection_allowed"])
             self.assertTrue(row["glue_never_upgrades_authority"])
             self.assertTrue(row["failed_glue_is_obstruction_not_assignment"])
+            self.assertIn("obstruction_kind", row)
 
     def test_overlap_basis_requires_source_or_scope_not_shared_vocabulary(self) -> None:
         compat = _compat_module()
@@ -87,6 +97,258 @@ class LocalGlobalCompatibilityTests(unittest.TestCase):
         self.assertFalse(row["overlap_basis"]["shared_vocabulary_counts_as_overlap"])
         self.assertEqual(row["overlap_basis"]["source_overlap_count"], 0)
         self.assertFalse(row["overlap_basis"]["scope_overlap"])
+
+    def test_typed_section_restriction_and_time_window_contract(self) -> None:
+        compat = _compat_module()
+        row = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "macro_local",
+                    "kind": "macro_router_context",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "restriction_path": [
+                        "project:AIppocampus",
+                        "project:AIppocampus#thread_family:runtime",
+                        "project:AIppocampus#thread:alpha",
+                    ],
+                    "source_ids": ["src:shared"],
+                    "section_time_window": {
+                        "start": "2026-06-13T00:00:00Z",
+                        "end": "2026-06-13T01:00:00Z",
+                    },
+                    "created_at": "2026-06-13T01:05:00Z",
+                    "valid_until": "2026-06-14T00:00:00Z",
+                    "claim_permission": "navigation_only_not_fact",
+                    "requested_claim_permission": "source_open",
+                },
+                {
+                    "case_id": "dream_local",
+                    "kind": "dream_topology_candidate",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "restriction_path": [
+                        "project:AIppocampus",
+                        "project:AIppocampus#thread_family:runtime",
+                        "project:AIppocampus#thread:alpha",
+                    ],
+                    "source_ids": ["src:shared"],
+                    "source_coverage_time": {
+                        "start": "2026-06-13T02:00:00Z",
+                        "end": "2026-06-13T03:00:00Z",
+                    },
+                    "packet_created_at": "2026-06-13T03:05:00Z",
+                },
+            ],
+            case_id="typed_section_time_mismatch",
+        )
+
+        section = row["section_contracts"][0]
+        self.assertEqual(section["section_contract_version"], 1)
+        self.assertEqual(
+            section["restriction_path"],
+            [
+                "project:AIppocampus",
+                "project:AIppocampus#thread_family:runtime",
+                "project:AIppocampus#thread:alpha",
+            ],
+        )
+        self.assertEqual(section["time_semantics"]["source_coverage_time"]["start"], "2026-06-13T00:00:00Z")
+        self.assertEqual(section["time_semantics"]["packet_created_at"], "2026-06-13T01:05:00Z")
+        self.assertFalse(row["overlap_basis"]["source_coverage_time_overlap"])
+        self.assertEqual(row["result"], "blocked_boundary")
+        self.assertIn("authority_or_claim_permission_upgrade_attempt", row["reason_codes"])
+        self.assertTrue(row["restriction_policy"]["transitive"])
+        self.assertFalse(row["restriction_policy"]["may_raise_authority"])
+        self.assertFalse(row["restriction_policy"]["may_raise_claim_permission"])
+
+    def test_time_window_mismatch_blocks_otherwise_matching_sections(self) -> None:
+        compat = _compat_module()
+        row = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "old",
+                    "kind": "memory_packet",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "source_ids": ["src:shared"],
+                    "section_time_window": {
+                        "start": "2026-06-13T00:00:00Z",
+                        "end": "2026-06-13T01:00:00Z",
+                    },
+                },
+                {
+                    "case_id": "new",
+                    "kind": "macro_router_context",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "source_ids": ["src:shared"],
+                    "source_coverage_time": {
+                        "start": "2026-06-14T00:00:00Z",
+                        "end": "2026-06-14T01:00:00Z",
+                    },
+                },
+            ],
+            case_id="time_window_mismatch",
+        )
+
+        self.assertEqual(row["result"], "obstruction")
+        self.assertEqual(row["obstruction_kind"], "time_window_mismatch")
+        self.assertIn("source_coverage_time_mismatch_blocks_glue", row["reason_codes"])
+
+    def test_restriction_narrowing_records_local_glue_without_broad_overclaim(self) -> None:
+        compat = _compat_module()
+        narrowed = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "dream_broad",
+                    "kind": "dream_topology_candidate",
+                    "scope": "project:AIppocampus#area:dream",
+                    "restriction_path": [
+                        "project:AIppocampus",
+                        "project:AIppocampus#thread_family:runtime",
+                    ],
+                    "source_ids": ["src:shared"],
+                },
+                {
+                    "case_id": "macro_broad",
+                    "kind": "macro_router_context",
+                    "scope": "project:AIppocampus#area:macro",
+                    "restriction_path": [
+                        "project:AIppocampus",
+                        "project:AIppocampus#thread_family:runtime",
+                    ],
+                    "source_ids": ["src:shared"],
+                },
+            ],
+            case_id="narrowed_glue",
+        )
+        failed = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "a",
+                    "kind": "memory_packet",
+                    "scope": "project:AIppocampus#area:a",
+                    "restriction_path": ["project:AIppocampus#area:a"],
+                    "source_ids": ["src:a"],
+                },
+                {
+                    "case_id": "b",
+                    "kind": "macro_router_context",
+                    "scope": "project:AIppocampus#area:b",
+                    "restriction_path": ["project:AIppocampus#area:b"],
+                    "source_ids": ["src:b"],
+                },
+            ],
+            case_id="narrowing_failed",
+        )
+
+        self.assertEqual(narrowed["result"], "partial_glue")
+        self.assertEqual(narrowed["restriction_narrowing"]["broad_result"], "obstruction")
+        self.assertEqual(narrowed["restriction_narrowing"]["narrowed_result"], "glued_route")
+        self.assertEqual(
+            narrowed["restriction_narrowing"]["narrowed_scope"],
+            "project:AIppocampus#thread_family:runtime",
+        )
+        self.assertFalse(narrowed["restriction_narrowing"]["raises_authority"])
+        self.assertFalse(narrowed["restriction_narrowing"]["raises_claim_permission"])
+        self.assertEqual(failed["restriction_narrowing"]["narrowed_result"], "not_glued")
+        self.assertIn("no_safe_common_restriction_scope", failed["reason_codes"])
+
+    def test_topology_shape_and_obstruction_kind_are_separate_axes(self) -> None:
+        compat = _compat_module()
+        stale = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "stale_cut",
+                    "kind": "dream_topology_candidate",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "shape": "cut_point",
+                    "source_ids": ["src:shared"],
+                    "status": "stale",
+                },
+                {
+                    "case_id": "memory",
+                    "kind": "memory_packet",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "shape": "cut_point",
+                    "source_ids": ["src:shared"],
+                },
+            ],
+            case_id="stale_cut_point",
+        )
+        missing_middle = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "missing_cut",
+                    "kind": "dream_topology_candidate",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "shape": "cut_point",
+                    "source_ids": [],
+                },
+                {
+                    "case_id": "memory",
+                    "kind": "memory_packet",
+                    "scope": "project:Different#thread:beta",
+                    "shape": "cut_point",
+                    "source_ids": [],
+                },
+            ],
+            case_id="missing_cut_point",
+        )
+
+        self.assertEqual(stale["topology_shape"], "cut_point")
+        self.assertEqual(missing_middle["topology_shape"], "cut_point")
+        self.assertEqual(stale["obstruction_kind"], "stale_boundary")
+        self.assertEqual(missing_middle["obstruction_kind"], "missing_middle")
+
+    def test_adjudicated_metric_report_separates_lift_from_correlation(self) -> None:
+        compat = _compat_module()
+        report = compat.build_local_global_adjudication_report(
+            [
+                {"diagnostic_result": "obstruction", "adjudication_label": "useful_obstruction"},
+                {"diagnostic_result": "glued_route", "adjudication_label": "false_glue"},
+                {"diagnostic_result": "obstruction", "adjudication_label": "no_help"},
+                {"diagnostic_result": "partial_glue", "adjudication_label": "ambiguous_correlation"},
+            ]
+        )
+
+        self.assertEqual(report["kind"], "aippocampus_local_global_adjudication_report")
+        self.assertEqual(report["metrics"]["useful_obstruction_later_used_count"], 1)
+        self.assertEqual(report["metrics"]["false_glue_regression_count"], 1)
+        self.assertEqual(report["metrics"]["no_help_count"], 1)
+        self.assertEqual(report["metrics"]["ambiguous_correlation_only_count"], 1)
+        self.assertFalse(report["claims"]["live_product_lift_claimed"])
+
+    def test_shi_ying_restriction_edges_stay_v0_navigation_only(self) -> None:
+        compat = _compat_module()
+        report = compat.build_local_global_compatibility_report()
+        row = compat.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "shi",
+                    "kind": "macro_router_context",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "source_ids": ["src:shared"],
+                    "relation_position": {
+                        "situation_role": "世",
+                        "current_agent_default_role": "应",
+                    },
+                },
+                {
+                    "case_id": "ying",
+                    "kind": "telepathy_coordination_packet",
+                    "scope": "project:AIppocampus#thread:alpha",
+                    "source_ids": ["src:shared"],
+                    "relation_position": {"handoff_role": "应"},
+                },
+            ],
+            case_id="shi_ying_v0",
+        )
+
+        self.assertEqual(
+            report["contract"]["shi_ying_restriction_edge_policy"],
+            "v0_project_scoped_navigation_hint",
+        )
+        self.assertIn("shi_ying_v0_project_role_hint", row["restriction_edges"])
+        self.assertFalse(row["restriction_policy"]["classical_bagua_positions_enabled"])
+        self.assertFalse(row["restriction_policy"]["may_change_source_truth"])
 
     def test_fixture_links_macro_dream_telepathy_aippo_and_topology_surfaces(self) -> None:
         compat = _compat_module()

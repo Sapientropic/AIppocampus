@@ -1149,6 +1149,114 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
             1,
         )
 
+    def test_source_semantic_cache_materializes_factual_aliases_without_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "case" / "source_index.sqlite"
+            messages = [
+                standard_public.standard_message_for_sqlite(
+                    source_id="factual-alias-question",
+                    line=1,
+                    role="assistant",
+                    text="The cobalt souvenir is stored in drawer nine.",
+                ),
+                standard_public.standard_message_for_sqlite(
+                    source_id="factual-alias-question",
+                    line=2,
+                    role="assistant",
+                    text="The cobalt souvenir was discussed during planning.",
+                ),
+            ]
+            manifest = standard_public.source_index_manifest(
+                dataset="longmemeval-v1-small",
+                source_id="factual-alias-question",
+                question_id="factual-alias-question",
+                messages=messages,
+            )
+            metrics = standard_public.new_standard_case_cache_metrics(
+                enabled=True,
+                cache_key="factual-alias",
+                rebuild_requested=False,
+            )
+            standard_public.prepare_standard_sqlite_index(
+                sqlite_path,
+                messages=messages,
+                manifest=manifest,
+                cache_metrics=metrics,
+                rebuild_cache=False,
+            )
+            line_to_session = {"1": "session-a", "2": "session-a"}
+            cache = standard_public.build_source_semantic_cache(
+                sqlite_path,
+                line_to_session=line_to_session,
+            )
+            query = "Where is the cobalt keepsake kept?"
+            case = {
+                "case_id": "factual-alias-fixture",
+                "dataset": "longmemeval-v1-small",
+                "case_type": "fixture",
+                "source_id_sha1": "fixture-source",
+                "question_id_sha1": "fixture-question",
+                "query_sha1": "fixture-query",
+                "query": query,
+                "query_terms": standard_public.split_query_terms([query]),
+                "sqlite_path": sqlite_path,
+                "expected": {
+                    "lines": [1],
+                    "sessions": ["session-a"],
+                    "line_to_session": line_to_session,
+                    "has_line_evidence": True,
+                },
+            }
+            row_result = standard_public.evaluate_standard_retrieval_case(
+                case,
+                top_k=10,
+                candidate_limit=10,
+                context_radius=0,
+                include_private_text=False,
+                line_reranker_mode="source_semantic_cache",
+                source_semantic_cache_store=standard_public.SourceSemanticCacheStore(),
+            )
+            search_payload = standard_public.search_source_semantic_cache(
+                query,
+                cache,
+                limit=5,
+            )
+
+        profile = cache["profiles"][1]
+        self.assertFalse(profile["semantic_scope_labels"])
+        self.assertIn("kept", profile["factual_alias_terms"])
+        self.assertIn("keepsake", profile["factual_alias_terms"])
+        self.assertIn("drawer", profile["answer_bearing_terms"])
+        self.assertGreaterEqual(cache["manifest"]["factual_alias_profile_count"], 1)
+        self.assertEqual(cache["manifest"]["provider_call_count"], 0)
+        self.assertEqual(search_payload["hits"][0]["line"], 1)
+        self.assertEqual(
+            search_payload["cache"]["hot_query_provider_call_count"],
+            0,
+        )
+        self.assertGreaterEqual(
+            search_payload["cache"]["factual_alias_query_overlap_count"],
+            1,
+        )
+        self.assertEqual(row_result["source_semantic_factual_alias_evidence_rank"], 1)
+        self.assertEqual(row_result["source_semantic_factual_gold_candidate_alias_count"], 1)
+        self.assertEqual(
+            row_result["source_semantic_factual_gold_candidate_query_overlap_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            row_result["line_reranker_usage"]["factual_alias_query_overlap_count"],
+            1,
+        )
+        self.assertEqual(
+            row_result["source_semantic_cache_hot_path"]["hot_query_provider_call_count"],
+            0,
+        )
+        dumped = json.dumps(row_result, ensure_ascii=False)
+        self.assertNotIn("drawer nine", dumped)
+        self.assertNotIn(str(root), dumped)
+
     def test_standard_case_cache_reuses_prepared_sqlite_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

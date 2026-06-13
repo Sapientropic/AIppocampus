@@ -68,6 +68,20 @@ def successful_probe() -> dict:
     }
 
 
+def successful_probe_with_noisy_stderr() -> dict:
+    result = successful_probe()
+    result["stderr_tail"] = "\n".join(
+        [
+            "ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters in other/plugin.json",
+            "Failed to list resource templates for MCP server 'aippocampus': Method not found: resources/templates/list",
+            "Failed to list resources for MCP server 'aippocampus': Method not found: resources/list",
+            "Failed to kill MCP process group 12345: No such process",
+            "state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back",
+        ]
+    )
+    return result
+
+
 class PluginInstallerTests(unittest.TestCase):
     def test_codex_install_builds_marketplace_refreshes_versioned_cache_and_verifies(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-install"
@@ -139,6 +153,31 @@ class PluginInstallerTests(unittest.TestCase):
                 self.assertFalse(
                     any(command[:2] == ["plugin", "add"] for command in runner.command_tails)
                 )
+        finally:
+            shutil.rmtree(output, ignore_errors=True)
+
+    def test_codex_install_buckets_nonfatal_host_probe_stderr_after_success(self) -> None:
+        output = REPO_ROOT / "dist" / "test-plugin-installer-stderr-summary"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                result = plugin_installer.install_codex_plugin(
+                    repo_root=REPO_ROOT,
+                    codex_home_path=root / "codex-home",
+                    plugin_output=output,
+                    verify=True,
+                    runner=FakeCodexRunner(),
+                    host_probe_runner=lambda **_: successful_probe_with_noisy_stderr(),
+                )
+
+            summary = result["host_probe"]["warning_summary"]
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["agent_callable_status"], "host_live_probe_ok")
+            self.assertEqual(summary["status"], "verification_passed_with_nonfatal_host_warnings")
+            self.assertEqual(summary["fatal_failures"], [])
+            self.assertEqual(summary["aippocampus_actionable_warnings"], [])
+            self.assertGreaterEqual(len(summary["benign_host_probe_warnings"]), 4)
+            self.assertEqual(len(summary["unrelated_host_or_plugin_noise"]), 1)
         finally:
             shutil.rmtree(output, ignore_errors=True)
 

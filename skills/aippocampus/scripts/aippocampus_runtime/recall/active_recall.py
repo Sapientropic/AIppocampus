@@ -50,6 +50,10 @@ from aippocampus_runtime.source.agent_self_notes import (
     public_agent_self_note_surface,
     search_agent_self_notes,
 )
+from aippocampus_runtime.source_shape import (
+    apply_source_shape_priority_to_active_recall_context,
+    load_source_shape_diagnostics,
+)
 from aippocampus_runtime.subconscious.candidate_router import (
     default_working_memory_path,
     load_working_memory,
@@ -372,6 +376,7 @@ def active_recall_context(
     agent_self_notes_path: Path | None = None,
     working_memory_path: Path | None = None,
     continuity_domains_snapshot_path: Path | None = None,
+    source_shape_diagnostics: list[dict[str, Any]] | None = None,
     max_matches: int = 4,
 ) -> dict[str, Any]:
     """Return explicit agent-initiated continuity context.
@@ -448,7 +453,7 @@ def active_recall_context(
         if route_status["snapshot_status"] in {"missing", "unreadable"}
         else "search_clean_source"
     )
-    return {
+    result = {
         "kind": "aippocampus_agent_initiated_recall_context",
         "schema_version": 1,
         "decision": "context" if memory_atmosphere or working_brief or domain_brief or pathlet_brief or routes else "empty",
@@ -476,6 +481,7 @@ def active_recall_context(
         },
         "suggested_next": suggested_next,
     }
+    return apply_source_shape_priority_to_active_recall_context(result, source_shape_diagnostics)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -505,6 +511,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--agent-self-notes")
     parser.add_argument("--working-memory")
     parser.add_argument("--continuity-domains-snapshot")
+    parser.add_argument(
+        "--source-shape-diagnostics",
+        help="Optional JSON/JSONL source-shape descriptors or runtime_recheck_event rows.",
+    )
     parser.add_argument("--use-lock", action="store_true", dest="use_lock")
     parser.add_argument("--use-background-lock", action="store_true", dest="use_lock")
     parser.add_argument("--lock-id")
@@ -586,6 +596,9 @@ def main(argv: list[str] | None = None) -> int:
             else None,
             continuity_domains_snapshot_path=Path(args.continuity_domains_snapshot).resolve()
             if args.continuity_domains_snapshot
+            else None,
+            source_shape_diagnostics=load_source_shape_diagnostics(args.source_shape_diagnostics)
+            if args.source_shape_diagnostics
             else None,
             max_matches=args.max,
         )

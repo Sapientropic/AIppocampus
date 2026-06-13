@@ -16,6 +16,7 @@ PR_STEMS = frozenset(
         # naming does not silently hide PR coverage.
         "test_benchmark_capability_provenance",
         "test_benchmark_graph_extraction_boundary",
+        "test_parallel_derivation_bundle",
     }
 )
 
@@ -140,6 +141,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_episode_arcs",
         "test_compat_shim_inventory",
         "test_compensatory_dream",
+        "test_continuity_domain_salience_adapter",
         "test_continuity_domain_producer",
         "test_continuity_domains",
         "test_coordination_topology",
@@ -230,6 +232,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_operation_integrity",
         "test_package_windows_binary",
         "test_packet_topology_diagnostic",
+        "test_parallel_derivation_bundle",
         "test_path_identity",
         "test_planning_audit",
         "test_plugin_distribution",
@@ -286,6 +289,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_retrieval_lifecycle",
         "test_retrieval_score_fusion",
         "test_routing_boundaries",
+        "test_runtime_recheck_events",
         "test_runtime_contracts_and_config_registry",
         "test_run_tests_tiers",
         "test_schema_profiles",
@@ -304,6 +308,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_semantic_warm_route_producer",
         "test_simulate_prompt_hook",
         "test_spend_doctor",
+        "test_source_shape_runtime",
         "test_source_evidence_recall_eval",
         "test_source_intake_health",
         "test_source_backed_lessons",
@@ -364,6 +369,7 @@ QUICK_STEMS = frozenset(
         "test_cognitive_observatory",
         "test_concept_edge_utility",
         "test_consolidation_priority",
+        "test_continuity_domain_salience_adapter",
         "test_continuity_domain_producer",
         "test_cross_agent_isolation",
         "test_dream_delivery_eligibility",
@@ -389,8 +395,10 @@ QUICK_STEMS = frozenset(
         "test_recall_feedback_events",
         "test_retrieval_lifecycle",
         "test_runtime_contracts_and_config_registry",
+        "test_runtime_recheck_events",
         "test_run_tests_tiers",
         "test_semantic_warm_route_producer",
+        "test_source_shape_runtime",
         "test_source_intake_health",
         "test_source_backed_lessons",
         "test_source_reopen_budget",
