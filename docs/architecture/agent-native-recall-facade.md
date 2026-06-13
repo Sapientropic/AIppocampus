@@ -57,12 +57,12 @@ navigation prior rather than source evidence.
 Attention-router sorting has the same source boundary. `--attention-router`
 forces explicit opt-in sorting for already emitted reopenable routes.
 `--attention-router-mode auto` checks the shared promotion harness before
-enabling sorting; if the gate is blocked, baseline order is preserved and
-`attention_router_navigation.policy.promotion_blockers` explains why. Current
-promotion blockers include safe-but-unhelpful routing cases such as an applied
-router that keeps a generic top route, lacks query/route overlap or an explicit
-bridge reason, or emits route labels / `why_this_may_matter` text too vague for
-a fresh agent to choose the first deepen step.
+enabling sorting. The auto gate is now scoped to explicit agent pull, not
+default hooks. It requires public/holdout router navigation evidence and keeps
+negative controls in the shared promotion report; neutral no-op cases remain
+ROI metrics instead of automatic blockers. If a red line or public-quality gate
+fails, baseline order is preserved and
+`attention_router_navigation.policy.promotion_blockers` explains why.
 
 This is an explicit pull path for agents and operators. It is not a default
 hook, not every-turn recall, and not a stable TypeScript/Python SDK. The recall

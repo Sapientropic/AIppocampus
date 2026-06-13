@@ -13,7 +13,10 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.ops import recall_navigation_comparison_fixtures
+from aippocampus_runtime.ops import (
+    attention_router_auto_gate,
+    recall_navigation_comparison_fixtures,
+)
 from aippocampus_runtime.ops.recall_navigation_comparison import ARM_ATTENTION_NAV
 from aippocampus_runtime.ops.recall_navigation_macro_fixture import (
     fixture_macro_navigation_cases,
@@ -582,8 +585,6 @@ def _promotion_blockers(
         blockers.append("safety_red_line_present")
     if _int(metrics.get("feature_hurt_case_count")):
         blockers.append("feature_hurt_cases_present")
-    if _int(metrics.get("feature_noop_case_count")):
-        blockers.append("feature_noop_cases_present")
     if set(coverage.get("distractor_families_present") or []) != set(DISTRACTOR_FAMILIES):
         blockers.append("distractor_coverage_incomplete")
     if _int(metrics.get("attention_router_applied_but_no_help_count")):
@@ -598,6 +599,36 @@ def _promotion_blockers(
     return blockers
 
 
+def _neutral_noop(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    case_ids = [
+        str(case.get("case_id") or "")
+        for case in cases
+        if str(case.get("promotion_outcome") or "") == "feature_noop"
+        and str(case.get("case_family") or "") != "attention_router_no_help"
+    ]
+    return {
+        "case_count": len(case_ids),
+        "case_ids": case_ids,
+        "blocking": False,
+        "metric_role": "roi_signal_not_hard_blocker",
+    }
+
+
+def _negative_controls(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    case_ids = [
+        str(case.get("case_id") or "")
+        for case in cases
+        if str(case.get("case_family") or "") in {"attention_router_no_help", "noise"}
+    ]
+    return {
+        "case_count": len(case_ids),
+        "case_ids": case_ids,
+        "blocking_for_shared_default_gate": True,
+        "blocking_for_explicit_auto_gate": False,
+        "reason": "negative controls prove the gate can see hurt/no-help without becoming permanent blockers for the positive public cohort",
+    }
+
+
 def build_recall_navigation_promotion_report(
     comparison_report: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -606,6 +637,17 @@ def build_recall_navigation_promotion_report(
     coverage = _fixture_coverage(cases)
     usefulness = _usefulness(metrics, cases)
     blockers = _promotion_blockers(metrics, coverage, usefulness)
+    neutral_noop = _neutral_noop(cases)
+    negative_controls = _negative_controls(cases)
+    public_cohort = attention_router_auto_gate.public_cohort_receipt(
+        red_line_keys=RED_LINE_KEYS,
+    )
+    explicit_auto_gate = attention_router_auto_gate.explicit_auto_gate(
+        metrics=metrics,
+        public_cohort=public_cohort,
+        neutral_noop=neutral_noop,
+        red_line_keys=RED_LINE_KEYS,
+    )
     macro_readout = macro_navigation_readout(
         cases,
         arm_baseline=ARM_BASELINE,
@@ -645,11 +687,15 @@ def build_recall_navigation_promotion_report(
         "cases": cases,
         "cases_by_id": {str(case["case_id"]): case for case in cases},
         "promotion_metrics": metrics,
+        "neutral_noop": neutral_noop,
+        "negative_controls": negative_controls,
         "usefulness_metrics": usefulness,
         "attention_router_readout": {
             **_as_dict(comparison_report.get("attention_router_activation")),
             "comparison_arm": ARM_ATTENTION_NAV,
         },
+        "attention_router_public_cohort": public_cohort,
+        "attention_router_explicit_auto_gate": explicit_auto_gate,
         "macro_navigation_readout": macro_readout,
         "fixture_coverage": coverage,
         "comparison_source": {

@@ -500,6 +500,18 @@ def _fixture_cases() -> list[dict[str, Any]]:
             "ripened": False,
             "result_status": "backstage_candidate",
             "truth_authority": "candidate_only",
+            "foreground_eligible": False,
+            "source_support_passed": False,
+        },
+        {
+            "case_id": "dream_candidate_ripened_with_source",
+            "candidate_source": "dream_subconscious",
+            "ripened": True,
+            "result_status": "ripe",
+            "truth_authority": "source_supported",
+            "foreground_eligible": True,
+            "source_support_passed": True,
+            "repeated_wrong_route_prevented": True,
         },
         {
             "case_id": "cognitive_route_to_source_support",
@@ -510,6 +522,40 @@ def _fixture_cases() -> list[dict[str, Any]]:
             "truth_authority": "source_supported",
         },
     ]
+
+
+def _dream_candidate_readout(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    dream_cases = [
+        case for case in cases if case.get("candidate_source") == "dream_subconscious"
+    ]
+    dream_only_foreground_leak_count = sum(
+        1
+        for case in dream_cases
+        if case.get("truth_authority") != "source_supported"
+        and bool(case.get("foreground_eligible"))
+    )
+    return {
+        "kind": "aippo_dream_candidate_ripening_readout",
+        "authority": "dream_synthesized_candidate_not_fact",
+        "metrics": {
+            "dream_candidate_nominated_count": len(dream_cases),
+            "dream_candidate_ripened_with_source_count": sum(
+                1
+                for case in dream_cases
+                if case.get("ripened") and case.get("truth_authority") == "source_supported"
+            ),
+            "dream_only_foreground_leak_count": dream_only_foreground_leak_count,
+            "repeated_wrong_route_prevented_count": sum(
+                1 for case in dream_cases if case.get("repeated_wrong_route_prevented")
+            ),
+        },
+        "boundary": {
+            "dream_may_nominate_candidates": True,
+            "dream_only_candidates_stay_backstage": True,
+            "source_support_required_before_ripening": True,
+            "ripened_candidate_still_requires_reopen_before_claim": True,
+        },
+    }
 
 
 def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
@@ -532,6 +578,7 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
     deepen = deepen_aippo_working_contract(contract)
     explain = explain_aippo_working_contract(contract)
     cases = _fixture_cases()
+    dream_readout = _dream_candidate_readout(cases)
     red_lines = {
         "source_backed_claim_without_reopen": 0,
         "stale_clause_activated_as_current": sum(
@@ -588,6 +635,7 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
         "deepen_surface": deepen,
         "explain_surface": explain,
         "fixture_cases": cases,
+        "dream_candidate_readout": dream_readout,
         "foreground_packet_budget_bytes": FOREGROUND_PACKET_BYTE_BUDGET,
         "metrics": {
             "aippo_extraction_success_count": len(contracts),

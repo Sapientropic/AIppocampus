@@ -342,7 +342,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("head_votes", encoded)
         self.assertNotIn("src_attention", encoded)
 
-    def test_attention_router_auto_mode_follows_promotion_gate(self) -> None:
+    def test_attention_router_auto_mode_uses_explicit_recall_gate(self) -> None:
         fake_packet = {
             "kind": "aippocampus_recall_context",
             "status": "ok",
@@ -379,10 +379,69 @@ class AgentOptInContinuityTests(unittest.TestCase):
         policy = report["attention_router_navigation"]["policy"]
         self.assertEqual(policy["mode"], "auto")
         self.assertTrue(policy["promotion_gate_checked"])
+        self.assertTrue(policy["default_adoption_allowed"])
+        self.assertTrue(report["attention_router_navigation"]["enabled"])
+        self.assertEqual(report["memory_packets"][0]["route_id"], "route_attention")
+        self.assertTrue(report["attention_router_navigation"]["top_route_changed"])
+        self.assertNotIn("fixture_only_not_live_default_path", policy["promotion_blockers"])
+
+    def test_attention_router_auto_mode_fails_closed_when_gate_blocks(self) -> None:
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "route_id": "route_generic",
+                    "kind": "source_ref",
+                    "handle": "handle:generic",
+                    "route_label": "generic technical route",
+                    "source_refs": [{"source_id": "src_generic", "message_id": "msg_generic"}],
+                },
+                {
+                    "route_id": "route_attention",
+                    "kind": "source_ref",
+                    "handle": "handle:attention",
+                    "route_label": "attention router score fusion route",
+                    "route_topic": "attention_router",
+                    "source_refs": [
+                        {"source_id": "src_attention", "message_id": "msg_attention"}
+                    ],
+                },
+            ],
+        }
+        blocked_gate = {
+            "surface": "explicit_agent_recall",
+            "gate_ok": False,
+            "public_quality_gate_ok": False,
+            "default_adoption_gate_ok": False,
+            "promotion_decision": "not_promoted",
+            "blockers": ["safety_red_line_present"],
+            "metrics": {},
+        }
+
+        with (
+            patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet),
+            patch.object(
+                agent_continuity.attention_router_policy,
+                "explicit_recall_auto_gate",
+                return_value=blocked_gate,
+            ),
+        ):
+            report = agent_continuity.recall(
+                "attention router score fusion route selection",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                max_routes=2,
+                attention_router="auto",
+            )
+
+        policy = report["attention_router_navigation"]["policy"]
+        self.assertEqual(policy["mode"], "auto")
+        self.assertTrue(policy["promotion_gate_checked"])
         self.assertFalse(policy["default_adoption_allowed"])
         self.assertFalse(report["attention_router_navigation"]["enabled"])
         self.assertEqual(report["memory_packets"][0]["route_id"], "route_generic")
-        self.assertIn("fixture_only_not_live_default_path", policy["promotion_blockers"])
+        self.assertIn("safety_red_line_present", policy["promotion_blockers"])
 
     def test_stale_and_malformed_deepen_cannot_verify(self) -> None:
         recall = agent_continuity.recall(
@@ -744,8 +803,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         policy = payload["attention_router_navigation"]["policy"]
         self.assertEqual(policy["mode"], "auto")
-        self.assertFalse(policy["default_adoption_allowed"])
-        self.assertIn("fixture_only_not_live_default_path", policy["promotion_blockers"])
+        self.assertTrue(policy["default_adoption_allowed"])
+        self.assertEqual(policy["promotion_blockers"], [])
 
     def test_cli_agent_aippo_task_selects_useful_clause_family(self) -> None:
         proc = subprocess.run(

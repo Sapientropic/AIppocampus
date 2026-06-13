@@ -211,16 +211,41 @@ def public_semantic_candidate_messages(
     ]
 
 
+def public_semantic_full_source_candidate_messages(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return every clean-source message as a labeler candidate in source order."""
+
+    candidates: list[dict[str, Any]] = []
+    for message in sorted(messages, key=lambda item: normalize_source_line(item, 1)):
+        text = str(message.get("text") or "").strip()
+        if not text or not message.get("message_id"):
+            continue
+        candidates.append(
+            {
+                "message_id": message.get("message_id") or message.get("id"),
+                "turn_id": message.get("turn_id"),
+                "source_line": message.get("source_line"),
+                "role": message.get("role"),
+                "phase": message.get("phase") or "",
+                "text": compact_text(text, 900),
+            }
+        )
+    return candidates
+
+
 def public_semantic_labeler_messages(candidates: list[dict[str, Any]]) -> list[dict[str, str]]:
     system = """You are labeling public benchmark clean-source messages for AIppocampus.
-Return JSON only. Labels are navigation hints, not source truth."""
+Return one valid JSON object only. Labels are navigation hints, not source truth."""
     user = json.dumps(
         {
             "canonical_scope_labels": list(SCOPE_LABEL_ORDER),
+            "required_top_level_shape": {"findings": ["finding objects"]},
             "task": (
                 "For each candidate that genuinely needs a fuzzy semantic scope label, "
                 "return one source-backed semantic_scope_labels finding. Omit candidates "
-                "that only have keyword matches or ordinary one-off assistant requests."
+                "that only have keyword matches or ordinary one-off assistant requests. "
+                "Keep the findings list compact; an empty findings list is valid."
             ),
             "label_rules": {
                 "personal_reflection": "self, feelings, doubts, identity, or meaning",

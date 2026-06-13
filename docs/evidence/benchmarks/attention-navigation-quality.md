@@ -63,8 +63,12 @@ Current deterministic result:
 Maturity metadata:
 
 - `benchmark_maturity_level = contract_smoke`
-- `contract_gate_ok = true`
-- `quality_gate_ok = false`
+- `contract_safety_gate_ok = true`
+- `router_design_gate_ok = true`
+- `public_quality_gate_ok = false`
+- `default_adoption_gate_ok = false`
+- `quality_gate_ok = false` as the backward-compatible public-quality alias,
+  not a V0 design-failure verdict
 - `minimum_family_case_floor = 30`
 - `sample_floor_met = false`
 - `next_promotion_target = public_cohort_candidate`
@@ -73,6 +77,25 @@ The contract gate says the selected navigation fixtures still protect the
 declared red lines. It is not a public-quality cohort result until a later
 public/external cohort, sample-floor, uncertainty, holdout, and no-tuning-leak
 promotion explicitly passes.
+
+## Public/Holdout Cohort Slice
+
+The public-safe cohort runner is:
+
+```powershell
+python -c "import json, sys; sys.path.insert(0, 'benchmarks/aippocampus'); import benchmark_attention_navigation_quality as b; print(json.dumps(b.run_attention_navigation_public_holdout_cohort(), ensure_ascii=False, indent=2))"
+```
+
+It emits `aippocampus_attention_navigation_public_cohort` over synthetic/public
+route packets across positive routes, hard masks, stale/currentness, conflict,
+action-time cues, wrong-source controls, generic-hint specificity, anti-nag,
+and multilingual alias routing. Each family has a development partition and a
+holdout partition; `holdout_used_for_tuning_count` stays `0`.
+
+This cohort can support the narrow explicit-pull auto gate for
+`aippocampus agent recall --attention-router-mode auto`. It still cannot claim
+live host behavior lift, answer quality, private-history quality, or default
+foreground hook adoption.
 
 ## Boundaries
 

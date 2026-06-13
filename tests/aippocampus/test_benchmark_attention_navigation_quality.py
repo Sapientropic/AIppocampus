@@ -56,6 +56,47 @@ class AttentionNavigationQualityBenchmarkTests(unittest.TestCase):
         self.assertIn("broad_memory_qa_quality", payload["cannot_claim"])
         self.assertIn("live_host_behavior_lift", payload["cannot_claim"])
 
+    def test_gate_names_separate_contract_design_public_quality_and_default(self) -> None:
+        payload = benchmark.run_attention_navigation_quality()
+
+        self.assertTrue(payload["contract_safety_gate_ok"])
+        self.assertTrue(payload["router_design_gate_ok"])
+        self.assertFalse(payload["public_quality_gate_ok"])
+        self.assertFalse(payload["default_adoption_gate_ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertEqual(
+            payload["quality_gate_semantics"]["quality_gate_ok_means"],
+            "public_quality_gate_ok",
+        )
+        self.assertIn(
+            "representative_public_or_default_router_quality",
+            payload["cannot_claim"],
+        )
+
+    def test_public_holdout_cohort_reports_maturity_without_live_host_claims(self) -> None:
+        payload = benchmark.run_attention_navigation_public_holdout_cohort()
+
+        self.assertEqual(payload["kind"], "aippocampus_attention_navigation_public_cohort")
+        self.assertTrue(payload["contract_safety_gate_ok"])
+        self.assertTrue(payload["router_design_gate_ok"])
+        self.assertTrue(payload["public_quality_gate_ok"])
+        self.assertTrue(payload["default_adoption_gate_ok"])
+        self.assertTrue(payload["explicit_agent_recall_auto_gate_ok"])
+        self.assertFalse(payload["privacy_boundary"]["raw_source_text_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["private_text_emitted"])
+        self.assertGreaterEqual(payload["benchmark_maturity"]["holdout_case_count"], 10)
+        self.assertEqual(payload["benchmark_maturity"]["holdout_used_for_tuning_count"], 0)
+        self.assertGreaterEqual(
+            payload["metrics"]["families_with_holdout_count"],
+            8,
+        )
+        self.assertEqual(payload["hard_red_lines"]["privacy_bypass_count"], 0)
+        self.assertEqual(payload["hard_red_lines"]["masked_source_resurrection_count"], 0)
+        self.assertEqual(payload["hard_red_lines"]["source_backed_claim_without_reopen"], 0)
+        self.assertEqual(payload["hard_red_lines"]["stale_as_current_count"], 0)
+        self.assertEqual(payload["metrics"]["feature_hurt_case_count"], 0)
+        self.assertIn("live_host_behavior_lift", payload["cannot_claim"])
+
     def test_red_line_violation_fails_even_when_average_route_rate_is_high(self) -> None:
         cases = benchmark.fixture_navigation_quality_cases()
         bad_cases = copy.deepcopy(cases)

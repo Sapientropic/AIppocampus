@@ -26,6 +26,11 @@ _paths.ensure_paths()
 import benchmark_source_evidence_retrieval as retrieval_benchmark
 import provider_execution_budget
 from claim_boundary_refs import claim_boundary_ref
+from source_evidence.semantic_sidecars import (
+    SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS,
+    source_semantic_sidecar_materializer_contract,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_SPLIT = "longmemeval-v1-small"
@@ -151,6 +156,20 @@ def skipped_payload(
     line_reranker_max_tokens: int = (
         retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS
     ),
+    source_semantic_sidecar_materializer: str = SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    source_semantic_sidecar_max_candidates: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES
+    ),
+    source_semantic_sidecar_max_provider_calls: int = 0,
+    source_semantic_sidecar_workers: int = 1,
+    source_semantic_sidecar_timeout: int = retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    source_semantic_sidecar_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS
+    ),
+    source_semantic_sidecar_min_confidence: float = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
+    ),
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -166,6 +185,14 @@ def skipped_payload(
             line_reranker_mode=line_reranker_mode,
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
+            source_semantic_sidecar_materializer=source_semantic_sidecar_materializer,
+            source_semantic_sidecar_max_candidates=source_semantic_sidecar_max_candidates,
+            source_semantic_sidecar_max_provider_calls=source_semantic_sidecar_max_provider_calls,
+            source_semantic_sidecar_workers=source_semantic_sidecar_workers,
+            source_semantic_sidecar_timeout=source_semantic_sidecar_timeout,
+            source_semantic_sidecar_max_tokens=source_semantic_sidecar_max_tokens,
+            source_semantic_sidecar_min_confidence=source_semantic_sidecar_min_confidence,
+            rebuild_source_semantic_sidecars=rebuild_source_semantic_sidecars,
         ),
         "metrics": {"question_count": 0},
         "cases": [],
@@ -209,8 +236,25 @@ def evaluation_metadata(
     line_reranker_mode: str = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE,
     line_reranker_timeout: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
     line_reranker_max_tokens: int = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
+    source_semantic_sidecar_materializer: str = SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    source_semantic_sidecar_max_candidates: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES
+    ),
+    source_semantic_sidecar_max_provider_calls: int = 0,
+    source_semantic_sidecar_workers: int = 1,
+    source_semantic_sidecar_timeout: int = retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    source_semantic_sidecar_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS
+    ),
+    source_semantic_sidecar_min_confidence: float = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
+    ),
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     resolved_line_reranker_mode = line_reranker_mode.strip().casefold()
+    resolved_sidecar_materializer = (
+        str(source_semantic_sidecar_materializer or "").strip().casefold()
+    )
     metadata = {
         "mode": "retrieval_only",
         "retrieval_metric_scope": "session and source-line recall",
@@ -220,13 +264,16 @@ def evaluation_metadata(
         "min_questions": int(min_questions),
         "top_k": int(top_k),
         "line_reranker_mode": resolved_line_reranker_mode,
+        "source_semantic_sidecar_materializer": resolved_sidecar_materializer,
+        "rebuild_source_semantic_sidecars": bool(rebuild_source_semantic_sidecars),
         "runner": "benchmarks/aippocampus/benchmark_longmemeval.py",
         "underlying_adapter": (
             "benchmarks/aippocampus/benchmark_source_evidence_retrieval.py"
         ),
         "capability_provenance": (
             retrieval_benchmark.benchmark_capability_provenance(
-                resolved_line_reranker_mode
+                resolved_line_reranker_mode,
+                source_semantic_sidecar_materializer=resolved_sidecar_materializer,
             )
         ),
     }
@@ -241,6 +288,18 @@ def evaluation_metadata(
         metadata["source_semantic_cache_arm"] = (
             retrieval_benchmark.source_semantic_cache_public_contract()
         )
+        if resolved_sidecar_materializer != SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF:
+            metadata["source_semantic_sidecar_materializer_contract"] = (
+                source_semantic_sidecar_materializer_contract(
+                    materializer=resolved_sidecar_materializer,
+                    max_candidates=source_semantic_sidecar_max_candidates,
+                    max_provider_calls=source_semantic_sidecar_max_provider_calls,
+                    workers=source_semantic_sidecar_workers,
+                    timeout=source_semantic_sidecar_timeout,
+                    max_tokens=source_semantic_sidecar_max_tokens,
+                    min_confidence=source_semantic_sidecar_min_confidence,
+                )
+            )
     return metadata
 
 
@@ -308,6 +367,20 @@ def partial_diagnostic_payload(
     line_reranker_max_tokens: int = (
         retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS
     ),
+    source_semantic_sidecar_materializer: str = SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    source_semantic_sidecar_max_candidates: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES
+    ),
+    source_semantic_sidecar_max_provider_calls: int = 0,
+    source_semantic_sidecar_workers: int = 1,
+    source_semantic_sidecar_timeout: int = retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    source_semantic_sidecar_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS
+    ),
+    source_semantic_sidecar_min_confidence: float = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
+    ),
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -323,6 +396,14 @@ def partial_diagnostic_payload(
             line_reranker_mode=line_reranker_mode,
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
+            source_semantic_sidecar_materializer=source_semantic_sidecar_materializer,
+            source_semantic_sidecar_max_candidates=source_semantic_sidecar_max_candidates,
+            source_semantic_sidecar_max_provider_calls=source_semantic_sidecar_max_provider_calls,
+            source_semantic_sidecar_workers=source_semantic_sidecar_workers,
+            source_semantic_sidecar_timeout=source_semantic_sidecar_timeout,
+            source_semantic_sidecar_max_tokens=source_semantic_sidecar_max_tokens,
+            source_semantic_sidecar_min_confidence=source_semantic_sidecar_min_confidence,
+            rebuild_source_semantic_sidecars=rebuild_source_semantic_sidecars,
         ),
         "metrics": progress_metrics(progress_events),
         "cases": [],
@@ -457,6 +538,20 @@ def run_longmemeval_benchmark(
     standard_cache_dir: Path | str | None = None,
     use_standard_cache: bool = True,
     rebuild_standard_cache: bool = False,
+    source_semantic_sidecar_materializer: str = SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    source_semantic_sidecar_max_candidates: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES
+    ),
+    source_semantic_sidecar_max_provider_calls: int = 0,
+    source_semantic_sidecar_workers: int = 1,
+    source_semantic_sidecar_timeout: int = retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    source_semantic_sidecar_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS
+    ),
+    source_semantic_sidecar_min_confidence: float = (
+        retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
+    ),
+    rebuild_source_semantic_sidecars: bool = False,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -469,7 +564,25 @@ def run_longmemeval_benchmark(
         else None
     )
     progress_events: list[dict[str, Any]] = []
-    verification = download_dataset(data_path, split) if download else verify_dataset_file(data_path, split)
+    sidecar_config: dict[str, Any] = {
+        "source_semantic_sidecar_materializer": source_semantic_sidecar_materializer,
+        "source_semantic_sidecar_max_candidates": source_semantic_sidecar_max_candidates,
+        "source_semantic_sidecar_max_provider_calls": (
+            source_semantic_sidecar_max_provider_calls
+        ),
+        "source_semantic_sidecar_workers": source_semantic_sidecar_workers,
+        "source_semantic_sidecar_timeout": source_semantic_sidecar_timeout,
+        "source_semantic_sidecar_max_tokens": source_semantic_sidecar_max_tokens,
+        "source_semantic_sidecar_min_confidence": (
+            source_semantic_sidecar_min_confidence
+        ),
+        "rebuild_source_semantic_sidecars": rebuild_source_semantic_sidecars,
+    }
+    verification = (
+        download_dataset(data_path, split)
+        if download
+        else verify_dataset_file(data_path, split)
+    )
     if not verification["ok"]:
         reason = (
             "skipped_missing_dataset"
@@ -488,6 +601,7 @@ def run_longmemeval_benchmark(
             line_reranker_mode=line_reranker_mode,
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
+            **sidecar_config,
         )
     live_provider_mode = line_reranker_mode.strip().casefold() == "semantic"
     provider_budget = semantic_provider_budget_config(
@@ -520,6 +634,7 @@ def run_longmemeval_benchmark(
             line_reranker_mode=line_reranker_mode,
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
+            **sidecar_config,
         )
         payload["ok"] = False
         budget_summary = provider_execution_budget.provider_execution_budget_summary(
@@ -570,6 +685,7 @@ def run_longmemeval_benchmark(
                     line_reranker_mode=line_reranker_mode,
                     line_reranker_timeout=line_reranker_timeout,
                     line_reranker_max_tokens=line_reranker_max_tokens,
+                    **sidecar_config,
                 ),
             )
         if progress_callback is not None:
@@ -601,6 +717,7 @@ def run_longmemeval_benchmark(
             standard_cache_dir=standard_cache_dir,
             use_standard_cache=use_standard_cache,
             rebuild_standard_cache=rebuild_standard_cache,
+            **sidecar_config,
         )
     except KeyboardInterrupt:
         if partial_path is None:
@@ -619,6 +736,7 @@ def run_longmemeval_benchmark(
             line_reranker_mode=line_reranker_mode,
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
+            **sidecar_config,
         )
         write_json_payload(partial_path, payload)
         return payload
@@ -637,6 +755,7 @@ def run_longmemeval_benchmark(
             line_reranker_mode=line_reranker_mode,
             line_reranker_timeout=line_reranker_timeout,
             line_reranker_max_tokens=line_reranker_max_tokens,
+            **sidecar_config,
         ),
         "metrics": retrieval.get("metrics") or {},
         "cases": retrieval.get("cases") or [],
@@ -755,6 +874,61 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force rebuild of cached standard cases/source indexes.",
     )
+    parser.add_argument(
+        "--rebuild-source-semantic-sidecars",
+        action="store_true",
+        help=(
+            "Force source semantic sidecar re-materialization; standard cache rebuilds "
+            "reuse existing sidecars unless this is set."
+        ),
+    )
+    parser.add_argument(
+        "--source-semantic-sidecar-materializer",
+        choices=sorted(SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS),
+        default=SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+        help=(
+            "Opt-in cold-fill materializer for canonical semantic-scope sidecars "
+            "before source_semantic_cache prewarm."
+        ),
+    )
+    parser.add_argument(
+        "--source-semantic-sidecar-max-candidates",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+        help=(
+            "Candidate selector width for public_semantic_labeler, or source-message "
+            "batch size for public_semantic_labeler_full_source."
+        ),
+    )
+    parser.add_argument(
+        "--max-source-semantic-sidecar-calls",
+        type=int,
+        default=0,
+        help=(
+            "Hard cap for source-side semantic sidecar materializer provider calls; "
+            "in full-source mode this caps source-message batches globally."
+        ),
+    )
+    parser.add_argument(
+        "--source-semantic-sidecar-workers",
+        type=int,
+        default=1,
+    )
+    parser.add_argument(
+        "--source-semantic-sidecar-timeout",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    )
+    parser.add_argument(
+        "--source-semantic-sidecar-max-tokens",
+        type=int,
+        default=retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+    )
+    parser.add_argument(
+        "--source-semantic-sidecar-min-confidence",
+        type=float,
+        default=retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--progress-every",
@@ -822,6 +996,14 @@ def main() -> int:
         standard_cache_dir=args.standard_cache_dir,
         use_standard_cache=not args.no_standard_cache,
         rebuild_standard_cache=args.rebuild_standard_cache,
+        rebuild_source_semantic_sidecars=args.rebuild_source_semantic_sidecars,
+        source_semantic_sidecar_materializer=args.source_semantic_sidecar_materializer,
+        source_semantic_sidecar_max_candidates=args.source_semantic_sidecar_max_candidates,
+        source_semantic_sidecar_max_provider_calls=args.max_source_semantic_sidecar_calls,
+        source_semantic_sidecar_workers=args.source_semantic_sidecar_workers,
+        source_semantic_sidecar_timeout=args.source_semantic_sidecar_timeout,
+        source_semantic_sidecar_max_tokens=args.source_semantic_sidecar_max_tokens,
+        source_semantic_sidecar_min_confidence=args.source_semantic_sidecar_min_confidence,
         progress_callback=stderr_progress if int(args.progress_every) > 0 else None,
     )
     if args.output:

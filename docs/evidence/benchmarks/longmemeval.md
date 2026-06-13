@@ -215,6 +215,23 @@ input report path local:
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --json
 ```
 
+The analysis report also carries the #1327 source-window coverage diagnostic:
+
+- `source_window_coverage_diagnostic.fused_miss_count`
+- `candidate_missing_miss_count` versus `reranker_visible_miss_count`
+- miss families such as `same_session_wrong_line_top_k`,
+  `session_found_below_top_k`, `gold_line_low_rank_21_50`, and
+  `gold_line_rank_below_50`
+- `bounded_coverage_improvement`, a bounded next-slice projection for adding
+  compact candidate rows without changing the default foreground packet budget
+- `negative_control_naive_large_radius`, which must stay rejected when wider
+  context growth would make candidate packs less usable
+
+These fields explain whether remaining exact-line failures are candidate
+coverage failures or line-selection failures. They do not prove answer quality,
+official LongMemEval score, or that a larger context radius should be accepted
+by default.
+
 Run the CI-safe answer/latency report schema path. This reuses the retrieval
 adapter, builds bounded candidate source windows, records retrieval and
 candidate-gathering latency, and produces answer-layer fields without making a
@@ -283,6 +300,8 @@ lexical rows remain the broader LongMemEval-S quality baselines.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-13T13:12:36Z` | `longmemeval-v1-small` | retrieval-only + contract-aware full-source semantic-scope warming | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1167.30s | #1323 full-source warming; source-index cache hit 500/500; 500 cold-fill provider calls; hot path provider 0; sidecar coverage improved but fused R@10 unchanged |
+| `2026-06-13T10:44:40Z` | `longmemeval-v1-small` | retrieval-only + materialized semantic-scope sidecar diagnostic | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 2559.04s | #1323 negative diagnostic; 0 rank delta vs worker-surface proxy; sidecar coverage/label-overlap bottleneck |
 | `2026-06-12T18:10:20Z` | `longmemeval-v1-small` | retrieval-only + AIppocampus source worker-surface proxy | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1494.10s | worker-surface proxy measured; no provider calls; not canonical semantic warming |
 | `2026-06-12T16:43:38Z` | `longmemeval-v1-small` | retrieval-only + semantic LLM query/candidate upper bound | 500 | 95.80% | 85.18% | 94.15% | 94.36% | 1705.75s | #1323 LLM upper bound; 9 provider errors |
 | `2026-06-12T16:01:24Z` | `longmemeval-v1-small` | retrieval-only + lexical line-reranker 100Q comparison | 100 | 97.00% | 87.23% | 89.36% | 96.81% | 154.73s | #1323 lexical comparison; deterministic |
@@ -315,6 +334,8 @@ python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-sm
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-timeout 45 --line-reranker-workers 2 --progress-every 10 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.budget.json --max-provider-calls 100 --max-provider-total-tokens 1500000 --provider-cost-unknown --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 100 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-timeout 45 --line-reranker-workers 8 --progress-every 10 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.budget.json --max-provider-calls 100 --max-provider-total-tokens 1500000 --provider-cost-unknown --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-warm-workers8-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --baseline-report benchmark_corpus\reports\longmemeval-v1-small-lexical-100-2026-06-12.json --semantic-pilot-report benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-cache-100-2026-06-12.local-replay-analysis.json --json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 100 --top-k 10 --line-reranker source_semantic_cache --line-reranker-workers 32 --standard-cache-dir benchmark_corpus\.cache\standard-public-cases --source-semantic-sidecar-materializer public_semantic_labeler --source-semantic-sidecar-max-candidates 8 --max-source-semantic-sidecar-calls 500 --source-semantic-sidecar-workers 12 --source-semantic-sidecar-timeout 90 --source-semantic-sidecar-max-tokens 0 --progress-every 50 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-scope-sidecar-500-2026-06-13.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-scope-sidecar-500-2026-06-13.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 500 --top-k 10 --line-reranker source_semantic_cache --line-reranker-workers 64 --standard-cache-dir benchmark_corpus\.cache\standard-public-cases --source-semantic-sidecar-materializer public_semantic_labeler_full_source --source-semantic-sidecar-max-candidates 768 --max-source-semantic-sidecar-calls 700 --source-semantic-sidecar-workers 180 --source-semantic-sidecar-timeout 480 --source-semantic-sidecar-max-tokens 20000 --progress-every 100 --partial-output benchmark_corpus\reports\longmemeval-v1-small-semantic-scope-full-source-sidecar-v3-contract-500-2026-06-13.partial.json --output benchmark_corpus\reports\longmemeval-v1-small-semantic-scope-full-source-sidecar-v3-contract-500-2026-06-13.json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-25-2026-06-12.json --json
 python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --reader-mode provider --reader-model deepseek-v4-flash --reader-api-key-env DEEPSEEK_API_KEY --reader-timeout 45 --reader-max-tokens 512 --reader-input-cost-per-million 0.28 --reader-output-cost-per-million 0.42 --partial-output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.partial.json --provider-budget-checkpoint benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.budget.json --max-provider-calls 25 --max-provider-total-tokens 400000 --max-provider-estimated-cost-usd 0.25 --output benchmark_corpus\reports\longmemeval-v1-small-answer-fixed-reader-v2-25-2026-06-12.json --json
 ```

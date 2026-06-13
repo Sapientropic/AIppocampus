@@ -33,6 +33,31 @@ class BenchmarkCapabilityProvenanceTests(unittest.TestCase):
         self.assertIn("aippocampus_working_memory_rows", provenance["aippocampus_capabilities_used"])
         self.assertIn("semantic_scope_labeling", provenance["relevant_aippocampus_paths_not_used"])
 
+    def test_materialized_sidecar_cache_can_claim_source_side_warming_slice(self) -> None:
+        provenance = benchmark_capability_provenance(
+            "source_semantic_cache",
+            source_semantic_sidecar_materializer="public_semantic_labeler",
+        )
+
+        self.assertEqual(
+            provenance["mode_classification"],
+            "source_semantic_scope_sidecar_cache",
+        )
+        self.assertEqual(
+            provenance["claim_level"],
+            "materialized_public_semantic_sidecar_benchmark",
+        )
+        self.assertTrue(provenance["can_claim_source_side_warming"])
+        self.assertIn("semantic_scope_labeling", provenance["aippocampus_capabilities_used"])
+        self.assertIn(
+            "canonical_semantic_scope_sidecar",
+            provenance["aippocampus_capabilities_used"],
+        )
+        self.assertNotIn(
+            "semantic_scope_labeling",
+            provenance["relevant_aippocampus_paths_not_used"],
+        )
+
     def test_cold_retrieval_reports_actual_aippocampus_adapter_surface(self) -> None:
         provenance = benchmark_capability_provenance("off")
 

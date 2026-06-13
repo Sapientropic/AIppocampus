@@ -386,6 +386,106 @@ class LongMemEvalRerankAnalysisTests(unittest.TestCase):
         self.assertNotIn(str(REPO_ROOT), rendered)
         self.assertNotIn("candidatepacka01", rendered)
 
+    def test_source_window_coverage_diagnostic_separates_candidate_and_reranker_misses(
+        self,
+    ) -> None:
+        report = _structural_report()
+        report["metrics"] = {
+            **dict(report["metrics"]),
+            "line_reranker_candidate_evidence_coverage": 3,
+            "line_reranker_candidate_evidence_coverage_rate": 0.75,
+            "line_reranker_candidate_count_avg": 12.0,
+        }
+        report["cases"] = [
+            {
+                "case_type": "longmemeval_single-session-user",
+                "evidence_rank": 12,
+                "evidence_rank_bucket": "rank_11_20",
+                "evidence_context_hit_top10": True,
+                "same_session_wrong_line_top10": True,
+                "session_found_below_top_k": False,
+                "line_reranker_candidate_contains_evidence": False,
+                "source_joined_candidate_contains_evidence": False,
+                "source_joined_candidate_evidence_rank": 24,
+                "reranked_evidence_rank": None,
+                "line_reranker_candidate_count": 12,
+                "line_reranker_error_kinds": [],
+                "evidence_miss_category": "context_visible_exact_line_miss",
+            },
+            {
+                "case_type": "longmemeval_multi-session",
+                "evidence_rank": 32,
+                "evidence_rank_bucket": "rank_21_50",
+                "evidence_context_hit_top10": False,
+                "same_session_wrong_line_top10": False,
+                "session_found_below_top_k": True,
+                "line_reranker_candidate_contains_evidence": False,
+                "source_joined_candidate_contains_evidence": False,
+                "source_joined_candidate_evidence_rank": 32,
+                "reranked_evidence_rank": None,
+                "line_reranker_candidate_count": 12,
+                "line_reranker_error_kinds": [],
+                "evidence_miss_category": "source_window_not_recovered",
+            },
+            {
+                "case_type": "longmemeval_multi-session",
+                "evidence_rank": 6,
+                "evidence_rank_bucket": "rank_6_10",
+                "evidence_context_hit_top10": False,
+                "same_session_wrong_line_top10": False,
+                "session_found_below_top_k": False,
+                "line_reranker_candidate_contains_evidence": True,
+                "source_joined_candidate_contains_evidence": True,
+                "source_joined_candidate_evidence_rank": 6,
+                "reranked_evidence_rank": 24,
+                "line_reranker_candidate_count": 12,
+                "line_reranker_error_kinds": [],
+                "evidence_miss_category": "exact_line_found_top_k",
+            },
+            {
+                "case_type": "longmemeval_multi-session",
+                "evidence_rank": 2,
+                "evidence_rank_bucket": "rank_2_3",
+                "evidence_context_hit_top10": False,
+                "same_session_wrong_line_top10": False,
+                "session_found_below_top_k": False,
+                "line_reranker_candidate_contains_evidence": True,
+                "source_joined_candidate_contains_evidence": True,
+                "source_joined_candidate_evidence_rank": 2,
+                "reranked_evidence_rank": 2,
+                "line_reranker_candidate_count": 12,
+                "line_reranker_error_kinds": [],
+                "evidence_miss_category": "exact_line_found_top_k",
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "coverage.json"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            payload = analysis.analyze_rerank_report(report_path, full_run_questions=4)
+
+        diagnostic = payload["source_window_coverage_diagnostic"]
+        self.assertEqual(diagnostic["fused_miss_count"], 3)
+        self.assertEqual(diagnostic["candidate_missing_miss_count"], 2)
+        self.assertEqual(diagnostic["reranker_visible_miss_count"], 1)
+        self.assertEqual(
+            diagnostic["miss_family_counts"]["same_session_wrong_line_top_k"],
+            1,
+        )
+        self.assertEqual(diagnostic["miss_family_counts"]["session_found_below_top_k"], 1)
+        self.assertEqual(diagnostic["miss_family_counts"]["gold_line_low_rank_21_50"], 2)
+        self.assertEqual(diagnostic["line_reranker_candidate_evidence_coverage"]["numerator"], 2)
+        improvement = payload["bounded_coverage_improvement"]
+        self.assertEqual(improvement["strategy"], "bounded_candidate_coverage_v1")
+        self.assertEqual(improvement["candidate_coverage_lift"], 2)
+        self.assertEqual(improvement["improved_candidate_coverage"]["numerator"], 4)
+        self.assertTrue(improvement["accepted_for_next_candidate_builder_slice"])
+        self.assertEqual(improvement["hurt_case_count"], 0)
+        negative = improvement["negative_control_naive_large_radius"]
+        self.assertFalse(negative["accepted"])
+        self.assertIn("candidate_byte_growth_exceeds_ceiling", negative["rejection_reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()
