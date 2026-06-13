@@ -28,7 +28,11 @@ _CANONICAL_SOURCE_SIDE_OWNER_REFS = [
 ]
 
 
-def benchmark_capability_provenance(line_reranker_mode: str) -> dict[str, Any]:
+def benchmark_capability_provenance(
+    line_reranker_mode: str,
+    *,
+    source_semantic_sidecar_materializer: str = "off",
+) -> dict[str, Any]:
     """Return what the benchmark mode actually exercised.
 
     This is intentionally descriptive rather than aspirational. A mode that is
@@ -37,6 +41,7 @@ def benchmark_capability_provenance(line_reranker_mode: str) -> dict[str, Any]:
     """
 
     mode = str(line_reranker_mode or "off").strip().casefold()
+    materializer = str(source_semantic_sidecar_materializer or "off").strip().casefold()
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "line_reranker_mode": mode,
@@ -63,6 +68,35 @@ def benchmark_capability_provenance(line_reranker_mode: str) -> dict[str, Any]:
                     _CANONICAL_SOURCE_SIDE_OWNER_REFS
                 ),
                 "remaining_gap_issue": "#1323",
+            }
+        )
+        return payload
+
+    if mode == "source_semantic_cache" and materializer != "off":
+        payload.update(
+            {
+                "mode_classification": "source_semantic_scope_sidecar_cache",
+                "claim_level": "materialized_public_semantic_sidecar_benchmark",
+                "aippocampus_capabilities_used": [
+                    *_BASE_CAPABILITIES,
+                    "semantic_scope_labeling",
+                    "semantic_scope_builder",
+                    "canonical_semantic_scope_sidecar",
+                    "aippocampus_working_memory_rows",
+                    "subconscious_candidate_matcher",
+                    "source_artifact_cache",
+                ],
+                "benchmark_local_scaffolding": [
+                    "longmemeval_public_source_candidate_batcher",
+                    "worker_surface_rerank_fusion",
+                ],
+                "relevant_aippocampus_paths_not_used": [
+                    "warm_ambient_routes",
+                    "attention_router",
+                ],
+                "can_claim_source_side_warming": True,
+                "measures_issue": "#1323",
+                "source_semantic_sidecar_materializer": materializer,
             }
         )
         return payload

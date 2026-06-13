@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "kind": "longmemeval_semantic_scope_sidecar_500q_diagnostic",
+  "generated_at_local": "2026-06-13",
+  "issue": "#1323",
+  "status": "diagnostic_materialized_sidecar_arm_no_rank_delta",
+  "decision": "The materialized semantic-scope sidecar path ran on public LongMemEval-S first 500 and source_semantic_cache consumed nonzero sidecars, but the 500Q rankings were identical to the older worker-surface proxy. Treat this as a negative diagnostic baseline for the current 8-candidate public sidecar materializer, not as product-quality semantic warming success or an issue-close victory.",
+  "dataset": {
+    "split": "longmemeval-v1-small",
+    "label": "LongMemEval-S cleaned",
+    "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "questions": 500,
+    "evidence_line_cases": 479,
+    "retriever_messages_scanned": 246738
+  },
+  "raw_reports": {
+    "smoke_100q": {
+      "path": "benchmark_corpus/reports/longmemeval-v1-small-semantic-scope-sidecar-100-2026-06-13.json",
+      "sha1": "26D0984D8FC66DA6A68029B4CB8A44B25875FA86",
+      "generated_at_utc": "2026-06-13T10:00:58Z"
+    },
+    "full_500q": {
+      "path": "benchmark_corpus/reports/longmemeval-v1-small-semantic-scope-sidecar-500-2026-06-13.json",
+      "sha1": "85074B2B76544D8FD010126C9A2005E820E4A215",
+      "generated_at_utc": "2026-06-13T10:44:40Z"
+    }
+  },
+  "rank_results": {
+    "first_100_vs_500_prefix_rank_diff_count": 0,
+    "sidecar_500_vs_worker_surface_proxy_rank_diff_count": 0,
+    "smoke_100q": {
+      "evidence_line_case_count": 94,
+      "baseline_evidence_line_recall_at_10": 0.8723,
+      "baseline_evidence_line_mrr": 0.6481,
+      "source_semantic_fused_recall_at_10": 0.9255,
+      "source_semantic_fused_mrr": 0.7063,
+      "bridge_lift_count": 5
+    },
+    "full_500q": {
+      "evidence_line_case_count": 479,
+      "baseline_evidence_line_recall_at_10": 0.8518,
+      "baseline_evidence_line_mrr": 0.6309,
+      "context_visible_evidence_line_recall_at_10": 0.9436,
+      "source_semantic_search_recall_at_10": 0.3257,
+      "source_semantic_search_mrr": 0.1391,
+      "source_semantic_only_recall_at_10": 0.8309,
+      "source_semantic_only_mrr": 0.5046,
+      "source_semantic_fused_recall_at_10": 0.881,
+      "source_semantic_fused_mrr": 0.6734,
+      "bridge_lift_count": 14,
+      "line_reranker_error_count": 0,
+      "candidate_evidence_coverage": {
+        "numerator": 456,
+        "denominator": 479,
+        "rate": 0.952
+      }
+    }
+  },
+  "slice_diagnostics": [
+    {
+      "slice": "q1-q100",
+      "case_mix": "70 single-session-user, 30 multi-session",
+      "evidence_cases": 94,
+      "baseline_recall_at_10": 0.8723,
+      "candidate_coverage": 0.9574,
+      "fused_recall_at_10": 0.9255,
+      "fused_miss_count": 7
+    },
+    {
+      "slice": "q101-q200",
+      "case_mix": "70 multi-session, 30 preference",
+      "evidence_cases": 95,
+      "baseline_recall_at_10": 0.7263,
+      "candidate_coverage": 0.9263,
+      "fused_recall_at_10": 0.7579,
+      "fused_miss_count": 23
+    },
+    {
+      "slice": "q201-q300",
+      "case_mix": "67 temporal, 33 multi-session",
+      "evidence_cases": 97,
+      "baseline_recall_at_10": 0.8351,
+      "candidate_coverage": 0.8969,
+      "fused_recall_at_10": 0.8454,
+      "fused_miss_count": 15
+    },
+    {
+      "slice": "q301-q400",
+      "case_mix": "66 temporal, 34 knowledge-update",
+      "evidence_cases": 99,
+      "baseline_recall_at_10": 0.9192,
+      "candidate_coverage": 0.9798,
+      "fused_recall_at_10": 0.9495,
+      "fused_miss_count": 5
+    },
+    {
+      "slice": "q401-q500",
+      "case_mix": "56 assistant, 44 knowledge-update",
+      "evidence_cases": 94,
+      "baseline_recall_at_10": 0.9043,
+      "candidate_coverage": 1.0,
+      "fused_recall_at_10": 0.9255,
+      "fused_miss_count": 7
+    }
+  ],
+  "materialization": {
+    "materializer": "public_semantic_labeler",
+    "max_candidates_per_source": 8,
+    "provider_call_count": 500,
+    "status_counts": {
+      "materialized_sidecar": 489,
+      "semantic_labeler_error": 11
+    },
+    "semantic_scope_sidecar_count": 428,
+    "semantic_scope_label_row_count": 1205,
+    "candidate_message_count": 4000,
+    "finding_count": 1663,
+    "total_tokens": 2988868,
+    "source_text_sent_to_labeler": true,
+    "source_text_is_public_benchmark_data": true,
+    "raw_source_text_emitted": false,
+    "sidecar_values_emitted": false,
+    "absolute_paths_emitted": false
+  },
+  "root_cause_diagnostics": {
+    "sidecar_exact_gold_coverage": {
+      "numerator": 8,
+      "denominator": 479,
+      "rate": 0.0167
+    },
+    "sidecar_same_session_near5_gold_coverage": {
+      "numerator": 15,
+      "denominator": 479,
+      "rate": 0.0313
+    },
+    "fused_miss_sidecar_exact_gold_coverage": {
+      "numerator": 0,
+      "denominator": 57,
+      "rate": 0.0
+    },
+    "fused_miss_sidecar_near5_gold_coverage": {
+      "numerator": 0,
+      "denominator": 57,
+      "rate": 0.0
+    },
+    "query_scope_label_direct_overlap": {
+      "numerator": 3,
+      "denominator": 479,
+      "rate": 0.0063
+    },
+    "sidecar_label_distribution": {
+      "personal_reflection": 641,
+      "open_question": 352,
+      "technical_work": 299,
+      "idea_seed": 137,
+      "reading_notes": 120,
+      "preference": 72,
+      "life_context": 66,
+      "relationship_continuity": 3
+    },
+    "query_label_distribution": {
+      "value_like": 487,
+      "answer_like_statement": 180,
+      "currentness_or_temporal": 139,
+      "preference": 18,
+      "technical_or_task": 6,
+      "continuation_bridge": 1
+    }
+  },
+  "selector_budget_curve": [
+    {
+      "max_candidates": 8,
+      "gold_exact_coverage": 0.0564,
+      "gold_near5_coverage": 0.1023,
+      "fused_miss_exact_coverage": 0.0351,
+      "fused_miss_near5_coverage": 0.0702
+    },
+    {
+      "max_candidates": 24,
+      "gold_exact_coverage": 0.1273,
+      "gold_near5_coverage": 0.3737,
+      "fused_miss_exact_coverage": 0.1228,
+      "fused_miss_near5_coverage": 0.2807
+    },
+    {
+      "max_candidates": 48,
+      "gold_exact_coverage": 0.1378,
+      "gold_near5_coverage": 0.6221,
+      "fused_miss_exact_coverage": 0.1228,
+      "fused_miss_near5_coverage": 0.4737
+    },
+    {
+      "max_candidates": 96,
+      "gold_exact_coverage": 0.2171,
+      "gold_near5_coverage": 0.785,
+      "fused_miss_exact_coverage": 0.1754,
+      "fused_miss_near5_coverage": 0.6491
+    }
+  ],
+  "recommended_next_work": [
+    "Keep the current run as a negative diagnostic baseline, not as product-quality semantic cache evidence.",
+    "Expose source_semantic_scope_sidecar evidence coverage and query-label overlap in benchmark reports.",
+    "Align canonical semantic-scope labels with query-side scoring terms without treating sidecar labels as source truth.",
+    "Improve source-side cold-fill candidate selection before spending another full 500Q live-labeling run."
+  ],
+  "cannot_claim": [
+    "official_longmemeval_qa_score",
+    "answer_generation_quality",
+    "sota_or_external_baseline_superiority",
+    "default_foreground_llm_reranker_adoption",
+    "provider_independent_semantic_quality",
+    "broad_life_history_memory_superiority",
+    "that_the_tested_sidecar_materializer_beats_the_worker_surface_proxy",
+    "that_semantic_sidecar_values_are_source_truth",
+    "that_issue_1323_is_closed_as_a_product_success"
+  ]
+}

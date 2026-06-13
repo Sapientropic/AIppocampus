@@ -39,6 +39,10 @@ from benchmark_statistics import binomial_rate_report
 
 from .capability_provenance import benchmark_capability_provenance
 from .defaults import (
+    DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+    DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+    DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
+    DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
     DEFAULT_STANDARD_CASE_CACHE_ROOT,
     DEFAULT_STANDARD_DATASET,
     DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES,
@@ -58,12 +62,19 @@ from .defaults import (
     STANDARD_LINE_RERANKER_MODES,
     STANDARD_QUERY_TERM_STOPWORDS,
     LineRerankerFn,
+    PublicSemanticLabelerFn,
 )
 from .reporting import (
     now_utc,
     reciprocal_rank,
     safe_rate,
     sha1_text,
+)
+from .semantic_sidecars import (
+    SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS,
+    materialize_source_semantic_sidecars,
+    source_semantic_sidecar_materializer_contract,
 )
 
 EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
@@ -1849,6 +1860,9 @@ def run_source_semantic_cache_line_reranker(
     scored: list[tuple[float, int, int, int, int]] = []
     hit_count = 0
     miss_count = 0
+    semantic_scope_profile_count = 0
+    semantic_scope_label_overlap_count = 0
+    semantic_scope_label_overlap_total = 0
     for candidate in candidates:
         line = int(candidate["line"])
         profile = profiles.get(line)
@@ -1863,6 +1877,13 @@ def run_source_semantic_cache_line_reranker(
             }
         else:
             hit_count += 1
+        semantic_scope_labels = set(profile.get("semantic_scope_labels") or set())
+        if semantic_scope_labels:
+            semantic_scope_profile_count += 1
+            semantic_scope_overlap = query_labels & semantic_scope_labels
+            if semantic_scope_overlap:
+                semantic_scope_label_overlap_count += 1
+                semantic_scope_label_overlap_total += len(semantic_scope_overlap)
         scored.append(
             (
                 source_semantic_cache_score(
@@ -1890,6 +1911,13 @@ def run_source_semantic_cache_line_reranker(
             "provider_call_count": 0,
             "provider_total_tokens": 0,
             "hot_query_provider_call_count": 0,
+            "semantic_scope_profile_count": semantic_scope_profile_count,
+            "semantic_scope_query_label_overlap_count": (
+                semantic_scope_label_overlap_count
+            ),
+            "semantic_scope_query_label_overlap_total": (
+                semantic_scope_label_overlap_total
+            ),
         },
         "latency_ms": round((time.perf_counter() - started) * 1000, 4),
         "cache": {
@@ -2700,6 +2728,42 @@ def evaluate_standard_retrieval_case(
         source_semantic_cache_hit_top_k = bool(
             source_semantic_cache_rank and source_semantic_cache_rank <= top_k
         )
+        semantic_scope_profile_lines: set[int] = set()
+        if source_semantic_cache:
+            for raw_line, profile in (source_semantic_cache.get("profiles") or {}).items():
+                if not isinstance(profile, dict):
+                    continue
+                if not profile.get("semantic_scope_labels"):
+                    continue
+                try:
+                    semantic_scope_profile_lines.add(int(raw_line))
+                except (TypeError, ValueError):
+                    continue
+        semantic_scope_profile_hits = [
+            {"line": line} for line in sorted(semantic_scope_profile_lines)
+        ]
+        semantic_scope_sidecar_evidence_rank = rank_expected_line(
+            semantic_scope_profile_hits,
+            expected_lines,
+        )
+        semantic_scope_sidecar_context_rank = rank_expected_line_context(
+            semantic_scope_profile_hits,
+            expected_lines=expected_lines,
+            line_to_session=line_to_session,
+            radius=context_radius,
+        )
+        semantic_scope_candidate_lines = {
+            int(candidate["line"])
+            for candidate in candidates
+            if int(candidate["line"]) in semantic_scope_profile_lines
+        }
+        semantic_scope_candidate_hits = [
+            {"line": line} for line in sorted(semantic_scope_candidate_lines)
+        ]
+        semantic_scope_candidate_evidence_rank = rank_expected_line(
+            semantic_scope_candidate_hits,
+            expected_lines,
+        )
         row.update(
             {
                 "line_reranker_mode": resolved_reranker_mode,
@@ -2750,6 +2814,30 @@ def evaluate_standard_retrieval_case(
                 ),
                 "source_semantic_cache_hot_path": (
                     source_semantic_search_payload.get("cache") or {}
+                ),
+                "source_semantic_scope_sidecar_line_count": (
+                    len(semantic_scope_profile_lines)
+                ),
+                "source_semantic_scope_sidecar_evidence_rank": (
+                    semantic_scope_sidecar_evidence_rank
+                ),
+                "source_semantic_scope_sidecar_evidence_contains": bool(
+                    semantic_scope_sidecar_evidence_rank
+                ),
+                "source_semantic_scope_sidecar_context_rank": (
+                    semantic_scope_sidecar_context_rank
+                ),
+                "source_semantic_scope_sidecar_context_contains": bool(
+                    semantic_scope_sidecar_context_rank
+                ),
+                "source_semantic_scope_sidecar_candidate_line_count": (
+                    len(semantic_scope_candidate_lines)
+                ),
+                "source_semantic_scope_sidecar_candidate_evidence_rank": (
+                    semantic_scope_candidate_evidence_rank
+                ),
+                "source_semantic_scope_sidecar_candidate_evidence_contains": bool(
+                    semantic_scope_candidate_evidence_rank
                 ),
                 "source_joined_candidate_contains_evidence": (
                     source_joined_candidate_contains_evidence
@@ -3098,6 +3186,26 @@ def summarize_standard_retrieval_results(
                 / len(source_semantic_cache_cases),
                 4,
             )
+            source_scope_sidecar_case_count = sum(
+                1
+                for row in source_semantic_cache_cases
+                if int(row.get("source_semantic_scope_sidecar_line_count") or 0) > 0
+            )
+            source_scope_sidecar_evidence_coverage = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get("source_semantic_scope_sidecar_evidence_contains")
+            )
+            source_scope_sidecar_context_coverage = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get("source_semantic_scope_sidecar_context_contains")
+            )
+            source_scope_sidecar_candidate_evidence_coverage = sum(
+                1
+                for row in source_semantic_cache_cases
+                if row.get("source_semantic_scope_sidecar_candidate_evidence_contains")
+            )
             metrics.update(
                 {
                     "source_semantic_cache_case_count": len(source_semantic_cache_cases),
@@ -3142,6 +3250,53 @@ def summarize_standard_retrieval_results(
                     ),
                     "source_semantic_cache_fused_evidence_mrr": source_fused_mrr,
                     "source_semantic_cache_hot_query_provider_call_count": 0,
+                    "source_semantic_scope_sidecar_case_count": (
+                        source_scope_sidecar_case_count
+                    ),
+                    "source_semantic_scope_sidecar_case_rate": safe_rate(
+                        source_scope_sidecar_case_count,
+                        len(source_semantic_cache_cases),
+                    ),
+                    "source_semantic_scope_sidecar_line_count_avg": round(
+                        sum(
+                            int(
+                                row.get(
+                                    "source_semantic_scope_sidecar_line_count"
+                                )
+                                or 0
+                            )
+                            for row in source_semantic_cache_cases
+                        )
+                        / len(source_semantic_cache_cases),
+                        2,
+                    ),
+                    "source_semantic_scope_sidecar_evidence_coverage": (
+                        source_scope_sidecar_evidence_coverage
+                    ),
+                    "source_semantic_scope_sidecar_evidence_coverage_rate": (
+                        safe_rate(
+                            source_scope_sidecar_evidence_coverage,
+                            len(source_semantic_cache_cases),
+                        )
+                    ),
+                    "source_semantic_scope_sidecar_context_coverage": (
+                        source_scope_sidecar_context_coverage
+                    ),
+                    "source_semantic_scope_sidecar_context_coverage_rate": (
+                        safe_rate(
+                            source_scope_sidecar_context_coverage,
+                            len(source_semantic_cache_cases),
+                        )
+                    ),
+                    "source_semantic_scope_sidecar_candidate_evidence_coverage": (
+                        source_scope_sidecar_candidate_evidence_coverage
+                    ),
+                    "source_semantic_scope_sidecar_candidate_evidence_coverage_rate": (
+                        safe_rate(
+                            source_scope_sidecar_candidate_evidence_coverage,
+                            len(source_semantic_cache_cases),
+                        )
+                    ),
                 }
             )
     return metrics
@@ -3277,6 +3432,14 @@ def run_standard_retrieval_qa_benchmark(
     standard_cache_dir: Path | str | None = None,
     use_standard_cache: bool = True,
     rebuild_standard_cache: bool = False,
+    source_semantic_sidecar_materializer: str = SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
+    source_semantic_sidecar_max_candidates: int = DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+    source_semantic_sidecar_max_provider_calls: int = 0,
+    source_semantic_sidecar_workers: int = 1,
+    source_semantic_sidecar_timeout: int = DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    source_semantic_sidecar_max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+    source_semantic_sidecar_min_confidence: float = DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
+    source_semantic_sidecar_labeler_fn: PublicSemanticLabelerFn | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if dataset not in STANDARD_DATASET_PATHS:
@@ -3285,6 +3448,20 @@ def run_standard_retrieval_qa_benchmark(
     resolved_line_reranker_mode = line_reranker_mode.strip().casefold()
     if resolved_line_reranker_mode not in STANDARD_LINE_RERANKER_MODES:
         raise ValueError(f"unsupported line reranker mode: {line_reranker_mode}")
+    resolved_sidecar_materializer = (
+        str(source_semantic_sidecar_materializer or "").strip().casefold()
+    )
+    if resolved_sidecar_materializer not in SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS:
+        raise ValueError(
+            f"unsupported source semantic sidecar materializer: {source_semantic_sidecar_materializer}"
+        )
+    if (
+        resolved_sidecar_materializer != SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF
+        and resolved_line_reranker_mode != "source_semantic_cache"
+    ):
+        raise ValueError(
+            "source semantic sidecar materialization requires line_reranker_mode=source_semantic_cache"
+        )
     resolved_reranker_workers = (
         max(1, (int(max_questions) + 1) // 2)
         if int(line_reranker_workers) <= 0 and resolved_line_reranker_mode != "off"
@@ -3324,6 +3501,19 @@ def run_standard_retrieval_qa_benchmark(
         "line_reranker_max_tokens": int(line_reranker_max_tokens),
         "line_reranker_workers": int(resolved_reranker_workers),
         "line_reranker_external_model": resolved_line_reranker_mode == "semantic",
+        "source_semantic_sidecar_materializer": resolved_sidecar_materializer,
+        "source_semantic_sidecar_max_candidates": int(
+            source_semantic_sidecar_max_candidates
+        ),
+        "source_semantic_sidecar_max_provider_calls": int(
+            source_semantic_sidecar_max_provider_calls
+        ),
+        "source_semantic_sidecar_workers": int(source_semantic_sidecar_workers),
+        "source_semantic_sidecar_timeout": int(source_semantic_sidecar_timeout),
+        "source_semantic_sidecar_max_tokens": int(source_semantic_sidecar_max_tokens),
+        "source_semantic_sidecar_min_confidence": float(
+            source_semantic_sidecar_min_confidence
+        ),
         "standard_case_cache": {
             "enabled": bool(standard_case_cache["enabled"]),
             "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
@@ -3333,7 +3523,8 @@ def run_standard_retrieval_qa_benchmark(
             "rebuild_requested": bool(rebuild_standard_cache),
         },
         "capability_provenance": benchmark_capability_provenance(
-            resolved_line_reranker_mode
+            resolved_line_reranker_mode,
+            source_semantic_sidecar_materializer=resolved_sidecar_materializer,
         ),
     }
     if resolved_line_reranker_mode == "semantic":
@@ -3347,6 +3538,18 @@ def run_standard_retrieval_qa_benchmark(
         config["source_semantic_cache_prewarm_workers"] = int(
             DEFAULT_STANDARD_SOURCE_SEMANTIC_CACHE_PREWARM_WORKERS
         )
+        if resolved_sidecar_materializer != SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF:
+            config["source_semantic_sidecar_materializer_contract"] = (
+                source_semantic_sidecar_materializer_contract(
+                    materializer=resolved_sidecar_materializer,
+                    max_candidates=source_semantic_sidecar_max_candidates,
+                    max_provider_calls=source_semantic_sidecar_max_provider_calls,
+                    workers=source_semantic_sidecar_workers,
+                    timeout=source_semantic_sidecar_timeout,
+                    max_tokens=source_semantic_sidecar_max_tokens,
+                    min_confidence=source_semantic_sidecar_min_confidence,
+                )
+            )
     if dataset == "longmemeval-v2":
         return skipped_standard_retrieval_payload(
             dataset=dataset,
@@ -3424,6 +3627,29 @@ def run_standard_retrieval_qa_benchmark(
             total_cases=len(cases),
             corpus=corpus,
         )
+        source_semantic_sidecar_materialization = None
+        if resolved_sidecar_materializer != SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF:
+            source_semantic_sidecar_materialization = materialize_source_semantic_sidecars(
+                cases,
+                materializer=resolved_sidecar_materializer,
+                max_candidates=source_semantic_sidecar_max_candidates,
+                max_provider_calls=source_semantic_sidecar_max_provider_calls,
+                workers=source_semantic_sidecar_workers,
+                timeout=source_semantic_sidecar_timeout,
+                max_tokens=source_semantic_sidecar_max_tokens,
+                min_confidence=source_semantic_sidecar_min_confidence,
+                labeler_fn=source_semantic_sidecar_labeler_fn,
+                rebuild_sidecars=bool(rebuild_standard_cache),
+            )
+            emit_standard_progress(
+                progress_callback,
+                started=started,
+                phase="source_semantic_sidecars_materialized",
+                config=config,
+                cases_built=len(cases),
+                total_cases=len(cases),
+                corpus=corpus,
+            )
         source_artifact_cache_dir = (
             case_root / "source_artifacts" / SOURCE_SEMANTIC_CACHE_POLICY_VERSION
             if standard_case_cache["enabled"]
@@ -3537,6 +3763,10 @@ def run_standard_retrieval_qa_benchmark(
         top_k=top_k,
         context_radius=context_radius,
     )
+    if "source_semantic_sidecar_materialization" in locals() and source_semantic_sidecar_materialization:
+        metrics["source_semantic_sidecar_materialization"] = (
+            source_semantic_sidecar_materialization
+        )
     if resolved_line_reranker_mode == "source_semantic_cache":
         metrics["source_semantic_cache"] = (
             source_semantic_cache_store.summary()

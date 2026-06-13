@@ -213,14 +213,16 @@ def public_semantic_candidate_messages(
 
 def public_semantic_labeler_messages(candidates: list[dict[str, Any]]) -> list[dict[str, str]]:
     system = """You are labeling public benchmark clean-source messages for AIppocampus.
-Return JSON only. Labels are navigation hints, not source truth."""
+Return one valid JSON object only. Labels are navigation hints, not source truth."""
     user = json.dumps(
         {
             "canonical_scope_labels": list(SCOPE_LABEL_ORDER),
+            "required_top_level_shape": {"findings": ["finding objects"]},
             "task": (
                 "For each candidate that genuinely needs a fuzzy semantic scope label, "
                 "return one source-backed semantic_scope_labels finding. Omit candidates "
-                "that only have keyword matches or ordinary one-off assistant requests."
+                "that only have keyword matches or ordinary one-off assistant requests. "
+                "Keep the findings list compact; an empty findings list is valid."
             ),
             "label_rules": {
                 "personal_reflection": "self, feelings, doubts, identity, or meaning",
