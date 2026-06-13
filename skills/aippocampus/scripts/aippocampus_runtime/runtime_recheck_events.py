@@ -25,6 +25,10 @@ TARGET_SURFACE_ALIASES = {
 KNOWN_REASON_CODES = {
     "semantic_invalidation",
     "dream_macro_recheck",
+    "dream_obstruction_recheck",
+    "dream_compensatory_probe_accepted",
+    "dream_shadow_route_reopen",
+    "dream_cut_point_stage_review",
     "avatar_shadowed",
     "decision_shadow_reopen",
     "local_global_obstruction",
@@ -34,6 +38,15 @@ KNOWN_REASON_CODES = {
     "continuity_domain_boundary_constraint",
     "continuity_domain_route_unavailable",
 }
+ACCEPTED_DREAM_REVIEW_STATES = {
+    "accepted",
+    "approved",
+    "reviewed",
+    "agent_adjudicated",
+    "auto_adjudicated",
+    "source_adjudicated",
+}
+ACCEPTED_ADJUDICATION_STATUSES = {"accepted", "approved"}
 
 
 def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
@@ -198,3 +211,135 @@ def runtime_recheck_events_from_continuity_domains_snapshot(
                 )
             )
     return events
+
+
+def _dream_finding_id(finding: Mapping[str, Any]) -> str:
+    for key in ("dream_finding_id", "finding_id", "fingerprint", "id"):
+        value = finding.get(key)
+        if value:
+            return _safe_text(value, 140)
+    return _stable_id(finding.get("title"), finding.get("summary"), prefix="dream_finding")
+
+
+def _dream_finding_adjudicated(finding: Mapping[str, Any]) -> bool:
+    review_state = _safe_text(finding.get("review_state"), 80)
+    adjudication = finding.get("adjudication_result")
+    status = (
+        _safe_text(adjudication.get("status"), 80)
+        if isinstance(adjudication, Mapping)
+        else ""
+    )
+    return review_state in ACCEPTED_DREAM_REVIEW_STATES or status in ACCEPTED_ADJUDICATION_STATUSES
+
+
+def _dream_recheck_reason(finding: Mapping[str, Any]) -> str:
+    values = " ".join(
+        str(value or "")
+        for value in (
+            finding.get("reason_code"),
+            finding.get("candidate_kind"),
+            finding.get("dream_function"),
+            finding.get("title"),
+            finding.get("summary"),
+            " ".join(str(item) for item in finding.get("recheck_on") or []),
+            " ".join(str(item) for item in finding.get("diagnostics") or []),
+            " ".join(str(item) for item in finding.get("downstream_use") or []),
+        )
+    ).casefold()
+    if "shadow" in values or "reopen" in values:
+        return "dream_shadow_route_reopen"
+    if "cut_point" in values or "stage" in values or "line_topology" in values:
+        return "dream_cut_point_stage_review"
+    if "obstruction" in values or "blocked" in values or "missing support" in values:
+        return "dream_obstruction_recheck"
+    if "compensatory" in values:
+        return "dream_compensatory_probe_accepted"
+    return "dream_macro_recheck"
+
+
+def runtime_recheck_event_from_dream_finding(
+    finding: Mapping[str, Any],
+    *,
+    source_shape_id: str = "",
+    created_at: str | None = None,
+) -> dict[str, Any]:
+    finding_id = _dream_finding_id(finding)
+    if not _dream_finding_adjudicated(finding):
+        return {
+            "kind": "runtime_recheck_event_rejection",
+            "reason_code": "dream_not_adjudicated_for_macro_recheck",
+            "finding_id": finding_id,
+            "authority_level": AUTHORITY_LEVEL,
+            "claim_permission": CLAIM_PERMISSION,
+            "may_mutate_macro_state": False,
+        }
+    refs = safe_source_refs(finding.get("source_refs"))
+    if not refs:
+        return {
+            "kind": "runtime_recheck_event_rejection",
+            "reason_code": "dream_macro_recheck_requires_source_refs",
+            "finding_id": finding_id,
+            "authority_level": AUTHORITY_LEVEL,
+            "claim_permission": CLAIM_PERMISSION,
+            "may_mutate_macro_state": False,
+        }
+    reason = _dream_recheck_reason(finding)
+    scope = {
+        "kind": "dream_finding",
+        "finding_id": finding_id,
+        "dream_function": _safe_text(finding.get("dream_function"), 80),
+        "candidate_kind": _safe_text(finding.get("candidate_kind"), 80),
+        "review_state": _safe_text(finding.get("review_state"), 80),
+        "trust_horizon": _safe_text(finding.get("trust_horizon") or finding.get("expires_at"), 120),
+        "invalidation_triggers": ", ".join(_safe_text(item, 80) for item in finding.get("invalidation_triggers") or [])[:240],
+    }
+    event = build_runtime_recheck_event(
+        producer="adjudicated_dream_finding",
+        reason_code=reason,
+        source_refs=refs,
+        scope=scope,
+        source_shape_id=source_shape_id or f"dream_finding:{finding_id}",
+        target_surfaces=("macro_recheck", "source_shape_review", "stage_tracker_review"),
+        created_at=created_at,
+        degrade_to="macro_review_input",
+    )
+    event["macro_recheck_policy"] = {
+        "may_mutate_macro_state": False,
+        "may_update_hexagram": False,
+        "may_update_momentum": False,
+        "may_update_three_powers": False,
+        "may_update_stage_tracker": False,
+        "explicit_operator_write_required": True,
+    }
+    return event
+
+
+def macro_review_input_from_runtime_recheck_event(event: Mapping[str, Any]) -> dict[str, Any] | None:
+    if event.get("kind") != RUNTIME_RECHECK_EVENT_KIND:
+        return None
+    targets = {str(surface) for surface in event.get("target_surfaces") or []}
+    if "macro_recheck" not in targets:
+        return None
+    refs = safe_source_refs(event.get("source_refs"))
+    if not refs:
+        return None
+    reason = _safe_text(event.get("reason_code"), 100)
+    payload = {
+        "kind": "macro_recheck_review_input",
+        "schema_version": RUNTIME_RECHECK_SCHEMA_VERSION,
+        "event_id": _safe_text(event.get("event_id"), 140),
+        "producer": _safe_text(event.get("producer"), 100),
+        "reason_code": reason,
+        "source_shape_id": _safe_text(event.get("source_shape_id"), 160),
+        "source_refs": refs,
+        "review_surfaces": sorted(targets & {"macro_recheck", "source_shape_review", "stage_tracker_review"}),
+        "diagnostics": [reason, "runtime_recheck_event", "navigation_only_macro_review_input"],
+        "write_effect": "none",
+        "fact_claim_allowed": False,
+        "foreground_eligible": False,
+        "authority_level": AUTHORITY_LEVEL,
+        "claim_permission": CLAIM_PERMISSION,
+        "source_reopen_required_before_claim": True,
+    }
+    redacted = redact_sensitive_values(redact_private_paths(payload))
+    return redacted if isinstance(redacted, dict) else payload

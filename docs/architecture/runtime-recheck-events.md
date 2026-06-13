@@ -9,7 +9,9 @@ navigation diagnostic, not a memory fact, task, claim, or foreground answer.
 The runtime owner is
 `aippocampus_runtime.runtime_recheck_events`. Producers may build events through
 `build_runtime_recheck_event`; continuity-domain snapshots may project lifecycle
-pressure through `runtime_recheck_events_from_continuity_domains_snapshot`.
+pressure through `runtime_recheck_events_from_continuity_domains_snapshot`;
+adjudicated Dream findings may project macro review pressure through
+`runtime_recheck_event_from_dream_finding`.
 Source-shape descriptor construction and active-recall priority adaptation are
 owned by `aippocampus_runtime.source_shape`; see
 `docs/architecture/source-shape-runtime-spine.md`.
@@ -41,6 +43,10 @@ Known first reason codes include:
 
 - `semantic_invalidation`
 - `dream_macro_recheck`
+- `dream_obstruction_recheck`
+- `dream_compensatory_probe_accepted`
+- `dream_shadow_route_reopen`
+- `dream_cut_point_stage_review`
 - `avatar_shadowed`
 - `decision_shadow_reopen`
 - `local_global_obstruction`
@@ -83,9 +89,23 @@ working summaries, and conclusions do not become event evidence. Active recall,
 macro, and Dream consumers should treat the bridge as "reopen this route before
 using it", not as a claim about the underlying source.
 
+## Dream-To-Macro Bridge
+
+Accepted/adjudicated Dream findings may ask Macro/Yi consumers to recheck
+stage, topology, source-shape, or timing diagnostics. They do this by emitting a
+`runtime_recheck_event` targeted at `macro_recheck`, not by mutating hexagram,
+momentum, three-powers, stage-tracker state, or source truth.
+
+Non-adjudicated or source-free Dream rows must return a rejection diagnostic
+instead of an event. Macro consumers may adapt an event into a sanitized
+`macro_recheck_review_input`, but the review input has `write_effect = none`,
+`fact_claim_allowed = false`, and still requires source reopen before any
+claim.
+
 ## Issue Boundary
 
 This contract implements the shared event shape requested by #1421 and the
 continuity-domain lifecycle bridge requested by #1434. It plugs into the
-source-shape runtime spine tracked by #1417 and the opt-in continuity production
-work from #1432/#1435 without duplicating those broader designs.
+source-shape runtime spine tracked by #1417, the Dream/Macro recheck bridge
+tracked by #1412/#1416, and the opt-in continuity production work from
+#1432/#1435 without duplicating those broader designs.

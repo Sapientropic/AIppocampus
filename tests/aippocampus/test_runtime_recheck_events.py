@@ -15,6 +15,8 @@ from aippocampus_runtime.recall.continuity_domains import (
 )
 from aippocampus_runtime.runtime_recheck_events import (  # noqa: E402
     build_runtime_recheck_event,
+    macro_review_input_from_runtime_recheck_event,
+    runtime_recheck_event_from_dream_finding,
     runtime_recheck_events_from_continuity_domains_snapshot,
 )
 
@@ -175,6 +177,98 @@ class RuntimeRecheckEventTests(unittest.TestCase):
         self.assertIn("continuity_domain_boundary_constraint", seed.frontiers)
         self.assertIn("runtime recheck event is direction-only navigation", seed.negative_contexts)
         self.assertIsNone(input_pack.seed_from_row(macro_only))
+
+    def test_adjudicated_dream_finding_emits_macro_recheck_without_state_mutation(self) -> None:
+        finding = {
+            "kind": "aippocampus_dream_finding",
+            "dream_finding_id": "dream-obstruction-1",
+            "finding_kind": "dream_synthesized",
+            "dream_function": "compensatory",
+            "candidate_kind": "blind_spot",
+            "review_state": "agent_adjudicated",
+            "adjudication_result": {"status": "accepted"},
+            "title": "Dream obstruction: missing lower support",
+            "summary": "A source-backed Dream hypothesis asks Macro to recheck an obstruction.",
+            "source_refs": [source_ref("dream-a"), source_ref("dream-b")],
+            "trust_horizon": "2026-06-30T00:00:00Z",
+            "invalidation_triggers": ["source_correction", "stage_recheck"],
+        }
+
+        event = runtime_recheck_event_from_dream_finding(
+            finding,
+            source_shape_id="source_shape:dream-obstruction-1",
+            created_at="2026-06-14T00:00:00Z",
+        )
+        review_input = macro_review_input_from_runtime_recheck_event(event)
+
+        self.assertEqual(event["kind"], "runtime_recheck_event")
+        self.assertEqual(event["reason_code"], "dream_obstruction_recheck")
+        self.assertEqual(event["authority_level"], "direction_only")
+        self.assertEqual(event["claim_permission"], "none")
+        self.assertEqual(event["degrade_to"], "macro_review_input")
+        self.assertIn("macro_recheck", event["target_surfaces"])
+        self.assertIn("stage_tracker_review", event["target_surfaces"])
+        self.assertFalse(event["consumer_policy"]["may_mutate_source_truth"])
+        self.assertFalse(event["consumer_policy"]["may_raise_authority"])
+        self.assertFalse(event["consumer_policy"]["may_emit_foreground_fact"])
+        self.assertFalse(event["macro_recheck_policy"]["may_update_hexagram"])
+        self.assertFalse(event["macro_recheck_policy"]["may_update_momentum"])
+        self.assertFalse(event["macro_recheck_policy"]["may_update_stage_tracker"])
+
+        self.assertIsNotNone(review_input)
+        assert review_input is not None
+        self.assertEqual(review_input["kind"], "macro_recheck_review_input")
+        self.assertEqual(review_input["write_effect"], "none")
+        self.assertFalse(review_input["fact_claim_allowed"])
+        self.assertFalse(review_input["foreground_eligible"])
+        self.assertIn("navigation_only_macro_review_input", review_input["diagnostics"])
+
+        non_adjudicated = runtime_recheck_event_from_dream_finding(
+            {
+                **finding,
+                "dream_finding_id": "dream-not-ready",
+                "review_state": "needs_review",
+                "adjudication_result": {"status": "parked"},
+            }
+        )
+        self.assertEqual(non_adjudicated["kind"], "runtime_recheck_event_rejection")
+        self.assertEqual(
+            non_adjudicated["reason_code"],
+            "dream_not_adjudicated_for_macro_recheck",
+        )
+
+    def test_dream_cut_point_and_compensatory_findings_route_to_specific_recheck_reasons(self) -> None:
+        base = {
+            "kind": "aippocampus_dream_finding",
+            "finding_kind": "dream_synthesized",
+            "review_state": "agent_adjudicated",
+            "adjudication_result": {"status": "accepted"},
+            "source_refs": [source_ref("dream-c"), source_ref("dream-d")],
+        }
+        cut_point = runtime_recheck_event_from_dream_finding(
+            {
+                **base,
+                "dream_finding_id": "dream-cut-point",
+                "dream_function": "prospective",
+                "candidate_kind": "trajectory_hint",
+                "recheck_on": ["line_topology_stage_review"],
+                "summary": "A Dream cut_point asks stage movement to be reviewed.",
+            }
+        )
+        compensatory = runtime_recheck_event_from_dream_finding(
+            {
+                **base,
+                "dream_finding_id": "dream-compensatory",
+                "dream_function": "compensatory",
+                "candidate_kind": "approach_bias",
+                "summary": "Accepted compensatory probe.",
+            }
+        )
+
+        self.assertEqual(cut_point["reason_code"], "dream_cut_point_stage_review")
+        self.assertEqual(compensatory["reason_code"], "dream_compensatory_probe_accepted")
+        self.assertFalse(cut_point["macro_recheck_policy"]["may_update_three_powers"])
+        self.assertFalse(compensatory["macro_recheck_policy"]["may_update_hexagram"])
 
 
 if __name__ == "__main__":

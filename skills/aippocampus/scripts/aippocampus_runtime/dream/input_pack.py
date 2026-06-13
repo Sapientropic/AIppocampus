@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.dream.macro_guidance import line_topology_dream_seed_payload
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_summary,
@@ -605,6 +606,15 @@ def runtime_recheck_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     )
 
 
+def line_topology_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    payload = line_topology_dream_seed_payload(row)
+    refs = normalize_source_refs(payload.get("source_refs") if payload else None)
+    if not payload or not refs:
+        return None
+    values = lambda key, limit: tuple(unique_preserve(string_values(payload.get(key)), limit=limit))
+    return DreamSeed(seed_id=str(payload["seed_id"]), seed_kind="line_topology_dream_seed", title=compact_text(str(payload.get("title") or "Line topology seed"), 160), summary=compact_text(str(payload.get("summary") or ""), 420), source_refs=refs, source_finding_ids=values("source_finding_ids", 8), frontiers=values("frontiers", 10), themes=values("themes", 14), concepts=values("concepts", 14), negative_contexts=values("negative_contexts", 8))
+
+
 def texture_seed_from_signal(signal: Mapping[str, Any]) -> DreamSeed | None:
     refs = normalize_source_refs(signal.get("source_refs"))
     if not refs:
@@ -647,6 +657,7 @@ def seed_from_row(row: Mapping[str, Any]) -> DreamSeed | None:
         or reflection_seed(row)
         or agency_or_coding_seed(row)
         or runtime_recheck_seed(row)
+        or line_topology_seed(row)
     )
 
 
@@ -672,16 +683,14 @@ def audit_status(refs: list[dict[str, Any]], *, min_source_threads: int) -> dict
     }
 
 
-def eligible_dream_functions(
-    *,
-    refs: list[dict[str, Any]],
-    min_source_threads: int,
-    texture_signals: Iterable[Mapping[str, Any]] = (),
-) -> list[str]:
+def eligible_dream_functions(*, refs: list[dict[str, Any]], min_source_threads: int, seed_kinds: Iterable[str] = (), texture_signals: Iterable[Mapping[str, Any]] = ()) -> list[str]:
     thread_count = len({source_ref_thread(ref) for ref in refs if source_ref_thread(ref)})
     if not refs or thread_count < min_source_threads:
         return []
+    kinds = {str(kind) for kind in seed_kinds}
     functions = ["compensatory", "amplification"]
+    if kinds == {"line_topology_dream_seed"}:
+        return ["compensatory"]
     signal_kinds = {str(signal.get("signal_kind") or "") for signal in texture_signals}
     if signal_kinds & {"uncertainty_or_frontier_signal", "process_route_note"}:
         functions.append("prospective")
@@ -741,9 +750,11 @@ def build_dream_input_pack(
     clean_seeds = [seed for seed in seeds if seed.source_refs]
     refs = merge_refs(clean_seeds, limit=max_source_refs)
     audit = audit_status(refs, min_source_threads=min_source_threads)
+    seed_kinds = unique_preserve((seed.seed_kind for seed in seeds), limit=8)
     functions = eligible_dream_functions(
         refs=refs,
         min_source_threads=min_source_threads,
+        seed_kinds=seed_kinds,
         texture_signals=texture_signals,
     )
     weak_handles = unique_preserve(
@@ -758,7 +769,6 @@ def build_dream_input_pack(
         status = READY_STATUS
 
     seed_ids = unique_preserve((seed.seed_id for seed in seeds), limit=32)
-    seed_kinds = unique_preserve((seed.seed_kind for seed in seeds), limit=8)
     source_finding_ids = unique_preserve(
         (source_id for seed in seeds for source_id in seed.source_finding_ids),
         limit=48,
