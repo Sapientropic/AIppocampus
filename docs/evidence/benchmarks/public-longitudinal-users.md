@@ -543,8 +543,8 @@ python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tm
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --production-like-retrieval --source-disambiguation-top-k 2 --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v2.json --production-like-retrieval --source-disambiguation-top-k 2 --json
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
 
 Fixture:

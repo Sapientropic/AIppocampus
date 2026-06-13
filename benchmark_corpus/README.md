@@ -386,7 +386,7 @@ not source-backed recovery.
 Build a local fixture from already-curated public event-link rows:
 
 ```powershell
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\vcs-future-events-built.jsonl --allow-non-cc0-dataset --json
 ```
 
@@ -398,7 +398,7 @@ source and provide a separate curated link file:
 
 ```powershell
 python skills\aippocampus\scripts\build_clean_source.py --cwd . --output-dir .tmp\clean-source --json
-python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
+python benchmarks\aippocampus\builders\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
 
 Run the optional public-corpus Track B source-evidence baseline over the broad
