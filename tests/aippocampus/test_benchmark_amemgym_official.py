@@ -21,8 +21,13 @@ for _path in (REPO_ROOT, BENCHMARKS):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from benchmarks.aippocampus.adapters import amemgym_aippocampus_adapter as aippocampus_adapter  # noqa: E402
-from benchmarks.aippocampus.adapters import amemgym_official_local_provider as local_provider  # noqa: E402
+from benchmarks.aippocampus.adapters import (
+    amemgym_aippocampus_adapter as aippocampus_adapter,  # noqa: E402
+)
+from benchmarks.aippocampus.adapters import (
+    amemgym_official_local_provider as local_provider,  # noqa: E402
+)
+
 import benchmark_amemgym_official as benchmark  # noqa: E402
 
 RAW_QUERY = "RAW AMEMGYM QUERY MUST NOT LEAK"

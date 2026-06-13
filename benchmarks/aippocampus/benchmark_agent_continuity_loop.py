@@ -19,7 +19,6 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmarks.aippocampus.shared import benchmark_maturity
 from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.navigation import attention_hot_router, semantic_warm_route_producer
 from aippocampus_runtime.recall import (
@@ -27,6 +26,7 @@ from aippocampus_runtime.recall import (
     prompt_foreground_budget,
     source_reopen_budget,
 )
+from benchmarks.aippocampus.shared import benchmark_maturity
 
 SCHEMA_VERSION = 1
 FOREGROUND_FORBIDDEN_MARKERS = (

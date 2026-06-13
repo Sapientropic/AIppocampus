@@ -27,7 +27,6 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 from benchmarks.aippocampus.adapters.amemgym_official_local_provider import (  # noqa: E402
     LOCAL_SCRIPTED_PROVIDER,
     local_scripted_llm_config_update,
@@ -52,6 +51,7 @@ from benchmarks.aippocampus.adapters.amemgym_openrouter_preflight import (  # no
     openrouter_route_preflight_summary,
     probe_openrouter_chat_route,
 )
+from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"

@@ -22,8 +22,9 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref  # noqa: E402
+
+from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 
 CASES: list[dict[str, Any]] = [
     {

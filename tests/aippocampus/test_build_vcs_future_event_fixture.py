@@ -12,8 +12,9 @@ for _path in (REPO_ROOT, BENCHMARKS):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import benchmark_vcs_future_event_recall as recall  # noqa: E402
 from benchmarks.aippocampus.builders import build_vcs_future_event_fixture as builder  # noqa: E402
+
+import benchmark_vcs_future_event_recall as recall  # noqa: E402
 
 
 class VcsFutureEventFixtureBuilderTests(unittest.TestCase):

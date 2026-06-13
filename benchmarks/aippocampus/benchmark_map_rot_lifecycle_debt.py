@@ -13,9 +13,9 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmarks.aippocampus.shared import benchmark_maturity
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.ops.map_rot_maintenance import plan_map_rot_maintenance
+from benchmarks.aippocampus.shared import benchmark_maturity
 
 SCHEMA_VERSION = 1
 LIFECYCLE_STATES = {

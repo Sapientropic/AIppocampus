@@ -12,8 +12,11 @@ for _path in (REPO_ROOT, BENCHMARKS):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from benchmarks.aippocampus.adapters import (
+    longmemeval_v2_aippocampus_adapter as adapter,  # noqa: E402
+)
+
 import benchmark_longmemeval_v2_official_pilot as decision  # noqa: E402
-from benchmarks.aippocampus.adapters import longmemeval_v2_aippocampus_adapter as adapter  # noqa: E402
 
 
 class LongMemEvalV2OfficialPilotTests(unittest.TestCase):

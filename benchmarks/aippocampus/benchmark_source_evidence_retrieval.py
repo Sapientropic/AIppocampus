@@ -25,8 +25,8 @@ _paths.ensure_paths()
 import smoke_source_evidence_recall_eval as source_evidence_eval
 
 import benchmark_fts5_recall as fts5_benchmark
-from benchmarks.aippocampus.shared import sharegpt_sampling
 from aippocampus_runtime.recall.index_builder import make_sqlite
+from benchmarks.aippocampus.shared import sharegpt_sampling
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 from source_evidence.defaults import (
     DEFAULT_FTS5_CASES,

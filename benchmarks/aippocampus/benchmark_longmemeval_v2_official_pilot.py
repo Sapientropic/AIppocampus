@@ -22,7 +22,6 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 from benchmark_longmemeval_v2_context import (  # noqa: E402
     LONGMEMEVAL_V2_DATASET_URL,
     LONGMEMEVAL_V2_LICENSE,
@@ -32,6 +31,7 @@ from benchmark_longmemeval_v2_context import (  # noqa: E402
     now_utc,
     sha1_short,
 )
+from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref  # noqa: E402
 
 SCHEMA_VERSION = 1

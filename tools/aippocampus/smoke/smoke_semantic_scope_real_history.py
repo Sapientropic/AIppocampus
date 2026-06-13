@@ -23,6 +23,7 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 from smoke_life_wide_registry import coverage_ratios, dict_value, run_life_wide_registry_smoke
 
 from aippocampus_runtime.core import (
@@ -61,7 +62,6 @@ from aippocampus_runtime.subconscious.worker import (
     default_project_timeline_path,
     default_staging_path,
 )
-from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 DEFAULT_LIVE_CONCURRENCY = max(2, DEFAULT_CONCURRENCY)
 DEFAULT_LIVE_SAMPLES_PER_JOB = max(2, DEFAULT_SAMPLES_PER_JOB)
