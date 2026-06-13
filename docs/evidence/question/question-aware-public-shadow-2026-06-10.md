@@ -44,6 +44,21 @@ python -m ruff check benchmarks\aippocampus\benchmark_question_aware_real_histor
 - Question-aware wrong-hint rate: 0.0
 - Negative controls passed: 2/2 (`noise` and `code_heavy` skip reasons)
 
+Baseline preregistration and materialization-review readout:
+
+- Preregistered cohort: checked-in `question_aware_public_shadow_v1`, with
+  public VCS-style and public agent-trajectory cases.
+- Compared arms: question-blind same-row structural baseline, selected plain
+  answer-review baseline, and question-aware source-reopen review.
+- Primary readouts: question-aware over question-blind structural delta,
+  answer-usefulness delta, manual-query-reduction delta, and question-aware
+  wrong-hint rate.
+- Materialization review status: `public_shadow_review_evidence_ready`.
+- Reviewer usefulness categories observed: source-reopen usefulness,
+  manual-search reduction, bounded wrong-route drag, selected
+  candidate/link/theme materialization, and dynamic-threshold regression guard.
+- Boundary: this is not a true no-question-aware retrieval baseline.
+
 Threshold readout from the selected calibration fixture:
 
 - Fixed low similarity threshold (`0.52`): false merge 1/3 = 0.333333
@@ -69,6 +84,9 @@ vector prefilter adoption.
   paths.
 - Question-aware fields improved selected source-reopened answer usefulness
   over the shadow plain baseline on this fixture.
+- The report preregisters the selected public baseline/cohort and records
+  materialization-review categories for manual-search reduction and wrong-route
+  drag.
 - The public shadow report records static-threshold and adaptive-threshold
   behavior so regressions do not silently collapse back to fixed-threshold
   matching.
@@ -77,6 +95,7 @@ vector prefilter adoption.
 ## Cannot Claim
 
 - Private real-history answer quality.
+- True no-question-aware retrieval baseline.
 - Live user-visible recall improvement.
 - Broad question-tracking quality.
 - Theme-resonance calibration.

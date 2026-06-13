@@ -33,6 +33,7 @@ The default runner is public-safe and dependency-free:
 | S3 hard-negative suppression | Reuses Track A gate behavior on explicit negation/currentness hard negatives. | suppression rate, stale-as-current rate, negation violation, source-evidence over-escalation |
 | S4 offline proxy alignment | Disabled by default. | only a skipped/proxy boundary until a local model is explicitly configured and reviewed |
 | S5 representation-space health | Skipped unless a local embedding index is supplied. | health checks only; not product-quality evidence |
+| S6 provider/language route config | Local contract check only; no provider call. | `supported`, `provider_config_unsupported`, or `degraded` with lexical/source-reopen fallback visible |
 
 ## Current Diagnostic Reading
 
@@ -88,3 +89,12 @@ Important limits:
 Optional S4/S5 work should stay explicit and local-first. Missing local models
 or embedding indexes should produce skipped diagnostics, not silent fallbacks or
 quality failures.
+
+For the #309/#1371 vector-provider edge, `question.vector_index` exposes a
+local `vector_provider_config_status` helper. It treats CJK queries routed to a
+Latin-only embedding model, embedding dimension mismatches, and missing provider
+config as configuration diagnostics, not retrieval-quality evidence. Unsupported
+or degraded vector routes must keep lexical fallback visible and still require
+clean-source reopen before user-visible claims. This does not prove multilingual
+embedding quality; it prevents a misconfigured vector route from being reported
+as valid source-joined recall.

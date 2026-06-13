@@ -205,9 +205,14 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   controls, source-ref fidelity 1.0, question-aware over question-blind delta
   0.75, answer-usefulness delta 1.0, manual-query-reduction delta 1.5,
   question-aware wrong-hint rate 0.0, and dynamic-threshold false merge/split
-  both 0. This retires the public shadow-case gap, but it is still selected
-  fixture evidence rather than private-history quality, live user-visible lift,
-  theme-resonance calibration, default prefilter adoption, or #248 closeout.
+  both 0. The report now also records a selected public baseline/cohort
+  preregistration and materialization-review categories for source-reopen
+  usefulness, manual-search reduction, wrong-route drag, candidate/link/theme
+  materialization, and threshold regression guard. This retires the public
+  shadow-case gap and gives #1367/#1369 a bounded public slice, but it is still
+  selected fixture evidence rather than a true no-question-aware retrieval
+  baseline, private-history quality, live user-visible lift, theme-resonance
+  calibration, default prefilter adoption, or #248 closeout.
 - Closed first-slice queue: umbrella #133 and focused #134 through #139 are
   implementation evidence for the first deterministic/question-health/theme/
   ambient/sidecar/structural slices. Do not route remaining work back there.
@@ -215,9 +220,10 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   reporting/parity, selected private answer-quality review plumbing, default
   borderline auto-materialization, and theme-resonance absence reporting all
   exist. The 2026-06-10 public shadow fixture adds replayable extraction/
-  linking/source-reopen/negative-control evidence, but a fair no-question-aware
-  retrieval/answer baseline, broader private-history calibration, and
-  theme/user-review lift evidence remain unresolved.
+  linking/source-reopen/negative-control evidence, selected public baseline
+  preregistration, and public materialization-review categories, but a true
+  no-question-aware retrieval/answer baseline, broader private-history
+  calibration, and theme/user-review lift evidence remain unresolved.
 - Adjacent user-visible symptoms: #201 and #281 cover places where vague or
   fresh-thread recall still feels too much like manual source search.
 - Designed/deferred under #248: real-user / private real-history calibration

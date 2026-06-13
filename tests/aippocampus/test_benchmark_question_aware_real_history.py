@@ -531,8 +531,54 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
             "public_shadow_question_aware_source_reopen_comparison_recorded",
             payload["can_claim"],
         )
+        self.assertIn(
+            "public_shadow_selected_baseline_preregistered",
+            payload["can_claim"],
+        )
+        self.assertIn(
+            "public_shadow_materialization_review_evidence_recorded",
+            payload["can_claim"],
+        )
+        prereg = payload["baseline_preregistration"]
+        self.assertEqual(
+            prereg["kind"],
+            "question_aware_public_shadow_baseline_preregistration",
+        )
+        self.assertFalse(
+            prereg["arms"]["question_blind_structural"]["true_retrieval_baseline"]
+        )
+        self.assertIn(
+            "question_aware_over_question_blind_delta",
+            prereg["primary_readouts"],
+        )
+        review_evidence = payload["materialization_review_evidence"]
+        self.assertEqual(
+            review_evidence["status"],
+            "public_shadow_review_evidence_ready",
+        )
+        self.assertEqual(
+            review_evidence["reviewer_usefulness_categories"]["manual_search_reduction"][
+                "status"
+            ],
+            "observed",
+        )
+        self.assertEqual(
+            review_evidence["reviewer_usefulness_categories"]["wrong_route_drag"]["status"],
+            "bounded",
+        )
+        self.assertEqual(
+            review_evidence["reviewer_usefulness_categories"][
+                "candidate_link_theme_materialization"
+            ]["status"],
+            "observed",
+        )
         self.assertIn("private_real_history_answer_quality", payload["cannot_claim"])
+        self.assertIn("true_no_question_aware_retrieval_baseline", payload["cannot_claim"])
         self.assertIn("live_user_visible_recall_improvement", payload["cannot_claim"])
+        self.assertIn(
+            "private_history_materialization_quality",
+            review_evidence["cannot_claim"],
+        )
         self.assertFalse(payload["privacy"]["raw_source_text_emitted"])
         self.assertFalse(payload["privacy"]["local_path_emitted"])
         self.assertNotIn("PUBLIC_SOURCE_TEXT_SENTINEL", rendered)

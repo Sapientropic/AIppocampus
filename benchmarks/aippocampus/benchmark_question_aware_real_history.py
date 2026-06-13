@@ -21,6 +21,7 @@ _paths.ensure_paths()
 
 import benchmark_cognitive_portrait as portrait  # noqa: E402
 import benchmark_question_tracking_calibration as calibration  # noqa: E402
+import question_aware_public_shadow_support as public_shadow_support  # noqa: E402
 from aippocampus_runtime.registry.api import registry_paths  # noqa: E402
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path  # noqa: E402
 from aippocampus_runtime.subconscious.question_extraction_gate import (  # noqa: E402
@@ -1160,6 +1161,14 @@ def run_question_aware_public_shadow_benchmark(
         item for item in fixture.get("negative_controls") or [] if isinstance(item, Mapping)
     ]
     negative_control_readout = public_shadow_negative_control_readout(negative_controls)
+    baseline_preregistration = public_shadow_support.baseline_preregistration(fixture=fixture)
+    materialization_review_evidence = public_shadow_support.materialization_review_evidence(
+        structural=structural,
+        review_metrics=review_metrics,
+        manual_query_reduction_delta=manual_query_reduction_delta,
+        negative_controls=negative_control_readout,
+        threshold_readout=threshold_readout,
+    )
     public_case_count = int(
         metadata.get("public_case_count")
         or len({str(row.get("case_id") or "") for row in review_rows if row.get("case_id")})
@@ -1216,7 +1225,9 @@ def run_question_aware_public_shadow_benchmark(
             "evaluation_design": structural["evaluation_design"],
             "known_failure_modes": structural["known_failure_modes"],
         },
+        "baseline_preregistration": baseline_preregistration,
         "answer_quality_review": structural["answer_quality_review"],
+        "materialization_review_evidence": materialization_review_evidence,
         "negative_controls": negative_control_readout,
         "privacy": {
             "raw_source_text_emitted": False,
@@ -1227,11 +1238,14 @@ def run_question_aware_public_shadow_benchmark(
         },
         "can_claim": [
             "public_shadow_question_aware_source_reopen_comparison_recorded",
+            "public_shadow_selected_baseline_preregistered",
+            "public_shadow_materialization_review_evidence_recorded",
             "public_shadow_threshold_readout_recorded",
             "public_shadow_negative_controls_recorded",
         ],
         "cannot_claim": [
             "private_real_history_answer_quality",
+            "true_no_question_aware_retrieval_baseline",
             "live_user_visible_recall_improvement",
             "theme_resonance_calibration",
             "default_prefilter_adoption",
