@@ -39,6 +39,11 @@ REPORT_KIND = "aippocampus_avatar_bounded_resonance_pilot"
 CLAIM_LEVEL = "exploratory_public_safe_deterministic_proxy"
 LIVE_CLAIM_LEVEL = "exploratory_public_safe_live_model_pilot"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "avatar_bounded_resonance" / "fixture.json"
+CLI_STATUSES = {
+    "deterministic_proxy_complete",
+    "live_model_public_fixture_complete",
+    "live_model_public_fixture_incomplete",
+}
 ARM_ORDER = [
     "A_explicit_instruction",
     "B_neutral_posture",
@@ -697,6 +702,25 @@ def run_live_model_benchmark(
     }
 
 
+def cli_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
+    status = str(payload.get("status", "unknown"))
+    if status not in CLI_STATUSES:
+        status = "unknown"
+    coverage = payload.get("coverage") if isinstance(payload.get("coverage"), Mapping) else {}
+    # Stdout is intentionally a whitelisted operational summary. The full
+    # report remains available via --output so CI logs never become a secondary
+    # place for model excerpts or future benchmark fields.
+    return {
+        "kind": REPORT_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "ok": bool(payload.get("ok")),
+        "status": status,
+        "case_arm_count": int(coverage.get("case_arm_count", 0)),
+        "quality_gate_ok": bool(payload.get("quality_gate_ok")),
+        "stdout_boundary": "summary_only_use_output_for_sanitized_full_report",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
@@ -728,12 +752,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         payload = run_benchmark(fixture)
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    summary = cli_summary(payload)
     if args.output:
         args.output.write_text(text + "\n", encoding="utf-8")
     if args.json:
-        print(text)
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     else:
-        print(f"{payload['status']}: {payload['coverage']['case_arm_count']} case-arms")
+        print(
+            f"{summary['status']}: {summary['case_arm_count']} case-arms "
+            "(summary only; use --output for sanitized full report)"
+        )
     return 0 if payload["ok"] else 1
 
 

@@ -45,6 +45,10 @@ REPORT_KIND = "aippocampus_e2e50_silent_constraint_live_behavior_pilot"
 CLAIM_LEVEL = "public_safe_live_model_behavior_pilot"
 DEFAULT_FIXTURE = case_pack_benchmark.DEFAULT_FIXTURE
 ISSUE = 1322
+CLI_STATUSES = {
+    "live_model_behavior_pilot_complete",
+    "live_model_behavior_pilot_incomplete",
+}
 
 ARM_ORDER = ["baseline_minimal_context", "aippocampus_packet"]
 ARMS = {
@@ -593,6 +597,31 @@ def run_live_model_benchmark(
     }
 
 
+def cli_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
+    status = str(payload.get("status", "unknown"))
+    if status not in CLI_STATUSES:
+        status = "unknown"
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), Mapping) else {}
+    arms = payload.get("arms") if isinstance(payload.get("arms"), Mapping) else {}
+    baseline = arms.get("baseline_minimal_context") if isinstance(arms.get("baseline_minimal_context"), Mapping) else {}
+    assisted = arms.get("aippocampus_packet") if isinstance(arms.get("aippocampus_packet"), Mapping) else {}
+    # Stdout is a small, whitelisted summary. The sanitized full report belongs
+    # in --output so CI logs do not become an accidental model-output channel if
+    # future report fields grow more detailed.
+    return {
+        "kind": REPORT_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "ok": bool(payload.get("ok")),
+        "status": status,
+        "contract_gate_ok": bool(payload.get("contract_gate_ok")),
+        "quality_gate_ok": bool(payload.get("quality_gate_ok")),
+        "baseline_correct_rate": float(baseline.get("correct_rate", 0.0)),
+        "assisted_correct_rate": float(assisted.get("correct_rate", 0.0)),
+        "assisted_correct_rate_lift": float(metrics.get("assisted_correct_rate_lift", 0.0)),
+        "stdout_boundary": "summary_only_use_output_for_sanitized_full_report",
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
@@ -622,11 +651,19 @@ def main(argv: list[str] | None = None) -> int:
         max_tokens=args.max_tokens,
         max_cases=args.max_cases,
     )
-    text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2, sort_keys=True)
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    summary = cli_summary(payload)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text + "\n", encoding="utf-8")
-    print(text)
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    else:
+        print(
+            f"{summary['status']}: baseline={summary['baseline_correct_rate']:.3f}, "
+            f"aippocampus={summary['assisted_correct_rate']:.3f} "
+            "(summary only; use --output for sanitized full report)"
+        )
     return 0 if payload.get("ok") else 1
 
 
