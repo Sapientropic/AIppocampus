@@ -162,7 +162,7 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], "aippocampus_avatar_bounded_resonance_pilot")
-        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "summary_only")
         self.assertEqual(
             payload["stdout_boundary"],
             "summary_only_use_output_for_sanitized_full_report",

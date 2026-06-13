@@ -103,27 +103,11 @@ class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
         self.assertNotIn('"api_key":"test"', encoded)
 
     def test_cli_summary_omits_case_and_model_output_fields(self) -> None:
-        payload = {
-            "kind": benchmark.REPORT_KIND,
-            "schema_version": benchmark.SCHEMA_VERSION,
-            "ok": True,
-            "status": "live_model_behavior_pilot_complete",
-            "contract_gate_ok": True,
-            "quality_gate_ok": False,
-            "metrics": {"assisted_correct_rate_lift": 0.06},
-            "arms": {
-                "baseline_minimal_context": {"correct_rate": 0.94},
-                "aippocampus_packet": {"correct_rate": 1.0},
-            },
-            "cases": [{"model_output_excerpt": "SHOULD_NOT_REACH_STDOUT"}],
-        }
-
-        summary = benchmark.cli_summary(payload)
+        summary = benchmark.cli_summary()
         encoded = json.dumps(summary, ensure_ascii=False)
 
         self.assertEqual(summary["kind"], benchmark.REPORT_KIND)
-        self.assertTrue(summary["ok"])
-        self.assertEqual(summary["assisted_correct_rate_lift"], 0.06)
+        self.assertEqual(summary["status"], "summary_only")
         self.assertEqual(
             summary["stdout_boundary"],
             "summary_only_use_output_for_sanitized_full_report",
