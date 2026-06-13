@@ -16,8 +16,8 @@ from typing import Any
 if __name__ == "__main__" and __package__ in {None, ""}:
     import sys
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from benchmark_entrypoints import library_only_main
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from benchmarks.aippocampus.shared.benchmark_entrypoints import library_only_main
 
     raise SystemExit(
         library_only_main(
@@ -337,7 +337,7 @@ def run_graph_extraction_boundary_benchmark(
 
 
 if __name__ == "__main__":
-    from ..benchmark_entrypoints import library_only_main
+    from ..shared.benchmark_entrypoints import library_only_main
 
     raise SystemExit(
         library_only_main(

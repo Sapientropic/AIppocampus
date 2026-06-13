@@ -22,7 +22,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from benchmark_statistics import binomial_rate_report, rounded_rate
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report, rounded_rate
 
 SCHEMA_VERSION = 1
 FIXTURE_SCHEMA_VERSION = "aippocampus.multimodal_corpus_fixture.v1"

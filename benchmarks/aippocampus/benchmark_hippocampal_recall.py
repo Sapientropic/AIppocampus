@@ -19,8 +19,8 @@ import _paths
 
 _paths.ensure_paths()
 
-import hippocampal_d5_d6_gate
-import hippocampal_fixture_schema as schema
+from benchmarks.aippocampus.families import hippocampal_d5_d6_gate
+from benchmarks.aippocampus.families import hippocampal_fixture_schema as schema
 
 SCHEMA_VERSION = 1
 REPORT_SCHEMA_VERSION = "aippocampus.hippocampal_recall_report.v1"
@@ -1449,7 +1449,7 @@ def run_benchmark(
         },
         "reproducibility": {
             "clean_clone_command": CLEAN_CLONE_COMMAND,
-            "fixture_builder_command": "python benchmarks/aippocampus/build_hippocampal_fixture.py --json",
+            "fixture_builder_command": "python benchmarks/aippocampus/builders/build_hippocampal_fixture.py --json",
             "fixture": RELATIVE_FIXTURE_PATH,
             "requires_private_registry": False,
             "requires_provider_credentials": False,

@@ -566,7 +566,7 @@ It keeps the same boundary while expanding the public-safe #1197 hard-event
 pack to 17 projects and 34 future events.
 
 Builder:
-[`benchmarks/aippocampus/build_vcs_future_event_fixture.py`](../../../benchmarks/aippocampus/build_vcs_future_event_fixture.py).
+[`benchmarks/aippocampus/builders/build_vcs_future_event_fixture.py`](../../../benchmarks/aippocampus/builders/build_vcs_future_event_fixture.py).
 It converts already-curated public VCS or rollout event-link rows into the
 scoring schema. It can also join clean-source `events.jsonl` behavior rows with
 a curated link file. It deliberately does not scrape public datasets or infer

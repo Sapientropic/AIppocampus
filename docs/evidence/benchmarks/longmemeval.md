@@ -127,7 +127,7 @@ The pilot path is deliberately small:
 - no raw questions, answers, trajectory text, screenshots, URLs, local paths,
   raw reader responses, or credentials in AIppocampus reports.
 
-`benchmarks/aippocampus/longmemeval_v2_aippocampus_adapter.py` provides the
+`benchmarks/aippocampus/adapters/longmemeval_v2_aippocampus_adapter.py` provides the
 minimal text-only Memory adapter shape for that pilot. The official harness
 registers memory backends from its own `memory_modules` package, so a real
 pilot should copy or import the adapter inside an ignored official checkout

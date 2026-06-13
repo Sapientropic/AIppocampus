@@ -7,13 +7,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (BENCHMARKS, SCRIPTS):
-    sys.path.insert(0, str(_path))
+for _path in (REPO_ROOT, BENCHMARKS, SCRIPTS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import benchmark_agent_continuity_loop as agent_loop  # noqa: E402
 import benchmark_attention_navigation_quality as attention  # noqa: E402
 import benchmark_map_rot_lifecycle_debt as map_rot  # noqa: E402
-import benchmark_maturity as maturity  # noqa: E402
+from benchmarks.aippocampus.shared import benchmark_maturity as maturity  # noqa: E402
 
 
 class BenchmarkMaturityTests(unittest.TestCase):

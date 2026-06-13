@@ -41,8 +41,8 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     merged_scope_labels,
     semantic_labels_for_message,
 )
-from benchmark_statistics import binomial_rate_report
-from claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 PROMPT_KIND = "fuzzy_life_wide_source_evidence"
 NON_TECHNICAL_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")

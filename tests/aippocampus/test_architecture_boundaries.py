@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 for _path in (
+    REPO_ROOT,
     SCRIPTS,
     REPO_ROOT / "benchmarks" / "aippocampus",
     REPO_ROOT / "tools" / "aippocampus" / "smoke",
@@ -190,6 +191,8 @@ def tool_python_files() -> list[Path]:
 def claim_boundary_helper_files() -> list[Path]:
     files = [
         *benchmark_python_files(),
+        *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "shared").glob("*.py")),
+        *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "families").glob("*.py")),
         *sorted((REPO_ROOT / "benchmarks" / "aippocampus" / "source_evidence").glob("*.py")),
         *sorted((REPO_ROOT / "tools" / "aippocampus" / "smoke").glob("*.py")),
     ]
@@ -543,7 +546,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
     def test_claim_boundary_helpers_share_canonical_ref(self) -> None:
         import importlib
 
-        refs = importlib.import_module("claim_boundary_refs")
+        refs = importlib.import_module("benchmarks.aippocampus.shared.claim_boundary_refs")
         self.assertEqual(
             refs.CANONICAL_CANNOT_CLAIM_REF,
             "docs/architecture/runtime/schema-field-profiles.md#cannot-claim",

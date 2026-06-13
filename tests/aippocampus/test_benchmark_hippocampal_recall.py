@@ -9,12 +9,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+for _path in (REPO_ROOT, BENCHMARKS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import benchmark_hippocampal_recall as benchmark  # noqa: E402
-import build_hippocampal_fixture as builder  # noqa: E402
-import hippocampal_fixture_schema as schema  # noqa: E402
+from benchmarks.aippocampus.builders import build_hippocampal_fixture as builder  # noqa: E402
+from benchmarks.aippocampus.families import hippocampal_fixture_schema as schema  # noqa: E402
 
 
 def _by_case(rows: list[dict[str, object]]) -> dict[str, dict[str, object]]:

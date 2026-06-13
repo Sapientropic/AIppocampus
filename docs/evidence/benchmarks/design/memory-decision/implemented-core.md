@@ -115,7 +115,7 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   `rate_estimates` summary collects the per-track binomial interval reports so
   public-readiness review can inspect uncertainty without walking every nested
   report.
-- `benchmarks/aippocampus/benchmark_statistics.py` owns the shared Wilson
+- `benchmarks/aippocampus/shared/benchmark_statistics.py` owns the shared Wilson
   binomial interval helper used by benchmark reports. The helper is reporting
   infrastructure only: it does not make selected, synthetic, or biased samples
   representative.

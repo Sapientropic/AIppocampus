@@ -17,17 +17,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 import time
 from collections import Counter, OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import _paths
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from benchmarks.aippocampus import _paths
 
 _paths.ensure_paths()
 
-import benchmark_vcs_future_event_recall as recall
+from benchmarks.aippocampus import benchmark_vcs_future_event_recall as recall
 
 SCHEMA_VERSION = 1
 DEFAULT_DATASET_ID = "aippocampus_vcs_future_events_built_v1"

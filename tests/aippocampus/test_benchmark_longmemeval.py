@@ -11,11 +11,12 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (BENCHMARKS, REPO_ROOT / "tools" / "aippocampus" / "smoke"):
-    sys.path.insert(0, str(_path))
+for _path in (REPO_ROOT, BENCHMARKS, REPO_ROOT / "tools" / "aippocampus" / "smoke"):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import benchmark_longmemeval as benchmark  # noqa: E402
-import provider_execution_budget  # noqa: E402
+from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 from source_evidence import standard_public  # noqa: E402
 
 

@@ -10,16 +10,17 @@ source-open or bounded-evidence path.
 from __future__ import annotations
 
 import hashlib
+import sys
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-try:
-    from benchmark_entrypoints import library_only_main
-except ModuleNotFoundError as exc:
-    if exc.name != "benchmark_entrypoints":
-        raise
-    from .benchmark_entrypoints import library_only_main
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from benchmarks.aippocampus.shared.benchmark_entrypoints import library_only_main
 
 NOTE_DRIFT_CANNOT_CLAIM = [
     "full_obsidian_or_vault_integration",
@@ -435,7 +436,7 @@ def run_note_memory_drift_fixture_report(*, include_private_text: bool = False) 
 if __name__ == "__main__":
     raise SystemExit(
         library_only_main(
-            module_path="benchmarks/aippocampus/note_memory_drift.py",
+            module_path="benchmarks/aippocampus/shared/note_memory_drift.py",
             supported_runner="benchmarks/aippocampus/benchmark_memory_decision_gate.py",
             summary="It provides #987 note-memory-drift companion fixtures.",
         )

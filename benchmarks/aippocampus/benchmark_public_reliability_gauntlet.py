@@ -25,7 +25,7 @@ import smoke_long_thread_segment_soak
 import smoke_question_tracking_scale
 import smoke_synthetic_scale_capacity
 
-import auto_hook_pollution
+from benchmarks.aippocampus.shared import auto_hook_pollution
 import benchmark_knowledge_pollution
 import benchmark_semantic_robustness
 from aippocampus_runtime.core import now_utc

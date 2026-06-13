@@ -10,14 +10,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-import _paths
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from benchmarks.aippocampus import _paths
 
 _paths.ensure_paths()
 
-import hippocampal_fixture_schema as schema
+from benchmarks.aippocampus.families import hippocampal_fixture_schema as schema
 
 PUBLIC_SAFETY = {
     "synthetic_public_safe": True,

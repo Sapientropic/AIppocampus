@@ -22,7 +22,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import provider_execution_budget  # noqa: E402
+from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 from benchmark_longmemeval_v2_context import (  # noqa: E402
     LONGMEMEVAL_V2_DATASET_URL,
     LONGMEMEVAL_V2_LICENSE,
@@ -32,7 +32,7 @@ from benchmark_longmemeval_v2_context import (  # noqa: E402
     now_utc,
     sha1_short,
 )
-from claim_boundary_refs import claim_boundary_ref  # noqa: E402
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_PILOT_QUESTIONS = 10
@@ -45,7 +45,7 @@ DEFAULT_EVALUATOR_REASONING_EFFORT = "medium"
 DEFAULT_MEMORY_CONTEXT_MAX_TOKENS = 200_000
 DEFAULT_QUERY_LATENCY_BUDGET_SECONDS = 120.0
 DEFAULT_TOTAL_COST_BUDGET_USD = 10.0
-ADAPTER_MODULE = "benchmarks/aippocampus/longmemeval_v2_aippocampus_adapter.py"
+ADAPTER_MODULE = "benchmarks/aippocampus/adapters/longmemeval_v2_aippocampus_adapter.py"
 ADAPTER_MEMORY_TYPE = "aippocampus_context_provider"
 
 CANNOT_CLAIM = sorted(

@@ -145,8 +145,8 @@ controls, external-adapter availability, or broader P1 coverage.
 
 ## Canonical Files
 
-- Schema: `benchmarks/aippocampus/hippocampal_fixture_schema.py`
-- Builder: `benchmarks/aippocampus/build_hippocampal_fixture.py`
+- Schema: `benchmarks/aippocampus/families/hippocampal_fixture_schema.py`
+- Builder: `benchmarks/aippocampus/builders/build_hippocampal_fixture.py`
 - Runner: `benchmarks/aippocampus/benchmark_hippocampal_recall.py`
 - Fixture:
   `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`

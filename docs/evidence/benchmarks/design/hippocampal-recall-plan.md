@@ -13,7 +13,7 @@ First contract-smoke slice:
 `docs/evidence/benchmarks/reports/hippocampal/hippocampal-hard-negative-fixture-report.md`.
 First D/I diagnostic-seed slice:
 `benchmarks/aippocampus/benchmark_hippocampal_recall.py`,
-`benchmarks/aippocampus/build_hippocampal_fixture.py`,
+`benchmarks/aippocampus/builders/build_hippocampal_fixture.py`,
 `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`, and
 `docs/evidence/benchmarks/reports/hippocampal/hippocampal-recall-fixture-report.md`.
 First H5 consolidation diagnostic slice: the same
@@ -213,7 +213,7 @@ whether the synthetic fixture predicts real-history behavior.
 ## Schema Contract
 
 The fixture schema should live in
-`benchmarks/aippocampus/hippocampal_fixture_schema.py` and validate JSONL rows
+`benchmarks/aippocampus/families/hippocampal_fixture_schema.py` and validate JSONL rows
 like this:
 
 ```json
@@ -674,8 +674,8 @@ separate closable slices.
 
 Proposed files:
 
-- `benchmarks/aippocampus/hippocampal_fixture_schema.py`
-- `benchmarks/aippocampus/build_hippocampal_fixture.py`
+- `benchmarks/aippocampus/families/hippocampal_fixture_schema.py`
+- `benchmarks/aippocampus/builders/build_hippocampal_fixture.py`
 - `benchmarks/aippocampus/benchmark_hippocampal_recall.py`
 - `tests/aippocampus/test_benchmark_hippocampal_recall.py`
 - `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`

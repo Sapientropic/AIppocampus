@@ -26,7 +26,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 SCHEMA_VERSION = 1
 DEFAULT_CASE_LIMIT = 20

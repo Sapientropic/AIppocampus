@@ -24,11 +24,11 @@ import _paths
 
 _paths.ensure_paths()
 
-import memory_pain_companions
-import sharegpt_sampling
+from benchmarks.aippocampus.shared import memory_pain_companions
+from benchmarks.aippocampus.shared import sharegpt_sampling
 from aippocampus_runtime.hooks import prompt as hook
 from aippocampus_runtime.recall.index_builder import make_sqlite
-from benchmark_statistics import binomial_rate_report
+from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
 
 EXPECTED_LABELS = {"should_skip", "should_scent", "should_evidence"}
 EXPECTED_TO_ACTUAL = {

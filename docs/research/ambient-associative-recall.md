@@ -547,7 +547,7 @@ The first slice should stay small but real:
    for available rate, observed scout result rate, expectation pass rate, error
    rate, false evidence, and missing-source-ref visibility; `--cases-file` can
    add larger sanitized JSON/JSONL prompt-trace suites. Real-trace calibration
-   can now start from `benchmarks/aippocampus/build_warm_ambient_trace_cases.py`,
+   can now start from `benchmarks/aippocampus/builders/build_warm_ambient_trace_cases.py`,
    which exports private cases from registered clean source or an explicit
    clean-source `messages.jsonl` such as `benchmark_corpus/output/...`, while
    skipping redacted prompts by default. For corpus sweeps, pair

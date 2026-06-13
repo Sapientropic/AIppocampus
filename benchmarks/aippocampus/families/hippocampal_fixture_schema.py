@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-import _paths
+from benchmarks.aippocampus import _paths
 
 _paths.ensure_paths()
 

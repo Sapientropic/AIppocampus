@@ -20,7 +20,7 @@ truths visible.
 
 ## Required Report Metadata
 
-Use `benchmarks/aippocampus/benchmark_maturity.py` when a runner can emit the
+Use `benchmarks/aippocampus/shared/benchmark_maturity.py` when a runner can emit the
 shared fields directly. Otherwise mirror the same shape in the report owner.
 
 Required fields:

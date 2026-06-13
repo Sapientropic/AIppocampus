@@ -17,11 +17,12 @@ from tests.aippocampus.path_assertions import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+for _path in (REPO_ROOT, BENCHMARKS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
-import amemgym_aippocampus_adapter as aippocampus_adapter  # noqa: E402
-import amemgym_official_local_provider as local_provider  # noqa: E402
+from benchmarks.aippocampus.adapters import amemgym_aippocampus_adapter as aippocampus_adapter  # noqa: E402
+from benchmarks.aippocampus.adapters import amemgym_official_local_provider as local_provider  # noqa: E402
 import benchmark_amemgym_official as benchmark  # noqa: E402
 
 RAW_QUERY = "RAW AMEMGYM QUERY MUST NOT LEAK"

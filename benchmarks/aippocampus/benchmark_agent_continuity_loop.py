@@ -19,7 +19,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import benchmark_maturity
+from benchmarks.aippocampus.shared import benchmark_maturity
 from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.navigation import attention_hot_router, semantic_warm_route_producer
 from aippocampus_runtime.recall import (

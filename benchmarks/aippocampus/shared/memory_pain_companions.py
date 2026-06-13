@@ -9,10 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-import auto_hook_pollution
-import memory_hygiene
-import note_memory_drift
-from claim_boundary_refs import claim_boundary_ref
+from . import auto_hook_pollution, memory_hygiene, note_memory_drift
+from .claim_boundary_refs import claim_boundary_ref
 
 ReportRunner = Callable[..., dict[str, Any]]
 COMPANION_CLAIM_BOUNDARY_REF = claim_boundary_ref(

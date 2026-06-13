@@ -43,7 +43,7 @@ from aippocampus_runtime.source.semantic_scope_source_review_core import (
 )
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
-from claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 PROMPT_KIND = "semantic_scope_label_source_review"
 REPO_ROOT = Path(__file__).resolve().parents[3]

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import _paths
+from .. import _paths
 
 _paths.ensure_paths()
 

@@ -19,7 +19,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import benchmark_maturity
+from benchmarks.aippocampus.shared import benchmark_maturity
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation import (
     attention_evidence_packager,
