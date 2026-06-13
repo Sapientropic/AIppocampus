@@ -468,6 +468,11 @@ def html_dashboard_v2(
         if site_mark
         else "<div class='mark-fallback'>☯</div>"
     )
+    favicon_link = (
+        f'  <link rel="icon" href="{html.escape(site_mark)}">\n'
+        if site_mark
+        else '  <link rel="icon" href="data:,">\n'
+    )
     pages = dashboard_pane_data_v2(health, anchors, checkpoint_state, recent_messages)
     pane_json = json_script(pages)
     graph_json = json_script(dashboard_graph_data(anchors))
@@ -530,7 +535,7 @@ def html_dashboard_v2(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>{html.escape(thread_name)} · {html.escape(site_title)}</title>
-{publish_link}  <link rel="icon" href="data:,">
+{publish_link}{favicon_link}
   <style>{css}</style>
 </head>
 <body class="styled-scrollbars theme-dark sliding-windows codex-memory-dashboard">

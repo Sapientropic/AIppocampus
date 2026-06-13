@@ -88,6 +88,12 @@ from looking like a control tower.
   - Exploratory public-safe proxy for bounded resonance posture prompts.
   - Treat this as a harness/report slice only; it is not runtime avatar
     adoption evidence.
+- [Avatar Bounded Resonance Live-Model Pilot, 2026-06-13](avatar-bounded-resonance-live-model-2026-06-13.md)
+  - Public-safe 60-call DeepSeek live-model run over the same bounded-resonance
+    fixture and A-E arms.
+  - Treat this as mixed/negative pilot evidence: red lines stayed clear, but
+    bounded resonance did not beat the neutral or alias-only arms on the
+    scripted scoring rubric.
 
 ## Evidence Levels
 

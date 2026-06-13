@@ -103,7 +103,7 @@ packages = [
 # TOML dotted keys must stay quoted here. Without quotes, setuptools sees a
 # nested `aippocampus_runtime = { vault = [...] }` table and editable installs
 # fail before any package smoke can run.
-"aippocampus_runtime.vault" = ["dashboard_assets/*.css", "dashboard_assets/*.js"]
+"aippocampus_runtime.vault" = ["dashboard_assets/*.css", "dashboard_assets/*.js", "dashboard_assets/*.png"]
 
 [tool.ruff]
 line-length = 100

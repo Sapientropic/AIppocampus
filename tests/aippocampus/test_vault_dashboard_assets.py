@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -19,6 +20,7 @@ for _path in (
 
 from aippocampus_runtime.vault import dashboard as packaged_dashboard  # noqa: E402
 from aippocampus_runtime.vault import dashboard as vault_dashboard  # noqa: E402
+from aippocampus_runtime.vault import utils as vault_utils  # noqa: E402
 
 
 class VaultDashboardAssetTests(unittest.TestCase):
@@ -47,6 +49,7 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertEqual(packaged_dashboard._DASHBOARD_ASSET_DIR, package_assets)
         self.assertTrue((package_assets / "dashboard_v2.js").exists())
         self.assertTrue((package_assets / "dashboard_v2.css").exists())
+        self.assertTrue((package_assets / "aippocampus-site-mark.png").exists())
         script = (package_assets / "dashboard_v2.js").read_text(encoding="utf-8")
         css = (package_assets / "dashboard_v2.css").read_text(encoding="utf-8")
 
@@ -54,6 +57,16 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertIn("--codex-pane-divider", css)
         self.assertEqual(vault_dashboard.dashboard_interaction_script_v2(), script)
         self.assertEqual(vault_dashboard.dashboard_css_v2(), css)
+
+    def test_copy_dashboard_assets_includes_default_site_mark(self) -> None:
+        with self.subTest("packaged default"):
+            self.assertTrue(vault_utils.DEFAULT_SITE_MARK_SOURCE.exists())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = vault_utils.copy_dashboard_assets(Path(tmp))
+
+            self.assertEqual(assets["site_mark"], "assets/site-mark.png")
+            self.assertTrue((Path(tmp) / "_dashboards" / "assets" / "site-mark.png").exists())
 
     def test_dashboard_runtime_uses_structured_body_nodes(self) -> None:
         script = (ASSETS / "dashboard_v2.js").read_text(encoding="utf-8")
@@ -77,6 +90,20 @@ class VaultDashboardAssetTests(unittest.TestCase):
 
         self.assertIn(f"<style>{css}</style>", rendered)
         self.assertIn(f"<script>{script}</script>", rendered)
+
+    def test_html_dashboard_v2_uses_site_mark_as_favicon(self) -> None:
+        rendered = vault_dashboard.html_dashboard_v2(
+            thread_name="Demo thread",
+            health={"ok": True},
+            anchors=[],
+            checkpoint_state={},
+            recent_messages=[],
+            vault=ROOT,
+            assets={"site_mark": "assets/site-mark.png"},
+        )
+
+        self.assertIn('<link rel="icon" href="assets/site-mark.png">', rendered)
+        self.assertIn("src='assets/site-mark.png'", rendered)
 
     def test_json_script_escapes_html_delimiters(self) -> None:
         rendered = packaged_dashboard.json_script(

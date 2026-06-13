@@ -33,7 +33,7 @@ class ChatClientConfig:
     base_url: str
     max_tokens: int | None = None
     timeout: float = 60.0
-    temperature: float = 0.0
+    temperature: float | None = None
     service_name: str = "OpenAI-compatible chat API"
     user_id: str | None = None
     thinking: str | None = None
@@ -140,7 +140,7 @@ def chat_json(messages: list[dict[str, str]], config: ChatClientConfig) -> dict[
     }
     if config.response_format_json:
         body["response_format"] = {"type": "json_object"}
-    if thinking != "enabled" and not reasoning_effort:
+    if config.temperature is not None and thinking != "enabled" and not reasoning_effort:
         body["temperature"] = config.temperature
     if config.max_tokens is not None:
         body["max_tokens"] = config.max_tokens

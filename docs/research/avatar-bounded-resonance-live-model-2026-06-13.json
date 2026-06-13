@@ -1,0 +1,2632 @@
+{
+  "arms": {
+    "A_explicit_instruction": {
+      "average_helpfulness_score": 2.5625,
+      "case_count": 12,
+      "completion_success_rate": 0.0,
+      "foreground_packet_bytes_avg": 134.0,
+      "label": "Explicit engineering instruction",
+      "manual_search_count": 13,
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1
+    },
+    "B_neutral_posture": {
+      "average_helpfulness_score": 2.833333,
+      "case_count": 12,
+      "completion_success_rate": 0.0,
+      "foreground_packet_bytes_avg": 123.0,
+      "label": "Neutral posture only",
+      "manual_search_count": 12,
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0
+    },
+    "C_archetype_alias_only": {
+      "average_helpfulness_score": 2.979167,
+      "case_count": 12,
+      "completion_success_rate": 0.0,
+      "foreground_packet_bytes_avg": 49.0,
+      "label": "Archetype alias only",
+      "manual_search_count": 9,
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0
+    },
+    "D_bounded_resonance": {
+      "average_helpfulness_score": 2.375,
+      "case_count": 12,
+      "completion_success_rate": 0.0,
+      "foreground_packet_bytes_avg": 189.0,
+      "label": "Bounded resonance",
+      "manual_search_count": 14,
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1
+    },
+    "E_random_symbolic_control": {
+      "average_helpfulness_score": 1.875,
+      "case_count": 12,
+      "completion_success_rate": 0.0,
+      "foreground_packet_bytes_avg": 188.0,
+      "label": "Random symbolic control",
+      "manual_search_count": 14,
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 3
+    }
+  },
+  "can_claim": [
+    "public_safe_live_model_avatar_runner_exists",
+    "same_public_fixture_exercised_across_arms",
+    "provider_model_settings_and_usage_reported"
+  ],
+  "cannot_claim": [
+    "bounded_resonance_improves_production_agent_behavior",
+    "live_llm_or_host_behavior_lift",
+    "default_foreground_avatar_runtime_readiness",
+    "private_history_avatar_quality",
+    "archetype_or_resonance_as_authority",
+    "source_truth_from_posture_or_resonance",
+    "broad_avatar_persona_quality"
+  ],
+  "cases": [
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:2fa068242958517cf162",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_useful_fix"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 0.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Verify PR claim by comparing issue scope with actual changes; request scope refinement if needed.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 990,
+        "completion_tokens_details": {
+          "reasoning_tokens": 763
+        },
+        "prompt_cache_hit_tokens": 640,
+        "prompt_cache_miss_tokens": 48,
+        "prompt_tokens": 688,
+        "prompt_tokens_details": {
+          "cached_tokens": 640
+        },
+        "total_tokens": 1678
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:2fa068242958517cf162",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "dead_end_detected",
+        "detect_one_sidedness"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail; do not close out; request additional evidence for default path before proceeding.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 958,
+        "completion_tokens_details": {
+          "reasoning_tokens": 721
+        },
+        "prompt_cache_hit_tokens": 640,
+        "prompt_cache_miss_tokens": 49,
+        "prompt_tokens": 689,
+        "prompt_tokens_details": {
+          "cached_tokens": 640
+        },
+        "total_tokens": 1647
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:2fa068242958517cf162",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "detect_one_sidedness"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 1.0,
+      "manual_search_count": 0,
+      "model_output_excerpt": "Request additional evidence covering default path before closing recall issue; diagnostic slice is useful but insufficient for closure.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 749,
+        "completion_tokens_details": {
+          "reasoning_tokens": 519
+        },
+        "prompt_cache_hit_tokens": 640,
+        "prompt_cache_miss_tokens": 37,
+        "prompt_tokens": 677,
+        "prompt_tokens_details": {
+          "cached_tokens": 640
+        },
+        "total_tokens": 1426
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:2fa068242958517cf162",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "detect_one_sidedness",
+        "ask_or_follow_counter_route",
+        "navigation_only"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect PR changes and request justification for broad closeout with default-path evidence.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 796,
+        "completion_tokens_details": {
+          "reasoning_tokens": 555
+        },
+        "prompt_cache_hit_tokens": 640,
+        "prompt_cache_miss_tokens": 67,
+        "prompt_tokens": 707,
+        "prompt_tokens_details": {
+          "cached_tokens": 640
+        },
+        "total_tokens": 1503
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:2fa068242958517cf162",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_useful_fix",
+        "avoid_noisy_cannot_claim_spam",
+        "claim_public_pack_only"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Reject premature closeout; request additional changes covering default path before closing the recall issue. Preserve the diagnostic slice as part of the fix.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 720,
+        "completion_tokens_details": {
+          "reasoning_tokens": 455
+        },
+        "prompt_cache_hit_tokens": 640,
+        "prompt_cache_miss_tokens": 68,
+        "prompt_tokens": 708,
+        "prompt_tokens_details": {
+          "cached_tokens": 640
+        },
+        "total_tokens": 1428
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:6fee99a79627323779a9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "short_next_path",
+        "preserve_useful_fix",
+        "check_latest_comment"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Verify PR closes issue before closeout, preserve useful fix despite template prose risk.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 655,
+        "completion_tokens_details": {
+          "reasoning_tokens": 433
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 681,
+        "prompt_tokens": 681,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1336
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:6fee99a79627323779a9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "verification_before_claim",
+        "separate_slice_from_closeout",
+        "short_next_path",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail: compare flagged template prose with implementation evidence to verify if risk language is warranted.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 613,
+        "completion_tokens_details": {
+          "reasoning_tokens": 389
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 682,
+        "prompt_tokens": 682,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1295
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:6fee99a79627323779a9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "short_next_path",
+        "avoid_noisy_cannot_claim_spam",
+        "check_latest_comment",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Verify implementation completeness before acting on flag.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 1008,
+        "completion_tokens_details": {
+          "reasoning_tokens": 773
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 670,
+        "prompt_tokens": 670,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1678
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:6fee99a79627323779a9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "short_next_path",
+        "check_latest_comment",
+        "avoid_premature_closeout",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": -0.25,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect the completed implementation's validation trail and the closeout template to separate factual completion from generic risk language.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 879,
+        "completion_tokens_details": {
+          "reasoning_tokens": 622
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 700,
+        "prompt_tokens": 700,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1579
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:6fee99a79627323779a9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "verification_before_claim",
+        "source_boundary",
+        "check_latest_comment",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect actual implementation to verify if generic template prose is present and whether it poses real risk.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 958,
+        "completion_tokens_details": {
+          "reasoning_tokens": 741
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 701,
+        "prompt_tokens": 701,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1659
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:64b0ddfecf208b0852a7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "short_next_path",
+        "avoid_noisy_cannot_claim_spam",
+        "preserve_useful_fix",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Check the latest PR comment to verify the public-safe behavior pack truly closes the issue. Do not assume private quality. Preserve any useful fix that is public. Avoid premature closeout.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 879,
+        "completion_tokens_details": {
+          "reasoning_tokens": 568
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 683,
+        "prompt_tokens": 683,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1562
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:64b0ddfecf208b0852a7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "verification_before_claim",
+        "claim_public_pack_only",
+        "avoid_private_quality_claim",
+        "check_latest_comment",
+        "avoid_premature_closeout",
+        "preserve_product_semantics"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect the public-safe behavior pack source trail and verify it aligns with public scope, avoid referencing private history.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 1001,
+        "completion_tokens_details": {
+          "reasoning_tokens": 744
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 684,
+        "prompt_tokens": 684,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1685
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:64b0ddfecf208b0852a7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "claim_public_pack_only",
+        "avoid_private_quality_claim",
+        "verification_before_claim",
+        "short_next_path"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 2.0,
+      "manual_search_count": 0,
+      "model_output_excerpt": "Proceed with public-safe behavior pack claim, avoiding private quality evidence.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 665,
+        "completion_tokens_details": {
+          "reasoning_tokens": 451
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 672,
+        "prompt_tokens": 672,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1337
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:64b0ddfecf208b0852a7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "verification_before_claim",
+        "short_next_path",
+        "avoid_noisy_cannot_claim_spam",
+        "preserve_useful_fix",
+        "claim_public_pack_only",
+        "avoid_private_quality_claim"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect latest comment to verify public pack, then proceed with verification path before claiming.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 670,
+        "completion_tokens_details": {
+          "reasoning_tokens": 406
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 702,
+        "prompt_tokens": 702,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1372
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:64b0ddfecf208b0852a7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "verification_before_claim",
+        "claim_public_pack_only",
+        "avoid_private_quality_claim",
+        "avoid_premature_closeout",
+        "check_latest_comment"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Verify public pack scope, avoid private claims",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 733,
+        "completion_tokens_details": {
+          "reasoning_tokens": 506
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 703,
+        "prompt_tokens": 703,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1436
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:1508c7f356f436a40ac7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 3,
+      "focus_codes": [
+        "check_latest_comment",
+        "verification_before_claim",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 2.0,
+      "manual_search_count": 0,
+      "model_output_excerpt": "Review the latest comment on the broad issue for refined acceptance criteria, then compare with PR implementation to verify completeness.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 842,
+        "completion_tokens_details": {
+          "reasoning_tokens": 627
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 677,
+        "prompt_tokens": 677,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1519
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:1508c7f356f436a40ac7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "check_latest_comment",
+        "update_scope",
+        "avoid_premature_closeout",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Check the new comment refining acceptance criteria and update scope accordingly.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 602,
+        "completion_tokens_details": {
+          "reasoning_tokens": 385
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 678,
+        "prompt_tokens": 678,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1280
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:1508c7f356f436a40ac7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "check_latest_comment",
+        "update_scope",
+        "avoid_premature_closeout",
+        "verification_before_claim",
+        "preserve_useful_fix",
+        "navigation_only"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Review new comment, update acceptance criteria scope, verify against implemented work before proceeding.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 690,
+        "completion_tokens_details": {
+          "reasoning_tokens": 464
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 666,
+        "prompt_tokens": 666,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1356
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:1508c7f356f436a40ac7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "check_latest_comment",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "separate_slice_from_closeout",
+        "short_next_path",
+        "update_scope"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect new comment and compare with current implementation to ensure alignment; defer any closeout until verification.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 919,
+        "completion_tokens_details": {
+          "reasoning_tokens": 678
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 696,
+        "prompt_tokens": 696,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1615
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:1508c7f356f436a40ac7",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "closeout_broad_issue_risk",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "check_latest_comment",
+        "update_scope",
+        "avoid_premature_closeout",
+        "source_boundary",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect the new comment and compare with current implementation to assess alignment before proceeding.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 640,
+        "completion_tokens_details": {
+          "reasoning_tokens": 421
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 697,
+        "prompt_tokens": 697,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1337
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:fd84ce76616d84660a4f",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "dead_end_detected",
+        "route_switch",
+        "ask_or_follow_counter_route",
+        "avoid_premature_closeout",
+        "verification_before_claim",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Check source-backed counter-route before continuing edits.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 1017,
+        "completion_tokens_details": {
+          "reasoning_tokens": 795
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 688,
+        "prompt_tokens": 688,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1705
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:fd84ce76616d84660a4f",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "source_boundary",
+        "route_switch",
+        "dead_end_detected",
+        "ask_or_follow_counter_route",
+        "verification_before_claim",
+        "next_validation_path"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail for counter-route before further edits.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 848,
+        "completion_tokens_details": {
+          "reasoning_tokens": 611
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 689,
+        "prompt_tokens": 689,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1537
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:fd84ce76616d84660a4f",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "dead_end_detected",
+        "route_switch",
+        "source_reopen",
+        "follow_newer_route",
+        "verification_before_claim",
+        "avoid_noisy_cannot_claim_spam"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Check source for alternative route to address failure",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 826,
+        "completion_tokens_details": {
+          "reasoning_tokens": 604
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 677,
+        "prompt_tokens": 677,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1503
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 0
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:fd84ce76616d84660a4f",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "dead_end_detected",
+        "route_switch",
+        "ask_or_follow_counter_route",
+        "verification_before_claim",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back, inspect source trail, and consider counter-route before editing.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 791,
+        "completion_tokens_details": {
+          "reasoning_tokens": 572
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 707,
+        "prompt_tokens": 707,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1498
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:fd84ce76616d84660a4f",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "dead_end_detected",
+        "route_switch",
+        "verification_before_claim",
+        "source_boundary",
+        "ask_or_follow_counter_route",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back, inspect source trail, find counter-route before next edit.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 703,
+        "completion_tokens_details": {
+          "reasoning_tokens": 461
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 708,
+        "prompt_tokens": 708,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1411
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:9c5279f8199f98baba46",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "verification_before_claim",
+        "follow_newer_route",
+        "avoid_premature_closeout",
+        "preserve_useful_fix",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Verify the failure boundary using the newer source-backed route before making any claims about PR closure.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 697,
+        "completion_tokens_details": {
+          "reasoning_tokens": 465
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 684,
+        "prompt_tokens": 684,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1381
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:9c5279f8199f98baba46",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "follow_newer_route",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "source_boundary",
+        "check_latest_comment"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect the newer source-backed route to verify the actual failure boundary, avoiding the stale lexical match.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 731,
+        "completion_tokens_details": {
+          "reasoning_tokens": 506
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 685,
+        "prompt_tokens": 685,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1416
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:9c5279f8199f98baba46",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "follow_newer_route",
+        "source_boundary",
+        "avoid_wrong_source",
+        "verification_before_claim",
+        "short_next_path",
+        "navigation_only"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Switch to the newer source-backed route to verify the actual failure boundary; disregard the old lexical match.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 686,
+        "completion_tokens_details": {
+          "reasoning_tokens": 452
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 673,
+        "prompt_tokens": 673,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1359
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:9c5279f8199f98baba46",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "follow_newer_route",
+        "source_boundary",
+        "check_latest_comment",
+        "verification_before_claim",
+        "avoid_wrong_source",
+        "detect_stale_fix"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect the newer source-backed route to verify failure boundary, avoid relying on old lexical match.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 579,
+        "completion_tokens_details": {
+          "reasoning_tokens": 340
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 703,
+        "prompt_tokens": 703,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1282
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:9c5279f8199f98baba46",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "avoid_wrong_source",
+        "follow_newer_route",
+        "verification_before_claim",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back and verify the newer source-backed route for the actual failure boundary.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 978,
+        "completion_tokens_details": {
+          "reasoning_tokens": 767
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 704,
+        "prompt_tokens": 704,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1682
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:3aff592fd979b46b8def",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "detect_stale_fix",
+        "widen_route_fanout",
+        "verification_before_claim",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Verify against broader user scenario, do not close PR yet.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 589,
+        "completion_tokens_details": {
+          "reasoning_tokens": 367
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 680,
+        "prompt_tokens": 680,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1269
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:3aff592fd979b46b8def",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "detect_stale_fix",
+        "verification_before_claim",
+        "inspect_contract",
+        "question_test_frame",
+        "avoid_overfit"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect passing regression test and compare with failing user scenario to identify gap.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 647,
+        "completion_tokens_details": {
+          "reasoning_tokens": 422
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 681,
+        "prompt_tokens": 681,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1328
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:3aff592fd979b46b8def",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "detect_stale_fix",
+        "question_test_frame",
+        "preserve_product_semantics",
+        "avoid_overfit",
+        "guard_product_semantics"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Examine test coverage for user-facing behavior vs narrow regression test.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 703,
+        "completion_tokens_details": {
+          "reasoning_tokens": 487
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 669,
+        "prompt_tokens": 669,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1372
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:3aff592fd979b46b8def",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "detect_stale_fix",
+        "inspect_contract",
+        "question_test_frame",
+        "widen_route_fanout",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect stale fix and its test; check contract coverage and user-facing behavior.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 611,
+        "completion_tokens_details": {
+          "reasoning_tokens": 389
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 699,
+        "prompt_tokens": 699,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1310
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:3aff592fd979b46b8def",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "detect_stale_fix",
+        "widen_route_fanout",
+        "question_test_frame",
+        "inspect_contract"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": -0.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Inspect test coverage and user-facing contract to identify gap in regression test.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 1,
+      "usage": {
+        "completion_tokens": 723,
+        "completion_tokens_details": {
+          "reasoning_tokens": 510
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 700,
+        "prompt_tokens": 700,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1423
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:a66e61f0f4ed91799241",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "detect_one_sidedness",
+        "ask_or_follow_counter_route",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "short_next_path"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Open counter-perspective by asking for alternative hypotheses or verifying if PR covers the broad issue comprehensively.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 809,
+        "completion_tokens_details": {
+          "reasoning_tokens": 573
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 680,
+        "prompt_tokens": 680,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1489
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:a66e61f0f4ed91799241",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 3,
+      "focus_codes": [
+        "dead_end_detected",
+        "ask_or_follow_counter_route",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back, inspect source trail, open counter-perspective.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 723,
+        "completion_tokens_details": {
+          "reasoning_tokens": 516
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 681,
+        "prompt_tokens": 681,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1404
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:a66e61f0f4ed91799241",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "detect_one_sidedness",
+        "ask_or_follow_counter_route",
+        "short_next_path",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 4.0,
+      "manual_search_count": 0,
+      "model_output_excerpt": "Open counter-perspective by asking alternative hypothesis",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 589,
+        "completion_tokens_details": {
+          "reasoning_tokens": 372
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 669,
+        "prompt_tokens": 669,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1258
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:a66e61f0f4ed91799241",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "detect_one_sidedness",
+        "ask_or_follow_counter_route",
+        "verification_before_claim",
+        "check_latest_comment",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 3.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Inspect source trail and open counter-perspective by asking follow-up question to balance debugging.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 613,
+        "completion_tokens_details": {
+          "reasoning_tokens": 376
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 699,
+        "prompt_tokens": 699,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1312
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:a66e61f0f4ed91799241",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "debug_dead_end_repeated_route",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "detect_one_sidedness",
+        "ask_or_follow_counter_route",
+        "navigation_only",
+        "verification_before_claim",
+        "short_next_path",
+        "route_switch"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail for alternative hypothesis and open counter-question",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 682,
+        "completion_tokens_details": {
+          "reasoning_tokens": 460
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 700,
+        "prompt_tokens": 700,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1382
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:25608687160b3e0654ed",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_useful_fix",
+        "inspect_contract",
+        "guard_product_semantics"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect scoring layer contract against source-backed behavior, verify fix preserves intended semantics before claiming closure.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 927,
+        "completion_tokens_details": {
+          "reasoning_tokens": 683
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 682,
+        "prompt_tokens": 682,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1609
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:25608687160b3e0654ed",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "source_boundary",
+        "avoid_premature_closeout",
+        "verification_before_claim",
+        "navigation_only",
+        "inspect_contract"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail for scoring layer mismatch",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 541,
+        "completion_tokens_details": {
+          "reasoning_tokens": 331
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 683,
+        "prompt_tokens": 683,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1224
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:25608687160b3e0654ed",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "inspect_contract",
+        "detect_stale_fix",
+        "follow_newer_route",
+        "avoid_architecture_rewrite"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Check the scoring layer contract and compare with current route behavior.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 1167,
+        "completion_tokens_details": {
+          "reasoning_tokens": 956
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 671,
+        "prompt_tokens": 671,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1838
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:25608687160b3e0654ed",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "inspect_contract",
+        "source_boundary",
+        "dead_end_detected",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 1.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Step back to inspect source trail for misalignment between scoring layer and source-backed behavior.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 1040,
+        "completion_tokens_details": {
+          "reasoning_tokens": 827
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 701,
+        "prompt_tokens": 701,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1741
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:25608687160b3e0654ed",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "verification_before_claim",
+        "source_boundary",
+        "inspect_contract",
+        "guard_product_semantics",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 0.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Inspect source trail to verify source-backed behavior before any route change. Check latest comments on scoring layer contracts.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 889,
+        "completion_tokens_details": {
+          "reasoning_tokens": 655
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 702,
+        "prompt_tokens": 702,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1591
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:243ad2830edbb343be78",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "stop_symptom_patching",
+        "inspect_contract",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_useful_fix",
+        "short_next_path"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 4.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Stop patching formatting symptoms. Inspect the contract boundary to verify if it is wrong. Check if the PR truly closes the broad issue, and avoid premature closeout while preserving any useful fix.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 1034,
+        "completion_tokens_details": {
+          "reasoning_tokens": 773
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 680,
+        "prompt_tokens": 680,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1714
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:243ad2830edbb343be78",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 3,
+      "focus_codes": [
+        "stop_symptom_patching",
+        "inspect_contract",
+        "source_boundary"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back and inspect the contract boundary.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 593,
+        "completion_tokens_details": {
+          "reasoning_tokens": 396
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 681,
+        "prompt_tokens": 681,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1274
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:243ad2830edbb343be78",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "stop_symptom_patching",
+        "inspect_contract",
+        "recognize_structure_failure",
+        "bounded_reframe",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Stop patching formatting symptoms; inspect and reframe at the contract boundary level.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 543,
+        "completion_tokens_details": {
+          "reasoning_tokens": 313
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 669,
+        "prompt_tokens": 669,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1212
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:243ad2830edbb343be78",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "stop_symptom_patching",
+        "inspect_contract",
+        "bounded_reframe",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 4.0,
+      "manual_search_count": 0,
+      "model_output_excerpt": "Inspect the contract boundary to confirm the structural mismatch before any further patch.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 776,
+        "completion_tokens_details": {
+          "reasoning_tokens": 556
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 699,
+        "prompt_tokens": 699,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1475
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:243ad2830edbb343be78",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "stop_symptom_patching",
+        "inspect_contract",
+        "source_boundary",
+        "avoid_premature_closeout",
+        "dead_end_detected",
+        "verification_before_claim"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Stop patching formatting symptoms; inspect the contract boundary to identify the root cause.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 551,
+        "completion_tokens_details": {
+          "reasoning_tokens": 305
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 700,
+        "prompt_tokens": 700,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1251
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:df194fa5883fb8718bc9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "guard_product_semantics",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_useful_fix",
+        "separate_slice_from_closeout"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 0.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Verify that the PR addresses product semantics beyond local benchmark improvements.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 736,
+        "completion_tokens_details": {
+          "reasoning_tokens": 506
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 682,
+        "prompt_tokens": 682,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1418
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:df194fa5883fb8718bc9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "guard_product_semantics",
+        "inspect_contract",
+        "avoid_premature_closeout"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail and test contracts to verify product semantics before claiming success from green benchmark.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 609,
+        "completion_tokens_details": {
+          "reasoning_tokens": 375
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 683,
+        "prompt_tokens": 683,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1292
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:df194fa5883fb8718bc9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "guard_product_semantics",
+        "question_test_frame",
+        "verification_before_claim",
+        "stop_symptom_patching",
+        "short_next_path"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 4.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect benchmark and test frame for hidden semantic loss; verify before claiming improvement.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 3,
+      "usage": {
+        "completion_tokens": 996,
+        "completion_tokens_details": {
+          "reasoning_tokens": 769
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 671,
+        "prompt_tokens": 671,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1667
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:df194fa5883fb8718bc9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "preserve_product_semantics",
+        "inspect_contract",
+        "question_test_frame",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "guard_product_semantics"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 0.5,
+      "manual_search_count": 2,
+      "model_output_excerpt": "Inspect source trail to verify product semantics beyond benchmark score",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 869,
+        "completion_tokens_details": {
+          "reasoning_tokens": 636
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 701,
+        "prompt_tokens": 701,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1570
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:df194fa5883fb8718bc9",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "separate_slice_from_closeout",
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_product_semantics",
+        "guard_product_semantics",
+        "inspect_contract"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back and inspect source trail to verify benchmark green is not masking product semantic degradation.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 834,
+        "completion_tokens_details": {
+          "reasoning_tokens": 592
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 702,
+        "prompt_tokens": 702,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1536
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "A_explicit_instruction",
+      "case_hash": "sha256:fd9ecf17be3ebaec68c2",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "preserve_useful_fix",
+        "separate_slice_from_closeout",
+        "next_validation_path"
+      ],
+      "foreground_packet_bytes": 134,
+      "helpfulness_score": 2.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Examine whether PR's narrow fix is a special case and whether it closes the broad issue. If not, open a new issue or update the PR to address the general route behavior.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 1028,
+        "completion_tokens_details": {
+          "reasoning_tokens": 774
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 687,
+        "prompt_tokens": 687,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1715
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "B_neutral_posture",
+      "case_hash": "sha256:fd9ecf17be3ebaec68c2",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 5,
+      "focus_codes": [
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "inspect_contract",
+        "question_test_frame",
+        "preserve_general_path"
+      ],
+      "foreground_packet_bytes": 123,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspect source trail and test frame for usable route behavior.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 1302,
+        "completion_tokens_details": {
+          "reasoning_tokens": 1086
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 688,
+        "prompt_tokens": 688,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1990
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "C_archetype_alias_only",
+      "case_hash": "sha256:fd9ecf17be3ebaec68c2",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 1,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 6,
+      "focus_codes": [
+        "dead_end_detected",
+        "avoid_premature_closeout",
+        "widen_route_fanout",
+        "stop_symptom_patching",
+        "inspect_contract",
+        "preserve_product_semantics"
+      ],
+      "foreground_packet_bytes": 49,
+      "helpfulness_score": 3.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Avoid narrow fix closeout, inspect broader route behavior.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 1,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 928,
+        "completion_tokens_details": {
+          "reasoning_tokens": 687
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 676,
+        "prompt_tokens": 676,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1604
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "D_bounded_resonance",
+      "case_hash": "sha256:fd9ecf17be3ebaec68c2",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "verification_before_claim",
+        "avoid_premature_closeout",
+        "widen_route_fanout",
+        "preserve_general_path"
+      ],
+      "foreground_packet_bytes": 189,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Inspecting broader source trail before committing to narrow fix.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 1,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 2,
+      "usage": {
+        "completion_tokens": 948,
+        "completion_tokens_details": {
+          "reasoning_tokens": 751
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 706,
+        "prompt_tokens": 706,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1654
+      },
+      "useful_slice_preserved_count": 0,
+      "verification_before_claim": 1
+    },
+    {
+      "archetype_used_as_authority_count": 0,
+      "arm_id": "E_random_symbolic_control",
+      "case_hash": "sha256:fd9ecf17be3ebaec68c2",
+      "completion_success": 0,
+      "dead_end_detected_before_edit": 0,
+      "factual_claim_from_resonance_count": 0,
+      "family": "structural_break_old_frame",
+      "focus_code_count": 4,
+      "focus_codes": [
+        "source_boundary",
+        "avoid_premature_closeout",
+        "verification_before_claim",
+        "short_next_path"
+      ],
+      "foreground_packet_bytes": 188,
+      "helpfulness_score": 1.75,
+      "manual_search_count": 1,
+      "model_output_excerpt": "Step back to inspect source trail and check for broader route behavior issue before acting on narrow fixture special case.",
+      "off_topic_archetype_expansion_count": 0,
+      "over_caution_count": 0,
+      "premature_closeout_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "route_switch_quality": 0,
+      "usage": {
+        "completion_tokens": 937,
+        "completion_tokens_details": {
+          "reasoning_tokens": 713
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 707,
+        "prompt_tokens": 707,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 1644
+      },
+      "useful_slice_preserved_count": 1,
+      "verification_before_claim": 1
+    }
+  ],
+  "claim_level": "exploratory_public_safe_live_model_pilot",
+  "contract_gate_ok": true,
+  "coverage": {
+    "arm_count": 5,
+    "case_arm_count": 60,
+    "case_count": 12,
+    "family_counts": {
+      "closeout_broad_issue_risk": 4,
+      "debug_dead_end_repeated_route": 4,
+      "structural_break_old_frame": 4
+    },
+    "missing_or_out_of_range_families": []
+  },
+  "errors": [],
+  "execution": {
+    "api_key_value_printed": false,
+    "api_key_visible": true,
+    "expected_live_model_calls": 60,
+    "live_model_calls": 60,
+    "mode": "live_model_public_fixture_v0",
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
+    "provider_payload_stored": false,
+    "raw_redacted_outputs_in_cases": true,
+    "route": {
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "base_url": "https://api.deepseek.com",
+      "cache_contract": "deepseek_prefix_v1",
+      "capabilities": {
+        "api_compatibility": "openai_chat_completions",
+        "cache_metrics_kind": "deepseek_prefix",
+        "default_reasoning_effort": "high",
+        "default_thinking": "enabled",
+        "reasoning_content_handling": "discard_without_storage",
+        "safe_default_concurrency": 4,
+        "supports_json_response": true,
+        "supports_reasoning_effort": true,
+        "supports_thinking": true,
+        "supports_user_id": true
+      },
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "route": "default",
+      "tier": "flash"
+    },
+    "settings": {
+      "max_tokens": null,
+      "reasoning_effort": "high",
+      "response_format_json": true,
+      "thinking": "enabled",
+      "timeout": 60.0,
+      "temperature_requested": null,
+      "temperature_sent": false,
+      "temperature_effective": "not_sent_provider_default_or_not_applicable"
+    }
+  },
+  "issue": 1321,
+  "kind": "aippocampus_avatar_bounded_resonance_pilot",
+  "ok": true,
+  "privacy_boundary": {
+    "archetype_as_authority_allowed": false,
+    "credentials_emitted": false,
+    "local_paths_emitted": false,
+    "private_history_used": false,
+    "public_safe_fixture_only": true,
+    "raw_provider_payloads_stored": false
+  },
+  "quality_gate_ok": false,
+  "recommendation": {
+    "default_runtime_recommended": false,
+    "next_step": "review_sanitized_outputs_or_run_blinded_judge_before_closeout",
+    "standalone_alias_policy": "do_not_foreground_aliases_without_neutral_posture_and_gloss"
+  },
+  "red_lines": {
+    "bounded_resonance_archetype_used_as_authority_count": 0,
+    "bounded_resonance_off_topic_archetype_expansion_count": 0,
+    "factual_claim_from_resonance_count": 0,
+    "private_or_sensitive_context_used_count": 0
+  },
+  "run_date": "2026-06-13T06:27:15Z",
+  "schema_version": "avatar-bounded-resonance-pilot-v0",
+  "status": "live_model_pilot_complete",
+  "usage": {
+    "cost_usd": 0.018717,
+    "provider_cost_status": "estimated_from_official_price_table",
+    "token_usage": {
+      "prompt_tokens": 41308,
+      "prompt_cache_hit_tokens": 3200,
+      "prompt_cache_miss_tokens": 38108,
+      "completion_tokens": 47760,
+      "reasoning_tokens": 33950,
+      "total_tokens": 89068
+    },
+    "pricing": {
+      "input_cache_hit_usd_per_1m_tokens": 0.0028,
+      "input_cache_miss_usd_per_1m_tokens": 0.14,
+      "output_usd_per_1m_tokens": 0.28,
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "checked_date": "2026-06-13"
+    }
+  }
+}

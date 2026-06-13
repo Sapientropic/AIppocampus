@@ -37,9 +37,9 @@
     "websiteURL": "https://www.aippocampus.com",
     "privacyPolicyURL": "https://www.aippocampus.com/privacy/",
     "termsOfServiceURL": "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/plugin-terms-boundary.md",
-    "composerIcon": "./assets/aippocampus-small.svg",
-    "logo": "./assets/aippocampus-logo.svg",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
     "screenshots": [],
-    "brandColor": "#256D85"
+    "brandColor": "#12334A"
   }
 }

@@ -20,6 +20,18 @@ from aippocampus_runtime.update.cli import (
     _load_plugin_builder,
     find_repo_root,
 )
+from aippocampus_runtime.update.codex_plugin_cli import (
+    CommandRunner,
+    installed_cache_dir,
+    remove_installed_cache,
+    run_text,
+)
+from aippocampus_runtime.update.codex_plugin_cli import (
+    codex_base as _codex_base,
+)
+from aippocampus_runtime.update.codex_plugin_cli import (
+    default_runner as _default_runner,
+)
 from aippocampus_runtime.update.plugin_cache import refresh_plugin_cache_layers
 
 PLUGIN_NAME = "aippocampus"
@@ -30,7 +42,6 @@ REQUIRED_HOST_TOOLS = {"memory_health", "search_memory", "sync_status"}
 IGNORED_TREE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs"}
 IGNORED_TREE_SUFFIXES = (".pyc", ".pyo")
 
-CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 HostProbeRunner = Callable[..., dict[str, Any]]
 
 
@@ -190,47 +201,6 @@ def _redact_local_paths(text: str, paths: list[Path]) -> str:
     return redacted
 
 
-def _codex_base(codex_command: str | list[str] | None = None) -> list[str]:
-    if codex_command is None:
-        return ["codex"]
-    if isinstance(codex_command, list):
-        return list(codex_command)
-    return [str(codex_command)]
-
-
-def _default_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
-    )
-
-
-def _load_json_text(value: str) -> dict[str, Any]:
-    if not value.strip():
-        return {}
-    data = json.loads(value)
-    return data if isinstance(data, dict) else {"data": data}
-
-
-def _run_json(runner: CommandRunner, command: list[str]) -> dict[str, Any]:
-    proc = runner(command)
-    if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "").strip()[-1200:]
-        raise RuntimeError(
-            f"command failed ({proc.returncode}): {' '.join(command[:4])}; {tail}"
-        )
-    try:
-        return _load_json_text(proc.stdout or "")
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"command returned non-json output: {' '.join(command[:4])}"
-        ) from exc
-
-
 def _read_manifest(root: Path) -> dict[str, Any]:
     manifest = root / ".codex-plugin" / "plugin.json"
     data = json.loads(manifest.read_text(encoding="utf-8"))
@@ -326,7 +296,7 @@ def write_local_marketplace(
     manifest_root.mkdir(parents=True, exist_ok=True)
     marketplace = {
         "name": marketplace_name,
-        "displayName": "AIppocampus local",
+        "displayName": "AIppocampus",
         "plugins": [
             {
                 "name": PLUGIN_NAME,
@@ -586,62 +556,40 @@ def install_codex_plugin(
         package_root=package_root,
         marketplace_name=marketplace_name,
     )
+    installed_cache_dir_path = installed_cache_dir(
+        codex_home_resolved,
+        marketplace_name=marketplace_name,
+        plugin_name=PLUGIN_NAME,
+        version=_plugin_version(package_root),
+    )
     cache_refresh = refresh_plugin_cache_layers(
         package_root=package_root,
         marketplace_dir=Path(marketplace_result["plugin_dir"]),
-        installed_dir=None,
+        installed_dir=installed_cache_dir_path,
     )
 
     codex = _codex_base(codex_command)
-    marketplace_add = _run_json(
+    marketplace_add = run_text(
         runner,
-        [*codex, "plugin", "marketplace", "add", str(marketplace), "--json"],
+        [*codex, "plugin", "marketplace", "add", str(marketplace)],
+        allow_already_registered=True,
     )
-    list_payload = _run_json(
+    marketplace_upgrade = run_text(
         runner,
-        [*codex, "plugin", "list", "--marketplace", marketplace_name, "--available", "--json"],
+        [*codex, "plugin", "marketplace", "upgrade", marketplace_name],
+        allow_non_git_marketplace=True,
     )
     expected_version = _plugin_version(package_root)
-    installed = _find_installed_plugin(list_payload, f"{PLUGIN_NAME}@{marketplace_name}")
-    source_current = _installed_source_current(installed, package_root) if installed else None
-    version_current = installed is not None and _plugin_item_version(installed) == expected_version
-    installed_current = (
-        installed is not None
-        and version_current
-        and _plugin_item_enabled(installed)
-        and (source_current if source_current is not None else True)
-    )
-    if installed_current:
-        plugin_result = {
-            "id": f"{PLUGIN_NAME}@{marketplace_name}",
-            "version": expected_version,
-            "action": "already_current",
-            "installed": True,
-            "enabled": True,
-            "source": "codex_plugin_list",
-        }
-    else:
-        stale_remove = None
-        action = "installed"
-        if installed is not None:
-            stale_remove = _run_json(
-                runner,
-                [*codex, "plugin", "remove", f"{PLUGIN_NAME}@{marketplace_name}", "--json"],
-            )
-            action = "reinstalled"
-        add = _run_json(
-            runner,
-            [*codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"],
-        )
-        plugin_result = {
-            "id": str(add.get("pluginId") or f"{PLUGIN_NAME}@{marketplace_name}"),
-            "version": str(add.get("version") or expected_version),
-            "action": action,
-            "installed": True,
-            "enabled": True,
-            "raw": add,
-            "stale_remove": stale_remove,
-        }
+    plugin_result = {
+        "id": f"{PLUGIN_NAME}@{marketplace_name}",
+        "version": expected_version,
+        "action": "marketplace_refreshed",
+        "installed": True,
+        "enabled": True,
+        "source": "codex_plugin_marketplace",
+        "installed_cache": str(installed_cache_dir_path),
+        "marketplace_upgrade": marketplace_upgrade,
+    }
 
     probe = (
         host_probe_runner(repo_root=repo, codex_command=codex_command)
@@ -657,6 +605,7 @@ def install_codex_plugin(
         "plugin_package": build_result,
         "marketplace": marketplace_result,
         "marketplace_add": marketplace_add,
+        "marketplace_upgrade": marketplace_upgrade,
         "plugin": plugin_result,
         "cache_refresh": cache_refresh,
         "host_probe": probe,
@@ -724,13 +673,14 @@ def uninstall_codex_plugin(
     )
     runner = runner or _default_runner
     codex = _codex_base(codex_command)
-    plugin_remove = _run_json(
+    marketplace_remove = run_text(
         runner,
-        [*codex, "plugin", "remove", f"{PLUGIN_NAME}@{marketplace_name}", "--json"],
+        [*codex, "plugin", "marketplace", "remove", marketplace_name],
     )
-    marketplace_remove = _run_json(
-        runner,
-        [*codex, "plugin", "marketplace", "remove", marketplace_name, "--json"],
+    removed_installed_cache = remove_installed_cache(
+        codex_home_resolved,
+        marketplace_name=marketplace_name,
+        plugin_name=PLUGIN_NAME,
     )
     removed_marketplace_root = False
     if not keep_marketplace:
@@ -739,8 +689,8 @@ def uninstall_codex_plugin(
         "kind": "aippocampus_plugin_uninstall",
         "ok": True,
         "codex_home": str(codex_home_resolved),
-        "plugin_remove": plugin_remove,
         "marketplace_remove": marketplace_remove,
+        "removed_installed_cache": removed_installed_cache,
         "removed_marketplace_root": removed_marketplace_root,
         "marketplace_root": str(marketplace),
     }
