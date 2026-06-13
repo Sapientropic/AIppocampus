@@ -103,6 +103,12 @@ network API. Negative and anti-nag controls are part of the gesture: do not call
 AIppocampus every turn, and do not treat AIppo activation or bounded summaries
 as source evidence.
 
+`aippocampus agent recall --attention-router-mode auto` belongs to this opt-in
+agent continuity surface. It may sort already emitted reopenable routes only
+after the explicit-pull attention-router gate passes; it is not a default hook,
+every-prompt recall path, hosted API behavior, or source-truth upgrade.
+Returned route labels, topics, and rank reasons are navigation previews only.
+
 The first executable AIppo working-contract fixture lives at
 `aippocampus_runtime.aippo.working_contract`. It is a host-facing proposal for
 trusted local experiments: a compact activation packet may guide low-risk

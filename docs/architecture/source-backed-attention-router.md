@@ -307,13 +307,29 @@ Current consumer inventory:
 
 `aippocampus agent recall --attention-router-mode auto` is the default-adoption
 policy boundary for the same path. It consults the shared recall-navigation
-promotion harness and enables sorting only when `default_adoption_allowed` is
-true. Until then, normal recall keeps baseline ordering and emits promotion
-blockers such as `attention_router_no_help_cases_present`,
-`attention_router_specificity_gate_not_satisfied`, and
-`attention_router_bridge_reason_gate_not_satisfied` in
-`attention_router_navigation.policy` instead of silently pretending the router
-is default-ready.
+promotion harness and enables sorting only when the explicit-agent-recall gate
+passes. That gate is narrower than default hooks: it requires the V0 contract
+red lines, the public/holdout navigation cohort, and no tuning leakage, but it
+does not claim live host lift or every-turn foreground readiness.
+
+The report now separates the old overloaded `quality_gate_ok` into explicit
+layers:
+
+- `contract_safety_gate_ok`: hard masks, stale/currentness, conflict, and
+  claim-permission red lines are clean.
+- `router_design_gate_ok`: the declared V0 route contract passes the fixture
+  scope.
+- `public_quality_gate_ok`: public cohort, family sample floor, holdout, and no
+  tuning leakage pass.
+- `default_adoption_gate_ok`: the narrow explicit-pull adoption gate passes.
+
+Neutral no-op cases, such as exact queries where baseline ordering is already
+right, remain visible as ROI signals but are no longer hard blockers. True
+negative controls still stay in the shared promotion harness: feature hurt,
+wrong-route drag, weak bridge reasons, and too-generic route labels still block
+broad/default promotion. Attention output remains navigation-only; source
+reopen still owns exact, public, stale, disputed, sensitive, or high-risk
+claims.
 
 ROI status can reduce low-yield non-guard scout families to watch or diagnostic
 surfaces, but required guard families remain `guard_required`. Quiet privacy or

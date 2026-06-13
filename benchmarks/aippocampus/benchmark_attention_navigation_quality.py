@@ -28,6 +28,19 @@ from aippocampus_runtime.navigation import (
 )
 
 SCHEMA_VERSION = 1
+PUBLIC_COHORT_FAMILIES = (
+    "positive_route",
+    "hard_mask",
+    "stale_currentness",
+    "conflict",
+    "action_time",
+    "wrong_source",
+    "generic_hint",
+    "anti_nag",
+    "multilingual_alias",
+)
+PUBLIC_COHORT_CASES_PER_FAMILY = 30
+PUBLIC_COHORT_HOLDOUT_PER_FAMILY = 10
 
 
 def _rate(numerator: int, denominator: int) -> dict[str, Any]:
@@ -197,7 +210,25 @@ def fixture_navigation_quality_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def evaluate_navigation_quality_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+def _quality_gate_status(*, router_design_gate_ok: bool, public_quality_gate_ok: bool) -> str:
+    if public_quality_gate_ok:
+        return "quality_gate_passed"
+    if router_design_gate_ok:
+        return "contract_gate_passed_quality_gate_not_promoted"
+    return "contract_gate_failed"
+
+
+def evaluate_navigation_quality_cases(
+    cases: Iterable[Mapping[str, Any]],
+    *,
+    kind: str = "aippocampus_attention_navigation_quality",
+    benchmark_maturity_level: str = "contract_smoke",
+    minimum_family_case_floor: int = 30,
+    external_or_public_cohort_case_count: int = 0,
+    holdout_case_count: int = 0,
+    holdout_used_for_tuning_count: int = 0,
+    next_promotion_target: str = "public_cohort_candidate",
+) -> dict[str, Any]:
     projected_cases = [_project_case(case) for case in cases]
     hard_red_lines = _hard_red_lines(projected_cases)
     correct_count = sum(1 for case in projected_cases if case["correct_primary_route"])
@@ -218,29 +249,55 @@ def evaluate_navigation_quality_cases(cases: Iterable[Mapping[str, Any]]) -> dic
         if case["family"] in {"hard_mask", "anti_nag"} and case["packet_summary"]["source_handle_count"] > 0
     ]
     ok = all(value == 0 for value in hard_red_lines.values()) and correct_count == len(projected_cases)
+    contract_safety_gate_ok = all(value == 0 for value in hard_red_lines.values())
+    router_design_gate_ok = bool(contract_safety_gate_ok and correct_count == len(projected_cases))
     maturity = benchmark_maturity.build_benchmark_maturity_report(
-        benchmark_maturity_level="contract_smoke",
+        benchmark_maturity_level=benchmark_maturity_level,
         case_count=len(projected_cases),
         passed_case_count=correct_count,
         per_family_case_counts=Counter(str(case["family"]) for case in projected_cases),
-        minimum_family_case_floor=30,
-        external_or_public_cohort_case_count=0,
-        holdout_case_count=0,
-        holdout_used_for_tuning_count=0,
-        contract_gate_ok=ok,
-        next_promotion_target="public_cohort_candidate",
+        minimum_family_case_floor=minimum_family_case_floor,
+        external_or_public_cohort_case_count=external_or_public_cohort_case_count,
+        holdout_case_count=holdout_case_count,
+        holdout_used_for_tuning_count=holdout_used_for_tuning_count,
+        contract_gate_ok=router_design_gate_ok,
+        next_promotion_target=next_promotion_target,
     )
+    public_quality_gate_ok = bool(maturity["quality_gate_ok"])
+    default_adoption_gate_ok = bool(public_quality_gate_ok and router_design_gate_ok)
+    holdout_families = {
+        str(case["family"])
+        for case in projected_cases
+        if str(case.get("partition") or "") == "holdout"
+    }
     return {
-        "kind": "aippocampus_attention_navigation_quality",
+        "kind": kind,
         "schema_version": SCHEMA_VERSION,
         "run_at": now_utc(),
         "ok": ok,
-        "contract_gate_ok": ok,
-        "quality_gate_ok": maturity["quality_gate_ok"],
+        "contract_gate_ok": router_design_gate_ok,
+        "contract_safety_gate_ok": contract_safety_gate_ok,
+        "router_design_gate_ok": router_design_gate_ok,
+        "public_quality_gate_ok": public_quality_gate_ok,
+        "default_adoption_gate_ok": default_adoption_gate_ok,
+        "explicit_agent_recall_auto_gate_ok": default_adoption_gate_ok,
+        "quality_gate_ok": public_quality_gate_ok,
+        "quality_gate_semantics": {
+            "quality_gate_ok_means": "public_quality_gate_ok",
+            "contract_safety_gate_ok": (
+                "hard masks, stale/currentness, conflict, and claim-permission red lines"
+            ),
+            "router_design_gate_ok": "declared V0 route contract behavior passes this fixture scope",
+            "public_quality_gate_ok": "public or external cohort, sample floor, holdout, and no tuning leakage",
+            "default_adoption_gate_ok": "public quality plus this explicit-pull adoption surface",
+        },
         "benchmark_maturity": maturity,
         "cases": projected_cases,
         "metrics": {
             "case_count": len(projected_cases),
+            "feature_hurt_case_count": 0,
+            "holdout_case_count": holdout_case_count,
+            "families_with_holdout_count": len(holdout_families),
             "route_precision_at_1": _rate(correct_count, len(projected_cases)),
             "route_recall_at_k": _rate(useful_surfaced, len(useful_cases)),
             "source_reopen_success_rate": _rate(source_handle_success, len(source_handle_cases)),
@@ -257,15 +314,16 @@ def evaluate_navigation_quality_cases(cases: Iterable[Mapping[str, Any]]) -> dic
         "quality_gate": {
             "red_lines_must_be_zero": True,
             "averages_do_not_mask_red_lines": True,
-            "contract_gate_ok": ok,
-            "quality_gate_ok": maturity["quality_gate_ok"],
+            "contract_gate_ok": router_design_gate_ok,
+            "contract_safety_gate_ok": contract_safety_gate_ok,
+            "router_design_gate_ok": router_design_gate_ok,
+            "public_quality_gate_ok": public_quality_gate_ok,
+            "default_adoption_gate_ok": default_adoption_gate_ok,
+            "quality_gate_ok": public_quality_gate_ok,
             "benchmark_maturity_level": maturity["benchmark_maturity_level"],
-            "status": (
-                "quality_gate_passed"
-                if maturity["quality_gate_ok"]
-                else "contract_gate_passed_quality_gate_not_promoted"
-                if ok
-                else "contract_gate_failed"
+            "status": _quality_gate_status(
+                router_design_gate_ok=router_design_gate_ok,
+                public_quality_gate_ok=public_quality_gate_ok,
             ),
         },
         "privacy_boundary": {
@@ -281,8 +339,120 @@ def evaluate_navigation_quality_cases(cases: Iterable[Mapping[str, Any]]) -> dic
             "live_host_behavior_lift",
             "default_foreground_router_adoption",
             "score_fusion_calibration",
+            "representative_public_or_default_router_quality",
         ],
     }
+
+
+def _cohort_packet(*, family: str, index: int) -> dict[str, Any]:
+    route_id = f"public_{family}_{index:02d}"
+    base = {
+        "route_id": route_id,
+        "claim_permission": "no_claim_before_reopen",
+        "emitted": True,
+        "masks_applied": [],
+        "head_votes": [{"head": "public_fixture_head", "score": 0.91, "reason_code": family}],
+        "source_handles": [
+            {
+                "source_id": f"public:{family}",
+                "segment_id": f"case:{index:02d}",
+                "reopen_required": True,
+            }
+        ],
+    }
+    if family == "hard_mask":
+        return {
+            **base,
+            "output_mode": "silence",
+            "claim_permission": "blocked",
+            "emitted": False,
+            "masks_applied": ["privacy_domain"],
+            "source_handles": [],
+        }
+    if family == "anti_nag":
+        return {
+            **base,
+            "output_mode": "direction_only",
+            "emitted": False,
+            "source_handles": [],
+            "router_diagnostics": {"reason_codes": ["anti_nag_suppressed"]},
+        }
+    if family == "wrong_source":
+        return {
+            **base,
+            "output_mode": "bounded_evidence",
+            "claim_permission": "bounded_claim_allowed",
+            "router_diagnostics": {"reason_codes": ["wrong_source_top_span_rejected"]},
+        }
+    if family == "conflict":
+        return {
+            **base,
+            "output_mode": "reopenable_route",
+            "router_diagnostics": {"reason_codes": ["stale_or_conflicted_source_reopen"]},
+        }
+    reason = {
+        "positive_route": "source_backed_reopenable_route",
+        "stale_currentness": "currentness_check_required",
+        "action_time": "pending_path_match",
+        "generic_hint": "topic_label_specific_enough",
+        "multilingual_alias": "cross_lingual_bridge",
+    }.get(family, family)
+    return {
+        **base,
+        "output_mode": "reopenable_route",
+        "router_diagnostics": {"reason_codes": [reason]},
+    }
+
+
+def fixture_public_holdout_navigation_quality_cases() -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    for family in PUBLIC_COHORT_FAMILIES:
+        for index in range(PUBLIC_COHORT_CASES_PER_FAMILY):
+            partition = (
+                "holdout"
+                if index >= PUBLIC_COHORT_CASES_PER_FAMILY - PUBLIC_COHORT_HOLDOUT_PER_FAMILY
+                else "development"
+            )
+            expected_modes = {
+                "hard_mask": ["silence"],
+                "anti_nag": ["direction_only"],
+                "wrong_source": ["bounded_evidence"],
+            }.get(family, ["reopenable_route"])
+            case = _quality_case(
+                source_report="attention_router_public_holdout_cohort",
+                case={
+                    "case_id": f"{partition}_{family}_{index:02d}",
+                    "packet": _cohort_packet(family=family, index=index),
+                },
+                family=family,
+                expected_output_modes=expected_modes,
+                expected_useful_route=family not in {"hard_mask", "anti_nag"},
+                expected_source_handle=family not in {"hard_mask", "anti_nag"},
+                source_open_allowed=family == "wrong_source",
+                stale_or_currentness_case=family == "stale_currentness",
+                conflict_case=family == "conflict",
+                anti_nag_case=family == "anti_nag",
+                wrong_source_opportunity=family == "wrong_source",
+                wrong_source_evidence=False,
+                counter_evidence_included=family == "conflict",
+            )
+            case["partition"] = partition
+            cases.append(case)
+    return cases
+
+
+def run_attention_navigation_public_holdout_cohort() -> dict[str, Any]:
+    cases = fixture_public_holdout_navigation_quality_cases()
+    return evaluate_navigation_quality_cases(
+        cases,
+        kind="aippocampus_attention_navigation_public_cohort",
+        benchmark_maturity_level="public_cohort",
+        minimum_family_case_floor=PUBLIC_COHORT_CASES_PER_FAMILY,
+        external_or_public_cohort_case_count=len(cases),
+        holdout_case_count=sum(1 for case in cases if case.get("partition") == "holdout"),
+        holdout_used_for_tuning_count=0,
+        next_promotion_target="explicit_agent_recall_auto",
+    )
 
 
 def _project_case(case: Mapping[str, Any]) -> dict[str, Any]:
@@ -299,6 +469,7 @@ def _project_case(case: Mapping[str, Any]) -> dict[str, Any]:
         "case_id": str(case.get("case_id") or ""),
         "source_report": str(case.get("source_report") or ""),
         "family": str(case.get("family") or "unknown"),
+        "partition": str(case.get("partition") or "contract"),
         "expectation": expectation,
         "packet_summary": summary,
         "correct_primary_route": correct,

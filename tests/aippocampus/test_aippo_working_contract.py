@@ -47,6 +47,7 @@ class AIppoWorkingContractTests(unittest.TestCase):
 
         self_note = by_id["self_note_candidate_without_source"]
         dream = by_id["dream_candidate_backstage"]
+        dream_supported = by_id["dream_candidate_ripened_with_source"]
         cognitive = by_id["cognitive_route_to_source_support"]
 
         self.assertFalse(self_note["ripened"])
@@ -58,10 +59,26 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertEqual(dream["result_status"], "backstage_candidate")
         self.assertEqual(report["red_lines"]["dream_candidate_promoted_without_source"], 0)
 
+        self.assertTrue(dream_supported["ripened"])
+        self.assertEqual(dream_supported["result_status"], "ripe")
+        self.assertEqual(dream_supported["truth_authority"], "source_supported")
+        self.assertTrue(dream_supported["repeated_wrong_route_prevented"])
+
         self.assertTrue(cognitive["ripened"])
         self.assertEqual(cognitive["navigation_signal_used"], "cognitive_map")
         self.assertEqual(cognitive["truth_authority"], "source_supported")
         self.assertEqual(report["red_lines"]["cognitive_route_used_as_truth"], 0)
+
+        dream_readout = report["dream_candidate_readout"]
+        self.assertEqual(dream_readout["authority"], "dream_synthesized_candidate_not_fact")
+        self.assertEqual(dream_readout["metrics"]["dream_candidate_nominated_count"], 2)
+        self.assertEqual(
+            dream_readout["metrics"]["dream_candidate_ripened_with_source_count"],
+            1,
+        )
+        self.assertEqual(dream_readout["metrics"]["dream_only_foreground_leak_count"], 0)
+        self.assertEqual(dream_readout["metrics"]["repeated_wrong_route_prevented_count"], 1)
+        self.assertTrue(dream_readout["boundary"]["dream_only_candidates_stay_backstage"])
 
     def test_challenged_and_gappy_pathlets_degrade_to_reopenable_routes(self) -> None:
         report = aippo.build_aippo_working_contract_fixture_report()

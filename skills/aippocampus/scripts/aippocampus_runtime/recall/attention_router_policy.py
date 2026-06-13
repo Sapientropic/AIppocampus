@@ -49,6 +49,26 @@ def _base_policy(mode: str, *, enabled: bool, reason: str) -> dict[str, Any]:
     }
 
 
+def explicit_recall_auto_gate() -> dict[str, Any]:
+    from aippocampus_runtime.ops import recall_navigation_promotion
+
+    report: Mapping[str, Any] = (
+        recall_navigation_promotion.fixture_recall_navigation_promotion_report()
+    )
+    gate = report.get("attention_router_explicit_auto_gate")
+    if not isinstance(gate, Mapping):
+        return {
+            "surface": "explicit_agent_recall",
+            "gate_ok": False,
+            "promotion_decision": "not_promoted",
+            "blockers": ["explicit_auto_gate_missing"],
+            "public_quality_gate_ok": False,
+            "default_adoption_gate_ok": False,
+            "metrics": {},
+        }
+    return dict(gate)
+
+
 def resolve_policy(mode: bool | str | None = None) -> dict[str, Any]:
     normalized = normalize_mode(mode)
     if normalized == "on":
@@ -56,27 +76,28 @@ def resolve_policy(mode: bool | str | None = None) -> dict[str, Any]:
     if normalized == "off":
         return _base_policy("off", enabled=False, reason="explicit_or_default_off")
     try:
-        from aippocampus_runtime.ops import recall_navigation_promotion
-
-        report: Mapping[str, Any] = (
-            recall_navigation_promotion.fixture_recall_navigation_promotion_report()
-        )
-        metrics = report.get("promotion_metrics") or {}
-        readout = report.get("attention_router_readout") or {}
-        blockers = [str(item) for item in report.get("promotion_blockers") or []]
-        gate_ok = bool(report.get("promotion_gate_ok"))
+        gate = explicit_recall_auto_gate()
+        metrics = gate.get("metrics") or {}
+        blockers = [str(item) for item in gate.get("blockers") or []]
+        gate_ok = bool(gate.get("gate_ok"))
         return {
             "mode": "auto",
             "enabled": gate_ok,
             "reason": "promotion_gate_passed" if gate_ok else "promotion_gate_blocked",
             "promotion_gate_checked": True,
             "promotion_gate_ok": gate_ok,
-            "default_adoption_allowed": bool(report.get("default_adoption_allowed")),
-            "promotion_decision": str(report.get("promotion_decision") or ""),
+            "default_adoption_allowed": bool(gate.get("default_adoption_gate_ok")),
+            "public_quality_gate_ok": bool(gate.get("public_quality_gate_ok")),
+            "promotion_decision": str(gate.get("promotion_decision") or ""),
             "promotion_blockers": blockers,
-            "feature_hurt_case_count": int(metrics.get("feature_hurt_case_count") or 0),
-            "feature_noop_case_count": int(metrics.get("feature_noop_case_count") or 0),
-            "attention_router_measured": bool(readout.get("measured")),
+            "neutral_noop_case_count": int(metrics.get("neutral_noop_case_count") or 0),
+            "negative_control_no_help_case_count": int(
+                metrics.get("negative_control_no_help_case_count") or 0
+            ),
+            "public_cohort_case_count": int(metrics.get("public_cohort_case_count") or 0),
+            "holdout_case_count": int(metrics.get("holdout_case_count") or 0),
+            "attention_router_measured": True,
+            "surface": str(gate.get("surface") or "explicit_agent_recall"),
             "operator_override": "use --attention-router-mode on for explicit opt-in sorting",
         }
     except Exception as exc:  # pragma: no cover - defensive fail-closed boundary
@@ -87,4 +108,4 @@ def resolve_policy(mode: bool | str | None = None) -> dict[str, Any]:
         }
 
 
-__all__ = ["VALID_MODES", "normalize_mode", "resolve_policy"]
+__all__ = ["VALID_MODES", "explicit_recall_auto_gate", "normalize_mode", "resolve_policy"]

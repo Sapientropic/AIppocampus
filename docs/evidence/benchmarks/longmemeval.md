@@ -215,6 +215,23 @@ input report path local:
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\reports\longmemeval-v1-small-semantic-pilot-25.json --json
 ```
 
+The analysis report also carries the #1327 source-window coverage diagnostic:
+
+- `source_window_coverage_diagnostic.fused_miss_count`
+- `candidate_missing_miss_count` versus `reranker_visible_miss_count`
+- miss families such as `same_session_wrong_line_top_k`,
+  `session_found_below_top_k`, `gold_line_low_rank_21_50`, and
+  `gold_line_rank_below_50`
+- `bounded_coverage_improvement`, a bounded next-slice projection for adding
+  compact candidate rows without changing the default foreground packet budget
+- `negative_control_naive_large_radius`, which must stay rejected when wider
+  context growth would make candidate packs less usable
+
+These fields explain whether remaining exact-line failures are candidate
+coverage failures or line-selection failures. They do not prove answer quality,
+official LongMemEval score, or that a larger context radius should be accepted
+by default.
+
 Run the CI-safe answer/latency report schema path. This reuses the retrieval
 adapter, builds bounded candidate source windows, records retrieval and
 candidate-gathering latency, and produces answer-layer fields without making a

@@ -2047,6 +2047,90 @@ def build_standard_line_reranker_candidates(
     return candidates[: max(1, int(max_candidates))]
 
 
+def _positive_rank(value: Any) -> int | None:
+    try:
+        rank = int(value)
+    except (TypeError, ValueError):
+        return None
+    return rank if rank > 0 else None
+
+
+def source_window_coverage_diagnostic(
+    rows: list[dict[str, Any]],
+    *,
+    top_k: int,
+) -> dict[str, Any]:
+    """Return sanitized coverage diagnostics for source-window/candidate misses.
+
+    Candidate rows remain navigation routes. This report intentionally avoids
+    source text, answer text, and case ids; it only separates first-stage misses
+    from candidate-packaging and line-selection misses so later agents do not
+    chase online reranking when the gold line was never in the candidate pack.
+    """
+
+    fused_miss_count = 0
+    candidate_missing = 0
+    reranker_visible = 0
+    candidate_coverage = 0
+    miss_family_counts: dict[str, int] = {}
+    reranker_attempted_count = 0
+    for row in rows:
+        evidence_rank = _positive_rank(row.get("evidence_rank"))
+        reranked_rank = _positive_rank(row.get("reranked_evidence_rank")) or evidence_rank
+        if row.get("line_reranker_attempted"):
+            reranker_attempted_count += 1
+            if row.get("line_reranker_candidate_contains_evidence"):
+                candidate_coverage += 1
+        if not reranked_rank or reranked_rank > top_k:
+            fused_miss_count += 1
+            if row.get("line_reranker_attempted"):
+                if row.get("line_reranker_candidate_contains_evidence"):
+                    reranker_visible += 1
+                else:
+                    candidate_missing += 1
+            if row.get(f"same_session_wrong_line_top{top_k}"):
+                miss_family_counts["same_session_wrong_line_top_k"] = (
+                    miss_family_counts.get("same_session_wrong_line_top_k", 0) + 1
+                )
+            if row.get("session_found_below_top_k"):
+                miss_family_counts["session_found_below_top_k"] = (
+                    miss_family_counts.get("session_found_below_top_k", 0) + 1
+                )
+            rank = (
+                _positive_rank(row.get("source_joined_candidate_evidence_rank"))
+                or evidence_rank
+            )
+            if rank is None:
+                miss_family_counts["gold_line_not_retrieved"] = (
+                    miss_family_counts.get("gold_line_not_retrieved", 0) + 1
+                )
+            elif 21 <= rank <= 50:
+                miss_family_counts["gold_line_low_rank_21_50"] = (
+                    miss_family_counts.get("gold_line_low_rank_21_50", 0) + 1
+                )
+            elif rank > 50:
+                miss_family_counts["gold_line_rank_below_50"] = (
+                    miss_family_counts.get("gold_line_rank_below_50", 0) + 1
+                )
+    return {
+        "status": "measured_from_sanitized_rows",
+        "top_k": int(top_k),
+        "evidence_line_case_count": len(rows),
+        "reranker_attempted_count": reranker_attempted_count,
+        "fused_miss_count": fused_miss_count,
+        "candidate_missing_miss_count": candidate_missing,
+        "reranker_visible_miss_count": reranker_visible,
+        "miss_family_counts": dict(sorted(miss_family_counts.items())),
+        "line_reranker_candidate_evidence_coverage": {
+            "numerator": candidate_coverage,
+            "denominator": reranker_attempted_count,
+            "rate": safe_rate(candidate_coverage, reranker_attempted_count),
+        },
+        "candidate_rows_are_routes_not_claims": True,
+        "raw_text_emitted": False,
+    }
+
+
 def standard_line_reranker_candidate_pack_sha1(
     candidates: list[dict[str, Any]],
 ) -> str:
@@ -2835,6 +2919,10 @@ def summarize_standard_retrieval_results(
         ),
         f"gold_line_near_miss_top{top_k}_to_20": sum(
             1 for row in line_cases if row.get(f"gold_line_near_miss_top{top_k}_to_20")
+        ),
+        "source_window_coverage_diagnostic": source_window_coverage_diagnostic(
+            line_cases,
+            top_k=top_k,
         ),
         "warning_count": sum(int(row.get("warning_count") or 0) for row in results),
     }

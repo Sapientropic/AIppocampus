@@ -216,6 +216,11 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
             ],
             1,
         )
+        coverage = payload["metrics"]["source_window_coverage_diagnostic"]
+        self.assertEqual(coverage["fused_miss_count"], 1)
+        self.assertEqual(coverage["candidate_missing_miss_count"], 0)
+        self.assertEqual(coverage["reranker_visible_miss_count"], 0)
+        self.assertTrue(coverage["candidate_rows_are_routes_not_claims"])
         self.assertEqual(payload["cases"][0]["evidence_rank_bucket"], "rank_2_3")
         self.assertTrue(payload["cases"][0]["gold_line_near_miss_top1_to_20"])
         self.assertEqual(

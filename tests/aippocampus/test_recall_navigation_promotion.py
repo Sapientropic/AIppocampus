@@ -52,6 +52,9 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         self.assertEqual(metrics["privacy_bypass_count"], 0)
         self.assertEqual(metrics["masked_source_resurrection_count"], 0)
         self.assertEqual(metrics["claim_without_source_reopen_count"], 0)
+        self.assertNotIn("feature_noop_cases_present", report["promotion_blockers"])
+        self.assertGreaterEqual(report["neutral_noop"]["case_count"], 1)
+        self.assertIn("exact_query_noop_control", report["neutral_noop"]["case_ids"])
         self.assertTrue(
             {"stale", "conflict", "noise", "wrong_source"}.issubset(
                 set(coverage["distractor_families_present"])
@@ -120,6 +123,27 @@ class RecallNavigationPromotionTests(unittest.TestCase):
             "attention_router_bridge_reason_gate_not_satisfied",
             report["promotion_blockers"],
         )
+
+    def test_attention_router_explicit_auto_gate_can_pass_with_public_cohort(self) -> None:
+        report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
+        gate = report["attention_router_explicit_auto_gate"]
+
+        self.assertTrue(gate["gate_ok"])
+        self.assertTrue(gate["public_quality_gate_ok"])
+        self.assertTrue(gate["default_adoption_gate_ok"])
+        self.assertEqual(gate["surface"], "explicit_agent_recall")
+        self.assertNotIn("fixture_only_not_live_default_path", gate["blockers"])
+        self.assertIn("neutral_noop_case_count", gate["metrics"])
+
+    def test_true_attention_router_no_help_case_remains_visible_as_negative_control(self) -> None:
+        report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
+        case = report["cases_by_id"]["attention_router_generic_top_no_help"]
+        gate = report["attention_router_explicit_auto_gate"]
+
+        self.assertEqual(case["case_family"], "attention_router_no_help")
+        self.assertGreaterEqual(report["promotion_metrics"]["attention_router_applied_but_no_help_count"], 1)
+        self.assertIn("attention_router_generic_top_no_help", report["negative_controls"]["case_ids"])
+        self.assertNotIn("attention_router_no_help_cases_present", gate["blockers"])
 
     def test_macro_navigation_readout_measures_default_prior_candidate(self) -> None:
         report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
