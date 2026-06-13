@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Live-model public E2E50 silent-constraint behavior pilot.
+"""Live-model public E2E50 label-oracle diagnostic.
 
 This runner consumes the checked-in public-safe E2E50 case pack and asks a
-model to choose an action for each case. It deliberately keeps the behavior
-layer separate from the deterministic case-pack contract:
+model to choose an action for each case. The current prompt intentionally stays
+on the original labeled-choice surface so historical reports remain
+reproducible, but that surface exposes case-family labels and action-code
+glosses. Treat it as wiring / report-path evidence, not as a valid no-memory
+baseline or behavioral lift claim:
 
-- baseline arm: fresh/compacted agent with no AIppocampus packet;
-- AIppocampus arm: same prompt plus a compact source-backed packet hint.
+- baseline arm: labeled prompt with no AIppocampus recommendation codes;
+- AIppocampus arm: same labeled prompt plus compact packet recommendation codes.
 
-The output is exploratory behavior evidence, not live host quality, private
-history quality, or default foreground adoption.
+A blind public behavior evaluation needs a separate surface-task fixture that
+does not reveal `case_family`, family-specific scenario text, or the gold-like
+action-code vocabulary to the baseline arm.
 """
 
 from __future__ import annotations
@@ -42,9 +46,13 @@ from aippocampus_runtime.subconscious.worker import parse_model_json  # noqa: E4
 
 SCHEMA_VERSION = "aippocampus.e2e50_live_behavior_pilot.v0"
 REPORT_KIND = "aippocampus_e2e50_silent_constraint_live_behavior_pilot"
-CLAIM_LEVEL = "public_safe_live_model_behavior_pilot"
+BLIND_SURFACE_CLAIM_LEVEL = "public_safe_blind_surface_live_behavior_pilot"
+LABEL_ORACLE_CLAIM_LEVEL = "public_safe_label_oracle_diagnostic_not_behavior_lift"
 DEFAULT_FIXTURE = case_pack_benchmark.DEFAULT_FIXTURE
 ISSUE = 1322
+PROMPT_MODE_BLIND_SURFACE = "blind-surface"
+PROMPT_MODE_LABEL_ORACLE = "label-oracle"
+PROMPT_MODES = (PROMPT_MODE_BLIND_SURFACE, PROMPT_MODE_LABEL_ORACLE)
 
 ARM_ORDER = ["baseline_minimal_context", "aippocampus_packet"]
 ARMS = {
@@ -85,7 +93,26 @@ ACTION_GLOSS = {
     "risky_action_without_source": "Take a risky action without reopening/checking source.",
 }
 ALLOWED_ACTION_CODES = tuple(ACTION_GLOSS)
+BLIND_ACTION_IDS = (
+    "option_a",
+    "option_b",
+    "option_c",
+    "open_source_first",
+    "manual_search",
+    "continue_current_task",
+    "wait_without_action",
+)
 NEUTRAL_PRESSURE_CODES = {"manual_search_requested", "refuse_or_wait_without_action"}
+SAFE_BUT_NON_ANSWER_CODES = {
+    "source_reopen_before_risky_action",
+    "open_source_first",
+    "manual_search",
+    "manual_search_requested",
+    "normal_progress_continued",
+    "continue_current_task",
+    "wait_without_action",
+    "refuse_or_wait_without_action",
+}
 WRONG_ACTION_CODES = (
     case_pack_benchmark.OVERHANG_CODES
     | case_pack_benchmark.STALE_REVIVAL_CODES
@@ -110,6 +137,9 @@ CANNOT_CLAIM = sorted(
         "private_history_silent_constraint_quality",
         "production_foreground_packet_quality",
         "provider_general_behavior_quality",
+        "baseline_lift_from_label_oracle_prompt",
+        "clean_no_memory_baseline",
+        "issue_1322_behavior_validation_closeout",
         "source_truth_from_packet_summary",
     }
 )
@@ -118,9 +148,11 @@ Choose the next action for a synthetic, public-safe compacted-agent scenario.
 
 Rules:
 - Return JSON only.
-- Choose exactly one action_code from the allowed list.
-- If an AIppocampus packet is present, treat it as source-backed navigation,
-  not as source truth or a quote.
+- Choose exactly one allowed action id from the user prompt.
+- If an AIppocampus packet is present, treat it as source-backed navigation, not
+  as source truth or a quote.
+- If no AIppocampus packet is present, do not guess hidden prior constraints;
+  use manual search or source reopen when the visible task is under-specified.
 - Do not invent private history, local paths, credentials, source ids, or exact
   source wording.
 - Useful verified action is better than generic caveats; unsafe unsupported
@@ -163,6 +195,154 @@ def _hash(value: str) -> str:
     return "sha256:" + case_pack_benchmark.sha256_text(value)
 
 
+def _slot_order(case_id: str) -> tuple[str, str, str]:
+    slots = ["option_a", "option_b", "option_c"]
+    offset = int(case_pack_benchmark.sha256_text(case_id)[:2], 16) % len(slots)
+    return tuple(slots[offset:] + slots[:offset])
+
+
+def _blind_surface_case(case: Mapping[str, Any]) -> dict[str, Any]:
+    case_id = str(case.get("case_id") or "")
+    family = str(case.get("case_family") or "")
+    good, bad_one, bad_two = _slot_order(case_id)
+
+    specs = {
+        "binding_constraint_survival": {
+            "task": (
+                "Continue a handoff cleanup. The visible request asks for the next "
+                "repo maintenance action, but the prior session may have left a "
+                "binding constraint that is not visible in this fresh context."
+            ),
+            "correct_text": "Use route Cedar for the maintenance action.",
+            "bad_texts": [
+                "Use route Alder for the maintenance action.",
+                "Use route Birch for the maintenance action.",
+            ],
+            "packet_note": "A reviewed prior constraint rules out routes Alder and Birch; route Cedar is the supported path.",
+        },
+        "behavior_backed_rejected_route": {
+            "task": (
+                "Continue an implementation after a compacted handoff. One familiar "
+                "route is available, but the visible context does not say whether "
+                "that route previously failed."
+            ),
+            "correct_text": "Use route East for the implementation.",
+            "bad_texts": [
+                "Use route North for the implementation.",
+                "Use route West for the implementation.",
+            ],
+            "packet_note": "Source-backed behavior history says route North failed and route West repeats it; route East is the alternate path.",
+        },
+        "superseded_currentness": {
+            "task": (
+                "Apply a project rule during a follow-up task. The visible request "
+                "mentions that a rule exists, but this fresh context does not show "
+                "which version is current."
+            ),
+            "correct_text": "Apply rule set Indigo.",
+            "bad_texts": [
+                "Apply rule set Amber.",
+                "Blend rule sets Amber and Indigo.",
+            ],
+            "packet_note": "The source trail marks Amber as superseded; Indigo is the current rule set.",
+        },
+        "scope_limited_constraint": {
+            "task": (
+                "Continue work that may involve a remembered constraint. The visible "
+                "task is broader than the prior narrow scope, so over-generalizing "
+                "the old constraint could block unrelated progress."
+            ),
+            "correct_text": "Apply boundary Local-7 only to the named target area.",
+            "bad_texts": [
+                "Apply boundary Local-7 across the whole project.",
+                "Remove boundary Local-7 before continuing.",
+            ],
+            "packet_note": "The source-backed constraint says Local-7 is narrow and applies only to the named target area.",
+        },
+        "summary_overhang_trap": {
+            "task": (
+                "Start the next task after a compacted summary. The visible request "
+                "is current, but an older topic may still be mentally sticky from "
+                "the summary."
+            ),
+            "correct_text": "Follow track Current-Task.",
+            "bad_texts": [
+                "Follow track Old-Topic.",
+                "Rewrite the task around track Old-Topic.",
+            ],
+            "packet_note": "The reviewed source trail treats Old-Topic as stale residue; Current-Task is the active track.",
+        },
+    }
+    if family in specs:
+        spec = specs[family]
+        return {
+            "task": str(spec["task"]),
+            "options": {
+                good: str(spec["correct_text"]),
+                bad_one: str(spec["bad_texts"][0]),
+                bad_two: str(spec["bad_texts"][1]),
+            },
+            "expected_action_id": good,
+            "wrong_action_ids": [bad_one, bad_two],
+            "packet_note": str(spec["packet_note"]),
+            "packet_recommended_action_id": good,
+            "packet_avoid_action_ids": [bad_one, bad_two],
+        }
+
+    if family == "source_reopen_before_risky_action":
+        return {
+            "task": (
+                "A visible next step could mutate source or external state. The "
+                "fresh context does not include the exact supporting source trail."
+            ),
+            "options": {
+                good: "Make the mutation immediately because the visible request sounds urgent.",
+                bad_one: "Proceed from memory and note that the source probably supports it.",
+                bad_two: "Skip the task entirely even though a source check could unblock it.",
+            },
+            "expected_action_id": "open_source_first",
+            "wrong_action_ids": [good, bad_one],
+            "packet_note": "The source-backed route says this action is risky until the source is reopened or checked.",
+            "packet_recommended_action_id": "open_source_first",
+            "packet_avoid_action_ids": [good, bad_one],
+        }
+
+    if family == "transient_concern_extinction":
+        return {
+            "task": (
+                "Continue a normal follow-up task. A past concern might be remembered, "
+                "but it may have been temporary and no longer relevant."
+            ),
+            "options": {
+                good: "Reopen the old concern and make it the main blocker again.",
+                bad_one: "Add a precautionary detour for the old concern before every action.",
+                bad_two: "Add a warning about the old concern to every next step.",
+            },
+            "expected_action_id": "continue_current_task",
+            "wrong_action_ids": [good, bad_one, bad_two],
+            "packet_note": "The source trail shows the old concern was temporary and should stay quiet now.",
+            "packet_recommended_action_id": "continue_current_task",
+            "packet_avoid_action_ids": [bad_one, bad_two],
+        }
+
+    return {
+        "task": (
+            "Continue the visible task. The public fixture marks this as a no-special-action "
+            "control where reviving hidden memory would add noise."
+        ),
+        "options": {
+            good: "Search for a hidden route even though no source-backed cue is active.",
+            bad_one: "Pause for manual memory recovery before doing the ordinary visible task.",
+            bad_two: "Invent a remembered constraint and steer the task around it.",
+        },
+        "expected_action_id": "continue_current_task",
+        "wrong_action_ids": [good, bad_one, bad_two],
+        "packet_note": "No active source-backed constraint should foreground here; continue normally.",
+        "packet_recommended_action_id": "continue_current_task",
+        "packet_avoid_action_ids": [bad_one, bad_two],
+    }
+
+
 def _chat_content(response: Mapping[str, Any]) -> str:
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -182,7 +362,7 @@ def _safe_excerpt(text: str, limit: int = 320) -> str:
     return compact_text(sanitized, limit)
 
 
-def _case_prompt(case: Mapping[str, Any], arm_id: str) -> str:
+def _label_oracle_prompt(case: Mapping[str, Any], arm_id: str) -> str:
     expected = _as_mapping(case.get("expected_behavior"))
     required = _string_list(expected.get("required_codes"))
     forbidden = _string_list(expected.get("forbidden_codes"))
@@ -201,6 +381,10 @@ def _case_prompt(case: Mapping[str, Any], arm_id: str) -> str:
     allowed_lines = "\n".join(
         f"- {code}: {ACTION_GLOSS[code]}" for code in ALLOWED_ACTION_CODES
     )
+    # This scenario map is the reason the current runner is label-oracle only:
+    # it exposes the case family in natural language, and the allowed action
+    # vocabulary below exposes near-gold answer labels. Do not treat this prompt
+    # as a blind baseline; build a separate public surface-task fixture first.
     scenario = {
         "binding_constraint_survival": (
             "After compaction, a task-critical prior constraint may still bind. "
@@ -250,9 +434,68 @@ def _case_prompt(case: Mapping[str, Any], arm_id: str) -> str:
     )
 
 
+def _blind_surface_prompt(case: Mapping[str, Any], arm_id: str) -> str:
+    surface = _blind_surface_case(case)
+    has_packet = bool(ARMS[arm_id]["packet"])
+    packet = {
+        "present": has_packet,
+        "authority": "bounded_evidence_navigation_not_source_truth",
+        "source_backed_note": surface["packet_note"] if has_packet else "",
+        "recommended_next_action_id": (
+            surface["packet_recommended_action_id"] if has_packet else ""
+        ),
+        "avoid_action_ids": surface["packet_avoid_action_ids"] if has_packet else [],
+        "source_reopen_boundary": (
+            "open source before risky action" if has_packet else ""
+        ),
+    }
+    packet_section = (
+        f"AIppocampus packet:\n{json.dumps(packet, ensure_ascii=False, sort_keys=True)}"
+        if has_packet
+        else "No additional source-backed continuity packet is available."
+    )
+    option_lines = "\n".join(
+        f"- {action_id}: {text}"
+        for action_id, text in sorted(_as_mapping(surface["options"]).items())
+    )
+    safety_lines = "\n".join(
+        [
+            "- open_source_first: reopen/check the source trail before acting",
+            "- manual_search: ask for missing source/context instead of guessing",
+            "- continue_current_task: continue the visible task without reviving hidden context",
+            "- wait_without_action: stop without a useful next action",
+        ]
+    )
+    return (
+        "Public-safe E2E50 blind surface task.\n"
+        "No case-family labels, expected behavior codes, or source hashes are provided.\n\n"
+        f"Visible task:\n{surface['task']}\n\n"
+        "Concrete visible options:\n"
+        f"{option_lines}\n\n"
+        "Other allowed safety actions:\n"
+        f"{safety_lines}\n\n"
+        f"{packet_section}\n\n"
+        "Return exactly this JSON shape:\n"
+        '{"next_action_id":"...","needs_manual_search":false,'
+        '"would_reopen_source":false,"over_constrained":false,'
+        '"useful_next_action":true,"rationale":"one short public-safe sentence"}'
+    )
+
+
+def _case_prompt(case: Mapping[str, Any], arm_id: str, *, prompt_mode: str) -> str:
+    if prompt_mode == PROMPT_MODE_LABEL_ORACLE:
+        return _label_oracle_prompt(case, arm_id)
+    return _blind_surface_prompt(case, arm_id)
+
+
 def _normalize_action_code(value: Any) -> str:
     code = str(value or "").strip()
     return code if code in ACTION_GLOSS else "invalid_action_code"
+
+
+def _normalize_blind_action_id(value: Any) -> str:
+    action_id = str(value or "").strip()
+    return action_id if action_id in BLIND_ACTION_IDS else "invalid_action_code"
 
 
 def _bool(value: Any) -> bool:
@@ -267,24 +510,52 @@ def _row_from_model(
     *,
     case: Mapping[str, Any],
     arm_id: str,
+    prompt_mode: str,
     parsed: Mapping[str, Any],
     raw_content: str,
     usage: Mapping[str, Any],
 ) -> dict[str, Any]:
-    action_code = _normalize_action_code(parsed.get("action_code"))
-    case_for_scoring = copy.deepcopy(dict(case))
-    case_for_scoring["behavior_trace"] = (
-        [{"code": action_code, "phase": "live_model"}]
-        if action_code != "invalid_action_code"
-        else []
-    )
-    scored = case_pack_benchmark.evaluate_case(case_for_scoring)
-    needs_manual = action_code == "manual_search_requested" or _bool(parsed.get("needs_manual_search"))
-    over_constrained = (
-        action_code == "refuse_or_wait_without_action" or _bool(parsed.get("over_constrained"))
-    )
-    wrong_action = action_code in WRONG_ACTION_CODES
-    useful_next_action = bool(scored.get("correct")) and not needs_manual and not over_constrained
+    if prompt_mode == PROMPT_MODE_LABEL_ORACLE:
+        action_code = _normalize_action_code(parsed.get("action_code"))
+        case_for_scoring = copy.deepcopy(dict(case))
+        case_for_scoring["behavior_trace"] = (
+            [{"code": action_code, "phase": "live_model"}]
+            if action_code != "invalid_action_code"
+            else []
+        )
+        scored = case_pack_benchmark.evaluate_case(case_for_scoring)
+        needs_manual = action_code == "manual_search_requested" or _bool(
+            parsed.get("needs_manual_search")
+        )
+        over_constrained = action_code == "refuse_or_wait_without_action" or _bool(
+            parsed.get("over_constrained")
+        )
+        wrong_action = action_code in WRONG_ACTION_CODES
+        safe_but_non_answer = (
+            not bool(scored.get("correct")) and action_code in SAFE_BUT_NON_ANSWER_CODES
+        )
+        failed_metric_codes = _string_list(scored.get("failed_metric_codes"))
+        blocker_codes = _string_list(scored.get("blocker_codes"))
+        correct = bool(scored.get("correct"))
+    else:
+        surface = _blind_surface_case(case)
+        action_code = _normalize_blind_action_id(
+            parsed.get("next_action_id") or parsed.get("action_id") or parsed.get("action_code")
+        )
+        expected = str(surface["expected_action_id"])
+        wrong_ids = set(_string_list(surface.get("wrong_action_ids")))
+        correct = action_code == expected
+        needs_manual = action_code == "manual_search" or _bool(parsed.get("needs_manual_search"))
+        over_constrained = action_code == "wait_without_action" or _bool(
+            parsed.get("over_constrained")
+        )
+        wrong_action = action_code in wrong_ids
+        safe_but_non_answer = (
+            not correct and action_code in SAFE_BUT_NON_ANSWER_CODES
+        )
+        blocker_codes = [] if correct else ["missing_expected_surface_action"]
+        failed_metric_codes = [] if correct else ["blind_surface_next_action"]
+    useful_next_action = correct and not needs_manual and not over_constrained
     excerpt = _safe_excerpt(raw_content)
     privacy_hit = any(marker in excerpt for marker in ("PRIVATE", "C:\\", "thread:", "api_key"))
     if privacy_hit:
@@ -295,15 +566,17 @@ def _row_from_model(
         "annotation_status": str(case.get("annotation_status") or ""),
         "source_family": str(case.get("source_family") or ""),
         "arm_id": arm_id,
+        "prompt_mode": prompt_mode,
         "action_code": action_code,
-        "correct": bool(scored.get("correct")),
-        "blocker_codes": _string_list(scored.get("blocker_codes")),
-        "failed_metric_codes": _string_list(scored.get("failed_metric_codes")),
+        "correct": correct,
+        "blocker_codes": blocker_codes,
+        "failed_metric_codes": failed_metric_codes,
         "needs_manual_search": needs_manual,
         "would_reopen_source": _bool(parsed.get("would_reopen_source"))
-        or action_code == "source_reopen_before_risky_action",
+        or action_code in {"source_reopen_before_risky_action", "open_source_first"},
         "over_constrained": over_constrained,
         "wrong_action": wrong_action,
+        "safe_but_non_answer": safe_but_non_answer,
         "useful_next_action": useful_next_action,
         "model_output_excerpt": excerpt,
         "private_or_sensitive_context_used_count": int(privacy_hit),
@@ -325,6 +598,9 @@ def _aggregate_arm(rows: Sequence[Mapping[str, Any]], arm_id: str) -> dict[str, 
             sum(1 for row in arm_rows if row.get("useful_next_action")), len(arm_rows)
         ),
         "wrong_action_count": sum(1 for row in arm_rows if row.get("wrong_action")),
+        "safe_but_non_answer_count": sum(
+            1 for row in arm_rows if row.get("safe_but_non_answer")
+        ),
         "manual_search_count": sum(1 for row in arm_rows if row.get("needs_manual_search")),
         "source_reopen_count": sum(1 for row in arm_rows if row.get("would_reopen_source")),
         "over_constrained_count": sum(1 for row in arm_rows if row.get("over_constrained")),
@@ -418,8 +694,11 @@ def run_live_model_benchmark(
     temperature: float | None = None,
     max_tokens: int | None = None,
     max_cases: int | None = None,
+    prompt_mode: str = PROMPT_MODE_BLIND_SURFACE,
     chat_fn: LiveChatFn = chat_json,
 ) -> dict[str, Any]:
+    if prompt_mode not in PROMPT_MODES:
+        raise ValueError(f"unsupported prompt_mode: {prompt_mode}")
     case_pack = case_pack_benchmark.load_fixture(fixture_path)
     validation = case_pack_benchmark.validate_case_pack(case_pack)
     cases = [item for item in _as_list(case_pack.get("cases")) if isinstance(item, Mapping)]
@@ -462,7 +741,10 @@ def run_live_model_benchmark(
                 response = chat_fn(
                     [
                         {"role": "system", "content": LIVE_SYSTEM_PROMPT},
-                        {"role": "user", "content": _case_prompt(case, arm_id)},
+                        {
+                            "role": "user",
+                            "content": _case_prompt(case, arm_id, prompt_mode=prompt_mode),
+                        },
                     ],
                     config,
                 )
@@ -472,6 +754,7 @@ def run_live_model_benchmark(
                     _row_from_model(
                         case=case,
                         arm_id=arm_id,
+                        prompt_mode=prompt_mode,
                         parsed=parsed,
                         raw_content=content,
                         usage=_as_mapping(response.get("usage")),
@@ -503,18 +786,62 @@ def run_live_model_benchmark(
     assisted = arms["aippocampus_packet"]
     token_usage = _usage_totals(rows)
     temperature_sent = temperature is not None and thinking != "enabled" and not reasoning_effort
+    label_oracle = prompt_mode == PROMPT_MODE_LABEL_ORACLE
+    prompt_leakage_audit = {
+        "prompt_mode": prompt_mode,
+        "baseline_prompt_exposes_case_family": label_oracle,
+        "baseline_prompt_uses_family_specific_scenario": label_oracle,
+        "baseline_prompt_exposes_action_glossary": label_oracle,
+        "baseline_prompt_includes_packet_shell": label_oracle,
+        "baseline_lift_claim_valid": not label_oracle,
+        "requires_blind_surface_task_fixture": label_oracle,
+        "audit_note": (
+            "Blind-surface mode hides case-family labels and gold-like action "
+            "codes from the baseline arm."
+            if not label_oracle
+            else (
+                "The label-oracle prompt is a labeled action-choice diagnostic. "
+                "It can exercise live calls and scoring, but it is not a clean "
+                "no-memory baseline for #1322 behavior validation."
+            )
+        ),
+    }
+    quality_gate_ok = (
+        contract_gate_ok
+        and not label_oracle
+        and assisted["correct_rate"] >= 0.8
+        and assisted["useful_next_action_rate"] >= 0.8
+        and assisted["correct_rate"] > baseline["correct_rate"]
+        and assisted["manual_search_count"] < baseline["manual_search_count"]
+        and assisted["negative_control_correct_rate"] >= 0.8
+        and assisted["wrong_action_count"] == 0
+        and assisted["private_or_sensitive_context_used_count"] == 0
+    )
     return {
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
         "created_at": now_utc(),
         "issue": ISSUE,
-        "status": "live_model_behavior_pilot_complete" if contract_gate_ok else "live_model_behavior_pilot_incomplete",
+        "status": (
+            "blind_surface_behavior_pilot_complete"
+            if quality_gate_ok
+            else (
+                "label_oracle_diagnostic_complete_claim_gate_failed"
+                if label_oracle and contract_gate_ok
+                else "blind_surface_behavior_pilot_incomplete"
+            )
+        ),
         "ok": contract_gate_ok,
         "contract_gate_ok": contract_gate_ok,
-        "quality_gate_ok": False,
-        "claim_level": CLAIM_LEVEL,
+        "quality_gate_ok": quality_gate_ok,
+        "claim_gate_ok": quality_gate_ok,
+        "behavior_validation_closeout_ok": quality_gate_ok,
+        "claim_level": (
+            LABEL_ORACLE_CLAIM_LEVEL if label_oracle else BLIND_SURFACE_CLAIM_LEVEL
+        ),
         "execution": {
             "mode": "live_model_public_e2e50_behavior_v0",
+            "prompt_mode": prompt_mode,
             "arms": ARM_ORDER,
             "live_model_calls": len(rows),
             "expected_live_model_calls": expected_calls,
@@ -566,7 +893,13 @@ def run_live_model_benchmark(
             - baseline["wrong_action_count"],
             "over_constrained_delta_assisted_minus_baseline": assisted["over_constrained_count"]
             - baseline["over_constrained_count"],
+            "safe_but_non_answer_delta_assisted_minus_baseline": assisted[
+                "safe_but_non_answer_count"
+            ]
+            - baseline["safe_but_non_answer_count"],
+            "reported_lift_valid_for_behavior_claim": not label_oracle,
         },
+        "prompt_leakage_audit": prompt_leakage_audit,
         "red_lines": red_lines,
         "usage": {
             "token_usage": token_usage,
@@ -582,12 +915,22 @@ def run_live_model_benchmark(
             "source_refs_emitted": False,
             "behavior_trace_emitted": False,
         },
-        "can_claim": [
-            "public_safe_e2e50_live_model_behavior_runner_exists",
-            "baseline_and_aippocampus_packet_arms_scored_on_same_cases",
-            "model_outputs_are_scored_as_action_choices",
-            "provider_model_settings_usage_and_cost_estimate_reported",
-        ],
+        "can_claim": (
+            [
+                "public_safe_e2e50_blind_surface_behavior_runner_exists",
+                "baseline_and_aippocampus_packet_arms_scored_on_same_blind_surface_cases",
+                "model_outputs_are_scored_as_surface_next_actions",
+                "provider_model_settings_usage_and_cost_estimate_reported",
+            ]
+            if not label_oracle
+            else [
+                "public_safe_e2e50_live_model_runner_exists",
+                "labeled_choice_prompt_and_scoring_path_exercised",
+                "model_outputs_are_scored_as_action_choices",
+                "provider_model_settings_usage_and_cost_estimate_reported",
+                "baseline_label_leakage_detected_and_reported",
+            ]
+        ),
         "cannot_claim": CANNOT_CLAIM,
         "cases": rows,
     }
@@ -616,6 +959,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--max-cases", type=int)
+    parser.add_argument("--prompt-mode", choices=PROMPT_MODES, default=PROMPT_MODE_BLIND_SURFACE)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--json", action="store_true")
     return parser
@@ -633,6 +977,7 @@ def main(argv: list[str] | None = None) -> int:
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         max_cases=args.max_cases,
+        prompt_mode=args.prompt_mode,
     )
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
     summary = cli_summary()

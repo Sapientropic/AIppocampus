@@ -94,11 +94,19 @@ from looking like a control tower.
   - Treat this as mixed/negative pilot evidence: red lines stayed clear, but
     bounded resonance did not beat the neutral or alias-only arms on the
     scripted scoring rubric.
-- [E2E50 Live-Model Behavior Pilot, 2026-06-13](e2e50-live-behavior-pilot-2026-06-13.md)
+- [E2E50 Live-Model Label-Oracle Diagnostic, 2026-06-13](e2e50-live-behavior-pilot-2026-06-13.md)
   - Public-safe 100-call DeepSeek run over the 50-case E2E50 behavior pack,
-    comparing baseline minimal context with an AIppocampus packet arm.
-  - Treat this as modest positive behavior evidence, not default foreground
-    adoption evidence.
+    comparing a labeled baseline prompt with an AIppocampus packet arm.
+  - Treat this as a flawed setup / runner-wiring diagnostic only: the baseline
+    exposed case-family labels, family-specific scenario text, the action-code
+    glossary, and a packet shell, so it is not valid behavior-lift evidence.
+- [E2E50 Blind-Surface Live Behavior, 2026-06-13](e2e50-blind-surface-live-behavior-2026-06-13.md)
+  - Corrected public-safe 100-call DeepSeek run where the baseline no longer
+    sees case-family labels, expected codes, source hashes, action-code glossary,
+    or an empty packet shell.
+  - Treat this as the #1322 small public live-behavior slice: packet arm `1.00`
+    correct/useful next-action vs baseline `0.42`, with zero wrong actions,
+    invalid outputs, over-constraint, or private-context red lines.
 
 ## Evidence Levels
 

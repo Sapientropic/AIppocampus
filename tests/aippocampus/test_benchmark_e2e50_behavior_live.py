@@ -16,8 +16,15 @@ import benchmark_e2e50_behavior_live as benchmark  # noqa: E402
 
 
 def _packet_from_prompt(prompt: str) -> dict[str, object]:
+    if "AIppocampus packet:\n" not in prompt:
+        return {"present": False}
+    separator = (
+        "\n\nAllowed action_code values:"
+        if "\n\nAllowed action_code values:" in prompt
+        else "\n\nReturn exactly this JSON shape:"
+    )
     packet_text = prompt.split("AIppocampus packet:\n", 1)[1].split(
-        "\n\nAllowed action_code values:",
+        separator,
         1,
     )[0]
     return json.loads(packet_text)
@@ -38,6 +45,20 @@ class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(missing, set())
 
+    def test_blind_surface_baseline_prompt_omits_label_oracle_leaks(self) -> None:
+        case = benchmark.case_pack_benchmark.load_fixture()["cases"][0]
+        prompt = benchmark._case_prompt(  # noqa: SLF001
+            case,
+            "baseline_minimal_context",
+            prompt_mode=benchmark.PROMPT_MODE_BLIND_SURFACE,
+        )
+
+        self.assertNotIn("case_family:", prompt)
+        self.assertNotIn("safe_route_used", prompt)
+        self.assertNotIn("Allowed action_code values", prompt)
+        self.assertNotIn("AIppocampus packet", prompt)
+        self.assertIn("No additional source-backed continuity packet is available", prompt)
+
     def test_live_model_runner_scores_generated_action_choices(self) -> None:
         calls: list[tuple[str, str]] = []
 
@@ -45,9 +66,12 @@ class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
             prompt = messages[-1]["content"]
             packet = _packet_from_prompt(prompt)
             if packet["present"]:
-                action = packet["recommended_action_codes"][0]
+                action = str(
+                    packet.get("recommended_next_action_id")
+                    or packet.get("recommended_action_codes", [""])[0]
+                )
             else:
-                action = "manual_search_requested"
+                action = "manual_search"
             calls.append((action, str(config.temperature)))
             return {
                 "choices": [
@@ -55,12 +79,11 @@ class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
                         "message": {
                             "content": json.dumps(
                                 {
-                                    "action_code": action,
-                                    "needs_manual_search": action == "manual_search_requested",
-                                    "would_reopen_source": action
-                                    == "source_reopen_before_risky_action",
+                                    "next_action_id": action,
+                                    "needs_manual_search": action == "manual_search",
+                                    "would_reopen_source": action == "open_source_first",
                                     "over_constrained": False,
-                                    "useful_next_action": action != "manual_search_requested",
+                                    "useful_next_action": action != "manual_search",
                                     "rationale": "public-safe action choice",
                                 }
                             )
@@ -79,28 +102,72 @@ class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
                 model="mock-model",
                 base_url="http://127.0.0.1:9",
                 api_key_env="AIPPOCAMPUS_TEST_KEY",
-                max_cases=4,
+                max_cases=8,
                 chat_fn=fake_chat,
             )
 
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["contract_gate_ok"])
-        self.assertFalse(payload["quality_gate_ok"])
+        self.assertTrue(payload["quality_gate_ok"])
+        self.assertTrue(payload["claim_gate_ok"])
+        self.assertTrue(payload["behavior_validation_closeout_ok"])
+        self.assertEqual(
+            payload["claim_level"],
+            "public_safe_blind_surface_live_behavior_pilot",
+        )
         self.assertEqual(payload["kind"], "aippocampus_e2e50_silent_constraint_live_behavior_pilot")
-        self.assertEqual(payload["execution"]["live_model_calls"], 8)
+        self.assertEqual(payload["execution"]["prompt_mode"], benchmark.PROMPT_MODE_BLIND_SURFACE)
+        self.assertEqual(payload["execution"]["live_model_calls"], 16)
         self.assertEqual(payload["execution"]["settings"]["temperature_requested"], None)
         self.assertFalse(payload["execution"]["settings"]["temperature_sent"])
-        self.assertEqual(payload["arms"]["baseline_minimal_context"]["manual_search_count"], 4)
+        self.assertEqual(payload["arms"]["baseline_minimal_context"]["manual_search_count"], 8)
         self.assertEqual(payload["arms"]["aippocampus_packet"]["correct_rate"], 1.0)
         self.assertGreater(payload["metrics"]["assisted_correct_rate_lift"], 0)
+        self.assertTrue(payload["metrics"]["reported_lift_valid_for_behavior_claim"])
+        self.assertFalse(payload["prompt_leakage_audit"]["baseline_prompt_exposes_case_family"])
+        self.assertFalse(payload["prompt_leakage_audit"]["baseline_prompt_includes_packet_shell"])
+        self.assertFalse(payload["prompt_leakage_audit"]["requires_blind_surface_task_fixture"])
+        self.assertIn("baseline_lift_from_label_oracle_prompt", payload["cannot_claim"])
+        self.assertIn(
+            "public_safe_e2e50_blind_surface_behavior_runner_exists",
+            payload["can_claim"],
+        )
         self.assertEqual(payload["red_lines"]["private_or_sensitive_context_used_count"], 0)
         self.assertEqual(payload["red_lines"]["invalid_action_count"], 0)
-        self.assertEqual(len(calls), 8)
+        self.assertEqual(len(calls), 16)
         self.assertNotIn("e2e50-binding-constraint-public", encoded)
         self.assertNotIn('"behavior_trace":', encoded)
         self.assertFalse(payload["execution"]["api_key_value_printed"])
         self.assertNotIn('"api_key":"test"', encoded)
+
+    def test_label_oracle_mode_cannot_close_behavior_claim(self) -> None:
+        def fake_chat(messages, config):  # type: ignore[no-untyped-def]
+            packet = _packet_from_prompt(messages[-1]["content"])
+            action = (
+                str(packet.get("recommended_action_codes", ["manual_search_requested"])[0])
+                if packet["present"]
+                else "manual_search_requested"
+            )
+            return {
+                "choices": [{"message": {"content": json.dumps({"action_code": action})}}],
+                "usage": {},
+            }
+
+        with mock.patch.dict(os.environ, {"AIPPOCAMPUS_TEST_KEY": "test"}, clear=False):
+            payload = benchmark.run_live_model_benchmark(
+                model="mock-model",
+                base_url="http://127.0.0.1:9",
+                api_key_env="AIPPOCAMPUS_TEST_KEY",
+                max_cases=1,
+                prompt_mode=benchmark.PROMPT_MODE_LABEL_ORACLE,
+                chat_fn=fake_chat,
+            )
+
+        self.assertFalse(payload["claim_gate_ok"])
+        self.assertFalse(payload["behavior_validation_closeout_ok"])
+        self.assertTrue(payload["prompt_leakage_audit"]["baseline_prompt_exposes_case_family"])
+        self.assertTrue(payload["prompt_leakage_audit"]["baseline_prompt_includes_packet_shell"])
 
     def test_cli_summary_omits_case_and_model_output_fields(self) -> None:
         summary = benchmark.cli_summary()
