@@ -6,7 +6,7 @@
     "truth_source": "human_authored_synthetic_fixture",
     "license": "CC0-compatible synthetic fixture text",
     "design_docs": [
-      "docs/evidence/benchmarks/hippocampal-recall-plan.md",
+      "docs/evidence/benchmarks/design/hippocampal-recall-plan.md",
       "docs/evidence/benchmarks/memory-decision-benchmark-plan.md",
       "docs/research/source-as-world.md",
       "docs/research/correction-reconsolidation.md"

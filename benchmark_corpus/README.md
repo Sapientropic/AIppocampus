@@ -6,6 +6,20 @@ AIppocampus benchmark work.
 For the cross-repository map of benchmark runners, smoke evidence, and dated
 records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence/benchmark-evidence-map.md).
 
+## Tracking Boundary
+
+Checked-in folders here are curated public-safe fixtures, manifests, and
+converter inputs. Local caches and generated outputs are workspace artifacts,
+not corpus assets:
+
+- `.cache/` holds downloaded or derived local caches.
+- `output/` and `outputs/` hold generated clean-source conversions.
+- `reports/` holds local benchmark output JSON.
+- `sharegpt_raw/` holds local raw imports.
+
+These paths are ignored by git. Promote anything from them only after an
+explicit provenance, privacy, license, and storage decision.
+
 ## Contents
 
 - `convert_to_aippocampus.py` converts public conversation datasets into

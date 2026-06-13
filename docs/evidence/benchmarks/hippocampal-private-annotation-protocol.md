@@ -5,7 +5,7 @@ quality claim.
 
 Source issue: #232.
 Parent plan:
-[`hippocampal-recall-plan.md`](reports/hippocampal/hippocampal-recall-plan.md).
+[`hippocampal-recall-plan.md`](design/hippocampal-recall-plan.md).
 
 This protocol defines how to create a small private real-history validation set
 for H1 pattern completion and H2 pattern separation after the synthetic runner

@@ -40,7 +40,7 @@ collapsing them into one leaderboard.
 | --- | --- | --- |
 | Benchmark philosophy | [`design/benchmark-design-rationale.md`](design/benchmark-design-rationale.md) | Reader-facing rationale; no raw outputs or current-status upgrades. |
 | Benchmark priority and run profiles | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | P0/P1/P2/P3 priority, maturity, default run profile, claim-level, and claim-boundary guidance. |
-| Detailed track plan | [`design/memory-decision-benchmark-plan.md`](design/memory-decision-benchmark-plan.md) | Track A-D runner details, profiles, diagnostics, and implementation notes. |
+| Detailed track plan | [`design/memory-decision-benchmark-plan.md`](design/memory-decision-benchmark-plan.md) | Slim Track A-D entrypoint; deep profiles, diagnostics, and implementation notes live under `design/memory-decision/`. |
 | Track S semantic robustness | [`semantic-robustness-track-s.md`](semantic-robustness-track-s.md) | No-live-judge diagnostics for perturbation stability, retrieval invariance, hard negatives, and optional proxy/vector health boundaries. |
 | External benchmark comparison home | [`design/external-benchmark-map.md`](design/external-benchmark-map.md) | Analysis map and blockers; not a superiority claim. |
 | LongMemEval evidence home | [`longmemeval.md`](longmemeval.md) | Stable entrypoint for V1 retrieval, reranker, fixed-reader answer/latency, failure-review, and V2 boundary notes. |
@@ -50,6 +50,7 @@ collapsing them into one leaderboard.
 | Multimodal memory benchmark map | [`design/multimodal-memory-benchmark-map.md`](design/multimodal-memory-benchmark-map.md) | #528 source-shape routing across HippoCamp, MemLens, ATM-Bench, egocentric video, UniDoc, Persona, and conversation-memory benchmarks. |
 | ATM-Bench Hard protocol boundary | [`design/atm-bench-hard-protocol-boundary.md`](design/atm-bench-hard-protocol-boundary.md) | Verified upstream-protocol boundary for #528; no adapter, score, or privacy claim. |
 | Hippocampal private annotation protocol | [`hippocampal-private-annotation-protocol.md`](hippocampal-private-annotation-protocol.md) | Private H1/H2 real-history sampling and sanitized report rules; no committed private pack. |
+| Hippocampal recall-discrimination design | [`design/hippocampal-recall-plan.md`](design/hippocampal-recall-plan.md) | H-series recall-discrimination plan; reports remain under `reports/hippocampal/`. |
 | Public-safe multimodal corpus fixture | [`multimodal-corpus-fixture-report.md`](reports/multimodal/multimodal-corpus-fixture-report.md) | #531 corpus-style contract smoke; not conversational upload recall or ATM-Bench score. |
 | Conversational media-ingest fixture | [`conversational-media-ingest-fixture-report.md`](reports/multimodal/conversational-media-ingest-fixture-report.md) | #532 conversational counterpart; media anchors attach to conversation turns. |
 | Multimodal NIAH evidence-pool fixture | [`multimodal-niah-evidence-pool-report.md`](reports/multimodal/multimodal-niah-evidence-pool-report.md) | #533 supplied-pool answer-synthesis contract; retrieval is not scored. |

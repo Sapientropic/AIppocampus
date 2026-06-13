@@ -146,7 +146,7 @@ for comparison candidates and blockers.
 - Full Track A-D methodology and profiles:
   [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md).
 - H-series recall-discrimination design:
-  [`../reports/hippocampal/hippocampal-recall-plan.md`](../reports/hippocampal/hippocampal-recall-plan.md).
+  [`hippocampal-recall-plan.md`](hippocampal-recall-plan.md).
 - Public longitudinal and VCS hard-event benchmark direction:
   [`../public-longitudinal-users.md`](../public-longitudinal-users.md).
 - Memory-system pain taxonomy and negative-fixture motivation:

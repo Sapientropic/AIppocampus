@@ -191,7 +191,7 @@ at text; B-tree/generated/partial indexes are better for structure and time.
 ### Phase 2: Private Real-History Annotation
 
 The private-safe procedure lives in
-[`../../hippocampal-private-annotation-protocol.md`](../../hippocampal-private-annotation-protocol.md).
+[`../hippocampal-private-annotation-protocol.md`](../hippocampal-private-annotation-protocol.md).
 This section keeps only the sampling intent.
 
 After the runner is stable, sample 20 private real-history scenes from

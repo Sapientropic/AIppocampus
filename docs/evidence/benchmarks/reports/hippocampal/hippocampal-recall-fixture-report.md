@@ -152,7 +152,7 @@ controls, external-adapter availability, or broader P1 coverage.
   `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`
 - Mirror tests: `tests/aippocampus/test_benchmark_hippocampal_recall.py`
 - Methodology owner:
-  `docs/evidence/benchmarks/reports/hippocampal/hippocampal-recall-plan.md`
+  `docs/evidence/benchmarks/design/hippocampal-recall-plan.md`
 
 ## Cannot Claim
 

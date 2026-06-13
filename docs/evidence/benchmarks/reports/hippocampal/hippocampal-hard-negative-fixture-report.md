@@ -142,7 +142,7 @@ python -m unittest tests.aippocampus.test_benchmark_hippocampal_hard_negatives
 - Mirror tests:
   `tests/aippocampus/test_benchmark_hippocampal_hard_negatives.py`
 - Methodology owner:
-  `docs/evidence/benchmarks/reports/hippocampal/hippocampal-recall-plan.md`
+  `docs/evidence/benchmarks/design/hippocampal-recall-plan.md`
 
 ## Cannot Claim
 

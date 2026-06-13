@@ -12,7 +12,9 @@ specific dated report only when you need the evidence behind a row.
 - [`stage-0-5-readiness.md`](stage-0-5-readiness.md): stage-level can-claim /
   cannot-claim snapshot.
 - [`public-readiness-verification.md`](public-readiness-verification.md):
-  dated command ledger and release/public-readiness evidence summaries.
+  slim dated-ledger entrypoint and anchor-preserving map.
+- [`public-readiness/`](public-readiness/): split detail ledgers for dated
+  evidence, continuous-memory readouts, command logs, and scan notes.
 - [`source-intake-health-2026-06-10.md`](source-intake-health-2026-06-10.md):
   fixture evidence for source-intake health and fallback diagnostics.
 - [`proof-slice-maturity.md`](proof-slice-maturity.md): proof-slice maturity

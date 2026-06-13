@@ -32,7 +32,7 @@ Dated command evidence belongs in
   source-backed recall track.
 - [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md)
   remains the detailed Track A-D methodology and runner-plan owner.
-- [`../reports/hippocampal/hippocampal-recall-plan.md`](../reports/hippocampal/hippocampal-recall-plan.md) owns the
+- [`hippocampal-recall-plan.md`](hippocampal-recall-plan.md) owns the
   H-series recall-discrimination design.
 - [`../public-longitudinal-users.md`](../public-longitudinal-users.md) owns the
   public longitudinal and VCS hard-event benchmark direction.

@@ -82,7 +82,7 @@ def _case(
             "https://github.com/Sapientropic/AIppocampus/issues/231",
         ],
         "design_doc_refs": [
-            "docs/evidence/benchmarks/hippocampal-recall-plan.md",
+            "docs/evidence/benchmarks/design/hippocampal-recall-plan.md",
         ],
         "scene_id": scene_id,
         "case_id": case_id,
