@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_longmemeval_evidence_summary",
+  "generated_at": "2026-06-13T13:12:36Z",
+  "issue_refs": ["#1323"],
+  "status": "contract_aware_full_source_semantic_warming_measured",
+  "raw_local_report": {
+    "filename": "longmemeval-v1-small-semantic-scope-full-source-sidecar-v3-contract-500-2026-06-13.json",
+    "sha1": "B6CFB24C883969CDD711EAD1AC1D31702895D6E6",
+    "gitignored": true
+  },
+  "dataset": {
+    "split": "longmemeval-v1-small",
+    "questions": 500,
+    "evidence_line_cases": 479,
+    "corpus_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442"
+  },
+  "retrieval": {
+    "first_stage_evidence_hit_top10": 408,
+    "first_stage_evidence_hit_rate_top10": 0.8518,
+    "context_visible_evidence_hit_top10": 452,
+    "context_visible_evidence_hit_rate_top10": 0.9436,
+    "source_semantic_cache_search_evidence_hit_top10": 156,
+    "source_semantic_cache_only_evidence_hit_top10": 398,
+    "source_semantic_cache_fused_evidence_hit_top10": 422,
+    "source_semantic_cache_fused_evidence_hit_rate_top10": 0.881,
+    "source_semantic_cache_fused_evidence_mrr": 0.6763,
+    "semantic_bridge_lift_top10": 14
+  },
+  "materialization": {
+    "materializer": "public_semantic_labeler_full_source",
+    "contract_aware_sidecar_manifest": true,
+    "provider_call_count": 500,
+    "candidate_message_count": 246738,
+    "full_source_candidate_count": 246738,
+    "candidate_batch_count": 500,
+    "candidate_coverage_mode_counts": {
+      "full_source_ordered_chunks": 500
+    },
+    "status_counts": {
+      "materialized_sidecar": 458,
+      "semantic_labeler_error": 42
+    },
+    "semantic_scope_sidecar_count": 451,
+    "semantic_scope_label_row_count": 2745,
+    "source_text_sent_to_labeler": true,
+    "hot_query_provider_call_count": 0,
+    "usage": {
+      "prompt_tokens": 56124275,
+      "completion_tokens": 4585860,
+      "total_tokens": 60710135,
+      "prompt_cache_hit_tokens": 12548480,
+      "prompt_cache_miss_tokens": 43575795
+    }
+  },
+  "cache": {
+    "standard_source_index_hit_count": 500,
+    "standard_source_index_miss_count": 0,
+    "standard_source_index_hit_rate": 1.0,
+    "source_artifact_cache_hit_count": 1,
+    "source_artifact_cache_miss_count": 499,
+    "source_artifact_cache_rebuild_count": 499,
+    "source_artifact_cache_miss_reason": "contract-aware sidecar manifest changed the sidecar fingerprint after replacing legacy non-manifest sidecars"
+  },
+  "sidecar_signal": {
+    "source_semantic_scope_sidecar_case_count": 430,
+    "source_semantic_scope_sidecar_evidence_coverage": 53,
+    "source_semantic_scope_sidecar_context_coverage": 74,
+    "source_semantic_scope_sidecar_candidate_evidence_coverage": 49,
+    "semantic_scope_profile_count": 596,
+    "semantic_scope_query_term_overlap_count": 260,
+    "semantic_scope_query_term_overlap_total": 502,
+    "semantic_scope_query_label_overlap_count": 0
+  },
+  "comparison": {
+    "worker_surface_proxy_fused_hit_top10": 422,
+    "worker_surface_proxy_fused_mrr": 0.6734,
+    "contract_full_source_fused_hit_top10": 422,
+    "contract_full_source_fused_mrr": 0.6763,
+    "cache_check_to_full_source_reranked_rank_improved_cases": 3,
+    "cache_check_to_full_source_reranked_rank_worsened_cases": 2,
+    "interpretation": "Full-source semantic warming improves sidecar coverage and term-overlap telemetry, but does not improve fused R@10 on this 500Q retrieval-only adapter."
+  },
+  "no_lift_diagnosis": {
+    "baseline_miss_count": 71,
+    "baseline_miss_semantic_only_rescue_count": 14,
+    "baseline_miss_sidecar_exact_coverage": 3,
+    "baseline_miss_sidecar_context_coverage": 7,
+    "baseline_miss_sidecar_candidate_exact_coverage": 0,
+    "sidecar_exact_cases_already_baseline_hit": 50,
+    "fused_miss_count": 57,
+    "fused_miss_candidate_visible_count": 37,
+    "fused_miss_candidate_missing_count": 20,
+    "candidate_visible_miss_gold_semantic_scope_label_count": 0,
+    "candidate_visible_miss_gold_semantic_scope_term_count": 0,
+    "candidate_visible_miss_gold_semantic_scope_query_overlap_count": 0,
+    "candidate_visible_miss_rank_buckets_after_source_semantic_scoring": {
+      "11_20": 17,
+      "21_50": 14,
+      "below_50": 6
+    },
+    "candidate_visible_miss_score_gap": {
+      "avg": 396.61,
+      "median": 360.45,
+      "max": 1350.56,
+      "min": 123.57
+    },
+    "candidate_visible_miss_feature_averages": {
+      "gold_source_overlap": 1.73,
+      "top_wrong_source_overlap": 5.03,
+      "gold_context_overlap": 3.95,
+      "top_wrong_context_overlap": 5.27,
+      "gold_context_distance": 2.35,
+      "top_wrong_context_distance": 0.43
+    },
+    "candidate_width_240_counterfactual": {
+      "provider_call_count": 0,
+      "source_artifact_cache_hit_count": 500,
+      "line_reranker_candidate_evidence_coverage": 472,
+      "fused_evidence_hit_top10": 423,
+      "fused_evidence_hit_rate_top10": 0.8831,
+      "interpretation": "Widening candidates mostly improves candidate visibility, not top-10 ranking."
+    },
+    "profile_scored_search_counterfactual": {
+      "provider_call_count": 0,
+      "source_artifact_cache_hit_count": 500,
+      "source_semantic_cache_search_evidence_hit_top10": 386,
+      "fused_evidence_hit_top10": 421,
+      "fused_evidence_hit_rate_top10": 0.8789,
+      "interpretation": "Naive all-profile semantic-scope-term search increases noisy retrieval and does not improve fused R@10."
+    },
+    "root_cause": "The full-source materializer reads all public source rows but emits sparse semantic-scope labels. Most hard LongMemEval gold rows receive no sidecar label or sidecar term, so the current FTS-preserving fusion can only rescue cases where ordinary source-semantic scoring already ranks the gold line in top 10."
+  },
+  "claim_boundary": {
+    "can_claim": [
+      "contract-aware public LongMemEval-S source-side semantic warming was measured on 500 questions",
+      "full-source sidecar materialization covered every clean-source message sent to the labeler for successful provider calls",
+      "hot-query provider calls remained zero",
+      "source index cache reuse worked after the shared-prefix cache fix"
+    ],
+    "cannot_claim": [
+      "official LongMemEval QA score",
+      "answer-generation quality",
+      "SOTA or external baseline superiority",
+      "full AIppocampus product ability",
+      "semantic sidecar values as source truth",
+      "that full-source semantic warming improves fused R@10 on this adapter"
+    ]
+  }
+}

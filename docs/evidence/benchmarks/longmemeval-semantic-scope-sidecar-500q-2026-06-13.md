@@ -7,6 +7,14 @@ Issue: [#1323](https://github.com/Sapientropic/AIppocampus/issues/1323)
 Sanitized JSON:
 [`longmemeval-semantic-scope-sidecar-500q-2026-06-13.json`](longmemeval-semantic-scope-sidecar-500q-2026-06-13.json).
 
+Follow-up:
+[`longmemeval-full-source-semantic-warming-500q-2026-06-13.md`](longmemeval-full-source-semantic-warming-500q-2026-06-13.md)
+records the later contract-aware full-source semantic warming run. This file is
+the older 8-candidate/top-selector negative diagnostic. Do not treat any
+intermediate "full-source cache-reuse" run without a sidecar materializer
+manifest as full-source evidence; legacy top-candidate sidecars were reusable
+by filename before the manifest fix and could satisfy the wrong contract.
+
 ## Decision
 
 Status: `diagnostic_materialized_sidecar_arm_no_rank_delta`.

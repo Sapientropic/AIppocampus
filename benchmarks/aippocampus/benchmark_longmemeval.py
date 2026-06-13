@@ -169,6 +169,7 @@ def skipped_payload(
     source_semantic_sidecar_min_confidence: float = (
         retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
     ),
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -191,6 +192,7 @@ def skipped_payload(
             source_semantic_sidecar_timeout=source_semantic_sidecar_timeout,
             source_semantic_sidecar_max_tokens=source_semantic_sidecar_max_tokens,
             source_semantic_sidecar_min_confidence=source_semantic_sidecar_min_confidence,
+            rebuild_source_semantic_sidecars=rebuild_source_semantic_sidecars,
         ),
         "metrics": {"question_count": 0},
         "cases": [],
@@ -247,6 +249,7 @@ def evaluation_metadata(
     source_semantic_sidecar_min_confidence: float = (
         retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
     ),
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     resolved_line_reranker_mode = line_reranker_mode.strip().casefold()
     resolved_sidecar_materializer = (
@@ -262,6 +265,7 @@ def evaluation_metadata(
         "top_k": int(top_k),
         "line_reranker_mode": resolved_line_reranker_mode,
         "source_semantic_sidecar_materializer": resolved_sidecar_materializer,
+        "rebuild_source_semantic_sidecars": bool(rebuild_source_semantic_sidecars),
         "runner": "benchmarks/aippocampus/benchmark_longmemeval.py",
         "underlying_adapter": (
             "benchmarks/aippocampus/benchmark_source_evidence_retrieval.py"
@@ -376,6 +380,7 @@ def partial_diagnostic_payload(
     source_semantic_sidecar_min_confidence: float = (
         retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
     ),
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -398,6 +403,7 @@ def partial_diagnostic_payload(
             source_semantic_sidecar_timeout=source_semantic_sidecar_timeout,
             source_semantic_sidecar_max_tokens=source_semantic_sidecar_max_tokens,
             source_semantic_sidecar_min_confidence=source_semantic_sidecar_min_confidence,
+            rebuild_source_semantic_sidecars=rebuild_source_semantic_sidecars,
         ),
         "metrics": progress_metrics(progress_events),
         "cases": [],
@@ -545,6 +551,7 @@ def run_longmemeval_benchmark(
     source_semantic_sidecar_min_confidence: float = (
         retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE
     ),
+    rebuild_source_semantic_sidecars: bool = False,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -569,6 +576,7 @@ def run_longmemeval_benchmark(
         "source_semantic_sidecar_min_confidence": (
             source_semantic_sidecar_min_confidence
         ),
+        "rebuild_source_semantic_sidecars": rebuild_source_semantic_sidecars,
     }
     verification = (
         download_dataset(data_path, split)
@@ -867,6 +875,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Force rebuild of cached standard cases/source indexes.",
     )
     parser.add_argument(
+        "--rebuild-source-semantic-sidecars",
+        action="store_true",
+        help=(
+            "Force source semantic sidecar re-materialization; standard cache rebuilds "
+            "reuse existing sidecars unless this is set."
+        ),
+    )
+    parser.add_argument(
         "--source-semantic-sidecar-materializer",
         choices=sorted(SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS),
         default=SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
@@ -879,12 +895,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--source-semantic-sidecar-max-candidates",
         type=int,
         default=retrieval_benchmark.DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+        help=(
+            "Candidate selector width for public_semantic_labeler, or source-message "
+            "batch size for public_semantic_labeler_full_source."
+        ),
     )
     parser.add_argument(
         "--max-source-semantic-sidecar-calls",
         type=int,
         default=0,
-        help="Hard cap for source-side semantic sidecar materializer provider calls.",
+        help=(
+            "Hard cap for source-side semantic sidecar materializer provider calls; "
+            "in full-source mode this caps source-message batches globally."
+        ),
     )
     parser.add_argument(
         "--source-semantic-sidecar-workers",
@@ -973,6 +996,7 @@ def main() -> int:
         standard_cache_dir=args.standard_cache_dir,
         use_standard_cache=not args.no_standard_cache,
         rebuild_standard_cache=args.rebuild_standard_cache,
+        rebuild_source_semantic_sidecars=args.rebuild_source_semantic_sidecars,
         source_semantic_sidecar_materializer=args.source_semantic_sidecar_materializer,
         source_semantic_sidecar_max_candidates=args.source_semantic_sidecar_max_candidates,
         source_semantic_sidecar_max_provider_calls=args.max_source_semantic_sidecar_calls,

@@ -71,6 +71,7 @@ from .reporting import (
     sha1_text,
 )
 from .semantic_sidecars import (
+    SEMANTIC_SCOPE_SIDECAR_MANIFEST_FILENAME,
     SOURCE_SEMANTIC_SIDECAR_MATERIALIZER_OFF,
     SOURCE_SEMANTIC_SIDECAR_MATERIALIZERS,
     materialize_source_semantic_sidecars,
@@ -81,7 +82,7 @@ EVIDENCE_DIAGNOSTIC_CUTOFFS = (1, 3, 5, 10, 20, 50)
 SEMANTIC_LINE_RERANKER_ARM = "llm_window_to_line_rerank"
 SEMANTIC_LINE_RERANKER_PROMPT_VERSION = "llm-window-to-line-rerank-v1"
 SOURCE_SEMANTIC_CACHE_ARM = "aippocampus_source_worker_surface_cache"
-SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-v2"
+SOURCE_SEMANTIC_CACHE_POLICY_VERSION = "aippocampus-source-worker-surface-cache-v3"
 SOURCE_SEMANTIC_CACHE_BUILDER_ID = "aippocampus-working-memory-surface-v1"
 STANDARD_CASE_CACHE_POLICY_VERSION = "standard-public-case-index-cache-v1"
 STANDARD_CASE_ADAPTER_VERSION = "standard-public-case-adapter-v1"
@@ -194,13 +195,16 @@ def standard_case_cache_key(
     corpus_sha256: str,
     max_questions: int,
 ) -> str:
+    # Keep the cache root shared across prefix-sized benchmark runs. A 500-question
+    # run should reuse the first 100 prepared clean-source indexes and sidecars
+    # instead of treating `max_questions` as part of source identity.
+    _ = max_questions
     material = {
         "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
         "adapter_version": STANDARD_CASE_ADAPTER_VERSION,
         "dataset": dataset,
         "corpus_sha256": corpus_sha256,
-        "question_selection": "first_eligible_questions_in_corpus_order",
-        "max_questions": int(max_questions),
+        "question_selection": "first_eligible_questions_in_corpus_order_shared_prefix_cache",
     }
     return stable_json_sha1(material, length=20)
 
@@ -1156,6 +1160,7 @@ def source_semantic_cache_public_contract() -> dict[str, Any]:
                 "source_text",
                 "adjacent_source_text_in_same_session",
                 "source_session_id",
+                "source_backed_semantic_scope_label_terms",
             ],
             "hot_query_visible": [
                 "query_terms",
@@ -1212,6 +1217,36 @@ def source_semantic_query_labels(question: str) -> set[str]:
     return labels
 
 
+def source_semantic_scope_terms(item: dict[str, Any]) -> set[str]:
+    """Extract ranking hints from source-backed semantic sidecar prose.
+
+    These terms help source-side warming shape route selection, but they remain
+    navigation hints. The foreground path must still reopen the clean-source row
+    before making any factual claim from the selected line.
+    """
+
+    if not isinstance(item, dict) or not item:
+        return set()
+    fragments: list[str] = []
+    for key in ("rationale", "summary", "why"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            fragments.append(value)
+    for evidence in item.get("label_evidence") or []:
+        if not isinstance(evidence, dict):
+            continue
+        reason = str(
+            evidence.get("reason")
+            or evidence.get("rationale")
+            or evidence.get("summary")
+            or evidence.get("why")
+            or ""
+        ).strip()
+        if reason:
+            fragments.append(reason)
+    return lexical_line_reranker_terms(compact_text(" ".join(fragments), 1200))
+
+
 def line_to_session_fingerprint(line_to_session: dict[str, str]) -> str:
     return stable_json_sha1(
         sorted((str(key), str(value)) for key, value in line_to_session.items()),
@@ -1235,9 +1270,12 @@ def semantic_scope_sidecar_fingerprint(sqlite_path: Path) -> str:
     if not sidecar_path.exists():
         return ""
     digest = hashlib.sha1()
-    with sidecar_path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
+    for path in (sidecar_path, sqlite_path.with_name(SEMANTIC_SCOPE_SIDECAR_MANIFEST_FILENAME)):
+        if not path.exists():
+            continue
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -1295,6 +1333,7 @@ def source_semantic_cache_for_json(cache: dict[str, Any]) -> dict[str, Any]:
             "labels",
             "context_labels",
             "semantic_scope_labels",
+            "semantic_scope_terms",
         ):
             value = profile.get(key)
             if isinstance(value, set):
@@ -1380,9 +1419,11 @@ def build_source_semantic_cache(
             previous_terms = lexical_line_reranker_terms(previous_text)
             next_terms = lexical_line_reranker_terms(next_text)
             labels = source_semantic_line_labels(text)
+            semantic_scope_item = semantic_scope_sidecar.get(message_id) or {}
             semantic_labels = semantic_labels_for_message(
                 {"message_id": message_id}, semantic_scope_sidecar
             )
+            semantic_scope_terms = source_semantic_scope_terms(semantic_scope_item)
             if semantic_labels:
                 semantic_scope_label_row_count += 1
                 labels = fts5_benchmark.unique_preserve([*labels, *semantic_labels])
@@ -1393,6 +1434,7 @@ def build_source_semantic_cache(
             route_terms.update(next_terms)
             route_terms.update(str(label).casefold() for label in labels)
             route_terms.update(str(label).casefold() for label in context_labels)
+            route_terms.update(semantic_scope_terms)
             route_terms_list = [
                 term
                 for term in sorted(route_terms)
@@ -1443,6 +1485,8 @@ def build_source_semantic_cache(
             if semantic_labels:
                 working_memory_row["scope_labels"] = semantic_labels
                 working_memory_row["semantic_scope_labels"] = semantic_labels
+            if semantic_scope_terms:
+                working_memory_row["semantic_scope_terms"] = sorted(semantic_scope_terms)[:24]
             working_memory_rows.append(working_memory_row)
             profiles[line] = {
                 "line": line,
@@ -1455,6 +1499,7 @@ def build_source_semantic_cache(
                 "labels": set(labels),
                 "context_labels": context_labels,
                 "semantic_scope_labels": set(semantic_labels),
+                "semantic_scope_terms": semantic_scope_terms,
                 "source_text_sha1": sha1_text(text)[:16],
                 "previous_text_sha1": sha1_text(previous_text)[:16],
                 "next_text_sha1": sha1_text(next_text)[:16],
@@ -1463,6 +1508,7 @@ def build_source_semantic_cache(
                         [
                             " ".join(sorted(source_terms))[:256],
                             " ".join(labels),
+                            " ".join(sorted(semantic_scope_terms))[:256],
                         ]
                     )
                 )[:16],
@@ -1671,10 +1717,12 @@ def source_semantic_cache_score(
     next_terms = set(profile.get("next_terms") or set())
     labels = set(profile.get("labels") or set())
     context_labels = set(profile.get("context_labels") or set())
+    semantic_scope_terms = set(profile.get("semantic_scope_terms") or set())
     source_overlap = len(question_terms & source_terms)
     previous_overlap = len(question_terms & previous_terms)
     next_overlap = len(question_terms & next_terms)
     context_overlap = previous_overlap + next_overlap
+    semantic_scope_overlap = len(question_terms & semantic_scope_terms)
     coverage = source_overlap / max(1, len(question_terms))
     label_overlap = len(query_labels & labels)
     context_label_overlap = len(query_labels & context_labels)
@@ -1688,6 +1736,7 @@ def source_semantic_cache_score(
     score += context_overlap * 34.0
     score += label_overlap * 12.0
     score += context_label_overlap * 5.0
+    score += semantic_scope_overlap * 32.0
     if "content" in {str(channel) for channel in candidate.get("query_channels") or []}:
         score += 16.0
     if fts_rank is not None:
@@ -1706,6 +1755,8 @@ def source_semantic_cache_score(
         score -= 18.0
     if context_overlap and ("answer_like_statement" in labels or "value_like" in labels):
         score += min(36.0, context_overlap * 8.0)
+    if semantic_scope_overlap and labels:
+        score += min(12.0, semantic_scope_overlap * 3.0)
     score -= context_distance * 1.25
     score -= nearest_hit_rank * 0.05
     return score
@@ -1731,9 +1782,11 @@ def source_semantic_cache_search_score(
     route_terms = set(profile.get("route_terms") or set())
     labels = set(profile.get("labels") or set())
     context_labels = set(profile.get("context_labels") or set())
+    semantic_scope_terms = set(profile.get("semantic_scope_terms") or set())
     source_overlap = len(question_terms & source_terms)
     context_overlap = len(question_terms & previous_terms) + len(question_terms & next_terms)
     route_overlap = len(question_terms & route_terms)
+    semantic_scope_overlap = len(question_terms & semantic_scope_terms)
     label_overlap = len(query_labels & labels)
     context_label_overlap = len(query_labels & context_labels)
     coverage = route_overlap / max(1, len(question_terms))
@@ -1744,6 +1797,7 @@ def source_semantic_cache_search_score(
     score += coverage * 30.0
     score += label_overlap * 18.0
     score += context_label_overlap * 7.0
+    score += semantic_scope_overlap * 16.0
     if str(profile.get("role") or "") == "user":
         score += 3.0
     if "answer_like_statement" in labels:
@@ -1863,6 +1917,9 @@ def run_source_semantic_cache_line_reranker(
     semantic_scope_profile_count = 0
     semantic_scope_label_overlap_count = 0
     semantic_scope_label_overlap_total = 0
+    semantic_scope_term_profile_count = 0
+    semantic_scope_term_overlap_count = 0
+    semantic_scope_term_overlap_total = 0
     for candidate in candidates:
         line = int(candidate["line"])
         profile = profiles.get(line)
@@ -1874,6 +1931,7 @@ def run_source_semantic_cache_line_reranker(
                 "next_terms": set(),
                 "labels": set(),
                 "context_labels": set(),
+                "semantic_scope_terms": set(),
             }
         else:
             hit_count += 1
@@ -1884,6 +1942,13 @@ def run_source_semantic_cache_line_reranker(
             if semantic_scope_overlap:
                 semantic_scope_label_overlap_count += 1
                 semantic_scope_label_overlap_total += len(semantic_scope_overlap)
+        semantic_scope_terms = set(profile.get("semantic_scope_terms") or set())
+        if semantic_scope_terms:
+            semantic_scope_term_profile_count += 1
+            semantic_scope_term_overlap = question_terms & semantic_scope_terms
+            if semantic_scope_term_overlap:
+                semantic_scope_term_overlap_count += 1
+                semantic_scope_term_overlap_total += len(semantic_scope_term_overlap)
         scored.append(
             (
                 source_semantic_cache_score(
@@ -1917,6 +1982,13 @@ def run_source_semantic_cache_line_reranker(
             ),
             "semantic_scope_query_label_overlap_total": (
                 semantic_scope_label_overlap_total
+            ),
+            "semantic_scope_term_profile_count": semantic_scope_term_profile_count,
+            "semantic_scope_query_term_overlap_count": (
+                semantic_scope_term_overlap_count
+            ),
+            "semantic_scope_query_term_overlap_total": (
+                semantic_scope_term_overlap_total
             ),
         },
         "latency_ms": round((time.perf_counter() - started) * 1000, 4),
@@ -2693,6 +2765,10 @@ def evaluate_standard_retrieval_case(
             [{"line": line} for line in semantic_lines[:top_k]],
             expected_lines,
         )
+        semantic_only_full_rank = rank_expected_line(
+            [{"line": line} for line in semantic_lines],
+            expected_lines,
+        )
         semantic_only_hit_top_k = bool(semantic_only_rank and semantic_only_rank <= top_k)
         wrong_stance_lines = {
             int(value) for value in expected.get("wrong_stance_lines") or []
@@ -2757,6 +2833,28 @@ def evaluate_standard_retrieval_case(
             for candidate in candidates
             if int(candidate["line"]) in semantic_scope_profile_lines
         }
+        candidate_evidence_lines = {
+            int(candidate["line"])
+            for candidate in candidates
+            if int(candidate["line"]) in expected_lines
+        }
+        semantic_scope_gold_candidate_label_count = 0
+        semantic_scope_gold_candidate_term_count = 0
+        semantic_scope_gold_candidate_query_term_overlap_count = 0
+        if source_semantic_cache and candidate_evidence_lines:
+            question_terms = lexical_line_reranker_terms(str(case.get("query") or ""))
+            source_profiles = source_semantic_cache.get("profiles") or {}
+            for line in sorted(candidate_evidence_lines):
+                profile = source_profiles.get(line) or source_profiles.get(str(line)) or {}
+                if not isinstance(profile, dict):
+                    continue
+                if profile.get("semantic_scope_labels"):
+                    semantic_scope_gold_candidate_label_count += 1
+                semantic_scope_terms = set(profile.get("semantic_scope_terms") or set())
+                if semantic_scope_terms:
+                    semantic_scope_gold_candidate_term_count += 1
+                    if question_terms & semantic_scope_terms:
+                        semantic_scope_gold_candidate_query_term_overlap_count += 1
         semantic_scope_candidate_hits = [
             {"line": line} for line in sorted(semantic_scope_candidate_lines)
         ]
@@ -2839,11 +2937,21 @@ def evaluate_standard_retrieval_case(
                 "source_semantic_scope_sidecar_candidate_evidence_contains": bool(
                     semantic_scope_candidate_evidence_rank
                 ),
+                "source_semantic_scope_gold_candidate_label_count": (
+                    semantic_scope_gold_candidate_label_count
+                ),
+                "source_semantic_scope_gold_candidate_term_count": (
+                    semantic_scope_gold_candidate_term_count
+                ),
+                "source_semantic_scope_gold_candidate_query_term_overlap_count": (
+                    semantic_scope_gold_candidate_query_term_overlap_count
+                ),
                 "source_joined_candidate_contains_evidence": (
                     source_joined_candidate_contains_evidence
                 ),
                 "source_joined_candidate_evidence_rank": source_joined_candidate_rank,
                 "semantic_only_evidence_rank": semantic_only_rank,
+                "semantic_only_evidence_full_rank": semantic_only_full_rank,
                 f"semantic_only_evidence_hit_top{top_k}": semantic_only_hit_top_k,
                 f"semantic_bridge_lift_top{top_k}": semantic_bridge_lift,
                 "wrong_stance_line_count": len(wrong_stance_lines),
@@ -3206,6 +3314,29 @@ def summarize_standard_retrieval_results(
                 for row in source_semantic_cache_cases
                 if row.get("source_semantic_scope_sidecar_candidate_evidence_contains")
             )
+            source_scope_gold_candidate_label_cases = sum(
+                1
+                for row in source_semantic_cache_cases
+                if int(row.get("source_semantic_scope_gold_candidate_label_count") or 0)
+                > 0
+            )
+            source_scope_gold_candidate_term_cases = sum(
+                1
+                for row in source_semantic_cache_cases
+                if int(row.get("source_semantic_scope_gold_candidate_term_count") or 0)
+                > 0
+            )
+            source_scope_gold_candidate_query_overlap_cases = sum(
+                1
+                for row in source_semantic_cache_cases
+                if int(
+                    row.get(
+                        "source_semantic_scope_gold_candidate_query_term_overlap_count"
+                    )
+                    or 0
+                )
+                > 0
+            )
             metrics.update(
                 {
                     "source_semantic_cache_case_count": len(source_semantic_cache_cases),
@@ -3296,6 +3427,15 @@ def summarize_standard_retrieval_results(
                             source_scope_sidecar_candidate_evidence_coverage,
                             len(source_semantic_cache_cases),
                         )
+                    ),
+                    "source_semantic_scope_gold_candidate_label_case_count": (
+                        source_scope_gold_candidate_label_cases
+                    ),
+                    "source_semantic_scope_gold_candidate_term_case_count": (
+                        source_scope_gold_candidate_term_cases
+                    ),
+                    "source_semantic_scope_gold_candidate_query_term_overlap_case_count": (
+                        source_scope_gold_candidate_query_overlap_cases
                     ),
                 }
             )
@@ -3440,6 +3580,7 @@ def run_standard_retrieval_qa_benchmark(
     source_semantic_sidecar_max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
     source_semantic_sidecar_min_confidence: float = DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
     source_semantic_sidecar_labeler_fn: PublicSemanticLabelerFn | None = None,
+    rebuild_source_semantic_sidecars: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if dataset not in STANDARD_DATASET_PATHS:
@@ -3514,6 +3655,7 @@ def run_standard_retrieval_qa_benchmark(
         "source_semantic_sidecar_min_confidence": float(
             source_semantic_sidecar_min_confidence
         ),
+        "rebuild_source_semantic_sidecars": bool(rebuild_source_semantic_sidecars),
         "standard_case_cache": {
             "enabled": bool(standard_case_cache["enabled"]),
             "policy_version": STANDARD_CASE_CACHE_POLICY_VERSION,
@@ -3639,7 +3781,7 @@ def run_standard_retrieval_qa_benchmark(
                 max_tokens=source_semantic_sidecar_max_tokens,
                 min_confidence=source_semantic_sidecar_min_confidence,
                 labeler_fn=source_semantic_sidecar_labeler_fn,
-                rebuild_sidecars=bool(rebuild_standard_cache),
+                rebuild_sidecars=bool(rebuild_source_semantic_sidecars),
             )
             emit_standard_progress(
                 progress_callback,
@@ -3651,14 +3793,20 @@ def run_standard_retrieval_qa_benchmark(
                 corpus=corpus,
             )
         source_artifact_cache_dir = (
-            case_root / "source_artifacts" / SOURCE_SEMANTIC_CACHE_POLICY_VERSION
+            # Store source artifacts under the shared benchmark cache root, not
+            # the per-prefix case root, so 25/100/500 growth runs can reuse the
+            # same content-addressed worker surfaces.
+            base_cache_dir / "source_artifacts" / SOURCE_SEMANTIC_CACHE_POLICY_VERSION
             if standard_case_cache["enabled"]
             else None
         )
         source_semantic_cache_store = (
             SourceSemanticCacheStore(
                 artifact_cache_dir=source_artifact_cache_dir,
-                rebuild_artifact_cache=bool(rebuild_standard_cache),
+                # Source artifact keys already include source/sidecar/session
+                # fingerprints. Standard SQLite rebuilds should not discard a
+                # matching semantic worker surface unless its content changes.
+                rebuild_artifact_cache=False,
             )
             if resolved_line_reranker_mode == "source_semantic_cache"
             else None

@@ -84,6 +84,42 @@ def write_context_visible_miss_fixture(path: Path) -> None:
     path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
 
 
+def write_full_source_sidecar_fixture(path: Path) -> None:
+    distractors = [
+        {
+            "role": "user",
+            "content": (
+                f"Long unrelated planning note {index}: "
+                + "alpha beta gamma " * 80
+            ),
+        }
+        for index in range(11)
+    ]
+    fixture = [
+        {
+            "question_id": "q-full-source-sidecar",
+            "question_type": "single-session-user",
+            "question": "Where did the full-source marker appear?",
+            "answer": "full-source marker",
+            "question_date": "2023/05/30 (Tue) 23:40",
+            "haystack_dates": ["2023/05/20 (Sat) 02:21"],
+            "haystack_session_ids": ["answer-session"],
+            "answer_session_ids": ["answer-session"],
+            "haystack_sessions": [
+                [
+                    *distractors,
+                    {
+                        "role": "user",
+                        "content": "The full-source marker appears on the final source line.",
+                        "has_answer": True,
+                    },
+                ]
+            ],
+        }
+    ]
+    path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+
+
 @contextmanager
 def patched_oracle_split(path: Path) -> Iterator[None]:
     split = benchmark.LONGMEMEVAL_SPLITS["longmemeval-v1-oracle"]
@@ -526,6 +562,14 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
             1,
         )
         self.assertEqual(
+            payload["metrics"]["source_semantic_scope_gold_candidate_label_case_count"],
+            1,
+        )
+        self.assertEqual(
+            payload["metrics"]["source_semantic_scope_gold_candidate_term_case_count"],
+            1,
+        )
+        self.assertEqual(
             payload["metrics"]["line_reranker_usage"]["semantic_scope_profile_count"],
             1,
         )
@@ -540,6 +584,213 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn("retrieval marker", dumped)
         self.assertNotIn(str(path), dumped)
         self.assertNotIn(str(cache_dir), dumped)
+
+    def test_full_source_sidecar_materializer_batches_all_clean_messages(self) -> None:
+        seen_source_lines: list[int] = []
+
+        def fake_labeler(candidates: list[dict[str, Any]], **_: object) -> dict[str, Any]:
+            seen_source_lines.extend(int(item["source_line"]) for item in candidates)
+            findings = []
+            target = next(
+                (
+                    item
+                    for item in candidates
+                    if int(item.get("source_line") or 0) == 12
+                ),
+                None,
+            )
+            if target:
+                findings.append(
+                    {
+                        "finding_kind": "semantic_scope_labels",
+                        "job": "semantic_scope_labeling",
+                        "message_id": target["message_id"],
+                        "turn_id": target["turn_id"],
+                        "scope_labels": ["technical_work"],
+                        "confidence": 0.91,
+                        "summary": "The final source line carries the marker.",
+                        "source_refs": [
+                            {
+                                "message_id": target["message_id"],
+                                "turn_id": target["turn_id"],
+                                "source_line": target["source_line"],
+                                "role": target["role"],
+                                "phase": target.get("phase") or "",
+                            }
+                        ],
+                        "label_evidence": [
+                            {
+                                "label": "technical_work",
+                                "reason": "The source row carries the full-source marker.",
+                                "confidence": 0.91,
+                            }
+                        ],
+                    }
+                )
+            return {
+                "available": True,
+                "findings": findings,
+                "usage": {"total_tokens": len(candidates)},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_full_source_sidecar_fixture(path)
+            with patched_oracle_split(path):
+                payload = standard_public.run_standard_retrieval_qa_benchmark(
+                    dataset="longmemeval-v1-oracle",
+                    corpus_path=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                    source_semantic_sidecar_materializer=(
+                        "public_semantic_labeler_full_source"
+                    ),
+                    source_semantic_sidecar_max_candidates=5,
+                    source_semantic_sidecar_max_provider_calls=10,
+                    source_semantic_sidecar_workers=1,
+                    source_semantic_sidecar_labeler_fn=fake_labeler,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(sorted(set(seen_source_lines)), list(range(1, 13)))
+        materialization = payload["metrics"]["source_semantic_sidecar_materialization"]
+        self.assertEqual(materialization["provider_call_count"], 3)
+        self.assertEqual(materialization["candidate_message_count"], 12)
+        self.assertTrue(materialization["source_text_sent_to_labeler"])
+        self.assertEqual(materialization["semantic_scope_sidecar_count"], 1)
+        self.assertEqual(
+            payload["metrics"]["source_semantic_scope_sidecar_evidence_coverage"],
+            1,
+        )
+
+    def test_full_source_sidecar_does_not_reuse_top_candidate_sidecar(self) -> None:
+        seen_full_source_lines: list[int] = []
+
+        def top_labeler(candidates: list[dict[str, Any]], **_: object) -> dict[str, Any]:
+            target = candidates[0]
+            return {
+                "available": True,
+                "findings": [
+                    {
+                        "finding_kind": "semantic_scope_labels",
+                        "job": "semantic_scope_labeling",
+                        "message_id": target["message_id"],
+                        "turn_id": target["turn_id"],
+                        "scope_labels": ["technical_work"],
+                        "confidence": 0.91,
+                        "summary": "Top-candidate sidecar marker.",
+                        "source_refs": [
+                            {
+                                "message_id": target["message_id"],
+                                "turn_id": target["turn_id"],
+                                "source_line": target["source_line"],
+                                "role": target["role"],
+                                "phase": target.get("phase") or "",
+                            }
+                        ],
+                        "label_evidence": [
+                            {
+                                "label": "technical_work",
+                                "reason": "The top-candidate sidecar marker is source-backed.",
+                                "confidence": 0.91,
+                            }
+                        ],
+                    }
+                ],
+            }
+
+        def full_source_labeler(
+            candidates: list[dict[str, Any]], **_: object
+        ) -> dict[str, Any]:
+            seen_full_source_lines.extend(int(item["source_line"]) for item in candidates)
+            return {
+                "available": True,
+                "findings": [],
+                "usage": {"total_tokens": len(candidates)},
+            }
+
+        def broken_labeler(candidates: list[dict[str, Any]], **_: object) -> dict[str, Any]:
+            raise AssertionError("full-source sidecar manifest should be reused")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_full_source_sidecar_fixture(path)
+            with patched_oracle_split(path):
+                top_payload = standard_public.run_standard_retrieval_qa_benchmark(
+                    dataset="longmemeval-v1-oracle",
+                    corpus_path=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                    source_semantic_sidecar_materializer="public_semantic_labeler",
+                    source_semantic_sidecar_max_candidates=5,
+                    source_semantic_sidecar_max_provider_calls=1,
+                    source_semantic_sidecar_labeler_fn=top_labeler,
+                )
+                full_payload = standard_public.run_standard_retrieval_qa_benchmark(
+                    dataset="longmemeval-v1-oracle",
+                    corpus_path=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                    source_semantic_sidecar_materializer=(
+                        "public_semantic_labeler_full_source"
+                    ),
+                    source_semantic_sidecar_max_candidates=5,
+                    source_semantic_sidecar_max_provider_calls=10,
+                    source_semantic_sidecar_labeler_fn=full_source_labeler,
+                )
+                reused_payload = standard_public.run_standard_retrieval_qa_benchmark(
+                    dataset="longmemeval-v1-oracle",
+                    corpus_path=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                    source_semantic_sidecar_materializer=(
+                        "public_semantic_labeler_full_source"
+                    ),
+                    source_semantic_sidecar_max_candidates=5,
+                    source_semantic_sidecar_max_provider_calls=10,
+                    source_semantic_sidecar_labeler_fn=broken_labeler,
+                )
+
+        self.assertTrue(top_payload["ok"], top_payload)
+        self.assertTrue(full_payload["ok"], full_payload)
+        self.assertTrue(reused_payload["ok"], reused_payload)
+        self.assertEqual(sorted(set(seen_full_source_lines)), list(range(1, 13)))
+        full_materialization = full_payload["metrics"][
+            "source_semantic_sidecar_materialization"
+        ]
+        reused_materialization = reused_payload["metrics"][
+            "source_semantic_sidecar_materialization"
+        ]
+        self.assertEqual(full_materialization["provider_call_count"], 3)
+        self.assertEqual(
+            full_materialization["candidate_coverage_mode_counts"],
+            {"full_source_ordered_chunks": 1},
+        )
+        self.assertEqual(reused_materialization["provider_call_count"], 0)
+        self.assertEqual(
+            reused_materialization["candidate_coverage_mode_counts"],
+            {"reused_existing_sidecar": 1},
+        )
 
     def test_source_semantic_sidecar_labeler_error_does_not_abort_batch(self) -> None:
         def broken_labeler(candidates: list[dict[str, Any]], **_: object) -> dict[str, Any]:
@@ -626,6 +877,39 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn(str(cache_dir), dumped)
         self.assertNotIn("secret fixture answer marker", dumped)
 
+    def test_standard_case_cache_reuses_prefix_when_question_count_grows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_oracle_fixture(path, question_count=2)
+            with patched_oracle_split(path):
+                first = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+                second = benchmark.run_longmemeval_benchmark(
+                    split_name="longmemeval-v1-oracle",
+                    data_file=path,
+                    max_questions=2,
+                    min_questions=2,
+                    top_k=5,
+                    standard_cache_dir=cache_dir,
+                )
+
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        first_cache = first["standard_adapter"]["corpus"]["case_cache"]
+        second_cache = second["standard_adapter"]["corpus"]["case_cache"]
+        self.assertEqual(first_cache["source_index_rebuild_count"], 1)
+        self.assertEqual(second_cache["source_index_hit_count"], 1)
+        self.assertEqual(second_cache["source_index_rebuild_count"], 1)
+        self.assertEqual(second_cache["source_index_hit_rate"], 0.5)
+
     def test_source_semantic_cache_route_keys_are_cache_root_stable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -700,6 +984,12 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
                     line=1,
                     role="user",
                     text="The source row describes a concrete implementation path.",
+                ),
+                standard_public.standard_message_for_sqlite(
+                    source_id="semantic-sidecar-question",
+                    line=2,
+                    role="user",
+                    text="The unrelated row mentions ordinary implementation work.",
                 )
             ]
             manifest = standard_public.source_index_manifest(
@@ -736,15 +1026,16 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
                         "message_id": message_id,
                         "scope_labels": ["technical_work", "preference"],
                         "confidence": 0.82,
+                        "rationale": "This is the zephyr migration corridor to revisit.",
                         "label_evidence": [
                             {
                                 "label": "technical_work",
-                                "reason": "The source row describes implementation work.",
+                                "reason": "The source row describes zephyr migration work.",
                                 "confidence": 0.82,
                             },
                             {
                                 "label": "preference",
-                                "reason": "The source row describes a preferred implementation path.",
+                                "reason": "The source row describes a preferred corridor.",
                                 "confidence": 0.92,
                             }
                         ],
@@ -772,6 +1063,33 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
                 sqlite_path,
                 line_to_session={"1": "session-a"},
             )
+            query = "Which zephyr migration corridor does the user prefer?"
+            case = {
+                "case_id": "semantic-sidecar-fixture",
+                "dataset": "longmemeval-v1-small",
+                "case_type": "fixture",
+                "source_id_sha1": "fixture-source",
+                "question_id_sha1": "fixture-question",
+                "query_sha1": "fixture-query",
+                "query": query,
+                "query_terms": standard_public.split_query_terms([query]),
+                "sqlite_path": sqlite_path,
+                "expected": {
+                    "lines": [1],
+                    "sessions": ["session-a"],
+                    "line_to_session": {"1": "session-a", "2": "session-a"},
+                    "has_line_evidence": True,
+                },
+            }
+            row_result = standard_public.evaluate_standard_retrieval_case(
+                case,
+                top_k=10,
+                candidate_limit=10,
+                context_radius=1,
+                include_private_text=False,
+                line_reranker_mode="source_semantic_cache",
+                source_semantic_cache_store=standard_public.SourceSemanticCacheStore(),
+            )
 
         self.assertNotEqual(key_without_sidecar, key_with_sidecar)
         profile = cache["profiles"][1]
@@ -780,16 +1098,24 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertIn("preference", profile["labels"])
         self.assertIn("technical_work", profile["semantic_scope_labels"])
         self.assertIn("preference", profile["semantic_scope_labels"])
+        self.assertIn("zephyr", profile["semantic_scope_terms"])
+        self.assertIn("migration", profile["semantic_scope_terms"])
+        self.assertIn("corridor", profile["semantic_scope_terms"])
         self.assertIn("technical_work", row["semantic_scope_labels"])
         self.assertIn("preference", row["semantic_scope_labels"])
+        self.assertIn("zephyr", row["trigger_terms"])
         self.assertTrue(cache["manifest"]["semantic_scope_sidecar_loaded"])
         self.assertEqual(cache["manifest"]["semantic_scope_sidecar_row_count"], 1)
         self.assertEqual(cache["manifest"]["semantic_scope_label_row_count"], 1)
         reranked = standard_public.run_source_semantic_cache_line_reranker(
-            "What implementation path does the user prefer to use?",
-            [{"line": 1, "query_channels": ["content"]}],
+            "Which zephyr migration corridor does the user prefer?",
+            [
+                {"line": 2, "query_channels": ["content"], "nearest_hit_rank": 1},
+                {"line": 1, "query_channels": ["content"], "nearest_hit_rank": 2},
+            ],
             source_semantic_cache=cache,
         )
+        self.assertEqual(reranked["ranked_lines"][0], 1)
         self.assertEqual(reranked["usage"]["semantic_scope_profile_count"], 1)
         self.assertEqual(
             reranked["usage"]["semantic_scope_query_label_overlap_count"],
@@ -797,6 +1123,29 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         )
         self.assertGreaterEqual(
             reranked["usage"]["semantic_scope_query_label_overlap_total"],
+            1,
+        )
+        self.assertEqual(
+            reranked["usage"]["semantic_scope_query_term_overlap_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            reranked["usage"]["semantic_scope_query_term_overlap_total"],
+            3,
+        )
+        self.assertEqual(row_result["semantic_only_evidence_full_rank"], 1)
+        self.assertEqual(
+            row_result["source_semantic_scope_gold_candidate_label_count"],
+            1,
+        )
+        self.assertEqual(
+            row_result["source_semantic_scope_gold_candidate_term_count"],
+            1,
+        )
+        self.assertEqual(
+            row_result[
+                "source_semantic_scope_gold_candidate_query_term_overlap_count"
+            ],
             1,
         )
 
@@ -839,6 +1188,92 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         self.assertNotIn(str(path), dumped)
         self.assertNotIn(str(cache_dir), dumped)
         self.assertNotIn("secret fixture answer marker", dumped)
+
+    def test_standard_cache_rebuild_reuses_existing_semantic_sidecar(self) -> None:
+        call_count = 0
+
+        def fake_labeler(candidates: list[dict[str, Any]], **_: object) -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            target = candidates[0]
+            return {
+                "available": True,
+                "findings": [
+                    {
+                        "finding_kind": "semantic_scope_labels",
+                        "job": "semantic_scope_labeling",
+                        "message_id": target["message_id"],
+                        "turn_id": target["turn_id"],
+                        "scope_labels": ["technical_work"],
+                        "confidence": 0.91,
+                        "summary": "The source row is a reusable cache marker.",
+                        "source_refs": [
+                            {
+                                "message_id": target["message_id"],
+                                "turn_id": target["turn_id"],
+                                "source_line": target["source_line"],
+                                "role": target["role"],
+                                "phase": target.get("phase") or "",
+                            }
+                        ],
+                        "label_evidence": [
+                            {
+                                "label": "technical_work",
+                                "reason": "The source row contains a reusable cache marker.",
+                                "confidence": 0.91,
+                            }
+                        ],
+                    }
+                ],
+            }
+
+        def broken_labeler(candidates: list[dict[str, Any]], **_: object) -> dict[str, Any]:
+            raise AssertionError("existing sidecar should be reused")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "longmemeval_oracle.json"
+            cache_dir = root / "standard-cache"
+            write_oracle_fixture(path)
+            with patched_oracle_split(path):
+                first = standard_public.run_standard_retrieval_qa_benchmark(
+                    dataset="longmemeval-v1-oracle",
+                    corpus_path=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                    source_semantic_sidecar_materializer="public_semantic_labeler",
+                    source_semantic_sidecar_max_provider_calls=1,
+                    source_semantic_sidecar_labeler_fn=fake_labeler,
+                )
+                second = standard_public.run_standard_retrieval_qa_benchmark(
+                    dataset="longmemeval-v1-oracle",
+                    corpus_path=path,
+                    max_questions=1,
+                    min_questions=1,
+                    top_k=5,
+                    line_reranker_mode="source_semantic_cache",
+                    line_reranker_workers=1,
+                    standard_cache_dir=cache_dir,
+                    rebuild_standard_cache=True,
+                    source_semantic_sidecar_materializer="public_semantic_labeler",
+                    source_semantic_sidecar_max_provider_calls=1,
+                    source_semantic_sidecar_labeler_fn=broken_labeler,
+                )
+
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        self.assertEqual(call_count, 1)
+        materialization = second["metrics"]["source_semantic_sidecar_materialization"]
+        self.assertEqual(materialization["provider_call_count"], 0)
+        self.assertEqual(
+            materialization["status_counts"],
+            {"reused_existing_sidecar": 1},
+        )
+        self.assertEqual(materialization["semantic_scope_sidecar_count"], 1)
 
     def test_standard_case_cache_manifest_mismatch_rebuilds(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
