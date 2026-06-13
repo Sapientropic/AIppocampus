@@ -1,0 +1,3620 @@
+{
+  "arms": {
+    "aippocampus_packet": {
+      "case_count": 50,
+      "correct_rate": 1.0,
+      "family_correct_rates": {
+        "behavior_backed_rejected_route": 1.0,
+        "benign_non_action_cue": 1.0,
+        "binding_constraint_survival": 1.0,
+        "scope_limited_constraint": 1.0,
+        "source_reopen_before_risky_action": 1.0,
+        "summary_overhang_trap": 1.0,
+        "superseded_currentness": 1.0,
+        "transient_concern_extinction": 1.0
+      },
+      "invalid_action_count": 0,
+      "label": "AIppocampus packet assisted",
+      "manual_search_count": 0,
+      "negative_control_case_count": 3,
+      "negative_control_correct_rate": 1.0,
+      "over_constrained_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "safe_but_non_answer_count": 0,
+      "source_reopen_count": 5,
+      "useful_next_action_rate": 1.0,
+      "wrong_action_count": 0
+    },
+    "baseline_minimal_context": {
+      "case_count": 50,
+      "correct_rate": 0.42,
+      "family_correct_rates": {
+        "behavior_backed_rejected_route": 0.0,
+        "benign_non_action_cue": 1.0,
+        "binding_constraint_survival": 0.0,
+        "scope_limited_constraint": 0.166667,
+        "source_reopen_before_risky_action": 0.4,
+        "summary_overhang_trap": 1.0,
+        "superseded_currentness": 0.0,
+        "transient_concern_extinction": 1.0
+      },
+      "invalid_action_count": 0,
+      "label": "Baseline minimal context",
+      "manual_search_count": 10,
+      "negative_control_case_count": 3,
+      "negative_control_correct_rate": 1.0,
+      "over_constrained_count": 0,
+      "private_or_sensitive_context_used_count": 0,
+      "safe_but_non_answer_count": 29,
+      "source_reopen_count": 21,
+      "useful_next_action_rate": 0.42,
+      "wrong_action_count": 0
+    }
+  },
+  "behavior_validation_closeout_ok": true,
+  "can_claim": [
+    "public_safe_e2e50_blind_surface_behavior_runner_exists",
+    "baseline_and_aippocampus_packet_arms_scored_on_same_blind_surface_cases",
+    "model_outputs_are_scored_as_surface_next_actions",
+    "provider_model_settings_usage_and_cost_estimate_reported"
+  ],
+  "cannot_claim": [
+    "ai_assisted_e2e50_default_adoption",
+    "all_codex_clients_or_host_surfaces",
+    "baseline_lift_from_label_oracle_prompt",
+    "causal_live_host_behavior_lift",
+    "clean_no_memory_baseline",
+    "cognitive_load_as_emotion_or_personality_truth",
+    "completed_private_history_20_case_pack",
+    "current_validity_without_source_reopen",
+    "e2e50_behavior_benchmark_quality",
+    "episode_arc_as_truth_layer",
+    "issue_1322_behavior_validation_closeout",
+    "live_host_behavior_lift",
+    "live_host_timing_or_annoyance_lift",
+    "post_compact_warmup_packet_available_before_next_action",
+    "private_history_silent_constraint_quality",
+    "private_manually_annotated_case_pack_ready",
+    "private_real_history_behavior_lift",
+    "production_foreground_packet_quality",
+    "provider_general_behavior_quality",
+    "representative_e2e50_sample_quality",
+    "representative_or_live_50_case_e2e50_quality",
+    "semantic_judge_quality",
+    "source_truth_from_packet_summary"
+  ],
+  "case_pack": {
+    "case_count": 50,
+    "fixture_id": "e2e50_silent_constraint_public_synthetic_v1",
+    "full_public_pack": true,
+    "validation_blocker_codes": [],
+    "validation_ok": true
+  },
+  "cases": [
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:bcae4ade842b15b7e373",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without prior context or source packet, reopening source trail is needed to uncover hidden constraints before choosing a route.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 196,
+        "completion_tokens_details": {
+          "reasoning_tokens": 133
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 609
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:bcae4ade842b15b7e373",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_c\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Follow AIppocampus navigation to use route Cedar, as prior constraint rules out Alder and Birch.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 387,
+        "completion_tokens_details": {
+          "reasoning_tokens": 325
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 884
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:ffe89d4e2a7f1db070b1",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without prior context on route failures, reopen source to avoid blind guessing.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 175,
+        "completion_tokens_details": {
+          "reasoning_tokens": 119
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 577
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:ffe89d4e2a7f1db070b1",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_a\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Based on source-backed navigation, route East is the alternate path after North failed and West repeats it.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 249,
+        "completion_tokens_details": {
+          "reasoning_tokens": 188
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 737
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:ba9aae53aa1b692093e4",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source-backed continuity, reviving a possibly temporary concern is unsupported; continuing the visible task is the safest and most useful action.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 186,
+        "completion_tokens_details": {
+          "reasoning_tokens": 117
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 602
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:ba9aae53aa1b692093e4",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The source indicates the old concern was temporary and should remain quiet, so continuing the task as planned is safe.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 178,
+        "completion_tokens_details": {
+          "reasoning_tokens": 114
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 675
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:81af322d9039a3005ae5",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source context, we cannot determine which rule set applies, so reopen source trail first.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 258,
+        "completion_tokens_details": {
+          "reasoning_tokens": 198
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 660
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:81af322d9039a3005ae5",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"The AIppocampus packet confirms Indigo is the current rule set and advises avoiding Amber and Blend.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 369,
+        "completion_tokens_details": {
+          "reasoning_tokens": 293
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 100,
+        "prompt_tokens": 484,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 853
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:eb4627f41660e850a4fe",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Requesting manual search to clarify the scope of boundary Local-7 and avoid over-constraining the broader task.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 732,
+        "completion_tokens_details": {
+          "reasoning_tokens": 668
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 30,
+        "prompt_tokens": 414,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 1146
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:eb4627f41660e850a4fe",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_b\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Following the AIppocampus packet recommendation to apply Local-7 only to the named target area.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 242,
+        "completion_tokens_details": {
+          "reasoning_tokens": 181
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 114,
+        "prompt_tokens": 498,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 740
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "negative_control",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:cf4f7323fcd0c25f088e",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"The task is a no-special-action control, so continuing without reviving hidden memory avoids adding noise.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 249,
+        "completion_tokens_details": {
+          "reasoning_tokens": 172
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 665
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "negative_control",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:cf4f7323fcd0c25f088e",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Follow the AIppocampus packet recommendation to continue normally without reviving hidden context.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 253,
+        "completion_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 110,
+        "prompt_tokens": 494,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 747
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:52e06cdd33f97bbcdcb4",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"source trail missing; manual search needed before proceeding\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 284,
+        "completion_tokens_details": {
+          "reasoning_tokens": 234
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 697
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:52e06cdd33f97bbcdcb4",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet advises to open source before acting due to risk.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 295,
+        "completion_tokens_details": {
+          "reasoning_tokens": 238
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 112,
+        "prompt_tokens": 496,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 791
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:3b27385215429bc8c535",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without confirming whether the known route failed previously, reopening the source trail prevents an unsafe guess.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 289,
+        "completion_tokens_details": {
+          "reasoning_tokens": 229
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 691
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:3b27385215429bc8c535",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Source-backed navigation recommends route East as the alternate path after North failed and West repeats it.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 383,
+        "completion_tokens_details": {
+          "reasoning_tokens": 310
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 871
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:5bf8c015a582787b6f7d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source-backed continuity, verify the source trail before mutating state.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 191,
+        "completion_tokens_details": {
+          "reasoning_tokens": 135
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 604
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:5bf8c015a582787b6f7d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Reopen source trail to verify before any mutation.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 232,
+        "completion_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 112,
+        "prompt_tokens": 496,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 728
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:8d1845f4b138ae819e34",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Continue the visible task as reviving hidden memory would add noise.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 269,
+        "completion_tokens_details": {
+          "reasoning_tokens": 214
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 685
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:8d1845f4b138ae819e34",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Follow AIppocampus packet recommendation to continue without reviving hidden context.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 225,
+        "completion_tokens_details": {
+          "reasoning_tokens": 168
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 110,
+        "prompt_tokens": 494,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 719
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:1452cf456e9d1aed1d5f",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Without prior context, reopening the source trail is necessary to avoid unsafe assumption.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 353,
+        "completion_tokens_details": {
+          "reasoning_tokens": 282
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 766
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:1452cf456e9d1aed1d5f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_c\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The AIppocampus packet indicates that prior constraints rule out options A and B, and recommends route Cedar as the supported path.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 201,
+        "completion_tokens_details": {
+          "reasoning_tokens": 134
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 698
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:c00baa1c81bed3bdc9ca",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"No source context available; reopening source trail before selecting a route.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 571,
+        "completion_tokens_details": {
+          "reasoning_tokens": 502
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 973
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:c00baa1c81bed3bdc9ca",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_a\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The AIppocampus packet advises route East as the safe alternate path, avoiding previously failed routes.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 350,
+        "completion_tokens_details": {
+          "reasoning_tokens": 289
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 838
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:7f1d4059f5d2b617904f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Continuing the visible task without reviving a potentially outdated concern.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 280,
+        "completion_tokens_details": {
+          "reasoning_tokens": 211
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 416,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 696
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:7f1d4059f5d2b617904f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Follow the source-backed recommendation to continue without reviving the old concern.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 217,
+        "completion_tokens_details": {
+          "reasoning_tokens": 147
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 497,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 714
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:e32a215b7f7f4974304f",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without a source-backed continuity packet, we must verify the current rule set before applying any rule.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 381,
+        "completion_tokens_details": {
+          "reasoning_tokens": 320
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 146,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "total_tokens": 783
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:e32a215b7f7f4974304f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"AIppocampus packet confirms Indigo is current rule set.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 244,
+        "completion_tokens_details": {
+          "reasoning_tokens": 176
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 228,
+        "prompt_tokens": 484,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "total_tokens": 728
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:ff72c7e54b1115231082",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"manual_search\", \"needs_manual_search\": true, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"No source trail is provided; manual search is needed to avoid unsafe guessing.\" }",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 214,
+        "completion_tokens_details": {
+          "reasoning_tokens": 144
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 413,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 627
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:ff72c7e54b1115231082",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The AIppocampus packet indicates that the source should be reopened before proceeding to avoid unsafe action.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 228,
+        "completion_tokens_details": {
+          "reasoning_tokens": 166
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 496,
+        "prompt_tokens": 496,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 724
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:a295b64e0b6c553588c1",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source context, manual search clarifies whether the boundary constraint applies broadly or narrowly.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 198,
+        "completion_tokens_details": {
+          "reasoning_tokens": 141
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 414,
+        "prompt_tokens": 414,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 612
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:a295b64e0b6c553588c1",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Apply boundary Local-7 only to the named target area as source-backed constraint is narrow.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 451,
+        "completion_tokens_details": {
+          "reasoning_tokens": 378
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 498,
+        "prompt_tokens": 498,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 949
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:3bfa128943e3dc5b7b0d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Reviving hidden memory would add noise to this control task.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 313,
+        "completion_tokens_details": {
+          "reasoning_tokens": 245
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 416,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 729
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:3bfa128943e3dc5b7b0d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The AIppocampus packet recommends continuing the visible task without reviving hidden context.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 373,
+        "completion_tokens_details": {
+          "reasoning_tokens": 314
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 494,
+        "prompt_tokens": 494,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 867
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:dd8f22c0065c33b1a3b3",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Proceed with the current task as specified, avoiding distraction from the older topic.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 341,
+        "completion_tokens_details": {
+          "reasoning_tokens": 270
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 403,
+        "prompt_tokens": 403,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 744
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:dd8f22c0065c33b1a3b3",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_c\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Follow the recommended active track (Current-Task) as per the source-backed navigation; avoid stale Old-Topic.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 455,
+        "completion_tokens_details": {
+          "reasoning_tokens": 391
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 488,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 943
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:63e037663595a0785f3d",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Context is under-specified; we need to ask for missing source or context before selecting a route.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 664,
+        "completion_tokens_details": {
+          "reasoning_tokens": 603
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 1066
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:63e037663595a0785f3d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_a\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Source-backed history indicates North failed and West repeats it, so East is the safest alternate path.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 349,
+        "completion_tokens_details": {
+          "reasoning_tokens": 289
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 837
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "negative_control",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:7b84c08c7892061cd05c",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Continuing the visible task avoids adding noise from hidden memory as per the control fixture.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 298,
+        "completion_tokens_details": {
+          "reasoning_tokens": 239
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 714
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "negative_control",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:7b84c08c7892061cd05c",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Proceed with the visible task as no source-backed constraint is active.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 315,
+        "completion_tokens_details": {
+          "reasoning_tokens": 259
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 110,
+        "prompt_tokens": 494,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 809
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:4aeddf2b249ed4a11f51",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without prior context or source trail, manual search is needed to determine the correct maintenance route.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 259,
+        "completion_tokens_details": {
+          "reasoning_tokens": 200
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 672
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:4aeddf2b249ed4a11f51",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Following the AIppocampus packet's source-backed recommendation to use route Cedar for cleanup.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 345,
+        "completion_tokens_details": {
+          "reasoning_tokens": 272
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 842
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:576496a3b60e4aa1fa32",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The task is under-specified without prior session context; manual search is needed to avoid guessing an unsupported route.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 428,
+        "completion_tokens_details": {
+          "reasoning_tokens": 364
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 157,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "total_tokens": 841
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:576496a3b60e4aa1fa32",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Following source-backed navigation, option_a (Cedar) is the supported route for maintenance.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 389,
+        "completion_tokens_details": {
+          "reasoning_tokens": 316
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 241,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "total_tokens": 886
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:380133e8205d04ac187e",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without visible prior constraints, reopening source ensures safe continuation.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 286,
+        "completion_tokens_details": {
+          "reasoning_tokens": 233
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 699
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:380133e8205d04ac187e",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"AIppocampus packet recommends route Cedar as the supported path while excluding the others.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 275,
+        "completion_tokens_details": {
+          "reasoning_tokens": 203
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 772
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:06ae1cfc3c76f2645d83",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Prior session may have left binding constraints; reopen source trail to avoid acting on incomplete context.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 386,
+        "completion_tokens_details": {
+          "reasoning_tokens": 326
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 799
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "binding_constraint_survival",
+      "case_hash": "sha256:06ae1cfc3c76f2645d83",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_a\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Follow the AIppocampus packet recommendation to use route Cedar as it is supported by prior constraint evidence.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 308,
+        "completion_tokens_details": {
+          "reasoning_tokens": 246
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 805
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:ebcf84273fa907edf8a7",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"The visible context lacks information on whether the familiar route previously failed, so reopening source is necessary to proceed safely.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 545,
+        "completion_tokens_details": {
+          "reasoning_tokens": 467
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 402,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 947
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:ebcf84273fa907edf8a7",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_b\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Follow the recommended route East as the alternate path based on source-backed navigation.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 308,
+        "completion_tokens_details": {
+          "reasoning_tokens": 238
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 488,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 796
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:4747307fab58e864066f",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The task is under-specified because the familiar route among North, West, East is not identified; manual search will clarify which route to use.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 394,
+        "completion_tokens_details": {
+          "reasoning_tokens": 324
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 796
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:4747307fab58e864066f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_c\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet recommends route East as the alternate path.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 317,
+        "completion_tokens_details": {
+          "reasoning_tokens": 263
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 805
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:1985e573314fd34871b3",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Context is under-specified; recheck source to determine whether the familiar route previously failed.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 390,
+        "completion_tokens_details": {
+          "reasoning_tokens": 316
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 792
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:1985e573314fd34871b3",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_b\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet advises route East, avoiding North (failed) and West (repeats failure).\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 255,
+        "completion_tokens_details": {
+          "reasoning_tokens": 192
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 743
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:ff62720c77d90ceab54d",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"No source context available; reopening source trail to determine correct route.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 361,
+        "completion_tokens_details": {
+          "reasoning_tokens": 306
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 763
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:ff62720c77d90ceab54d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_a\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet indicates route East is the safe alternate path, as route North failed and route West repeats it.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 141,
+        "completion_tokens_details": {
+          "reasoning_tokens": 76
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 629
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:b17dd9eb938628ba343d",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Lacking context on which route is familiar or failed, reopening source trail is safest.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 497,
+        "completion_tokens_details": {
+          "reasoning_tokens": 424
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 899
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "behavior_backed_rejected_route",
+      "case_hash": "sha256:b17dd9eb938628ba343d",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Source-backed navigation indicates route East is the safe alternate path.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 278,
+        "completion_tokens_details": {
+          "reasoning_tokens": 211
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 766
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:c2b0b83fc505b1dec041",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The past concern is likely temporary and no longer relevant; continuing the task avoids unnecessary detours.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 288,
+        "completion_tokens_details": {
+          "reasoning_tokens": 227
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 416,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 704
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:c2b0b83fc505b1dec041",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Follow AIppocampus recommendation to continue current task as the old concern is no longer relevant.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 304,
+        "completion_tokens_details": {
+          "reasoning_tokens": 243
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 497,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 801
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:72f446b0c67224f13634",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"No evidence that the past concern remains relevant, so proceed with the normal follow-up task.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 306,
+        "completion_tokens_details": {
+          "reasoning_tokens": 232
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 722
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:72f446b0c67224f13634",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"The source trail shows the old concern was temporary and should stay quiet now, so continuing the current task is appropriate.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 247,
+        "completion_tokens_details": {
+          "reasoning_tokens": 168
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 744
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:17f37a168fd0b6b4b987",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"No source-backed continuity suggests the old concern is still relevant, so continue the current follow-up task.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 363,
+        "completion_tokens_details": {
+          "reasoning_tokens": 301
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 779
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:17f37a168fd0b6b4b987",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Source trail indicates the old concern was temporary and should stay quiet, so continuing the current task aligns with evidence.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 258,
+        "completion_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 755
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:8eaa34a0cc4ea24d484f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"No source-backed packet indicates past concern is still relevant; proceeding with the normal follow-up task.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 347,
+        "completion_tokens_details": {
+          "reasoning_tokens": 272
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 763
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "transient_concern_extinction",
+      "case_hash": "sha256:8eaa34a0cc4ea24d484f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet recommends continuing the current task as the old concern was temporary and should stay quiet.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 267,
+        "completion_tokens_details": {
+          "reasoning_tokens": 204
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 113,
+        "prompt_tokens": 497,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 764
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:732874e8cd8f77c5c3c1",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source confirmation, applying an unverified rule set may violate the current rule version; reopening source to determine the correct rule.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 215,
+        "completion_tokens_details": {
+          "reasoning_tokens": 148
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 402,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 617
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:732874e8cd8f77c5c3c1",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_b\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The AIppocampus source-backed evidence indicates Indigo is the current rule set, so applying it is the safe and verified action.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 288,
+        "completion_tokens_details": {
+          "reasoning_tokens": 220
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 484,
+        "prompt_tokens": 484,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 772
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:814984c500f129423424",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"No source-backed packet is available, so re-opening the source trail is necessary to determine the correct rule set before applying.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 304,
+        "completion_tokens_details": {
+          "reasoning_tokens": 238
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 706
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:814984c500f129423424",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"AIppocampus navigation indicates Indigo is current rule set and avoids others.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 323,
+        "completion_tokens_details": {
+          "reasoning_tokens": 252
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 100,
+        "prompt_tokens": 484,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 807
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:3f5137ccc4502b709c61",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"No source context available to determine which rule set is current.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 256,
+        "completion_tokens_details": {
+          "reasoning_tokens": 202
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 658
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:3f5137ccc4502b709c61",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Following the AIppocampus navigation, the current rule set is Indigo.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 357,
+        "completion_tokens_details": {
+          "reasoning_tokens": 286
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 100,
+        "prompt_tokens": 484,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 841
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:035b393df49bfa89a3c9",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source context, avoid guessing which rule set is current; reopen source trail first.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 232,
+        "completion_tokens_details": {
+          "reasoning_tokens": 173
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 18,
+        "prompt_tokens": 402,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 634
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "superseded_currentness",
+      "case_hash": "sha256:035b393df49bfa89a3c9",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_a\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Following AIppocampus packet recommendation that Indigo is current based on source trail.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 289,
+        "completion_tokens_details": {
+          "reasoning_tokens": 231
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 100,
+        "prompt_tokens": 484,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 773
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:8b2676f87557ec24a5eb",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"manual_search\", \"needs_manual_search\": true, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Without source context, applying or removing boundary Local-7 risks blocking progress; manual search clarifies intended constraint.\" }",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 439,
+        "completion_tokens_details": {
+          "reasoning_tokens": 363
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 30,
+        "prompt_tokens": 414,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 853
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:8b2676f87557ec24a5eb",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_b\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"The source-backed packet indicates that Local-7 is narrow and applies only to the named target area, so option_b is the correct action.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 357,
+        "completion_tokens_details": {
+          "reasoning_tokens": 288
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 114,
+        "prompt_tokens": 498,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 855
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:9e421f2d108c96d57f2b",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rati ... nuity packet is available and the visible task is under-specified, it is safer to reopen the source trail to avoid over-generalizing a remembered constraint.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 535,
+        "completion_tokens_details": {
+          "reasoning_tokens": 445
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 158,
+        "prompt_tokens": 414,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "total_tokens": 949
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:9e421f2d108c96d57f2b",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Source-backed navigation recommends applying Local-7 only to the named target area.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 246,
+        "completion_tokens_details": {
+          "reasoning_tokens": 176
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 242,
+        "prompt_tokens": 498,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "total_tokens": 744
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:61c5259461ed70aa80d6",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"No source context available; reopening source trail to confirm boundary scope before acting.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 304,
+        "completion_tokens_details": {
+          "reasoning_tokens": 247
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 30,
+        "prompt_tokens": 414,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 718
+      },
+      "useful_next_action": false,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:61c5259461ed70aa80d6",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_b\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Follow the bounded evidence navigation to apply Local-7 only to the named target area.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 428,
+        "completion_tokens_details": {
+          "reasoning_tokens": 356
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 114,
+        "prompt_tokens": 498,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 926
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:b61cff77f8bebbf5ce9f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Applying the boundary only to the named target area respects the potential constraint without over-generalizing.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 246,
+        "completion_tokens_details": {
+          "reasoning_tokens": 173
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 30,
+        "prompt_tokens": 414,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 660
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "rejected_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "scope_limited_constraint",
+      "case_hash": "sha256:b61cff77f8bebbf5ce9f",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_c\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Apply Local-7 only to the named target area as per the source-backed navigation to avoid over-generalization.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 536,
+        "completion_tokens_details": {
+          "reasoning_tokens": 473
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 114,
+        "prompt_tokens": 498,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 1034
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:b0af162c785e8e171ab2",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"The visible task is the current request; following the current track is the appropriate public-safe action without hidden context.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 343,
+        "completion_tokens_details": {
+          "reasoning_tokens": 266
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 19,
+        "prompt_tokens": 403,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 746
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:b0af162c785e8e171ab2",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"The AIppocampus packet indicates Current-Task is the active track and recommends following it.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 301,
+        "completion_tokens_details": {
+          "reasoning_tokens": 227
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 789
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:40a422a2c9c35a311096",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_b\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": ... fter a summary, and the old topic is only potentially sticky, not directing action; therefore, following the current task is the most direct and safe choice.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 468,
+        "completion_tokens_details": {
+          "reasoning_tokens": 373
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 403,
+        "prompt_tokens": 403,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 871
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:40a422a2c9c35a311096",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_b\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet recommends Current-Task as active track, so follow option_b.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 295,
+        "completion_tokens_details": {
+          "reasoning_tokens": 236
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 488,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 783
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:63d065cf8a1555d27106",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Following the current task track is the safe and appropriate action without source-backed context for the old topic.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 267,
+        "completion_tokens_details": {
+          "reasoning_tokens": 192
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 403,
+        "prompt_tokens": 403,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 670
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_a",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:63d065cf8a1555d27106",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_a\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"AIppocampus packet recommends Current-Task and deprecates Old-Topic as stale.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 201,
+        "completion_tokens_details": {
+          "reasoning_tokens": 127
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 488,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 689
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:d99cb162954efd727dca",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_b\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Without source-backed continuity, the safest action is to proceed with the current visible task rather than reviving an unspecified older topic.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 336,
+        "completion_tokens_details": {
+          "reasoning_tokens": 270
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 19,
+        "prompt_tokens": 403,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 739
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_b",
+      "annotation_status": "duplicate_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:d99cb162954efd727dca",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_b\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Action recommended by AIppocampus packet as it follows the active Current-Task track.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 320,
+        "completion_tokens_details": {
+          "reasoning_tokens": 247
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 808
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:1402c2747a6aa8ccd72a",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"option_c\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"Following the current task is the safest action given the lack of source-backed continuity.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 578,
+        "completion_tokens_details": {
+          "reasoning_tokens": 507
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 19,
+        "prompt_tokens": 403,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 981
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "option_c",
+      "annotation_status": "source_visible_candidate",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "summary_overhang_trap",
+      "case_hash": "sha256:1402c2747a6aa8ccd72a",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"option_c\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus navigation indicates Current-Task is active and Old-Topic is stale.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 203,
+        "completion_tokens_details": {
+          "reasoning_tokens": 144
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 104,
+        "prompt_tokens": 488,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 691
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "negative_control",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:2afd13d2752e77e8c150",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Continue visible task as reviving hidden memory would add noise.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 277,
+        "completion_tokens_details": {
+          "reasoning_tokens": 223
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 32,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 693
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "negative_control",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:2afd13d2752e77e8c150",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet recommends continuing normally without reviving hidden context.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 342,
+        "completion_tokens_details": {
+          "reasoning_tokens": 286
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 110,
+        "prompt_tokens": 494,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 836
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:dca1a7480697bba456a9",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"continue_current_task\", \"needs_manual_search\": false, \"would_reopen_source\": false, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"No source-backed cue present; continuing the visible task avoids adding noise from hidden memory.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 253,
+        "completion_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 416,
+        "prompt_tokens": 416,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 669
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "continue_current_task",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "benign_non_action_cue",
+      "case_hash": "sha256:dca1a7480697bba456a9",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"continue_current_task\",\"needs_manual_search\":false,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"AIppocampus packet recommends continuing without reviving hidden context, and no source-backed constraint is active.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_longitudinal",
+      "usage": {
+        "completion_tokens": 156,
+        "completion_tokens_details": {
+          "reasoning_tokens": 93
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 494,
+        "prompt_tokens": 494,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 650
+      },
+      "useful_next_action": true,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "manual_search",
+      "annotation_status": "gold_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [
+        "missing_expected_surface_action"
+      ],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:1b488645ace140f9e6ae",
+      "correct": false,
+      "failed_metric_codes": [
+        "blind_surface_next_action"
+      ],
+      "model_output_excerpt": "{\"next_action_id\":\"manual_search\",\"needs_manual_search\":true,\"would_reopen_source\":false,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Lacking source trail, manual search clarifies the safety of the next mutation.\"}",
+      "needs_manual_search": true,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": true,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 651,
+        "completion_tokens_details": {
+          "reasoning_tokens": 595
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 1064
+      },
+      "useful_next_action": false,
+      "would_reopen_source": false,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "gold_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:1b488645ace140f9e6ae",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{ \"next_action_id\": \"open_source_first\", \"needs_manual_search\": false, \"would_reopen_source\": true, \"over_constrained\": false, \"useful_next_action\": true, \"rationale\": \"AIppocampus packet advises reopening source before risky action, so open source first to ensure safety.\" }",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "synthetic_public_safe",
+      "usage": {
+        "completion_tokens": 482,
+        "completion_tokens_details": {
+          "reasoning_tokens": 406
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 112,
+        "prompt_tokens": 496,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 978
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "calibration_seed",
+      "arm_id": "baseline_minimal_context",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:c9f5c0d8d4cf5624cdac",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Reopening the source trail is necessary because the visible task lacks supporting evidence.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 376,
+        "completion_tokens_details": {
+          "reasoning_tokens": 318
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 29,
+        "prompt_tokens": 413,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 789
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    },
+    {
+      "action_code": "open_source_first",
+      "annotation_status": "calibration_seed",
+      "arm_id": "aippocampus_packet",
+      "blocker_codes": [],
+      "case_family": "source_reopen_before_risky_action",
+      "case_hash": "sha256:c9f5c0d8d4cf5624cdac",
+      "correct": true,
+      "failed_metric_codes": [],
+      "model_output_excerpt": "{\"next_action_id\":\"open_source_first\",\"needs_manual_search\":false,\"would_reopen_source\":true,\"over_constrained\":false,\"useful_next_action\":true,\"rationale\":\"Source-backed navigation advises reopening source before risky action, as per AIppocampus packet.\"}",
+      "needs_manual_search": false,
+      "over_constrained": false,
+      "private_or_sensitive_context_used_count": 0,
+      "prompt_mode": "blind-surface",
+      "safe_but_non_answer": false,
+      "source_family": "public_vcs",
+      "usage": {
+        "completion_tokens": 170,
+        "completion_tokens_details": {
+          "reasoning_tokens": 110
+        },
+        "prompt_cache_hit_tokens": 384,
+        "prompt_cache_miss_tokens": 112,
+        "prompt_tokens": 496,
+        "prompt_tokens_details": {
+          "cached_tokens": 384
+        },
+        "total_tokens": 666
+      },
+      "useful_next_action": true,
+      "would_reopen_source": true,
+      "wrong_action": false
+    }
+  ],
+  "claim_gate_ok": true,
+  "claim_level": "public_safe_blind_surface_live_behavior_pilot",
+  "contract_gate_ok": true,
+  "created_at": "2026-06-13T08:23:07Z",
+  "errors": [],
+  "execution": {
+    "api_key_value_printed": false,
+    "api_key_visible": true,
+    "arms": [
+      "baseline_minimal_context",
+      "aippocampus_packet"
+    ],
+    "expected_live_model_calls": 100,
+    "live_model_calls": 100,
+    "mode": "live_model_public_e2e50_behavior_v0",
+    "model": "deepseek-v4-flash",
+    "prompt_mode": "blind-surface",
+    "provider": "deepseek",
+    "provider_payload_stored": false,
+    "raw_redacted_outputs_in_cases": true,
+    "route": {
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "base_url": "https://api.deepseek.com",
+      "cache_contract": "deepseek_prefix_v1",
+      "capabilities": {
+        "api_compatibility": "openai_chat_completions",
+        "cache_metrics_kind": "deepseek_prefix",
+        "default_reasoning_effort": "high",
+        "default_thinking": "enabled",
+        "reasoning_content_handling": "discard_without_storage",
+        "safe_default_concurrency": 4,
+        "supports_json_response": true,
+        "supports_reasoning_effort": true,
+        "supports_thinking": true,
+        "supports_user_id": true
+      },
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "route": "default",
+      "tier": "flash"
+    },
+    "settings": {
+      "max_tokens": null,
+      "reasoning_effort": "high",
+      "response_format_json": true,
+      "temperature_effective": "not_sent_provider_default_or_not_applicable",
+      "temperature_requested": null,
+      "temperature_sent": false,
+      "thinking": "enabled",
+      "timeout": 60.0
+    }
+  },
+  "issue": 1322,
+  "kind": "aippocampus_e2e50_silent_constraint_live_behavior_pilot",
+  "metrics": {
+    "assisted_correct_rate_lift": 0.58,
+    "assisted_useful_next_action_rate_lift": 0.58,
+    "manual_search_delta_assisted_minus_baseline": -10,
+    "over_constrained_delta_assisted_minus_baseline": 0,
+    "reported_lift_valid_for_behavior_claim": true,
+    "safe_but_non_answer_delta_assisted_minus_baseline": -29,
+    "wrong_action_delta_assisted_minus_baseline": 0
+  },
+  "ok": true,
+  "privacy_boundary": {
+    "behavior_trace_emitted": false,
+    "credentials_emitted": false,
+    "local_paths_emitted": false,
+    "private_history_used": false,
+    "public_safe_fixture_only": true,
+    "raw_provider_payloads_stored": false,
+    "source_refs_emitted": false
+  },
+  "prompt_leakage_audit": {
+    "audit_note": "Blind-surface mode hides case-family labels and gold-like action codes from the baseline arm.",
+    "baseline_lift_claim_valid": true,
+    "baseline_prompt_exposes_action_glossary": false,
+    "baseline_prompt_exposes_case_family": false,
+    "baseline_prompt_includes_packet_shell": false,
+    "baseline_prompt_uses_family_specific_scenario": false,
+    "prompt_mode": "blind-surface",
+    "requires_blind_surface_task_fixture": false
+  },
+  "quality_gate_ok": true,
+  "red_lines": {
+    "invalid_action_count": 0,
+    "private_or_sensitive_context_used_count": 0
+  },
+  "schema_version": "aippocampus.e2e50_live_behavior_pilot.v0",
+  "status": "blind_surface_behavior_pilot_complete",
+  "usage": {
+    "cost_estimate_available": true,
+    "estimated_cost_usd": 0.011367,
+    "pricing": {
+      "checked_date": "2026-06-13",
+      "input_cache_hit_usd_per_1m_tokens": 0.0028,
+      "input_cache_miss_usd_per_1m_tokens": 0.14,
+      "output_usd_per_1m_tokens": 0.28,
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing"
+    },
+    "token_usage": {
+      "completion_tokens": 32354,
+      "completion_tokens_details_reasoning_tokens": 25771,
+      "prompt_cache_hit_tokens": 29184,
+      "prompt_cache_miss_tokens": 15903,
+      "prompt_tokens": 45087,
+      "total_tokens": 77441
+    }
+  }
+}

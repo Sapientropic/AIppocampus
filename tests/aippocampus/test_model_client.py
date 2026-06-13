@@ -179,7 +179,7 @@ class ModelClientTests(unittest.TestCase):
 
         self.assertEqual(captured["body"]["user_id"], "aip-warm-abc_123")
 
-    def test_chat_json_can_disable_model_thinking(self) -> None:
+    def test_chat_json_can_disable_model_thinking_without_forcing_temperature(self) -> None:
         captured: dict[str, object] = {}
 
         class FakeResponse:
@@ -210,7 +210,41 @@ class ModelClientTests(unittest.TestCase):
             )
 
         self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
-        self.assertIn("temperature", captured["body"])
+        self.assertNotIn("temperature", captured["body"])
+
+    def test_chat_json_sends_explicit_temperature_when_sampling_is_supported(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
+
+        def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
+            del timeout
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
+                    thinking="disabled",
+                    temperature=0.2,
+                ),
+            )
+
+        self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
+        self.assertEqual(captured["body"]["temperature"], 0.2)
 
     def test_chat_json_omits_temperature_for_enabled_thinking(self) -> None:
         captured: dict[str, object] = {}

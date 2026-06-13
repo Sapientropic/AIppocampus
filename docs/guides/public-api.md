@@ -213,8 +213,9 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus hooks lifecycle status|install|uninstall`
 - `aippocampus plugin install --codex --verify` as the local Codex plugin
   happy path over package build, AIppocampus-owned local marketplace refresh,
-  Codex plugin manager install/reinstall, MCP host reload, and `sync_status`
-  probe; `aippocampus plugin uninstall --codex` as the paired rollback.
+  current Codex marketplace add/upgrade, versioned installed-cache refresh, MCP
+  host reload, and `sync_status` probe; `aippocampus plugin uninstall --codex`
+  as the paired rollback.
 - `aippocampus episode-arcs --json`
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
@@ -517,8 +518,8 @@ package; it refreshes marketplace/cache layers only when
 `--plugin-marketplace-dir` or `--plugin-installed-dir` is supplied. Even then,
 host reload or reinstall evidence is still separate from package freshness.
 `aippocampus plugin install --codex --verify` is the higher-level local install
-path that may perform the Codex plugin-manager calls and host probe directly;
-it does not enable Codex hooks or configure external-model keys.
+path that may perform the Codex local marketplace/cache refresh and host probe
+directly; it does not enable Codex hooks or configure external-model keys.
 
 `recall_context` and `recall_deepen` are the progressive recall navigation
 tools. `recall_context` accepts a fuzzy intent or query and returns small route

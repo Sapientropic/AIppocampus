@@ -88,6 +88,25 @@ from looking like a control tower.
   - Exploratory public-safe proxy for bounded resonance posture prompts.
   - Treat this as a harness/report slice only; it is not runtime avatar
     adoption evidence.
+- [Avatar Bounded Resonance Live-Model Pilot, 2026-06-13](avatar-bounded-resonance-live-model-2026-06-13.md)
+  - Public-safe 60-call DeepSeek live-model run over the same bounded-resonance
+    fixture and A-E arms.
+  - Treat this as mixed/negative pilot evidence: red lines stayed clear, but
+    bounded resonance did not beat the neutral or alias-only arms on the
+    scripted scoring rubric.
+- [E2E50 Live-Model Label-Oracle Diagnostic, 2026-06-13](e2e50-live-behavior-pilot-2026-06-13.md)
+  - Public-safe 100-call DeepSeek run over the 50-case E2E50 behavior pack,
+    comparing a labeled baseline prompt with an AIppocampus packet arm.
+  - Treat this as a flawed setup / runner-wiring diagnostic only: the baseline
+    exposed case-family labels, family-specific scenario text, the action-code
+    glossary, and a packet shell, so it is not valid behavior-lift evidence.
+- [E2E50 Blind-Surface Live Behavior, 2026-06-13](e2e50-blind-surface-live-behavior-2026-06-13.md)
+  - Corrected public-safe 100-call DeepSeek run where the baseline no longer
+    sees case-family labels, expected codes, source hashes, action-code glossary,
+    or an empty packet shell.
+  - Treat this as the #1322 small public live-behavior slice: packet arm `1.00`
+    correct/useful next-action vs baseline `0.42`, with zero wrong actions,
+    invalid outputs, over-constraint, or private-context red lines.
 
 ## Evidence Levels
 

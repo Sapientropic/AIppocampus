@@ -28,6 +28,9 @@ DEFAULT_VAULT = Path(
 DEFAULT_STYLE_SOURCE = optional_env_path("AIPPOCAMPUS_STYLE_SOURCE", "CODEX_MEMORY_STYLE_SOURCE")
 DEFAULT_SCRIPT_SOURCE = optional_env_path("AIPPOCAMPUS_SCRIPT_SOURCE", "CODEX_MEMORY_SCRIPT_SOURCE")
 DEFAULT_SITE_MARK = optional_env_path("AIPPOCAMPUS_SITE_MARK", "CODEX_MEMORY_SITE_MARK")
+DEFAULT_SITE_MARK_SOURCE = (
+    SCRIPT_DIR / "aippocampus_runtime" / "vault" / "dashboard_assets" / "aippocampus-site-mark.png"
+)
 DEFAULT_SITE_TITLE = env_value("AIPPOCAMPUS_SITE_TITLE", "CODEX_MEMORY_SITE_TITLE") or "AIppocampus"
 DEFAULT_D3_SOURCE = SCRIPT_DIR.parent / "assets" / "d3-7.9.0.min.js"
 DEFAULT_PIXI_SOURCE = SCRIPT_DIR.parent / "assets" / "pixi-7.2.4.min.js"
@@ -135,8 +138,14 @@ def copy_dashboard_assets(vault: Path) -> dict[str, str]:
         target = assets_dir / "pixi-7.2.4.min.js"
         shutil.copy2(DEFAULT_PIXI_SOURCE, target)
         copied["pixi_js"] = "assets/pixi-7.2.4.min.js"
-    if DEFAULT_SITE_MARK and DEFAULT_SITE_MARK.exists():
-        target = assets_dir / "site-mark.svg"
-        shutil.copy2(DEFAULT_SITE_MARK, target)
-        copied["site_mark"] = "assets/site-mark.svg"
+    site_mark_source = (
+        DEFAULT_SITE_MARK
+        if DEFAULT_SITE_MARK and DEFAULT_SITE_MARK.exists()
+        else DEFAULT_SITE_MARK_SOURCE
+    )
+    if site_mark_source.exists():
+        suffix = site_mark_source.suffix.lower() or ".png"
+        target = assets_dir / f"site-mark{suffix}"
+        shutil.copy2(site_mark_source, target)
+        copied["site_mark"] = f"assets/{target.name}"
     return copied

@@ -216,12 +216,18 @@ aippocampus plugin install --codex --verify
 
 This builds the repo-local plugin package, refreshes the AIppocampus-owned
 local marketplace at `$CODEX_HOME/aippocampus-marketplace`, registers that
-marketplace with Codex, installs or reinstalls
-`aippocampus@aippocampus-local` when the installed copy is stale, asks the
-Codex app-server to reload MCP servers, and calls `sync_status` through the
-host. A successful verify reports `agent_callable_status:
+marketplace with Codex, refreshes the current Desktop versioned installed cache
+at `$CODEX_HOME/plugins/cache/aippocampus-local/aippocampus/<version>`, asks
+Codex to upgrade the local marketplace, asks the Codex app-server to reload MCP
+servers, and calls `sync_status` through the host. A successful verify reports
+`agent_callable_status:
 host_live_probe_ok`. This command does not enable hooks, copy private memory
 data, or configure LLM keys.
+
+`aippocampus-local` is the stable local marketplace selector used by Codex
+plugin IDs; the user-facing plugin name remains `AIppocampus`. If a host UI
+shows the selector, read `local` as a source/install boundary, not as a product
+rename.
 
 Rollback is one command too:
 
@@ -230,6 +236,7 @@ aippocampus plugin uninstall --codex
 ```
 
 Rollback removes the installed Codex plugin, unregisters the local marketplace,
+deletes the AIppocampus versioned installed cache under Codex's plugin cache,
 and deletes only the AIppocampus-owned marketplace directory.
 
 Apply local package/effect surfaces explicitly:

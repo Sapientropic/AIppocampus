@@ -50,6 +50,7 @@ class PluginDistributionTests(unittest.TestCase):
         for key in ("composerIcon", "logo"):
             asset = interface[key]
             self.assertTrue(asset.startswith("./assets/"))
+            self.assertTrue(asset.endswith(".png"))
             self.assertTrue((PLUGIN_ROOT / asset.removeprefix("./")).exists())
 
         server = mcp_config["mcpServers"]["aippocampus"]
