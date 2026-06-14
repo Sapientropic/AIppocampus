@@ -718,8 +718,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             packet["reopen_plan"]["arguments"],
             {"thread_key": "session:projection"},
         )
-        self.assertIn("Source-required recall route", context)
-        self.assertIn("reopen_registry_thread_source_index", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertNotIn("Source-required recall route", context)
+        self.assertNotIn("reopen_registry_thread_source_index", context)
         self.assertNotIn("keep the consent gate beside mutation flow", context)
 
     def test_route_delivery_diagnostic_distinguishes_semantic_public_labels(self) -> None:

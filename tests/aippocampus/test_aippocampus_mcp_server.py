@@ -390,6 +390,70 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["source_refs"][0]["message_id"], "msg_user")
         self.assertEqual(payload["source_reopen_path"]["arguments"]["message_id"], "msg_user")
 
+    def test_recall_deepen_accepts_route_object_from_recall_context(self) -> None:
+        context_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3041,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                },
+            }
+        )
+        route = self.tool_payload(context_response)["routes"][0]
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3042,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": route, "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertFalse(response["result"].get("isError", False), payload)
+        self.assertEqual(payload["source_refs"][0]["message_id"], "msg_final")
+        self.assertEqual(payload["source_reopen_path"]["arguments"]["turn_id"], "turn_1")
+
+    def test_recall_deepen_accepts_source_reopen_arguments_from_recall_context(self) -> None:
+        context_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3043,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                },
+            }
+        )
+        reopen_args = self.tool_payload(context_response)["routes"][0]["source_reopen_path"][
+            "arguments"
+        ]
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3044,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": reopen_args, "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertFalse(response["result"].get("isError", False), payload)
+        self.assertEqual(payload["source_refs"][0]["message_id"], "msg_final")
+        self.assertEqual(payload["source_reopen_path"]["tool"], "get_turn_context")
+
     def test_recall_deepen_reports_malformed_handle_as_tool_error(self) -> None:
         response = mcp.handle_request(
             {
@@ -703,6 +767,24 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         self.assertEqual(payload["status"], "clean_source_final_answer")
         self.assertEqual(payload["message"]["message_id"], "msg_final")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertIn("agent_next_action", payload)
+        self.assertNotIn("text", payload["message"])
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 441,
+                "method": "tools/call",
+                "params": {
+                    "name": "latest_reply",
+                    "arguments": {"cwd": str(self.cwd), "detail": "full"},
+                },
+            }
+        )
+        full_payload = self.tool_payload(full_response)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertIn("text", full_payload["message"])
 
     def test_sync_status_reads_local_sync_bundle_when_path_is_supplied(self) -> None:
         registry_dir = self.cwd / "registry"
@@ -794,9 +876,13 @@ class AippocampusMcpServerTests(unittest.TestCase):
                     "threads": [
                         {
                             "thread_key": "session:test",
+                            "title": "Local registry thread",
                             "paths": {
                                 "workspace": str(self.cwd),
                                 "rollout": str(self.cwd / "rollout.jsonl"),
+                            },
+                            "debug": {
+                                "command": f"python {self.cwd / 'tools' / 'audit.py'} --cwd {self.cwd}",
                             },
                         }
                     ]
@@ -822,10 +908,31 @@ class AippocampusMcpServerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertEqual(payload["registry"], mcp.LOCAL_PATH_REDACTION)
+        self.assertEqual(payload["detail"], "compact")
+        self.assertIn("agent_next_action", payload)
+        self.assertNotIn("debug", encoded)
+        self.assertNotIn("paths", payload["threads"][0])
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 681,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_threads",
+                    "arguments": {"registry_dir": str(registry_dir), "detail": "full"},
+                },
+            }
+        )
+        full_payload = self.tool_payload(full_response)
+        full_encoded = json.dumps(full_payload, ensure_ascii=False)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertNotIn(str(self.cwd), full_encoded)
         self.assertEqual(
-            payload["threads"][0]["paths"]["workspace"],
+            full_payload["threads"][0]["paths"]["workspace"],
             mcp.LOCAL_PATH_REDACTION,
         )
+        self.assertIn(mcp.LOCAL_PATH_REDACTION, full_payload["threads"][0]["debug"]["command"])
 
     def test_unknown_tool_is_tool_error_not_protocol_crash(self) -> None:
         response = mcp.handle_request(
@@ -964,6 +1071,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "ok": False,
                 "cwd": str(cwd),
                 "recommended_actions": [],
+                "debug": {
+                    "command": f"python {self.cwd / 'tools' / 'health.py'} --cwd {self.cwd}",
+                },
             }
 
         with mock.patch.object(
@@ -1030,6 +1140,42 @@ class AippocampusMcpServerTests(unittest.TestCase):
             [core.workspace_identity_key(item) for item in seen_cwd],
             [core.workspace_identity_key(self.cwd)],
         )
+
+    def test_memory_health_default_is_compact_agent_budgeted_and_redacted(self) -> None:
+        def fake_health_report(cwd: str | Path) -> dict:
+            return {
+                "ok": False,
+                "cwd": str(cwd),
+                "recommended_actions": ["run clean source", "repair registry"],
+                "checks": [{"name": f"large-{index}", "path": str(self.cwd / f"{index}.jsonl")} for index in range(12)],
+                "debug": {
+                    "command": f"python {self.cwd / 'tools' / 'health.py'} --cwd {self.cwd}",
+                },
+            }
+
+        with mock.patch.object(
+            mcp.aippocampus_health, "health_report", side_effect=fake_health_report
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 581,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd)},
+                    },
+                }
+            )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["ok"], False)
+        self.assertIn("agent_next_action", payload)
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("debug", encoded)
+        self.assertNotIn("checks", payload)
 
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:
         requests = [

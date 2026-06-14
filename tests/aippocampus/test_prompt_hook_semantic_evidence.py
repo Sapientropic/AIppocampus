@@ -55,6 +55,15 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
         self.assertEqual(result["semantic_gate"]["budget"]["requested_timeout"], 3)
         self.assertEqual(result["semantic_gate"]["budget"]["effective_timeout"], seen["timeout"])
         self.assertTrue(result["semantic_gate"]["budget"]["budget_clipped"])
+        self.assertEqual(
+            result["semantic_gate"]["budget"]["agent_next_action"],
+            "increase_max_elapsed_ms_or_use_background_recall",
+        )
+        public = hook.public_hook_debug_payload(result)
+        self.assertEqual(
+            public["semantic_gate"]["budget"]["agent_next_action"],
+            "increase_max_elapsed_ms_or_use_background_recall",
+        )
         self.assertEqual(result["semantic_gate"]["model_route"]["provider"], "test-provider")
         self.assertEqual(result["semantic_gate"]["cache_diagnostics"]["lookup"], "disabled")
 
@@ -316,7 +325,7 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
         self.assertEqual(result["decision"], "scent")
         self.assertFalse(result["evidence"])
 
-    def test_semantic_context_can_upgrade_fuzzy_status_to_evidence_when_risk_is_low(self) -> None:
+    def test_semantic_context_keeps_fuzzy_status_as_route_without_source_intent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:
             return {
                 "available": True,
@@ -340,9 +349,10 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
             search_budget=1,
         )
 
-        self.assertEqual(result["decision"], "evidence")
-        self.assertTrue(result["evidence"])
-        self.assertIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+        self.assertTrue(result["semantic_source_reopen_route"])
+        self.assertNotIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
 
     def test_negative_evidence_intent_keeps_semantic_evidence_as_scent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:
@@ -482,7 +492,7 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
         self.assertFalse(result["evidence"])
         self.assertIn("evidence withheld", " ".join(result["reasons"]))
 
-    def test_semantic_evidence_bridge_survives_semantic_budget_spend(self) -> None:
+    def test_semantic_budget_spend_still_requires_source_intent_for_evidence(self) -> None:
         def slow_semantic_gate(prompt: str, **kwargs) -> dict:
             time.sleep(1.05)
             return {
@@ -509,10 +519,82 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
             search_budget=1,
         )
 
-        self.assertEqual(result["decision"], "evidence")
-        self.assertTrue(result["evidence"])
-        self.assertIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
-        self.assertIn("semantic budget spend", " ".join(result["reasons"]))
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+        self.assertTrue(result["semantic_source_reopen_route"])
+        self.assertNotIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
+
+    def test_multilingual_semantic_alias_without_route_agreement_stays_scent(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:openclaw-negative",
+            [
+                {
+                    "source_line": 77,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "OpenClaw OAuth token refresh failed before the agent reply; "
+                        "this is unrelated to the small hippocampus smoke test."
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:openclaw-negative",
+            title="OpenClaw OAuth agent failure",
+            keywords=["OpenClaw", "OAuth", "agent failed", "small hippocampus test"],
+            summary="Unrelated OpenClaw OAuth debugging material.",
+            messages_path=messages,
+            project_label="OpenClaw",
+        )
+        registry_payload = json.loads(registry_path.read_text(encoding="utf-8"))
+        registry_payload["threads"][0]["paths"]["workspace"] = str(self.old)
+        registry_payload["threads"].append(
+            {
+                "thread_key": "session:aippocampus-current",
+                "title": "AIppocampus current workspace",
+                "project_label": "AIppocampus",
+                "workspace_name": "AIppocampus",
+                "keywords": ["AIppocampus", "foreground recall"],
+                "summary": "Current project marker without the OpenClaw alias.",
+                "paths": {"workspace": str(self.workspace)},
+            }
+        )
+        registry_path.write_text(
+            json.dumps(registry_payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.96,
+                "intent": "recall",
+                "query_aliases": ["small hippocampus test", "agent failed before reply"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["Arabic cue broadly paraphrased into unrelated debug aliases"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "هل تتذكر اختبار الحُصين الصغير الذي فشل أولاً؟",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=2,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+        self.assertFalse(result["semantic_source_reopen_route"])
+        self.assertEqual(
+            result["semantic_bridge_diagnostic"],
+            "semantic_evidence_without_source_bridge",
+        )
 
     def test_semantic_evidence_without_source_bridge_gets_diagnostic(self) -> None:
         registry_path = self.root / "semantic-bridge-miss-registry" / "threads.json"
@@ -555,10 +637,11 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
         payload = hook.hook_stdout_payload(result)
         self.assertIsNotNone(payload)
         context = payload["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("Semantic recall route", context)
-        self.assertIn("missing clean-source topic", context)
-        self.assertIn("direction_only", context)
-        self.assertIn("reopen clean source", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
+        self.assertNotIn("Semantic recall route", context)
+        self.assertNotIn("direction_only", context)
 
     def test_vague_cross_project_semantic_evidence_stays_scent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:
@@ -719,4 +802,3 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
 
         self.assertEqual(result["decision"], "evidence")
         self.assertTrue(result["evidence"])
-

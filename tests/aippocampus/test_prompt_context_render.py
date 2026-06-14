@@ -45,8 +45,11 @@ class PromptContextRenderTests(unittest.TestCase):
             affordance["privacy_boundary"],
             "no raw source, no local paths, no source refs in hook",
         )
-        self.assertIn("suggested_agent_action=agent_aippo", context)
-        self.assertIn("not_enough_for_claim=true", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
+        self.assertNotIn("suggested_agent_action=agent_aippo", context)
+        self.assertNotIn("not_enough_for_claim=true", context)
         self.assertNotIn("source_refs", context)
         self.assertNotIn("C:\\", context)
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", context)
@@ -75,7 +78,10 @@ class PromptContextRenderTests(unittest.TestCase):
         self.assertEqual(affordance["suggested_query_seed"], "source-required route")
         self.assertIn("source_required", affordance["lead_kinds"])
         self.assertIn("source_required_route_available", affordance["reason_codes"])
-        self.assertIn("suggested_agent_action=agent_deepen", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertNotIn("suggested_agent_action=agent_deepen", context)
+        self.assertNotIn("source_required_route_available", context)
 
     def test_current_code_question_affordance_reads_repo_first_without_context(self) -> None:
         result = {

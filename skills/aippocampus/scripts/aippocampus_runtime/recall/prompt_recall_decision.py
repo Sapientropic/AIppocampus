@@ -20,8 +20,6 @@ from aippocampus_runtime.recall.prompt_cues import (
     current_checkout_live_fact_intent,
     natural_evidence_intent,
     negative_evidence_intent,
-    semantic_gate_can_request_evidence,
-    semantic_gate_can_request_source_reopen,
     semantic_gate_can_warm_cue_cache,
     source_evidence_intent,
 )
@@ -67,12 +65,12 @@ from aippocampus_runtime.recall.prompt_recall_projection import (
 from aippocampus_runtime.recall.prompt_recall_projection import (
     route_delivery_diagnostic as resolve_route_delivery_diagnostic,
 )
-from aippocampus_runtime.recall.prompt_recall_projection import (
-    semantic_bridge_diagnostic as resolve_semantic_bridge_diagnostic,
-)
 from aippocampus_runtime.recall.prompt_recall_route_context import (
     candidate_memory_context,
     prepare_route_context,
+)
+from aippocampus_runtime.recall.prompt_recall_semantic_routes import (
+    resolve_semantic_route_state,
 )
 from aippocampus_runtime.recall.prompt_route_blocks import memory_route_block_intent
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
@@ -483,25 +481,6 @@ def _record_semantic_cue_hits(
         }
 
 
-def _semantic_source_reopen_route_ready(
-    prompt: str,
-    decision: str,
-    candidates: list[dict[str, Any]],
-    evidence: list[dict[str, Any]],
-    suppressed: bool,
-    ambiguous_evidence_request: bool,
-    semantic_result: dict[str, Any] | None,
-) -> bool:
-    return bool(
-        decision == "scent"
-        and candidates
-        and not evidence
-        and not suppressed
-        and not ambiguous_evidence_request
-        and semantic_gate_can_request_source_reopen(prompt, semantic_result)
-    )
-
-
 def _prompt_result(
     *,
     decision: str,
@@ -755,18 +734,15 @@ def assess_prompt(
         association_matches=association_matches, start=start, max_elapsed_ms=max_elapsed_ms,
         reasons=reasons,
     )
-    if decision == "skip" and not suppressed and semantic_gate_can_request_evidence(prompt, semantic_result):
-        # Semantic evidence without local source stays a route hint, not evidence.
-        decision = "scent"
-
-    semantic_source_reopen_route = _semantic_source_reopen_route_ready(
-        prompt, decision, candidates, evidence, suppressed, ambiguous_evidence_request, semantic_result
-    )
-    semantic_bridge_diagnostic = resolve_semantic_bridge_diagnostic(
+    decision, semantic_source_reopen_route, semantic_bridge_diagnostic = resolve_semantic_route_state(
         prompt=prompt,
-        semantic_result=semantic_result,
+        decision=decision,
+        candidates=candidates,
         evidence=evidence,
-        source_reopen_route_ready=semantic_source_reopen_route,
+        suppressed=suppressed,
+        ambiguous_evidence_request=ambiguous_evidence_request,
+        semantic_result=semantic_result,
+        current_project_label=context.project_label,
         reasons=reasons,
     )
     semantic_cue_cache = _record_semantic_cue_hits(

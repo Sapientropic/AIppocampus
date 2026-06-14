@@ -12,6 +12,13 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.mcp.public_projection import (
+    compact_health_payload,
+    compact_message,
+    compact_thread,
+    detail_arg,
+    public_payload,
+)
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
     navigation_error_payload,
@@ -20,7 +27,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.ops import telepathy_handoff_store
-from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
+from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
@@ -109,12 +116,6 @@ def text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
         ],
         "isError": is_error,
     }
-
-
-def public_payload(arguments: dict[str, Any], payload: Any) -> Any:
-    if arguments.get("include_private_paths"):
-        return payload
-    return redact_private_paths(payload)
 
 
 def tool_error(
@@ -268,6 +269,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
 def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
     cwd = cwd_arg(arguments)
     source_dir = clean_source_dir_for(arguments)
+    detail = detail_arg(arguments)
     messages = iter_clean_messages(source_dir / "messages.jsonl")
     final_messages = [
         item
@@ -276,19 +278,29 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
         and (item.get("is_final") or item.get("phase") == "final_answer")
     ]
     if final_messages and not arguments.get("rollout"):
+        message = final_messages[-1] if detail == "full" else compact_message(final_messages[-1])
         return text_result(
             public_payload(
                 arguments,
                 {
                     "status": "clean_source_final_answer",
+                    "detail": detail,
                     "source": str(source_dir / "messages.jsonl"),
-                    "message": final_messages[-1],
+                    "message": message,
                     "message_count": len(messages),
+                    "agent_next_action": (
+                        "Use this compact final-answer preview for orientation; "
+                        "call get_turn_context or recall_deepen before quoting exact wording."
+                    ),
                 },
             )
         )
     rollout = Path(str(arguments["rollout"])) if arguments.get("rollout") else core.locate_rollout(cwd)
-    return text_result(public_payload(arguments, latest_reply_module.latest_reply(rollout)))
+    payload = latest_reply_module.latest_reply(rollout)
+    if isinstance(payload, dict):
+        payload = dict(payload)
+        payload.setdefault("detail", detail)
+    return text_result(public_payload(arguments, payload))
 
 
 def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -377,28 +389,38 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
         Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
     )
     json_path, _ = registry.registry_paths(registry_dir)
+    detail = detail_arg(arguments)
     if not json_path.exists():
         return text_result(
             {
                 "status": "registry_missing",
+                "detail": detail,
                 "registry": str(json_path)
                 if arguments.get("include_private_paths")
                 else LOCAL_PATH_REDACTION,
                 "threads": [],
                 "count": 0,
+                "agent_next_action": "Register or sync a thread before listing memory routes.",
             }
         )
     payload = registry.load_registry(json_path)
-    limit = int(arguments.get("max") or len(payload.get("threads") or []) or 0)
-    threads = list(payload.get("threads") or [])[:limit]
+    default_limit = 5 if detail == "compact" else len(payload.get("threads") or []) or 0
+    limit = int_range(arguments.get("max"), default=default_limit, minimum=1, maximum=100)
+    raw_threads = list(payload.get("threads") or [])[:limit]
+    threads = [compact_thread(item) for item in raw_threads] if detail == "compact" else raw_threads
     return text_result(
         public_payload(
             arguments,
             {
                 "status": "ok",
+                "detail": detail,
                 "registry": str(json_path),
                 "threads": threads,
                 "count": len(threads),
+                "total_count": len(payload.get("threads") or []),
+                "agent_next_action": (
+                    "Use recall_context for task-specific routes; request detail=full only for diagnostics."
+                ),
             },
         )
     )
@@ -496,6 +518,10 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         return tool_error("health_check_failed", str(exc), arguments=arguments)
 
+    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload = compact_health_payload(payload)
+    elif isinstance(payload, dict):
+        payload = {"detail": "full", **payload}
     return text_result(public_payload(arguments, payload))
 
 

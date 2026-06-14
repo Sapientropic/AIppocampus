@@ -95,6 +95,7 @@ TOOLS: list[dict[str, Any]] = [
         {
             "cwd": {"type": "string"},
             "rollout": {"type": "string"},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
     ),
@@ -116,6 +117,7 @@ TOOLS: list[dict[str, Any]] = [
         {
             "registry_dir": {"type": "string"},
             "max": {"type": "integer", "minimum": 1, "maximum": 100},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
     ),
@@ -145,7 +147,11 @@ TOOLS: list[dict[str, Any]] = [
     tool_schema(
         "memory_health",
         "Run the local AIppocampus health check for a workspace.",
-        {"cwd": {"type": "string"}, "include_private_paths": {"type": "boolean"}},
+        {
+            "cwd": {"type": "string"},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
+            "include_private_paths": {"type": "boolean"},
+        },
     ),
     tool_schema(
         "list_telepathy_handoffs",
