@@ -219,23 +219,30 @@ def _comment_bodies(value: Any) -> list[str]:
     return bodies
 
 
+def _coerce_int(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _closed_pr_numbers(value: Any) -> list[int]:
     numbers: list[int] = []
     for item in _node_list(value):
         if not isinstance(item, Mapping):
             continue
-        try:
-            numbers.append(int(item.get("number")))
-        except (TypeError, ValueError):
-            continue
+        number = _coerce_int(item.get("number"))
+        if number is not None:
+            numbers.append(number)
     return sorted(set(numbers))
 
 
 def _issue_number(raw: Mapping[str, Any]) -> int:
-    try:
-        return int(raw.get("number"))
-    except (TypeError, ValueError):
-        return 0
+    return _coerce_int(raw.get("number")) or 0
 
 
 def _closed_issue_rows(value: Any) -> list[Mapping[str, Any]]:
