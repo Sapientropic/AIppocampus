@@ -45,16 +45,12 @@ commercial/separate-license product surfaces is
 AIppocampus's public Python support floor is Python 3.12. CI and package
 metadata currently prove Python 3.12 and 3.13; Python 3.10 and Python 3.11 are
 unsupported public targets unless package metadata, docs, and workflows are
-widened in the same change. Before claiming the repository is healthy, run the
-deterministic PR path from the repository root:
+widened in the same change. Before claiming the repository is healthy, start
+with the changed-surface planner and run the focused commands it names:
 
 ```sh
+python tools/aippocampus/test_plan.py --json
 python tools/aippocampus/docs/check_docs_health.py --json
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
-python -m mypy
-python tools/aippocampus/run_tests.py --tier quick
-python tools/aippocampus/run_tests.py --tier pr
-python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 ```
 
 Test tiers are explicitly classified in `tools/aippocampus/test_tier_manifest.py`.
@@ -66,8 +62,14 @@ During normal editing, prefer targeted module tests such as
 `python tools/aippocampus/run_tests.py --tier quick` as the ordinary inner
 loop. The quick target is roughly 46 modules, 330 tests, and 30 seconds of
 timing-report elapsed on current local hardware; treat it as drift visibility,
-not a cross-machine SLA. Use `python tools/aippocampus/run_tests.py --tier pr`
-as the broad pre-push gate.
+not a cross-machine SLA.
+
+Use `python tools/aippocampus/run_tests.py --tier pr` as the broad pre-push
+fallback when CI is unavailable, stale, or the planner names runtime, plugin,
+or skill surfaces. `pr` already includes `quick`, so do not run both as a
+closeout ritual. CI owns Ruff, mypy, coverage, compileall, `pr`, sharded
+`broad-pr`, benchmark smoke, Python compatibility, and the focused macOS
+path-identity guard for ordinary PRs.
 
 When the quick lane feels slow, measure before moving tests between tiers:
 
@@ -85,11 +87,20 @@ CI may shard the same deterministic module selection with `--shard-index` and
 `--shard-total`; shards are assigned by sorted module name so a missing or empty
 shard fails loudly instead of silently weakening coverage.
 
-Run `python tools/aippocampus/run_tests.py --tier full` before release,
-public-readiness, or broad refactor claims. The `benchmark`, `slow`, `smoke`,
-and `integration` tiers are explicit: use them when touching benchmark runners,
-prompt-hook integration, onboarding, plugin packaging, smoke tools, provider
-contracts, browser/MCP surfaces, or sync behavior.
+Run `python tools/aippocampus/run_tests.py --tier full` only before a
+repository-health or public-readiness claim that explicitly needs the slow,
+benchmark, and release-heavy surface. Routine patch/minor releases with green
+PR CI should use the release preflight planner and the release checklist instead
+of locally replaying every CI lane:
+
+```sh
+python tools/aippocampus/test_plan.py --release-preflight --json
+```
+
+The `benchmark`, `slow`, `smoke`, and `integration` tiers are explicit: use
+them when touching benchmark runners, prompt-hook integration, onboarding,
+plugin packaging, smoke tools, provider contracts, browser/MCP surfaces, or
+sync behavior.
 
 For public-readiness changes, also run a secret/local-path scan and inspect any
 hits. Test fixtures with `FAKE_TEST_` markers are acceptable; real credentials

@@ -397,19 +397,25 @@ prefer `AIPPOCAMPUS_REGISTRY_DIR` or `AIPPOCAMPUS_HOME`; existing Codex installs
 continue to use `$CODEX_HOME/aippocampus-registry/` as a legacy fallback.
 
 Maintainer verification from a repository checkout, not required for a first
-recall:
+recall, starts with the changed-surface planner:
 
 ```sh
+python tools/aippocampus/test_plan.py --json
 python tools/aippocampus/docs/check_docs_health.py --json
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
-python -m mypy
-python tools/aippocampus/run_tests.py --tier quick
-python tools/aippocampus/run_tests.py --tier pr
 ```
 
-That Ruff command is the staged hard gate from `pyproject.toml`; broader
-`--select ALL --statistics` output is advisory lint debt, not a normal install
-or CI failure gate.
+Use targeted tests or `quick` while editing. Use `pr` as the broad pre-push
+fallback when CI is unavailable, stale, or the planner names it; `pr` already
+includes `quick`, so do not run both as closeout ceremony.
+
+When you do run Ruff, use the staged hard gate from `pyproject.toml`:
+
+```sh
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
+```
+
+Broader `--select ALL --statistics` output is advisory lint debt, not a normal
+install or CI failure gate.
 
 For benchmark work from a fresh clone, install the stable benchmark extra and
 run the deterministic smoke lane before attempting broader benchmark tiers:

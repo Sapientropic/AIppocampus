@@ -121,9 +121,12 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
 
     def test_release_checklist_includes_install_build_and_macos_path_gate(self) -> None:
         text = RELEASE_CHECKLIST.read_text(encoding="utf-8")
+        flattened = " ".join(text.split())
 
-        self.assertIn("uv run --python 3.12 python -c", text)
+        self.assertIn("test_plan.py --release-preflight --json", text)
+        self.assertIn('python -m pip install -e ".[release]"', text)
         self.assertIn("python -m build --sdist --wheel", text)
+        self.assertIn("Do not flatten them into one local marathon", flattened)
         self.assertIn("macOS", text)
         self.assertIn("TMPDIR", text)
 

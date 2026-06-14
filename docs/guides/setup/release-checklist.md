@@ -24,26 +24,72 @@ route them through a maintainer light lane only because the diff is small.
 - Link any known limitations to active issues rather than burying them in the
   release notes.
 
-## Required Local Checks
+## Required Gates
 
-Run from the repository root:
+Release verification has three owners. Do not flatten them into one local
+marathon.
+
+1. The release PR proves the merged source through CI.
+2. The local tag preflight checks metadata, public-boundary hygiene, and any
+   focused changed-surface tests that have not already passed in CI.
+3. The publish workflow proves and publishes the built artifact.
+
+Start with the planner:
 
 ```sh
-uv run --python 3.12 python -c 'import aippocampus_runtime; print("uv-run-ok")'
-python -m pip install -e .
-python -m pip install -e ".[release]"
-python -m build --sdist --wheel
-python tools/aippocampus/release/check_wheel_contract.py --json
-python tools/aippocampus/docs/check_docs_health.py --json
-python tools/aippocampus/release/check_agent_discovery_release.py --json
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
-python -m mypy
-python tools/aippocampus/run_tests.py --tier quick
-python tools/aippocampus/run_tests.py --tier pr
-python tools/aippocampus/run_tests.py --tier broad-pr
-python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
-python tools/aippocampus/run_coverage.py --tier pr
+python tools/aippocampus/test_plan.py --json
+python tools/aippocampus/test_plan.py --release-preflight --json
 ```
+
+Run the focused commands from the changed-surface plan. During development,
+`quick` is useful as a cheap inner loop. For closeout, remember that `pr`
+already includes `quick`; do not run both by reflex.
+
+For a normal patch or minor release whose PR CI is green, the local tag
+preflight is:
+
+```sh
+python tools/aippocampus/docs/check_docs_health.py --json
+python tools/aippocampus/release/check_agent_discovery_release.py --offline --json
+git clean -ndX
+git diff --check
+```
+
+Before publication, the online agent-discovery check may report `pending`
+because PyPI and MCP Registry cannot contain the new version yet. Use the
+offline local metadata check before tagging; use the strict online check only
+after publication.
+
+PR CI owns these routine release signals by default:
+
+- Ruff and mypy.
+- `python tools/aippocampus/run_tests.py --tier pr` under coverage.
+- Sharded `broad-pr`.
+- `benchmark-smoke --benchmark-suite-profile public-fast`.
+- Python 3.13 `quick`.
+- Focused macOS default `TMPDIR` path-identity smoke.
+- Wheel contract against the CI-built artifact.
+
+The publish workflow owns:
+
+- `python -m pip install -e ".[release]"`.
+- Docs health and `pr` tests at the tag commit.
+- MCP Registry schema validation.
+- `python -m build --sdist --wheel`.
+- `python -m twine check dist/*`.
+- `python tools/aippocampus/release/check_wheel_contract.py --wheel dist/*.whl --json`.
+- PyPI and MCP Registry publication.
+
+Escalate locally only when the changed surface owns the risk:
+
+- Run `broad-pr` locally for tier-runner, manifest, or CI changes when waiting
+  for CI would hide the failure source.
+- Run `benchmark-smoke --benchmark-suite-profile public-fast` locally for
+  benchmark runner, benchmark fixture, or public benchmark claim changes.
+- Run `full` locally only for repository-health or public-readiness claims that
+  explicitly need the slow, benchmark, and release-heavy surface.
+- Run manual macOS install smoke for package/install/path-identity changes, or
+  when the release itself claims fresh macOS install behavior.
 
 The wheel contract builds the wheel into a fresh venv by default and verifies
 the documented CLI, MCP, generic JSONL import/search/reopen, public module
@@ -60,8 +106,9 @@ release blocker without a separate rule-selection issue:
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus --select ALL --statistics
 ```
 
-Run the full tier before a repository-health, public-readiness, or release
-claim:
+Run the full tier before a repository-health or broad public-readiness claim
+that actually needs full coverage. Do not use it as a routine patch-release
+tax after green PR CI:
 
 ```sh
 python tools/aippocampus/run_tests.py --tier full
@@ -85,9 +132,9 @@ packs were exercised.
 
 PR and push CI include a focused macOS default `TMPDIR` path-identity guard, but
 that job is only a regression gate for the recurring `/var` and `/private/var`
-class. It intentionally does not repeat the full `pr` tier. For
-runtime/package-owner or path-identity changes, also run the manual macOS
-install smoke before making a release or public readiness claim:
+class. It intentionally does not repeat the full `pr` tier. For package,
+install, or path-identity changes, or when a release explicitly claims fresh
+macOS install behavior, run the manual macOS install smoke:
 
 ```sh
 gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-version=3.12

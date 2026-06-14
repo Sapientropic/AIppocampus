@@ -9,10 +9,9 @@
 ## Verification
 
 - [ ] `python tools\aippocampus\test_plan.py --json`
-- [ ] `python tools\aippocampus\docs\check_docs_health.py --json`
-- [ ] `python tools\aippocampus\run_tests.py --tier quick`
-- [ ] `python tools\aippocampus\run_tests.py --tier pr`
 - [ ] Focused tests from the changed-surface planner
+- [ ] `python tools\aippocampus\docs\check_docs_health.py --json` when docs, skill text, release notes, or public claims changed
+- [ ] `python tools\aippocampus\run_tests.py --tier pr` when the planner names it, CI is unavailable/stale, or runtime/plugin/skill surfaces changed
 - [ ] Other:
 
 ## Source And Privacy Boundary
