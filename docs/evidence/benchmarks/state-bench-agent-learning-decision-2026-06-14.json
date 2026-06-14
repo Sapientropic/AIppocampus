@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_state_bench_agent_learning_decision",
+  "created_at": "2026-06-14T06:10:00+08:00",
+  "status": "defer_official_submission_until_locked_eval_client_available",
+  "ok": true,
+  "official_source_recheck": {
+    "checked_at": "2026-06-14T06:10:00+08:00",
+    "repo": "https://github.com/microsoft/STATE-Bench",
+    "main_head": "a0ffc655e7a36c179bfd2b037a08b0f3d75c9431",
+    "agent_learning_track_doc": "https://github.com/microsoft/STATE-Bench/blob/main/docs/AGENT_LEARNING_TRACK.md",
+    "locked_eval_client_doc": "https://github.com/microsoft/STATE-Bench/blob/main/docs/setup/eval-client.md",
+    "official_num_runs": 5,
+    "retrieve_learnings_top_k": 3,
+    "locked_eval_model_family": "GPT-5.4 simulator and judge"
+  },
+  "local_env_readiness": {
+    "state_bench_eval_endpoint_configured": false,
+    "state_bench_eval_deployments_configured": false,
+    "state_bench_eval_api_key_configured": false,
+    "official_task_run_count": 0
+  },
+  "decision": {
+    "submission_path": "defer",
+    "reason": "The official locked evaluation client endpoint and deployments are not configured in this environment, so a matched no-memory vs AIppocampus one-domain task run cannot honestly execute.",
+    "closeout_for_issues": {
+      "github_1043": "documented_currently_not_feasible",
+      "github_1379": "access_blocker_recorded",
+      "github_1381": "defer_decision_recorded"
+    },
+    "next_valid_action": "Open a new narrow official-run issue only after STATE_BENCH_EVAL_ENDPOINT and STATE_BENCH_EVAL_DEPLOYMENTS are available, then run the same task/domain/model/run-count for no-memory and AIppocampus arms."
+  },
+  "supports": [
+    "train_only_adapter_and_no_memory_adapter_are_prepared_by_prior_preflight",
+    "official_locked_eval_requirements_rechecked",
+    "current_environment_blocker_recorded",
+    "official_submission_deferred_without_score_or_lift_claim"
+  ],
+  "material_limits": [
+    "no_official_state_bench_score",
+    "no_agent_learning_track_lift",
+    "no_matched_one_domain_task_score",
+    "no_leaderboard_submission_readiness",
+    "no_state_bench_sota_claim"
+  ],
+  "privacy_boundary": {
+    "private_history_used": false,
+    "raw_train_trajectory_text_emitted": false,
+    "provider_credentials_emitted": false,
+    "local_absolute_paths_emitted": false
+  }
+}

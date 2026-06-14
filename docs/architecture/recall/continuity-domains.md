@@ -12,11 +12,12 @@ narrative-mesh direction from discussion #700. The durable domain substrate is
 `aippocampus_runtime.recall.continuity_domains`; the task-time route projection
 for #700 narrative packets is `aippocampus_runtime.recall.narrative_packet`.
 
-Contract v1 ships the runtime substrate and progressive recall exposure. It
-does not claim that passive hooks automatically create continuity domains.
-Domain events are written by explicit runtime producers, tests, or future
-operator/subconscious jobs that satisfy this contract; passive hooks may only
-consume existing pointer material.
+Contract v1 ships the runtime substrate, progressive recall exposure, and
+opt-in runtime producer paths. Prompt hooks still do not write domain events
+while the user is typing. Background jobs may write deterministic
+source-ref-backed events after the user has enabled that producer feature, with
+auditability, dedupe, repair/rebuild, and a kill switch replacing per-event
+confirmation.
 
 ## Design Promise
 
@@ -91,7 +92,7 @@ Event writes are append-only. Snapshot writes use the shared artifact lease and
 atomic replace pattern. Snapshot data is rebuildable; it must not mutate clean
 source and must not be treated as a source of exact wording.
 
-The explicit operator authoring path is:
+The explicit operator/debug authoring path is:
 
 ```text
 aippocampus continuity-domain produce --dry-run --json
@@ -111,6 +112,47 @@ the registration/onboarding route can seed domain labels without becoming
 evidence. `--dry-run` stays no-write unless `--refresh-query-pattern-routes` is
 explicitly passed. Candidate events are written only with `--append`. Prompt
 hooks and default MCP recall still do not mutate durable domain state.
+
+The opt-in subconscious producer path is:
+
+```text
+python -m aippocampus_runtime.subconscious.jobs \
+  --event-salience-gate \
+  --continuity-domain-salience-mode report
+
+python -m aippocampus_runtime.subconscious.jobs \
+  --event-salience-gate \
+  --continuity-domain-salience-mode write_when_enabled \
+  --continuity-domain-events-output <clean-source/continuity-domain-events.jsonl> \
+  --continuity-domain-snapshot-dir <continuity-domain-snapshots> \
+  --continuity-domain-clean-source-dir <clean-source> \
+  --continuity-domain-publish
+```
+
+`AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION=report|write_when_enabled` can set the
+same policy for configured job runners when the salience gate is enabled.
+`report` is no-write. `write_when_enabled` appends through the existing
+continuity-domain event path only when writes are not otherwise disabled by
+`--dry-run` or `--no-write`.
+
+## Producer Capability Matrix
+
+| Tier | Event families | Current owner | Boundary |
+| --- | --- | --- | --- |
+| `accepted_by_contract` | all domain and pathlet families listed below | `continuity_domains.py` normalizer/materializer | Accepted events still need resolving source refs and remain navigation until source reopen. |
+| `auto_produced_now` | `domain_created`, support/source refs | `continuity_domain_producer.py` registry producer | Producer-backed labels are source-ref routes, not evidence owners. |
+| `materialized_fallback` | representative refs synthesized from support/counter/correction/boundary refs | `continuity_domains.py` snapshot finalizer | Fallback representative refs are not a claim that a producer classified representative evidence. |
+| `opt_in_runtime_production_now` | `correction_source_added`, `counter_source_added`, `boundary_pinned`, and cautious repeated-ref `domain_created` from salience | `continuity_domain_salience_adapter.py` via subconscious jobs | Enabled jobs may write quietly with dedupe/auditability; public summaries expose counts only. |
+| `review_or_target_required` | `domain_superseded` from currentness salience | salience adapter | Written only when a target domain is supplied or resolved; otherwise deferred as reviewable currentness pressure. |
+| `operator_debug_or_backfill` | any accepted event family when curated by an operator/agent | `aippocampus continuity-domain append/produce/publish/report` | Useful for repair, imports, exceptional curation, and tests; not the ordinary ADHD-facing path. |
+| `operator_authored_or_future` | split, merge, reinterpretation, representative curation, pathlet lifecycle automation | future source-shaped producers | Do not imply these are automatically produced by the current registry or salience producer. |
+
+Lifecycle snapshots may also project into shared
+[`runtime_recheck_event`](runtime-recheck-events.md) diagnostics. That bridge is
+not a continuity-domain producer and does not add source truth: it only lets
+macro, Dream/subconscious, and active-recall consumers notice contested,
+stale/superseded, pinned-boundary, blocked, or retired routes as direction-only
+recheck pressure.
 
 Supported domain event families:
 
@@ -221,6 +263,13 @@ MCP progressive recall reuses existing tools:
 - If no continuity-domain snapshot is published or readable, active recall and
   MCP context should report the missing snapshot artifact instead of silently
   implying there is no memory.
+
+Macro and Dream consumers may read continuity-domain lifecycle pressure through
+the shared runtime recheck event bridge. Contested/counter/correction-heavy
+domains map to conflict recheck, stale or superseded domains map to currentness
+recheck, pinned boundaries map to restriction diagnostics, and blocked or
+retired domains map to route-unavailable diagnostics. These events remain
+`direction_only`; active recall must still reopen source before any factual use.
 
 Post-packet relation diagnostics for narrative pathlets, missing-middle
 cut-points, route cycles, and navigation-as-claim failures are defined in

@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.navigation.parallel_derivation_bundle import (
+    preflattening_gate_for_route_affordance,
+)
 from aippocampus_runtime.navigation.repo_familiarity import navigation_routes_from_cards
 from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
@@ -575,6 +578,7 @@ def _potential_from_route(
     agency_feedback: Sequence[Mapping[str, Any]],
     correction_windows: Sequence[Mapping[str, Any]],
     journeys: Sequence[Mapping[str, Any]],
+    parallel_preflattening_gate: Mapping[str, Any] | None,
     now: str,
 ) -> dict[str, Any] | None:
     route_id = _route_id(route)
@@ -755,6 +759,28 @@ def _potential_from_route(
         negative_feedback_count=negative_feedback_count,
         has_concrete_next_step=has_next_step,
     )
+    preconditions = _strings(route.get("preconditions"), limit=8, chars=180)
+    if parallel_preflattening_gate is not None and not parallel_preflattening_gate.get("flattening_allowed"):
+        reason_codes = _strings(parallel_preflattening_gate.get("reason_codes"), limit=6, chars=100)
+        preconditions = unique_preserve(
+            [
+                *preconditions,
+                "parallel_derivation_recheck_required",
+                *reason_codes,
+                str(parallel_preflattening_gate.get("required_next") or "source_reopen_or_review"),
+            ],
+            limit=10,
+        )
+        signals.append(
+            _signal(
+                source="parallel_derivation",
+                signal=str(parallel_preflattening_gate.get("status") or "incomplete"),
+                effect=str(parallel_preflattening_gate.get("required_next") or "review_before_flattening"),
+                detail="pre-flattening compatibility gate kept route guidance navigation-only",
+            )
+        )
+        status = _apply_status(status, "unresolved")
+        selected_affordance = "state_check" if route_refs else "silent"
     annoyance_risk = _annoyance_risk(
         explicit=route.get("annoyance_risk"),
         source_thickness=source_thickness,
@@ -803,13 +829,16 @@ def _potential_from_route(
         "thread_keys": route_thread_keys,
         "matched_terms_only": matched_terms_only,
         "requires_source_reopen": grammar in {"reopenable_route", "direction_only"},
-        "preconditions": _strings(route.get("preconditions"), limit=8, chars=180),
+        "preconditions": preconditions,
         "do_not_do": _strings(route.get("do_not_do"), limit=10, chars=160),
         "diagnostics": {
             "raw_prompt_stored": False,
             "signal_count": len(signals),
             "signals": signals,
             "suppressed_reason": status if selected_affordance == "silent" else "",
+            "parallel_derivation_preflattening_gate": dict(parallel_preflattening_gate)
+            if parallel_preflattening_gate is not None
+            else None,
         },
     }
     return potential
@@ -824,6 +853,7 @@ def build_navigation_potential_projection(
     correction_windows: Sequence[Mapping[str, Any]] | None = None,
     journeys: Sequence[Mapping[str, Any]] | None = None,
     repo_familiarity_cards: Sequence[Mapping[str, Any]] | None = None,
+    parallel_derivation_bundle: Mapping[str, Any] | None = None,
     topic_epoch: str = "default",
     now: str | None = None,
 ) -> dict[str, Any]:
@@ -832,6 +862,11 @@ def build_navigation_potential_projection(
     now_value = now or now_utc()
     routes: list[Mapping[str, Any]] = list(cognitive_routes or [])
     routes.extend(navigation_routes_from_cards(repo_familiarity_cards or []))
+    parallel_preflattening_gate = (
+        preflattening_gate_for_route_affordance(parallel_derivation_bundle)
+        if parallel_derivation_bundle is not None
+        else None
+    )
     potentials = [
         potential
         for route in routes
@@ -844,6 +879,7 @@ def build_navigation_potential_projection(
                 agency_feedback=agency_feedback or [],
                 correction_windows=correction_windows or [],
                 journeys=journeys or [],
+                parallel_preflattening_gate=parallel_preflattening_gate,
                 now=now_value,
             )
         ]
@@ -873,7 +909,9 @@ def build_navigation_potential_projection(
             "source_thin_routes_are_direction_only": True,
             "suppressed_statuses": sorted(TERMINAL_SUPPRESSED_STATUSES),
             "raw_prompt_stored": False,
+            "parallel_derivation_gate_is_navigation_only": True,
         },
+        "parallel_derivation_preflattening_gate": parallel_preflattening_gate,
     }
 
 

@@ -103,6 +103,12 @@ only anonymized case ids, event kinds, feedback outcomes, counts, and rates.
 It does not make the private aggregate cohort public, and it does not prove live
 host timing or default foreground usefulness.
 
+`build_public_default_path_usefulness_report()` is the #1375 public replay
+slice. It validates one useful cognitive-load hint, two no-hint/no-op cases,
+and one safe-but-draggy regression. The current recommendation is
+`dogfood_diagnostic_only`: keep the sidecar as diagnostic/ranking metadata, not
+as default foreground weighting or host-timing policy.
+
 ## Projection Boundary
 
 Model-visible and public-safe rows must use the boundary string
@@ -162,13 +168,16 @@ calibration before private reviewed cases exist.
 - the public behavior-trace feedback fixture reports useful caution, irrelevant
   drag / false positive, and over-personalization-risk outcomes without leaking
   source refs, raw notes, or local paths.
+- the public default-path replay records useful-hint, no-op, and regression
+  cases, then recommends diagnostic-only maturity rather than default adoption.
 
 The dated private-history aggregate report is
 [`docs/evidence/reports/cognitive-load-private-history-calibration-2026-06-08.md`](../../evidence/reports/cognitive-load-private-history-calibration-2026-06-08.md).
 It scanned 100 local registry threads and marked private-history calibration as
 measured for that cohort, but it still found no reviewed false-positive or
 caution-usefulness rows. The public behavior-trace fixture now covers selected
-reviewed outcomes, but future work should only wire this into a live hook or
-broader host policy after live/private reviewed calibration shows that the boost
-reduces repeated pitfalls without raising over-personalization or annoyance
-risk.
+reviewed outcomes, and the 2026-06-14 default-path replay shows the current
+evidence is not strong enough for default foreground weighting. Future work
+should only wire this into a live hook or broader host policy after live/default
+evidence shows that the boost reduces repeated pitfalls without raising
+over-personalization, annoyance, or memory-drag risk.

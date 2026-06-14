@@ -158,6 +158,73 @@ class DreamQueueTests(unittest.TestCase):
         self.assertEqual([item["trigger_family"] for item in payload["items"]], ["recall_miss_feedback", "recall_miss_feedback"])
         self.assertEqual(payload["counts"]["trigger_families"]["recall_miss_feedback"], 2)
 
+    def test_macro_momentum_biases_compensatory_without_overriding_source_triggers(self) -> None:
+        pack = ready_pack(question_link_row())
+        blocked_context = {
+            "phase": "blocked_decline",
+            "direction": "declining",
+            "recheck_on": ["dream_seed", "momentum_first_decay_recheck"],
+        }
+        baseline = dream_queue.build_dream_queue([pack], now="2026-06-14T00:00:00Z")
+        blocked = dream_queue.build_dream_queue(
+            [pack],
+            macro_momentum_context=blocked_context,
+            now="2026-06-14T00:00:00Z",
+        )
+        balanced = dream_queue.build_dream_queue(
+            [pack],
+            macro_momentum_context={"phase": "balanced", "direction": "rising"},
+            now="2026-06-14T00:00:00Z",
+        )
+
+        base_compensatory = next(item for item in baseline["items"] if item["dream_function"] == "compensatory")
+        blocked_compensatory = next(item for item in blocked["items"] if item["dream_function"] == "compensatory")
+        balanced_compensatory = next(item for item in balanced["items"] if item["dream_function"] == "compensatory")
+
+        self.assertEqual(blocked_compensatory["priority"], base_compensatory["priority"] + 8)
+        self.assertEqual(
+            blocked_compensatory["priority_components"]["macro_momentum"]["reason_code"],
+            "macro_momentum_declining_compensatory_bump",
+        )
+        self.assertEqual(
+            blocked_compensatory["priority_components"]["macro_momentum"]["authority_level"],
+            "direction_only",
+        )
+        self.assertFalse(blocked_compensatory["priority_components"]["macro_momentum"]["may_be_used_as_source_evidence"])
+        self.assertEqual(balanced_compensatory["priority"], base_compensatory["priority"])
+        self.assertFalse(blocked_compensatory["foreground_eligible"])
+
+        protected_cases = [
+            (
+                ready_pack(question_link_row()),
+                "explicit_operator_request",
+                "compensatory",
+            ),
+            (
+                ready_pack(correction_row(), question_link_row()),
+                None,
+                "compensatory",
+            ),
+            (
+                ready_pack(recall_miss_row()),
+                None,
+                "compensatory",
+            ),
+        ]
+        for protected_pack, trigger_family, dream_function in protected_cases:
+            payload = dream_queue.build_dream_queue(
+                [protected_pack],
+                trigger_family=trigger_family,
+                macro_momentum_context=blocked_context,
+                now="2026-06-14T00:00:00Z",
+            )
+            item = next(row for row in payload["items"] if row["dream_function"] == dream_function)
+            self.assertEqual(item["priority"], dream_queue.priority_for(item["trigger_family"], dream_function))
+            self.assertEqual(
+                item["priority_components"]["macro_momentum"]["reason_code"],
+                "macro_momentum_does_not_override_source_backed_trigger",
+            )
+
     def test_journey_frontier_items_carry_retention_ladder_policy(self) -> None:
         journey_pack = ready_pack(journey_row())
 

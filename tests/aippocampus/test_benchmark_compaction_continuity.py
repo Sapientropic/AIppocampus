@@ -28,7 +28,7 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_compaction_continuity_benchmark")
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["config"]["live_llm"], False)
-        self.assertGreaterEqual(payload["metrics"]["total_cases"], 10)
+        self.assertGreaterEqual(payload["metrics"]["total_cases"], 45)
         self.assertEqual(payload["privacy_boundary"]["raw_correction_text_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
         self.assertTrue(payload["privacy_boundary"]["case_selection_filters_active"])
@@ -214,7 +214,8 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertGreater(density["missing_cell_count"], 0)
         self.assertGreater(density["singleton_cell_count"], 0)
         self.assertEqual(density["missing_high_risk_cells"], [])
-        self.assertGreater(len(density["high_risk_sparse_cells"]), 0)
+        self.assertEqual(density["high_risk_sparse_cells"], [])
+        self.assertGreaterEqual(density["min_high_risk_cell_count"], 2)
         self.assertTrue(
             any(
                 cell["hook_stage"] == "PostCompact"
@@ -223,6 +224,92 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
                 for cell in density["observed_cells"]
             )
         )
+
+    def test_track_d_issue_1352_to_1360_target_cells_are_covered(self) -> None:
+        payload = benchmark.run_benchmark(include_private_text=False)
+        cell_counts: dict[tuple[str, str, str], int] = {}
+        for row in payload["cases"]:
+            key = (
+                row["hook_stage"],
+                row["compaction_state"],
+                row["adjudication_status"],
+            )
+            cell_counts[key] = cell_counts.get(key, 0) + 1
+
+        required_cells = {
+            ("UserPromptSubmit", "post_compaction", "valid_adopted"),
+            ("UserPromptSubmit", "horizon_lost", "valid_adopted"),
+            ("UserPromptSubmit", "post_compaction", "uncertain"),
+            ("UserPromptSubmit", "post_compaction", "local_only"),
+            ("PreToolUse", "visible", "valid_ignored"),
+            ("PreToolUse", "visible", "valid_adopted"),
+            ("PreToolUse", "post_compaction", "valid_adopted"),
+            ("PreToolUse", "post_compaction", "refuted"),
+            ("PreToolUse", "horizon_lost", "refuted"),
+            ("PreToolUse", "horizon_lost", "superseded"),
+            ("PostToolUse", "post_compaction", "valid_adopted"),
+            ("PostToolUse", "horizon_lost", "valid_adopted"),
+            ("PostToolUse", "post_compaction", "refuted"),
+            ("PostToolUse", "horizon_lost", "refuted"),
+            ("PostToolUse", "post_compaction", "uncertain"),
+            ("SubagentStart", "visible", "valid_adopted"),
+            ("SubagentStart", "horizon_lost", "refuted"),
+            ("SubagentStart", "horizon_lost", "superseded"),
+            ("PreCompact", "post_compaction", "refuted"),
+            ("PreCompact", "post_compaction", "superseded"),
+            ("Stop", "post_compaction", "valid_adopted"),
+            ("Stop", "post_compaction", "valid_ignored"),
+            ("Stop", "post_compaction", "refuted"),
+            ("Stop", "post_compaction", "superseded"),
+            ("PostCompact", "horizon_lost", "local_only"),
+        }
+        missing = sorted(cell for cell in required_cells if cell_counts.get(cell, 0) == 0)
+        self.assertEqual(missing, [])
+
+        post_tool_positive = [
+            row
+            for row in payload["cases"]
+            if row["hook_stage"] == "PostToolUse"
+            and row["compaction_state"] in {"post_compaction", "horizon_lost"}
+            and row["adjudication_status"] == "valid_adopted"
+        ]
+        self.assertGreaterEqual(len(post_tool_positive), 2)
+        for row in post_tool_positive:
+            self.assertTrue(row["source_event_chain_valid"])
+            self.assertTrue(row["source_fidelity"])
+            self.assertIsNotNone(row["emitted_source_event_id_sha1"])
+
+        silent_stages = {"PreCompact", "Stop"}
+        for row in payload["cases"]:
+            if row["hook_stage"] in silent_stages:
+                self.assertFalse(row["expected_emit"])
+                self.assertFalse(row["emitted_anchor"])
+
+    def test_subagent_sequence_coverage_validates_cross_stage_links(self) -> None:
+        payload = benchmark.run_benchmark(include_private_text=False)
+        sequence_coverage = payload["sequence_coverage"]
+
+        self.assertEqual(sequence_coverage["sequence_count"], 2)
+        self.assertEqual(sequence_coverage["invalid_sequence_count"], 0)
+        self.assertEqual(sequence_coverage["adopted_rehydration_count"], 1)
+        self.assertEqual(sequence_coverage["refuted_suppression_count"], 1)
+        self.assertLessEqual(
+            {
+                "UserPromptSubmit",
+                "SubagentStart",
+                "SubagentStop",
+                "PostCompact",
+            },
+            set(sequence_coverage["covered_stages"]),
+        )
+        for sequence in payload["sequences"]:
+            self.assertTrue(sequence["event_link_chain_valid"])
+            self.assertEqual(len(sequence["steps"]), 4)
+            self.assertNotIn("sequence_id", sequence)
+            self.assertNotIn("thread_id", sequence)
+            for step in sequence["steps"]:
+                self.assertNotIn("correction_text", step)
+                self.assertNotIn("source_ref", step)
 
     def test_private_debug_text_requires_explicit_opt_in(self) -> None:
         public_payload = benchmark.run_benchmark(include_private_text=False)

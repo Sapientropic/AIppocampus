@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.dream.macro_guidance import priority_with_macro_momentum
 
 QUEUE_KIND = "aippocampus_dream_queue"
 QUEUE_ITEM_KIND = "aippocampus_dream_queue_item"
@@ -260,6 +261,7 @@ def queue_item(
     pack: Mapping[str, Any],
     dream_function: str,
     trigger_family: str,
+    macro_momentum_context: Mapping[str, Any] | None,
     now_dt: datetime,
     review_after_hours: int,
     expiry_hours: int,
@@ -269,6 +271,12 @@ def queue_item(
     review_after = now_dt + timedelta(hours=max(1, int(review_after_hours)))
     expires_at = now_dt + timedelta(hours=max(2, int(expiry_hours)))
     retention_ladder = retention_ladder_policy_for(trigger_family, dream_function)
+    priority = priority_with_macro_momentum(
+        base_priority=priority_for(trigger_family, dream_function),
+        trigger_family=trigger_family,
+        dream_function=dream_function,
+        context=macro_momentum_context,
+    )
     return {
         "schema_version": 1,
         "kind": QUEUE_ITEM_KIND,
@@ -278,7 +286,11 @@ def queue_item(
         "pack_id": pack_id,
         "dream_function": dream_function,
         "trigger_family": trigger_family,
-        "priority": priority_for(trigger_family, dream_function),
+        "priority": priority["priority"],
+        "priority_components": {
+            "trigger_family_base": priority["base_priority"],
+            "macro_momentum": priority["macro_momentum"],
+        },
         "dedup_key": dedup_key,
         "review_after": format_utc(review_after),
         "expires_at": format_utc(expires_at),
@@ -308,6 +320,7 @@ def build_dream_queue(
     previous_items: Iterable[Mapping[str, Any]] | None = None,
     existing_findings: Iterable[Mapping[str, Any]] | None = None,
     trigger_family: str | None = None,
+    macro_momentum_context: Mapping[str, Any] | None = None,
     now: str | datetime | None = None,
     review_after_hours: int = 24,
     expiry_hours: int = 7 * 24,
@@ -330,6 +343,11 @@ def build_dream_queue(
             continue
         pack_id = str(pack.get("pack_id") or "")
         family = trigger_family_for_pack(pack, explicit=trigger_family)
+        pack_momentum = (
+            pack.get("macro_momentum_context")
+            if isinstance(pack.get("macro_momentum_context"), Mapping)
+            else macro_momentum_context
+        )
         for dream_function in string_values(pack.get("eligible_dream_functions")):
             dedup_key = dedup_key_for(pack_id, dream_function)
             if dedup_key in previous_keys:
@@ -360,6 +378,7 @@ def build_dream_queue(
                     pack=pack,
                     dream_function=dream_function,
                     trigger_family=family,
+                    macro_momentum_context=pack_momentum,
                     now_dt=now_dt,
                     review_after_hours=review_after_hours,
                     expiry_hours=expiry_hours,

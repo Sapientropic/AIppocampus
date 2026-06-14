@@ -13,7 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.update import codex_plugin_cli, plugin_installer  # noqa: E402
+from aippocampus_runtime.update import (  # noqa: E402
+    codex_plugin_cli,
+    host_probe_warnings,
+    plugin_installer,
+)
 
 
 class FakeCodexRunner:
@@ -66,6 +70,20 @@ def successful_probe() -> dict:
             "backend": "local_folder",
         },
     }
+
+
+def successful_probe_with_noisy_stderr() -> dict:
+    result = successful_probe()
+    result["stderr_tail"] = "\n".join(
+        [
+            "ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters in other/plugin.json",
+            "Failed to list resource templates for MCP server 'aippocampus': Method not found: resources/templates/list",
+            "Failed to list resources for MCP server 'aippocampus': Method not found: resources/list",
+            "Failed to kill MCP process group 12345: No such process",
+            "state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back",
+        ]
+    )
+    return result
 
 
 class PluginInstallerTests(unittest.TestCase):
@@ -144,6 +162,68 @@ class PluginInstallerTests(unittest.TestCase):
                 )
         finally:
             shutil.rmtree(output, ignore_errors=True)
+
+    def test_codex_install_buckets_nonfatal_host_probe_stderr_after_success(self) -> None:
+        output = REPO_ROOT / "dist" / "test-plugin-installer-stderr-summary"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                result = plugin_installer.install_codex_plugin(
+                    repo_root=REPO_ROOT,
+                    codex_home_path=root / "codex-home",
+                    plugin_output=output,
+                    verify=True,
+                    runner=FakeCodexRunner(),
+                    host_probe_runner=lambda **_: successful_probe_with_noisy_stderr(),
+                )
+
+            summary = result["host_probe"]["warning_summary"]
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["agent_callable_status"], "host_live_probe_ok")
+            self.assertEqual(summary["status"], "verification_passed_with_nonfatal_host_warnings")
+            self.assertEqual(summary["fatal_failures"], [])
+            self.assertEqual(summary["aippocampus_actionable_warnings"], [])
+            self.assertGreaterEqual(len(summary["benign_host_probe_warnings"]), 4)
+            self.assertEqual(len(summary["unrelated_host_or_plugin_noise"]), 1)
+        finally:
+            shutil.rmtree(output, ignore_errors=True)
+
+    def test_host_probe_warning_summary_does_not_downgrade_failed_probe_noise(self) -> None:
+        summary = host_probe_warnings.summarize_host_probe_warnings(
+            {
+                "validation_ok": False,
+                "stderr_tail": "\n".join(
+                    [
+                        "Failed to list resources for MCP server 'aippocampus': Method not found: resources/list",
+                        "Failed to kill MCP process group 12345: No such process",
+                        "state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back",
+                    ]
+                ),
+            }
+        )
+
+        self.assertEqual(summary["status"], "probe_failed_or_has_fatal_stderr")
+        self.assertEqual(summary["benign_host_probe_warnings"], [])
+        self.assertGreaterEqual(len(summary["aippocampus_actionable_warnings"]), 1)
+        self.assertGreaterEqual(len(summary["unclassified_stderr"]), 1)
+
+    def test_host_probe_warning_summary_keeps_true_errors_fatal_after_success(self) -> None:
+        summary = host_probe_warnings.summarize_host_probe_warnings(
+            {
+                "validation_ok": True,
+                "stderr_tail": "\n".join(
+                    [
+                        "Traceback (most recent call last): plugin background worker crashed",
+                        "Fatal host probe invariant failed",
+                        "other plugin completed background refresh",
+                    ]
+                ),
+            }
+        )
+
+        self.assertEqual(summary["status"], "probe_failed_or_has_fatal_stderr")
+        self.assertEqual(len(summary["fatal_failures"]), 2)
+        self.assertEqual(len(summary["unrelated_host_or_plugin_noise"]), 1)
 
     def test_codex_install_tolerates_existing_marketplace_and_still_upgrades(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-existing-marketplace"

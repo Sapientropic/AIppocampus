@@ -32,6 +32,10 @@ from aippocampus_runtime.update.codex_plugin_cli import (
 from aippocampus_runtime.update.codex_plugin_cli import (
     default_runner as _default_runner,
 )
+from aippocampus_runtime.update.host_probe_warnings import (
+    attach_host_probe_warning_summary,
+    summarize_host_probe_warnings,
+)
 from aippocampus_runtime.update.plugin_cache import refresh_plugin_cache_layers
 
 PLUGIN_NAME = "aippocampus"
@@ -510,6 +514,7 @@ def run_codex_host_probe(
                 result["notifications"] = [item.get("method") for item in client.notifications[:40]]
                 result["protocol_noise"] = client.protocol_noise[:20]
                 client.close()
+        result["warning_summary"] = summarize_host_probe_warnings(result)
 
 
 def _agent_callable_status(probe: dict[str, Any] | None, verify: bool) -> str:
@@ -596,6 +601,7 @@ def install_codex_plugin(
         if verify
         else None
     )
+    probe = attach_host_probe_warning_summary(probe)
     agent_status = _agent_callable_status(probe, verify)
     return {
         "kind": "aippocampus_plugin_install",

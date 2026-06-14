@@ -84,6 +84,19 @@ class MacroThreePowersTests(unittest.TestCase):
         self.assertEqual(earth["active_layer"], "earth")
         self.assertEqual(human["active_layer"], "human")
         self.assertEqual(heaven["active_layer"], "heaven")
+        self.assertEqual(explicit["ambiguity_status"], "explicit_override")
+        self.assertEqual(earth["ambiguity_status"], "clear")
+
+    def test_mixed_queries_report_active_layer_ambiguity_without_upgrading_authority(self) -> None:
+        issue_tests = three_powers.infer_active_layer("issue PR test source coverage")
+        roadmap_evidence = three_powers.infer_active_layer("roadmap benchmark")
+
+        self.assertEqual(issue_tests["active_layer"], "human")
+        self.assertEqual(issue_tests["ambiguity_status"], "ambiguous_tie")
+        self.assertEqual(issue_tests["candidate_layers"], ["earth", "human"])
+        self.assertIn("ambiguous_layer_tie", issue_tests["reason_codes"])
+        self.assertEqual(roadmap_evidence["ambiguity_status"], "ambiguous_tie")
+        self.assertEqual(roadmap_evidence["candidate_layers"], ["earth", "heaven"])
 
     def test_perturbation_amplitude_controls_layer_aware_fanout(self) -> None:
         routes = [

@@ -400,6 +400,29 @@ def normalize_continuity_domain_event(
         values = _safe_list(row.get(key), limit=16, chars=100)
         if values:
             event[key] = values
+    for key in (
+        "producer",
+        "producer_event_id",
+        "producer_event_kind",
+        "producer_authority",
+        "source_reopen_policy",
+        "privacy_boundary",
+    ):
+        if row.get(key) not in (None, ""):
+            event[key] = _safe_text(row.get(key), 160)
+    producer_reason_codes = _safe_list(
+        row.get("producer_reason_codes"),
+        limit=12,
+        chars=100,
+    )
+    if producer_reason_codes:
+        event["producer_reason_codes"] = producer_reason_codes
+    producer_score = row.get("producer_score")
+    if producer_score is not None and producer_score != "":
+        try:
+            event["producer_score"] = round(float(producer_score), 4)
+        except (TypeError, ValueError):
+            pass
     for key, refs in source_groups.items():
         if refs:
             event[key] = refs

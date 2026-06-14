@@ -314,7 +314,7 @@ class QuestionTrackingTests(unittest.TestCase):
                     "model": "offline-fixture-reviewer",
                     "source": "offline_fixture_question_confirmation",
                     "prompt_version": "test-question-confirmation-v1",
-                    "created_at": "2026-05-30T00:00:00Z",
+                    "created_at": requests[0]["created_at"],
                     "rationale": "The compact request shows both questions concern recall continuity.",
                 },
                 ensure_ascii=False,

@@ -157,11 +157,36 @@ Observed blockers:
   `Azure OpenAI endpoint required. Set STATE_BENCH_EVAL_ENDPOINT environment
   variable or pass endpoint parameter.`
 
-Decision: this slice turns the one-domain attempt into a concrete operator
-blocker and reproducible run plan. It still does not provide a matched
-no-memory vs AIppocampus task score. #1043 should stay open until the locked
-evaluation client is configured and both arms complete under the same official
-harness/model/run-count settings.
+Decision at the time: this slice turned the one-domain attempt into a concrete
+operator blocker and reproducible run plan. It still did not provide a matched
+no-memory vs AIppocampus task score. The 2026-06-14 recheck below supersedes
+the "keep open" posture: the current #1043 path is closed as a documented
+defer decision, and a new narrow official-run issue should be opened only after
+the locked evaluation client endpoint/deployment names are available.
+
+## 2026-06-14 Defer Decision
+
+Decision report:
+[`state-bench-agent-learning-decision-2026-06-14.md`](state-bench-agent-learning-decision-2026-06-14.md).
+Machine-readable report:
+[`state-bench-agent-learning-decision-2026-06-14.json`](state-bench-agent-learning-decision-2026-06-14.json).
+
+Recheck summary:
+
+- `microsoft/STATE-Bench` `main` was rechecked at
+  `a0ffc655e7a36c179bfd2b037a08b0f3d75c9431`.
+- The official Agent Learning Track still uses train-only learning extraction,
+  `--num-runs 5`, and `--retrieve-learnings-top-k 3`.
+- The locked evaluation client still requires `STATE_BENCH_EVAL_ENDPOINT` and
+  `STATE_BENCH_EVAL_DEPLOYMENTS`.
+- This environment does not have those two variables configured, and
+  `official_task_run_count` remains `0`.
+
+Closeout decision: defer official submission and close the current #1043 issue
+path as **currently not feasible from this environment**. Reopen as a new narrow
+official-run issue only when the locked eval client endpoint/deployment names
+are available, then run the same task/domain/model/run-count for no-memory and
+AIppocampus arms before claiming lift.
 
 ## Claim Shape
 

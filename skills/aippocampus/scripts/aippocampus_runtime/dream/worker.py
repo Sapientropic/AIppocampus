@@ -23,6 +23,7 @@ from aippocampus_runtime.dream.constructive_outputs import (
     normalized_constructive_artifact,
     normalized_prospective_invitation,
 )
+from aippocampus_runtime.dream.macro_guidance import dream_worker_strategy_from_perturbation
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.dream.source_refs import (
     bridge_claims_from_candidate,
@@ -196,12 +197,10 @@ def safe_pack_payload(pack: Mapping[str, Any]) -> dict[str, Any]:
     return sanitize_external_model_payload(payload)
 
 
-def build_worker_messages(
-    pack: Mapping[str, Any],
-    *,
-    dream_function: str,
-    max_samples: int = 1,
-) -> list[dict[str, str]]:
+def build_worker_messages(pack: Mapping[str, Any], *, dream_function: str, max_samples: int = 1, macro_perturbation_context: Mapping[str, Any] | None = None) -> list[dict[str, str]]:
+    strategy = dream_worker_strategy_from_perturbation(macro_perturbation_context, default_max_samples=max_samples)
+    directive = variable_run_directive(dream_function, max_samples=int(strategy["max_samples"]), candidate_kinds_by_function=CANDIDATE_KINDS_BY_FUNCTION)
+    directive["macro_perturbation_strategy"] = strategy
     return [
         {
             "role": "system",
@@ -222,11 +221,7 @@ def build_worker_messages(
         {
             "role": "user",
             "content": json.dumps(
-                variable_run_directive(
-                    dream_function,
-                    max_samples=max_samples,
-                    candidate_kinds_by_function=CANDIDATE_KINDS_BY_FUNCTION,
-                ),
+                directive,
                 ensure_ascii=False,
                 sort_keys=False,
             ),
@@ -489,6 +484,7 @@ def run_model_backed_dream_worker(
     config: ChatClientConfig,
     model_call: ModelCall = chat_json,
     max_samples: int = 1,
+    macro_perturbation_context: Mapping[str, Any] | None = None,
     no_write: bool = True,
 ) -> dict[str, Any]:
     if dream_function not in CANDIDATE_KINDS_BY_FUNCTION:
@@ -508,7 +504,8 @@ def run_model_backed_dream_worker(
             "no_write": True,
         }
 
-    messages = build_worker_messages(pack, dream_function=dream_function, max_samples=max_samples)
+    messages = build_worker_messages(pack, dream_function=dream_function, max_samples=max_samples, macro_perturbation_context=macro_perturbation_context)
+    effective_max_samples = max(1, int(json.loads(messages[-1]["content"]).get("max_samples") or max_samples))
     rejected: list[dict[str, Any]] = []
     try:
         response = model_call(messages, config)
@@ -517,7 +514,7 @@ def run_model_backed_dream_worker(
             parsed,
             pack=pack,
             dream_function=dream_function,
-            max_samples=max_samples,
+            max_samples=effective_max_samples,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         response = {}
@@ -561,7 +558,7 @@ def run_model_backed_dream_worker(
             "foreground_model_calls_allowed": False,
             "clean_source_mutation_allowed": False,
             "requires_background_adjudication": True,
-            "max_samples": max(1, int(max_samples)),
+            "max_samples": effective_max_samples,
         },
     }
 

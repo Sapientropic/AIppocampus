@@ -12,6 +12,7 @@ SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke" / "smoke_recall_navigation
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
 from aippocampus_runtime.ops import (
     recall_navigation_comparison,  # noqa: E402
     recall_navigation_comparison_fixtures,  # noqa: E402
@@ -20,6 +21,78 @@ from aippocampus_runtime.ops import (
 
 
 class RecallNavigationComparisonTests(unittest.TestCase):
+    def test_route_packet_hints_improve_top1_without_claim_permission(self) -> None:
+        query = "route packet hint integration"
+        base_routes = [
+            {
+                "route_id": "generic-current-route",
+                "route_label": "packet implementation route",
+                "route_topic": "packet",
+                "source_refs": [{"source_id": "clean:generic", "message_id": "msg-generic"}],
+            },
+            {
+                "route_id": "hinted-route",
+                "route_label": "continuity trail",
+                "route_topic": "technical_work",
+                "source_refs": [{"source_id": "clean:hinted", "message_id": "msg-hinted"}],
+            },
+        ]
+        hinted_routes = [
+            base_routes[0],
+            {
+                **base_routes[1],
+                "route_hints": {
+                    "semantic_warming": {
+                        "semantic_score": 0.88,
+                        "semantic_aliases": ["route packet hint integration"],
+                        "scout_family_votes": ["semantic_expander"],
+                    },
+                    "familiarity_map": {
+                        "route_terms": ["route", "packet", "hint"],
+                        "first_source_to_reopen": "source-backed-attention-router",
+                        "freshness": "current",
+                    },
+                    "topology_explain_only": {
+                        "topology_shape": "similar_routes_need_disambiguation",
+                        "risk_reason_codes": ["blind_deepen_risk"],
+                    },
+                },
+            },
+        ]
+
+        baseline, baseline_diag = attention_route_projection.rerank_routes_with_attention_router(
+            query=query,
+            routes=base_routes,
+            max_routes=2,
+        )
+        hinted, hinted_diag = attention_route_projection.rerank_routes_with_attention_router(
+            query=query,
+            routes=hinted_routes,
+            max_routes=2,
+        )
+
+        self.assertEqual(baseline[0]["route_id"], "generic-current-route")
+        self.assertEqual(hinted[0]["route_id"], "hinted-route")
+        self.assertTrue(hinted_diag["top_route_changed"])
+        self.assertEqual(hinted_diag["selected_route_id"], "hinted-route")
+        self.assertEqual(
+            hinted_diag["selected_packet"]["claim_permission"],
+            "no_claim_before_reopen",
+        )
+        self.assertTrue(
+            hinted_diag["selected_packet"]["contract"]["source_reopen_required_before_claim"]
+        )
+        self.assertIn(
+            "blind_deepen_risk",
+            hinted_diag["selected_packet"]["route_hints"]["topology_explain_only"][
+                "risk_reason_codes"
+            ],
+        )
+        self.assertGreater(
+            hinted_diag["selected_query_term_overlap_count"],
+            baseline_diag["selected_query_term_overlap_count"],
+        )
+
     def test_fixture_report_compares_direct_hook_and_progressive_arms(self) -> None:
         report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
         arms = report["aggregate"]["arms"]

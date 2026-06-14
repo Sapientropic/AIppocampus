@@ -32,6 +32,65 @@ macro packet into source evidence.
 | 乘 / 承 / 比 / 应 internal line topology | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.line_topology`, `macro.three_powers` | No ranking-weight change, source support, or mathematical topology claim. |
 | 当位 / 不当位 | `research_only` | none | No foreground signal, route control, or claim support until usefulness is proven. |
 
+## Shi/Ying Restriction Edge Decision
+
+Local/global compatibility keeps Shi/Ying restriction edges as V0
+project-scoped navigation hints. The runtime may record
+`shi_ying_v0_project_role_hint` when a Macro or Telepathy section carries
+project relation-position metadata, but it does not load classical bagua
+position tables or infer exact classical Shi/Ying line semantics.
+
+This decision keeps the current product surface grounded: Shi/Ying can help
+explain why two local sections need handoff/restriction review, but it cannot
+alter source truth, rank routes, assign agent identity, infer user intent, or
+grant foreground claim permission. Classical position infrastructure should be
+a future issue only if a concrete usefulness fixture needs it.
+
+## Cross-Grain Projection Contract
+
+Cross-grain projection is owned by `aippocampus_runtime.macro.cross_grain`.
+It is an explain/deepen contract over existing deterministic primitives, not a
+new ranking, evidence, or foreground prose layer.
+
+| Grain | Runtime source | Projection rule | Boundary |
+| --- | --- | --- | --- |
+| Three Powers / 3 layers | `macro.three_powers` | Earth, human, and heaven remain separate route facets; mixed queries expose `candidate_layers`, `score_margin`, and `ambiguity_status` instead of hiding ties. | Layer labels are navigation posture only, never user intent, role truth, or source support. |
+| Six lines | `macro.line_topology` | Broken couplings such as `broken_coupling_earth_heaven` project upward as reason codes and review pressure for the relevant Three Powers layers. | Topology cannot change ranking weights or prove a claim without reopened source. |
+| Trigram shape | `macro.hexagram` | Upper/lower trigrams may appear as compact shape hints in explain/deepen packets. | A trigram hint is not a full hexagram state and must not be foreground symbolic prose. |
+| 64-state / orbit | `macro.transform_orbit` | `same_reversible_orbit` and `adjacent_flip` may explain structural relation; nuclear basins remain non-invertible projection diagnostics. | Orbit or basin membership is not source support, route merge permission, or ranking weight. |
+
+Every projection carries `authority_level=navigation_only`,
+`claim_permission=no_claim_before_reopen`, and `fact_claim_allowed=false`.
+Runtime consumers such as the attention route producer (#1188) and semantic
+warming bridge (#1386) may use these reason codes as reopen/deepen hints only;
+they must not duplicate this contract or treat the projection as evidence.
+
+## Change-Line Transition Records
+
+`cross_grain.macro_transition_record` names the existing computation
+本卦 -> changing lines -> 之卦 as a lifecycle record. The record carries source
+hexagram, changed lines, target hexagram, perturbation band, optional source
+refs, and review policy.
+
+The record is for audit and explain/deepen readability. It does not create
+divination-style advice, does not write macro state, and does not authorize
+foreground action. Inversion transitions require conflict review/source reopen
+before action; local and medium transitions remain navigation-only fanout
+pressure over source-backed project events.
+
+## Nuclear Basin Decision
+
+Nuclear/互卦 basins are locked to `explain_only` for V0. The candidate
+usefulness path is perspective-change explanation during deepen/debug, but no
+current fixture proves route merging, ranking, or source-support lift. Until a
+future issue supplies wins, no-help cases, and no authority upgrade evidence,
+`nuclear_basin_explain_policy` enforces:
+
+- no route merge from basin membership;
+- no ranking-weight change;
+- no source support from basin membership;
+- no foreground symbolic prose.
+
 ## Runtime Audit
 
 The executable audit lives in `aippocampus_runtime.macro.audit`:
@@ -48,6 +107,11 @@ The fixture asserts:
 - nuclear/opposite/reverse transforms remain `deepen_explain_only`;
 - 当位 / 不当位 remains `research_only`;
 - Hamming distance changes fanout width, and momentum changes recheck timing;
+- mixed active-layer queries expose ambiguity instead of hiding ties;
+- cross-grain projections and change-line transition records stay
+  navigation-only;
+- nuclear basins are locked to explain-only with no route merge or ranking
+  effect;
 - topology/sheaf-style consumption can read Yi-derived layer/movement signals
   without raising authority or bypassing source reopen.
 

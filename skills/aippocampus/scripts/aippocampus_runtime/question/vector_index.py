@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
 
 SCHEMA_VERSION = 1
+PROVIDER_CONFIG_STATUS_KIND = "aippocampus_vector_provider_config_status"
+
+_CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,41 @@ class VectorSearchResult:
             "score": self.score,
             "metadata": self.metadata,
         }
+
+
+@dataclass(frozen=True)
+class VectorProviderConfig:
+    provider: str
+    model: str
+    dimensions: int | None = None
+    supported_language_buckets: tuple[str, ...] = ()
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any] | None) -> "VectorProviderConfig | None":
+        if not payload:
+            return None
+        dimensions = safe_dimension(payload.get("dimensions"))
+        languages = tuple(
+            normalize_language_bucket(str(value))
+            for value in (payload.get("supported_language_buckets") or payload.get("languages") or ())
+            if str(value).strip()
+        )
+        return cls(
+            provider=str(payload.get("provider") or "unknown").strip() or "unknown",
+            model=str(payload.get("model") or "unknown").strip() or "unknown",
+            dimensions=dimensions,
+            supported_language_buckets=languages,
+        )
+
+
+def safe_dimension(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        dimension = int(value)
+    except (TypeError, ValueError):
+        return None
+    return dimension if dimension > 0 else None
 
 
 class QuestionVectorIndex(Protocol):
@@ -78,6 +118,99 @@ def normalize_vector(vector: Iterable[float]) -> tuple[float, ...]:
     if not values:
         raise ValueError("vector must not be empty")
     return values
+
+
+def detect_language_bucket(text: str) -> str:
+    if _CJK_RE.search(text):
+        return "cjk"
+    if _LATIN_RE.search(text):
+        return "latin"
+    return "unknown"
+
+
+def normalize_language_bucket(value: str) -> str:
+    normalized = value.strip().casefold().replace("_", "-")
+    if normalized in {"zh", "zh-cn", "zh-tw", "ja", "ko", "cjk", "chinese", "japanese", "korean"}:
+        return "cjk"
+    if normalized in {"en", "eng", "english", "latin", "ascii"}:
+        return "latin"
+    if normalized in {"multi", "multilingual", "*", "any", "all"}:
+        return "multilingual"
+    return normalized or "unknown"
+
+
+def vector_provider_config_status(
+    *,
+    query_text: str,
+    provider_config: Mapping[str, Any] | VectorProviderConfig | None,
+    expected_dimensions: int | None = None,
+) -> dict[str, Any]:
+    """Report whether a vector route can be trusted as a routing hint.
+
+    This is deliberately a local contract check, not a provider probe. A
+    language or dimension mismatch must degrade to lexical/source-reopen
+    routing instead of silently reporting a vector result as valid.
+    """
+
+    config = (
+        provider_config
+        if isinstance(provider_config, VectorProviderConfig)
+        else VectorProviderConfig.from_mapping(provider_config)
+    )
+    language_bucket = detect_language_bucket(query_text)
+    fallback = {
+        "lexical_fallback_visible": True,
+        "source_reopen_required_for_claims": True,
+        "vector_scores_are_navigation_only": True,
+    }
+    if config is None:
+        return {
+            "kind": PROVIDER_CONFIG_STATUS_KIND,
+            "status": "degraded",
+            "reason": "provider_config_missing",
+            "query_language_bucket": language_bucket,
+            "fallback": fallback,
+            "provider_checked_live": False,
+        }
+
+    supported = tuple(
+        bucket
+        for bucket in (normalize_language_bucket(value) for value in config.supported_language_buckets)
+        if bucket and bucket != "unknown"
+    )
+    reasons: list[str] = []
+    if (
+        expected_dimensions is not None
+        and config.dimensions is not None
+        and int(config.dimensions) != int(expected_dimensions)
+    ):
+        reasons.append("embedding_dimension_mismatch")
+    if (
+        language_bucket != "unknown"
+        and supported
+        and "multilingual" not in supported
+        and language_bucket not in supported
+    ):
+        reasons.append("embedding_language_mismatch")
+
+    status = "supported" if not reasons else "provider_config_unsupported"
+    return {
+        "kind": PROVIDER_CONFIG_STATUS_KIND,
+        "status": status,
+        "reason": reasons[0] if len(reasons) == 1 else (";".join(reasons) if reasons else ""),
+        "query_language_bucket": language_bucket,
+        "provider": config.provider,
+        "model": config.model,
+        "expected_dimensions": expected_dimensions,
+        "configured_dimensions": config.dimensions,
+        "supported_language_buckets": list(supported),
+        "fallback": fallback,
+        "provider_checked_live": False,
+        "cannot_claim": [
+            "live_embedding_quality",
+            "provider_output_as_source_truth",
+        ],
+    }
 
 
 def cosine_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> float:

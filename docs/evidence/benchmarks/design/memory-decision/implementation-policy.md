@@ -148,8 +148,21 @@ counter fired. Limited `--cases` runs remain allowed, but their report carries
 `coverage_density` block for the hook-stage x compaction-state x adjudication
 matrix so sparse combination coverage stays visible instead of being hidden by
 the broad axis lists. High-risk post-compaction horizon-lost cells are split
-out as missing or sparse diagnostics so stale/superseded/refuted/uncertain
-anchor behavior remains easy to audit.
+out as missing or sparse diagnostics and now report `min_high_risk_cell_count`;
+the public synthetic fixture set keeps each declared high-risk cell at two or
+more cases so stale/superseded/refuted/uncertain anchor behavior remains easy
+to audit.
+
+The public Track D fixture set also includes post-compaction and horizon-lost
+coverage for `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStart`,
+`PreCompact`, and `Stop` gaps from the design matrix. `PreCompact`, `Stop`, and
+`SubagentStop` are modeled as silent recording stages in this runner: they
+preserve, flush, or reconcile source-linked event state for later decisions,
+but they do not emit foreground prompt anchors. End-to-end
+`SubagentStart`/`SubagentStop` behavior is represented by explicit sequence
+diagnostics that validate related-event links across
+`UserPromptSubmit -> SubagentStart -> SubagentStop -> PostCompact`; these
+sequence cases remain synthetic and do not claim live subagent host wiring.
 
 Track D reports now also include `benchmark_framing` and
 `metrics.no_harm_when_spec_complete` for the #453 boundary. The synthetic

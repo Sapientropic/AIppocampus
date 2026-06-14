@@ -254,6 +254,21 @@ class MacroOrientationStateTests(unittest.TestCase):
         self.assertEqual(momentum["claim_permission"], "no_claim_before_reopen")
         self.assertFalse(momentum["fact_claim_allowed"])
 
+    def test_invalid_relation_position_active_layer_fails_validation(self) -> None:
+        entry = state.build_macro_orientation_state(
+            project="AIppocampus",
+            hexagram="屯",
+            source_refs=({"source_id": "source-active-layer"},),
+            updated_at="2026-06-14T00:00:00Z",
+        )
+        invalid = dict(entry)
+        invalid["relation_position"] = {**dict(entry["relation_position"]), "active_layer": "bad-layer"}
+
+        validation = state.validate_macro_orientation_state(invalid)
+
+        self.assertFalse(validation["ok"])
+        self.assertIn("relation_position_active_layer_invalid", validation["errors"])
+
 
 if __name__ == "__main__":
     unittest.main()

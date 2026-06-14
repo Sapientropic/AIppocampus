@@ -8,9 +8,11 @@ Status: deterministic coding slices implemented in
 adjudication is implemented in
 `aippocampus_runtime/coding/episode_arc_private_adjudication.py`; public
 gappy-chain fixture calibration is exposed by
-`build_public_gappy_chain_calibration_report()`. Broader Episode/Arc coverage
-remains an active owner track and should not be claimed complete from these
-slices alone.
+`build_public_gappy_chain_calibration_report()`. The public route-producer
+fixture is exposed by
+`aippocampus_runtime.coding.episode_arc_route_producer`. Broader Episode/Arc
+coverage remains an active owner track and should not be claimed complete from
+these slices alone.
 
 Episode/Arc read-models preserve ordered local causality that is easy to lose
 in flattened memory: tried route, failed check, user correction, accepted
@@ -115,6 +117,21 @@ event ids, thread ids, registry paths, or local machine paths. This is a
 selected deterministic fixture, not live behavior evidence or a broad public
 corpus.
 
+`episode_arc_route_producer.build_public_episode_arc_route_producer_report()`
+adds the #1362/#1363 public route-producer slice. It runs a small public
+VCS/hard-event-style cohort over commit revert, PR rejection/merge, issue
+reopen, patch supersession, workaround removal, missing-middle, and wrong-order
+families. The report proves the intended live-recall route shape without
+adopting it by default: complete rejected-route chains may produce compact
+`prevent_repeated_wrong_route` guidance, unresolved frontiers become
+`reopenable_route`, and gappy/wrong-order chains degrade to refresh-source
+guidance. The report serializes family names, event-kind order, gap labels,
+source-ref hash counts, and aggregate metrics only; it does not serialize raw
+source text, source refs, event ids, thread ids, registry paths, or local paths.
+This closes the public deterministic route-producer/evidence slice and the
+bounded #663 owner track, not live host behavior lift or default route-producer
+adoption.
+
 The sequence-packet reopen helper is intentionally stricter than the arc
 builder. A packet cannot reopen source by itself because it only carries compact
 timeline handles and hashes. The helper needs a clean source-ref catalog from
@@ -136,7 +153,6 @@ ids, local paths, or registry paths. The first dated evidence slice is
 
 This slice cannot claim:
 
-- the broader #663 Episode/Arc owner track is complete;
 - live private-history behavior lift;
 - private-history generality beyond the aggregate cohort;
 - Journey instantiation quality;

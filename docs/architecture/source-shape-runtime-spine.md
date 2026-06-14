@@ -1,90 +1,142 @@
 # Source-Shape Runtime Spine
 
-Role: active design.
+Role: current contract.
 
-Status: reader-facing map for the source-shape integration owners. This is not
-a runtime contract yet. Use it to find the current owner issue, source file, and
-claim boundary before changing Macro, Dream, recall, avatar, or continuity-map
-integration.
+The source-shape runtime spine is the small shared contract for turning
+producer-owned diagnostics into navigation-only route pressure. It connects
+parallel derivation bundles, local/global compatibility, Dream/Macro recheck,
+avatar or familiarity posture, and active recall without creating a second
+recall pipeline or a new source of truth.
 
-## Why This Exists
+Runtime owner:
 
-AIppocampus now has several strong but separately named architecture tracks:
-Macro/Yi derivations, Dream jobs, local/global compatibility, familiarity
-cards, avatar illumination, and active recall. The runtime gap is not that any
-one track is missing; it is that a later agent can no longer quickly see how the
-tracks compose.
+- `aippocampus_runtime.source_shape`
+- Producer contract: `docs/architecture/parallel-derivation-compatibility.md`
+- Tests: `tests/aippocampus/test_source_shape_runtime.py` and the source-shape
+  fixture in `tests/aippocampus/test_active_recall.py`
 
-The source-shape spine is the proposed composition layer:
+## Runtime API
 
-```text
-shared source snapshot
-  -> parallel derivations and local sections
-  -> compatibility / recheck diagnostics
-  -> source-shape descriptor
-  -> bounded projection into recall, Dream, avatar, or foreground packets
-```
+`build_source_shape_descriptor(...)` builds a `source_shape_descriptor` from
+safe source refs, source-snapshot ids, optional derivation summaries,
+compatibility diagnostics, temporal semantics, guard inputs, and producer
+signals.
 
-Every output remains navigation until source is reopened or already source-open
-within scope.
+Callers must be able to read `descriptor_state`:
 
-## Agent Fast Path
+- `complete`: source refs, required time semantics, compatible derivation, and
+  projection policy passed.
+- `incomplete`: a source-backed route exists, but freshness, authority,
+  compatibility, derivation, or time semantics require reopen/recheck first.
+- `diagnostic_only`: privacy/source availability blocks ordinary projection.
 
-If you are touching one of these areas, start here first:
+`project_source_shape_for_foreground(...)` returns the default compact
+foreground projection. It may carry route posture, source-ref count,
+`risk_flags`, `triage_rank_reason_codes`, and a source-reopen instruction. It
+does not expose guard internals, raw diagnostics, Dream text, avatar internals,
+macro state, local paths, or private source text.
 
-| You are changing | First owner | Then read |
-| --- | --- | --- |
-| Macro/Yi derivation compatibility | #1399 | [yi-macro-runtime-interfaces.md](coordination/yi-macro-runtime-interfaces.md) |
-| Local/global section glue | #1394 | [agent-native-recall-facade.md](recall/agent-native-recall-facade.md) |
-| Runtime spine, guard order, recheck events, or projection | #1417 | this file, then the relevant child issue |
-| Dream <-> Macro feedback | #1412 | [dream-task-design.md](../research/dream-task-design.md), then Dream runtime files |
-| Familiarity cards, avatar invalidation, or decision shadows | #1407 | [source-backed-familiarity-map.md](recall/source-backed-familiarity-map.md) |
-| Active recall consuming structural diagnostics | #1428 | [agent-native-recall-facade.md](recall/agent-native-recall-facade.md) and [source-backed-attention-router.md](recall/source-backed-attention-router.md) |
+`explain_source_shape_descriptor(...)` returns the public-safe explain/deepen
+surface with guard diagnostics, temporal semantics, derivation summary, and
+safe source refs. This is where omitted reason codes are recovered.
 
-GitHub Issues are the executable queue. This page is the map, not a second
-queue.
+`source_shape_active_recall_priorities(...)` and
+`apply_source_shape_priority_to_active_recall_context(...)` adapt
+`source_shape_descriptor` and `runtime_recheck_event` rows into active-recall
+priority input. They may reorder or front-load source reopen routes and add
+navigation-only risk flags. They cannot raise authority or grant claim
+permission.
 
-## Concept Status Map
+## Invocation Modes
 
-| Concept | Status | Owner issue | Current code / doc anchor | Boundary |
-| --- | --- | --- | --- | --- |
-| Source-backed kernel | Current contract | none | [architecture-overview.md#source-backed-kernel-contract](architecture-overview.md#source-backed-kernel-contract) | Clean source and source reopen remain the authority for claims. |
-| Source-shape runtime spine | Active design | #1417 | this file | No new memory store, global score, or fact authority. |
-| `parallel_derivation_bundle` | Active design | #1399, #1400-#1405 | `aippocampus_runtime.macro.*`, `aippocampus_runtime.navigation.local_global_compatibility` | Shared derivations must declare snapshot/source-basis and compatibility before route flattening. |
-| `source_shape_descriptor` | Active design | #1411 | pending runtime owner | One descriptor should translate module-specific signals into a bounded shape description. |
-| Runtime recheck event | Active design | #1421 | pending runtime owner | Recheck events request review; they do not mutate source truth or Macro state. |
-| Interlayer coupling surface | Active design | #1402 | `macro.three_powers`, `macro.line_topology`, `macro.momentum`, `macro.perturbation` | Cross-layer diagnostics run before flattening and stay navigation-only. |
-| Local/global section compatibility | Partly implemented, hardening open | #1394 | `navigation.local_global_compatibility` | `glued_route`, `partial_glue`, and `obstruction` route attention; they are not facts. |
-| Partial-glue narrowing | Active design | #1406 | `navigation.local_global_compatibility` | Narrowing may preserve local consistency without hiding the broader obstruction. |
-| Dream/Yi recheck loop | Active design | #1412-#1416 | `dream.*`, `macro.*` | Dream can request recheck after adjudication; it must not directly rewrite Macro state. |
-| Active recall source-shape consumer | Active design | #1428 | `recall.agent_continuity`, `recall.macro_live_recall`, `recall.active_recall` | Structural diagnostics may influence priority/reopen order, not claim authority. |
-| Avatar illumination | Active design | #1407-#1410 | [source-backed-familiarity-map.md](recall/source-backed-familiarity-map.md) | Avatar posture emerges from valid source shape and degrades on invalidation. |
+Foreground recall may consume compact projection only. It can use source-shape
+pressure to decide what to reopen first, not what to say as fact.
 
-## Projection Rules
+Explicit explain/deepen may inspect diagnostics and temporal semantics, then
+reopen source or run the relevant producer again.
 
-- Query text decides what the agent is asking about.
-- Source-shape diagnostics may decide where to look first, what to reopen first,
-  and which route needs currentness review.
-- Hard masks, privacy, stale boundaries, and source authority run before
-  symbolic or structural navigation.
-- Compatibility diagnostics, Dream findings, avatar posture, Macro shape, and
-  route scores must not become fact evidence.
-- Ordinary foreground packets should use stable engineering vocabulary, not
-  symbolic design vocabulary.
+Background Dream, Macro, or compatibility workers may emit descriptors or
+`runtime_recheck_event` rows as backstage candidates. They remain
+direction-only until source is reopened or a stronger source-backed packet is
+built by an existing owner.
 
-## Current Consolidation Boundary
+Tests and fixtures may build descriptors directly from synthetic refs. This is
+the supported fixture path; direct module outputs from Dream, Macro, avatar, or
+compatibility code are not automatically projection-ready source-shape output.
 
-Do not open a no-harm benchmark owner from this page yet. The current work is
-still defining the runtime shape and projection contracts. No-harm evaluation
-should wait until those slices converge enough to test real risks instead of
-obvious boundaries.
+## Temporal Semantics
 
-## Maintenance
+A descriptor separates these fields:
 
-When a concept graduates:
+- `source_coverage_time`: source event/window coverage. A Section local
+  `section_time_window` maps here; the spine does not create a competing local
+  time model.
+- `materialized_at`: when the producer extracted or materialized the artifact.
+- `built_at`: when the descriptor was built.
+- `valid_after`, `valid_until`, `review_after`: validity or review windows.
+- `topic_epoch`, `source_epoch`, `invalidation_epoch`: epoch comparison fields.
+- `invalidation_reasons`, `recheck_on`: signals that can request reopen/recheck.
 
-1. Move the operational rule to the specific runtime contract or skill
-   reference.
-2. Leave a short pointer here.
-3. Update the owner issue status.
-4. Do not mirror long rules across multiple docs.
+Missing coverage time degrades to reopen/diagnostic behavior. Calendar age
+alone is not semantic staleness. Epoch mismatch, explicit invalidation, stale
+currentness, conflicts, or missing time can request source reopen; privacy and
+missing refs can block projection.
+
+## Guard Order
+
+Guards run in this order, and earlier blocking or degrading guards win:
+
+1. Privacy / blocked boundary.
+2. Source availability and source refs.
+3. Freshness / invalidation / recheck triggers.
+4. Authority and claim permission.
+5. Local/global compatibility.
+6. Parallel derivation compatibility / source-shape completeness.
+7. Route/avatar/Dream projection permission.
+8. Ranking, delivery, or foreground formatting.
+
+Later projection, ranking, or formatting cannot raise a descriptor above
+`authority_level = direction_only` or `claim_permission = none`. Diagnostics
+remain inspectable through explain/deepen even when foreground receives only a
+compact posture.
+
+## Foreground Boundary
+
+Default foreground projection is intentionally tiny:
+
+- `source_shape_id`
+- `route_posture`: `active`, `shadowed`, or `blocked`
+- `action_grammar`: `reopenable_route`, `direction_with_ref`, or
+  `ignore_or_blocked`
+- `source_ref_count`
+- `risk_flags`
+- `triage_rank_reason_codes`
+- `recommended_next`
+- `source_reopen_required_before_claim`
+
+Debug-only or explain/deepen-only fields include guard diagnostics, temporal
+internals, derivation summaries, compatibility detail, Dream hypotheses,
+avatar posture detail, Macro state, raw source snippets, and local paths.
+
+Blocked, stale, private, or incomplete descriptors must not produce an active
+foreground posture or route claim. At most they produce shadow/blocked reopen
+guidance.
+
+## Runtime Terms
+
+Use engineering terms in code, tests, public contracts, and foreground packets:
+
+| Term | Meaning |
+| --- | --- |
+| `source_shape_descriptor` | Normalized navigation-only descriptor built by the runtime spine. |
+| `source_snapshot` | Safe ids, epochs, and coverage handles for the source basis. |
+| `derivation_dag` | Producer-owned derivation structure summarized by presence/counts here. |
+| `compatibility_diagnostic` | Guard result that may block or degrade projection. |
+| `invalidation_reason` | Freshness/currentness signal requesting reopen or recheck. |
+| `projection_allowed` | Whether compact route guidance may be projected after all guards. |
+| `degrade_to` | Lower-authority surface for blocked or suspect descriptors. |
+| `runtime_recheck_event` | Direction-only event that asks consumers to reopen or recheck source. |
+
+Design vocabulary from Dream/Yi/avatar discussions remains useful source
+context, but ordinary runtime packets should lead with these engineering terms
+and keep symbolic vocabulary in design/debug material only.

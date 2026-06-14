@@ -40,9 +40,45 @@ python -m ruff check benchmarks\aippocampus\benchmark_question_aware_real_histor
 - Question-aware term coverage: 1.0
 - Question-aware over question-blind delta: 0.75
 - Answer-usefulness delta: 1.0
+- No-question retrieval recall: 0.5
+- Question-aware retrieval recall: 1.0
+- Retrieval recall delta: 0.5
+- No-question answer-support proxy: 0.5
+- Question-aware answer-support proxy: 1.0
+- Answer-support proxy delta: 0.5
 - Manual-query-reduction delta: 1.5
 - Question-aware wrong-hint rate: 0.0
+- Stale question carryover count: 0
+- Missed resurfacing without question tracking count: 2
+- Wrong-route drag count: 0
+- Noise false-positive count: 0
 - Negative controls passed: 2/2 (`noise` and `code_heavy` skip reasons)
+
+Baseline preregistration and materialization-review readout:
+
+- Preregistered cohort: checked-in `question_aware_public_shadow_v1`, with
+  public VCS-style and public agent-trajectory cases.
+- Compared arms: question-blind same-row structural baseline, selected plain
+  answer-review baseline, deterministic no-question retrieval/answer proxy
+  baseline, and question-aware source-reopen review.
+- Primary readouts: question-aware over question-blind structural delta,
+  answer-usefulness delta, retrieval-recall delta, answer-support proxy delta,
+  manual-query-reduction delta, and question-aware wrong-hint rate.
+- No-question retrieval scoring fields: source-ref count, confidence, and
+  created_at only. It does not score using question text, question labels,
+  linked-question payloads, theme labels, or theme ids.
+- Materialization review status: `public_shadow_review_evidence_ready`.
+- Reviewer usefulness categories observed: source-reopen usefulness,
+  manual-search reduction, bounded wrong-route drag, selected
+  candidate/link/theme materialization, and dynamic-threshold regression guard.
+- Public-safe local calibration status: `public_safe_local_calibration_ready`.
+- False-positive classes recorded: stale question carryover,
+  noise/code promoted to question, and wrong-route drag.
+- False-negative classes recorded: missed resurfacing without question tracking
+  and over-split recurring question.
+- Boundary: this is a public deterministic no-question retrieval/answer
+  baseline shape, not a broad public/private calibration or live answer-quality
+  claim.
 
 Threshold readout from the selected calibration fixture:
 
@@ -55,12 +91,17 @@ Threshold readout from the selected calibration fixture:
 This retires the public-replayable shadow-case gap added to #248 on
 2026-06-08. It shows a checked-in source-replayable path for question-aware
 source reopen, answer-review deltas, adaptive-threshold readout, and
-noise/code negative controls.
+noise/code negative controls. It also records the fair #1367 public baseline
+shape: the no-question arm retrieves from the same public candidate pool
+without question/theme labels and reports retrieval plus answer-support proxy
+metrics.
 
-Do not close #248 from this slice. The benchmark still uses selected public
-fixtures, not a broad public corpus, private-history answer-quality cohort, or
-live user-visible trial. It also does not decide default question-index or
-vector prefilter adoption.
+This slice makes #1368 closeable through the issue's public-safe extracted
+fixture path. Together with the already-landed #1367 and #1369 slices, #248 can
+close as a bounded public-safe question-tracking owner closeout. That closeout
+does not mean broad private-history calibration, live user-visible recall lift,
+theme-resonance quality, default prefilter adoption, or source truth from
+question/theme rows.
 
 ## Can Claim
 
@@ -69,17 +110,26 @@ vector prefilter adoption.
   paths.
 - Question-aware fields improved selected source-reopened answer usefulness
   over the shadow plain baseline on this fixture.
+- The report preregisters the selected public baseline/cohort and records
+  materialization-review categories for manual-search reduction and wrong-route
+  drag.
+- The report records a deterministic no-question retrieval/answer proxy arm
+  whose scoring excludes question/theme fields, with retrieval-recall delta
+  0.5 and answer-support proxy delta 0.5 on the checked-in fixture.
 - The public shadow report records static-threshold and adaptive-threshold
   behavior so regressions do not silently collapse back to fixed-threshold
   matching.
 - The fixture includes multilingual/noise and code negative controls.
+- The public-safe calibration readout records stale-carryover, missed-
+  resurfacing, wrong-route-drag, false-positive, and false-negative classes.
 
 ## Cannot Claim
 
 - Private real-history answer quality.
+- Broad no-question-aware retrieval baseline beyond this checked-in public
+  fixture shape.
 - Live user-visible recall improvement.
 - Broad question-tracking quality.
 - Theme-resonance calibration.
 - Default prefilter adoption.
 - Source truth from question, theme, or frontier rows.
-- #248 closeout.

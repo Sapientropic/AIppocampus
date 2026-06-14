@@ -1,0 +1,260 @@
+{
+  "candidate_quality_review": {
+    "cases": [
+      {
+        "candidate_family": "rejected_route_recovery",
+        "candidate_id": "dream_review_rejected_route",
+        "false_positive_category": "none",
+        "foreground_eligible_after_source_support": true,
+        "privacy_blocked": false,
+        "review_verdict": "useful",
+        "source_overlap": true,
+        "source_reopenable": true
+      },
+      {
+        "candidate_family": "stale_hypothesis_demoted",
+        "candidate_id": "dream_review_currentness_check",
+        "false_positive_category": "none",
+        "foreground_eligible_after_source_support": true,
+        "privacy_blocked": false,
+        "review_verdict": "useful",
+        "source_overlap": true,
+        "source_reopenable": true
+      },
+      {
+        "candidate_family": "temporary_concern_extinction",
+        "candidate_id": "dream_review_temporary_concern",
+        "false_positive_category": "none",
+        "foreground_eligible_after_source_support": false,
+        "privacy_blocked": false,
+        "review_verdict": "quiet_no_help",
+        "source_overlap": true,
+        "source_reopenable": true
+      },
+      {
+        "candidate_family": "superseded_route",
+        "candidate_id": "dream_review_stale_route",
+        "false_positive_category": "stale_route",
+        "foreground_eligible_after_source_support": false,
+        "privacy_blocked": false,
+        "review_verdict": "rejected",
+        "source_overlap": true,
+        "source_reopenable": true
+      },
+      {
+        "candidate_family": "generic_semantic_bridge",
+        "candidate_id": "dream_review_generic_vocab_bridge",
+        "false_positive_category": "noisy_generic_vocab",
+        "foreground_eligible_after_source_support": false,
+        "privacy_blocked": false,
+        "review_verdict": "rejected",
+        "source_overlap": false,
+        "source_reopenable": false
+      },
+      {
+        "candidate_family": "sensitive_boundary",
+        "candidate_id": "dream_review_sensitive_private_hint",
+        "false_positive_category": "privacy_or_safety_boundary",
+        "foreground_eligible_after_source_support": false,
+        "privacy_blocked": true,
+        "review_verdict": "blocked",
+        "source_overlap": true,
+        "source_reopenable": false
+      }
+    ],
+    "claim_level": "sanitized_public_candidate_review_table",
+    "kind": "public_synthetic_dream_candidate_quality_review",
+    "metrics": {
+      "false_positive_candidate_count": 3,
+      "false_positive_candidate_rate": 0.5,
+      "false_positive_categories": [
+        "noisy_generic_vocab",
+        "privacy_or_safety_boundary",
+        "stale_route"
+      ],
+      "foreground_leak_count": 0,
+      "noisy_generic_vocab_false_positive_count": 1,
+      "privacy_or_safety_blocked_count": 1,
+      "quiet_no_help_candidate_count": 1,
+      "reviewed_candidate_count": 6,
+      "source_reopenable_candidate_count": 4,
+      "source_reopenable_rate": 0.666667,
+      "stale_route_false_positive_count": 1,
+      "useful_candidate_count": 2
+    },
+    "source_reachability_boundary": "Dream may nominate candidate routes, but source-backed support and source reopen decide foreground use."
+  },
+  "cases": [
+    {
+      "baseline_manual_query_count": 2,
+      "baseline_route_found": false,
+      "case_family": "coding_rejected_route",
+      "case_id": "rejected_route_recovery",
+      "dream_action_delta": "useful",
+      "dream_action_delta_useful": true,
+      "dream_manual_query_count": 0,
+      "dream_no_harm": false,
+      "dream_no_help": false,
+      "dream_outcome_class": "",
+      "dream_regression": false,
+      "dream_route_found": true,
+      "dream_route_lift": true,
+      "dream_verification_cost_delta": -2,
+      "dream_visible_hint": true,
+      "dream_wrong_hint": false,
+      "hint_policy": "bounded_action_time_hint",
+      "source_reopen_required": true,
+      "suppressed_regression_risk": false,
+      "suppressed_wrong_hint": false
+    },
+    {
+      "baseline_manual_query_count": 1,
+      "baseline_route_found": true,
+      "case_family": "stale_currentness",
+      "case_id": "stale_hypothesis_demoted",
+      "dream_action_delta": "useful",
+      "dream_action_delta_useful": true,
+      "dream_manual_query_count": 0,
+      "dream_no_harm": false,
+      "dream_no_help": false,
+      "dream_outcome_class": "",
+      "dream_regression": false,
+      "dream_route_found": true,
+      "dream_route_lift": true,
+      "dream_verification_cost_delta": -1,
+      "dream_visible_hint": true,
+      "dream_wrong_hint": false,
+      "hint_policy": "bounded_currentness_check",
+      "source_reopen_required": true,
+      "suppressed_regression_risk": false,
+      "suppressed_wrong_hint": false
+    },
+    {
+      "baseline_manual_query_count": 0,
+      "baseline_route_found": false,
+      "case_family": "temporary_concern_extinction",
+      "case_id": "temporary_concern_stays_quiet",
+      "dream_action_delta": "quiet",
+      "dream_action_delta_useful": false,
+      "dream_manual_query_count": 0,
+      "dream_no_harm": true,
+      "dream_no_help": true,
+      "dream_outcome_class": "no_help_quiet",
+      "dream_regression": false,
+      "dream_route_found": false,
+      "dream_route_lift": false,
+      "dream_verification_cost_delta": 0,
+      "dream_visible_hint": false,
+      "dream_wrong_hint": false,
+      "hint_policy": "quiet_no_delivery",
+      "source_reopen_required": true,
+      "suppressed_regression_risk": false,
+      "suppressed_wrong_hint": false
+    },
+    {
+      "baseline_manual_query_count": 0,
+      "baseline_route_found": false,
+      "case_family": "irrelevant_or_over_personalized_hint",
+      "case_id": "wrong_hint_negative_control",
+      "dream_action_delta": "quiet",
+      "dream_action_delta_useful": false,
+      "dream_manual_query_count": 0,
+      "dream_no_harm": true,
+      "dream_no_help": false,
+      "dream_outcome_class": "regression_risk_suppressed",
+      "dream_regression": false,
+      "dream_route_found": false,
+      "dream_route_lift": false,
+      "dream_verification_cost_delta": 0,
+      "dream_visible_hint": false,
+      "dream_wrong_hint": false,
+      "hint_policy": "suppress_wrong_or_over_personalized_hint",
+      "source_reopen_required": true,
+      "suppressed_regression_risk": true,
+      "suppressed_wrong_hint": true
+    }
+  ],
+  "claim_level": "public_synthetic_dream_vs_baseline_shadow",
+  "created_at": "2026-06-13T21:52:44Z",
+  "issue_readouts": {
+    "github_1364": {
+      "baseline_arms": [
+        "no_dream_baseline",
+        "bounded_dream_hint"
+      ],
+      "claim_level": "public_safe_shadow_not_live_default",
+      "closeout_eligible": true,
+      "cohort_defined_before_report": true,
+      "dream_no_help_count": 1,
+      "dream_regression_count": 0,
+      "dream_win_count": 2,
+      "suppressed_regression_risk_count": 1
+    },
+    "github_1365": {
+      "closeout_eligible": true,
+      "false_positive_candidate_count": 3,
+      "false_positive_categories": [
+        "noisy_generic_vocab",
+        "privacy_or_safety_boundary",
+        "stale_route"
+      ],
+      "foreground_leak_count": 0,
+      "review_table_recorded": true,
+      "reviewed_candidate_count": 6,
+      "source_reopenable_rate": 0.666667
+    },
+    "github_163": {
+      "closeout_eligible": false,
+      "dream_action_delta_useful_count": 2,
+      "dream_route_lift_count": 2,
+      "dream_wrong_hint_rate": 0.0,
+      "live_delivered_quality_measured": false,
+      "private_real_history_quality_measured": false,
+      "public_candidate_quality_review_measured": true,
+      "public_dream_vs_baseline_shadow_measured": true,
+      "public_safe_closeout_slice_ready": true
+    }
+  },
+  "kind": "aippocampus_public_dream_vs_baseline_shadow_report",
+  "metric_notes": {
+    "candidate_quality_review": "Sanitized candidate review counts useful, quiet/no-help, stale, noisy, and privacy/safety-blocked Dream nominations without raw private text.",
+    "dream_action_delta_useful_count": "Cases where the bounded Dream hint changes the action after source verification, such as avoiding a rejected route or checking currentness.",
+    "dream_route_lift_count": "Cases where Dream material finds a source-backed route with fewer manual queries than the no-Dream baseline.",
+    "dream_wrong_hint_rate": "Visible Dream hints marked stale, irrelevant, or over-personalized. Suppressed wrong-hint controls are counted separately."
+  },
+  "metrics": {
+    "case_count": 4,
+    "dream_action_delta_useful_count": 2,
+    "dream_action_delta_useful_rate": 0.5,
+    "dream_no_harm_count": 2,
+    "dream_no_harm_rate": 0.5,
+    "dream_no_help_count": 1,
+    "dream_regression_count": 0,
+    "dream_route_lift_count": 2,
+    "dream_route_lift_rate": 0.5,
+    "dream_verification_cost_delta_total": -3,
+    "dream_win_count": 2,
+    "dream_wrong_hint_count": 0,
+    "dream_wrong_hint_rate": 0.0,
+    "source_reopen_required_count": 4,
+    "suppressed_regression_risk_count": 1,
+    "suppressed_wrong_hint_count": 1
+  },
+  "ok": true,
+  "policy_boundary": {
+    "cannot_claim_causal_user_lift": true,
+    "cannot_claim_general_dream_quality": true,
+    "deterministic_public_fixture_only": true,
+    "dream_material_is_navigation_only": true,
+    "no_external_model_calls": true,
+    "no_live_delivery": true,
+    "source_reopen_required_for_claims": true
+  },
+  "privacy": {
+    "absolute_paths_serialized": false,
+    "fixture_contains_private_user_data": false,
+    "raw_case_text_serialized": false,
+    "raw_source_refs_serialized": false
+  },
+  "schema_version": 1
+}
