@@ -115,6 +115,17 @@ class AippocampusMcpServerTests(unittest.TestCase):
             },
         )
 
+    def test_tools_only_server_returns_empty_resource_lists(self) -> None:
+        resources = mcp.handle_request(
+            {"jsonrpc": "2.0", "id": 21, "method": "resources/list"}
+        )
+        templates = mcp.handle_request(
+            {"jsonrpc": "2.0", "id": 22, "method": "resources/templates/list"}
+        )
+
+        self.assertEqual(resources["result"], {"resources": []})
+        self.assertEqual(templates["result"], {"resourceTemplates": []})
+
     def test_register_thread_passes_explicit_provider_to_registry(self) -> None:
         with mock.patch.object(
             mcp.registry,

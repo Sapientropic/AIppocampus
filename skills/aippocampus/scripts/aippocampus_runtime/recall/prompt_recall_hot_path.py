@@ -10,6 +10,7 @@ instead of adding another foreground search surface.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from pathlib import Path
@@ -24,6 +25,38 @@ from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.warm_ambient.query_pattern_routes import select_query_pattern_packet
 
 MAX_STAGE_CANDIDATES = 3
+SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
+
+
+def _iter_jsonl_dicts(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(item, dict):
+                    rows.append(item)
+    except OSError:
+        return []
+    return rows
+
+
+def _source_factual_aliases_path(paths: dict[str, Any]) -> Path | None:
+    explicit = paths.get("source_factual_aliases_jsonl")
+    if explicit:
+        return Path(explicit)
+    clean_messages = paths.get("clean_source_messages_jsonl")
+    if clean_messages:
+        return Path(clean_messages).with_name(SOURCE_FACTUAL_ALIASES_FILENAME)
+    clean_dir = paths.get("clean_source_dir")
+    if clean_dir:
+        return Path(clean_dir) / SOURCE_FACTUAL_ALIASES_FILENAME
+    return None
 
 
 def candidate_indexes_from_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
@@ -31,12 +64,17 @@ def candidate_indexes_from_registry(registry: dict[str, Any]) -> list[dict[str, 
     for entry in registry.get("threads") or []:
         if not isinstance(entry, dict):
             continue
+        raw_paths = entry.get("paths")
+        paths: dict[str, Any] = raw_paths if isinstance(raw_paths, dict) else {}
+        alias_path = _source_factual_aliases_path(paths)
+        source_factual_aliases = _iter_jsonl_dicts(alias_path) if alias_path else []
         rows.append(
             {
                 "thread_key": entry.get("thread_key"),
-                "paths": entry.get("paths") or {},
+                "paths": paths,
                 "workspace": entry.get("workspace_name") or entry.get("workspace"),
                 "source_refs": [{"thread_key": entry.get("thread_key"), "line": None}],
+                "source_factual_aliases": source_factual_aliases,
                 "thread_profile": {
                     "terms": unique_preserve(
                         [
@@ -48,8 +86,7 @@ def candidate_indexes_from_registry(registry: dict[str, Any]) -> list[dict[str, 
                         ],
                         limit=16,
                     ),
-                    "representative_message_ids": entry.get("representative_message_ids")
-                    or [],
+                    "representative_message_ids": entry.get("representative_message_ids") or [],
                 },
             }
         )
@@ -218,6 +255,100 @@ def _cue_cache_candidates(
             item["hot_path_navigation_only"] = True
         hits.append(item)
     return _hit_rows(hits), "stale_navigation_only" if stale else ""
+
+
+def _factual_route_intent(prompt: str) -> bool:
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    if (
+        prompt_cues.explicit_recall_terms(text)
+        or prompt_cues.natural_evidence_intent(text)
+        or prompt_cues.source_evidence_intent(text)
+    ):
+        return True
+    return bool(
+        re.search(
+            r"(?i)\b(where|what|when|who|which|whose)\b.*\b(i|my|me|we|our)\b|"
+            r"\b(i|my|me|we|our)\b.*\b(kept|keep|stored|put|called|named|prefer|"
+            r"preferred|favorite|favourite|use|used|adopted|bought|found|left)\b|"
+            r"(我|我们).*(放|存|叫|偏好|喜欢|用|采用|买|留|在哪|哪里|哪儿|什么|谁|什么时候)",
+            text,
+        )
+    )
+
+
+def _row_alias_terms(row: dict[str, Any]) -> list[str]:
+    terms: list[str] = []
+    for key in (
+        "query_aliases",
+        "aliases",
+        "factual_alias_terms",
+        "route_terms",
+        "answer_bearing_terms",
+        "source_terms",
+    ):
+        value = row.get(key)
+        if isinstance(value, (list, tuple, set)):
+            terms.extend(str(item) for item in value)
+        elif isinstance(value, str):
+            terms.append(value)
+    return unique_preserve(terms, limit=32)
+
+
+def _row_source_refs(row: dict[str, Any], candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, dict)]
+    if refs:
+        return refs
+    ref: dict[str, Any] = {"thread_key": _candidate_id(candidate)}
+    for source_key in ("message_id", "turn_id", "line", "source_line", "phase"):
+        value = row.get(source_key)
+        if value not in (None, "", []):
+            ref["line" if source_key == "source_line" else source_key] = value
+    return [ref]
+
+
+def _source_factual_alias_candidates(
+    *,
+    prompt: str,
+    query_terms: list[str],
+    candidate_indexes: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str]:
+    if not _factual_route_intent(prompt):
+        return [], "prompt_lacks_factual_route_intent"
+    prompt_terms = unique_preserve(
+        [prompt, *query_terms, *prompt_cues.expand_query_terms(prompt)],
+        limit=32,
+    )
+    hits: list[tuple[float, dict[str, Any]]] = []
+    for candidate in candidate_indexes:
+        alias_rows = candidate.get("source_factual_aliases") if isinstance(candidate, dict) else []
+        if not isinstance(alias_rows, list):
+            continue
+        best: tuple[float, dict[str, Any]] | None = None
+        for row in alias_rows:
+            if not isinstance(row, dict):
+                continue
+            terms = _row_alias_terms(row)
+            if not terms:
+                continue
+            overlap = sum(1 for term in prompt_terms if _terms_overlap(term, terms))
+            if overlap <= 0:
+                continue
+            scored = (float(overlap), row)
+            if best is None or scored[0] > best[0]:
+                best = scored
+        if best is None:
+            continue
+        item = dict(candidate)
+        item["source_refs"] = _row_source_refs(best[1], candidate)
+        item["hot_path_reason"] = "source_factual_aliases"
+        item["hot_path_navigation_only"] = True
+        item["source_reopen_required_for_facts"] = True
+        item["hot_path_top_score"] = best[0]
+        hits.append((best[0], item))
+    hits.sort(key=lambda pair: (-pair[0], _candidate_id(pair[1])))
+    return _hit_rows([item for _score, item in hits]), ""
 
 
 def _living_cue_candidates(
@@ -504,6 +635,33 @@ def run_hot_path_funnel(
     if candidates:
         stages.append(
             _stage(
+                stage="source_factual_aliases",
+                status="skip",
+                candidate_count=0,
+                fallback_reason="already_hit",
+                start=stage_start,
+            )
+        )
+    else:
+        candidates, alias_reason = _source_factual_alias_candidates(
+            prompt=prompt,
+            query_terms=query_terms,
+            candidate_indexes=candidate_indexes,
+        )
+        stages.append(
+            _stage(
+                stage="source_factual_aliases",
+                status="hit" if candidates else "skip",
+                candidate_count=len(candidates),
+                fallback_reason=alias_reason or ("" if candidates else "no_source_factual_alias_match"),
+                start=stage_start,
+            )
+        )
+
+    stage_start = time.perf_counter()
+    if candidates:
+        stages.append(
+            _stage(
                 stage="bounded_trigram_fts",
                 status="skip",
                 candidate_count=0,
@@ -564,5 +722,13 @@ def run_hot_path_funnel(
         "query_pattern_routes": query_pattern_packet,
         "source_reopen_promotion_count": 0,
         "local_only": True,
+        "source_boundary": {
+            "local_continuity_memory_can_use_factual_aliases": True,
+            "source_factual_aliases_are_navigation_only": True,
+            "source_reopen_required_for_facts": True,
+            "raw_source_text_emitted": False,
+            "alias_values_emitted": False,
+            "provider_call_count": 0,
+        },
         "elapsed_ms": _elapsed_ms(overall_start),
     }

@@ -37,6 +37,13 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.continuity_domain_salience import (
+    add_continuity_domain_salience_args,
+    continuity_domain_salience_kwargs,
+    continuity_domain_salience_write_enabled,
+    public_continuity_domain_salience_summary,
+    run_continuity_domain_salience_adapter,
+)
 from aippocampus_runtime.subconscious.deterministic_jobs import (
     DETERMINISTIC_RUNNERS,
     run_deterministic_job,
@@ -194,6 +201,10 @@ def public_jobs_payload(result: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(result.get("event_salience_gate"), Mapping):
         payload["event_salience_gate"] = public_event_salience_summary(
             result["event_salience_gate"]
+        )
+    if isinstance(result.get("continuity_domain_salience_adapter"), Mapping):
+        payload["continuity_domain_salience_adapter"] = public_continuity_domain_salience_summary(
+            result["continuity_domain_salience_adapter"]
         )
     error = public_error(result.get("error"))
     if error:
@@ -541,6 +552,11 @@ def run_jobs(
     dry_run: bool = False,
     no_write: bool = False,
     event_salience_gate: bool = False,
+    continuity_domain_salience_mode: str = "off",
+    continuity_domain_events_path: Path | None = None,
+    continuity_domain_snapshot_dir: Path | None = None,
+    continuity_domain_clean_source_dir: Path | None = None,
+    continuity_domain_publish: bool = False,
     concurrency: int = DEFAULT_CONCURRENCY,
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB,
     chat_fn: ChatFn = call_chat_json,
@@ -652,6 +668,22 @@ def run_jobs(
     indexed_results.sort(key=lambda item: item[0])
     results = [result for _, result in indexed_results]
 
+    def run_cd_salience(salience_report: Mapping[str, Any]) -> dict[str, Any]:
+        return run_continuity_domain_salience_adapter(
+            salience_report=salience_report,
+            registry_path=registry_path,
+            event_salience_output_path=event_salience_output_path,
+            mode=continuity_domain_salience_mode,
+            enabled=continuity_domain_salience_write_enabled(continuity_domain_salience_mode),
+            events_path=continuity_domain_events_path,
+            snapshot_dir=continuity_domain_snapshot_dir,
+            clean_source_dir=continuity_domain_clean_source_dir,
+            publish=continuity_domain_publish,
+            dry_run=dry_run,
+            no_write=no_write,
+        )
+
+    continuity_domain_salience_adapter = run_cd_salience({})
     if not no_write and not dry_run:
         # DeepSeek calls can run concurrently, but staging files are append-only
         # shared artifacts. Serialize writes here so multi-sample runs do not
@@ -690,6 +722,7 @@ def run_jobs(
                 event_salience_output_path,
                 aggregate_salience.get("sidecar_rows") or [],
             )
+            continuity_domain_salience_adapter = run_cd_salience(aggregate_salience)
     for deterministic_job in deterministic_jobs:
         try:
             results.append(
@@ -759,6 +792,7 @@ def run_jobs(
         if event_salience_output_path
         else "",
         "event_salience_gate": event_salience_report,
+        "continuity_domain_salience_adapter": continuity_domain_salience_adapter,
         "quality_diagnostics": [
             result["quality_diagnostics"]
             for result in results
@@ -796,6 +830,7 @@ def run_jobs_with_config(
         dry_run=config.dry_run,
         no_write=config.no_write,
         event_salience_gate=config.event_salience_gate,
+        **continuity_domain_salience_kwargs(config),
         concurrency=config.concurrency,
         samples_per_job=config.samples_per_job,
         chat_fn=chat_fn,
@@ -827,6 +862,7 @@ def main() -> int:
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     parser.add_argument("--samples-per-job", type=int, default=DEFAULT_SAMPLES_PER_JOB)
     parser.add_argument("--event-salience-gate", action="store_true")
+    add_continuity_domain_salience_args(parser)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")

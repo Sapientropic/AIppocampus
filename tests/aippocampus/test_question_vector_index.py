@@ -89,6 +89,61 @@ class QuestionVectorIndexTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dimensions"):
             index.search([1.0])
 
+    def test_provider_config_status_degrades_for_cjk_query_on_latin_only_model(self) -> None:
+        status = qvi.vector_provider_config_status(
+            query_text="我们采用了哪个登录安全机制？",
+            provider_config={
+                "provider": "local-test",
+                "model": "english-minilm",
+                "dimensions": 384,
+                "supported_language_buckets": ["en"],
+            },
+            expected_dimensions=384,
+        )
+
+        self.assertEqual(status["kind"], qvi.PROVIDER_CONFIG_STATUS_KIND)
+        self.assertEqual(status["status"], "provider_config_unsupported")
+        self.assertEqual(status["reason"], "embedding_language_mismatch")
+        self.assertEqual(status["query_language_bucket"], "cjk")
+        self.assertTrue(status["fallback"]["lexical_fallback_visible"])
+        self.assertTrue(status["fallback"]["source_reopen_required_for_claims"])
+        self.assertFalse(status["provider_checked_live"])
+        self.assertIn("provider_output_as_source_truth", status["cannot_claim"])
+
+    def test_provider_config_status_degrades_for_dimension_mismatch(self) -> None:
+        status = qvi.vector_provider_config_status(
+            query_text="Which login safety mechanism did we adopt?",
+            provider_config={
+                "provider": "local-test",
+                "model": "multilingual-e5",
+                "dimensions": 768,
+                "languages": ["multilingual"],
+            },
+            expected_dimensions=384,
+        )
+
+        self.assertEqual(status["status"], "provider_config_unsupported")
+        self.assertEqual(status["reason"], "embedding_dimension_mismatch")
+        self.assertEqual(status["configured_dimensions"], 768)
+        self.assertEqual(status["expected_dimensions"], 384)
+        self.assertTrue(status["fallback"]["vector_scores_are_navigation_only"])
+
+    def test_provider_config_status_accepts_matching_multilingual_route(self) -> None:
+        status = qvi.vector_provider_config_status(
+            query_text="登录安全机制",
+            provider_config={
+                "provider": "local-test",
+                "model": "multilingual-e5",
+                "dimensions": 384,
+                "supported_language_buckets": ["multilingual"],
+            },
+            expected_dimensions=384,
+        )
+
+        self.assertEqual(status["status"], "supported")
+        self.assertEqual(status["reason"], "")
+        self.assertEqual(status["supported_language_buckets"], ["multilingual"])
+
 
 if __name__ == "__main__":
     unittest.main()

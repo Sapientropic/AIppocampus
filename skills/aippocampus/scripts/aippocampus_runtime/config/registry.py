@@ -127,6 +127,7 @@ CONFIG_KNOBS = (
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY", "subconscious", "experimental", "background scheduling", "4"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "subconscious", "experimental", "background jobs", "4"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "subconscious", "experimental", "background jobs", "2"),
+    _knob("AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION", "subconscious", "experimental", "background jobs", "off"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_STAGING_WARN_ROWS", "subconscious", "internal_maintainer", "staging maintenance", "built-in threshold"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_STAGING_WARN_BYTES", "subconscious", "internal_maintainer", "staging maintenance", "built-in threshold"),
     _knob("AIPPOCAMPUS_LOG_MAX_BYTES", "ops/log_retention", "stable_public", "log retention", "built-in limit"),

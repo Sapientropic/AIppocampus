@@ -12,7 +12,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.navigation import attention_hot_router
+from aippocampus_runtime.navigation import attention_hot_router, attention_route_tokens
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -42,6 +42,35 @@ def _split_terms(values: Sequence[Any]) -> list[str]:
     return terms
 
 
+def _route_hints(route: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    return attention_route_tokens.route_hints_from_sources(route)
+
+
+def _hint_terms(route_hints: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    terms: list[Any] = []
+    semantic = _as_dict(route_hints.get("semantic_warming"))
+    familiarity = _as_dict(route_hints.get("familiarity_map"))
+    topology = _as_dict(route_hints.get("topology_explain_only"))
+    terms.extend(_as_list(semantic.get("semantic_aliases")))
+    terms.extend(_as_list(semantic.get("scout_family_votes")))
+    terms.append(semantic.get("topic_epoch_label"))
+    terms.extend(_as_list(familiarity.get("route_terms")))
+    terms.append(familiarity.get("first_source_to_reopen"))
+    terms.append(familiarity.get("freshness"))
+    terms.append(topology.get("topology_shape"))
+    return _split_terms(terms)
+
+
+def _semantic_hint_score(route_hints: Mapping[str, Mapping[str, Any]]) -> float:
+    semantic = _as_dict(route_hints.get("semantic_warming"))
+    return _float(semantic.get("semantic_score"))
+
+
+def _topology_risk_codes(route_hints: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    topology = _as_dict(route_hints.get("topology_explain_only"))
+    return [str(code) for code in _as_list(topology.get("risk_reason_codes")) if str(code)]
+
+
 def packet_bytes(value: Mapping[str, Any]) -> int:
     return len(json.dumps(dict(value), ensure_ascii=False, sort_keys=True).encode("utf-8"))
 
@@ -50,7 +79,7 @@ def public_attention_packet(packet: Mapping[str, Any] | None) -> dict[str, Any]:
     if packet is None:
         return {}
     diagnostics = _as_dict(packet.get("router_diagnostics"))
-    return {
+    public = {
         "route_id": str(packet.get("route_id") or ""),
         "output_mode": str(packet.get("output_mode") or ""),
         "action_grammar": str(packet.get("action_grammar") or ""),
@@ -62,6 +91,19 @@ def public_attention_packet(packet: Mapping[str, Any] | None) -> dict[str, Any]:
         "threshold": diagnostics.get("threshold"),
         "reason_codes": _as_list(diagnostics.get("reason_codes"))[:6],
     }
+    contract = _as_dict(packet.get("contract"))
+    if contract:
+        public["contract"] = {
+            "attention_score_is_not_evidence": bool(contract.get("attention_score_is_not_evidence")),
+            "route_value_is_not_memory_fact": bool(contract.get("route_value_is_not_memory_fact")),
+            "source_reopen_required_before_claim": bool(
+                contract.get("source_reopen_required_before_claim")
+            ),
+        }
+    route_hints = _route_hints(packet)
+    if route_hints:
+        public["route_hints"] = route_hints
+    return public
 
 
 def source_handles_for_attention_route(route: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -95,6 +137,7 @@ def source_handles_for_attention_route(route: Mapping[str, Any]) -> list[dict[st
 
 
 def attention_terms_for_route(route: Mapping[str, Any]) -> list[str]:
+    route_hints = _route_hints(route)
     text = " ".join(
         str(value or "")
         for value in (
@@ -105,6 +148,7 @@ def attention_terms_for_route(route: Mapping[str, Any]) -> list[str]:
             route.get("summary"),
             " ".join(str(label) for label in route.get("scope_labels") or []),
             " ".join(str(code) for code in route.get("triage_rank_reason_codes") or []),
+            " ".join(_hint_terms(route_hints)),
         )
     )
     return _split_terms([text])[:32]
@@ -113,7 +157,13 @@ def attention_terms_for_route(route: Mapping[str, Any]) -> list[str]:
 def attention_token_for_route(route: Mapping[str, Any], *, index: int) -> dict[str, Any]:
     currentness = str(route.get("currentness") or "").strip() or "needs_reopen"
     source_handles = source_handles_for_attention_route(route)
-    return {
+    route_hints = _route_hints(route)
+    semantic_score = max(
+        0.45 if route.get("route_topic") else 0.25,
+        _semantic_hint_score(route_hints),
+    )
+    risk_flags = [*_as_list(route.get("risk_flags")), *_topology_risk_codes(route_hints)]
+    token: dict[str, Any] = {
         "kind": "aippocampus_attention_route_token",
         "token_id": str(route.get("route_id") or f"attention_route_{index}"),
         "route_token_level": "source_span_token" if source_handles else "episode_or_question_token",
@@ -121,7 +171,7 @@ def attention_token_for_route(route: Mapping[str, Any], *, index: int) -> dict[s
         "route_label": str(route.get("route_label") or ""),
         "why_may_matter": str(route.get("why_this_may_matter") or ""),
         "scope": "project:AIppocampus",
-        "risk_flags": _as_list(route.get("risk_flags")),
+        "risk_flags": risk_flags,
         "triage_rank_reason_codes": _as_list(route.get("triage_rank_reason_codes")),
         "route_metadata": {
             "salience": "high" if index < 2 else "medium",
@@ -131,10 +181,13 @@ def attention_token_for_route(route: Mapping[str, Any], *, index: int) -> dict[s
         },
         "route_features": {
             "terms": attention_terms_for_route(route),
-            "semantic_score": 0.45 if route.get("route_topic") else 0.25,
+            "semantic_score": semantic_score,
             "evidence_packaging_score": 0.55 if source_handles else 0.0,
         },
     }
+    if route_hints:
+        token["route_hints"] = route_hints
+    return token
 
 
 def _token_terms(token: Mapping[str, Any]) -> set[str]:

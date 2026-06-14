@@ -21,6 +21,7 @@ from aippocampus_runtime.recall import retrieval as retrieval  # noqa: E402
 from aippocampus_runtime.recall.continuity_domains import (
     materialize_continuity_domains,  # noqa: E402
 )
+from aippocampus_runtime.runtime_recheck_events import build_runtime_recheck_event  # noqa: E402
 
 
 def _write_context_clean_source(clean: Path, rows: list[dict[str, object]]) -> None:
@@ -390,6 +391,55 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertEqual(result["memory_atmosphere"][0]["action_grammar"], "direction_only")
         self.assertFalse(result["memory_atmosphere"][0]["trust_contract"]["treat_as_fact"])
         self.assertEqual(result["source_reopen_routes"][0]["message_id"], "msg-stance")
+
+    def test_context_mode_consumes_source_shape_priority_without_changing_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            baseline = packaged_active_recall.active_recall_context(
+                prompt="继续这个路线",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                max_matches=3,
+            )
+            event = build_runtime_recheck_event(
+                producer="local_global_compatibility",
+                reason_code="local_global_obstruction",
+                source_refs=[
+                    {
+                        "thread_key": "thread-priority",
+                        "message_id": "msg-priority",
+                        "source_id": r"E:\private\source.jsonl",
+                    }
+                ],
+                scope={"kind": "compatibility", "token": "sk-test-secret"},
+                source_shape_id="compat:priority",
+                target_surfaces=("active_recall_priority",),
+                created_at="2026-06-14T00:00:00Z",
+            )
+            result = packaged_active_recall.active_recall_context(
+                prompt="继续这个路线",
+                cwd=root,
+                agent_self_notes_path=empty,
+                working_memory_path=empty,
+                source_shape_diagnostics=[event],
+                max_matches=3,
+            )
+            raw = json.dumps(result, ensure_ascii=False)
+
+        self.assertNotIn("source_shape_recheck_priority", baseline)
+        self.assertEqual(result["decision"], "context")
+        self.assertEqual(result["surface_counts"]["source_shape_diagnostics"], 1)
+        self.assertEqual(result["source_reopen_routes"][0]["message_id"], "msg-priority")
+        self.assertTrue(result["source_reopen_routes"][0]["source_shape_priority"])
+        self.assertIn("compatibility_obstruction", result["source_reopen_routes"][0]["risk_flags"])
+        self.assertEqual(result["source_shape_recheck_priority"][0]["authority_level"], "direction_only")
+        self.assertEqual(result["source_shape_recheck_priority"][0]["claim_permission"], "none")
+        self.assertTrue(result["source_boundary"]["source_shape_diagnostics_are_navigation_only"])
+        self.assertNotIn(r"E:\private\source.jsonl", raw)
+        self.assertNotIn("sk-test-secret", raw)
 
     def test_context_mode_cli_is_public_safe_and_omits_raw_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

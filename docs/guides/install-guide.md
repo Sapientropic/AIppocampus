@@ -21,19 +21,62 @@ The product friction budget lives in
 stay `personal_default`; core hook setup is the consented next step for ambient
 continuity, while diagnostics, sync, governance, and research surfaces stay
 operator or opt-in paths unless a user explicitly needs them.
+The low-friction producer boundary lives in
+[opt-in-continuity-boundary-audit.md](../architecture/opt-in-continuity-boundary-audit.md):
+enabled deterministic continuity maintenance should use auditability and
+rollback instead of repeated per-event confirmation, while prompt hooks and
+public reports keep their stricter source/privacy boundaries.
 
-For a new external user or agent host, follow the
-[10-minute public API path](public-api.md#ten-minute-public-path) first:
-package probe, read-only provider status, explicit onboarding only with user
-consent, then clean-source search for a first source-backed snippet. After that
-first source has been found, offer core hook setup as the normal ambient
-continuity step, still behind explicit trust and rollback. Treat plugin
-packaging, sync, object storage, Dream, semantic jobs, and benchmarks as
-advanced surfaces unless that path proves the user actually needs them.
+For a Codex user who has asked an agent to install or set up AIppocampus, start
+with the agent-mediated plugin path below. For no-clone package probing,
+non-Codex hosts, or CLI-only fallback, use the
+[10-minute public API path](public-api.md#ten-minute-public-path): package
+probe, read-only provider status, explicit onboarding only with user consent,
+then clean-source search for a first source-backed snippet. Treat sync, object
+storage, Dream, semantic jobs, and benchmarks as advanced surfaces unless that
+path proves the user actually needs them.
+
+## Agent-Mediated Codex Plugin Path
+
+Give this path to the active local agent when Codex is the intended host. The
+agent should install the local plugin package, verify foreground MCP tool
+visibility, then offer core hooks and one LLM-provider choice without turning
+the first run into a diagnostics checklist:
+
+```sh
+aippocampus plugin install --codex --verify
+```
+
+A successful verify reports `agent_callable_status: host_live_probe_ok` and a
+`host_probe.warning_summary` that separates fatal failures, AIppocampus
+actionable warnings, benign host-probe warnings, and unrelated host/plugin
+noise. It does not copy private memory data, enable hooks, or configure LLM
+keys.
+
+After verify, enable prompt/lifecycle hooks only when the user trusts this
+machine and wants ambient continuity:
+
+```sh
+aippocampus update apply --surface hooks
+```
+
+Then ask once whether to enable LLM-backed semantic/background routes. If yes,
+configure the provider environment or credential bridge described below. If
+not, continue with the useful no-key path: clean-source search, MCP/plugin
+recall, and local hooks that do not call an external model.
+
+Rollback stays one or two explicit commands:
+
+```sh
+aippocampus plugin uninstall --codex
+aippocampus hooks prompt uninstall
+aippocampus hooks lifecycle uninstall
+```
 
 ## First Recall Path
 
-Start with the PyPI `uvx` path:
+Use this path when you need a no-clone package probe, a non-Codex host, or a
+CLI-only fallback. Start with the PyPI `uvx` path:
 
 ```sh
 uvx aippocampus --help

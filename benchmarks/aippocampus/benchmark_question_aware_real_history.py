@@ -21,6 +21,7 @@ _paths.ensure_paths()
 
 import benchmark_cognitive_portrait as portrait  # noqa: E402
 import benchmark_question_tracking_calibration as calibration  # noqa: E402
+import question_aware_public_shadow_support as public_shadow_support  # noqa: E402
 from aippocampus_runtime.registry.api import registry_paths  # noqa: E402
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path  # noqa: E402
 from aippocampus_runtime.subconscious.question_extraction_gate import (  # noqa: E402
@@ -1114,7 +1115,8 @@ def public_shadow_negative_control_readout(
 ) -> list[dict[str, Any]]:
     readout: list[dict[str, Any]] = []
     for index, item in enumerate(negative_controls, start=1):
-        turn = item.get("turn") if isinstance(item.get("turn"), Mapping) else {}
+        raw_turn = item.get("turn")
+        turn: Mapping[str, Any] = raw_turn if isinstance(raw_turn, Mapping) else {}
         observed_reason = question_extraction_skip_reason(turn)
         expected_reason = str(item.get("expected_skip_reason") or "").strip()
         passed = bool(observed_reason) and (
@@ -1155,47 +1157,56 @@ def run_question_aware_public_shadow_benchmark(
         -float(review_metrics.get("mean_extra_verification_steps_delta") or 0.0),
         4,
     )
-    metadata = fixture.get("metadata") if isinstance(fixture.get("metadata"), Mapping) else {}
+    raw_metadata = fixture.get("metadata")
+    metadata: Mapping[str, Any] = (
+        raw_metadata if isinstance(raw_metadata, Mapping) else {}
+    )
     negative_controls = [
         item for item in fixture.get("negative_controls") or [] if isinstance(item, Mapping)
     ]
     negative_control_readout = public_shadow_negative_control_readout(negative_controls)
-    public_case_count = int(
-        metadata.get("public_case_count")
-        or len({str(row.get("case_id") or "") for row in review_rows if row.get("case_id")})
-        + len(negative_controls)
+    baseline_preregistration = public_shadow_support.baseline_preregistration(fixture=fixture)
+    materialization_review_evidence = public_shadow_support.materialization_review_evidence(
+        structural=structural,
+        review_metrics=review_metrics,
+        manual_query_reduction_delta=manual_query_reduction_delta,
+        negative_controls=negative_control_readout,
+        threshold_readout=threshold_readout,
     )
-    metrics = {
-        "public_case_count": public_case_count,
-        "negative_control_count": len(negative_controls),
-        "pack_count": structural["metrics"]["pack_count"],
-        "source_ref_fidelity_rate": structural["metrics"]["source_ref_fidelity_rate"],
-        "plain_term_coverage": structural["metrics"]["plain_term_coverage"],
-        "question_blind_term_coverage": structural["metrics"]["question_blind_term_coverage"],
-        "question_aware_term_coverage": structural["metrics"]["question_aware_term_coverage"],
-        "question_aware_over_question_blind_delta": structural["metrics"][
-            "question_aware_over_question_blind_delta"
-        ],
-        "answer_usefulness_delta": review_metrics.get("answer_usefulness_delta"),
+    no_question_retrieval_answer_baseline = (
+        public_shadow_support.true_no_question_retrieval_answer_baseline(
+            fixture=fixture,
+            structural=structural,
+            review_metrics=review_metrics,
+        )
+    )
+    public_safe_calibration_readout = (
+        public_shadow_support.public_safe_local_calibration_readout(
+            no_question_baseline=no_question_retrieval_answer_baseline,
+            review_metrics=review_metrics,
+            negative_controls=negative_control_readout,
+            threshold_readout=threshold_readout,
+        )
+    )
+    review_metrics_with_delta = {
+        **review_metrics,
         "manual_query_reduction_delta": manual_query_reduction_delta,
-        "question_aware_wrong_hint_rate": review_metrics.get("question_aware_wrong_hint_rate"),
-        "negative_control_pass_count": sum(1 for item in negative_control_readout if item["passed"]),
-        "threshold_dynamic_false_split_count": threshold_readout["dynamic_six_axis_threshold"].get(
-            "false_split_count"
-        ),
-        "threshold_dynamic_false_merge_count": threshold_readout["dynamic_six_axis_threshold"].get(
-            "false_merge_count"
-        ),
     }
-    status = (
-        "public_shadow_ready"
-        if structural["status"].startswith("structural_proxy_ready")
-        and structural["answer_quality_review"]["status"]
-        == "selected_source_reopened_answer_quality_review_ready"
-        and all(item["passed"] for item in negative_control_readout)
-        and int(metrics["threshold_dynamic_false_split_count"] or 0) == 0
-        and int(metrics["threshold_dynamic_false_merge_count"] or 0) == 0
-        else "public_shadow_needs_review"
+    metrics = public_shadow_support.public_shadow_metrics(
+        metadata=metadata,
+        review_rows=review_rows,
+        negative_controls=negative_controls,
+        structural=structural,
+        review_metrics=review_metrics_with_delta,
+        no_question_baseline=no_question_retrieval_answer_baseline,
+        calibration_readout=public_safe_calibration_readout,
+        threshold_readout=threshold_readout,
+        negative_control_readout=negative_control_readout,
+    )
+    status = public_shadow_support.public_shadow_status(
+        structural=structural,
+        metrics=metrics,
+        negative_control_readout=negative_control_readout,
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1216,7 +1227,12 @@ def run_question_aware_public_shadow_benchmark(
             "evaluation_design": structural["evaluation_design"],
             "known_failure_modes": structural["known_failure_modes"],
         },
+        "baseline_preregistration": baseline_preregistration,
+        "no_question_retrieval_answer_baseline": no_question_retrieval_answer_baseline,
         "answer_quality_review": structural["answer_quality_review"],
+        "materialization_review_evidence": materialization_review_evidence,
+        "public_safe_calibration_readout": public_safe_calibration_readout,
+        "issue_readouts": public_safe_calibration_readout["issue_readouts"],
         "negative_controls": negative_control_readout,
         "privacy": {
             "raw_source_text_emitted": False,
@@ -1227,17 +1243,23 @@ def run_question_aware_public_shadow_benchmark(
         },
         "can_claim": [
             "public_shadow_question_aware_source_reopen_comparison_recorded",
+            "public_shadow_selected_baseline_preregistered",
+            "public_shadow_true_no_question_retrieval_baseline_shape_recorded",
+            "public_shadow_materialization_review_evidence_recorded",
+            "public_safe_question_tracking_calibration_classes_recorded",
+            "issue_248_public_safe_owner_closeout",
             "public_shadow_threshold_readout_recorded",
             "public_shadow_negative_controls_recorded",
         ],
         "cannot_claim": [
             "private_real_history_answer_quality",
+            "broad_no_question_aware_retrieval_baseline",
             "live_user_visible_recall_improvement",
             "theme_resonance_calibration",
             "default_prefilter_adoption",
             "source_truth_from_question_theme_rows",
             "broad_question_tracking_quality",
-            "issue_248_closeout",
+            "private_or_live_issue_248_closeout",
         ],
     }
 

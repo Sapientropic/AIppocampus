@@ -7,6 +7,9 @@ from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.macro import three_powers
 from aippocampus_runtime.macro.hexagram import perturbation_band
 from aippocampus_runtime.navigation import attention_hot_router
+from aippocampus_runtime.navigation.parallel_derivation_bundle import (
+    preflattening_gate_for_route_affordance,
+)
 
 AUTHORITY_LEVEL = "navigation_only"
 ACTION_GRAMMAR = "direction_only"
@@ -86,6 +89,17 @@ def build_macro_router_context(value: Mapping[str, Any]) -> dict[str, Any]:
     changed_line_count = _int_value(perturbation.get("changed_line_count"), len(changing_lines))
     band = perturbation_band(max(0, min(6, changed_line_count)))
     active_layer = _active_layer(entry)
+    bundle = entry.get("parallel_derivation_bundle")
+    parallel_gate = (
+        preflattening_gate_for_route_affordance(bundle)
+        if isinstance(bundle, Mapping)
+        else None
+    )
+    recheck_triggers = [str(item) for item in entry.get("recheck_on", [])]
+    if parallel_gate is not None and not parallel_gate.get("flattening_allowed"):
+        recheck_triggers.extend(
+            f"parallel_derivation:{code}" for code in parallel_gate.get("reason_codes") or []
+        )
     return {
         "kind": "macro_router_context",
         "schema_version": SCHEMA_VERSION,
@@ -112,8 +126,12 @@ def build_macro_router_context(value: Mapping[str, Any]) -> dict[str, Any]:
         "router_effects": {
             "preferred_route_layers": [active_layer],
             "fanout_bias": _fanout_bias(perturbation),
-            "recheck_triggers": [str(item) for item in entry.get("recheck_on", [])],
+            "recheck_triggers": recheck_triggers,
+            "parallel_derivation_required_next": parallel_gate.get("required_next")
+            if parallel_gate
+            else "",
         },
+        "parallel_derivation_preflattening_gate": parallel_gate,
         "source_boundary": {
             "macro_context_is_navigation_prior": True,
             "hard_masks_still_run_first": True,

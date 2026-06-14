@@ -113,9 +113,29 @@ Use cheap orientation and source reopening as three distinct modes:
 Do not run heavy recall every turn. Scent, summaries, route handles, semantic
 labels, and familiarity cards are navigation until source is reopened.
 
-## One-Command Install And Probe
+## Agent-Mediated Install And Probe
 
-The current public, copyable command uses the PyPI package:
+When the user is in Codex and asks an agent to install or set up AIppocampus,
+prefer the agent-mediated local plugin path over a help-first diagnostic path:
+
+```sh
+aippocampus plugin install --codex --verify
+```
+
+After successful host verification, ask whether to enable AIppocampus-owned
+Codex prompt/lifecycle hooks on this machine. If the user agrees:
+
+```sh
+aippocampus update apply --surface hooks
+```
+
+Then ask once whether to enable LLM-backed semantic/background routes with a
+key. If the user declines or no key is available, keep the no-key
+source-backed path usable; missing provider state is not a local recall
+failure.
+
+Use the PyPI command below when the agent needs a no-clone package probe, when
+the host is not Codex, or when the user wants a read-only check first:
 
 ```sh
 uvx aippocampus --help

@@ -19,14 +19,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.aippo import working_contract
-from aippocampus_runtime.dream import topology_scout
-from aippocampus_runtime.macro import state as macro_state
-from aippocampus_runtime.navigation import macro_router_interface
-from aippocampus_runtime.ops import (
-    packet_topology_diagnostic,
-    telepathy_coordination_packet,
-)
+from aippocampus_runtime.navigation import local_global_fixture_catalog, local_global_sections
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_local_global_compatibility_report"
@@ -272,7 +265,7 @@ def normalize_local_section(row: Mapping[str, Any]) -> dict[str, Any]:
         "topic_tokens": sorted(_topic_tokens(row)),
         "source_reopen_required_before_claim": True,
     }
-    return section
+    return local_global_sections.attach_section_contract(section, row)
 
 
 def _has_blocked_boundary(sections: Sequence[Mapping[str, Any]]) -> bool:
@@ -344,6 +337,7 @@ def _result_and_reasons(
     source_overlap: set[str],
     scope_overlap: bool,
     shared_vocabulary: bool,
+    source_coverage_time_overlap: bool,
 ) -> tuple[str, list[str], str]:
     reasons: list[str] = []
     if _authority_upgrade_attempt(sections):
@@ -352,12 +346,22 @@ def _result_and_reasons(
         return BLOCKED_BOUNDARY, ["privacy_or_boundary_flag_blocks_glue"], "do_not_cross_boundary"
     if any(_is_stale_obstruction(section) for section in sections):
         return OBSTRUCTION, ["stale_or_released_section_blocks_current_glue"], "review_obstruction_before_action"
+    if not source_coverage_time_overlap:
+        return OBSTRUCTION, ["source_coverage_time_mismatch_blocks_glue"], "review_obstruction_before_action"
+    explicit_kind = local_global_sections.explicit_obstruction_kind(sections)
+    if explicit_kind:
+        return OBSTRUCTION, [f"{explicit_kind}_obstruction"], "review_obstruction_before_action"
     if source_overlap and scope_overlap and _topic_epoch_overlap(sections):
         return GLUED_ROUTE, ["source_scope_and_epoch_overlap"], "deepen_compatible_route"
     if scope_overlap and _any_source_support(sections):
         return PARTIAL_GLUE, ["scope_overlap_without_full_source_overlap"], "deepen_each_section_before_use"
+    if source_overlap and local_global_sections.common_restriction_scope(sections):
+        return PARTIAL_GLUE, ["narrowed_restriction_preserves_source_overlap"], "deepen_narrowed_scope_before_use"
     if _any_source_support(sections):
-        return PARTIAL_GLUE, ["source_supported_sections_need_scope_review"], "deepen_each_section_before_use"
+        return OBSTRUCTION, [
+            "source_supported_sections_need_scope_review",
+            "no_safe_common_restriction_scope",
+        ], "review_obstruction_before_action"
     if shared_vocabulary:
         reasons.append("shared_vocabulary_without_source_scope_support")
     if not reasons:
@@ -374,13 +378,35 @@ def evaluate_local_global_compatibility(
     source_overlap = _source_overlap(normalized)
     scope_overlap = _scope_overlap(normalized)
     shared_vocabulary = _shared_vocabulary(normalized)
+    time_overlap = local_global_sections.source_coverage_time_overlap(normalized)
     result, reasons, next_action = _result_and_reasons(
         normalized,
         source_overlap=source_overlap,
         scope_overlap=scope_overlap,
         shared_vocabulary=shared_vocabulary,
+        source_coverage_time_overlap=time_overlap,
     )
+    narrowing = local_global_sections.restriction_narrowing_diagnostic(
+        normalized,
+        source_overlap_count=len(source_overlap),
+        scope_overlap=scope_overlap,
+        blocked=_has_blocked_boundary(normalized),
+        stale=any(_is_stale_obstruction(section) for section in normalized),
+    )
+    for reason in narrowing["reason_codes"]:
+        if (
+            reason
+            and reason not in reasons
+            and narrowing["narrowed_result"] in {"glued_route", "not_glued"}
+        ):
+            reasons.append(reason)
     section_kinds = sorted({section["section_kind"] for section in normalized})
+    obstruction_kind = local_global_sections.obstruction_kind_for(
+        result=result,
+        reason_codes=reasons,
+        explicit_kind=local_global_sections.explicit_obstruction_kind(normalized),
+        blocked=_has_blocked_boundary(normalized),
+    )
     return {
         "kind": ROW_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -388,10 +414,17 @@ def evaluate_local_global_compatibility(
         "result": result,
         "section_count": len(normalized),
         "section_kinds": section_kinds,
+        "section_contracts": local_global_sections.section_contracts(normalized),
+        "restriction_policy": dict(local_global_sections.RESTRICTION_POLICY),
+        "restriction_edges": local_global_sections.restriction_edges(normalized),
+        "restriction_narrowing": narrowing,
+        "topology_shape": local_global_sections.topology_shape(normalized),
+        "obstruction_kind": obstruction_kind,
         "overlap_basis": {
             "source_overlap_count": len(source_overlap),
             "scope_overlap": scope_overlap,
             "topic_epoch_overlap": _topic_epoch_overlap(normalized),
+            "source_coverage_time_overlap": time_overlap,
             "privacy_domain_compatible": not _has_blocked_boundary(normalized),
             "authority_ceiling": _lowest_authority(normalized),
             "claim_permission_ceiling": "navigation_only_not_fact",
@@ -411,181 +444,10 @@ def evaluate_local_global_compatibility(
     }
 
 
-def _successful_glue_sections() -> list[dict[str, Any]]:
-    entry = macro_state.build_macro_orientation_state(
-        project="AIppocampus",
-        hexagram="蹇",
-        changing_lines=(3,),
-        source_refs=({"source_id": "issue:#1272"},),
-        updated_at="2026-06-11T10:00:00Z",
-        active_layer="人",
-        momentum={"basis": {"support_delta": 0.2}},
-    )
-    macro = macro_router_interface.build_macro_router_context(entry)
-    macro.update(
-        {
-            "scope": "project:AIppocampus#issue:1272",
-            "source_ids": ["issue:#1272"],
-            "topic_epoch": "2026w24",
-        }
-    )
-    telepathy = telepathy_coordination_packet.normalize_coordination_packet(
-        {
-            "case_id": "macro_handoff",
-            "scope": "project:AIppocampus#issue:1272",
-            "coordination_mode": "handoff",
-            "status": "ready_for_handoff",
-            "source_support": "reopenable_route",
-            "handoff_readiness": "route_ready",
-            "owner": "codex-public",
-        }
-    )
-    telepathy.update({"source_ids": ["issue:#1272"], "topic_epoch": "2026w24"})
-    memory = {
-        "case_id": "route_packet_1272",
-        "kind": "memory_packet",
-        "scope": "project:AIppocampus#issue:1272",
-        "source_ids": ["issue:#1272"],
-        "topic_epoch": "2026w24",
-        "authority_level": "navigation_only",
-        "claim_permission": "no_claim_before_reopen",
-    }
-    return [memory, macro, telepathy]
-
-
-def _dream_partial_sections() -> list[dict[str, Any]]:
-    dream = topology_scout.candidate_or_rejection(
-        {
-            "case_id": "weak_bridge_between_issues",
-            "shape": "weak_bridge",
-            "source_anchors": ["issue:#1263", "issue:#1270"],
-        }
-    )
-    dream["scope"] = "project:AIppocampus#issue:1270"
-    memory = {
-        "case_id": "route_packet_1270",
-        "kind": "memory_packet",
-        "scope": "project:AIppocampus#issue:1270",
-        "source_ids": ["issue:#1285"],
-        "authority_level": "navigation_only",
-        "claim_permission": "no_claim_before_reopen",
-    }
-    return [dream, memory]
-
-
-def _stale_obstruction_sections() -> list[dict[str, Any]]:
-    topology = packet_topology_diagnostic.evaluate_packet(
-        {
-            "case_id": "repeated_failed_route_cycle",
-            "packet_type": "route_packet",
-            "route_state": "rejected",
-            "reopen_attempt_count": 3,
-            "repeated_failed_route": True,
-        }
-    )
-    topology.update(
-        {
-            "scope": "project:AIppocampus#issue:1188",
-            "source_ids": ["issue:#1188"],
-            "status": "rejected",
-        }
-    )
-    memory = {
-        "case_id": "stale_route_1188",
-        "kind": "memory_packet",
-        "scope": "project:AIppocampus#issue:1188",
-        "source_ids": ["issue:#1188"],
-        "route_state": "stale",
-        "authority_level": "navigation_only",
-    }
-    return [topology, memory]
-
-
-def _privacy_blocked_sections() -> list[dict[str, Any]]:
-    private_packet = telepathy_coordination_packet.normalize_coordination_packet(
-        {
-            "case_id": "privacy_blocked_packet",
-            "scope": "private_scope_fixture",
-            "coordination_mode": "blocked",
-            "status": "blocked",
-            "source_support": "ignore_or_blocked",
-            "boundary_flags": ["no_private_source", "no_shared_cot"],
-            "owner": "codex-private",
-        }
-    )
-    private_packet.update({"privacy_domain": "private", "source_ids": ["issue:#1264"]})
-    public_packet = {
-        "case_id": "public_route_1264",
-        "kind": "memory_packet",
-        "scope": "project:AIppocampus#issue:1264",
-        "source_ids": ["issue:#1264"],
-        "privacy_domain": "public",
-        "authority_level": "navigation_only",
-    }
-    return [private_packet, public_packet]
-
-
-def _authority_escalation_sections() -> list[dict[str, Any]]:
-    contract = working_contract.build_project_workflow_public_safe_contract()
-    activation = working_contract.activation_packet_from_working_contract(
-        contract, task="issue closeout"
-    )
-    activation.update(
-        {
-            "case_id": "aippo_activation_escalation_attempt",
-            "scope": "project:AIppocampus#issue:1285",
-            "source_ids": ["issue:#1285"],
-            "requested_claim_permission": "source_open",
-        }
-    )
-    dream = topology_scout.candidate_or_rejection(
-        {
-            "case_id": "dream_candidate_escalation_guard",
-            "shape": "knot",
-            "source_anchors": ["issue:#1285"],
-            "obligation_count": 3,
-            "unlinking_move_present": False,
-        }
-    )
-    dream.update(
-        {
-            "scope": "project:AIppocampus#issue:1285",
-            "requested_claim_permission": "bounded_claim_allowed",
-        }
-    )
-    return [activation, dream]
-
-
-def _shared_vocabulary_sections() -> list[dict[str, Any]]:
-    return [
-        {
-            "case_id": "vocab_memory",
-            "kind": "memory_packet",
-            "scope": "project:AIppocampus",
-            "route_topic": "dream topology bridge",
-            "source_ids": [],
-            "authority_level": "navigation_only",
-        },
-        {
-            "case_id": "vocab_dream",
-            "kind": "dream_topology_candidate",
-            "scope": "project:Different",
-            "route_topic": "dream topology bridge",
-            "source_anchors": [],
-            "authority": "dream_synthesized_candidate_not_fact",
-        },
-    ]
-
-
-def fixture_compatibility_cases() -> list[tuple[str, list[dict[str, Any]]]]:
-    return [
-        ("successful_macro_telepathy_glue", _successful_glue_sections()),
-        ("dream_topology_partial_glue", _dream_partial_sections()),
-        ("stale_topology_obstruction", _stale_obstruction_sections()),
-        ("privacy_blocked_boundary", _privacy_blocked_sections()),
-        ("authority_escalation_attempt", _authority_escalation_sections()),
-        ("shared_vocabulary_only", _shared_vocabulary_sections()),
-    ]
+def build_local_global_adjudication_report(
+    rows: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    return local_global_sections.build_local_global_adjudication_report(rows)
 
 
 def build_local_global_compatibility_report(
@@ -594,7 +456,7 @@ def build_local_global_compatibility_report(
     if rows is None:
         compatibility_rows = [
             evaluate_local_global_compatibility(sections, case_id=case_id)
-            for case_id, sections in fixture_compatibility_cases()
+            for case_id, sections in local_global_fixture_catalog.fixture_compatibility_cases()
         ]
     else:
         compatibility_rows = [
@@ -604,6 +466,13 @@ def build_local_global_compatibility_report(
     reason_counts: Counter[str] = Counter(
         reason for row in compatibility_rows for reason in row["reason_codes"]
     )
+    obstruction_kind_counts: Counter[str] = Counter(
+        row["obstruction_kind"] for row in compatibility_rows if row["obstruction_kind"] != "none"
+    )
+    adjudication_report = build_local_global_adjudication_report(
+        local_global_fixture_catalog.fixture_adjudication_rows()
+    )
+    adjudication_metrics = adjudication_report["metrics"]
     connected_section_kinds = sorted(
         {
             section_kind
@@ -634,6 +503,16 @@ def build_local_global_compatibility_report(
         "shared_vocabulary_only_overlap_count": reason_counts[
             "shared_vocabulary_without_source_scope_support"
         ],
+        "useful_obstruction_later_used_count": adjudication_metrics[
+            "useful_obstruction_later_used_count"
+        ],
+        "false_glue_regression_count": adjudication_metrics[
+            "false_glue_regression_count"
+        ],
+        "no_help_count": adjudication_metrics["no_help_count"],
+        "ambiguous_correlation_only_count": adjudication_metrics[
+            "ambiguous_correlation_only_count"
+        ],
         "claim_permission_upgrade_count": red_lines["claim_permission_upgrade_count"],
         "foreground_projection_count": red_lines["foreground_projection_count"],
         "raw_private_text_emitted_count": red_lines["raw_private_text_emitted_count"],
@@ -652,8 +531,10 @@ def build_local_global_compatibility_report(
         "authority_level": "navigation_only",
         "claim_permission": "navigation_only_not_fact",
         "compatibility_rows": compatibility_rows,
+        "adjudication_report": adjudication_report,
         "connected_section_kinds": connected_section_kinds,
         "metrics": metrics,
+        "obstruction_kind_counts": dict(sorted(obstruction_kind_counts.items())),
         "red_lines": red_lines,
         "privacy_boundary": {
             "raw_private_text_emitted": False,
@@ -677,6 +558,15 @@ def build_local_global_compatibility_report(
             in connected_section_kinds,
             "packet_topology_fixture_connected": "aippocampus_packet_topology_row"
             in connected_section_kinds,
+            "typed_section_contract_version": local_global_sections.SECTION_CONTRACT_VERSION,
+            "restriction_narrowing_protocol_declared": True,
+            "time_semantics_split": [
+                "source_coverage_time",
+                "packet_created_at",
+                "validity_window",
+            ],
+            "shi_ying_restriction_edge_policy": local_global_sections.V0_SHI_YING_POLICY,
+            "useful_obstruction_metrics_require_adjudication": True,
         },
         "cannot_claim": [
             "default_foreground_compatibility",

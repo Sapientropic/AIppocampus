@@ -223,6 +223,48 @@ def coding_decision_row() -> dict[str, object]:
     }
 
 
+def line_topology_row(*, broken: bool = True) -> dict[str, object]:
+    return {
+        "kind": "macro_line_topology_diagnostics",
+        "schema_version": 1,
+        "source_shape_id": "source_shape:earth-heaven",
+        "source_refs": [
+            source_ref("session:topo-a", "msg-topo-a", 150),
+            source_ref("session:topo-b", "msg-topo-b", 160),
+        ],
+        "broken_couplings": [
+            {
+                "pair_id": "earth_heaven",
+                "lower_line": 2,
+                "upper_line": 5,
+                "lower_layer": "earth",
+                "upper_layer": "heaven",
+                "status": "missing_lower_support",
+                "diagnostic": "broken_coupling_earth_heaven",
+            }
+        ]
+        if broken
+        else [],
+        "adjacent_relations": [
+            {
+                "lower_line": 4,
+                "upper_line": 5,
+                "diagnostic": "adjacent_pressure_without_lower_support",
+            }
+        ]
+        if broken
+        else [],
+        "reason_codes": [
+            "broken_coupling_earth_heaven"
+            if broken
+            else "topology_no_broken_cross_layer_coupling"
+        ],
+        "authority_level": "navigation_only",
+        "claim_permission": "no_claim_before_reopen",
+        "ranking_weight_changes": False,
+    }
+
+
 class DreamInputPackTests(unittest.TestCase):
     def test_cross_thread_pack_combines_question_journey_and_residue_seed(self) -> None:
         pack = input_pack.build_dream_input_pack(
@@ -274,6 +316,27 @@ class DreamInputPackTests(unittest.TestCase):
             all(item["readiness_role"] == "clean_anchor" for item in pack["source_contributions"])
         )
         self.assertGreaterEqual(pack["source_ref_audit"]["source_thread_count"], 6)
+
+    def test_line_topology_broken_coupling_becomes_compensatory_navigation_seed(self) -> None:
+        pack = input_pack.build_dream_input_pack([line_topology_row()])
+
+        self.assertEqual(pack["status"], "ready_for_dream_worker")
+        self.assertEqual(pack["eligible_dream_functions"], ["compensatory"])
+        self.assertIn("line_topology_dream_seed", pack["source_seed_kinds"])
+        self.assertIn("broken_coupling_earth_heaven", pack["frontiers"])
+        self.assertIn("line topology is navigation context, not evidence", pack["negative_contexts"])
+        self.assertFalse(pack["foreground_eligible"])
+        contribution = pack["source_contributions"][0]
+        self.assertEqual(contribution["seed_kind"], "line_topology_dream_seed")
+        self.assertEqual(contribution["readiness_role"], "clean_anchor")
+        self.assertFalse(line_topology_row()["ranking_weight_changes"])
+
+        no_broken_seed = input_pack.seed_from_row(line_topology_row(broken=False))
+        no_broken_pack = input_pack.build_dream_input_pack([line_topology_row(broken=False)])
+
+        self.assertIsNone(no_broken_seed)
+        self.assertEqual(no_broken_pack["status"], "no_clean_source_refs")
+        self.assertEqual(no_broken_pack["source_seed_kinds"], [])
 
     def test_source_backed_recall_miss_feedback_becomes_compensatory_seed(self) -> None:
         pack = input_pack.build_dream_input_pack([recall_miss_row()])

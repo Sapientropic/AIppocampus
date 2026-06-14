@@ -1,0 +1,101 @@
+{
+  "authority": "diagnostic_only",
+  "can_claim": [
+    "public_safe_default_path_cognitive_load_replay_recorded",
+    "cognitive_load_maturity_recommendation_recorded"
+  ],
+  "cannot_claim": [
+    "live_hook_capture_quality",
+    "default_foreground_weighting_ready_when_regressions_exist",
+    "affect_personality_truth_from_load_signal",
+    "broad_private_history_generality"
+  ],
+  "cases": [
+    {
+      "blind_deepen_reduced": true,
+      "case_id": "helpful_reopen_priority",
+      "expected_behavior": "emit_bounded_reopen_hint",
+      "hint_emitted": true,
+      "regression": false,
+      "wrong_route_drag_reduced": true
+    },
+    {
+      "blind_deepen_reduced": false,
+      "case_id": "generic_caution_should_not_dominate",
+      "expected_behavior": "stay_silent_or_deepen_only",
+      "hint_emitted": true,
+      "regression": true,
+      "wrong_route_drag_reduced": false
+    },
+    {
+      "blind_deepen_reduced": false,
+      "case_id": "stale_load_refresh_only",
+      "expected_behavior": "refresh_sources",
+      "hint_emitted": false,
+      "refresh_sources": true,
+      "regression": false,
+      "wrong_route_drag_reduced": false
+    },
+    {
+      "blind_deepen_reduced": false,
+      "case_id": "clean_no_hint_noop",
+      "expected_behavior": "no_hint",
+      "hint_emitted": false,
+      "regression": false,
+      "wrong_route_drag_reduced": false
+    }
+  ],
+  "feedback_summary": {
+    "kind": "aippocampus_cognitive_load_public_behavior_trace_feedback_report",
+    "metrics": {
+      "boosted_candidate_count": 2,
+      "caution_hint_useful_rate": 0.5,
+      "helpful_caution_hint_count": 1,
+      "irrelevant_load_drag_count": 1,
+      "irrelevant_load_drag_rate": 0.5,
+      "load_weight_false_positive_rate": 0.5,
+      "overpersonalization_from_load_signal_count": 0,
+      "public_behavior_trace_case_count": 3,
+      "reviewed_feedback_case_count": 2,
+      "source_reopen_recommended_count": 2
+    }
+  },
+  "issue_readouts": {
+    "github_1375": {
+      "closeout_eligible": true,
+      "default_path_replay_reported": true,
+      "faithful_local_replay": "public_safe_default_path_replay",
+      "live_hook_capture": false,
+      "recommended_maturity": "dogfood_diagnostic_only"
+    },
+    "github_575": {
+      "bounded_adoption_recommended": false,
+      "diagnostic_only_recommended": true,
+      "owner_closeout_eligible": true
+    }
+  },
+  "kind": "aippocampus_cognitive_load_public_default_path_usefulness_report",
+  "metrics": {
+    "blind_deepen_reduction_count": 1,
+    "case_count": 4,
+    "default_path_regression_count": 1,
+    "default_path_usefulness_rate": 0.25,
+    "feedback_caution_hint_useful_rate": 0.5,
+    "feedback_false_positive_rate": 0.5,
+    "no_hint_pass_count": 2,
+    "no_op_behavior_pass_rate": 1.0,
+    "useful_hint_count": 1,
+    "wrong_route_drag_reduction_count": 1
+  },
+  "mode": "public_safe_default_path_replay",
+  "privacy_boundary": {
+    "emotion_or_personality_claims_emitted": false,
+    "raw_notes_emitted": false,
+    "raw_paths_emitted": false,
+    "raw_source_handles_emitted": false
+  },
+  "projection_boundary": "routing_caution_not_affect_or_personality_truth",
+  "recommended_maturity": "dogfood_diagnostic_only",
+  "schema_version": 1,
+  "status": "validated_diagnostic_result"
+}

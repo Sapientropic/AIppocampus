@@ -174,6 +174,65 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertNotIn("SECRET_TEXTURE_TOKEN", encoded)
         self.assertNotIn(r"E:\private\tool.txt", encoded)
 
+    def test_macro_perturbation_strategy_tunes_worker_directive_with_caps(self) -> None:
+        none_messages = dream_worker.build_worker_messages(
+            ready_pack(),
+            dream_function="compensatory",
+            macro_perturbation_context={
+                "band": "none",
+                "fanout_hint": {"recommended_candidate_limit": 0},
+                "source_refs": [source_ref("private-thread", "msg-secret", 1)],
+                "raw_text": "SECRET_PRIVATE_CONTEXT",
+            },
+        )
+        none_directive = json.loads(none_messages[-1]["content"])
+        none_strategy = none_directive["macro_perturbation_strategy"]
+
+        self.assertEqual(none_strategy["strategy"], "conservative_check")
+        self.assertEqual(none_directive["max_samples"], 1)
+        self.assertEqual(none_strategy["authority_level"], "direction_only")
+        self.assertFalse(none_strategy["foreground_eligible"])
+        self.assertNotIn("SECRET_PRIVATE_CONTEXT", json.dumps(none_directive, ensure_ascii=False))
+        self.assertNotIn("private-thread", json.dumps(none_directive, ensure_ascii=False))
+
+        large_messages = dream_worker.build_worker_messages(
+            ready_pack(),
+            dream_function="amplification",
+            macro_perturbation_context={
+                "band": "large",
+                "fanout_hint": {"recommended_candidate_limit": 8},
+            },
+        )
+        large_directive = json.loads(large_messages[-1]["content"])
+        large_strategy = large_directive["macro_perturbation_strategy"]
+
+        self.assertEqual(large_strategy["strategy"], "expanded_bounded")
+        self.assertEqual(large_directive["max_samples"], 3)
+        self.assertFalse(large_strategy["raw_foreground_fanout_copied"])
+        self.assertEqual(large_strategy["recommended_candidate_limit_seen"], 8)
+
+        inversion_messages = dream_worker.build_worker_messages(
+            ready_pack(),
+            dream_function="compensatory",
+            macro_perturbation_context={
+                "band": "inversion",
+                "route_policy": "reopen_or_conflict_review",
+                "conflict_review_required": True,
+                "fanout_hint": {"candidate_limit_after_review": 8},
+            },
+        )
+        inversion_directive = json.loads(inversion_messages[-1]["content"])
+        inversion_strategy = inversion_directive["macro_perturbation_strategy"]
+
+        self.assertEqual(inversion_strategy["strategy"], "conflict_review_first")
+        self.assertTrue(inversion_strategy["requires_conflict_review_before_expand"])
+        self.assertEqual(inversion_directive["max_samples"], 1)
+        self.assertEqual(inversion_strategy["candidate_limit_after_review"], 3)
+        self.assertEqual(
+            inversion_strategy["reason_code"],
+            "inversion_requires_source_reopen_before_dream_expand",
+        )
+
     def test_model_worker_requires_llm_activation_cues_before_accepting_candidate(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {

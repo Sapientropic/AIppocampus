@@ -80,6 +80,38 @@ refresh, but not a foreground coding route. A rejected-route card can warn or
 constrain the next coding move, but it still cannot prove current code state
 without reopening source.
 
+## Avatar Illumination Projection
+
+`aippocampus_runtime.navigation.avatar_illumination` projects the same selected
+familiarity card into `source_backed_avatar_state`. This is a posture/attention
+surface, not a second memory layer. Avatar state may say "build narrowly",
+"review before claiming", or "reopen this source first"; it cannot say what
+happened, prove the card is current, or bypass source reopening.
+
+The shared lifecycle is:
+
+| Familiarity card state | Avatar state | Foreground behavior |
+| --- | --- | --- |
+| valid/current with source refs | `active` or `weak` | Emit a tiny posture packet if it changes the next action. |
+| partial invalidation | `narrowed` | Keep only the named safe facet, retain the broader card as a shadow candidate, and reopen before widening scope. |
+| stale, conflicted, or semantic source-change signal | `shadowed` | Suppress active posture and emit only reopen/shadow guidance. |
+| privacy-blocked or missing source refs | `absent` | Do not emit foreground avatar posture. |
+
+Semantic invalidation is deterministic and source-reachable. The current
+allowlist is `user_correction`, `superseding_decision`,
+`topic_epoch_changed`, `registry_freshness_changed`,
+`clean_source_freshness_changed`, `source_fingerprint_changed`,
+`contradiction_visible`, `review_due`, and `macro_recheck_required`.
+Unsupported vocabulary is rejected rather than treated as a broad purge signal.
+These events mark the card suspect or narrowed; they do not adjudicate whether
+the old card was false.
+
+`decision_shadow` may project into avatar negative attention as `avoid`,
+`review_before`, `ask_before`, or `reopen_first`. A fresh shadow can suppress
+repeating an old route only within the cited source scope. If invalidation
+weakens the old rejection reason, the shadow becomes a reopen candidate rather
+than a permanent blacklist.
+
 ## Attention Router Boundary
 
 For the source-backed attention router, familiarity is cold route sidecar

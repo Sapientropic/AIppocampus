@@ -13,6 +13,35 @@ from typing import Any
 
 ROUTE_METADATA_FIELDS = ("salience", "currentness", "privacy", "conflict")
 TOKEN_LEVELS = ("source_span_token", "event_token", "episode_or_question_token")
+ALLOWED_ROUTE_HINT_FIELDS: dict[str, tuple[str, ...]] = {
+    "semantic_warming": (
+        "semantic_score",
+        "semantic_aliases",
+        "scout_family_votes",
+        "source_ref_fingerprints",
+        "candidate_fingerprint",
+        "topic_epoch_label",
+        "guard_status",
+        "cache_status",
+        "source_bridge_status",
+    ),
+    "familiarity_map": (
+        "first_source_to_reopen",
+        "stop_after",
+        "freshness",
+        "invalidation_present",
+        "decision_shadow_present",
+        "rejected_route",
+        "route_terms",
+        "do_not_use_for",
+        "source_ref_count",
+    ),
+    "topology_explain_only": (
+        "topology_shape",
+        "risk_reason_codes",
+        "explain_only",
+    ),
+}
 
 
 def _stable_id(*parts: Any, prefix: str = "tok") -> str:
@@ -33,6 +62,104 @@ def _range(value: Any) -> list[int] | None:
 
 def _list_of_mappings(value: Any) -> list[Mapping[str, Any]]:
     return [row for row in value or [] if isinstance(row, Mapping)]
+
+
+def _safe_string(value: Any, limit: int = 160) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    # Route hints are public/debug navigation material. Drop absolute local
+    # paths and drive paths so sidecars cannot smuggle machine-specific source.
+    if ":\\" in text or text.startswith(("/", "\\")):
+        return ""
+    return text[:limit]
+
+
+def _safe_strings(value: Any, *, limit: int = 8) -> list[str]:
+    if isinstance(value, str):
+        values: list[Any] = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        text = _safe_string(item)
+        key = text.casefold()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(1.0, round(parsed, 3)))
+
+
+def _compact_hint_value(field: str, value: Any) -> Any:
+    if field == "semantic_score":
+        return _safe_float(value)
+    if field in {
+        "semantic_aliases",
+        "scout_family_votes",
+        "source_ref_fingerprints",
+        "route_terms",
+        "do_not_use_for",
+        "risk_reason_codes",
+    }:
+        values = _safe_strings(value)
+        return values or None
+    if field in {
+        "invalidation_present",
+        "decision_shadow_present",
+        "rejected_route",
+        "explain_only",
+    }:
+        return bool(value)
+    if field == "source_ref_count":
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return None
+    return _safe_string(value) or None
+
+
+def route_hints_from_sources(*sources: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Project allowed sidecar hints into route-token navigation fields.
+
+    Semantic warming, Familiarity Map, and topology diagnostics may improve
+    route choice or explain route risk, but they stay below the factual-claim
+    layer. Keep this allowlist narrow; adding fields here means they may appear
+    in route tokens and compact route packets.
+    """
+
+    result: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        raw_hints = source.get("route_hints")
+        hints = raw_hints if isinstance(raw_hints, Mapping) else {}
+        for family, allowed_fields in ALLOWED_ROUTE_HINT_FIELDS.items():
+            raw_family = hints.get(family)
+            if not isinstance(raw_family, Mapping):
+                continue
+            clean = result.setdefault(family, {})
+            for field in allowed_fields:
+                value = _compact_hint_value(field, raw_family.get(field))
+                if value not in (None, "", []):
+                    clean[field] = value
+    topology = result.get("topology_explain_only")
+    if topology:
+        # Topology can explain why a route is risky or ambiguous, never change
+        # ranking weights or authority by itself.
+        topology["explain_only"] = True
+    return {family: values for family, values in result.items() if values}
 
 
 def _route_metadata(*sources: Mapping[str, Any]) -> dict[str, str]:
@@ -125,25 +252,29 @@ def project_event_route_tokens(event: Mapping[str, Any]) -> dict[str, Any]:
         _span_token(span, event=event, event_token_id=event_token_id)
         for span in _list_of_mappings(event.get("spans"))
     ]
+    route_hints = route_hints_from_sources(event)
+    event_token = {
+        "kind": "aippocampus_attention_route_token",
+        "schema_version": "attention-route-token-v0",
+        "token_id": event_token_id,
+        "route_token_level": "event_token",
+        "role": _text(event.get("role"), "unknown"),
+        "turn_id": _text(event.get("turn_id")),
+        "timestamp": _text(event.get("timestamp")),
+        "thread": _text(event.get("thread") or event.get("thread_id")),
+        "phase": _text(event.get("phase"), "unknown"),
+        "source_refs": source_refs,
+        "source_handles": source_handles,
+        "span_token_ids": [span["token_id"] for span in span_tokens],
+        "route_metadata": _route_metadata(event),
+        "action_grammar": "reopenable_route",
+        "claim_permission": "no_claim_before_reopen",
+        "token_contract": _token_contract(),
+    }
+    if route_hints:
+        event_token["route_hints"] = route_hints
     return {
-        "event_token": {
-            "kind": "aippocampus_attention_route_token",
-            "schema_version": "attention-route-token-v0",
-            "token_id": event_token_id,
-            "route_token_level": "event_token",
-            "role": _text(event.get("role"), "unknown"),
-            "turn_id": _text(event.get("turn_id")),
-            "timestamp": _text(event.get("timestamp")),
-            "thread": _text(event.get("thread") or event.get("thread_id")),
-            "phase": _text(event.get("phase"), "unknown"),
-            "source_refs": source_refs,
-            "source_handles": source_handles,
-            "span_token_ids": [span["token_id"] for span in span_tokens],
-            "route_metadata": _route_metadata(event),
-            "action_grammar": "reopenable_route",
-            "claim_permission": "no_claim_before_reopen",
-            "token_contract": _token_contract(),
-        },
+        "event_token": event_token,
         "source_span_tokens": span_tokens,
     }
 
@@ -170,7 +301,8 @@ def _span_token(
         line_range=span.get("line_range"),
         char_range=span.get("char_range"),
     )
-    return {
+    route_hints = route_hints_from_sources(event, span)
+    token = {
         "kind": "aippocampus_attention_route_token",
         "schema_version": "attention-route-token-v0",
         "token_id": token_id,
@@ -184,6 +316,9 @@ def _span_token(
         "claim_permission": "no_claim_before_reopen",
         "token_contract": _token_contract(),
     }
+    if route_hints:
+        token["route_hints"] = route_hints
+    return token
 
 
 def project_episode_or_question_token(
@@ -206,7 +341,8 @@ def project_episode_or_question_token(
     for token_id in [*member_event_ids, *member_span_ids]:
         token = event_by_id.get(token_id) or span_by_id.get(token_id) or {}
         source_handles.extend(token.get("source_handles") or [])
-    return {
+    route_hints = route_hints_from_sources(group)
+    token = {
         "kind": "aippocampus_attention_route_token",
         "schema_version": "attention-route-token-v0",
         "token_id": _text(group.get("token_id") or group.get("group_id"))
@@ -221,6 +357,9 @@ def project_episode_or_question_token(
         "claim_permission": "no_claim_before_reopen",
         "token_contract": _token_contract(),
     }
+    if route_hints:
+        token["route_hints"] = route_hints
+    return token
 
 
 def _token_contract() -> dict[str, bool]:

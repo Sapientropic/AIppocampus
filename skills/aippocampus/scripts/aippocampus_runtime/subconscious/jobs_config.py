@@ -23,6 +23,11 @@ DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 DEFAULT_EVENT_SALIENCE_OUTPUT_NAME = "subconscious_event_salience.jsonl"
 DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
+DEFAULT_CONTINUITY_DOMAIN_SALIENCE_MODE = os.environ.get(
+    "AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION",
+    "off",
+)
+CONTINUITY_DOMAIN_SALIENCE_MODES = {"off", "report", "write_when_enabled"}
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,11 @@ class JobsRunConfig:
     concurrency: int = DEFAULT_CONCURRENCY
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB
     event_salience_gate: bool = False
+    continuity_domain_salience_mode: str = "off"
+    continuity_domain_events_path: Path | None = None
+    continuity_domain_snapshot_dir: Path | None = None
+    continuity_domain_clean_source_dir: Path | None = None
+    continuity_domain_publish: bool = False
     dry_run: bool = False
     no_write: bool = False
 
@@ -70,6 +80,11 @@ def default_event_salience_output_path(
         return registry_path.resolve().parent / DEFAULT_EVENT_SALIENCE_OUTPUT_NAME
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / DEFAULT_EVENT_SALIENCE_OUTPUT_NAME
+
+
+def default_continuity_domain_salience_mode() -> str:
+    mode = str(os.environ.get("AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION") or "off").strip()
+    return mode if mode in CONTINUITY_DOMAIN_SALIENCE_MODES else "off"
 
 
 def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
@@ -125,6 +140,14 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         if getattr(args, "event_salience_output", None)
         else default_event_salience_output_path(registry_path=registry_path)
     )
+    continuity_domain_salience_mode = str(
+        getattr(
+            args,
+            "continuity_domain_salience_mode",
+            None,
+        )
+        or default_continuity_domain_salience_mode()
+    )
     return JobsRunConfig(
         jobs=job_names(args.job),
         registry_path=registry_path,
@@ -149,6 +172,23 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         concurrency=args.concurrency,
         samples_per_job=args.samples_per_job,
         event_salience_gate=bool(getattr(args, "event_salience_gate", False)),
+        continuity_domain_salience_mode=continuity_domain_salience_mode,
+        continuity_domain_events_path=(
+            Path(args.continuity_domain_events_output).resolve()
+            if getattr(args, "continuity_domain_events_output", None)
+            else None
+        ),
+        continuity_domain_snapshot_dir=(
+            Path(args.continuity_domain_snapshot_dir).resolve()
+            if getattr(args, "continuity_domain_snapshot_dir", None)
+            else None
+        ),
+        continuity_domain_clean_source_dir=(
+            Path(args.continuity_domain_clean_source_dir).resolve()
+            if getattr(args, "continuity_domain_clean_source_dir", None)
+            else None
+        ),
+        continuity_domain_publish=bool(getattr(args, "continuity_domain_publish", False)),
         dry_run=args.dry_run,
         no_write=args.no_write,
     )

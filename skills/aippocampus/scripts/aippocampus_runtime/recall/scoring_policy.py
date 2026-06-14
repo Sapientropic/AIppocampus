@@ -120,6 +120,10 @@ class SourceSignalPolicy:
 class ScoreFusionPolicy:
     # The source weight stays small because provenance richness is a tie-break
     # after the source-join gate, not a second evidence/authority layer.
+    # The 2026-06-14 source-joined routing decision keeps vector/graph weights
+    # post-join only: these weights do not enable vector prefiltering, local
+    # embedding adapters, foreground model calls, or source-free semantic hits.
+    # Change those defaults only with a new public replayable consumer report.
     normal_recall: SignalBlendWeights = SignalBlendWeights(
         text=0.65, vector=0.20, graph=0.10, source=0.05
     )
