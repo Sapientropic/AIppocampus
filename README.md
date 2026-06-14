@@ -63,8 +63,17 @@ aippocampus plugin install --codex --verify
 aippocampus update apply --surface hooks
 ```
 
-That path should end in one source-backed recall moment, not a diagnostics
-maze. Rollback stays explicit:
+The Codex plugin command is a source checkout / editable local package path,
+not the public PyPI `uvx` first-recall path. For a user-facing install closeout,
+agents should report the concise public-safe summary:
+
+```sh
+aippocampus plugin install --codex --verify --compact-json
+```
+
+`--compact-json`, `--public`, and `--summary` are aliases for the same
+public-safe success summary. That path should end in one source-backed recall
+moment, not a diagnostics maze. Rollback stays explicit:
 
 ```sh
 aippocampus plugin uninstall --codex

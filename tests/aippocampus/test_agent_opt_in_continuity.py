@@ -849,7 +849,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("AIppocampus agent recall: ok", proc.stdout)
-        self.assertIn("Next: call agent_deepen", proc.stdout)
+        self.assertIn("Next: aippocampus agent deepen ", proc.stdout)
         self.assertIn("Boundary: route only", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
         self.assertNotIn("source_refs", proc.stdout)

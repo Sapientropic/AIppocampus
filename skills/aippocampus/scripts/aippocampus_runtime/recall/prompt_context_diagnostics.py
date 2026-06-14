@@ -22,6 +22,7 @@ ROUTE_DELIVERY_PROFILES = {
     "exact_phrase",
     "generic_recall_meta",
     "journey_frontier",
+    "low_value_casual",
     "normal_recall",
     "temporal_revisit",
 }
@@ -31,9 +32,13 @@ ROUTE_DELIVERY_LANES = {
     "recall_composer",
     "source_current_repo",
     "source_text",
+    "stay_silent",
     "temporal_source_spread",
 }
-FOREGROUND_SUPPRESSION_REASONS = {"generic_meta_terms_only"}
+FOREGROUND_SUPPRESSION_REASONS = {
+    "generic_meta_terms_only",
+    "low_value_casual_no_memory_route_intent",
+}
 
 
 def _controlled(value: Any, allowed: set[str]) -> str | None:

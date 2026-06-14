@@ -358,6 +358,31 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(private_payload["cwd"], str(workspace.resolve()))
         self.assertTrue(private_payload["privacy"]["paths_included"])
 
+    def test_health_text_render_preserves_rollout_metadata_after_path_redaction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
+
+        public_payload = health.public_health_report(payload)
+
+        self.assertEqual(public_payload["rollout"]["path"], health.LOCAL_PATH_REDACTION)
+        self.assertEqual(public_payload["rollout"]["size"], payload["rollout"]["size"])
+        self.assertEqual(
+            public_payload["rollout"]["message_count"],
+            payload["rollout"]["message_count"],
+        )
+        with mock.patch("sys.stdout", new=StringIO()) as stdout:
+            health.render_health_text(public_payload)
+
+        self.assertIn(f"rollout: {health.LOCAL_PATH_REDACTION}", stdout.getvalue())
+
     def test_health_trajectory_reports_age_without_age_only_preemptive_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

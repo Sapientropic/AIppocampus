@@ -172,6 +172,35 @@ class AgentDiscoveryReleaseCheckTests(unittest.TestCase):
             any(check["id"] == "pyproject" and check["status"] == "fail" for check in result["checks"])
         )
 
+    def test_public_uvx_command_surface_rejects_source_checkout_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_minimal_repo(repo)
+            (repo / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# AIppocampus",
+                        "<!-- mcp-name: io.github.Sapientropic/aippocampus -->",
+                        "```sh",
+                        "uvx aippocampus plugin install --codex --verify",
+                        "```",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = release_check.check_repo(repo, offline=True)
+
+        self.assertFalse(result["ok"])
+        check = next(
+            check
+            for check in result["checks"]
+            if check["id"] == "public_uvx_command_surface"
+        )
+        self.assertEqual(check["status"], "fail")
+        self.assertEqual(check["details"]["commands"][0]["tail"].split()[0], "plugin")
+
     def test_mcp_registry_accepts_nested_server_search_results(self) -> None:
         original_fetch_json = release_check.fetch_json
 

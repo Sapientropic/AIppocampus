@@ -43,6 +43,7 @@ from aippocampus_runtime.update.host_probe_warnings import (
     summarize_host_probe_warnings,
 )
 from aippocampus_runtime.update.plugin_cache import refresh_plugin_cache_layers
+from aippocampus_runtime.update.plugin_public_summary import public_install_summary
 
 PLUGIN_NAME = "aippocampus"
 MARKETPLACE_NAME = "aippocampus-local"
@@ -734,6 +735,14 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--marketplace-name", default=MARKETPLACE_NAME)
     install.add_argument("--codex-command")
     install.add_argument("--json", action="store_true", dest="json_output")
+    install.add_argument(
+        "--compact-json",
+        "--public",
+        "--summary",
+        action="store_true",
+        dest="public_summary",
+        help="Emit compact public-safe install/probe JSON instead of operator details.",
+    )
 
     uninstall = subparsers.add_parser(
         "uninstall",
@@ -753,7 +762,14 @@ def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
         return
-    if result["kind"] == "aippocampus_plugin_install":
+    if result["kind"] == "aippocampus_plugin_install_public_summary":
+        print(f"plugin: {result['plugin']['action']} {result['plugin']['id']}")
+        print(f"agent callable: {result['agent_callable_status']}")
+        probe = result.get("host_probe") or {}
+        warnings = (probe.get("warning_summary") or {}).get("warning_count", 0)
+        print(f"host probe: tools={probe.get('tool_count')} warnings={warnings}")
+        print(f"rollback: {result['rollback_command']}")
+    elif result["kind"] == "aippocampus_plugin_install":
         print(f"plugin: {result['plugin']['action']} {result['plugin']['id']}")
         print(f"marketplace: {result['marketplace']['name']}")
         print(f"agent callable: {result['agent_callable_status']}")
@@ -779,6 +795,8 @@ def main(argv: list[str] | None = None) -> int:
                 codex_command=args.codex_command,
                 verify=args.verify,
             )
+            if args.public_summary:
+                result = public_install_summary(result)
         else:
             result = uninstall_codex_plugin(
                 codex_home_path=args.codex_home,
@@ -801,7 +819,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(error_message)
         return 1
-    _emit_result(result, json_output=args.json_output)
+    _emit_result(result, json_output=args.json_output or bool(getattr(args, "public_summary", False)))
     return 0 if result.get("ok") else 1
 
 

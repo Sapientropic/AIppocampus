@@ -92,7 +92,7 @@ def redact_private_paths(value):
         for key, item in value.items():
             key_text = str(key)
             if _is_private_path_key(key_text, item) and item:
-                redacted[key] = LOCAL_PATH_REDACTION
+                redacted[key] = _redact_private_path_value(item)
             else:
                 redacted[key] = redact_private_paths(item)
         return redacted
@@ -140,6 +140,17 @@ def _is_private_path_key(key: str, value=None) -> bool:
         or normalized.endswith("_dir")
         or normalized.endswith("_file")
     )
+
+
+def _redact_private_path_value(value):
+    # Path-bearing containers often also carry public metadata such as byte
+    # counts. Keep the shape and redact only the locator leaves so renderers
+    # do not lose non-private health context.
+    if isinstance(value, dict):
+        return redact_private_paths(value)
+    if isinstance(value, list):
+        return [_redact_private_path_value(item) for item in value]
+    return LOCAL_PATH_REDACTION
 
 
 def _is_sensitive_value_key(key: str) -> bool:

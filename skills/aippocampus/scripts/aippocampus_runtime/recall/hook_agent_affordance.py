@@ -97,9 +97,14 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     ]
     cognitive_map = [item for item in _as_list(result.get("cognitive_map")) if isinstance(item, dict)]
     semantic_gate = _as_dict(result.get("semantic_gate"))
+    surface_intent = _as_dict(result.get("agent_surface_intent"))
+    explicit_surfaces = [str(item) for item in _as_list(surface_intent.get("surfaces"))]
     all_items = working + candidates + evidence + cards + architecture
 
-    if any(_is_aippo_working_contract(item) for item in working + candidates):
+    if any(_is_aippo_working_contract(item) for item in working + candidates) or (
+        "aippo_working_contract" in explicit_surfaces
+        and surface_intent.get("aippo_status") == "ok"
+    ):
         kinds.append("aippo_working_contract")
     if candidates or evidence or cards:
         kinds.append("memory_route")
@@ -126,6 +131,12 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
         result.get("episode_arcs")
     ):
         kinds.append("episode_arc")
+    if "avatar_posture" in explicit_surfaces:
+        kinds.append("avatar_posture")
+    if "episode_arc" in explicit_surfaces:
+        kinds.append("episode_arc")
+    if "project_experience" in explicit_surfaces:
+        kinds.append("project_experience")
     if _has_architecture_diagnostic(result, all_items):
         kinds.append("architecture_diagnostic")
     if result.get("semantic_source_reopen_route") or any(
@@ -157,6 +168,9 @@ def _lead_count(result: Mapping[str, Any], lead_kinds: list[str]) -> int:
         count = 1
     if result.get("semantic_source_reopen_route") and count == 0:
         count = 1
+    surface_intent = _as_dict(result.get("agent_surface_intent"))
+    if surface_intent.get("explicit"):
+        count = max(count, len(_as_list(surface_intent.get("surfaces"))))
     return min(max(count, len(lead_kinds)), 9)
 
 
@@ -196,8 +210,17 @@ def _budget_hint(action: str) -> str:
     }.get(action, "none")
 
 
-def _reason_codes(action: str, lead_kinds: list[str]) -> list[str]:
+def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any]) -> list[str]:
     codes: list[str] = []
+    surface_intent = _as_dict(result.get("agent_surface_intent"))
+    explicit_surfaces = [str(item) for item in _as_list(surface_intent.get("surfaces"))]
+    if explicit_surfaces:
+        codes.append("explicit_agent_native_surface_intent")
+    if (
+        "aippo_working_contract" in explicit_surfaces
+        and surface_intent.get("aippo_status") != "ok"
+    ):
+        codes.append("aippo_surface_not_ready")
     if "aippo_working_contract" in lead_kinds:
         codes.append("work_task_may_need_context")
     if "memory_route" in lead_kinds:
@@ -206,8 +229,14 @@ def _reason_codes(action: str, lead_kinds: list[str]) -> list[str]:
         codes.append("source_required_route_available")
     if "avatar_posture" in lead_kinds:
         codes.append("avatar_posture_available")
+    if "avatar_posture" in explicit_surfaces:
+        codes.append("avatar_posture_candidate")
     if "episode_arc" in lead_kinds:
         codes.append("episode_arc_route_available")
+    if "episode_arc" in explicit_surfaces:
+        codes.append("episode_arc_candidate")
+    if "project_experience" in lead_kinds:
+        codes.append("project_experience_candidate")
     if "architecture_diagnostic" in lead_kinds:
         codes.append("architecture_diagnostic_available")
     if action == "read_current_repo_first":
@@ -239,7 +268,7 @@ def build_hook_agent_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
         "suggested_agent_action": action,
         "suggested_query_seed": _query_seed(action, lead_kinds),
         "budget_hint": _budget_hint(action),
-        "reason_codes": _reason_codes(action, lead_kinds),
+        "reason_codes": _reason_codes(action, lead_kinds, result),
         "not_enough_for_claim": True,
         "privacy_boundary": PRIVACY_BOUNDARY,
     }

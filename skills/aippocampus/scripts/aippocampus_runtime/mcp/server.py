@@ -768,7 +768,7 @@ def serve_stdio() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="aippocampus mcp")
     parser.add_argument("command", nargs="?", choices=["list-tools"])
     parser.add_argument(
         "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
