@@ -167,9 +167,9 @@ the locked evaluation client endpoint/deployment names are available.
 ## 2026-06-14 Defer Decision
 
 Decision report:
-[`state-bench-agent-learning-decision-2026-06-14.md`](state-bench-agent-learning-decision-2026-06-14.md).
+[`state-bench-agent-learning-decision-2026-06-14.md`](reports/state-bench/state-bench-agent-learning-decision-2026-06-14.md).
 Machine-readable report:
-[`state-bench-agent-learning-decision-2026-06-14.json`](state-bench-agent-learning-decision-2026-06-14.json).
+[`state-bench-agent-learning-decision-2026-06-14.json`](reports/state-bench/state-bench-agent-learning-decision-2026-06-14.json).
 
 Recheck summary:
 

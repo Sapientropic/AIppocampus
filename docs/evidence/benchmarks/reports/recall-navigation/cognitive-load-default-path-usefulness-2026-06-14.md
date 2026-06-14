@@ -15,7 +15,7 @@ from aippocampus_runtime.recall.cognitive_load_sidecar import (
     build_public_default_path_usefulness_report,
 )
 out = Path(
-    "docs/evidence/benchmarks/cognitive-load-default-path-usefulness-2026-06-14.json"
+    "docs/evidence/benchmarks/reports/recall-navigation/cognitive-load-default-path-usefulness-2026-06-14.json"
 )
 out.write_text(
     json.dumps(

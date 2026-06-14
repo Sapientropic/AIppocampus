@@ -10,7 +10,7 @@ Observatory cannot mutate recall ranking, activation order, or foreground hooks.
 ```powershell
 python tools\aippocampus\smoke\smoke_cognitive_observatory_current_completeness.py `
   --json `
-  --output docs\evidence\benchmarks\cognitive-observatory-current-completeness-2026-06-14.json
+  --output docs\evidence\benchmarks\reports\cognitive-runtime\cognitive-observatory-current-completeness-2026-06-14.json
 ```
 
 Focused verification:

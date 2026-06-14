@@ -58,6 +58,12 @@ class RunTestsTierTests(unittest.TestCase):
         with (
             mock.patch.object(
                 run_tests,
+                "runtime_import_preflight_issue",
+                side_effect=lambda: events.append("runtime") or None,
+                create=True,
+            ),
+            mock.patch.object(
+                run_tests,
                 "ensure_usable_tempdir",
                 side_effect=lambda: events.append("tempdir"),
                 create=True,
@@ -72,12 +78,91 @@ class RunTestsTierTests(unittest.TestCase):
             exit_code = run_tests.main(["--tier", "pr"])
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(events, ["tempdir", "run"])
+        self.assertEqual(events, ["runtime", "tempdir", "run"])
+
+    def test_runtime_import_preflight_reports_hidden_editable_pth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            site_packages = Path(tmp) / "site-packages"
+            site_packages.mkdir()
+            editable_pth = site_packages / "__editable__.aippocampus-0.2.0.pth"
+            editable_pth.write_text(
+                str(run_tests.REPO_ROOT / "skills" / "aippocampus" / "scripts") + "\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(run_tests.importlib.util, "find_spec", return_value=None),
+                mock.patch.object(run_tests.site, "getsitepackages", return_value=[str(site_packages)]),
+                mock.patch.object(run_tests, "_path_has_hidden_flag", return_value=True),
+            ):
+                issue = run_tests.runtime_import_preflight_issue()
+
+        self.assertIsNotNone(issue)
+        self.assertIn("aippocampus_runtime", issue)
+        self.assertIn("hidden .pth", issue)
+        self.assertIn("chflags -R nohidden .venv", issue)
+
+    def test_runtime_source_path_bypasses_hidden_editable_pth_for_runner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_root = Path(tmp) / "runtime-source"
+            package_root = source_root / "aippocampus_runtime_probe"
+            package_root.mkdir(parents=True)
+            (package_root / "__init__.py").write_text("", encoding="utf-8")
+
+            site_packages = Path(tmp) / "site-packages"
+            site_packages.mkdir()
+            editable_pth = site_packages / "__editable__.aippocampus-0.2.0.pth"
+            editable_pth.write_text(str(source_root) + "\n", encoding="utf-8")
+
+            previous_sys_path = list(sys.path)
+            previous_pythonpath = os.environ.get("PYTHONPATH")
+            try:
+                sys.path[:] = [entry for entry in sys.path if entry != str(source_root)]
+                os.environ.pop("PYTHONPATH", None)
+                with (
+                    mock.patch.object(run_tests, "RUNTIME_PACKAGE", "aippocampus_runtime_probe"),
+                    mock.patch.object(run_tests, "RUNTIME_SOURCE_ROOT", source_root),
+                    mock.patch.object(run_tests.site, "getsitepackages", return_value=[str(site_packages)]),
+                    mock.patch.object(run_tests, "_path_has_hidden_flag", return_value=True),
+                ):
+                    run_tests.ensure_runtime_source_path()
+                    issue = run_tests.runtime_import_preflight_issue()
+
+                self.assertIsNone(issue)
+                self.assertEqual(sys.path[0], str(source_root))
+                self.assertEqual(os.environ["PYTHONPATH"].split(os.pathsep)[0], str(source_root))
+            finally:
+                sys.path[:] = previous_sys_path
+                if previous_pythonpath is None:
+                    os.environ.pop("PYTHONPATH", None)
+                else:
+                    os.environ["PYTHONPATH"] = previous_pythonpath
+
+    def test_main_stops_before_running_tests_when_runtime_import_preflight_fails(self) -> None:
+        with (
+            io.StringIO() as stderr,
+            contextlib.redirect_stderr(stderr),
+            mock.patch.object(
+                run_tests,
+                "runtime_import_preflight_issue",
+                return_value="runtime import diagnostic",
+                create=True,
+            ),
+            mock.patch.object(run_tests, "ensure_usable_tempdir") as ensure_tempdir,
+            mock.patch.object(run_tests, "run_modules") as run_modules,
+        ):
+            exit_code = run_tests.main(["--tier", "pr"])
+            error_text = stderr.getvalue()
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("runtime import diagnostic", error_text)
+        ensure_tempdir.assert_not_called()
+        run_modules.assert_not_called()
 
     def test_main_can_run_benchmark_suite_profile_before_selected_tier(self) -> None:
         events: list[str] = []
 
         with (
+            mock.patch.object(run_tests, "runtime_import_preflight_issue", return_value=None, create=True),
             mock.patch.object(
                 run_tests,
                 "ensure_usable_tempdir",
@@ -236,6 +321,12 @@ class RunTestsTierTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             timings_path = Path(tmp) / "timings.json"
             with (
+                mock.patch.object(
+                    run_tests,
+                    "runtime_import_preflight_issue",
+                    return_value=None,
+                    create=True,
+                ),
                 mock.patch.object(run_tests, "ensure_usable_tempdir", return_value=Path(".")),
                 mock.patch.object(run_tests, "modules_for_tier", return_value=modules),
                 mock.patch.object(
