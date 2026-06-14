@@ -11,7 +11,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 EVIDENCE_MAP = REPO_ROOT / "docs" / "evidence" / "benchmark-evidence-map.md"
 BENCHMARK_PLAN = (
-    REPO_ROOT / "docs" / "evidence" / "benchmarks" / "memory-decision-benchmark-plan.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "benchmarks"
+    / "design"
+    / "memory-decision-benchmark-plan.md"
+)
+CONTINUOUS_MEMORY_ARMS_DOC = (
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "benchmarks"
+    / "design"
+    / "memory-decision"
+    / "continuous-memory-arms.md"
 )
 sys.path.insert(0, str(BENCHMARKS))
 
@@ -697,7 +711,12 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
 
     def test_docs_register_runner_and_claim_boundary(self) -> None:
         evidence_map = EVIDENCE_MAP.read_text(encoding="utf-8")
-        benchmark_plan = BENCHMARK_PLAN.read_text(encoding="utf-8")
+        benchmark_plan = "\n".join(
+            (
+                BENCHMARK_PLAN.read_text(encoding="utf-8"),
+                CONTINUOUS_MEMORY_ARMS_DOC.read_text(encoding="utf-8"),
+            )
+        )
 
         self.assertIn("benchmarks/aippocampus/benchmark_continuous_memory_arms.py", evidence_map)
         self.assertIn("Continuous-memory attribution arms", evidence_map)
@@ -727,7 +746,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("lower_bound_units=-27.7675", benchmark_plan)
         self.assertIn("source_grounded_task_success_under_equalized_cost", benchmark_plan)
         self.assertIn("no demonstrated memory advantage", benchmark_plan)
-        self.assertIn("not a public superiority claim", benchmark_plan)
+        self.assertIn("public-quality continuous-memory advantage claim", benchmark_plan)
         self.assertIn("public_synthetic_preregistered_repeat", evidence_map)
         self.assertIn("github_1153_context_loss_public_continuity_v1", evidence_map)
 

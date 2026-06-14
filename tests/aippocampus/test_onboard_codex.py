@@ -260,6 +260,8 @@ class OnboardCodexTests(unittest.TestCase):
 
         proc = self._run_onboard_facade(
             "--status",
+            "--format",
+            "json",
             "--cwd",
             str(self.cwd),
             env_extra={
@@ -283,6 +285,8 @@ class OnboardCodexTests(unittest.TestCase):
         legacy_registry = self.root / "private-legacy-registry"
         proc = self._run_onboard_facade(
             "--status",
+            "--format",
+            "json",
             "--cwd",
             str(self.cwd),
             env_extra={
@@ -311,6 +315,8 @@ class OnboardCodexTests(unittest.TestCase):
             "--provider",
             "codex",
             "--status",
+            "--format",
+            "json",
             "--cwd",
             str(self.cwd),
             env_extra={
@@ -329,6 +335,8 @@ class OnboardCodexTests(unittest.TestCase):
     def test_onboard_status_reports_missing_non_codex_providers_as_blocked(self) -> None:
         proc = self._run_onboard_facade(
             "--status",
+            "--format",
+            "json",
             "--cwd",
             str(self.cwd),
             env_extra={

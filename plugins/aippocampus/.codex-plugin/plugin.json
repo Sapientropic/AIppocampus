@@ -1,6 +1,6 @@
 {
   "name": "aippocampus",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Source-backed continuity memory for Codex agents across threads, projects, devices, and life-wide conversations.",
   "author": {
     "name": "AIppocampus contributors",

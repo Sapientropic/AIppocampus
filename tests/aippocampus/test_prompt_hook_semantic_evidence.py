@@ -638,7 +638,7 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
         self.assertIsNotNone(payload)
         context = payload["hookSpecificOutput"]["additionalContext"]
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Next: call agent_recall with this cue before broad search.", context)
         self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
         self.assertNotIn("Semantic recall route", context)
         self.assertNotIn("direction_only", context)
