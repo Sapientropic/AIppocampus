@@ -57,9 +57,18 @@ def task_families(task: str) -> list[str]:
 
 
 def _is_active_clause(clause: Mapping[str, Any]) -> bool:
-    lifecycle = clause.get("lifecycle") if isinstance(clause.get("lifecycle"), Mapping) else {}
-    activation = clause.get("activation") if isinstance(clause.get("activation"), Mapping) else {}
+    lifecycle_raw = clause.get("lifecycle")
+    activation_raw = clause.get("activation")
+    lifecycle: Mapping[str, Any] = lifecycle_raw if isinstance(lifecycle_raw, Mapping) else {}
+    activation: Mapping[str, Any] = activation_raw if isinstance(activation_raw, Mapping) else {}
     return lifecycle.get("status") == "ripe" and bool(activation.get("foreground_eligible"))
+
+
+def _lifecycle_status(clause: Mapping[str, Any]) -> str | None:
+    lifecycle_raw = clause.get("lifecycle")
+    lifecycle: Mapping[str, Any] = lifecycle_raw if isinstance(lifecycle_raw, Mapping) else {}
+    status = lifecycle.get("status")
+    return str(status) if status is not None else None
 
 
 def selected_active_clauses(
@@ -105,7 +114,7 @@ def usefulness_metrics(
     stale_or_challenged = {
         str(clause.get("clause_id"))
         for clause in clauses
-        if (clause.get("lifecycle") or {}).get("status") in {"stale", "challenged"}
+        if _lifecycle_status(clause) in {"stale", "challenged"}
     }
     active_ids = {str(item) for item in activation.get("active_clause_ids") or []}
     info_tokens = sum(len(item.split()) for item in selected_guidance)

@@ -229,7 +229,7 @@ def _path_has_hidden_flag(path: Path) -> bool:
     if not hidden_flag:
         return False
     try:
-        return bool(path.stat().st_flags & hidden_flag)
+        return bool(getattr(path.stat(), "st_flags", 0) & hidden_flag)
     except OSError:
         return False
 
