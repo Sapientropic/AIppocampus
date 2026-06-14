@@ -786,7 +786,6 @@ def assess_prompt(
         scent_threshold=scent_threshold,
         reasons=reasons,
     )
-
     decision, evidence = choose_decision_evidence(
         prompt=prompt, candidates=candidates, working_memory_matches=working_memory_matches,
         query_terms=query_terms, search_budget=search_budget, explicit=explicit,
