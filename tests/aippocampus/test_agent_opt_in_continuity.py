@@ -176,6 +176,43 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(deepened["result"]["evidence_level"], "source_backed")
         self.assertIn("compact MemoryPacket", json.dumps(deepened, ensure_ascii=False))
 
+    def test_human_recall_does_not_print_opaque_aippo_nav_handle(self) -> None:
+        long_handle = "aippo-nav:" + ("x" * 540)
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "route_id": "route_long_handle",
+                    "kind": "source_ref",
+                    "handle": long_handle,
+                    "route_label": "long opaque navigation handle route",
+                    "source_refs": [{"source_id": "src_long", "message_id": "msg_long"}],
+                }
+            ],
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            report = agent_continuity.recall(
+                "topology attention router macro sheaf callable handle UX",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                max_routes=1,
+            )
+
+        human = agent_continuity._render_recall_human(report)
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn(long_handle, encoded)
+        self.assertEqual(report["deepen_requests"][0]["handle"], long_handle)
+        self.assertIn("handle_preview", report["deepen_requests"][0])
+        self.assertIn("handle_sha256_12", report["deepen_requests"][0])
+        self.assertIn("deepen route 1", human)
+        self.assertIn("--json for callable handle", human)
+        self.assertNotIn(long_handle, human)
+        self.assertNotIn("aippo-nav:", human)
+        self.assertLess(max(len(line) for line in human.splitlines()), 180)
+
     def test_topic_labels_distinguish_routes_that_share_broad_scope_bucket(self) -> None:
         rows = [
             {
@@ -254,6 +291,12 @@ class AgentOptInContinuityTests(unittest.TestCase):
                 "handle": "handle:attention",
                 "route_label": "attention router score fusion route",
                 "route_topic": "attention_router",
+                "route_hints": {
+                    "topology_explain_only": {
+                        "topology_shape": "local_global_glue",
+                        "risk_reason_codes": ["local_global_obstruction"],
+                    }
+                },
                 "source_refs": [
                     {"source_id": "src_attention", "message_id": "msg_attention", "line": 12}
                 ],
@@ -312,13 +355,13 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
             default_report = agent_continuity.recall(
-                "attention router score fusion route selection",
+                "attention router topology score fusion route selection",
                 cwd=self.cwd,
                 clean_source_dir=self.clean,
                 max_routes=2,
             )
             routed_report = agent_continuity.recall(
-                "attention router score fusion route selection",
+                "attention router topology score fusion route selection",
                 cwd=self.cwd,
                 clean_source_dir=self.clean,
                 max_routes=2,
@@ -345,6 +388,27 @@ class AgentOptInContinuityTests(unittest.TestCase):
             routed_report["memory_packets"][0]["recommended_next"],
             "deepen_this_route_first",
         )
+        self.assertEqual(
+            routed_report["navigation_signals"]["kind"],
+            "architecture_navigation_affordance",
+        )
+        self.assertIn(
+            "attention_router_top_route_changed",
+            routed_report["navigation_signals"]["signals"],
+        )
+        self.assertIn(
+            "topology_requested",
+            routed_report["navigation_signals"]["signals"],
+        )
+        self.assertEqual(
+            routed_report["navigation_signals"]["next_safe_action"],
+            "deepen_selected_route",
+        )
+        human = agent_continuity._render_recall_human(routed_report)
+        self.assertIn("why: attention_router:top_route_changed", human)
+        self.assertIn("Navigation:", human)
+        self.assertIn("deepen route 1", human)
+        self.assertNotIn("handle:attention", human)
         self.assertTrue(routed_report["metrics"]["attention_router_applied"])
         self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
         self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
@@ -491,6 +555,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("macro_orientation_recall_prior", packet["route_delta_reason_codes"])
         self.assertIn("macro_active_layer", packet["selection_hint"]["why"])
         self.assertEqual(packet["recommended_next"], "deepen_this_route_first")
+        self.assertIn("macro_orientation_applied", report["navigation_signals"]["signals"])
+        self.assertEqual(report["navigation_signals"]["action_grammar"], "reopenable_route")
         self.assertNotIn("src_macro", encoded)
         self.assertNotIn("source_refs", encoded)
 
@@ -849,7 +915,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("AIppocampus agent recall: ok", proc.stdout)
-        self.assertIn("Next: aippocampus agent deepen ", proc.stdout)
+        self.assertIn("Next: deepen route 1; rerun with --json for callable handle.", proc.stdout)
         self.assertIn("Boundary: route only", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
         self.assertNotIn("source_refs", proc.stdout)

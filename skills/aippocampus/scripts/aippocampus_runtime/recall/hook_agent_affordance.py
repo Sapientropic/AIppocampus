@@ -160,6 +160,8 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
         kinds.append("episode_arc")
     if "project_experience" in explicit_surfaces:
         kinds.append("project_experience")
+    if "architecture_navigation" in explicit_surfaces:
+        kinds.append("architecture_navigation")
     if not skip_without_explicit_agent_surface and _has_architecture_diagnostic(result, all_items):
         kinds.append("architecture_diagnostic")
     if not skip_without_explicit_agent_surface and (
@@ -219,6 +221,8 @@ def _query_seed(action: str, lead_kinds: list[str]) -> str:
         return "work-continuation / prior task contract"
     if action == "agent_deepen":
         return "source-required route"
+    if action == "agent_recall" and "architecture_navigation" in lead_kinds:
+        return "architecture navigation / route diagnostics"
     if action == "agent_recall":
         return "continuity cue / route lookup"
     return "none"
@@ -261,6 +265,8 @@ def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any])
         codes.append("episode_arc_candidate")
     if "project_experience" in lead_kinds:
         codes.append("project_experience_candidate")
+    if "architecture_navigation" in lead_kinds:
+        codes.append("architecture_navigation_requested")
     if "architecture_diagnostic" in lead_kinds:
         codes.append("architecture_diagnostic_available")
     if action == "read_current_repo_first":
@@ -302,10 +308,13 @@ def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     if not affordance.get("usable_continuity_lead"):
         return None
     action = str(affordance.get("suggested_agent_action") or "agent_recall")
+    lead_kinds = [str(kind) for kind in _as_list(affordance.get("lead_kinds"))]
     if action == "agent_aippo":
         next_line = "Next: call agent_aippo for the task contract before broad search."
     elif action == "agent_deepen":
         next_line = "Next: call agent_deepen when a handle is present; otherwise call agent_recall first."
+    elif "architecture_navigation" in lead_kinds:
+        next_line = "Next: call agent_recall; use agent_explain or deepen before claims."
     else:
         next_line = "Next: call agent_recall with this cue before broad search."
     return (

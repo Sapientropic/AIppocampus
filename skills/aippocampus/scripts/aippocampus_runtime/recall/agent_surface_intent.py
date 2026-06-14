@@ -11,6 +11,10 @@ AIppo_RE = re.compile(r"\bai\s*ppo\b|aippo|working\s+contract|工作契约|工�
 AVATAR_RE = re.compile(r"\bavatar\b|头像|化身", re.IGNORECASE)
 EPISODE_ARC_RE = re.compile(r"episode[-\s]*arc|episode\s*/\s*arc|情节弧|事件弧", re.IGNORECASE)
 PROJECT_EXPERIENCE_RE = re.compile(r"project\s+experience|项目经验|以前是不是反复|不要重复踩坑", re.IGNORECASE)
+ARCHITECTURE_NAVIGATION_RE = re.compile(
+    r"attention[-_\s]*router|topology|macro\s+orientation|sheaf|local[-_\s]*global|架构|拓扑|胶合",
+    re.IGNORECASE,
+)
 
 
 def classify_agent_surface_intent(prompt: str) -> dict[str, Any]:
@@ -31,6 +35,8 @@ def classify_agent_surface_intent(prompt: str) -> dict[str, Any]:
         surfaces.append("episode_arc")
     if PROJECT_EXPERIENCE_RE.search(text):
         surfaces.append("project_experience")
+    if ARCHITECTURE_NAVIGATION_RE.search(text):
+        surfaces.append("architecture_navigation")
 
     if not surfaces:
         return {

@@ -103,6 +103,37 @@ class PromptHookSemanticDiagnosticsTests(unittest.TestCase):
         self.assertIn("project_experience_candidate", affordance["reason_codes"])
         self.assertIn("Next: call agent_recall", context)
 
+    def test_explicit_architecture_prompt_exposes_quiet_navigation_affordance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = hook.assess_prompt(
+                "验一下 topology、attention router、macro orientation、sheaf/local-global 是否让前台少走弯路",
+                cwd=Path(tmp),
+                semantic_gate_fn=lambda *_, **__: {
+                    "available": False,
+                    "decision": "skip",
+                    "confidence": 0.0,
+                    "query_aliases": [],
+                },
+                max_elapsed_ms=1200,
+            )
+
+        public = hook.public_hook_debug_payload(result)
+        payload = hook.hook_stdout_payload(result)
+        context = payload["hookSpecificOutput"]["additionalContext"] if payload else ""
+        affordance = public["agent_recall_affordance"]
+
+        self.assertTrue(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "agent_recall")
+        self.assertIn("architecture_navigation", affordance["lead_kinds"])
+        self.assertIn("architecture_navigation_requested", affordance["reason_codes"])
+        self.assertEqual(
+            affordance["suggested_query_seed"],
+            "architecture navigation / route diagnostics",
+        )
+        self.assertIn("agent_explain or deepen", context)
+        self.assertTrue(affordance["not_enough_for_claim"])
+        self.assertNotIn("source_refs", context)
+
     def test_public_payload_explains_partial_semantic_success_without_raw_worker_details(
         self,
     ) -> None:

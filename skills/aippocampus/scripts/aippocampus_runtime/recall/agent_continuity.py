@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -27,8 +26,16 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-from aippocampus_runtime.recall import agent_facade_contract as facade
-from aippocampus_runtime.recall import attention_router_policy, feedback_events, macro_live_recall
+from aippocampus_runtime.recall import (
+    agent_deepen_requests,
+    architecture_navigation_affordance,
+    attention_router_policy,
+    feedback_events,
+    macro_live_recall,
+)
+from aippocampus_runtime.recall import (
+    agent_facade_contract as facade,
+)
 
 SCHEMA_VERSION = "agent-opt-in-continuity-v0"
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
@@ -344,30 +351,6 @@ def _annotate_route_selection_hints(
         )
         selected["_recommended_next"] = "deepen_this_route_first"
     return annotated
-
-
-def _deepen_request_for_route(route: Mapping[str, Any], packet: Mapping[str, Any]) -> dict[str, Any]:
-    handle = route.get("handle")
-    handle_arg = (
-        json.dumps(handle, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        if isinstance(handle, Mapping)
-        else str(handle)
-        if handle
-        else ""
-    )
-    command = f"aippocampus agent deepen {shlex.quote(handle_arg)}" if handle_arg else None
-    return {
-        "route_id": packet.get("route_id"),
-        "deepen_route_id": packet.get("deepen_route_id"),
-        "deepen_route_id_display_only": True,
-        "tool": "agent deepen",
-        "handle": handle,
-        "callable_handle": handle,
-        "callable_handle_field": "deepen_requests[].handle",
-        "copy_paste_command": command,
-        "boundary": "opaque_navigation_handle_not_fact",
-        "claim_boundary": "source_reopen_required_before_strong_claim",
-    }
 
 
 def _selection_hint_present(packet: Mapping[str, Any]) -> bool:
@@ -828,10 +811,23 @@ def recall(
     )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
     deepen_requests = [
-        _deepen_request_for_route(route, memory_packet)
-        for route, memory_packet in zip(routes, memory_packets, strict=True)
+        agent_deepen_requests.deepen_request_for_route(
+            route,
+            memory_packet,
+            request_index=index,
+        )
+        for index, (route, memory_packet) in enumerate(
+            zip(routes, memory_packets, strict=True),
+            start=1,
+        )
         if route.get("handle")
     ]
+    navigation_signals = architecture_navigation_affordance.navigation_signals_for_recall(
+        query=str(query or ""),
+        macro_navigation=macro_navigation,
+        attention_navigation=attention_navigation,
+        memory_packets=memory_packets,
+    )
     forbidden_count = _count_forbidden_keys(memory_packets)
     triage_metrics = _memory_packet_triage_metrics(memory_packets)
     result = {
@@ -845,6 +841,7 @@ def recall(
         "deepen_requests": deepen_requests,
         "macro_navigation": macro_navigation,
         "attention_router_navigation": attention_navigation,
+        "navigation_signals": navigation_signals,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": (
             deepen_requests[0].get("copy_paste_command") if deepen_requests else None
@@ -1243,6 +1240,9 @@ def _json_out(payload: Mapping[str, Any]) -> None:
 
 def _render_recall_human(payload: Mapping[str, Any]) -> str:
     packets = [packet for packet in payload.get("memory_packets") or [] if isinstance(packet, Mapping)]
+    deepen_requests = [
+        request for request in payload.get("deepen_requests") or [] if isinstance(request, Mapping)
+    ]
     lines = [f"AIppocampus agent recall: {payload.get('status') or 'unknown'}"]
     if not packets:
         lines.append("No compact route surfaced.")
@@ -1261,11 +1261,22 @@ def _render_recall_human(payload: Mapping[str, Any]) -> str:
         reason_codes = packet.get("route_delta_reason_codes") or packet.get("triage_rank_reason_codes")
         if isinstance(reason_codes, list) and reason_codes:
             lines.append("   codes: " + ", ".join(str(code) for code in reason_codes[:3]))
+    navigation = payload.get("navigation_signals")
+    if isinstance(navigation, Mapping):
+        signals = [str(signal) for signal in navigation.get("signals") or [] if str(signal)]
+        if signals:
+            action = str(navigation.get("next_safe_action") or "deepen_before_claim")
+            lines.append(f"Navigation: {', '.join(signals[:3])} -> {action}")
     suggested_command = str(payload.get("suggested_next_command") or "").strip()
-    if suggested_command:
+    if deepen_requests:
+        first = deepen_requests[0]
+        next_action = str(first.get("human_next_action") or "").strip()
+        if not next_action:
+            request_index = int(first.get("request_index") or 1)
+            next_action = f"deepen route {request_index}; rerun with --json for callable handle"
+        lines.append(f"Next: {next_action}.")
+    elif suggested_command and "aippo-nav:" not in suggested_command and len(suggested_command) <= 160:
         lines.append(f"Next: {suggested_command}")
-    elif payload.get("deepen_requests"):
-        lines.append("Next: rerun with --json to copy a deepen handle.")
     else:
         lines.append(f"Next: {payload.get('suggested_next') or 'continue_normally'}")
     lines.append("Boundary: route only; reopen source before quoting or making strong claims.")
