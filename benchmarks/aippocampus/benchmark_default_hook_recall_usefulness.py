@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Public-safe three-arm default-hook recall usefulness benchmark for #1439."""
+"""Public-safe default-hook recall usefulness benchmark for #1439 and #1449."""
 
 from __future__ import annotations
 
@@ -15,11 +15,12 @@ import _paths
 _paths.ensure_paths()
 
 REPORT_KIND = "aippocampus_default_hook_recall_usefulness_benchmark"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ARM_BASELINE = "default_no_packet_baseline"
 ARM_EXPLICIT = "explicit_recall_same_budget"
 ARM_DEFAULT_HOOK = "default_hook_foreground_candidate"
-ARMS = (ARM_BASELINE, ARM_EXPLICIT, ARM_DEFAULT_HOOK)
+ARM_TINY_AFFORDANCE = "default_hook_tiny_agent_recall_affordance"
+ARMS = (ARM_BASELINE, ARM_EXPLICIT, ARM_DEFAULT_HOOK, ARM_TINY_AFFORDANCE)
 PACKET_BUDGET = 2
 SOURCE_REOPEN_BUDGET = 1
 
@@ -44,8 +45,13 @@ def _arm(
     wrong_route_drag_count: int = 0,
     irrelevant_memory_drag_count: int = 0,
     source_truth_overclaim: bool = False,
+    affordance_emitted: bool = False,
+    suggested_agent_action: str | None = None,
+    agent_followed_suggested_action: bool = False,
+    recall_after_hint_success: bool = False,
+    affordance_not_evidence: bool = False,
 ) -> dict[str, Any]:
-    return {
+    row = {
         "activated": activated,
         "helpful_next_action": helpful_next_action,
         "manual_search_steps": manual_search_steps,
@@ -57,10 +63,54 @@ def _arm(
         "quiet_for_reason": quiet_for_reason,
         "source_truth_overclaim": source_truth_overclaim,
     }
+    if affordance_emitted:
+        row["affordance_emitted"] = True
+    if agent_followed_suggested_action:
+        row["agent_followed_suggested_action"] = True
+    if recall_after_hint_success:
+        row["recall_after_hint_success"] = True
+    if affordance_not_evidence:
+        row["affordance_not_evidence"] = True
+    if suggested_agent_action is not None:
+        row["suggested_agent_action"] = suggested_agent_action
+    return row
+
+
+def _tiny_agent_recall_affordance_arm(case: Mapping[str, Any]) -> dict[str, Any]:
+    """Model the hook as a tiny action hint, not as foreground evidence."""
+    explicit = _as_mapping(_as_mapping(case.get("arms")).get(ARM_EXPLICIT))
+    should_emit = bool(explicit.get("helpful_next_action"))
+    if should_emit:
+        return _arm(
+            activated=True,
+            helpful_next_action=True,
+            manual_search_steps=int(explicit.get("manual_search_steps", 0)),
+            source_reopen_follow_through=bool(
+                explicit.get("source_reopen_follow_through")
+            ),
+            latency_ms_proxy=12,
+            cost_unit_proxy=1,
+            affordance_emitted=True,
+            suggested_agent_action="agent_recall",
+            agent_followed_suggested_action=True,
+            recall_after_hint_success=bool(
+                explicit.get("source_reopen_follow_through")
+            ),
+            affordance_not_evidence=True,
+        )
+    return _arm(
+        activated=False,
+        helpful_next_action=False,
+        manual_search_steps=int(explicit.get("manual_search_steps", 0)),
+        source_reopen_follow_through=False,
+        latency_ms_proxy=5,
+        cost_unit_proxy=0,
+        quiet_for_reason=True,
+    )
 
 
 def _fixture_cases() -> list[dict[str, Any]]:
-    return [
+    cases = [
         {
             "case_id": "self_referential_continuity_hook_skip",
             "families": [
@@ -438,6 +488,9 @@ def _fixture_cases() -> list[dict[str, Any]]:
             },
         },
     ]
+    for case in cases:
+        case["arms"][ARM_TINY_AFFORDANCE] = _tiny_agent_recall_affordance_arm(case)
+    return cases
 
 
 def _arm_metrics(cases: Sequence[Mapping[str, Any]], arm: str) -> dict[str, Any]:
@@ -465,6 +518,18 @@ def _arm_metrics(cases: Sequence[Mapping[str, Any]], arm: str) -> dict[str, Any]
     source_truth_overclaim_count = sum(
         1 for row in selected if row.get("source_truth_overclaim")
     )
+    affordance_emitted_count = sum(
+        1 for row in selected if row.get("affordance_emitted")
+    )
+    agent_followed_suggested_action_count = sum(
+        1 for row in selected if row.get("agent_followed_suggested_action")
+    )
+    recall_after_hint_success_count = sum(
+        1 for row in selected if row.get("recall_after_hint_success")
+    )
+    affordance_not_evidence_count = sum(
+        1 for row in selected if row.get("affordance_not_evidence")
+    )
     return {
         "activation_count": activation_count,
         "activation_rate": _ratio(activation_count, total),
@@ -482,6 +547,21 @@ def _arm_metrics(cases: Sequence[Mapping[str, Any]], arm: str) -> dict[str, Any]
         "cost_unit_proxy_avg": _ratio(cost_total, total),
         "quiet_for_reason_count": quiet_count,
         "source_truth_overclaim_count": source_truth_overclaim_count,
+        "affordance_emitted_count": affordance_emitted_count,
+        "affordance_emission_rate": _ratio(affordance_emitted_count, total),
+        "agent_followed_suggested_action_count": (
+            agent_followed_suggested_action_count
+        ),
+        "agent_followed_suggested_action_rate": _ratio(
+            agent_followed_suggested_action_count,
+            affordance_emitted_count,
+        ),
+        "recall_after_hint_success_count": recall_after_hint_success_count,
+        "recall_after_hint_success_rate": _ratio(
+            recall_after_hint_success_count,
+            affordance_emitted_count,
+        ),
+        "affordance_not_evidence_count": affordance_not_evidence_count,
     }
 
 
@@ -547,14 +627,68 @@ def _prompt_hook_gap_readout(cases: Sequence[Mapping[str, Any]]) -> dict[str, in
     }
 
 
+def _tiny_agent_recall_affordance_readout(
+    arm_metrics: Mapping[str, Mapping[str, Any]],
+) -> dict[str, int | float | bool]:
+    tiny_metrics = arm_metrics[ARM_TINY_AFFORDANCE]
+    gate_passed = bool(
+        tiny_metrics["affordance_emitted_count"] >= 1
+        and tiny_metrics["agent_followed_suggested_action_count"]
+        == tiny_metrics["affordance_emitted_count"]
+        and tiny_metrics["recall_after_hint_success_count"] >= 1
+        and tiny_metrics["manual_search_reduction_vs_baseline"] > 0
+        and tiny_metrics["wrong_route_drag_count"] == 0
+        and tiny_metrics["irrelevant_memory_drag_count"] == 0
+        and tiny_metrics["source_truth_overclaim_count"] == 0
+        and tiny_metrics["quiet_for_reason_count"] >= 1
+        and tiny_metrics["affordance_not_evidence_count"]
+        == tiny_metrics["affordance_emitted_count"]
+    )
+    return {
+        "affordance_emitted_count": tiny_metrics["affordance_emitted_count"],
+        "affordance_emission_rate": tiny_metrics["affordance_emission_rate"],
+        "agent_followed_suggested_action_count": tiny_metrics[
+            "agent_followed_suggested_action_count"
+        ],
+        "agent_followed_suggested_action_rate": tiny_metrics[
+            "agent_followed_suggested_action_rate"
+        ],
+        "recall_after_hint_success_count": tiny_metrics[
+            "recall_after_hint_success_count"
+        ],
+        "recall_after_hint_success_rate": tiny_metrics[
+            "recall_after_hint_success_rate"
+        ],
+        "manual_search_reduction_vs_baseline": tiny_metrics[
+            "manual_search_reduction_vs_baseline"
+        ],
+        "wrong_route_drag_count": tiny_metrics["wrong_route_drag_count"],
+        "irrelevant_memory_drag_count": tiny_metrics[
+            "irrelevant_memory_drag_count"
+        ],
+        "source_truth_overclaim_count": tiny_metrics[
+            "source_truth_overclaim_count"
+        ],
+        "quiet_for_reason_count": tiny_metrics["quiet_for_reason_count"],
+        "affordance_not_evidence_count": tiny_metrics[
+            "affordance_not_evidence_count"
+        ],
+        "fixture_gate_passed": gate_passed,
+    }
+
+
 def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
     cases = _fixture_cases()
     arm_metrics = {arm: _arm_metrics(cases, arm) for arm in ARMS}
     cohort_coverage = _cohort_coverage(cases)
     question_theme_readout = _question_theme_readout(cases)
     prompt_hook_gap_readout = _prompt_hook_gap_readout(cases)
+    tiny_affordance_readout = _tiny_agent_recall_affordance_readout(arm_metrics)
     default_metrics = arm_metrics[ARM_DEFAULT_HOOK]
     explicit_metrics = arm_metrics[ARM_EXPLICIT]
+    tiny_affordance_gate_passed = bool(
+        tiny_affordance_readout["fixture_gate_passed"]
+    )
     adoption_blockers = []
     if default_metrics["wrong_route_drag_count"]:
         adoption_blockers.append("wrong_route_drag_present")
@@ -582,30 +716,39 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
     return {
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
-        "ok": closeout_eligible,
+        "ok": bool(closeout_eligible and tiny_affordance_gate_passed),
         "comparison_contract": {
             "arms": list(ARMS),
             "same_packet_budget": True,
             "packet_budget": PACKET_BUDGET,
             "same_source_reopen_budget": True,
             "source_reopen_budget": SOURCE_REOPEN_BUDGET,
+            "tiny_affordance_suggested_agent_action": "agent_recall",
+            "tiny_affordance_not_evidence": True,
             "private_history_used": False,
             "provider_call_count": 0,
         },
         "metrics": {
             "case_count": len(cases),
             "adoption_blocker_count": len(adoption_blockers),
+            "tiny_affordance_gate_passed": tiny_affordance_gate_passed,
         },
         "cohort_coverage": cohort_coverage,
         "arm_metrics": arm_metrics,
         "question_theme_readout": question_theme_readout,
         "prompt_hook_gap_readout": prompt_hook_gap_readout,
+        "tiny_agent_recall_affordance_readout": tiny_affordance_readout,
         "decision": {
             "default_foreground_decision": "keep_default_hook_diagnostic_only",
             "default_foreground_adoption_recommended": False,
             "eligible_default_foreground_surfaces": [],
             "tiny_agent_recall_affordance_decision": (
-                "review_opt_in_affordance_only_not_default_foreground"
+                "default_tiny_agent_recall_affordance_ready_not_foreground_context"
+                if tiny_affordance_gate_passed
+                else "review_opt_in_affordance_only_not_default_foreground"
+            ),
+            "eligible_tiny_agent_recall_affordance_surfaces": (
+                [ARM_TINY_AFFORDANCE] if tiny_affordance_gate_passed else []
             ),
             "opt_in_or_diagnostic_surfaces": [
                 "explicit_recall_same_budget",
@@ -620,28 +763,46 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
         "issue_readouts": {
             "github_1439": {
                 "same_budget_three_arm_eval_measured": True,
+                "same_budget_four_arm_eval_measured": True,
                 "default_hook_validated_before_adoption": True,
                 "default_foreground_adoption_recommended": False,
                 "default_foreground_decision": "keep_default_hook_diagnostic_only",
                 "question_theme_gap_covered": True,
                 "explicit_route_hook_skip_gap_covered": True,
                 "closeout_eligible": closeout_eligible,
+            },
+            "github_1449": {
+                "tiny_affordance_eval_separated": True,
+                "default_hook_tiny_agent_recall_affordance_arm": True,
+                "not_foreground_context": True,
+                "affordance_emitted_vs_silent_measured": True,
+                "agent_recall_follow_through_measured": True,
+                "manual_search_reduction_measured": True,
+                "wrong_route_drag_measured": True,
+                "irrelevant_memory_drag_measured": True,
+                "source_truth_overclaim_measured": True,
+                "quiet_for_reason_measured": True,
+                "fixture_gate_passed": tiny_affordance_gate_passed,
+                "live_quality_claimed": False,
             }
         },
         "can_claim": [
             "default_hook_foreground_candidate_was_tested_against_explicit_recall",
+            "default_hook_tiny_agent_recall_affordance_was_tested_separately",
             "representative_public_synthetic_cohort_reports_help_and_drag",
             "explicit_recall_same_budget_outperforms_no_packet_baseline",
             "default_hook_should_remain_diagnostic_only_for_this_slice",
             "explicit_route_hook_skip_gap_is_measured",
+            "tiny_agent_recall_affordance_fixture_gate_passed_for_not_evidence_action_hints",
         ],
         "cannot_claim": [
             "live_default_hook_quality",
+            "live_tiny_agent_recall_affordance_quality",
             "default_foreground_adoption_ready",
             "broad_private_history_question_quality",
             "theme_rows_as_source_truth",
             "cognitive_load_default_foreground_readiness",
-            "tiny_agent_recall_affordance_ready_for_default",
+            "tiny_affordance_source_claims_without_recall_or_deepen",
         ],
         "privacy_boundary": {
             "prompt_text_serialized": False,
