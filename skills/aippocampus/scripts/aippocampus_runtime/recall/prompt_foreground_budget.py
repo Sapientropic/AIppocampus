@@ -110,11 +110,6 @@ def cognitive_map_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
 def _has_higher_authority_route(result: dict[str, Any]) -> bool:
     if result.get("evidence") or result.get("working_memory"):
         return True
-    if fresh_packet_source_required(result):
-        return True
-    semantic_gate = result.get("semantic_gate")
-    if isinstance(semantic_gate, dict) and semantic_gate.get("available"):
-        return True
     for card in ambient_cards(result):
         action = str(card.get("action_grammar") or card.get("trust_level") or "").strip()
         if action in HIGHER_AUTHORITY_ACTIONS:
@@ -191,8 +186,7 @@ def compact_weak_scent_lines(result: dict[str, Any]) -> list[str]:
     ][:2]
     why_now = compact_text("; ".join(reasons), 140) if reasons else "weak route scent"
     lines = [
-        "Ambient recall scent (aippocampus compact direction_only):",
-        "action: direction_only",
+        "Ambient recall scent:",
         f"why_now: {why_now}",
         "routes:",
     ]
@@ -201,10 +195,6 @@ def compact_weak_scent_lines(result: dict[str, Any]) -> list[str]:
         lines.extend(f"- {label}" for label in labels)
     else:
         lines.append("- related prior context")
-    lines.append(
-        "can_use: orientation only; must_reopen_for: exact quotes, source-backed claims, "
-        "public issue/comment text; next: reopen/deepen only if this changes the answer"
-    )
     return lines
 
 

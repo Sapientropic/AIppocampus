@@ -60,10 +60,17 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     evidence = [item for item in _as_list(result.get("evidence")) if isinstance(item, dict)]
     cards = _ambient_cards(result)
     cognitive_map = [item for item in _as_list(result.get("cognitive_map")) if isinstance(item, dict)]
+    semantic_gate = _as_dict(result.get("semantic_gate"))
 
     if any(_is_aippo_working_contract(item) for item in working + candidates):
         kinds.append("aippo_working_contract")
     if candidates or evidence or cards:
+        kinds.append("memory_route")
+    if (
+        not kinds
+        and semantic_gate.get("available")
+        and str(semantic_gate.get("decision") or "") in {"scent", "evidence"}
+    ):
         kinds.append("memory_route")
     if cognitive_map or any(
         str(card.get("provenance_class") or "") == "cognitive_map_route" for card in cards
@@ -185,17 +192,10 @@ def build_hook_agent_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
 def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     if not affordance.get("usable_continuity_lead"):
         return None
-    lead_kinds = [
-        str(kind)
-        for kind in _as_list(affordance.get("lead_kinds"))
-        if str(kind).strip()
-    ][:4]
     return (
-        "AIppocampus recall affordance (not evidence): "
-        f"suggested_agent_action={affordance.get('suggested_agent_action')}; "
-        f"lead_kinds={','.join(lead_kinds) or 'unknown'}; "
-        f"budget={affordance.get('budget_hint')}; "
-        "not_enough_for_claim=true."
+        "AIppocampus: prior context may matter.\n"
+        "Next: call recall_context with this cue before broad search.\n"
+        "Use as route only; reopen source before quoting or making strong claims."
     )
 
 
@@ -206,12 +206,6 @@ def prepend_hook_agent_affordance(
     affordance_line = format_hook_agent_affordance(build_hook_agent_affordance(result))
     if not affordance_line:
         return lines
-    if lines and lines[0].startswith("Ambient recall scent (aippocampus compact"):
-        compact_heading = affordance_line.replace(
-            "AIppocampus recall affordance",
-            "Ambient recall scent + AIppocampus affordance",
-        )
-        return [compact_heading, *lines[1:]]
     return [affordance_line, *lines]
 
 

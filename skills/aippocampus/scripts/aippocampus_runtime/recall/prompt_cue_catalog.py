@@ -363,6 +363,22 @@ CJK_CONTENT_MARKERS = {
 CJK_SHORT_EVIDENCE_TERMS = frozenset("压力 焦虑 难受 崩溃 害怕 孤独 家人 家庭 妈妈 爸爸 伴侣 礼物 关系 偏好".split())
 
 GENERIC_ASSOCIATION_TERMS = {
+    "agent",
+    "agents",
+    "debug",
+    "diagnostic",
+    "diagnostics",
+    "foreground",
+    "frontstage",
+    "plugin",
+    "plugins",
+    "product",
+    "ux",
+    "体验",
+    "前台",
+    "插件",
+    "调试",
+    "诊断",
     "当前线程",
     "前线程",
     "线程",

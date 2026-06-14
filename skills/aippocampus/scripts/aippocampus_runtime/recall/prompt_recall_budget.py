@@ -13,6 +13,7 @@ EVIDENCE_MIN_REMAINING_MS = 900.0
 SEMANTIC_EFFECTIVE_TIMEOUT_POLICY = "worker_socket_timeout_half_of_overall_deadline"
 SEMANTIC_BUDGET_CLIP_REASON = "foreground_post_semantic_reserve"
 SEMANTIC_SOCKET_TIMEOUT_REASON = "worker_socket_timeout_policy"
+SEMANTIC_BUDGET_AGENT_NEXT_ACTION = "increase_max_elapsed_ms_or_use_background_recall"
 
 
 def remaining_ms(start: float, max_elapsed_ms: int | None) -> float | None:
@@ -83,5 +84,8 @@ def semantic_budget_result(
             "budget_clip_reason": (
                 SEMANTIC_BUDGET_CLIP_REASON if budget_clipped else SEMANTIC_SOCKET_TIMEOUT_REASON
             ),
+            "agent_next_action": SEMANTIC_BUDGET_AGENT_NEXT_ACTION
+            if budget_clipped
+            else "no_budget_change_needed",
         },
     }

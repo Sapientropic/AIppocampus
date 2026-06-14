@@ -21,6 +21,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
+from aippocampus_runtime.mcp.handle_inputs import nested_navigation_handle_value
 from aippocampus_runtime.mcp.source_ref_registry import (
     registry_source_fingerprint_invalidations,
     source_candidate_dirs_for_ref,
@@ -577,6 +578,9 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
     if isinstance(current, str):
         return _decode_handle(current)
     if isinstance(current, dict):
+        nested = nested_navigation_handle_value(current, clean_ref=_clean_ref)
+        if nested is not None and nested is not current:
+            return normalize_handle(nested)
         kind = str(current.get("kind") or "")
         if kind == "source_ref":
             refs = current.get("source_refs") or []
@@ -641,7 +645,10 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
             }
     raise RecallNavigationError(
         "malformed_recall_handle",
-        "recall_deepen requires a recall_context handle or navigation seed.",
+        (
+            "recall_deepen requires a recall_context handle, a returned route object, "
+            "or source_reopen_path.arguments from recall_context."
+        ),
     )
 
 

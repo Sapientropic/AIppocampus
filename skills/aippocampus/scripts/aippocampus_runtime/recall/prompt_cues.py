@@ -419,26 +419,11 @@ def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | Non
     # exact/source-backed recall. Otherwise a fuzzy "how is that memory thing
     # going?" can surface old high-scoring fragments instead of staying as a
     # gentle scent for the foreground model to decide on.
-    if (
+    return bool(
         explicit_recall_terms(prompt)
         or source_evidence_intent(prompt)
         or natural_evidence_intent(prompt)
-    ):
-        return True
-
-    risk = str(result.get("anti_personalization_risk") or "").strip().casefold()
-    if risk == "high":
-        return False
-    intent = str(result.get("intent") or "").strip().casefold()
-    if intent not in {"recall", "source_recall", "exact_recall"}:
-        return False
-    if float(result.get("confidence") or 0.0) < 0.82:
-        return False
-    # Subconscious/semantic context may decide a fuzzy status prompt is really a
-    # bounded recall request. That signal can open a local evidence probe, but
-    # the source hit still has to come from clean source/SQLite and pass normal
-    # quality filtering before anything is injected.
-    return bool(result.get("query_aliases") or result.get("memory_scope"))
+    )
 
 
 def semantic_gate_can_request_source_reopen(prompt: str, result: dict[str, Any] | None) -> bool:
@@ -457,7 +442,11 @@ def semantic_gate_can_request_source_reopen(prompt: str, result: dict[str, Any] 
     # paid/high-confidence route should give the foreground agent a reopen plan
     # instead of collapsing back to ordinary scent/manual grep.
     has_route_surface = bool(result.get("query_aliases") or result.get("memory_scope"))
-    return bool(risk != "high" and intent == "continuation" and has_route_surface)
+    return bool(
+        risk != "high"
+        and intent in {"continuation", "recall", "source_recall", "exact_recall"}
+        and has_route_surface
+    )
 
 
 def has_non_cjk_non_latin_letters(prompt: str) -> bool:

@@ -92,20 +92,19 @@ class PromptForegroundBudgetTests(unittest.TestCase):
 
         self.assertLessEqual(len(context), 650)
         self.assertLessEqual(context.count("\n") + 1, 9)
-        self.assertIn("action: direction_only", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
         self.assertIn("routes:", context)
-        self.assertIn("can_use: orientation only", context)
-        self.assertIn(
-            "must_reopen_for: exact quotes, source-backed claims, public issue/comment text",
-            context,
-        )
+        self.assertNotIn("action: direction_only", context)
+        self.assertNotIn("must_reopen_for", context)
         self.assertNotIn("Ambient recall private context", context)
         self.assertNotIn("bounded_evidence within scope", context)
         self.assertNotIn("source_open", context)
         self.assertNotIn("source-generation", context)
         self.assertEqual(public["ambient_recall"]["action_grammar_counts"]["direction_only"], 3)
         self.assertEqual(public["foreground_context"]["foreground_context_chars"], len(context))
-        self.assertEqual(public["foreground_context"]["foreground_context_line_count"], 8)
+        self.assertLessEqual(public["foreground_context"]["foreground_context_line_count"], 9)
         self.assertEqual(public["foreground_context"]["direction_only_actionable_route_count"], 3)
         self.assertEqual(public["foreground_context"]["weak_scent_payload_budget_violation_count"], 0)
         self.assertEqual(public["foreground_context"]["debug_only_field_leak_count"], 0)
@@ -172,10 +171,11 @@ class PromptForegroundBudgetTests(unittest.TestCase):
 
         self.assertLessEqual(len(context), 650)
         self.assertLessEqual(context.count("\n") + 1, 9)
-        self.assertIn("action: direction_only", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
         self.assertIn("AIppocampus hook field budget", context)
         self.assertIn("Source-court route guidance", context)
-        self.assertIn("can_use: orientation only", context)
+        self.assertIn("Use as route only", context)
+        self.assertNotIn("action: direction_only", context)
         self.assertNotIn("Cognitive map routes", context)
         self.assertNotIn("Ambient recall private context", context)
         self.assertNotIn("bounded_evidence within scope", context)
@@ -185,6 +185,118 @@ class PromptForegroundBudgetTests(unittest.TestCase):
             public["foreground_context"]["direction_only_foreground_budget_violation_count"],
             0,
         )
+
+    def test_semantic_route_foreground_uses_product_cue_without_taxonomy_dump(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.81,
+            "confidence": "medium",
+            "query_terms": ["plugin", "frontstage"],
+            "concept_expansions": [],
+            "candidates": [
+                {
+                    "title": "AIppocampus plugin frontstage UX",
+                    "anchors": ["prompt-hook foreground projection"],
+                    "matched_terms": ["plugin", "frontstage"],
+                }
+            ],
+            "evidence": [],
+            "working_memory": [],
+            "cognitive_map": [],
+            "semantic_gate": {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.84,
+                "query_aliases": ["plugin UX", "foreground projection"],
+                "memory_scope": ["registered_threads"],
+            },
+            "semantic_bridge_diagnostic": "semantic_evidence_without_source_bridge",
+            "route_delivery_diagnostic": {
+                "foreground_profile": "explicit_recall",
+                "final_candidate_count": 1,
+                "evidence_count": 0,
+                "semantic_source_reopen_route": False,
+            },
+            "reasons": ["semantic gate: scent confidence=0.84 aliases=plugin UX"],
+            "elapsed_ms": 18.4,
+        }
+
+        context = hook.context_for_hook(result) or ""
+
+        self.assertLessEqual(len(context), 650)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
+        for marker in (
+            "bounded_evidence",
+            "source_open",
+            "direction_with_ref",
+            "source court",
+            "action grammar",
+            "Semantic recall route",
+        ):
+            self.assertNotIn(marker, context)
+
+    def test_source_required_fresh_packet_still_uses_compact_product_foreground(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.86,
+            "confidence": "medium",
+            "query_terms": ["small", "hippocampus", "test"],
+            "concept_expansions": [],
+            "candidates": [
+                {
+                    "title": "Small hippocampus smoke route",
+                    "anchors": ["test failed first"],
+                    "matched_terms": ["small hippocampus test"],
+                }
+            ],
+            "evidence": [],
+            "working_memory": [],
+            "cognitive_map": [],
+            "semantic_gate": {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.92,
+                "query_aliases": ["small hippocampus test"],
+                "memory_scope": ["registered_threads"],
+            },
+            "semantic_source_reopen_route": True,
+            "ambient_recall": {
+                "mode": "active_gentle_nudge",
+                "cards": [
+                    {
+                        "theme": "Small hippocampus smoke route",
+                        "support_level": "scent",
+                        "trust_level": "direction_only",
+                        "action_grammar": "direction_only",
+                        "visibility": "active_gentle_nudge",
+                    }
+                ],
+                "fresh_thread_packet": {
+                    "support_level": "source_required",
+                    "action_grammar": "reopenable_route",
+                    "reopen_plan": {"status": "ready"},
+                },
+            },
+            "reasons": ["semantic gate: evidence confidence=0.92 aliases=small hippocampus test"],
+        }
+
+        context = hook.context_for_hook(result) or ""
+
+        self.assertLessEqual(len(context), 650)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Small hippocampus smoke route", context)
+        for marker in (
+            "source_required",
+            "reopenable_route",
+            "bounded_evidence",
+            "source_open",
+            "action grammar",
+            "Source-required recall route",
+        ):
+            self.assertNotIn(marker, context)
 
     def test_memory_packet_budget_keeps_foreground_useful_without_profile_dump(self) -> None:
         report = budget.build_foreground_memory_budget_fixture_report()

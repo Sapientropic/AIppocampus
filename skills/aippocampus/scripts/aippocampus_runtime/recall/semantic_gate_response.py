@@ -311,6 +311,10 @@ def public_semantic_budget(value: Any) -> dict[str, Any] | None:
         "worker_socket_timeout_policy",
     }
     allowed_policies = {"worker_socket_timeout_half_of_overall_deadline"}
+    allowed_actions = {
+        "increase_max_elapsed_ms_or_use_background_recall",
+        "no_budget_change_needed",
+    }
     result: dict[str, Any] = {
         "requested_timeout": public_float(value.get("requested_timeout")),
         "effective_timeout": public_float(value.get("effective_timeout")),
@@ -324,6 +328,9 @@ def public_semantic_budget(value: Any) -> dict[str, Any] | None:
     reason = str(value.get("budget_clip_reason") or "")
     if reason in allowed_reasons:
         result["budget_clip_reason"] = reason
+    action = str(value.get("agent_next_action") or "")
+    if action in allowed_actions:
+        result["agent_next_action"] = action
     return {key: item for key, item in result.items() if item is not None}
 
 

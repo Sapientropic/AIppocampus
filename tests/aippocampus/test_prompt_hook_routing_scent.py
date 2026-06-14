@@ -123,11 +123,74 @@ class PromptHookRoutingScentTests(AmbientRecallHookCase):
         context = hook.context_for_hook(result)
         self.assertIsNotNone(context)
         self.assertIn("Ambient recall scent", context)
-        self.assertIn("action: direction_only", context)
-        self.assertIn("can_use: orientation only", context)
-        self.assertIn("must_reopen_for: exact quotes", context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Use as route only", context)
+        self.assertNotIn("action: direction_only", context)
+        self.assertNotIn("must_reopen_for", context)
         self.assertNotIn("Ambient recall private context", context)
         self.assertNotIn("line 190", context)
+
+    def test_generic_agent_plugin_ux_association_does_not_route_to_unrelated_thread(self) -> None:
+        registry_path = self.root / "generic-agent-association-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:openclaw-oauth",
+                            "title": "OpenClaw OAuth token refresh failure",
+                            "project_label": "OpenClaw",
+                            "anchor_titles": ["Agent failed before reply"],
+                            "keywords": ["OpenClaw", "OAuth", "agent", "token refresh"],
+                            "summary": "Unrelated OAuth debugging route.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        associations = registry_path.parent / "associations.json"
+        associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "agent": {
+                            "term": "agent",
+                            "status": "staging",
+                            "confidence": 0.9,
+                            "hit_count": 8,
+                            "threads": [{"thread_key": "session:openclaw-oauth"}],
+                        },
+                        "插件": {
+                            "term": "插件",
+                            "status": "staging",
+                            "confidence": 0.8,
+                            "hit_count": 5,
+                            "threads": [{"thread_key": "session:openclaw-oauth"}],
+                        },
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "插件暴露给主 agent 的前台信息太像调试审计，怎么让体验更丝滑",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            associations_path=associations,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertIsNone(hook.context_for_hook(result))
 
     def test_chinese_hook_cue_emits_scent(self) -> None:
         result = hook.assess_prompt(
@@ -351,4 +414,3 @@ class PromptHookRoutingScentTests(AmbientRecallHookCase):
         self.assertGreaterEqual(result["score"], hook.SCENT_THRESHOLD)
         self.assertEqual(result["candidates"][0]["thread_key"], "session:single-thread")
         self.assertFalse(result["evidence"])
-

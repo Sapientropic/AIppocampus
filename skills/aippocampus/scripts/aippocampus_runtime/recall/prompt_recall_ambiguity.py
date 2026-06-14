@@ -6,7 +6,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from aippocampus_runtime.recall.prompt_cues import semantic_gate_can_request_evidence
+from aippocampus_runtime.recall.prompt_cues import (
+    current_checkout_live_fact_intent,
+    negative_evidence_intent,
+)
 from aippocampus_runtime.recall.prompt_recall_policy import (
     PROMPT_RECALL_GATE_POLICY,
     PromptRecallGatePolicy,
@@ -81,7 +84,14 @@ def semantic_evidence_request_is_vague_cross_project(
     natural_evidence: list[str] | None = None,
     semantic_result: dict[str, Any] | None,
 ) -> bool:
-    has_semantic_evidence = semantic_gate_can_request_evidence(prompt, semantic_result)
+    has_semantic_evidence = bool(
+        semantic_result
+        and semantic_result.get("available")
+        and semantic_result.get("decision") == "evidence"
+        and float(semantic_result.get("confidence") or 0.0) >= 0.5
+        and not negative_evidence_intent(prompt)
+        and not current_checkout_live_fact_intent(prompt)
+    )
     has_natural_evidence = bool(natural_evidence)
     has_source_evidence = bool(source_evidence)
     if explicit and not (has_natural_evidence or has_source_evidence or has_semantic_evidence):

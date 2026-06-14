@@ -79,6 +79,9 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 )
 BEARER_VALUE_RE = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")
 OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9._-]{8,}\b")
+LOCAL_PATH_TEXT_RE = re.compile(
+    r"(?P<path>(?:[A-Za-z]:\\|/(?:Users|home|tmp|var|private|Volumes)/)[^\s,;\"')\]]+)"
+)
 
 
 def redact_private_paths(value):
@@ -95,6 +98,8 @@ def redact_private_paths(value):
         return redacted
     if isinstance(value, list):
         return [redact_private_paths(item) for item in value]
+    if isinstance(value, str):
+        return _redact_private_path_text(value)
     return value
 
 
@@ -152,6 +157,10 @@ def _redact_sensitive_text(value: str) -> str:
     )
     text = BEARER_VALUE_RE.sub(f"Bearer {SENSITIVE_VALUE_REDACTION}", text)
     return OPENAI_KEY_RE.sub(SENSITIVE_VALUE_REDACTION, text)
+
+
+def _redact_private_path_text(value: str) -> str:
+    return LOCAL_PATH_TEXT_RE.sub(LOCAL_PATH_REDACTION, str(value))
 
 
 def _looks_like_path(value: str) -> bool:
