@@ -67,6 +67,15 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertTrue(any("test_test_plan" in command for command in commands))
         self.assertIn("python tools/aippocampus/run_tests.py --report-json", commands)
 
+    def test_release_tool_change_recommends_release_contracts_and_boundary_scan(self) -> None:
+        payload = test_plan.build_test_plan(["tools/aippocampus/release/check_public_boundary.py"])
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("release_tool", payload["categories"])
+        self.assertTrue(any("test_agent_discovery_release_check" in command for command in commands))
+        self.assertTrue(any("test_public_boundary_check" in command for command in commands))
+        self.assertIn("python tools/aippocampus/release/check_public_boundary.py --json", commands)
+
     def test_changed_tests_run_their_modules_first(self) -> None:
         commands = commands_for(
             [
@@ -112,11 +121,18 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             "--offline --json",
             local_required,
         )
+        self.assertIn("python tools/aippocampus/release/check_public_boundary.py --json", local_required)
         self.assertIn("python tools/aippocampus/run_tests.py --tier pr", fallback)
         self.assertIn("python tools/aippocampus/run_tests.py --tier full", ci_owned)
         self.assertTrue(any("`pr` includes `quick`" in reason for reason in fallback_reasons))
         self.assertIn('python -m pip install -e ".[release]"', payload["publish_workflow_owned"])
         self.assertTrue(any("PyPI publish" in command for command in payload["publish_workflow_owned"]))
+        self.assertTrue(
+            any(
+                "--wait-ready" in command["command"]
+                for command in payload["post_publish_required"]
+            )
+        )
         self.assertTrue(
             any(
                 "pip install aippocampus" in command["command"]

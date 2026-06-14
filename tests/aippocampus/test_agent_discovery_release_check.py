@@ -85,6 +85,8 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
                 "mcp-publisher login github-oidc",
                 "mcp-publisher validate server.json",
                 "mcp-publisher publish server.json",
+                "Check public agent discovery",
+                "--wait-ready",
                 "",
             ]
         ),
@@ -227,6 +229,77 @@ class AgentDiscoveryReleaseCheckTests(unittest.TestCase):
 
         self.assertEqual(checks[0].id, "mcp_registry")
         self.assertEqual(checks[0].status, "pass")
+
+    def test_wait_for_ready_polls_pending_public_state_until_claimable(self) -> None:
+        calls: list[tuple[Path, bool, float]] = []
+        sleeps: list[float] = []
+        times = iter([10.0, 10.0, 11.0])
+
+        pending = {
+            "ok": True,
+            "ready_for_public_agent_claim": False,
+            "summary": {"pending": 1},
+            "checks": [
+                {"id": "pypi_package", "status": "pending", "message": "not visible yet"},
+            ],
+        }
+        ready = {
+            "ok": True,
+            "ready_for_public_agent_claim": True,
+            "summary": {"pass": 1},
+            "checks": [
+                {"id": "pypi_package", "status": "pass", "message": "visible"},
+            ],
+        }
+
+        def fake_check(repo: Path, *, offline: bool = False, timeout: float = 10.0) -> dict[str, object]:
+            calls.append((repo, offline, timeout))
+            return pending if len(calls) == 1 else ready
+
+        result = release_check.wait_for_ready(
+            Path("."),
+            timeout=0.5,
+            wait_seconds=30.0,
+            poll_interval=1.0,
+            check_once=fake_check,
+            sleep=lambda seconds: sleeps.append(seconds),
+            monotonic=lambda: next(times),
+        )
+
+        self.assertTrue(result["ready_for_public_agent_claim"], result)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(sleeps, [1.0])
+        self.assertEqual(result["wait"]["attempts"], 2)
+        self.assertFalse(result["wait"]["timed_out"])
+
+    def test_wait_for_ready_returns_fail_without_retrying_local_contract_errors(self) -> None:
+        calls = 0
+        result_payload = {
+            "ok": False,
+            "ready_for_public_agent_claim": False,
+            "summary": {"fail": 1},
+            "checks": [
+                {"id": "pyproject", "status": "fail", "message": "version mismatch"},
+            ],
+        }
+
+        def fake_check(repo: Path, *, offline: bool = False, timeout: float = 10.0) -> dict[str, object]:
+            nonlocal calls
+            calls += 1
+            return result_payload
+
+        result = release_check.wait_for_ready(
+            Path("."),
+            wait_seconds=30.0,
+            check_once=fake_check,
+            sleep=lambda seconds: None,
+            monotonic=lambda: 0.0,
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(calls, 1)
+        self.assertEqual(result["wait"]["attempts"], 1)
+        self.assertFalse(result["wait"]["timed_out"])
 
 
 if __name__ == "__main__":

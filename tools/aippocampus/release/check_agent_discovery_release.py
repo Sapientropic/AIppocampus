@@ -14,12 +14,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 SERVER_NAME = "io.github.Sapientropic/aippocampus"
 PACKAGE_NAME = "aippocampus"
@@ -281,6 +282,8 @@ def check_workflow(repo: Path, checks: list[Check]) -> None:
         "mcp-publisher login github-oidc": "MCP GitHub OIDC auth",
         "mcp-publisher validate server.json": "MCP Registry validation",
         "mcp-publisher publish server.json": "explicit MCP publish target",
+        "Check public agent discovery": "post-publish public-state wait",
+        "--wait-ready": "post-publish PyPI/MCP propagation wait",
     }
     missing = [label for term, label in required_terms.items() if term not in workflow]
     if missing:
@@ -435,9 +438,95 @@ def check_repo(repo: Path, *, offline: bool = False, timeout: float = 10.0) -> d
     }
 
 
+def pending_check_ids(result: dict[str, Any]) -> list[str]:
+    return [
+        str(check.get("id", ""))
+        for check in result.get("checks", [])
+        if check.get("status") == "pending"
+    ]
+
+
+def _with_wait_metadata(
+    result: dict[str, Any],
+    *,
+    attempts: int,
+    elapsed_seconds: float,
+    wait_seconds: float,
+    poll_interval: float,
+    timed_out: bool,
+) -> dict[str, Any]:
+    payload = dict(result)
+    payload["wait"] = {
+        "attempts": attempts,
+        "elapsed_seconds": round(elapsed_seconds, 3),
+        "wait_seconds": wait_seconds,
+        "poll_interval": poll_interval,
+        "timed_out": timed_out,
+        "pending_checks": pending_check_ids(result),
+    }
+    return payload
+
+
+def wait_for_ready(
+    repo: Path,
+    *,
+    offline: bool = False,
+    timeout: float = 10.0,
+    wait_seconds: float = 180.0,
+    poll_interval: float = 15.0,
+    check_once: Callable[..., dict[str, Any]] = check_repo,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    """Poll the public-state check while PyPI/MCP indexes catch up.
+
+    The release workflow can publish successfully before the public indexes are
+    visible to a fresh agent. Waiting is intentionally opt-in so pre-tag local
+    checks stay fast, while post-publish verification can stop treating ordinary
+    registry propagation as a manual retry ritual.
+    """
+
+    wait_seconds = max(0.0, wait_seconds)
+    poll_interval = max(0.1, poll_interval)
+    start = monotonic()
+    attempts = 0
+
+    while True:
+        attempts += 1
+        result = check_once(repo, offline=offline, timeout=timeout)
+        elapsed = monotonic() - start
+        if result.get("ready_for_public_agent_claim") or not result.get("ok"):
+            return _with_wait_metadata(
+                result,
+                attempts=attempts,
+                elapsed_seconds=elapsed,
+                wait_seconds=wait_seconds,
+                poll_interval=poll_interval,
+                timed_out=False,
+            )
+        if elapsed >= wait_seconds:
+            return _with_wait_metadata(
+                result,
+                attempts=attempts,
+                elapsed_seconds=elapsed,
+                wait_seconds=wait_seconds,
+                poll_interval=poll_interval,
+                timed_out=bool(pending_check_ids(result)),
+            )
+
+        sleep(min(poll_interval, wait_seconds - elapsed))
+
+
 def print_text_report(result: dict[str, Any]) -> None:
     print(f"ok={str(result['ok']).lower()}")
     print(f"ready_for_public_agent_claim={str(result['ready_for_public_agent_claim']).lower()}")
+    if wait := result.get("wait"):
+        print(
+            "wait="
+            f"attempts:{wait['attempts']} "
+            f"elapsed_seconds:{wait['elapsed_seconds']} "
+            f"timed_out:{str(wait['timed_out']).lower()}"
+        )
     for check in result["checks"]:
         print(f"[{check['status']}] {check['id']}: {check['message']}")
         if check.get("details"):
@@ -452,6 +541,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--offline", action="store_true", help="Skip PyPI and MCP Registry HTTP checks")
     parser.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout in seconds")
     parser.add_argument(
+        "--wait-ready",
+        action="store_true",
+        help="Poll until PyPI/MCP public agent-discovery state is claim-ready or the wait expires.",
+    )
+    parser.add_argument(
+        "--wait-seconds",
+        type=float,
+        default=180.0,
+        help="Maximum seconds to wait with --wait-ready.",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=15.0,
+        help="Seconds between public-state polls with --wait-ready.",
+    )
+    parser.add_argument(
         "--fail-on-not-ready",
         action="store_true",
         help="Exit nonzero unless the public PyPI/MCP agent-discovery state is claimable",
@@ -459,7 +565,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = find_repo_root(args.repo)
-    result = check_repo(repo, offline=args.offline, timeout=args.timeout)
+    if args.wait_ready:
+        result = wait_for_ready(
+            repo,
+            offline=args.offline,
+            timeout=args.timeout,
+            wait_seconds=args.wait_seconds,
+            poll_interval=args.poll_interval,
+        )
+    else:
+        result = check_repo(repo, offline=args.offline, timeout=args.timeout)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

@@ -50,6 +50,7 @@ preflight is:
 
 ```sh
 python tools/aippocampus/docs/check_docs_health.py --json
+python tools/aippocampus/release/check_public_boundary.py --json
 python tools/aippocampus/release/check_agent_discovery_release.py --offline --json
 git clean -ndX
 git diff --check
@@ -118,7 +119,7 @@ For an agent-discoverability release, run the stricter public-state gate after
 PyPI and MCP Registry publication:
 
 ```sh
-python tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-ready
+python tools/aippocampus/release/check_agent_discovery_release.py --wait-ready --wait-seconds 300 --poll-interval 20 --fail-on-not-ready
 ```
 
 The non-strict check may report `pending` before publication. Do not translate
@@ -142,13 +143,24 @@ gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-v
 
 ## Privacy And Secret Scan
 
-- Scan for real local paths, API keys, bearer headers, cookies, connection
-  strings, age private identities, SSH keys, and credential URLs.
+- Run the release-facing public-boundary scanner:
+
+  ```sh
+  python tools/aippocampus/release/check_public_boundary.py --json
+  ```
+
+- Add local-only `--private-needle` values for machine or user-specific strings
+  when needed. Do not commit those strings into the repository.
+- The scanner checks tracked release-facing files and optional dist artifacts
+  for local paths, API keys, bearer headers, cookies, connection strings, SSH
+  keys, and credential URLs.
 - Confirm `.aippocampus/`, registry exports, raw rollouts, sync bundles,
   generated indexes, vault exports, `.coverage*`, `coverage.xml`, and `htmlcov/`
   are not committed.
 - Inspect hits manually. Synthetic `FAKE_TEST_` values may be valid fixtures;
-  real user memory or credentials are not.
+  real user memory or credentials are not. The default scan excludes noisy test
+  fixture zones; use `--include-default-excluded` for a dedicated audit, not as
+  a routine release tax.
 - Recheck `docs/guides/community/privacy-security-checklist.md` before publishing demos or
   bundles.
 

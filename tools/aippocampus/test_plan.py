@@ -94,6 +94,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             "tools/aippocampus/test_plan.py",
         }:
             categories.add("test_runner")
+        if path.startswith("tools/aippocampus/release/"):
+            categories.add("release_tool")
         if path.startswith("tests/aippocampus/"):
             categories.add("tests")
         if path.startswith("benchmarks/aippocampus/") or path.startswith("benchmark_corpus/"):
@@ -170,6 +172,28 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
                 command="python tools/aippocampus/run_tests.py --report-json",
                 reason="Tier membership/count drift should be visible before a broad run.",
                 scope="diagnostic",
+            ),
+        )
+
+    if "release_tool" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=(
+                    "python -m unittest "
+                    "tests.aippocampus.test_agent_discovery_release_check "
+                    "tests.aippocampus.test_public_boundary_check -v"
+                ),
+                reason="Release tooling changes need focused checks for metadata readiness and public-boundary hygiene.",
+                scope="focused",
+            ),
+        )
+        _add_command(
+            commands,
+            PlannedCommand(
+                command="python tools/aippocampus/release/check_public_boundary.py --json",
+                reason="Public-boundary tooling changes should prove the source scan still runs cleanly.",
+                scope="public-boundary",
             ),
         )
 
@@ -279,6 +303,11 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "scope": "release-preflight",
             },
             {
+                "command": "python tools/aippocampus/release/check_public_boundary.py --json",
+                "reason": "Scan release-facing tracked files for local paths, credentials, and private strings.",
+                "scope": "public-boundary",
+            },
+            {
                 "command": (
                     "python tools/aippocampus/release/check_agent_discovery_release.py "
                     "--offline --json"
@@ -351,6 +380,7 @@ def build_release_preflight_plan() -> dict[str, object]:
             {
                 "command": (
                     "python tools/aippocampus/release/check_agent_discovery_release.py "
+                    "--wait-ready --wait-seconds 300 --poll-interval 20 "
                     "--fail-on-not-ready --json"
                 ),
                 "reason": "After PyPI and MCP Registry publication, remote agent discovery must be claim-ready.",

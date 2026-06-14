@@ -483,6 +483,8 @@ files = [
     "tools/aippocampus/github/closeout_audit.py",
     "tools/aippocampus/github/planning_audit.py",
     "tools/aippocampus/github/project_triage.py",
+    "tools/aippocampus/release/check_agent_discovery_release.py",
+    "tools/aippocampus/release/check_public_boundary.py",
     "tools/aippocampus/release/check_wheel_contract.py",
     "tools/aippocampus/repo_paths.py",
     "tools/aippocampus/run_tests.py",

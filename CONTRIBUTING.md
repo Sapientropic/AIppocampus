@@ -54,7 +54,7 @@ python tools/aippocampus/docs/check_docs_health.py --json
 ```
 
 Test tiers are explicitly classified in `tools/aippocampus/test_tier_manifest.py`.
-`quick` is the small local inner loop; `pr` is the broad deterministic PR lane;
+`quick` is the small local inner loop; `pr` is the fast local pre-push gate;
 `fast` remains only as a deprecated compatibility alias for `pr`. New test
 modules must be classified in the manifest before they can enter any tier.
 During normal editing, prefer targeted module tests such as
@@ -64,7 +64,7 @@ loop. The quick target is roughly 46 modules, 330 tests, and 30 seconds of
 timing-report elapsed on current local hardware; treat it as drift visibility,
 not a cross-machine SLA.
 
-Use `python tools/aippocampus/run_tests.py --tier pr` as the broad pre-push
+Use `python tools/aippocampus/run_tests.py --tier pr` as the fast pre-push
 fallback when CI is unavailable, stale, or the planner names runtime, plugin,
 or skill surfaces. `pr` already includes `quick`, so do not run both as a
 closeout ritual. CI owns Ruff, mypy, coverage, compileall, `pr`, sharded
@@ -102,9 +102,16 @@ them when touching benchmark runners, prompt-hook integration, onboarding,
 plugin packaging, smoke tools, provider contracts, browser/MCP surfaces, or
 sync behavior.
 
-For public-readiness changes, also run a secret/local-path scan and inspect any
-hits. Test fixtures with `FAKE_TEST_` markers are acceptable; real credentials
-or private paths are not.
+For public-readiness changes, also run the release-facing public-boundary scan
+and inspect any hits:
+
+```sh
+python tools/aippocampus/release/check_public_boundary.py --json
+```
+
+Use local-only `--private-needle` values for user or machine-specific strings
+when needed. Test fixtures with `FAKE_TEST_` markers are acceptable; real
+credentials or private paths are not.
 
 Before handing work to another agent or cutting a release, preview ignored
 artifacts with:

@@ -591,6 +591,27 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertNotIn("coverage-${{ matrix.python-version }}", workflow)
         self.assertNotIn("python benchmarks/aippocampus/benchmark_suite.py", workflow)
 
+    def test_quick_and_pr_count_budgets_stay_within_declared_targets(self) -> None:
+        for tier in ("quick", "pr"):
+            modules = run_tests.modules_for_tier(tier)
+            test_count = sum(run_tests.count_tests_for_module(module) for module in modules)
+            budget = run_tests.count_budget_for_tier(
+                tier,
+                module_count=len(modules),
+                test_count=test_count,
+            )
+
+            self.assertEqual(
+                budget["module_count_status"],
+                "within_target",
+                f"{tier} module count drifted over target: {len(modules)} modules",
+            )
+            self.assertEqual(
+                budget["test_count_status"],
+                "within_target",
+                f"{tier} test count drifted over target: {test_count} tests",
+            )
+
     def test_benchmark_extra_is_stable_contributor_install_target(self) -> None:
         pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
