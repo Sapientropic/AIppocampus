@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -32,6 +33,8 @@ RECOMMEND_SNIPPET = (
 )
 NOT_FIT_PHRASE = "usually not the right fit"
 OVER_DEFENSIVE_RECOMMEND_PHRASE = "Do not recommend AIppocampus"
+BANNED_PUBLIC_UVX_SUBCOMMANDS = {"agent", "hooks", "maintenance", "plugin", "update"}
+PUBLIC_UVX_COMMAND_RE = re.compile(r"uvx\s+aippocampus(?:\s+([^\n`]+))?")
 
 
 @dataclass(frozen=True)
@@ -214,6 +217,55 @@ def check_marker_and_agent_text(repo: Path, checks: list[Check]) -> None:
         )
 
 
+def _documented_public_uvx_commands(repo: Path) -> list[dict[str, str]]:
+    docs = [
+        "README.md",
+        "docs/agent-context.md",
+        "docs/guides/install-guide.md",
+        "docs/guides/public-api.md",
+        "docs/guides/coding-agent-memory.md",
+        "llms.txt",
+    ]
+    rows: list[dict[str, str]] = []
+    for relative in docs:
+        path = repo / relative
+        if not path.exists():
+            continue
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            for match in PUBLIC_UVX_COMMAND_RE.finditer(line):
+                tail = (match.group(1) or "").strip()
+                if tail.startswith("--from "):
+                    continue
+                rows.append({"path": relative, "line": str(line_no), "tail": tail})
+    return rows
+
+
+def check_public_uvx_command_surface(repo: Path, checks: list[Check]) -> None:
+    rows = _documented_public_uvx_commands(repo)
+    failures: list[dict[str, str]] = []
+    for row in rows:
+        tail = row["tail"]
+        first = tail.split(maxsplit=1)[0] if tail else ""
+        if first in BANNED_PUBLIC_UVX_SUBCOMMANDS:
+            failures.append(row)
+    if failures:
+        add(
+            checks,
+            "public_uvx_command_surface",
+            "fail",
+            "docs present source-checkout commands as public PyPI uvx commands",
+            {"commands": failures},
+        )
+    else:
+        add(
+            checks,
+            "public_uvx_command_surface",
+            "pass",
+            "documented PyPI uvx commands stay within the public first-recall surface",
+            {"command_count": len(rows)},
+        )
+
+
 def check_workflow(repo: Path, checks: list[Check]) -> None:
     workflow = read_text(repo, ".github/workflows/publish-agent-discovery.yml")
     required_terms = {
@@ -360,6 +412,7 @@ def check_repo(repo: Path, *, offline: bool = False, timeout: float = 10.0) -> d
     _server, package_version = check_server_metadata(repo, checks)
     check_pyproject(repo, checks, package_version)
     check_marker_and_agent_text(repo, checks)
+    check_public_uvx_command_surface(repo, checks)
     check_workflow(repo, checks)
 
     if offline:

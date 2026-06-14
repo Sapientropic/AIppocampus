@@ -1261,8 +1261,11 @@ def _render_recall_human(payload: Mapping[str, Any]) -> str:
         reason_codes = packet.get("route_delta_reason_codes") or packet.get("triage_rank_reason_codes")
         if isinstance(reason_codes, list) and reason_codes:
             lines.append("   codes: " + ", ".join(str(code) for code in reason_codes[:3]))
-    if payload.get("deepen_requests"):
-        lines.append("Next: call agent_deepen with a handle from --json or MCP agent_recall.")
+    suggested_command = str(payload.get("suggested_next_command") or "").strip()
+    if suggested_command:
+        lines.append(f"Next: {suggested_command}")
+    elif payload.get("deepen_requests"):
+        lines.append("Next: rerun with --json to copy a deepen handle.")
     else:
         lines.append(f"Next: {payload.get('suggested_next') or 'continue_normally'}")
     lines.append("Boundary: route only; reopen source before quoting or making strong claims.")

@@ -17,6 +17,7 @@ from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
 from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
 from aippocampus_runtime.public_output import emit_public_text
+from aippocampus_runtime.update import status_actions as update_actions
 from aippocampus_runtime.update.agent_callable import (
     command_availability,
     default_host_probe_report_path,
@@ -719,6 +720,10 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         if not _surface_ready(item)
         and item.get("status") not in {"not_provided", "not_requested"}
     ]
+    plugin_cache_action = update_actions.plugin_cache_needs_action(surfaces["plugin"])
+    if plugin_cache_action:
+        actionable.append("plugin")
+    actionable = update_actions.unique_names(actionable)
     core_blockers = _unready_surfaces(surfaces, CORE_SURFACES)
     magic_blockers = _unready_surfaces(surfaces, MAGIC_SURFACES)
     optional_surfaces = _unready_surfaces(surfaces, OPTIONAL_SURFACES)
@@ -746,6 +751,12 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "capability_ladder": capability_ladder,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
+            "nested_action_surfaces": ["plugin"] if plugin_cache_action else [],
+            "plugin_cache_needs_action": plugin_cache_action,
+            "plugin_cache_recommended_actions": surfaces["plugin"].get(
+                "plugin_cache_recommended_actions"
+            )
+            or [],
         },
         "surfaces": surfaces,
         "safety_notes": [
@@ -989,12 +1000,10 @@ def render_text(report: dict[str, Any]) -> str:
                     lines.append("  next: " + str(repairs[0]))
             if item.get("mcp_command_uses_ambiguous_python"):
                 lines.append("  warn: MCP command uses python; verify python vs python3 on this host")
+        if name == "plugin":
+            lines.extend(update_actions.plugin_cache_action_lines(item))
         if name == "agent_callable":
-            probe = item.get("host_live_probe") or {}
-            if item.get("ready") and probe.get("ok"):
-                lines.append(f"  host probe: {probe.get('source')} ok")
-            elif not item.get("ready"):
-                lines.append("  warn: foreground host tool visibility is not confirmed")
+            lines.extend(update_actions.agent_callable_probe_lines(item))
     if mode == "plan":
         lines.append("- Apply all local package/effect surfaces: aippocampus update apply --all-local")
         lines.append("- API key values are never read or written by update; configure the env var explicitly.")

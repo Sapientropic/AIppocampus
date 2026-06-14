@@ -13,11 +13,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 from aippocampus_runtime.navigation.concept_graph import expand_concepts
+from aippocampus_runtime.recall.agent_surface_intent import classify_agent_surface_intent
 from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
 from aippocampus_runtime.recall.prompt_cues import (
     CONCEPT_EXPANSION_MAX_TERMS,
     concept_expansion_terms,
     current_checkout_live_fact_intent,
+    expand_query_terms,
+    low_value_casual_prompt,
     natural_evidence_intent,
     negative_evidence_intent,
     semantic_gate_can_warm_cue_cache,
@@ -339,6 +342,62 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
     }
 
 
+def _cheap_casual_skip_result(prompt: str, start: float) -> dict[str, Any]:
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    return {
+        "decision": "skip",
+        "score": 0.0,
+        "confidence": "low",
+        "query_terms": expand_query_terms(prompt)[:8],
+        "cognitive_map": [],
+        "concept_expansions": [],
+        "reasons": ["cheap skip: low-value casual prompt has no memory route intent"],
+        "candidates": [],
+        "evidence": [],
+        "working_memory": [],
+        "semantic_gate": None,
+        "semantic_bridge_diagnostic": None,
+        "semantic_cue_cache": None,
+        "hot_path_funnel": {
+            "decision": "skip",
+            "candidate_count": 0,
+            "source_reopen_promotion_count": 0,
+            "local_only": True,
+            "elapsed_ms": elapsed_ms,
+            "stages": [
+                {
+                    "stage": "cheap_casual_skip",
+                    "status": "skip",
+                    "candidate_count": 0,
+                    "fallback_reason": "low_value_casual_no_memory_route_intent",
+                    "elapsed_ms": elapsed_ms,
+                }
+            ],
+        },
+        "route_delivery_diagnostic": {
+            "foreground_profile": "ambient_hot_path",
+            "foreground_route_profile": "low_value_casual",
+            "foreground_lane": "stay_silent",
+            "generic_prompt_term_count": 0,
+            "specific_prompt_term_count": 0,
+            "foreground_suppression_reasons": ["low_value_casual_no_memory_route_intent"],
+            "decision": "skip",
+            "semantic_reuse_source": "none",
+            "semantic_waited": False,
+            "semantic_partial_failure": False,
+            "cold_semantic_shadowed": False,
+            "background_scheduled": False,
+            "hot_path_candidates_after_merge": 0,
+            "final_candidate_count": 0,
+            "evidence_count": 0,
+            "semantic_source_reopen_route": False,
+            "semantic_source_reopen_candidate_count": 0,
+        },
+        "agent_surface_intent": {},
+        "elapsed_ms": elapsed_ms,
+    }
+
+
 def _policy_update_result(context: Any, start: float, update: dict[str, Any]) -> dict[str, Any]:
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     return {
@@ -506,6 +565,7 @@ def _prompt_result(
     start: float,
     deep_archival_requested: bool,
     route_delivery_state: dict[str, Any],
+    agent_surface_intent: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
         "decision": decision,
@@ -528,6 +588,7 @@ def _prompt_result(
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
         "semantic_source_reopen_route": semantic_source_reopen_route,
         "semantic_cue_cache": semantic_cue_cache,
+        "agent_surface_intent": agent_surface_intent or {},
         "recall_channels": recall_channel_envelope(
             candidates=candidates,
             evidence=evidence,
@@ -565,6 +626,8 @@ def assess_prompt(
     dream_hypothesis_limit: int | None = None, dream_delivery_prefilter_reason: str | None = None, dream_delivery_task_mode: str | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
+    if low_value_casual_prompt(prompt):
+        return _cheap_casual_skip_result(str(prompt or "").strip(), start)
     context = build_recall_decision_context(
         prompt, cwd=cwd, registry_path=registry_path, registry_dir=registry_dir,
         associations_path=associations_path, cognitive_map_path=cognitive_map_path,
@@ -601,6 +664,7 @@ def assess_prompt(
     source_evidence = source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
     current_checkout_live_fact = current_checkout_live_fact_intent(prompt)
+    agent_surface_intent = classify_agent_surface_intent(prompt)
     route_context = prepare_route_context(
         prompt=prompt,
         context=context,
@@ -786,6 +850,7 @@ def assess_prompt(
         start=start,
         deep_archival_requested=_deep_archival_requested(prompt),
         route_delivery_state=locals(),
+        agent_surface_intent=agent_surface_intent,
     )
     return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,

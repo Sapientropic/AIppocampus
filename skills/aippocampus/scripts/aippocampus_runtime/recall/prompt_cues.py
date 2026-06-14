@@ -491,6 +491,35 @@ def looks_like_latin_long_question(prompt: str) -> bool:
     return len(words) >= 7 and len(stripped) >= 42
 
 
+LOW_VALUE_CASUAL_PATTERNS = (
+    re.compile(r"(今天天气怎么样|天气怎么样|天气如何|weather\s+(today|tomorrow)|what'?s\s+the\s+weather)", re.IGNORECASE),
+    re.compile(r"(最近有什么值得聊的|有什么值得聊|聊点什么|what\s+should\s+we\s+talk\s+about)", re.IGNORECASE),
+)
+
+
+def low_value_casual_prompt(prompt: str) -> bool:
+    """Return obvious daily chat prompts that should stay cheap and silent.
+
+    This is a foreground spend brake, not a memory-quality classifier. If the
+    prompt contains any explicit recall, evidence, source, or importance cue,
+    semantic recall may still run; the brake only covers bare weather/chat
+    prompts where waiting on a model and then emitting nothing feels broken.
+    """
+
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    if (
+        explicit_recall_terms(text)
+        or natural_evidence_intent(text)
+        or source_evidence_intent(text)
+        or matched_terms(text, IMPORTANCE_CUES)
+        or semantic_trigger_context_intent(text)
+    ):
+        return False
+    return any(pattern.search(text) for pattern in LOW_VALUE_CASUAL_PATTERNS)
+
+
 def should_run_semantic_gate(
     prompt: str,
     *,
@@ -517,6 +546,8 @@ def should_run_semantic_gate(
         # The current checkout boundary is a live-source problem, not a memory
         # classification problem. Let the foreground agent inspect the repo
         # files/config instead of spending semantic recall budget.
+        return False
+    if low_value_casual_prompt(prompt):
         return False
     if prompt_is_code_surface(prompt) and not (
         explicit

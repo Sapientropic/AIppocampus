@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from typing import Sequence
 
 from aippocampus_runtime.core import aippocampus_registry_resolution, codex_home
@@ -53,7 +54,34 @@ def _provider_registration_error(provider: str) -> dict:
     }
 
 
-def _provider_capability(provider: str, *, cwd: str | None = None) -> dict:
+FRONTSTAGE_PROVIDER_SAMPLE_LIMIT = 3
+FRONTSTAGE_PROVIDER_SCAN_BUDGET_SECONDS = 0.75
+
+
+def _sample_sessions(instance: object, *, detailed: bool) -> tuple[list[object], bool]:
+    if detailed:
+        return list(instance.discover_sessions()), True
+    sessions: list[object] = []
+    deadline = time.monotonic() + FRONTSTAGE_PROVIDER_SCAN_BUDGET_SECONDS
+    complete = True
+    iterator = iter(instance.discover_sessions())
+    while len(sessions) <= FRONTSTAGE_PROVIDER_SAMPLE_LIMIT:
+        if time.monotonic() > deadline:
+            complete = False
+            break
+        try:
+            sessions.append(next(iterator))
+        except StopIteration:
+            break
+    else:
+        complete = False
+    if len(sessions) > FRONTSTAGE_PROVIDER_SAMPLE_LIMIT:
+        complete = False
+        sessions = sessions[:FRONTSTAGE_PROVIDER_SAMPLE_LIMIT]
+    return sessions, complete
+
+
+def _provider_capability(provider: str, *, cwd: str | None = None, detailed: bool = False) -> dict:
     resolved = normalize_provider_name(provider)
     try:
         instance = create_conversation_provider(resolved, codex_home_dir=codex_home())
@@ -70,9 +98,9 @@ def _provider_capability(provider: str, *, cwd: str | None = None) -> dict:
             "blockers": [str(exc)[:220]],
         }
 
-    sessions = list(instance.discover_sessions())
+    sessions, scan_complete = _sample_sessions(instance, detailed=detailed)
     current_match = False
-    if cwd:
+    if cwd and detailed:
         try:
             instance.locate_current(cwd)
             current_match = True
@@ -88,6 +116,11 @@ def _provider_capability(provider: str, *, cwd: str | None = None) -> dict:
         "state": state if sessions or resolved == "codex" else "blocked",
         "detected": bool(sessions),
         "transcript_count": len(sessions),
+        "transcript_count_exact": bool(detailed and scan_complete),
+        "transcript_count_label": str(len(sessions))
+        if scan_complete
+        else f"{len(sessions)}+",
+        "scan_status": "complete" if scan_complete else "partial_frontstage_sample",
         "current_cwd_match": current_match,
         "dry_run_available": True,
         "write_registration_available": write_enabled,
@@ -104,9 +137,14 @@ def _status_provider_scope(provider: str | None) -> tuple[str, list[str]]:
     return resolved, [resolved]
 
 
-def provider_status_report(provider: str | None = "auto", cwd: str | None = None) -> dict:
+def provider_status_report(
+    provider: str | None = "auto",
+    cwd: str | None = None,
+    *,
+    detailed: bool = False,
+) -> dict:
     provider_scope, provider_names = _status_provider_scope(provider)
-    providers = [_provider_capability(name, cwd=cwd) for name in provider_names]
+    providers = [_provider_capability(name, cwd=cwd, detailed=detailed) for name in provider_names]
     storage = aippocampus_registry_resolution()
     return {
         "ok": True,
@@ -125,6 +163,7 @@ def provider_status_report(provider: str | None = "auto", cwd: str | None = None
             },
             "storage": storage,
             "legacy_aliases": legacy_alias_diagnostics(registry_resolution=storage),
+            "detail_level": "operator" if detailed else "frontstage",
         },
         "meta": {"facade": "onboard.py", "schema_version": 1},
     }
@@ -144,11 +183,13 @@ def render_status_text(report: dict) -> str:
                 provider=item.get("provider"),
                 state=item.get("state"),
                 detected=str(bool(item.get("detected"))).lower(),
-                count=item.get("transcript_count", 0),
+                count=item.get("transcript_count_label", item.get("transcript_count", 0)),
                 match=str(bool(item.get("current_cwd_match"))).lower(),
                 suffix=suffix,
             )
         )
+        if item.get("scan_status") == "partial_frontstage_sample":
+            lines.append("  scan: partial frontstage sample; use --json for operator inventory")
     auto = report.get("data", {}).get("auto", {})
     if provider_scope in {None, "auto"}:
         lines.append(f"auto: {auto.get('default_provider')} - {auto.get('why')}")
@@ -178,6 +219,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--status", action="store_true")
     parser.add_argument("--format", choices=["auto", "json", "text"], default="auto")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--details", action="store_true", help="Use the full operator inventory path for status.")
     parser.add_argument("-h", "--help", action="store_true")
     known, remaining = parser.parse_known_args(raw_args)
 
@@ -197,11 +239,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if known.status:
-        report = provider_status_report(provider=known.provider, cwd=_arg_value(raw_args, "--cwd"))
+        detailed = bool(known.details or known.json_output or known.format == "json")
+        report = provider_status_report(
+            provider=known.provider,
+            cwd=_arg_value(raw_args, "--cwd"),
+            detailed=detailed,
+        )
         wants_json = (
             known.json_output
             or known.format == "json"
-            or (known.format == "auto" and not sys.stdout.isatty())
         )
         if wants_json:
             print(json.dumps(report, ensure_ascii=False, indent=2))

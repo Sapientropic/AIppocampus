@@ -448,6 +448,64 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("registry configured", output)
         self.assertNotIn("C:/private/aippocampus/registry", output)
 
+    def test_onboard_status_default_is_frontstage_text_not_json_inventory(self) -> None:
+        from aippocampus_runtime.onboarding import facade as onboard_facade
+
+        report = {
+            "ok": True,
+            "data": {
+                "provider_scope": "auto",
+                "providers": [
+                    {
+                        "provider": "codex",
+                        "state": "write_enabled",
+                        "detected": True,
+                        "transcript_count": 3,
+                        "transcript_count_label": "3+",
+                        "scan_status": "partial_frontstage_sample",
+                        "current_cwd_match": False,
+                        "blockers": [],
+                    }
+                ],
+                "auto": {"default_provider": "codex", "why": "safe default"},
+                "storage": {"path": "C:/private/aippocampus/registry", "source": "AIPPOCAMPUS_HOME"},
+            },
+        }
+
+        with (
+            patch.object(onboard_facade, "provider_status_report", return_value=report),
+            patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = onboard_facade.main(["--provider", "auto", "--status"])
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("AIppocampus provider status", output)
+        self.assertIn("partial frontstage sample", output)
+        self.assertNotIn('"providers"', output)
+        self.assertNotIn("C:/private/aippocampus/registry", output)
+
+    def test_onboard_status_frontstage_samples_provider_inventory(self) -> None:
+        from aippocampus_runtime.onboarding import facade as onboard_facade
+
+        class FakeProvider:
+            def discover_sessions(self):
+                for index in range(10):
+                    yield types.SimpleNamespace(session_id=f"s{index}")
+
+        with patch.object(
+            onboard_facade,
+            "create_conversation_provider",
+            return_value=FakeProvider(),
+        ):
+            report = onboard_facade.provider_status_report(provider="codex", detailed=False)
+
+        provider = report["data"]["providers"][0]
+        self.assertTrue(provider["detected"])
+        self.assertEqual(provider["transcript_count"], 3)
+        self.assertEqual(provider["transcript_count_label"], "3+")
+        self.assertEqual(provider["scan_status"], "partial_frontstage_sample")
+
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade
 
@@ -567,6 +625,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(data["status"], "available_requires_sync_dir")
         self.assertEqual(data["backend"], "local_folder")
         self.assertIn("push", data["commands"])
+
+    def test_sync_status_without_sync_dir_human_output_is_not_configured_ok(self) -> None:
+        proc = self.run_cli("sync", "status")
+
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("capability available; no sync folder selected", proc.stdout)
+        self.assertIn("next: aippocampus sync status --sync-dir <folder> --json", proc.stdout)
+        self.assertNotIn("sync status: ok", proc.stdout)
 
     def test_sync_status_preserves_child_exit_code_and_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

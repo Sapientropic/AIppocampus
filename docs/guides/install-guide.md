@@ -39,7 +39,7 @@ path proves the user actually needs them.
 ## Agent-Mediated Codex Plugin Path
 
 Give this path to the active local agent when Codex is the intended host. The
-agent should install the local plugin package, verify foreground MCP tool
+agent should install the source-checkout / editable local plugin package, verify foreground MCP tool
 visibility, then offer core hooks and one LLM-provider choice without turning
 the first run into a diagnostics checklist:
 
@@ -52,6 +52,17 @@ A successful verify reports `agent_callable_status: host_live_probe_ok` and a
 actionable warnings, benign host-probe warnings, and unrelated host/plugin
 noise. It does not copy private memory data, enable hooks, or configure LLM
 keys.
+
+For user-facing closeout, agents should use the public-safe summary instead of
+pasting full operator JSON:
+
+```sh
+aippocampus plugin install --codex --verify --public
+```
+
+That summary reports install/probe status, warning counts/classes, and rollback
+without local paths, raw stderr tails, command arrays, or unrelated plugin
+paths.
 
 After verify, enable prompt/lifecycle hooks only when the user trusts this
 machine and wants ambient continuity:
@@ -95,8 +106,10 @@ uvx aippocampus onboard --provider auto --status
 
 The status output is a provider-matrix readiness view. It may include Codex,
 Claude Code, and generic JSONL providers when they are locally detectable; do
-not read that as Codex-only provider-scoped evidence or as consent to ingest
-every detected provider.
+not read that as Codex-only provider-scoped evidence, source quality, recall
+quality, or consent to ingest every detected provider. The default human output
+is a bounded first-run card; use `--json` or `--details` only for operator
+inventory.
 
 Register local history only after the user explicitly agrees, then choose the
 matching provider path:
@@ -234,11 +247,13 @@ AIppocampus MCP tool, feed that sanitized report back into status:
 aippocampus update status --host-probe-report <smoke-report.json> --json
 ```
 
-A successful Codex app-server or Claude Code MCP probe upgrades
-`agent_callable_status` to `host_live_probe_ok`. That is a host-exposure claim:
-the current agent host can see and call the MCP/plugin tools. It is not a recall
-quality, benchmark, or source-answer correctness claim. If the packaged MCP
-artifact is current but its command does not resolve, status reports
+A successful Codex app-server or Claude Code MCP probe upgrades update status
+to `host_live_probe_ok_current_thread_unverified` unless the current foreground
+thread visibility is separately marked. That is a host-exposure claim: a fresh
+host probe saw and called MCP/plugin tools, but the current foreground thread
+may still need a reload or tool refresh before agent-native tools appear. It is
+not a recall quality, benchmark, or source-answer correctness claim. If the
+packaged MCP artifact is current but its command does not resolve, status reports
 `mcp_command_repair_options` such as `aippocampus mcp`,
 `python3 -m aippocampus_runtime.cli.facade mcp`, or `uvx aippocampus mcp`
 instead of treating the artifact as foreground-ready.

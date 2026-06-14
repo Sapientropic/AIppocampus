@@ -13,6 +13,12 @@ from typing import Any
 PLUGIN_SECTION_RE = re.compile(r'^\s*\[plugins\."([^"]+)"\]\s*$')
 MCP_SECTION_RE = re.compile(r'^\s*\[(?:mcp_servers|mcpServers)\."?([^"\]]+)"?\]\s*$')
 HOST_PROBE_REPORT_RELATIVE = Path("aippocampus") / "host-probe" / "codex-plugin-install.json"
+AGENT_NATIVE_TOOL_NAMES = {
+    "agent_recall",
+    "agent_aippo",
+    "agent_deepen",
+    "agent_explain",
+}
 
 
 def default_host_probe_report_path(codex_home_path: Path) -> Path:
@@ -199,11 +205,11 @@ def status_agent_callable(
     host_probe_status = _host_probe_status(host_probe)
     foreground_override = os.environ.get("AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
     foreground_tools_visible: bool | None
-    if host_probe_status.get("ok") is True:
-        foreground_tools_visible = True
-    elif foreground_override in {"1", "true", "TRUE", "yes"}:
+    if foreground_override in {"1", "true", "TRUE", "yes"}:
         foreground_tools_visible = True
     elif host_plugin_installed or host_mcp_registered:
+        foreground_tools_visible = None
+    elif host_probe_status.get("ok") is True:
         foreground_tools_visible = None
     else:
         foreground_tools_visible = False
@@ -215,8 +221,22 @@ def status_agent_callable(
         mcp.get("package_artifact_current") or plugin.get("package_artifact_current")
     )
     ready = foreground_tools_visible is True
-    if host_probe_status.get("ok") is True:
-        status = "host_live_probe_ok"
+    host_probe_tool_names = {
+        str(item) for item in host_probe_status.get("tool_names") or []
+    }
+    agent_native_tools_in_host_probe = sorted(host_probe_tool_names & AGENT_NATIVE_TOOL_NAMES)
+    missing_agent_native_tools = sorted(AGENT_NATIVE_TOOL_NAMES - host_probe_tool_names)
+    current_thread_discovery = (
+        "verified_by_operator_override"
+        if ready
+        else "unknown_or_stale"
+        if host_probe_status.get("ok") is True or host_plugin_installed or host_mcp_registered
+        else "not_configured"
+    )
+    if host_probe_status.get("ok") is True and not ready:
+        status = "host_live_probe_ok_current_thread_unverified"
+    elif host_probe_status.get("ok") is True and ready:
+        status = "host_live_probe_ok_current_thread_verified"
     elif ready:
         status = "ready"
     elif host_plugin_installed or host_mcp_registered:
@@ -227,7 +247,9 @@ def status_agent_callable(
         status = "host_not_exposed"
 
     next_command = "aippocampus update status --json"
-    if host_probe_status.get("ok") is True:
+    if host_probe_status.get("ok") is True and not ready:
+        next_command = "reload Codex Desktop or refresh plugin tools if agent-native tools are missing"
+    elif host_probe_status.get("ok") is True:
         next_command = "aippocampus update status --json"
     elif not cli.get("console_script_available_on_path") and cli.get("module_entrypoint_available"):
         next_command = f"{Path(sys.executable).name} -m aippocampus_runtime.cli.facade agent recall"
@@ -244,16 +266,18 @@ def status_agent_callable(
         "host_mcp_registered": host_mcp_registered,
         "mcp_command_resolves": bool(mcp.get("mcp_command_resolves")),
         "host_live_probe": host_probe_status,
+        "host_probe_tool_count": len(host_probe_tool_names),
+        "host_probe_agent_native_tools": agent_native_tools_in_host_probe,
+        "host_probe_missing_agent_native_tools": missing_agent_native_tools,
         "foreground_tools_visible": foreground_tools_visible,
         "foreground_tools_visibility_source": (
-            "host_probe_report"
+            "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE"
+            if foreground_override
+            else "current_thread_unverified_after_host_probe"
             if host_probe_status.get("ok") is True
-            else (
-                "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE"
-                if foreground_override
-                else "host_config_probe"
-            )
+            else "host_config_probe"
         ),
+        "current_thread_tool_discovery": current_thread_discovery,
         "next_command": next_command,
         "claim_boundary": (
             "package artifacts being current does not prove that the current "

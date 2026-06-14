@@ -15,6 +15,94 @@ from tests.aippocampus.redaction_fixtures import FAKE_TEST_OPENAI_API_KEY  # noq
 
 
 class PromptHookSemanticDiagnosticsTests(unittest.TestCase):
+    def test_low_value_casual_prompt_skips_semantic_and_registry_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def fail_if_called(prompt: str, **kwargs) -> dict:
+                raise AssertionError("low-value casual prompt should not call semantic gate")
+
+            result = hook.assess_prompt(
+                "今天天气怎么样",
+                cwd=root,
+                semantic_gate_fn=fail_if_called,
+                semantic_timeout=5,
+                max_elapsed_ms=20000,
+            )
+
+        public = hook.public_hook_debug_payload(result)
+        delivery = public["route_delivery_diagnostic"]
+        affordance = public["agent_recall_affordance"]
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertLess(result["elapsed_ms"], 250)
+        self.assertEqual(delivery["foreground_route_profile"], "low_value_casual")
+        self.assertEqual(delivery["foreground_lane"], "stay_silent")
+        self.assertFalse(delivery["semantic_waited"])
+        self.assertIn(
+            "low_value_casual_no_memory_route_intent",
+            delivery["foreground_suppression_reasons"],
+        )
+        self.assertFalse(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "stay_silent")
+
+    def test_explicit_aippo_prompt_delivers_agent_native_affordance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = hook.assess_prompt(
+                "用 AIppo working contract 帮我 review 这个 issue 的反馈口径",
+                cwd=Path(tmp),
+                semantic_gate_fn=lambda *_, **__: {
+                    "available": False,
+                    "decision": "skip",
+                    "confidence": 0.0,
+                    "query_aliases": [],
+                },
+                max_elapsed_ms=1200,
+            )
+
+        public = hook.public_hook_debug_payload(result)
+        payload = hook.hook_stdout_payload(result)
+        context = payload["hookSpecificOutput"]["additionalContext"] if payload else ""
+        affordance = public["agent_recall_affordance"]
+
+        self.assertTrue(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "agent_aippo")
+        self.assertIn("aippo_working_contract", affordance["lead_kinds"])
+        self.assertIn("explicit_agent_native_surface_intent", affordance["reason_codes"])
+        self.assertIn("Next: call agent_aippo", context)
+        self.assertNotIn("source_refs", context)
+        self.assertNotIn(str(tmp), json.dumps(public, ensure_ascii=False))
+
+    def test_explicit_avatar_episode_prompt_exposes_surface_specific_reasons(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = hook.assess_prompt(
+                "用 avatar 和 Episode-Arc / project experience 看看这个插件体验问题以前是不是反复出现过",
+                cwd=Path(tmp),
+                semantic_gate_fn=lambda *_, **__: {
+                    "available": False,
+                    "decision": "skip",
+                    "confidence": 0.0,
+                    "query_aliases": [],
+                },
+                max_elapsed_ms=1200,
+            )
+
+        public = hook.public_hook_debug_payload(result)
+        affordance = public["agent_recall_affordance"]
+        context = (hook.hook_stdout_payload(result) or {})["hookSpecificOutput"][
+            "additionalContext"
+        ]
+
+        self.assertTrue(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "agent_recall")
+        self.assertIn("avatar_posture", affordance["lead_kinds"])
+        self.assertIn("episode_arc", affordance["lead_kinds"])
+        self.assertIn("project_experience", affordance["lead_kinds"])
+        self.assertIn("avatar_posture_candidate", affordance["reason_codes"])
+        self.assertIn("episode_arc_candidate", affordance["reason_codes"])
+        self.assertIn("project_experience_candidate", affordance["reason_codes"])
+        self.assertIn("Next: call agent_recall", context)
+
     def test_public_payload_explains_partial_semantic_success_without_raw_worker_details(
         self,
     ) -> None:

@@ -523,13 +523,15 @@ The caller-facing MCP failure boundary is:
 
 `aippocampus update status --host-probe-report <json>` is the public readiness
 bridge from host smokes back into the local status card. It may report
-`agent_callable_status: "host_live_probe_ok"` after a sanitized Codex app-server
-or Claude Code MCP report proves tool listing plus a real MCP tool call. That
-status is additive host-exposure evidence only; it does not change the MCP tool
-schema, imply recall quality, or promote retrieval/answer claims. Packaged
-plugin MCP config uses `aippocampus mcp`; if that command is missing from PATH,
-status reports repair options instead of treating the package artifact as
-foreground agent-callable.
+`agent_callable_status: "host_live_probe_ok_current_thread_unverified"` after a
+sanitized Codex app-server or Claude Code MCP report proves tool listing plus a
+real MCP tool call but the current foreground thread has not separately shown
+the agent-native tools. That status is additive host-exposure evidence only; it
+does not change the MCP tool schema, imply recall quality, prove current-thread
+tool discovery, or promote retrieval/answer claims. Packaged plugin MCP config
+uses `aippocampus mcp`; if that command is missing from PATH, status reports
+repair options instead of treating the package artifact as foreground
+agent-callable.
 
 The plugin readiness portion of `aippocampus update status` is a local operator
 contract, not a marketplace API. It may report `local_marketplace`,
@@ -542,7 +544,9 @@ package; it refreshes marketplace/cache layers only when
 host reload or reinstall evidence is still separate from package freshness.
 `aippocampus plugin install --codex --verify` is the higher-level local install
 path that may perform the Codex local marketplace/cache refresh and host probe
-directly; it does not enable Codex hooks or configure external-model keys.
+directly; it does not enable Codex hooks or configure external-model keys. Use
+`aippocampus plugin install --codex --verify --public` for a user-facing
+public-safe summary with warning counts/classes instead of full operator JSON.
 
 `recall_context` and `recall_deepen` are the progressive recall navigation
 tools. `recall_context` accepts a fuzzy intent or query and returns small route

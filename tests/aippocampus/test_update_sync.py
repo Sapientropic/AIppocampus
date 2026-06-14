@@ -28,6 +28,7 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
     "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
     "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
+    "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE",
 ]
 
 
@@ -428,8 +429,11 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(plugin["installed_cache"]["status"], "stale_version")
         self.assertTrue(plugin["cache_boundary"]["package_artifact_is_not_installed_cache"])
         self.assertTrue(plugin["plugin_cache_recommended_actions"])
+        self.assertTrue(payload["summary"]["plugin_cache_needs_action"])
+        self.assertIn("plugin", payload["summary"]["needs_action"])
+        self.assertIn("plugin", payload["summary"]["nested_action_surfaces"])
 
-    def test_status_uses_successful_host_probe_report_for_agent_callable_ready(self) -> None:
+    def test_status_marks_successful_host_probe_as_current_thread_unverified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
             codex_home = root / "codex-home"
@@ -464,18 +468,70 @@ class UpdateSyncTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
-        self.assertTrue(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(payload["summary"]["agent_callable_status"], "host_live_probe_ok")
-        self.assertTrue(agent["ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok")
-        self.assertEqual(agent["foreground_tools_visible"], True)
-        self.assertEqual(agent["foreground_tools_visibility_source"], "host_probe_report")
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(
+            payload["summary"]["agent_callable_status"],
+            "host_live_probe_ok_current_thread_unverified",
+        )
+        self.assertFalse(agent["ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
+        self.assertIsNone(agent["foreground_tools_visible"])
+        self.assertEqual(
+            agent["foreground_tools_visibility_source"],
+            "current_thread_unverified_after_host_probe",
+        )
+        self.assertEqual(agent["current_thread_tool_discovery"], "unknown_or_stale")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
-        self.assertEqual(agent["next_command"], "aippocampus update status --json")
+        self.assertIn("reload Codex Desktop", agent["next_command"])
         by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
-        self.assertTrue(by_id["active_recall_ready"]["ready"])
-        self.assertEqual(by_id["active_recall_ready"]["status"], "ready")
+        self.assertFalse(by_id["active_recall_ready"]["ready"])
+        self.assertEqual(
+            by_id["active_recall_ready"]["status"],
+            "host_live_probe_ok_current_thread_unverified",
+        )
+
+    def test_status_can_mark_host_probe_ready_when_current_thread_visibility_is_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1"}):
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {
+                            "tool_names": [
+                                "agent_recall",
+                                "agent_aippo",
+                                "agent_deepen",
+                                "agent_explain",
+                            ]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {"status": "available_requires_sync_dir"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--host-probe-report",
+                str(probe),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertTrue(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
+        self.assertEqual(agent["current_thread_tool_discovery"], "verified_by_operator_override")
+        self.assertEqual(len(agent["host_probe_agent_native_tools"]), 4)
 
     def test_status_uses_default_host_probe_cache_from_plugin_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -511,8 +567,8 @@ class UpdateSyncTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
-        self.assertTrue(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok")
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
 

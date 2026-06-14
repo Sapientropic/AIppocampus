@@ -891,7 +891,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"sync {args.command}: {'ok' if result.get('ok') else 'needs attention'}")
+        if result.get("status") == "available_requires_sync_dir":
+            print("sync status: capability available; no sync folder selected")
+            print(f"next: {result.get('next_command')}")
+            print(f"boundary: {result.get('claim_boundary')}")
+        else:
+            print(f"sync {args.command}: {'ok' if result.get('ok') else 'needs attention'}")
         if result.get("manifest"):
             print(f"manifest: {result['manifest']}")
         if result.get("issues"):
