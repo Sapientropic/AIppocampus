@@ -736,11 +736,12 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--codex-command")
     install.add_argument("--json", action="store_true", dest="json_output")
     install.add_argument(
+        "--compact-json",
         "--public",
         "--summary",
         action="store_true",
         dest="public_summary",
-        help="Emit the public-safe install/probe summary instead of operator details.",
+        help="Emit compact public-safe install/probe JSON instead of operator details.",
     )
 
     uninstall = subparsers.add_parser(

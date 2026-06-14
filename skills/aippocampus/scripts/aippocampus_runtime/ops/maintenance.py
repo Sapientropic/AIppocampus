@@ -156,7 +156,7 @@ def failed_action_ids(failures: list[dict]) -> set[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="aippocampus maintenance")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
         "--append-checkpoint",

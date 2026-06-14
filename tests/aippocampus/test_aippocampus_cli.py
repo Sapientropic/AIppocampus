@@ -53,6 +53,17 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("plugin install", proc.stdout)
         self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
 
+    def test_nested_operator_help_uses_facade_command_prog(self) -> None:
+        mcp = self.run_cli("mcp", "--help")
+        maintenance = self.run_cli("maintenance", "--help")
+
+        self.assertEqual(mcp.returncode, 0)
+        self.assertIn("usage: aippocampus mcp", mcp.stdout)
+        self.assertNotIn("usage: facade.py", mcp.stdout)
+        self.assertEqual(maintenance.returncode, 0)
+        self.assertIn("usage: aippocampus maintenance", maintenance.stdout)
+        self.assertNotIn("usage: facade.py", maintenance.stdout)
+
     def test_package_facade_is_the_public_python_entrypoint(self) -> None:
         from aippocampus_runtime.cli import facade
         from aippocampus_runtime.cli import facade as aippocampus_cli

@@ -25,6 +25,29 @@ def _warning_summary_counts(summary: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _aippocampus_action_required(warning_counts: dict[str, Any], *, ok: bool) -> bool:
+    buckets = warning_counts.get("bucket_counts") or {}
+    return (not ok) or bool(
+        buckets.get("fatal_failures")
+        or buckets.get("aippocampus_actionable_warnings")
+    )
+
+
+def _next_action(
+    *,
+    ok: bool,
+    action_required: bool,
+    agent_callable_status: Any,
+) -> str:
+    if not ok:
+        return "review plugin install error details with --json"
+    if action_required:
+        return "review aippocampus host warnings with --json"
+    if agent_callable_status == "host_live_probe_ok":
+        return "reload host app if tools are not visible"
+    return "run aippocampus update status --json"
+
+
 def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
     """Return the user-reportable install/probe summary without local paths."""
 
@@ -40,9 +63,22 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
         for name in ("agent_recall", "agent_aippo", "agent_deepen", "agent_explain")
         if name in tool_names
     ]
+    ok = bool(result.get("ok"))
+    agent_callable_status = result.get("agent_callable_status")
+    warning_counts = _warning_summary_counts(warning_summary)
+    action_required = _aippocampus_action_required(warning_counts, ok=ok)
     return {
         "kind": "aippocampus_plugin_install_public_summary",
-        "ok": bool(result.get("ok")),
+        "ok": ok,
+        "agent_callable_status": agent_callable_status,
+        "tool_count": len(tool_names),
+        "nonfatal_host_warning_count": warning_counts["nonfatal_warning_count"],
+        "aippocampus_action_required": action_required,
+        "next_action": _next_action(
+            ok=ok,
+            action_required=action_required,
+            agent_callable_status=agent_callable_status,
+        ),
         "plugin": {
             "id": plugin.get("id"),
             "version": plugin.get("version"),
@@ -50,12 +86,11 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             "installed": bool(plugin.get("installed")),
             "enabled": bool(plugin.get("enabled")),
         },
-        "agent_callable_status": result.get("agent_callable_status"),
         "host_probe": {
             "validation_ok": bool(host_probe.get("validation_ok")),
             "tool_count": len(tool_names),
             "key_tools_present": key_tools,
-            "warning_summary": _warning_summary_counts(warning_summary),
+            "warning_summary": warning_counts,
         },
         "rollback_command": result.get("rollback_command"),
         "next_status_command": "aippocampus update status --json",

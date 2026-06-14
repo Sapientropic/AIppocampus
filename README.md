@@ -68,11 +68,12 @@ not the public PyPI `uvx` first-recall path. For a user-facing install closeout,
 agents should report the concise public-safe summary:
 
 ```sh
-aippocampus plugin install --codex --verify --public
+aippocampus plugin install --codex --verify --compact-json
 ```
 
-That path should end in one source-backed recall moment, not a diagnostics
-maze. Rollback stays explicit:
+`--compact-json`, `--public`, and `--summary` are aliases for the same
+public-safe success summary. That path should end in one source-backed recall
+moment, not a diagnostics maze. Rollback stays explicit:
 
 ```sh
 aippocampus plugin uninstall --codex

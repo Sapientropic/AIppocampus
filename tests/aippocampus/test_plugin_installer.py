@@ -63,7 +63,17 @@ class FakeCodexRunner:
 def successful_probe() -> dict:
     return {
         "validation_ok": True,
-        "mcp_status": {"tool_names": ["memory_health", "search_memory", "sync_status"]},
+        "mcp_status": {
+            "tool_names": [
+                "memory_health",
+                "search_memory",
+                "sync_status",
+                "agent_recall",
+                "agent_aippo",
+                "agent_deepen",
+                "agent_explain",
+            ]
+        },
         "mcp_tool_is_error": False,
         "mcp_tool_payload": {
             "status": "available_requires_sync_dir",
@@ -217,6 +227,11 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertEqual(summary["kind"], "aippocampus_plugin_install_public_summary")
             self.assertTrue(summary["ok"])
             self.assertEqual(summary["agent_callable_status"], "host_live_probe_ok")
+            self.assertEqual(summary["tool_count"], 7)
+            self.assertGreaterEqual(summary["nonfatal_host_warning_count"], 1)
+            self.assertFalse(summary["aippocampus_action_required"])
+            self.assertEqual(summary["next_action"], "reload host app if tools are not visible")
+            self.assertIn("agent_recall", summary["host_probe"]["key_tools_present"])
             self.assertEqual(summary["rollback_command"], "aippocampus plugin uninstall --codex")
             self.assertGreaterEqual(warnings["warning_count"], 1)
             self.assertGreaterEqual(
@@ -233,6 +248,13 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertNotIn("command_tails", encoded)
         finally:
             shutil.rmtree(output, ignore_errors=True)
+
+    def test_compact_json_is_public_summary_alias(self) -> None:
+        args = plugin_installer.build_parser().parse_args(
+            ["install", "--codex", "--verify", "--compact-json"]
+        )
+
+        self.assertTrue(args.public_summary)
 
     def test_host_probe_warning_summary_does_not_downgrade_failed_probe_noise(self) -> None:
         summary = host_probe_warnings.summarize_host_probe_warnings(
