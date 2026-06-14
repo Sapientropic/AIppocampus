@@ -8,8 +8,8 @@ not introduce a default reranker change.
 
 ```powershell
 python benchmarks\aippocampus\benchmark_longmemeval_rerank_analysis.py `
-  --report docs\evidence\benchmarks\longmemeval-source-factual-alias-500-2026-06-14.json `
-  --output docs\evidence\benchmarks\longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json `
+  --report docs\evidence\benchmarks\reports\longmemeval\longmemeval-source-factual-alias-500-2026-06-14.json `
+  --output docs\evidence\benchmarks\reports\longmemeval\longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json `
   --json
 ```
 

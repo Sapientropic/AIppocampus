@@ -9,7 +9,7 @@ diagnostic-only for this slice.
 ```powershell
 python benchmarks\aippocampus\benchmark_default_hook_recall_usefulness.py `
   --json `
-  --output docs\evidence\benchmarks\default-hook-recall-usefulness-2026-06-14.json
+  --output docs\evidence\benchmarks\reports\recall-navigation\default-hook-recall-usefulness-2026-06-14.json
 ```
 
 Focused verification:

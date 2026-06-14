@@ -9,7 +9,7 @@ and without Episode/Arc sequence route material.
 ```powershell
 python benchmarks\aippocampus\benchmark_episode_arc_sequence_usefulness.py `
   --json `
-  --output docs\evidence\benchmarks\episode-arc-sequence-usefulness-2026-06-14.json
+  --output docs\evidence\benchmarks\reports\coordination\episode-arc-sequence-usefulness-2026-06-14.json
 ```
 
 Focused verification:

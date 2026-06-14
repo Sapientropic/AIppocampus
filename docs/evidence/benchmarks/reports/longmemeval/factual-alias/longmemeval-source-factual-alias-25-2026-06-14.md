@@ -10,7 +10,7 @@ public-report boundaries.
 Command:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 25 --min-questions 25 --top-k 10 --line-reranker source_semantic_cache --line-reranker-workers 4 --standard-cache-dir benchmark_corpus\.cache\standard-public-cases --partial-output benchmark_corpus\reports\longmemeval-v1-small-source-factual-alias-25-2026-06-14.partial.json --output docs\evidence\benchmarks\longmemeval-source-factual-alias-25-2026-06-14.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --questions 25 --min-questions 25 --top-k 10 --line-reranker source_semantic_cache --line-reranker-workers 4 --standard-cache-dir benchmark_corpus\.cache\standard-public-cases --partial-output benchmark_corpus\reports\longmemeval-v1-small-source-factual-alias-25-2026-06-14.partial.json --output docs\evidence\benchmarks\reports\longmemeval\longmemeval-source-factual-alias-25-2026-06-14.json
 ```
 
 The committed JSON report is

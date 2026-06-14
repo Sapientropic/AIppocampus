@@ -82,7 +82,7 @@ secrets, or answer strings into committed output.
 This is the source-side factual artifact and hot-path bridge requested by
 #1424, #1425, and #1426. The 25Q LongMemEval slice proves the mechanics; the
 2026-06-14 500Q public replay
-[`longmemeval-source-factual-alias-500-2026-06-14.md`](../evidence/benchmarks/longmemeval-source-factual-alias-500-2026-06-14.md)
+[`longmemeval-source-factual-alias-500-2026-06-14.md`](../evidence/benchmarks/reports/longmemeval/factual-alias/longmemeval-source-factual-alias-500-2026-06-14.md)
 adds the broader source-side evidence needed to close #1424 and the bounded
 #1323/#1327 owner questions:
 

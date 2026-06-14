@@ -343,6 +343,28 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
+The repo test runner adds `skills/aippocampus/scripts` to its own Python path
+and to child test subprocesses, so contributor tests do not depend on macOS
+processing editable `.pth` files. If direct Python commands outside the runner
+still fail with `ModuleNotFoundError: No module named 'aippocampus_runtime'`
+after a successful editable install, check the common macOS case where Python
+skips hidden editable `.pth` files during site initialization. The hidden flag
+can live on the repo-local `.venv` directory and affect its descendants, so
+repair only that virtualenv:
+
+```sh
+chflags -R nohidden .venv
+python tools/aippocampus/run_tests.py --tier quick
+```
+
+If direct commands still fail and specific `.pth` files remain hidden after
+clearing the tree, clear those files too:
+
+```sh
+find .venv -name '*.pth' -exec chflags nohidden {} +
+python tools/aippocampus/run_tests.py --tier quick
+```
+
 Copy the installable skill package into Codex home:
 
 ```sh

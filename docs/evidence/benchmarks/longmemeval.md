@@ -275,14 +275,14 @@ LongMemEval downloads or generated JSON reports unless a future change promotes
 a small curated artifact with provenance and license notes.
 
 The first dated LongMemEval-S answer/latency baseline is summarized in
-[`longmemeval-fixed-reader-answer-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-answer-25-2026-06-12.md).
+[`longmemeval-fixed-reader-answer-25-2026-06-12.md`](reports/longmemeval/fixed-reader/longmemeval-fixed-reader-answer-25-2026-06-12.md).
 The raw generated report remains local and gitignored; the committed summary
 preserves the fixed reader config, prompt version, model/provider metadata,
 token/cost telemetry, sanitized report validation, and retrieval-vs-answer
 claim separation.
 
 The #1282 fixed-reader cleanup rerun is summarized in
-[`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
+[`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](reports/longmemeval/fixed-reader/longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
 It adds a privacy-safe failure review, v2 bounded-evidence reader prompt, and
 explicit expansion gate. The current decision is `no_go` for 100Q or 500Q
 provider answer runs until reader/provider errors, false abstentions on
@@ -300,9 +300,9 @@ lexical rows remain the broader LongMemEval-S quality baselines.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `2026-06-14T08:20:40Z` | `longmemeval-v1-small` | post-factual-alias rerank closeout analysis | 500 | 95.80% | 85.18% | 88.10% | 94.36% | analysis-only | #1437 closeout; 57 fused misses split into 15 candidate-missing and 42 reranker-visible; default exact-line reranker change rejected; bounded candidate-builder follow-up scoped; full projection marked local no-provider hot path; see [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`](longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md) |
-| `2026-06-13T22:21:45Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1078.28s | #1323/#1327/#1424 closeout slice; candidate evidence coverage 463/479; factual-alias candidate lift 16, fused lift 2; no provider calls; zero fused regressions; see [`longmemeval-source-factual-alias-500-2026-06-14.md`](longmemeval-source-factual-alias-500-2026-06-14.md) |
-| `2026-06-13T19:00:57Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 64.98s | #1424/#1425/#1426 slice; no provider calls; cache policy v6; factual-alias query-overlap remains sparse at 2/25; see [`longmemeval-source-factual-alias-25-2026-06-14.md`](longmemeval-source-factual-alias-25-2026-06-14.md) |
+| `2026-06-14T08:20:40Z` | `longmemeval-v1-small` | post-factual-alias rerank closeout analysis | 500 | 95.80% | 85.18% | 88.10% | 94.36% | analysis-only | #1437 closeout; 57 fused misses split into 15 candidate-missing and 42 reranker-visible; default exact-line reranker change rejected; bounded candidate-builder follow-up scoped; full projection marked local no-provider hot path; see [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`](reports/longmemeval/factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md) |
+| `2026-06-13T22:21:45Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1078.28s | #1323/#1327/#1424 closeout slice; candidate evidence coverage 463/479; factual-alias candidate lift 16, fused lift 2; no provider calls; zero fused regressions; see [`longmemeval-source-factual-alias-500-2026-06-14.md`](reports/longmemeval/factual-alias/longmemeval-source-factual-alias-500-2026-06-14.md) |
+| `2026-06-13T19:00:57Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 64.98s | #1424/#1425/#1426 slice; no provider calls; cache policy v6; factual-alias query-overlap remains sparse at 2/25; see [`longmemeval-source-factual-alias-25-2026-06-14.md`](reports/longmemeval/factual-alias/longmemeval-source-factual-alias-25-2026-06-14.md) |
 | `2026-06-13T13:12:36Z` | `longmemeval-v1-small` | retrieval-only + contract-aware full-source semantic-scope warming | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1167.30s | #1323 full-source warming; source-index cache hit 500/500; 500 cold-fill provider calls; hot path provider 0; sidecar coverage improved but fused R@10 unchanged |
 | `2026-06-13T10:44:40Z` | `longmemeval-v1-small` | retrieval-only + materialized semantic-scope sidecar diagnostic | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 2559.04s | #1323 negative diagnostic; 0 rank delta vs worker-surface proxy; sidecar coverage/label-overlap bottleneck |
 | `2026-06-12T18:10:20Z` | `longmemeval-v1-small` | retrieval-only + AIppocampus source worker-surface proxy | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1494.10s | worker-surface proxy measured; no provider calls; not canonical semantic warming |
@@ -346,7 +346,7 @@ python benchmarks\aippocampus\benchmark_longmemeval_answer.py --split longmemeva
 Fixed-reader answer baseline for #1194:
 
 - Summary:
-  [`longmemeval-fixed-reader-answer-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-answer-25-2026-06-12.md).
+  [`longmemeval-fixed-reader-answer-25-2026-06-12.md`](reports/longmemeval/fixed-reader/longmemeval-fixed-reader-answer-25-2026-06-12.md).
 - Reader attempted: `25/25`; deterministic answer-correct count:
   `20/25 = 0.8000`.
 - Retrieval/reference layer in the same run: session R@10 `25/25`, evidence-line
@@ -364,7 +364,7 @@ Fixed-reader answer baseline for #1194:
 Fixed-reader cleanup for #1282:
 
 - Summary:
-  [`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](reports/longmemeval/longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
+  [`longmemeval-fixed-reader-cleanup-25-2026-06-12.md`](reports/longmemeval/fixed-reader/longmemeval-fixed-reader-cleanup-25-2026-06-12.md).
 - Reader attempted: `25/25`; deterministic answer-correct count:
   `19/25 = 0.7600`.
 - Retrieval/reference layer in the same run stayed unchanged from the baseline:
@@ -381,7 +381,7 @@ Fixed-reader cleanup for #1282:
 LongMemEval-S 500-question verification summary:
 
 - Public artifact trail:
-  [`longmemeval-500-retrieval-artifact-2026-06-11.json`](reports/longmemeval/longmemeval-500-retrieval-artifact-2026-06-11.json).
+  [`longmemeval-500-retrieval-artifact-2026-06-11.json`](reports/longmemeval/repair/longmemeval-500-retrieval-artifact-2026-06-11.json).
   This manifest records the deterministic rerun metadata, dataset checksum,
   command shape, report SHA-256, aggregate metrics, privacy checks, and schema
   preview without committing the raw dataset or full generated report.
@@ -452,9 +452,9 @@ Optional lexical line-reranker 500-question follow-up for #1087:
 Structural exact-line repair failure report for #1193:
 
 - Summary:
-  [`longmemeval-exact-line-repair-2026-06-12.md`](reports/longmemeval/longmemeval-exact-line-repair-2026-06-12.md).
+  [`longmemeval-exact-line-repair-2026-06-12.md`](reports/longmemeval/repair/longmemeval-exact-line-repair-2026-06-12.md).
 - Sanitized JSON:
-  [`longmemeval-exact-line-repair-2026-06-12.json`](reports/longmemeval/longmemeval-exact-line-repair-2026-06-12.json).
+  [`longmemeval-exact-line-repair-2026-06-12.json`](reports/longmemeval/repair/longmemeval-exact-line-repair-2026-06-12.json).
 - Run date: `2026-06-12T05:56:12Z`.
 - Command: same 500-question LongMemEval-S split and top-k as above, with
   `--line-reranker structural --line-reranker-workers 8`.
@@ -488,9 +488,9 @@ Structural exact-line repair failure report for #1193:
 Warm query/candidate cache replay for #1305:
 
 - Summary:
-  [`longmemeval-semantic-cache-path-2026-06-12.md`](reports/longmemeval/longmemeval-semantic-cache-path-2026-06-12.md).
+  [`longmemeval-semantic-cache-path-2026-06-12.md`](reports/longmemeval/semantic-cache/longmemeval-semantic-cache-path-2026-06-12.md).
 - Sanitized JSON:
-  [`longmemeval-semantic-cache-path-2026-06-12.json`](reports/longmemeval/longmemeval-semantic-cache-path-2026-06-12.json).
+  [`longmemeval-semantic-cache-path-2026-06-12.json`](reports/longmemeval/semantic-cache/longmemeval-semantic-cache-path-2026-06-12.json).
 - Run date: `2026-06-12T10:10:57Z`.
 - The fresh 25Q semantic pilot now emits `line_reranker_candidate_pack_sha1`,
   a hash of candidate line/routing metadata plus source-text hashes. The hash
@@ -526,9 +526,9 @@ Warm query/candidate cache replay for #1305:
 500Q source-worker-surface proxy and LLM upper bound:
 
 - Summary:
-  [`longmemeval-source-worker-surface-500q-2026-06-13.md`](reports/longmemeval/longmemeval-source-worker-surface-500q-2026-06-13.md).
+  [`longmemeval-source-worker-surface-500q-2026-06-13.md`](reports/longmemeval/semantic-cache/longmemeval-source-worker-surface-500q-2026-06-13.md).
 - Sanitized JSON:
-  [`longmemeval-source-worker-surface-500q-2026-06-13.json`](reports/longmemeval/longmemeval-source-worker-surface-500q-2026-06-13.json).
+  [`longmemeval-source-worker-surface-500q-2026-06-13.json`](reports/longmemeval/semantic-cache/longmemeval-source-worker-surface-500q-2026-06-13.json).
 - Source-side run date: `2026-06-12T18:10:20Z`. LLM upper-bound run date:
   `2026-06-12T16:43:38Z`.
 - Dataset scale: LongMemEval-S first `500` questions; runner-scanned source
@@ -575,9 +575,9 @@ Warm query/candidate cache replay for #1305:
 500Q source factual-alias closeout for #1323/#1327/#1424:
 
 - Summary:
-  [`longmemeval-source-factual-alias-500-2026-06-14.md`](longmemeval-source-factual-alias-500-2026-06-14.md).
+  [`longmemeval-source-factual-alias-500-2026-06-14.md`](reports/longmemeval/factual-alias/longmemeval-source-factual-alias-500-2026-06-14.md).
 - Sanitized JSON:
-  [`longmemeval-source-factual-alias-500-2026-06-14.json`](longmemeval-source-factual-alias-500-2026-06-14.json).
+  [`longmemeval-source-factual-alias-500-2026-06-14.json`](reports/longmemeval/factual-alias/longmemeval-source-factual-alias-500-2026-06-14.json).
 - Run date: `2026-06-13T22:21:45Z`.
 - Command: same LongMemEval-S first-500 cohort and top-k `10` as the existing
   500Q rows, with `--line-reranker source_semantic_cache`, local
@@ -615,11 +615,11 @@ Warm query/candidate cache replay for #1305:
 Post-factual-alias exact-line closeout for #1437:
 
 - Summary:
-  [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`](longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md).
+  [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`](reports/longmemeval/factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md).
 - Sanitized analysis JSON:
-  [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json`](longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json).
+  [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json`](reports/longmemeval/factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json).
 - Source report:
-  [`longmemeval-source-factual-alias-500-2026-06-14.json`](longmemeval-source-factual-alias-500-2026-06-14.json).
+  [`longmemeval-source-factual-alias-500-2026-06-14.json`](reports/longmemeval/factual-alias/longmemeval-source-factual-alias-500-2026-06-14.json).
 - Decision: `post_factual_alias_exact_line_rerank_v1` is rejected as a default
   reranker change from this evidence. The 57 remaining fused misses are
   dominated by 42 candidate-visible exact-line ranking failures, while the
@@ -635,9 +635,9 @@ Post-factual-alias exact-line closeout for #1437:
 100Q semantic query/candidate cache progress, superseded by the 500Q rows above:
 
 - Summary:
-  [`longmemeval-semantic-cache-100q-2026-06-12.md`](reports/longmemeval/longmemeval-semantic-cache-100q-2026-06-12.md).
+  [`longmemeval-semantic-cache-100q-2026-06-12.md`](reports/longmemeval/semantic-cache/longmemeval-semantic-cache-100q-2026-06-12.md).
 - Sanitized JSON:
-  [`longmemeval-semantic-cache-100q-2026-06-12.json`](reports/longmemeval/longmemeval-semantic-cache-100q-2026-06-12.json).
+  [`longmemeval-semantic-cache-100q-2026-06-12.json`](reports/longmemeval/semantic-cache/longmemeval-semantic-cache-100q-2026-06-12.json).
 - Run dates: lexical comparison `2026-06-12T16:01:24Z`, semantic first run
   `2026-06-12T15:39:58Z`, and semantic repeated provider-prefix replay
   `2026-06-12T15:45:30Z`.
@@ -692,7 +692,7 @@ Optional semantic LLM line-reranker pilot for #1092:
   `25/25`; fused evidence-line MRR `1.0000`, up `0.3652` over first-stage
   evidence-line MRR `0.6348`.
 - Sanitized analysis report:
-  [`longmemeval-semantic-rerank-analysis-2026-06-10.json`](reports/longmemeval/longmemeval-semantic-rerank-analysis-2026-06-10.json).
+  [`longmemeval-semantic-rerank-analysis-2026-06-10.json`](reports/longmemeval/semantic-cache/longmemeval-semantic-rerank-analysis-2026-06-10.json).
 - Reranked evidence-line ladder from the analysis report: R@1/R@3/R@5/R@10/R@20/R@50
   all `25/25 = 1.0000`. Baseline ladder for the same 25 cases was R@1
   `12/25 = 0.4800`, R@3 `18/25 = 0.7200`, R@5 `21/25 = 0.8400`, R@10

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
+import site
+import stat
 import subprocess
 import sys
 import tempfile
@@ -26,6 +29,8 @@ from test_tier_manifest import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_ROOT = REPO_ROOT / "tests" / "aippocampus"
+RUNTIME_PACKAGE = "aippocampus_runtime"
+RUNTIME_SOURCE_ROOT = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FALLBACK_TEST_TMPDIR = REPO_ROOT / ".aippocampus" / "test-tmp"
 TEMP_ENV_NAMES = ("TMPDIR", "TEMP", "TMP")
 TEMP_PROBE_PREFIX = "aippocampus-test-runner-"
@@ -201,6 +206,88 @@ def normalize_shard_args(
 def _ensure_repo_on_path() -> None:
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
+
+
+def ensure_runtime_source_path() -> None:
+    if not RUNTIME_SOURCE_ROOT.exists():
+        return
+    runtime_source = str(RUNTIME_SOURCE_ROOT)
+    if runtime_source not in sys.path:
+        sys.path.insert(0, runtime_source)
+
+    # Child test subprocesses should not depend on macOS processing editable
+    # .pth files; the runner has a source-backed runtime route already.
+    pythonpath = os.environ.get("PYTHONPATH", "")
+    pythonpath_parts = [part for part in pythonpath.split(os.pathsep) if part]
+    if runtime_source not in pythonpath_parts:
+        os.environ["PYTHONPATH"] = os.pathsep.join([runtime_source, *pythonpath_parts])
+    importlib.invalidate_caches()
+
+
+def _path_has_hidden_flag(path: Path) -> bool:
+    hidden_flag = getattr(stat, "UF_HIDDEN", 0)
+    if not hidden_flag:
+        return False
+    try:
+        return bool(getattr(path.stat(), "st_flags", 0) & hidden_flag)
+    except OSError:
+        return False
+
+
+def _runtime_source_pth_files() -> list[Path]:
+    candidates: list[Path] = []
+    site_dirs: list[str] = []
+    try:
+        site_dirs.extend(site.getsitepackages())
+    except AttributeError:
+        pass
+    user_site = site.getusersitepackages()
+    if isinstance(user_site, str):
+        site_dirs.append(user_site)
+    runtime_source = str(RUNTIME_SOURCE_ROOT)
+    for site_dir in dict.fromkeys(site_dirs):
+        root = Path(site_dir)
+        if not root.exists():
+            continue
+        for pth in sorted(root.glob("*.pth")):
+            try:
+                text = pth.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            if runtime_source in text:
+                candidates.append(pth)
+    return candidates
+
+
+def runtime_import_preflight_issue() -> str | None:
+    if importlib.util.find_spec(RUNTIME_PACKAGE) is not None:
+        return None
+
+    editable_pth_files = _runtime_source_pth_files()
+    hidden_pth_files = [pth for pth in editable_pth_files if _path_has_hidden_flag(pth)]
+    if hidden_pth_files:
+        names = ", ".join(pth.name for pth in hidden_pth_files)
+        return (
+            f"{RUNTIME_PACKAGE} is not importable even though an editable install path file "
+            f"exists. Detected hidden .pth file(s): {names}. On macOS, Python can skip "
+            "hidden .pth files during site initialization, which makes an editable install "
+            "look successful while subprocess imports fail. If this is the repo-local "
+            "virtualenv, repair only that environment with: "
+            "chflags -R nohidden .venv. If the diagnostic still names specific .pth "
+            "files, clear those files too with: "
+            "find .venv -name '*.pth' -exec chflags nohidden {} +"
+        )
+    if editable_pth_files:
+        names = ", ".join(pth.name for pth in editable_pth_files)
+        return (
+            f"{RUNTIME_PACKAGE} is not importable, but editable .pth file(s) exist: {names}. "
+            "Check whether Python processed site-packages .pth files for this virtualenv, "
+            "or recreate the repo-local .venv and rerun: python -m pip install -e \".[dev]\""
+        )
+    return (
+        f"{RUNTIME_PACKAGE} is not importable. Run the contributor install from the repo "
+        "root with a Python 3.12+ virtualenv: python -m pip install -e \".[dev]\""
+    )
 
 
 def count_tests_for_module(module: str) -> int:
@@ -484,6 +571,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not modules:
         print(f"no tests selected for tier: {args.tier}", file=sys.stderr)
+        return 2
+    ensure_runtime_source_path()
+    runtime_issue = runtime_import_preflight_issue()
+    if runtime_issue:
+        print(runtime_issue, file=sys.stderr)
         return 2
     try:
         ensure_usable_tempdir()
