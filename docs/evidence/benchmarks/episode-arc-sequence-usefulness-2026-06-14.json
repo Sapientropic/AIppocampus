@@ -1,0 +1,259 @@
+{
+  "can_claim": [
+    "public_sequence_usefulness_workload_exists",
+    "episode_arc_route_packet_reduces_manual_search_in_selected_cases",
+    "episode_arc_route_packet_avoids_repeated_wrong_route_in_selected_cases",
+    "incomplete_or_wrong_order_sequences_do_not_overclaim_source_truth"
+  ],
+  "cannot_claim": [
+    "live_host_behavior_lift",
+    "private_history_generality",
+    "default_recall_route_producer_adoption",
+    "episode_arc_as_source_truth",
+    "source_reopen_not_required"
+  ],
+  "cases": [
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 3,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": true,
+          "manual_search_steps": 1,
+          "repeated_mistake_avoided": true,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_682552503cb150",
+      "expected_behavior": "avoid_repeated_wrong_route",
+      "family": "commit_revert",
+      "pathlet_kind": "rejected_route",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 3,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": true
+    },
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 3,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": true,
+          "manual_search_steps": 1,
+          "repeated_mistake_avoided": true,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_3dde17a1849cfd",
+      "expected_behavior": "avoid_repeated_wrong_route",
+      "family": "pr_rejection_merge",
+      "pathlet_kind": "rejected_route",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 3,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": true
+    },
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 3,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": true,
+          "manual_search_steps": 1,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_3011abda22462d",
+      "expected_behavior": "reopen_frontier_source",
+      "family": "issue_reopen",
+      "pathlet_kind": "unresolved_frontier",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 2,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": true
+    },
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": true,
+          "manual_search_steps": 1,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": true,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_b4cd54be8082ab",
+      "expected_behavior": "prefer_current_source",
+      "family": "patch_supersession",
+      "pathlet_kind": "supersession_chain",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 3,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": true
+    },
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_e2983faf58fb9e",
+      "expected_behavior": "no_harm_refresh_sources",
+      "family": "workaround_removal",
+      "pathlet_kind": "temporary_concern_arc",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 2,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": false
+    },
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_6587b21f66395a",
+      "expected_behavior": "suppress_incomplete_or_wrong_order_chain",
+      "family": "missing_middle_negative",
+      "pathlet_kind": "missing_middle",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 2,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": false
+    },
+    {
+      "arms": {
+        "baseline_no_episode_arc": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        },
+        "episode_arc_route_packet": {
+          "correct_source_reopen": false,
+          "manual_search_steps": 2,
+          "repeated_mistake_avoided": false,
+          "source_truth_overclaim": false,
+          "stale_chain_suppressed": false,
+          "wrong_project_contamination": false
+        }
+      },
+      "case_id": "episode_route_969ea0e2161a03",
+      "expected_behavior": "suppress_incomplete_or_wrong_order_chain",
+      "family": "wrong_order_negative",
+      "pathlet_kind": "wrong_order",
+      "same_source_budget": true,
+      "source_budget_ref_hash_count": 3,
+      "source_reopen_required_before_claim": true,
+      "treatment_regression": false,
+      "treatment_win": false
+    }
+  ],
+  "comparison_contract": {
+    "arms": [
+      "baseline_no_episode_arc",
+      "episode_arc_route_packet"
+    ],
+    "private_history_used": false,
+    "provider_calls": 0,
+    "same_source_budget": true,
+    "source_budget_kind": "source_ref_hash_count_only"
+  },
+  "issue_readouts": {
+    "github_1440": {
+      "baseline_vs_episode_arc_same_source_budget": true,
+      "closeout_eligible": true,
+      "sequence_usefulness_workload": "measured_public_synthetic"
+    }
+  },
+  "kind": "aippocampus_episode_arc_sequence_usefulness_benchmark",
+  "metrics": {
+    "case_count": 7,
+    "correct_source_reopen_lift": 4,
+    "manual_search_step_delta": 7,
+    "quiet_no_harm_case_count": 2,
+    "repeated_mistake_avoidance_lift": 2,
+    "source_truth_overclaim_count": 0,
+    "stale_chain_suppression_lift": 1,
+    "treatment_regression_count": 0,
+    "treatment_win_count": 4,
+    "wrong_project_contamination_count": 0
+  },
+  "ok": true,
+  "public_safety": {
+    "local_paths_serialized": false,
+    "provider_payload_serialized": false,
+    "raw_source_refs_serialized": false,
+    "raw_source_text_serialized": false,
+    "thread_or_message_handles_serialized": false
+  },
+  "schema_version": 1
+}

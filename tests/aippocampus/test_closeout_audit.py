@@ -304,6 +304,107 @@ class CloseoutAuditTests(unittest.TestCase):
         payload = json.loads(completed.stdout)
         self.assertFalse(payload["ok"])
 
+    def test_closed_issue_traceability_flags_malformed_and_missing_evidence(self) -> None:
+        report = closeout_audit.audit_closed_issue_traceability(
+            [
+                {
+                    "number": 1401,
+                    "closedByPullRequestsReferences": {"nodes": []},
+                    "comments": {
+                        "nodes": [
+                            {
+                                "body": (
+                                    "Closeout: fixed on $branch at ^[cf754d8. "
+                                    "Verification passed."
+                                )
+                            }
+                        ]
+                    },
+                },
+                {
+                    "number": 1402,
+                    "closedByPullRequestsReferences": {"nodes": []},
+                    "comments": {"nodes": [{"body": "Thanks."}]},
+                },
+            ],
+            window_start="2026-06-13T18:33:49Z",
+            window_end="2026-06-14T06:33:49Z",
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["summary"]["closed_issue_count"], 2)
+        kinds = [finding["kind"] for finding in report["findings"]]
+        self.assertIn("malformed_closeout_comment", kinds)
+        self.assertIn("missing_pr_or_commit_reference", kinds)
+        self.assertIn("missing_closeout_comment", kinds)
+        self.assertTrue(report["policy"]["do_not_rewrite_existing_comments"])
+
+    def test_closed_issue_traceability_accepts_pr_linked_closeout_comment(self) -> None:
+        report = closeout_audit.audit_closed_issue_traceability(
+            {
+                "issues": [
+                    {
+                        "number": 1403,
+                        "closedByPullRequestsReferences": {
+                            "nodes": [{"number": 1436, "url": "https://example.test/pull/1436"}]
+                        },
+                        "comments": {
+                            "nodes": [
+                                {
+                                    "body": (
+                                        "Closeout: PR #1436 merged. "
+                                        "Verification: docs health and PR gate passed. "
+                                        "Cannot claim live/private quality."
+                                    )
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["summary"]["issues_with_closed_pr_count"], 1)
+        self.assertEqual(report["findings"], [])
+
+    def test_cli_reads_closed_issue_file_and_returns_traceability_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload_path = Path(tmp) / "closed.json"
+            payload_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "number": 1404,
+                            "closedByPullRequestsReferences": {"nodes": []},
+                            "comments": {"nodes": []},
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "--closed-issues-file",
+                    str(payload_path),
+                    "--closed-window-start",
+                    "2026-06-13T18:33:49Z",
+                    "--closed-window-end",
+                    "2026-06-14T06:33:49Z",
+                    "--json",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(completed.returncode, 1)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_closed_issue_traceability_audit")
+        self.assertEqual(payload["window"]["start"], "2026-06-13T18:33:49Z")
+
 
 if __name__ == "__main__":
     unittest.main()
