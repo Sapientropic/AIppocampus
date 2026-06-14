@@ -537,8 +537,7 @@ def _evidence_card_line(card: dict[str, Any]) -> str:
 
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
     if result.get("decision") == "skip" and not _has_foregroundable_ambient_card(result):
-        return (truncate_preserving_lines("\n".join(lines), max_chars)
-                if (lines := prepend_hook_agent_affordance(result, [])) else None)
+        return truncate_preserving_lines("\n".join(affordance_lines), max_chars) if (affordance_lines := prepend_hook_agent_affordance(result, [])) else None
     if is_weak_direction_only_scent(result):
         if legacy_candidate_summary_suppressed(result) and not _ambient_cards(result):
             return None

@@ -13,7 +13,11 @@ from aippocampus_runtime.core import aippocampus_registry_resolution, codex_home
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.onboarding import codex as onboard_codex
 from aippocampus_runtime.ops import provider_key_bridge
-from conversation_sources import create_conversation_provider, normalize_provider_name
+from conversation_sources import (
+    ConversationProvider,
+    create_conversation_provider,
+    normalize_provider_name,
+)
 
 
 def _wants_json(argv: Sequence[str]) -> bool:
@@ -58,7 +62,7 @@ FRONTSTAGE_PROVIDER_SAMPLE_LIMIT = 3
 FRONTSTAGE_PROVIDER_SCAN_BUDGET_SECONDS = 0.75
 
 
-def _sample_sessions(instance: object, *, detailed: bool) -> tuple[list[object], bool]:
+def _sample_sessions(instance: ConversationProvider, *, detailed: bool) -> tuple[list[object], bool]:
     if detailed:
         return list(instance.discover_sessions()), True
     sessions: list[object] = []
