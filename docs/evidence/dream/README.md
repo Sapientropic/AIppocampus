@@ -6,6 +6,8 @@ snapshot before treating any dated report as current.
 
 Current and recent report entries:
 
+- [`dream-delivery-quality-eval-2026-06-14.md`](dream-delivery-quality-eval-2026-06-14.md):
+  public-safe three-arm Dream delivery-quality eval for #1438.
 - [`dream-atlas-live-pilot-2026-06-12.md`](dream-atlas-live-pilot-2026-06-12.md):
   public-safe live DeepSeek V4 Flash atlas pilot for #1286.
 - [`dream-private-large-history-diagnostic-2026-06-04.md`](dream-private-large-history-diagnostic-2026-06-04.md):

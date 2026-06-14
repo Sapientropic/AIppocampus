@@ -1,0 +1,364 @@
+{
+  "can_claim": [
+    "public_synthetic_three_arm_delivery_quality_eval_exists",
+    "bounded_hint_arm_improves_selected_route_and_action_cases",
+    "stale_noisy_over_personalized_and_unsourced_controls_stay_quiet",
+    "source_reopen_required_before_dream_material_can_support_claims"
+  ],
+  "cannot_claim": [
+    "live_default_dream_delivery_quality",
+    "broad_private_history_dream_quality",
+    "causal_real_user_lift",
+    "dream_only_material_as_source_truth",
+    "default_foreground_dream_adoption"
+  ],
+  "cases": [
+    {
+      "arms": {
+        "baseline_no_dream": {
+          "action_quality": 0,
+          "manual_search_steps": 3,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 3,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_backstage_only": {
+          "action_quality": 1,
+          "manual_search_steps": 2,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": true,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 2,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_bounded_action_hint": {
+          "action_quality": 2,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": true,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 1,
+          "visible_hint": true,
+          "wrong_hint": false
+        }
+      },
+      "bounded_action_lift": true,
+      "bounded_quiet_no_harm": false,
+      "bounded_route_lift": true,
+      "bounded_verification_cost_delta": -2,
+      "case_family": "repeated_rejected_route",
+      "case_id": "rejected_route_recovery",
+      "control_family": "positive_route_lift",
+      "dream_only_foreground_leak": false,
+      "source_ripening": true
+    },
+    {
+      "arms": {
+        "baseline_no_dream": {
+          "action_quality": 0,
+          "manual_search_steps": 2,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 2,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_backstage_only": {
+          "action_quality": 1,
+          "manual_search_steps": 2,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": true,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 2,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_bounded_action_hint": {
+          "action_quality": 2,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": true,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 1,
+          "visible_hint": true,
+          "wrong_hint": false
+        }
+      },
+      "bounded_action_lift": true,
+      "bounded_quiet_no_harm": false,
+      "bounded_route_lift": true,
+      "bounded_verification_cost_delta": -1,
+      "case_family": "stale_hypothesis_currentness",
+      "case_id": "currentness_check_before_retry",
+      "control_family": "positive_action_lift",
+      "dream_only_foreground_leak": false,
+      "source_ripening": true
+    },
+    {
+      "arms": {
+        "baseline_no_dream": {
+          "action_quality": 1,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 1,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_backstage_only": {
+          "action_quality": 1,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "stale_route",
+          "verification_cost": 1,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_bounded_action_hint": {
+          "action_quality": 1,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "stale_route",
+          "verification_cost": 1,
+          "visible_hint": false,
+          "wrong_hint": false
+        }
+      },
+      "bounded_action_lift": false,
+      "bounded_quiet_no_harm": true,
+      "bounded_route_lift": false,
+      "bounded_verification_cost_delta": 0,
+      "case_family": "stale_route",
+      "case_id": "stale_route_negative_control",
+      "control_family": "stale_route",
+      "dream_only_foreground_leak": false,
+      "source_ripening": false
+    },
+    {
+      "arms": {
+        "baseline_no_dream": {
+          "action_quality": 1,
+          "manual_search_steps": 0,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 0,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_backstage_only": {
+          "action_quality": 1,
+          "manual_search_steps": 0,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "noisy_hint",
+          "verification_cost": 0,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_bounded_action_hint": {
+          "action_quality": 1,
+          "manual_search_steps": 0,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "noisy_hint",
+          "verification_cost": 0,
+          "visible_hint": false,
+          "wrong_hint": false
+        }
+      },
+      "bounded_action_lift": false,
+      "bounded_quiet_no_harm": true,
+      "bounded_route_lift": false,
+      "bounded_verification_cost_delta": 0,
+      "case_family": "noisy_hint",
+      "case_id": "noisy_generic_hint_control",
+      "control_family": "noisy_hint",
+      "dream_only_foreground_leak": false,
+      "source_ripening": false
+    },
+    {
+      "arms": {
+        "baseline_no_dream": {
+          "action_quality": 1,
+          "manual_search_steps": 0,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 0,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_backstage_only": {
+          "action_quality": 1,
+          "manual_search_steps": 0,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "over_personalization",
+          "verification_cost": 0,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_bounded_action_hint": {
+          "action_quality": 1,
+          "manual_search_steps": 0,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "over_personalization",
+          "verification_cost": 0,
+          "visible_hint": false,
+          "wrong_hint": false
+        }
+      },
+      "bounded_action_lift": false,
+      "bounded_quiet_no_harm": true,
+      "bounded_route_lift": false,
+      "bounded_verification_cost_delta": 0,
+      "case_family": "over_personalization",
+      "case_id": "over_personalized_hint_control",
+      "control_family": "over_personalization",
+      "dream_only_foreground_leak": false,
+      "source_ripening": false
+    },
+    {
+      "arms": {
+        "baseline_no_dream": {
+          "action_quality": 1,
+          "manual_search_steps": 1,
+          "route_found": false,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "",
+          "verification_cost": 1,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_backstage_only": {
+          "action_quality": 1,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "source_reopen_required",
+          "verification_cost": 1,
+          "visible_hint": false,
+          "wrong_hint": false
+        },
+        "dream_bounded_action_hint": {
+          "action_quality": 1,
+          "manual_search_steps": 1,
+          "route_found": true,
+          "source_reopen_required": true,
+          "source_ripened": false,
+          "source_truth_overclaim": false,
+          "suppressed_reason": "source_reopen_required",
+          "verification_cost": 1,
+          "visible_hint": false,
+          "wrong_hint": false
+        }
+      },
+      "bounded_action_lift": false,
+      "bounded_quiet_no_harm": true,
+      "bounded_route_lift": true,
+      "bounded_verification_cost_delta": 0,
+      "case_family": "source_truth_boundary",
+      "case_id": "source_truth_overclaim_control",
+      "control_family": "source_truth_overclaim",
+      "dream_only_foreground_leak": false,
+      "source_ripening": false
+    }
+  ],
+  "claim_level": "public_synthetic_delivery_quality_eval",
+  "issue_readouts": {
+    "github_1438": {
+      "arms_pre_registered": true,
+      "closeout_eligible": true,
+      "delivery_quality_eval_measured": true,
+      "live_private_delivery_quality_measured": false,
+      "negative_controls_covered": true,
+      "sanitized_aggregate_only": true
+    }
+  },
+  "kind": "aippocampus_dream_delivery_quality_eval",
+  "metrics": {
+    "bounded_action_lift_count": 2,
+    "bounded_route_lift_count": 3,
+    "bounded_verification_cost_delta_total": -3,
+    "case_count": 6,
+    "quiet_no_harm_count": 4,
+    "source_ripening_count": 2,
+    "visible_hint_count": 2,
+    "visible_wrong_hint_count": 0,
+    "visible_wrong_hint_rate": 0.0
+  },
+  "negative_controls": {
+    "dream_only_foreground_leak_count": 0,
+    "noisy_hint_suppressed_count": 1,
+    "over_personalization_suppressed_count": 1,
+    "source_reopen_required_count": 6,
+    "source_truth_overclaim_count": 0,
+    "stale_route_suppressed_count": 1
+  },
+  "ok": true,
+  "privacy_boundary": {
+    "credential_values_serialized": false,
+    "prompt_text_serialized": false,
+    "provider_details_serialized": false,
+    "source_handles_serialized": false,
+    "source_text_serialized": false,
+    "thread_handles_serialized": false
+  },
+  "schema_version": 1,
+  "scoring_contract": {
+    "arms": [
+      "baseline_no_dream",
+      "dream_backstage_only",
+      "dream_bounded_action_hint"
+    ],
+    "arms_pre_registered": true,
+    "private_history_used": false,
+    "provider_call_count": 0,
+    "same_public_fixture_budget": true,
+    "scoring_defined_before_cases": true
+  }
+}
