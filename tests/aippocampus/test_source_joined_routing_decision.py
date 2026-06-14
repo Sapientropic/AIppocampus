@@ -67,12 +67,46 @@ class SourceJoinedRoutingDecisionTests(unittest.TestCase):
     def test_markdown_report_states_defer_decision_and_boundaries(self) -> None:
         report = source_joined_routing_decision.build_source_joined_routing_decision()
         text = source_joined_routing_decision.render_markdown(report)
+        source_joined_routing_decision.assert_public_report_text(text)
 
         self.assertIn("keep_text_first_source_joined_defaults", text)
         self.assertIn("#1370 can close", text)
         self.assertIn("#1372 can close", text)
         self.assertIn("#309 can close as a decision issue", text)
         self.assertIn("default_vector_prefilter_safety", text)
+
+    def test_public_json_output_rejects_sensitive_route_fields(self) -> None:
+        report = source_joined_routing_decision.build_source_joined_routing_decision()
+        report["debug_model_route"] = {
+            "provider": "fixture",
+            "api_key_env": "DEEPSEEK_API_KEY",
+        }
+
+        with self.assertRaises(ValueError):
+            source_joined_routing_decision.encode_public_json(report)
+
+    def test_public_json_output_rejects_raw_refs_and_local_paths(self) -> None:
+        report = source_joined_routing_decision.build_source_joined_routing_decision()
+        report["source_refs"] = [
+            {
+                "source_id": "private-source",
+                "message_id": "message",
+                "path": r"C:\Users\Name\private.txt",
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            source_joined_routing_decision.encode_public_json(report)
+
+    def test_default_public_json_excludes_codeql_sensitive_fragments(self) -> None:
+        report = source_joined_routing_decision.build_source_joined_routing_decision()
+        encoded = source_joined_routing_decision.encode_public_json(report)
+
+        self.assertNotIn("api_key_env", encoded)
+        self.assertNotIn("DEEPSEEK_API_KEY", encoded)
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn('"source_refs": [', encoded)
+        self.assertNotIn(str(REPO_ROOT), encoded)
 
 
 if __name__ == "__main__":

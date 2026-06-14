@@ -15,6 +15,15 @@ SCHEMA_VERSION = 1
 
 CLOSING_REF_RE = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b", re.I)
 ISSUE_REF_RE = re.compile(r"#\d+\b")
+COMMIT_REF_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.I)
+PULL_REQUEST_REF_RE = re.compile(r"(?:pull/\d+|PR\s*#?\d+|pull request\s*#?\d+)", re.I)
+LITERAL_TEMPLATE_RE = re.compile(r"\$(?:branch|commit|sha|pr|issue)\b|\$\{[^}]+\}", re.I)
+MALFORMED_COMMIT_REF_RE = re.compile(r"\^\[?[0-9a-f]{6,40}\b|\[[0-9a-f]{6,40}\b", re.I)
+CLOSEOUT_COMMENT_RE = re.compile(
+    r"\b(closeout|verification|verified|commit|merged|pr\s*#?\d+|pull request)\b|"
+    r"(验证|已验证|合并|提交|关闭)",
+    re.I,
+)
 EVIDENCE_LEVELS = (
     "contract_fixture",
     "scripted_proxy",
@@ -189,6 +198,171 @@ def _normalize_issue_metadata(value: Any) -> dict[int, dict[str, Any]]:
             continue
         normalized[number] = dict(item)
     return normalized
+
+
+def _node_list(value: Any) -> list[Any]:
+    if isinstance(value, Mapping):
+        nodes = value.get("nodes")
+        return list(nodes) if isinstance(nodes, list) else []
+    return list(value) if isinstance(value, list) else []
+
+
+def _comment_bodies(value: Any) -> list[str]:
+    bodies: list[str] = []
+    for item in _node_list(value):
+        if isinstance(item, Mapping):
+            body = item.get("body")
+        else:
+            body = item
+        if isinstance(body, str) and body.strip():
+            bodies.append(body)
+    return bodies
+
+
+def _closed_pr_numbers(value: Any) -> list[int]:
+    numbers: list[int] = []
+    for item in _node_list(value):
+        if not isinstance(item, Mapping):
+            continue
+        try:
+            numbers.append(int(item.get("number")))
+        except (TypeError, ValueError):
+            continue
+    return sorted(set(numbers))
+
+
+def _issue_number(raw: Mapping[str, Any]) -> int:
+    try:
+        return int(raw.get("number"))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _closed_issue_rows(value: Any) -> list[Mapping[str, Any]]:
+    if isinstance(value, Mapping):
+        if isinstance(value.get("issues"), list):
+            return [item for item in value["issues"] if isinstance(item, Mapping)]
+        repository = value.get("repository")
+        if isinstance(repository, Mapping):
+            return _closed_issue_rows(repository.get("issues"))
+        nodes = value.get("nodes")
+        if isinstance(nodes, list):
+            return [item for item in nodes if isinstance(item, Mapping)]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, Mapping)]
+    return []
+
+
+def audit_closed_issue_traceability(
+    issues: list[Mapping[str, Any]] | Mapping[str, Any],
+    *,
+    window_start: str | None = None,
+    window_end: str | None = None,
+) -> dict[str, Any]:
+    """Audit already-closed issues for source-reachable closeout evidence.
+
+    The audit is intentionally additive: malformed comments are findings, not a
+    reason to reopen product work. Future agents need stable PR/commit/comment
+    trails, while historical issue comments remain immutable public history.
+    """
+
+    rows = _closed_issue_rows(issues)
+    findings: list[dict[str, Any]] = []
+    malformed_comment_issue_count = 0
+    missing_pr_or_commit_reference_count = 0
+    missing_closeout_comment_count = 0
+    issues_with_closed_pr_count = 0
+    issues_with_commit_reference_count = 0
+    issues_with_closeout_comment_count = 0
+
+    for raw in rows:
+        number = _issue_number(raw)
+        if not number:
+            continue
+        comments = _comment_bodies(raw.get("comments"))
+        joined_comments = "\n\n".join(comments)
+        closed_prs = _closed_pr_numbers(raw.get("closedByPullRequestsReferences"))
+        has_closed_pr = bool(closed_prs)
+        has_commit_ref = bool(COMMIT_REF_RE.search(joined_comments))
+        has_pr_ref = bool(PULL_REQUEST_REF_RE.search(joined_comments))
+        has_closeout_comment = any(CLOSEOUT_COMMENT_RE.search(body) for body in comments)
+        malformed_terms: list[str] = []
+        if LITERAL_TEMPLATE_RE.search(joined_comments):
+            malformed_terms.append("literal_template_variable")
+        if MALFORMED_COMMIT_REF_RE.search(joined_comments):
+            malformed_terms.append("malformed_commit_reference")
+
+        if has_closed_pr:
+            issues_with_closed_pr_count += 1
+        if has_commit_ref:
+            issues_with_commit_reference_count += 1
+        if has_closeout_comment:
+            issues_with_closeout_comment_count += 1
+
+        if malformed_terms:
+            malformed_comment_issue_count += 1
+            findings.append(
+                {
+                    "kind": "malformed_closeout_comment",
+                    "severity": "warning",
+                    "issue": number,
+                    "terms": sorted(set(malformed_terms)),
+                    "message": "Closed issue has a malformed or templated closeout comment.",
+                }
+            )
+        if not (has_closed_pr or has_commit_ref or has_pr_ref):
+            missing_pr_or_commit_reference_count += 1
+            findings.append(
+                {
+                    "kind": "missing_pr_or_commit_reference",
+                    "severity": "warning",
+                    "issue": number,
+                    "message": (
+                        "Closed issue has no closedByPullRequestsReferences and no "
+                        "obvious PR/commit reference in recent comments."
+                    ),
+                }
+            )
+        if not has_closeout_comment:
+            missing_closeout_comment_count += 1
+            findings.append(
+                {
+                    "kind": "missing_closeout_comment",
+                    "severity": "warning",
+                    "issue": number,
+                    "message": "Closed issue has no obvious closeout/evidence comment.",
+                }
+            )
+
+    return {
+        "kind": "aippocampus_closed_issue_traceability_audit",
+        "schema_version": SCHEMA_VERSION,
+        "ok": not findings,
+        "window": {"start": window_start, "end": window_end},
+        "summary": {
+            "closed_issue_count": len([raw for raw in rows if _issue_number(raw)]),
+            "issues_with_closed_pr_count": issues_with_closed_pr_count,
+            "issues_with_commit_reference_count": issues_with_commit_reference_count,
+            "issues_with_closeout_comment_count": issues_with_closeout_comment_count,
+            "missing_pr_or_commit_reference_count": missing_pr_or_commit_reference_count,
+            "missing_closeout_comment_count": missing_closeout_comment_count,
+            "malformed_comment_issue_count": malformed_comment_issue_count,
+            "finding_count": len(findings),
+        },
+        "findings": findings,
+        "expected_closeout_comment_shape": {
+            "issue_scope": "Name the issue slice and whether it is complete, follow-up-owned, or blocker-recorded.",
+            "pr_or_commit": "Link a PR or stable commit SHA; never leave literal template variables.",
+            "verification": "List focused commands or evidence artifacts that actually cover the scope.",
+            "material_limits": "State cannot-claim boundaries when evidence is public, synthetic, diagnostic, or partial.",
+            "followup_routing": "Link remaining-gap issues instead of implying broad completion.",
+        },
+        "policy": {
+            "additive_only": True,
+            "do_not_reopen_for_comment_shape_alone": True,
+            "do_not_rewrite_existing_comments": True,
+        },
+    }
 
 
 def _issue_intent_levels(
@@ -468,14 +642,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--body-env")
     parser.add_argument("--body")
     parser.add_argument("--issue-metadata-file", type=Path)
+    parser.add_argument(
+        "--closed-issues-file",
+        type=Path,
+        help="Audit an exported GitHub closed-issue JSON payload instead of a PR body.",
+    )
+    parser.add_argument("--closed-window-start")
+    parser.add_argument("--closed-window-end")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--github-annotations", action="store_true")
     args = parser.parse_args(argv)
 
-    report = audit_pr_body(
-        _body_from_args(args),
-        issue_metadata=_issue_metadata_from_args(args),
-    )
+    if args.closed_issues_file:
+        report = audit_closed_issue_traceability(
+            json.loads(args.closed_issues_file.read_text(encoding="utf-8")),
+            window_start=args.closed_window_start,
+            window_end=args.closed_window_end,
+        )
+    else:
+        report = audit_pr_body(
+            _body_from_args(args),
+            issue_metadata=_issue_metadata_from_args(args),
+        )
     if args.json_output or not args.github_annotations:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.github_annotations:

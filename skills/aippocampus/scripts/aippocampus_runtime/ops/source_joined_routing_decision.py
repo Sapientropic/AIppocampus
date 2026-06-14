@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -19,6 +21,21 @@ from aippocampus_runtime.recall import score_fusion
 
 DECISION_KIND = "aippocampus_source_joined_routing_decision"
 DECISION_SCHEMA_VERSION = 1
+FORBIDDEN_PUBLIC_OUTPUT_FRAGMENTS = (
+    "api_key",
+    "api-key",
+    "password",
+    "bearer ",
+    "authorization",
+    "DEEPSEEK_API_KEY",
+    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+    "SECRET_TOKEN",
+    '"source_refs": [',
+    '"source_ref": {',
+    '"raw_source_text"',
+    '"provider_payload"',
+)
+LOCAL_PATH_PATTERN = re.compile(r"[A-Za-z]:\\|/home/|/Users/")
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -41,6 +58,57 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _public_score_metrics(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    """Project only the score-fusion fields this decision needs.
+
+    This report is printed by an operator CLI. Upstream score or routing reports
+    may grow provider-route metadata such as credential environment variable
+    names; keep this boundary as an allowlist so future convenience fields do
+    not accidentally become public report output.
+    """
+
+    return {
+        "semantic_bridge_lift_count": _safe_int(metrics.get("semantic_bridge_lift_count")),
+        "wrong_stance_ranked_above_evidence_count": _safe_int(
+            metrics.get("wrong_stance_ranked_above_evidence_count")
+        ),
+        "source_join_gate_reject_count": _safe_int(
+            metrics.get("source_join_gate_reject_count")
+        ),
+        "vectors_disabled_fallback_count": _safe_int(
+            metrics.get("vectors_disabled_fallback_count")
+        ),
+        "ranking_scores_as_truth_claim_count": _safe_int(
+            metrics.get("ranking_scores_as_truth_claim_count")
+        ),
+    }
+
+
+def assert_public_report_text(text: str) -> None:
+    lower = text.casefold()
+    for fragment in FORBIDDEN_PUBLIC_OUTPUT_FRAGMENTS:
+        if fragment.casefold() in lower:
+            raise ValueError(f"source-joined decision public output contains {fragment!r}")
+    if LOCAL_PATH_PATTERN.search(text):
+        raise ValueError("source-joined decision public output contains a local path")
+
+
+def encode_public_json(report: Mapping[str, Any]) -> str:
+    encoded = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+    assert_public_report_text(encoded)
+    return encoded
+
+
+def write_public_stdout(text: str) -> None:
+    assert_public_report_text(text)
+    # The text is produced by the allowlisted public report projection above and
+    # rejected if sensitive field names, source refs, or local paths appear.
+    # CodeQL cannot infer that local sanitizer, so keep this suppression scoped
+    # to the final stdout write instead of suppressing the report builder.
+    # codeql[py/clear-text-logging-sensitive-data]
+    sys.stdout.write(text)
 
 
 def _average_ms(
@@ -173,7 +241,7 @@ def build_source_joined_routing_decision(
     attention = _as_dict(arms.get("attention_router_navigation_only"))
     funnel = _as_dict(navigation.get("vague_cue_candidate_funnel"))
     funnel_metrics = _as_dict(funnel.get("metrics"))
-    score_metrics = _as_dict(score_report.get("metrics"))
+    score_metrics = _public_score_metrics(_as_dict(score_report.get("metrics")))
     cases = _as_list(navigation.get("cases"))
     attention_claim_without_source_reopen_count = _sum_arm_field(
         cases,
@@ -334,6 +402,15 @@ def build_source_joined_routing_decision(
             "raw_source_refs_serialized": False,
             "absolute_paths_serialized": False,
         },
+        "public_output_boundary": {
+            "allowlist_projection": True,
+            "raw_secret_values_serialized": False,
+            "credential_env_names_serialized": False,
+            "provider_payload_serialized": False,
+            "raw_source_refs_serialized": False,
+            "local_paths_serialized": False,
+            "codeql_alerts_addressed": [335, 336],
+        },
         "issue_readouts": {
             "github_1370": {
                 "bounded_measurement_report_published": True,
@@ -476,9 +553,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     report = build_source_joined_routing_decision()
     if args.markdown_output:
-        print(render_markdown(report), end="")
+        write_public_stdout(render_markdown(report))
     else:
-        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+        write_public_stdout(encode_public_json(report) + "\n")
     return 0 if report.get("ok") else 1
 
 

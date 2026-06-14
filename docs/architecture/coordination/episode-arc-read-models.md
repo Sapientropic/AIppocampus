@@ -132,6 +132,16 @@ This closes the public deterministic route-producer/evidence slice and the
 bounded #663 owner track, not live host behavior lift or default route-producer
 adoption.
 
+`benchmark_episode_arc_sequence_usefulness.py` adds the #1440 sequence
+usefulness workload. It reuses the same public route-producer cases and compares
+`baseline_no_episode_arc` against `episode_arc_route_packet` under the same
+source-ref-hash budget. The dated 2026-06-14 report shows treatment wins for
+repeated wrong-route avoidance, frontier/source reopen, and patch supersession
+with no wrong-project contamination or source-truth overclaim. This upgrades the
+public evidence from route shape to selected sequence usefulness, but it still
+does not prove live host behavior lift, private-history generality, or default
+route-producer adoption.
+
 The sequence-packet reopen helper is intentionally stricter than the arc
 builder. A packet cannot reopen source by itself because it only carries compact
 timeline handles and hashes. The helper needs a clean source-ref catalog from

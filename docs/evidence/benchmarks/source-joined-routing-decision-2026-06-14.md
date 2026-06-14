@@ -82,6 +82,15 @@ useful for regression shape, not billing or product latency claims.
 - Foreground prompt hooks should not make embedding or LLM calls for this path
   by default.
 
+## Public Output Boundary
+
+The #1442 CodeQL follow-up keeps the CLI output on an allowlisted public report
+projection. `source_joined_routing_decision` now rejects public JSON/Markdown
+output if credential environment variable names, secret-like values, raw source
+refs, provider payloads, or local paths are serialized. The report can still
+state boolean boundary flags such as `raw_source_refs_serialized=false`; those
+flags are not raw refs.
+
 ## Closeout
 
 #1370 can close because the report selects a concrete recall consumer, compares

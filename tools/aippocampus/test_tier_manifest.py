@@ -15,6 +15,7 @@ PR_STEMS = frozenset(
         # benchmark mirrors. Keep the explicit override small so benchmark
         # naming does not silently hide PR coverage.
         "test_benchmark_capability_provenance",
+        "test_benchmark_episode_arc_sequence_usefulness",
         "test_benchmark_graph_extraction_boundary",
         "test_parallel_derivation_bundle",
     }
@@ -76,6 +77,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_benchmark_conversational_media_ingest_recall",
         "test_benchmark_e2e50_behavior_live",
         "test_benchmark_e2e50_silent_constraint",
+        "test_benchmark_episode_arc_sequence_usefulness",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
         "test_benchmark_graph_extraction_boundary",
@@ -507,6 +509,7 @@ BENCHMARK_STEMS = frozenset(
         "test_benchmark_conversational_media_ingest_recall",
         "test_benchmark_e2e50_behavior_live",
         "test_benchmark_e2e50_silent_constraint",
+        "test_benchmark_episode_arc_sequence_usefulness",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
         "test_benchmark_fts5_recall",
