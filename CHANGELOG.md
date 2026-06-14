@@ -4,6 +4,15 @@ All notable public-facing changes to AIppocampus are summarized here. The
 project is still alpha; release notes distinguish shipped behavior from
 evidence, diagnostics, and claim boundaries.
 
+## Unreleased
+
+Release work is less of a maze now.
+
+The local preflight says which checks are actually needed, the quick lane has a
+budget guard, public-boundary scanning has a real command, and post-publish
+agent discovery waits for PyPI and MCP Registry to be visible before anyone
+claims the release is ready.
+
 ## 0.3.1 - 2026-06-15
 
 0.3.1 is a small release about foreground manners.
@@ -142,10 +151,11 @@ merged PRs after the v0.1.1 release PR.
 
 - This changelog prepares the 0.2.0 release notes; it does not create the tag,
   publish PyPI, update MCP Registry metadata, or create a GitHub release.
-- Before tagging, run the full release checklist in
-  `docs/guides/setup/release-checklist.md`, including build, release extra install,
-  docs health, agent-discovery release check, Ruff, mypy, quick/pr/benchmark
-  smoke, coverage, full tier, and privacy/secret scans.
+- At the time of the 0.2.0 preparation notes, the release checklist still
+  expected a broad local evidence sweep. Current releases should use
+  `python tools/aippocampus/test_plan.py --release-preflight --json` and
+  `docs/guides/setup/release-checklist.md` instead of replaying the historical
+  quick/pr/benchmark/coverage/full stack by reflex.
 - Current evidence does not claim interactive Codex Desktop marketplace
   click-through, third-party install review, macOS/Linux signed binaries, broad
   provider/client coverage, or production-quality private-history recall.

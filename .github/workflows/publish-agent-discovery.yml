@@ -106,3 +106,12 @@ jobs:
 
       - name: Publish server to MCP Registry
         run: ./mcp-publisher publish server.json
+
+      - name: Check public agent discovery
+        run: >
+          python tools/aippocampus/release/check_agent_discovery_release.py
+          --wait-ready
+          --wait-seconds 300
+          --poll-interval 20
+          --fail-on-not-ready
+          --json
