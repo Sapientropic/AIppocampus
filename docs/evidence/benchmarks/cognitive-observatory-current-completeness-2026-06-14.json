@@ -1,0 +1,208 @@
+{
+  "can_claim": [
+    "current_observatory_completeness_projection_exists",
+    "expected_surfaces_are_explicitly_included_or_missing",
+    "surface_supported_present_and_validated_states_are_separate",
+    "blocked_control_attempts_are_diagnostic_only",
+    "public_projection_omits_private_source_payloads"
+  ],
+  "cannot_claim": [
+    "observatory_is_a_control_plane",
+    "observatory_rows_can_change_activation_order",
+    "observatory_summaries_are_source_truth",
+    "live_user_visible_quality_lift",
+    "private_raw_history_is_public_evidence",
+    "absent_optional_surface_validated_by_fixture"
+  ],
+  "complete_current_surface": true,
+  "control_plane_boundary": {
+    "attempted_control_action_count": 1,
+    "attempted_foreground_hook_mutation_count": 1,
+    "blocked_diagnostics_only": true,
+    "control_attempts_blocked": 1,
+    "foreground_hook_behavior_mutated": false,
+    "live_recall_ranking_mutated": false,
+    "ranking_or_hook_mutation_count": 0
+  },
+  "expected_surfaces": [
+    "route_readiness",
+    "activation_authority",
+    "recall_diagnostic",
+    "query_pattern_routes",
+    "cognitive_load_calibration",
+    "sleep_cycle",
+    "campus_usefulness_panels"
+  ],
+  "issue_readouts": {
+    "github_1443": {
+      "closeout_eligible": true,
+      "control_attempts_blocked": 1,
+      "current_completeness_smoke": "measured_public_fixture",
+      "expected_surfaces_all_accounted": true,
+      "missing_surfaces": [],
+      "ranking_or_hook_mutation_count": 0,
+      "raw_leak_flag_count": 0
+    }
+  },
+  "kind": "aippocampus_cognitive_observatory_current_completeness",
+  "mode": "local_current_fixture",
+  "ok": true,
+  "privacy_boundary": {
+    "credential_like_values_serialized": false,
+    "prompt_text_serialized": false,
+    "provider_details_serialized": false,
+    "source_handle_payload_serialized": false,
+    "source_text_serialized": false,
+    "thread_handles_serialized": false
+  },
+  "raw_leak_flags": [],
+  "reader_contract": {
+    "blocked_or_suppressed_surfaces": [
+      {
+        "privacy_blocked_count": 7,
+        "stale_count": 7,
+        "suppressed_count": 14,
+        "surface": "route_readiness"
+      },
+      {
+        "privacy_blocked_count": 2,
+        "stale_count": 4,
+        "suppressed_count": 0,
+        "surface": "activation_authority"
+      },
+      {
+        "privacy_blocked_count": 4,
+        "stale_count": 4,
+        "suppressed_count": 6,
+        "surface": "query_pattern_routes"
+      },
+      {
+        "privacy_blocked_count": 1,
+        "stale_count": 0,
+        "suppressed_count": 0,
+        "surface": "cognitive_load_calibration"
+      },
+      {
+        "privacy_blocked_count": 3,
+        "stale_count": 6,
+        "suppressed_count": 6,
+        "surface": "campus_usefulness_panels"
+      }
+    ],
+    "control_plane_status": "read_only",
+    "included_surfaces": [
+      "route_readiness",
+      "activation_authority",
+      "recall_diagnostic",
+      "query_pattern_routes",
+      "cognitive_load_calibration",
+      "sleep_cycle",
+      "campus_usefulness_panels"
+    ],
+    "missing_optional_surfaces": [],
+    "recommended_next_actions": [
+      "Use included_surfaces as the read-only diagnostic checklist.",
+      "Reopen source before factual claims from route-like rows.",
+      "Treat missing or suppressed surfaces as opt-in repair inputs."
+    ]
+  },
+  "schema_version": 1,
+  "summary": {
+    "control_attempts_blocked": 1,
+    "expected_surface_count": 7,
+    "included_surface_count": 7,
+    "missing_surface_count": 0,
+    "missing_surfaces": [],
+    "privacy_blocked_bucket_count": 17,
+    "ranking_or_hook_mutation_count": 0,
+    "raw_leak_flag_count": 0,
+    "stale_bucket_count": 21,
+    "suppressed_bucket_count": 26
+  },
+  "surface_matrix": [
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 7,
+      "stale_count": 7,
+      "status": "included",
+      "suppressed_count": 14,
+      "surface": "route_readiness",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    },
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 2,
+      "stale_count": 4,
+      "status": "included",
+      "suppressed_count": 0,
+      "surface": "activation_authority",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    },
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 0,
+      "stale_count": 0,
+      "status": "included",
+      "suppressed_count": 0,
+      "surface": "recall_diagnostic",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    },
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 4,
+      "stale_count": 4,
+      "status": "included",
+      "suppressed_count": 6,
+      "surface": "query_pattern_routes",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    },
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 1,
+      "stale_count": 0,
+      "status": "included",
+      "suppressed_count": 0,
+      "surface": "cognitive_load_calibration",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    },
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 0,
+      "stale_count": 0,
+      "status": "included",
+      "suppressed_count": 0,
+      "surface": "sleep_cycle",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    },
+    {
+      "included_count": 1,
+      "missing_count": 0,
+      "privacy_blocked_count": 3,
+      "stale_count": 6,
+      "status": "included",
+      "suppressed_count": 6,
+      "surface": "campus_usefulness_panels",
+      "surface_present_in_this_readout": true,
+      "surface_supported": true,
+      "surface_validated_by_fixture": true
+    }
+  ]
+}

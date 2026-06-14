@@ -466,6 +466,23 @@ authority. It can render the same sanitized readout as JSON, text, or static
 no-script HTML for local inspection. These rows can justify reopening source,
 but they cannot support factual claims by themselves.
 
+`aippocampus_runtime.ops.observatory_completeness` owns the #1443 current
+completeness projection so `cognitive_observatory.py` does not absorb every
+new drilldown. The projection takes a read-only Observatory report, records each
+expected current surface as included or missing, and exposes stale,
+privacy-blocked, suppressed, and attempted-control buckets. It deliberately
+does not pass through source refs, raw prompt/source text, thread handles,
+paths, provider payloads, or credentials, and its control-plane readout is
+diagnostic-only: a blocked attempt must never become a shortcut for mutating
+live recall ranking, activation order, or foreground hooks.
+
+The completeness projection also carries a top-level reader contract:
+`included_surfaces`, `missing_optional_surfaces`,
+`blocked_or_suppressed_surfaces`, `control_plane_status`, and safe
+`recommended_next_actions`. Surface rows distinguish `surface_supported`,
+`surface_present_in_this_readout`, and `surface_validated_by_fixture` so an
+absent optional surface cannot be mistaken for verified current coverage.
+
 The Observatory also projects `campus_usefulness_panels` from existing
 readiness, activation-authority, query-pattern, and cognitive-load diagnostics.
 The four buckets are `Useful Now`, `Wasted Motion`, `Quiet For A Reason`, and

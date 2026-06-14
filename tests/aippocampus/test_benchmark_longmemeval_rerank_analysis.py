@@ -250,6 +250,115 @@ def _lexical_baseline_report() -> dict[str, object]:
     return report
 
 
+def _source_factual_alias_report() -> dict[str, object]:
+    report = _structural_report()
+    report["evaluation"] = {
+        "mode": "retrieval_only",
+        "line_reranker_mode": "source_semantic_cache",
+        "top_k": 10,
+        "source_semantic_cache_arm": {
+            "arm": "aippocampus_source_worker_surface_cache",
+            "input_boundary": {
+                "withheld_from_builder_and_hot_path": [
+                    "gold_answer",
+                    "expected_lines",
+                    "miss_taxonomy",
+                ]
+            },
+            "output_boundary": {
+                "source_reopen_required_for_claims": True,
+                "raw_source_text_emitted": False,
+                "cache_values_emitted": False,
+            },
+        },
+    }
+    report["metrics"] = {
+        "question_count": 5,
+        "evidence_line_case_count": 5,
+        "reranked_evidence_hit_top10": 2,
+        "reranked_evidence_hit_rate_top10": 0.4,
+        "reranked_evidence_mrr": 0.5,
+        "line_reranker_attempted_count": 5,
+        "line_reranker_available_count": 5,
+        "line_reranker_error_count": 0,
+        "line_reranker_candidate_count_avg": 4.0,
+        "line_reranker_usage": {"provider_call_count": 0, "provider_total_tokens": 0},
+        "line_reranker_latency_ms": {"count": 5, "avg": 2.0, "max": 4.0},
+        "line_reranker_metadata": {
+            "arm": "aippocampus_source_worker_surface_cache",
+            "provider": "local_aippocampus_runtime",
+            "model": "none",
+            "cost_status": "no_provider_calls",
+        },
+        "source_semantic_cache_fused_evidence_hit_top10": 2,
+        "source_semantic_cache_fused_evidence_mrr": 0.5,
+        "source_semantic_cache_fused_regression_top10": 0,
+        "source_semantic_cache_hot_query_provider_call_count": 0,
+        "source_semantic_cache_hot_path_latency_ms": {"count": 5, "avg": 2.0, "max": 4.0},
+        "source_semantic_factual_alias_case_count": 5,
+        "source_semantic_factual_alias_candidate_lift_top10": 1,
+        "source_semantic_factual_alias_fused_lift_top10": 1,
+        "source_semantic_factual_alias_candidate_evidence_coverage": 3,
+        "source_semantic_factual_alias_candidate_evidence_coverage_rate": 0.6,
+    }
+    report["cases"] = [
+        {
+            "case_type": "longmemeval_single-session-user",
+            "has_line_evidence": True,
+            "evidence_rank": 1,
+            "reranked_evidence_rank": 1,
+            "line_reranker_candidate_contains_evidence": True,
+            "source_joined_candidate_contains_evidence": True,
+            "evidence_miss_category": "exact_line_found_top_k",
+            "line_reranker_error_kinds": [],
+        },
+        {
+            "case_type": "longmemeval_single-session-user",
+            "has_line_evidence": True,
+            "evidence_rank": 12,
+            "reranked_evidence_rank": 12,
+            "same_session_wrong_line_top10": True,
+            "evidence_context_rescue_top10": True,
+            "line_reranker_candidate_contains_evidence": True,
+            "source_joined_candidate_contains_evidence": True,
+            "evidence_miss_category": "context_visible_exact_line_miss",
+            "line_reranker_error_kinds": [],
+        },
+        {
+            "case_type": "longmemeval_multi-session",
+            "has_line_evidence": True,
+            "evidence_rank": 30,
+            "reranked_evidence_rank": 30,
+            "session_found_below_top_k": True,
+            "line_reranker_candidate_contains_evidence": False,
+            "source_joined_candidate_contains_evidence": False,
+            "evidence_miss_category": "session_found_below_top_k",
+            "line_reranker_error_kinds": [],
+        },
+        {
+            "case_type": "longmemeval_multi-session",
+            "has_line_evidence": True,
+            "evidence_rank": None,
+            "reranked_evidence_rank": None,
+            "line_reranker_candidate_contains_evidence": True,
+            "source_joined_candidate_contains_evidence": True,
+            "evidence_miss_category": "gold_line_rank_below_50",
+            "line_reranker_error_kinds": [],
+        },
+        {
+            "case_type": "longmemeval_knowledge-update",
+            "has_line_evidence": True,
+            "evidence_rank": 3,
+            "reranked_evidence_rank": 3,
+            "line_reranker_candidate_contains_evidence": True,
+            "source_joined_candidate_contains_evidence": True,
+            "evidence_miss_category": "exact_line_found_top_k",
+            "line_reranker_error_kinds": [],
+        },
+    ]
+    return report
+
+
 class LongMemEvalRerankAnalysisTests(unittest.TestCase):
     def test_analysis_adds_ladder_taxonomy_and_budget_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -485,6 +594,36 @@ class LongMemEvalRerankAnalysisTests(unittest.TestCase):
         negative = improvement["negative_control_naive_large_radius"]
         self.assertFalse(negative["accepted"])
         self.assertIn("candidate_byte_growth_exceeds_ceiling", negative["rejection_reasons"])
+
+    def test_post_factual_alias_closeout_records_1437_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "source-factual-alias.json"
+            report_path.write_text(
+                json.dumps(_source_factual_alias_report()),
+                encoding="utf-8",
+            )
+
+            payload = analysis.analyze_rerank_report(report_path)
+
+        closeout = payload["post_factual_alias_closeout"]
+        self.assertEqual(payload["source_issue"].split("/")[-1], "1437")
+        self.assertEqual(payload["status"], "post_factual_alias_exact_line_rerank_closeout")
+        self.assertEqual(closeout["miss_split"]["fused_miss_count"], 3)
+        self.assertEqual(closeout["miss_split"]["candidate_missing_miss_count"], 1)
+        self.assertEqual(closeout["miss_split"]["reranker_visible_miss_count"], 2)
+        self.assertEqual(
+            closeout["scoped_reranker_decision"]["decision"],
+            "reject_default_reranker_change",
+        )
+        self.assertEqual(
+            payload["full_500_projection"]["decision"],
+            "already_measured_local_hot_path",
+        )
+        self.assertIn(
+            "preserve_source_reopen_required_for_claims",
+            payload["full_500_projection"]["required_before_full_run"],
+        )
+        self.assertTrue(closeout["issue_readouts"]["github_1437"]["closeout_eligible"])
 
 
 if __name__ == "__main__":

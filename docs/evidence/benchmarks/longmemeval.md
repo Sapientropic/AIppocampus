@@ -300,6 +300,7 @@ lexical rows remain the broader LongMemEval-S quality baselines.
 
 | Date | Split | Mode | Questions | Session R@10 | Evidence-line R@10 | Reranked evidence-line R@10 | Context-visible evidence R@10 | Runtime | Status |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2026-06-14T08:20:40Z` | `longmemeval-v1-small` | post-factual-alias rerank closeout analysis | 500 | 95.80% | 85.18% | 88.10% | 94.36% | analysis-only | #1437 closeout; 57 fused misses split into 15 candidate-missing and 42 reranker-visible; default exact-line reranker change rejected; bounded candidate-builder follow-up scoped; full projection marked local no-provider hot path; see [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`](longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md) |
 | `2026-06-13T22:21:45Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1078.28s | #1323/#1327/#1424 closeout slice; candidate evidence coverage 463/479; factual-alias candidate lift 16, fused lift 2; no provider calls; zero fused regressions; see [`longmemeval-source-factual-alias-500-2026-06-14.md`](longmemeval-source-factual-alias-500-2026-06-14.md) |
 | `2026-06-13T19:00:57Z` | `longmemeval-v1-small` | retrieval-only + source factual alias cache v6 | 25 | 100.00% | 92.00% | 100.00% | 100.00% | 64.98s | #1424/#1425/#1426 slice; no provider calls; cache policy v6; factual-alias query-overlap remains sparse at 2/25; see [`longmemeval-source-factual-alias-25-2026-06-14.md`](longmemeval-source-factual-alias-25-2026-06-14.md) |
 | `2026-06-13T13:12:36Z` | `longmemeval-v1-small` | retrieval-only + contract-aware full-source semantic-scope warming | 500 | 95.80% | 85.18% | 88.10% | 94.36% | 1167.30s | #1323 full-source warming; source-index cache hit 500/500; 500 cold-fill provider calls; hot path provider 0; sidecar coverage improved but fused R@10 unchanged |
@@ -610,6 +611,26 @@ Warm query/candidate cache replay for #1305:
   score, LongMemEval-V2 quality, SOTA, broad life-history memory superiority,
   default foreground adoption, perfect exact-line citation quality, or source
   truth from aliases/candidate routes without source reopen.
+
+Post-factual-alias exact-line closeout for #1437:
+
+- Summary:
+  [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`](longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md).
+- Sanitized analysis JSON:
+  [`longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json`](longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json).
+- Source report:
+  [`longmemeval-source-factual-alias-500-2026-06-14.json`](longmemeval-source-factual-alias-500-2026-06-14.json).
+- Decision: `post_factual_alias_exact_line_rerank_v1` is rejected as a default
+  reranker change from this evidence. The 57 remaining fused misses are
+  dominated by 42 candidate-visible exact-line ranking failures, while the
+  factual-alias signal produced 16 candidate lifts but only 2 fused top-10
+  lifts. A bounded candidate-builder follow-up is acceptable as a separate
+  coverage slice, not as an exact-line ranking or source-truth claim.
+- Full projection: `already_measured_local_hot_path`; this closeout used the
+  local source-semantic-cache path with no provider calls or provider tokens.
+- Boundary: do not claim default reranker adoption, perfect exact-line citation
+  quality, answer-generation quality, official LongMemEval QA score, SOTA, or
+  source truth from aliases/candidate routes without source reopen.
 
 100Q semantic query/candidate cache progress, superseded by the 500Q rows above:
 

@@ -309,6 +309,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cold_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cognitive_observatory.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/coordination_topology.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/observatory_completeness.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/observatory_control_authority.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/packet_topology_diagnostic.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/telepathy_coordination_packet.py",

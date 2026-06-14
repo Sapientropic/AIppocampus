@@ -1,0 +1,732 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_longmemeval_rerank_analysis",
+  "generated_at": "2026-06-14T08:20:40Z",
+  "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1437",
+  "related_issues": [
+    "https://github.com/Sapientropic/AIppocampus/issues/1092",
+    "https://github.com/Sapientropic/AIppocampus/issues/1193",
+    "https://github.com/Sapientropic/AIppocampus/issues/1327",
+    "https://github.com/Sapientropic/AIppocampus/issues/1437"
+  ],
+  "source_report": {
+    "kind": "aippocampus_longmemeval_benchmark",
+    "status": "retrieval_sufficient",
+    "generated_at": "2026-06-13T22:21:45Z",
+    "input_report_sha1": "5402d0505b44a967",
+    "local_path_emitted": false
+  },
+  "semantic_pilot_report": null,
+  "status": "post_factual_alias_exact_line_rerank_closeout",
+  "ok": true,
+  "benchmark": {
+    "name": "LongMemEval",
+    "split": "longmemeval-v1-small",
+    "dataset_version": "longmemeval-cleaned 2025-09"
+  },
+  "reranker_metadata": {
+    "line_reranker_mode": "source_semantic_cache",
+    "arm": "aippocampus_source_worker_surface_cache",
+    "prompt_version": null,
+    "provider": "local_aippocampus_runtime",
+    "model": "none",
+    "cost_status": "no_provider_calls",
+    "input_boundary": {
+      "offline_build_visible": [
+        "source_line_number",
+        "source_role",
+        "source_text",
+        "adjacent_source_text_in_same_session",
+        "source_session_id",
+        "source_backed_semantic_scope_label_terms",
+        "deterministic_factual_alias_terms",
+        "answer_bearing_source_terms"
+      ],
+      "hot_query_visible": [
+        "query_terms",
+        "aippocampus_working_memory_trigger_terms",
+        "source_side_factual_alias_terms",
+        "candidate_line_number",
+        "candidate_route_rank_metadata",
+        "candidate_context_distance"
+      ],
+      "withheld_from_builder_and_hot_path": [
+        "gold_answer",
+        "expected_lines",
+        "expected_sessions",
+        "has_answer_labels",
+        "judge_labels",
+        "miss_taxonomy",
+        "raw_report_cases"
+      ]
+    },
+    "output_boundary": {
+      "source_side_search_allowed": true,
+      "ranked_lines_filtered_to_source_side_candidate_set": true,
+      "question_answering_allowed": false,
+      "local_factual_aliases_are_navigation_only": true,
+      "working_memory_rows_are_navigation_only": true,
+      "source_reopen_required_for_claims": true,
+      "cache_values_emitted": false,
+      "raw_source_text_emitted": false
+    }
+  },
+  "metrics": {
+    "question_count": 500,
+    "evidence_line_case_count": 479,
+    "baseline_evidence_recall_by_k": {
+      "r_at_1": {
+        "numerator": 240,
+        "denominator": 479,
+        "rate": 0.501
+      },
+      "r_at_3": {
+        "numerator": 349,
+        "denominator": 479,
+        "rate": 0.7286
+      },
+      "r_at_5": {
+        "numerator": 380,
+        "denominator": 479,
+        "rate": 0.7933
+      },
+      "r_at_10": {
+        "numerator": 408,
+        "denominator": 479,
+        "rate": 0.8518
+      },
+      "r_at_20": {
+        "numerator": 429,
+        "denominator": 479,
+        "rate": 0.8956
+      },
+      "r_at_50": {
+        "numerator": 450,
+        "denominator": 479,
+        "rate": 0.9395
+      }
+    },
+    "reranked_evidence_recall_by_k": {
+      "r_at_1": {
+        "numerator": 265,
+        "denominator": 479,
+        "rate": 0.5532
+      },
+      "r_at_3": {
+        "numerator": 369,
+        "denominator": 479,
+        "rate": 0.7704
+      },
+      "r_at_5": {
+        "numerator": 396,
+        "denominator": 479,
+        "rate": 0.8267
+      },
+      "r_at_10": {
+        "numerator": 422,
+        "denominator": 479,
+        "rate": 0.881
+      },
+      "r_at_20": {
+        "numerator": 436,
+        "denominator": 479,
+        "rate": 0.9102
+      },
+      "r_at_50": {
+        "numerator": 453,
+        "denominator": 479,
+        "rate": 0.9457
+      }
+    },
+    "semantic_only_evidence_recall_by_k": {
+      "r_at_1": {
+        "numerator": 170,
+        "denominator": 479,
+        "rate": 0.3549
+      },
+      "r_at_3": {
+        "numerator": 298,
+        "denominator": 479,
+        "rate": 0.6221
+      },
+      "r_at_5": {
+        "numerator": 339,
+        "denominator": 479,
+        "rate": 0.7077
+      },
+      "r_at_10": {
+        "numerator": 394,
+        "denominator": 479,
+        "rate": 0.8225
+      },
+      "r_at_20": {
+        "numerator": 394,
+        "denominator": 479,
+        "rate": 0.8225
+      },
+      "r_at_50": {
+        "numerator": 394,
+        "denominator": 479,
+        "rate": 0.8225
+      }
+    },
+    "baseline_evidence_mrr": 0.6309,
+    "reranked_evidence_mrr": 0.6744,
+    "semantic_only_evidence_mrr": 0.5071,
+    "semantic_bridge_lift_top10": 14,
+    "rerank_regression_count_top10": 0,
+    "context_visible_rescue_count": 44,
+    "context_visible_rescue_conversion_count": 12,
+    "context_visible_rescue_conversion_rate": 0.2727,
+    "same_session_wrong_line_count": 53,
+    "same_session_wrong_line_reduction_count": 14,
+    "same_session_wrong_line_reduction_rate": 0.2642,
+    "average_candidate_count": 96.0,
+    "rank_bucket_movement_counts": {
+      "not_retrieved->not_retrieved": 15,
+      "not_retrieved->rank_6_10": 1,
+      "rank_1->rank_1": 240,
+      "rank_11_20->rank_11_20": 14,
+      "rank_11_20->rank_2_3": 1,
+      "rank_11_20->rank_4_5": 4,
+      "rank_11_20->rank_6_10": 2,
+      "rank_21_50->rank_21_50": 17,
+      "rank_21_50->rank_4_5": 2,
+      "rank_21_50->rank_6_10": 2,
+      "rank_2_3->rank_1": 23,
+      "rank_2_3->rank_2_3": 86,
+      "rank_4_5->rank_1": 1,
+      "rank_4_5->rank_2_3": 10,
+      "rank_4_5->rank_4_5": 20,
+      "rank_6_10->rank_1": 1,
+      "rank_6_10->rank_2_3": 7,
+      "rank_6_10->rank_6_10": 20,
+      "rank_below_50->rank_4_5": 1,
+      "rank_below_50->rank_6_10": 1,
+      "rank_below_50->rank_below_50": 11
+    },
+    "line_reranker_attempted_count": 479,
+    "line_reranker_available_count": 479,
+    "line_reranker_error_count": 0,
+    "line_reranker_error_kind_counts": {},
+    "line_reranker_usage": {
+      "local_scored_candidates": 45984,
+      "source_semantic_profile_lookups": 45984,
+      "provider_call_count": 0,
+      "provider_total_tokens": 0,
+      "hot_query_provider_call_count": 0,
+      "semantic_scope_profile_count": 652,
+      "semantic_scope_query_label_overlap_count": 0,
+      "semantic_scope_query_label_overlap_total": 0,
+      "semantic_scope_term_profile_count": 652,
+      "semantic_scope_query_term_overlap_count": 303,
+      "semantic_scope_query_term_overlap_total": 577,
+      "factual_alias_profile_count": 21557,
+      "factual_alias_query_overlap_count": 1239,
+      "factual_alias_query_overlap_total": 1265,
+      "answer_bearing_profile_count": 45984,
+      "answer_bearing_query_overlap_count": 38428,
+      "answer_bearing_query_overlap_total": 122356
+    },
+    "line_reranker_latency_ms": {
+      "count": 479,
+      "avg": 1.91,
+      "max": 3.38
+    },
+    "line_reranker_cache": {
+      "available_count": 479,
+      "kind_counts": {
+        "aippocampus-source-worker-surface-cache-v6": 479
+      },
+      "hit_tokens": 0,
+      "miss_tokens": 0,
+      "hit_rate": 0.0,
+      "profile_hit_count": 45984,
+      "profile_miss_count": 0,
+      "profile_hit_rate": 1.0
+    },
+    "per_case_type": {
+      "longmemeval_knowledge-update": {
+        "case_count": 72,
+        "baseline_evidence_hit_top10": 68,
+        "baseline_evidence_hit_rate_top10": 0.9444,
+        "reranked_evidence_hit_top10": 69,
+        "reranked_evidence_hit_rate_top10": 0.9583,
+        "reranked_evidence_mrr": 0.7577,
+        "semantic_bridge_lift_top10": 1,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 0
+      },
+      "longmemeval_multi-session": {
+        "case_count": 125,
+        "baseline_evidence_hit_top10": 103,
+        "baseline_evidence_hit_rate_top10": 0.824,
+        "reranked_evidence_hit_top10": 106,
+        "reranked_evidence_hit_rate_top10": 0.848,
+        "reranked_evidence_mrr": 0.5828,
+        "semantic_bridge_lift_top10": 3,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 0
+      },
+      "longmemeval_single-session-assistant": {
+        "case_count": 56,
+        "baseline_evidence_hit_top10": 51,
+        "baseline_evidence_hit_rate_top10": 0.9107,
+        "reranked_evidence_hit_top10": 52,
+        "reranked_evidence_hit_rate_top10": 0.9286,
+        "reranked_evidence_mrr": 0.8342,
+        "semantic_bridge_lift_top10": 1,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 0
+      },
+      "longmemeval_single-session-preference": {
+        "case_count": 30,
+        "baseline_evidence_hit_top10": 15,
+        "baseline_evidence_hit_rate_top10": 0.5,
+        "reranked_evidence_hit_top10": 17,
+        "reranked_evidence_hit_rate_top10": 0.5667,
+        "reranked_evidence_mrr": 0.2304,
+        "semantic_bridge_lift_top10": 2,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 0
+      },
+      "longmemeval_single-session-user": {
+        "case_count": 64,
+        "baseline_evidence_hit_top10": 60,
+        "baseline_evidence_hit_rate_top10": 0.9375,
+        "reranked_evidence_hit_top10": 63,
+        "reranked_evidence_hit_rate_top10": 0.9844,
+        "reranked_evidence_mrr": 0.819,
+        "semantic_bridge_lift_top10": 3,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 0
+      },
+      "longmemeval_temporal-reasoning": {
+        "case_count": 132,
+        "baseline_evidence_hit_top10": 111,
+        "baseline_evidence_hit_rate_top10": 0.8409,
+        "reranked_evidence_hit_top10": 115,
+        "reranked_evidence_hit_rate_top10": 0.8712,
+        "reranked_evidence_mrr": 0.6788,
+        "semantic_bridge_lift_top10": 4,
+        "rerank_regression_count_top10": 0,
+        "line_reranker_error_count": 0
+      }
+    },
+    "per_miss_taxonomy": {
+      "context_visible_exact_line_miss": {
+        "case_count": 44,
+        "baseline_evidence_hit_top_k": 0,
+        "baseline_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_hit_top_k": 12,
+        "reranked_evidence_hit_rate_top_k": 0.2727,
+        "reranked_evidence_mrr": 0.0793,
+        "semantic_bridge_lift_top_k": 12,
+        "context_visible_rescue_count": 44,
+        "context_visible_rescue_conversion_count": 12,
+        "context_visible_rescue_conversion_rate": 0.2727,
+        "same_session_wrong_line_count": 44,
+        "candidate_contains_evidence_count": 44,
+        "candidate_contains_evidence_rate": 1.0,
+        "line_reranker_error_count": 0
+      },
+      "exact_line_found_top_k": {
+        "case_count": 323,
+        "baseline_evidence_hit_top_k": 323,
+        "baseline_evidence_hit_rate_top_k": 1.0,
+        "reranked_evidence_hit_top_k": 323,
+        "reranked_evidence_hit_rate_top_k": 1.0,
+        "reranked_evidence_mrr": 0.8082,
+        "semantic_bridge_lift_top_k": 0,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 0,
+        "candidate_contains_evidence_count": 322,
+        "candidate_contains_evidence_rate": 0.9969,
+        "line_reranker_error_count": 0
+      },
+      "gold_line_low_rank_21_50": {
+        "case_count": 5,
+        "baseline_evidence_hit_top_k": 0,
+        "baseline_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_hit_top_k": 0,
+        "reranked_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_mrr": 0.0318,
+        "semantic_bridge_lift_top_k": 0,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 0,
+        "candidate_contains_evidence_count": 2,
+        "candidate_contains_evidence_rate": 0.4,
+        "line_reranker_error_count": 0
+      },
+      "gold_line_near_miss_rank_2_20": {
+        "case_count": 1,
+        "baseline_evidence_hit_top_k": 0,
+        "baseline_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_hit_top_k": 0,
+        "reranked_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_mrr": 0.05,
+        "semantic_bridge_lift_top_k": 0,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 0,
+        "candidate_contains_evidence_count": 0,
+        "candidate_contains_evidence_rate": 0.0,
+        "line_reranker_error_count": 0
+      },
+      "gold_line_rank_below_50": {
+        "case_count": 3,
+        "baseline_evidence_hit_top_k": 0,
+        "baseline_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_hit_top_k": 0,
+        "reranked_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_mrr": 0.0096,
+        "semantic_bridge_lift_top_k": 0,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 0,
+        "candidate_contains_evidence_count": 2,
+        "candidate_contains_evidence_rate": 0.6667,
+        "line_reranker_error_count": 0
+      },
+      "multi_evidence_partial_hit": {
+        "case_count": 85,
+        "baseline_evidence_hit_top_k": 85,
+        "baseline_evidence_hit_rate_top_k": 1.0,
+        "reranked_evidence_hit_top_k": 85,
+        "reranked_evidence_hit_rate_top_k": 1.0,
+        "reranked_evidence_mrr": 0.6803,
+        "semantic_bridge_lift_top_k": 0,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 0,
+        "candidate_contains_evidence_count": 85,
+        "candidate_contains_evidence_rate": 1.0,
+        "line_reranker_error_count": 0
+      },
+      "same_session_wrong_line_top_k": {
+        "case_count": 9,
+        "baseline_evidence_hit_top_k": 0,
+        "baseline_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_hit_top_k": 2,
+        "reranked_evidence_hit_rate_top_k": 0.2222,
+        "reranked_evidence_mrr": 0.0509,
+        "semantic_bridge_lift_top_k": 2,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 9,
+        "candidate_contains_evidence_count": 8,
+        "candidate_contains_evidence_rate": 0.8889,
+        "line_reranker_error_count": 0
+      },
+      "session_found_below_top_k": {
+        "case_count": 9,
+        "baseline_evidence_hit_top_k": 0,
+        "baseline_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_hit_top_k": 0,
+        "reranked_evidence_hit_rate_top_k": 0.0,
+        "reranked_evidence_mrr": 0.0,
+        "semantic_bridge_lift_top_k": 0,
+        "context_visible_rescue_count": 0,
+        "context_visible_rescue_conversion_count": 0,
+        "context_visible_rescue_conversion_rate": 0.0,
+        "same_session_wrong_line_count": 0,
+        "candidate_contains_evidence_count": 0,
+        "candidate_contains_evidence_rate": 0.0,
+        "line_reranker_error_count": 0
+      }
+    },
+    "reranked_reported_hit_top_k": 422
+  },
+  "source_window_coverage_diagnostic": {
+    "status": "measured_from_sanitized_case_rows",
+    "top_k": 10,
+    "evidence_line_case_count": 479,
+    "fused_miss_count": 57,
+    "candidate_missing_miss_count": 15,
+    "reranker_visible_miss_count": 42,
+    "miss_family_counts": {
+      "candidate_visible_but_reranker_missed": 42,
+      "gold_line_low_rank_21_50": 16,
+      "gold_line_near_miss_rank_2_20": 1,
+      "gold_line_not_retrieved": 4,
+      "gold_line_rank_below_50": 14,
+      "same_session_wrong_line_top_k": 40,
+      "session_found_below_top_k": 9
+    },
+    "line_reranker_candidate_evidence_coverage": {
+      "numerator": 463,
+      "denominator": 479,
+      "rate": 0.9666
+    },
+    "source_joined_candidate_evidence_coverage": {
+      "numerator": 463,
+      "denominator": 479,
+      "rate": 0.9666
+    },
+    "exact_evidence_r_at_10_observed": {
+      "numerator": 422,
+      "denominator": 479,
+      "rate": 0.881
+    },
+    "context_visible_r_at_10_observed": {
+      "numerator": 452,
+      "denominator": 479,
+      "rate": 0.9436
+    },
+    "boundary": {
+      "candidate_rows_are_routes_not_claims": true,
+      "no_raw_question_answer_or_source_text": true,
+      "coverage_does_not_imply_reader_or_qa_quality": true
+    }
+  },
+  "bounded_coverage_improvement": {
+    "strategy": "bounded_candidate_coverage_v1",
+    "status": "prototype_projection_from_sanitized_case_rows",
+    "baseline_candidate_coverage": {
+      "numerator": 463,
+      "denominator": 479,
+      "rate": 0.9666
+    },
+    "improved_candidate_coverage": {
+      "numerator": 469,
+      "denominator": 479,
+      "rate": 0.9791
+    },
+    "candidate_coverage_lift": 6,
+    "recoverable_miss_family_counts": {
+      "gold_line_low_rank_21_50": 7,
+      "gold_line_near_miss_rank_2_20": 1,
+      "gold_line_not_retrieved": 1,
+      "same_session_wrong_line_top_k": 2,
+      "session_found_below_top_k": 1
+    },
+    "average_candidate_count_before": 96.0,
+    "average_candidate_count_after_projection": 96.01,
+    "candidate_byte_growth": 768,
+    "candidate_byte_growth_ratio": 0.0001,
+    "hurt_case_count": 0,
+    "accepted_for_next_candidate_builder_slice": true,
+    "exact_evidence_r_at_10_observed": {
+      "numerator": 422,
+      "denominator": 479,
+      "rate": 0.881
+    },
+    "candidate_coverage_projection_not_rerank_quality": true,
+    "negative_control_naive_large_radius": {
+      "strategy": "naive_large_radius_expansion",
+      "candidate_coverage_lift": 16,
+      "candidate_byte_growth_ratio": 0.2083,
+      "accepted": false,
+      "rejection_reasons": [
+        "reader_usability_not_proven_by_large_radius"
+      ]
+    },
+    "boundary": {
+      "does_not_change_default_context_radius": true,
+      "does_not_use_gold_labels_at_query_time": true,
+      "source_reopen_required_before_claims": true
+    }
+  },
+  "post_factual_alias_closeout": {
+    "kind": "aippocampus_longmemeval_post_factual_alias_closeout",
+    "status": "measured_from_same_500q_sanitized_report",
+    "issue": "https://github.com/Sapientropic/AIppocampus/issues/1437",
+    "top_k": 10,
+    "same_cohort_evidence": {
+      "question_count": 500,
+      "evidence_line_case_count": 479,
+      "reranked_evidence_r_at_10": {
+        "numerator": 422,
+        "denominator": 479,
+        "rate": 0.881
+      },
+      "reranked_evidence_mrr": 0.6744,
+      "top_10_regression_count": 0,
+      "candidate_coverage": {
+        "numerator": 463,
+        "denominator": 479,
+        "rate": 0.9666
+      },
+      "hot_query_latency_ms": {
+        "avg": 1092.5576,
+        "max": 1926.4032
+      },
+      "hot_query_provider_call_count": 0,
+      "source_reopen_required_before_claims": true
+    },
+    "miss_split": {
+      "fused_miss_count": 57,
+      "candidate_missing_miss_count": 15,
+      "reranker_visible_miss_count": 42,
+      "miss_family_counts": {
+        "candidate_visible_but_reranker_missed": 42,
+        "gold_line_low_rank_21_50": 16,
+        "gold_line_near_miss_rank_2_20": 1,
+        "gold_line_not_retrieved": 4,
+        "gold_line_rank_below_50": 14,
+        "same_session_wrong_line_top_k": 40,
+        "session_found_below_top_k": 9
+      }
+    },
+    "scoped_reranker_decision": {
+      "proposal": "post_factual_alias_exact_line_rerank_v1",
+      "decision": "reject_default_reranker_change",
+      "reasons": [
+        "remaining misses are dominated by candidate-visible exact-line ranking failures",
+        "factual-alias candidate evidence did not translate into enough fused top-10 lift",
+        "candidate routes and aliases are navigation-only and cannot become source truth",
+        "default ranking changes need a separate holdout gate before adoption"
+      ],
+      "reranker_visible_miss_count": 42,
+      "factual_alias_candidate_lift_top_k": 16,
+      "factual_alias_fused_lift_top_k": 2
+    },
+    "candidate_builder_decision": {
+      "proposal": "bounded_candidate_coverage_v1",
+      "decision": "accept_next_candidate_builder_slice_only",
+      "candidate_coverage_lift": 6,
+      "candidate_byte_growth_ratio": 0.0001,
+      "not_exact_line_rerank_quality": true
+    },
+    "issue_readouts": {
+      "github_1437": {
+        "same_500q_cohort_analyzed": true,
+        "miss_split_recorded": true,
+        "scoped_reranker_change_rejected_for_default": true,
+        "candidate_builder_followup_scoped": true,
+        "provider_call_count": 0,
+        "top_10_regression_count": 0,
+        "closeout_eligible": true
+      }
+    },
+    "privacy_boundary": {
+      "raw_question_answer_or_source_text_emitted": false,
+      "provider_payloads_emitted": false,
+      "cache_values_emitted": false,
+      "local_paths_emitted": false
+    },
+    "cannot_claim": [
+      "perfect_exact_line_citation_quality",
+      "answer_generation_quality",
+      "official_longmemeval_qa_score",
+      "default_reranker_adoption",
+      "source_truth_from_aliases_or_candidate_routes"
+    ]
+  },
+  "baseline_comparison": null,
+  "semantic_cache_path_evaluation": {
+    "cold_online_semantic_latency": {
+      "status": "not_run_in_this_report",
+      "avg_ms": null,
+      "max_ms": null,
+      "available_call_count": null,
+      "total_tokens": null,
+      "boundary": "external provider call at query time; explicit opt-in only"
+    },
+    "warm_query_cache_latency": {
+      "status": "contract_defined_not_measured",
+      "cache_key_fields": [
+        "query_hash",
+        "candidate_window_or_span_hashes",
+        "reranker_prompt_version",
+        "model_provider_id",
+        "source_or_dataset_fingerprint",
+        "policy_version"
+      ],
+      "boundary": "valid only as warm query/candidate cache; do not report as cold online latency"
+    },
+    "source_side_cache_hot_path_latency": {
+      "status": "not_measured_for_semantic_cache",
+      "deterministic_report_elapsed_ms": 1078277.1,
+      "boundary": "source-side semantic warming must be built from source spans, not benchmark questions"
+    },
+    "source_side_cache_build_cost": {
+      "status": "not_run",
+      "token_count": null,
+      "wall_clock_seconds": null,
+      "boundary": "not claimable until a source-only warming job is measured"
+    },
+    "semantic_cache_hit_rate": {
+      "status": "not_measured",
+      "hit_rate": null,
+      "hit_tokens": null,
+      "miss_tokens": null
+    },
+    "semantic_cache_invalidation_count": {
+      "status": "not_measured",
+      "count": null,
+      "required_invalidation_inputs": [
+        "source_fingerprint",
+        "candidate_hashes",
+        "prompt_version",
+        "model_provider_id",
+        "policy_version"
+      ]
+    },
+    "foreground_default_decision": "do_not_make_cold_online_semantic_rerank_default_hook_path"
+  },
+  "full_500_projection": {
+    "basis_question_count": 500,
+    "target_question_count": 500,
+    "projected_total_tokens": 0,
+    "projected_prompt_cache_hit_tokens": 0,
+    "projected_prompt_cache_miss_tokens": 0,
+    "projected_single_worker_seconds": 0.95,
+    "projected_single_worker_minutes": 0.02,
+    "average_available_call_latency_ms": 1.91,
+    "cache_hit_rate": 0.0,
+    "cost_status": "no_provider_calls",
+    "decision": "already_measured_local_hot_path",
+    "decision_reason": "This reranker report is a local AIppocampus runtime path with no provider calls or provider tokens; the measured cohort is already the relevant local hot-path evidence. Further work should target named candidate-builder or source-reopen boundaries, not an external-model full-run budget gate.",
+    "required_before_full_run": [
+      "preserve_source_reopen_required_for_claims",
+      "keep_candidate_routes_navigation_only",
+      "name_a_candidate_builder_or_source_boundary_question"
+    ]
+  },
+  "commands": {
+    "lexical_500": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 100 --top-k 10 --line-reranker lexical --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\\reports\\longmemeval-v1-small-lexical-500.partial.json --output benchmark_corpus\\reports\\longmemeval-v1-small-lexical-500.json",
+    "structural_500": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --questions 500 --min-questions 100 --top-k 10 --line-reranker structural --line-reranker-workers 8 --progress-every 50 --partial-output benchmark_corpus\\reports\\longmemeval-v1-small-structural-500.partial.json --output benchmark_corpus\\reports\\longmemeval-v1-small-structural-500.json",
+    "pilot": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 25 --min-questions 25 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 5 --max-provider-calls 25 --max-provider-total-tokens 300000 --provider-cost-unknown --provider-budget-checkpoint benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.budget.json --partial-output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.partial.json --output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.json",
+    "full_500_explicit_opt_in": "python benchmarks\\aippocampus\\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 500 --min-questions 100 --top-k 10 --line-reranker semantic --line-reranker-workers 1 --line-reranker-timeout 30 --progress-every 25 --partial-output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-500.partial.json --output benchmark_corpus\\reports\\longmemeval-v1-small-semantic-500.json",
+    "analysis": "python benchmarks\\aippocampus\\benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus\\reports\\longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus\\reports\\longmemeval-v1-small-lexical-500.json --semantic-pilot-report benchmark_corpus\\reports\\longmemeval-v1-small-semantic-pilot-25-cachehash.json --json"
+  },
+  "privacy_boundary": {
+    "raw_text_emitted": false,
+    "snippets_emitted": false,
+    "case_ids_emitted": false,
+    "local_paths_emitted": false,
+    "absolute_paths_emitted": false,
+    "dataset_url_emitted": false,
+    "input_report_path_emitted": false,
+    "external_model_raw_response_emitted": false,
+    "output_shape": "sanitized_rerank_aggregate_analysis"
+  },
+  "claim_boundary": "This is the #1437 post-factual-alias closeout over the same sanitized LongMemEval-S first-500 report. It records the miss split, rejects a default exact-line reranker change from this evidence, and keeps any candidate-builder follow-up separate from source-truth or answer-quality claims.",
+  "cannot_claim": [
+    "answer_generation_quality",
+    "broad_reranker_safety",
+    "candidate_coverage_projection_as_exact_rerank_lift",
+    "cross_dataset_model_comparison_without_matching_protocol",
+    "decision_gate_quality",
+    "default_exact_line_citation_quality",
+    "full_500_llm_reranker_quality",
+    "judge_model_score",
+    "longmemeval_qa_score",
+    "longmemeval_v2_score",
+    "naive_large_radius_as_product_improvement",
+    "provider_independent_quality",
+    "sota_or_external_baseline_superiority",
+    "warm_cache_replay_as_500q_semantic_quality",
+    "warm_cache_replay_as_live_hook_latency"
+  ],
+  "elapsed_ms": 18.1
+}

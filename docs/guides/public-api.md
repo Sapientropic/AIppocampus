@@ -322,6 +322,15 @@ For these commands:
   factual claims, mutate owner surfaces, or control foreground hooks. The
   `control_authority_audit` block counts attempted activation/mutation requests
   as blocked diagnostics; it is not an API for applying those actions.
+  `tools/aippocampus/smoke/smoke_cognitive_observatory_current_completeness.py`
+  is the public-safe completeness smoke for the current read-only surface: it
+  reports included and missing Observatory surfaces, stale/privacy/suppressed
+  buckets, and blocked control attempts without serializing raw prompts, source
+  payloads, source refs, thread handles, paths, provider payloads, or secrets.
+  Its top-level `reader_contract` gives a compact operator view of included
+  surfaces, missing optional surfaces, blocked/suppressed surfaces,
+  `read_only` control-plane status, and safe next actions; each surface row
+  separates supported, present-in-this-readout, and fixture-validated states.
   The readout also includes `campus_usefulness_panels` with `Useful Now`,
   `Wasted Motion`, `Quiet For A Reason`, and `Needs Ripening` buckets. These
   panels reuse existing diagnostics to make usefulness failures visible; they

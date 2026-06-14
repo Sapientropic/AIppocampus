@@ -1,0 +1,680 @@
+{
+  "arm_metrics": {
+    "default_hook_foreground_candidate": {
+      "activation_count": 8,
+      "activation_rate": 0.727273,
+      "cost_unit_proxy_avg": 0.727273,
+      "helpful_next_action_count": 3,
+      "helpful_next_action_rate": 0.272727,
+      "irrelevant_memory_drag_count": 3,
+      "irrelevant_memory_drag_rate": 0.272727,
+      "latency_ms_proxy_avg": 15.363636,
+      "manual_search_reduction_vs_baseline": 5,
+      "manual_search_steps": 16,
+      "quiet_for_reason_count": 2,
+      "source_reopen_follow_through_count": 3,
+      "source_reopen_follow_through_rate": 0.272727,
+      "source_truth_overclaim_count": 0,
+      "wrong_route_drag_count": 4,
+      "wrong_route_drag_rate": 0.363636
+    },
+    "default_no_packet_baseline": {
+      "activation_count": 0,
+      "activation_rate": 0.0,
+      "cost_unit_proxy_avg": 0.0,
+      "helpful_next_action_count": 0,
+      "helpful_next_action_rate": 0.0,
+      "irrelevant_memory_drag_count": 0,
+      "irrelevant_memory_drag_rate": 0.0,
+      "latency_ms_proxy_avg": 0.0,
+      "manual_search_reduction_vs_baseline": 0,
+      "manual_search_steps": 21,
+      "quiet_for_reason_count": 2,
+      "source_reopen_follow_through_count": 0,
+      "source_reopen_follow_through_rate": 0.0,
+      "source_truth_overclaim_count": 0,
+      "wrong_route_drag_count": 0,
+      "wrong_route_drag_rate": 0.0
+    },
+    "explicit_recall_same_budget": {
+      "activation_count": 10,
+      "activation_rate": 0.909091,
+      "cost_unit_proxy_avg": 0.909091,
+      "helpful_next_action_count": 7,
+      "helpful_next_action_rate": 0.636364,
+      "irrelevant_memory_drag_count": 0,
+      "irrelevant_memory_drag_rate": 0.0,
+      "latency_ms_proxy_avg": 40.0,
+      "manual_search_reduction_vs_baseline": 11,
+      "manual_search_steps": 10,
+      "quiet_for_reason_count": 4,
+      "source_reopen_follow_through_count": 7,
+      "source_reopen_follow_through_rate": 0.636364,
+      "source_truth_overclaim_count": 0,
+      "wrong_route_drag_count": 0,
+      "wrong_route_drag_rate": 0.0
+    }
+  },
+  "can_claim": [
+    "default_hook_foreground_candidate_was_tested_against_explicit_recall",
+    "representative_public_synthetic_cohort_reports_help_and_drag",
+    "explicit_recall_same_budget_outperforms_no_packet_baseline",
+    "default_hook_should_remain_diagnostic_only_for_this_slice",
+    "explicit_route_hook_skip_gap_is_measured"
+  ],
+  "cannot_claim": [
+    "live_default_hook_quality",
+    "default_foreground_adoption_ready",
+    "broad_private_history_question_quality",
+    "theme_rows_as_source_truth",
+    "cognitive_load_default_foreground_readiness",
+    "tiny_agent_recall_affordance_ready_for_default"
+  ],
+  "cases": [
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 7,
+          "manual_search_steps": 3,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 3,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 48,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "self_referential_continuity_hook_skip",
+      "default_hook_observation": {
+        "card_count": 0,
+        "decision": "skip",
+        "memory_surface": "no_memory",
+        "source_backed_count": 0
+      },
+      "explicit_recall_observation": {
+        "output_mode": "reopenable_route",
+        "red_line_count": 0,
+        "source_reopen_required_for_strong_claims": true
+      },
+      "families": [
+        "self_referential_continuity",
+        "explicit_route_hook_skip_gap"
+      ],
+      "surface": "prompt_hook",
+      "tiny_agent_recall_affordance_candidate": true
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 4,
+          "manual_search_steps": 0,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 35,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "pure_deictic_ambiguous_quiet",
+      "families": [
+        "deictic_prompt"
+      ],
+      "surface": "default_session"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 18,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 3,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 45,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "multilingual_light_cue_route",
+      "families": [
+        "multilingual_prompt"
+      ],
+      "surface": "attention_router"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 4,
+          "manual_search_steps": 0,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 0,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 0,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "already_good_noop_stays_quiet",
+      "families": [
+        "already_good_noop"
+      ],
+      "surface": "anti_nag"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 19,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 1
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 48,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "stale_route_drag_control",
+      "families": [
+        "stale_or_conflict_control"
+      ],
+      "surface": "attention_router"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 22,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 1
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 52,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "conflict_route_drag_control",
+      "families": [
+        "stale_or_conflict_control"
+      ],
+      "surface": "attention_router"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 20,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 3,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 44,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "question_resurfacing_route",
+      "families": [
+        "question_resurfacing"
+      ],
+      "question_resurfacing": true,
+      "source_truth_overclaim_blocked": true,
+      "surface": "question_tracking"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 21,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 46,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "theme_user_review_lift",
+      "families": [
+        "theme_user_review"
+      ],
+      "surface": "question_tracking",
+      "theme_user_review_lift": true
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 1,
+          "latency_ms_proxy": 20,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 1
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 38,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "stale_theme_carryover_drag",
+      "families": [
+        "question_resurfacing"
+      ],
+      "stale_theme_carryover": true,
+      "surface": "question_tracking"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 1,
+          "latency_ms_proxy": 16,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 30,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "cognitive_load_irrelevant_drag",
+      "families": [
+        "cognitive_load_drag"
+      ],
+      "surface": "cognitive_load"
+    },
+    {
+      "arms": {
+        "default_hook_foreground_candidate": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 1,
+          "latency_ms_proxy": 18,
+          "manual_search_steps": 2,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 1
+        },
+        "default_no_packet_baseline": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 0,
+          "manual_search_steps": 3,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "explicit_recall_same_budget": {
+          "activated": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 42,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        }
+      },
+      "case_id": "attention_route_specificity_generic_drag",
+      "families": [
+        "attention_route_specificity"
+      ],
+      "surface": "attention_router"
+    }
+  ],
+  "cohort_coverage": {
+    "family_counts": {
+      "already_good_noop": 1,
+      "attention_route_specificity": 1,
+      "cognitive_load_drag": 1,
+      "deictic_prompt": 1,
+      "explicit_route_hook_skip_gap": 1,
+      "multilingual_prompt": 1,
+      "question_resurfacing": 2,
+      "self_referential_continuity": 1,
+      "stale_or_conflict_control": 2,
+      "theme_user_review": 1
+    },
+    "surface_counts": {
+      "anti_nag": 1,
+      "attention_router": 4,
+      "cognitive_load": 1,
+      "default_session": 1,
+      "prompt_hook": 1,
+      "question_tracking": 3
+    }
+  },
+  "comparison_contract": {
+    "arms": [
+      "default_no_packet_baseline",
+      "explicit_recall_same_budget",
+      "default_hook_foreground_candidate"
+    ],
+    "packet_budget": 2,
+    "private_history_used": false,
+    "provider_call_count": 0,
+    "same_packet_budget": true,
+    "same_source_reopen_budget": true,
+    "source_reopen_budget": 1
+  },
+  "decision": {
+    "adoption_blockers": [
+      "wrong_route_drag_present",
+      "irrelevant_memory_drag_present",
+      "default_hook_helpfulness_below_explicit_recall"
+    ],
+    "default_foreground_adoption_recommended": false,
+    "default_foreground_decision": "keep_default_hook_diagnostic_only",
+    "eligible_default_foreground_surfaces": [],
+    "opt_in_or_diagnostic_surfaces": [
+      "explicit_recall_same_budget",
+      "default_hook_foreground_candidate",
+      "question_tracking_theme_rows",
+      "cognitive_load_sidecar",
+      "attention_router_default_hook_candidate"
+    ],
+    "tiny_agent_recall_affordance_decision": "review_opt_in_affordance_only_not_default_foreground"
+  },
+  "issue_readouts": {
+    "github_1439": {
+      "closeout_eligible": true,
+      "default_foreground_adoption_recommended": false,
+      "default_foreground_decision": "keep_default_hook_diagnostic_only",
+      "default_hook_validated_before_adoption": true,
+      "explicit_route_hook_skip_gap_covered": true,
+      "question_theme_gap_covered": true,
+      "same_budget_three_arm_eval_measured": true
+    }
+  },
+  "kind": "aippocampus_default_hook_recall_usefulness_benchmark",
+  "metrics": {
+    "adoption_blocker_count": 3,
+    "case_count": 11
+  },
+  "ok": true,
+  "privacy_boundary": {
+    "credential_values_serialized": false,
+    "prompt_text_serialized": false,
+    "provider_details_serialized": false,
+    "source_handles_serialized": false,
+    "source_text_serialized": false,
+    "thread_handles_serialized": false
+  },
+  "prompt_hook_gap_readout": {
+    "default_hook_skip_no_memory_count": 1,
+    "explicit_recall_reopenable_route_count": 1,
+    "explicit_route_hook_skip_gap_count": 1,
+    "tiny_agent_recall_affordance_candidate_count": 1
+  },
+  "question_theme_readout": {
+    "question_resurfacing_count": 1,
+    "source_truth_overclaim_blocked_count": 1,
+    "source_truth_overclaim_count": 0,
+    "stale_theme_carryover_count": 1,
+    "theme_user_review_lift_count": 1,
+    "wrong_route_drag_count": 4
+  },
+  "schema_version": 1
+}

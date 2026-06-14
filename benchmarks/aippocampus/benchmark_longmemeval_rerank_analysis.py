@@ -462,6 +462,39 @@ def _project_full_run(
     avg_latency_ms = float(latency.get("avg") or 0.0)
     projected_total_tokens = int(round(per_question_tokens * full_run_questions))
     projected_single_worker_seconds = round(avg_latency_ms * full_run_questions / 1000, 2)
+    cost_status = str(metadata.get("cost_status") or "provider_cost_not_reported")
+    provider = str(metadata.get("provider") or "")
+    local_no_provider_path = total_tokens == 0 and (
+        cost_status == "no_provider_calls" or provider == "local_aippocampus_runtime"
+    )
+    if local_no_provider_path:
+        decision = "already_measured_local_hot_path"
+        decision_reason = (
+            "This reranker report is a local AIppocampus runtime path with no "
+            "provider calls or provider tokens; the measured cohort is already "
+            "the relevant local hot-path evidence. Further work should target "
+            "named candidate-builder or source-reopen boundaries, not an "
+            "external-model full-run budget gate."
+        )
+        required_before_full_run = [
+            "preserve_source_reopen_required_for_claims",
+            "keep_candidate_routes_navigation_only",
+            "name_a_candidate_builder_or_source_boundary_question",
+        ]
+    else:
+        decision = "not_run_by_default"
+        decision_reason = (
+            "The semantic rerank arm is external-model-assisted, cost is not "
+            "reported by the provider response, and the pilot already projects "
+            "material token/latency spend at 500 questions. Run the full arm only "
+            "when it answers a named claim-boundary question."
+        )
+        required_before_full_run = [
+            "explicit_operator_budget_approval",
+            "provider_cost_model_or_cost_ceiling",
+            "privacy_review_for_external_candidate_source_text",
+            "partial_output_path_kept_gitignored",
+        ]
     return {
         "basis_question_count": int(pilot_question_count),
         "target_question_count": int(full_run_questions),
@@ -476,20 +509,10 @@ def _project_full_run(
         "projected_single_worker_minutes": round(projected_single_worker_seconds / 60, 2),
         "average_available_call_latency_ms": avg_latency_ms,
         "cache_hit_rate": cache.get("hit_rate"),
-        "cost_status": metadata.get("cost_status") or "provider_cost_not_reported",
-        "decision": "not_run_by_default",
-        "decision_reason": (
-            "The semantic rerank arm is external-model-assisted, cost is not "
-            "reported by the provider response, and the pilot already projects "
-            "material token/latency spend at 500 questions. Run the full arm only "
-            "when it answers a named claim-boundary question."
-        ),
-        "required_before_full_run": [
-            "explicit_operator_budget_approval",
-            "provider_cost_model_or_cost_ceiling",
-            "privacy_review_for_external_candidate_source_text",
-            "partial_output_path_kept_gitignored",
-        ],
+        "cost_status": cost_status,
+        "decision": decision,
+        "decision_reason": decision_reason,
+        "required_before_full_run": required_before_full_run,
     }
 
 
@@ -921,6 +944,151 @@ def _metadata(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _to_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _is_post_factual_alias_report(report: Mapping[str, Any]) -> bool:
+    metrics = report.get("metrics") or {}
+    return bool(
+        _line_reranker_mode(report) == "source_semantic_cache"
+        and _to_int(metrics.get("source_semantic_factual_alias_case_count")) > 0
+    )
+
+
+def _post_factual_alias_closeout(
+    report: Mapping[str, Any],
+    *,
+    source_window_coverage: Mapping[str, Any],
+    bounded_coverage: Mapping[str, Any],
+    top_k: int,
+) -> dict[str, Any]:
+    metrics = report.get("metrics") or {}
+    usage = metrics.get("line_reranker_usage") or {}
+    latency = (
+        metrics.get("source_semantic_cache_hot_path_latency_ms")
+        or metrics.get("line_reranker_latency_ms")
+        or {}
+    )
+    fused_miss_count = _to_int(source_window_coverage.get("fused_miss_count"))
+    candidate_missing = _to_int(
+        source_window_coverage.get("candidate_missing_miss_count")
+    )
+    reranker_visible = _to_int(
+        source_window_coverage.get("reranker_visible_miss_count")
+    )
+    top10_regressions = _to_int(
+        metrics.get(f"source_semantic_cache_fused_regression_top{top_k}")
+        or metrics.get("source_semantic_cache_fused_regression_top10")
+    )
+    provider_calls = _to_int(
+        metrics.get("source_semantic_cache_hot_query_provider_call_count")
+        or usage.get("hot_query_provider_call_count")
+        or usage.get("provider_call_count")
+    )
+    candidate_coverage = source_window_coverage.get(
+        "line_reranker_candidate_evidence_coverage"
+    ) or {}
+    exact_r_at_10 = source_window_coverage.get("exact_evidence_r_at_10_observed") or {}
+    closeout_eligible = bool(
+        fused_miss_count > 0
+        and fused_miss_count == candidate_missing + reranker_visible
+        and provider_calls == 0
+        and top10_regressions == 0
+    )
+    return {
+        "kind": "aippocampus_longmemeval_post_factual_alias_closeout",
+        "status": "measured_from_same_500q_sanitized_report",
+        "issue": "https://github.com/Sapientropic/AIppocampus/issues/1437",
+        "top_k": top_k,
+        "same_cohort_evidence": {
+            "question_count": _to_int(metrics.get("question_count")),
+            "evidence_line_case_count": _to_int(
+                metrics.get("evidence_line_case_count")
+            ),
+            "reranked_evidence_r_at_10": exact_r_at_10,
+            "reranked_evidence_mrr": metrics.get(
+                "source_semantic_cache_fused_evidence_mrr",
+                metrics.get("reranked_evidence_mrr"),
+            ),
+            "top_10_regression_count": top10_regressions,
+            "candidate_coverage": candidate_coverage,
+            "hot_query_latency_ms": {
+                "avg": latency.get("avg"),
+                "max": latency.get("max"),
+            },
+            "hot_query_provider_call_count": provider_calls,
+            "source_reopen_required_before_claims": True,
+        },
+        "miss_split": {
+            "fused_miss_count": fused_miss_count,
+            "candidate_missing_miss_count": candidate_missing,
+            "reranker_visible_miss_count": reranker_visible,
+            "miss_family_counts": source_window_coverage.get("miss_family_counts")
+            or {},
+        },
+        "scoped_reranker_decision": {
+            "proposal": "post_factual_alias_exact_line_rerank_v1",
+            "decision": "reject_default_reranker_change",
+            "reasons": [
+                "remaining misses are dominated by candidate-visible exact-line ranking failures",
+                "factual-alias candidate evidence did not translate into enough fused top-10 lift",
+                "candidate routes and aliases are navigation-only and cannot become source truth",
+                "default ranking changes need a separate holdout gate before adoption",
+            ],
+            "reranker_visible_miss_count": reranker_visible,
+            "factual_alias_candidate_lift_top_k": _to_int(
+                metrics.get(f"source_semantic_factual_alias_candidate_lift_top{top_k}")
+                or metrics.get("source_semantic_factual_alias_candidate_lift_top10")
+            ),
+            "factual_alias_fused_lift_top_k": _to_int(
+                metrics.get(f"source_semantic_factual_alias_fused_lift_top{top_k}")
+                or metrics.get("source_semantic_factual_alias_fused_lift_top10")
+            ),
+        },
+        "candidate_builder_decision": {
+            "proposal": bounded_coverage.get("strategy"),
+            "decision": (
+                "accept_next_candidate_builder_slice_only"
+                if bounded_coverage.get("accepted_for_next_candidate_builder_slice")
+                else "reject_candidate_builder_change"
+            ),
+            "candidate_coverage_lift": bounded_coverage.get("candidate_coverage_lift"),
+            "candidate_byte_growth_ratio": bounded_coverage.get(
+                "candidate_byte_growth_ratio"
+            ),
+            "not_exact_line_rerank_quality": True,
+        },
+        "issue_readouts": {
+            "github_1437": {
+                "same_500q_cohort_analyzed": True,
+                "miss_split_recorded": True,
+                "scoped_reranker_change_rejected_for_default": True,
+                "candidate_builder_followup_scoped": True,
+                "provider_call_count": provider_calls,
+                "top_10_regression_count": top10_regressions,
+                "closeout_eligible": closeout_eligible,
+            }
+        },
+        "privacy_boundary": {
+            "raw_question_answer_or_source_text_emitted": False,
+            "provider_payloads_emitted": False,
+            "cache_values_emitted": False,
+            "local_paths_emitted": False,
+        },
+        "cannot_claim": [
+            "perfect_exact_line_citation_quality",
+            "answer_generation_quality",
+            "official_longmemeval_qa_score",
+            "default_reranker_adoption",
+            "source_truth_from_aliases_or_candidate_routes",
+        ],
+    }
+
+
 def analyze_rerank_report(
     report_path: Path | str,
     *,
@@ -997,6 +1165,16 @@ def analyze_rerank_report(
         top_k=top_k,
         average_candidate_count=metrics.get("line_reranker_candidate_count_avg"),
     )
+    post_factual_alias_closeout = (
+        _post_factual_alias_closeout(
+            report,
+            source_window_coverage=source_window_coverage,
+            bounded_coverage=bounded_coverage,
+            top_k=top_k,
+        )
+        if _is_post_factual_alias_report(report)
+        else None
+    )
     status = "pilot_analyzed_full_run_not_default"
     source_issue = "https://github.com/Sapientropic/AIppocampus/issues/1092"
     if baseline_comparison:
@@ -1013,6 +1191,9 @@ def analyze_rerank_report(
     ):
         source_issue = "https://github.com/Sapientropic/AIppocampus/issues/1305"
         status = "semantic_warm_query_cache_path_replay_report"
+    if post_factual_alias_closeout:
+        source_issue = "https://github.com/Sapientropic/AIppocampus/issues/1437"
+        status = "post_factual_alias_exact_line_rerank_closeout"
     projection_metrics = (
         (semantic_pilot_report or {}).get("metrics") if semantic_pilot_report else metrics
     ) or {}
@@ -1034,19 +1215,28 @@ def analyze_rerank_report(
             "and does not score answer generation or judge-model QA."
         )
     )
+    if post_factual_alias_closeout:
+        claim_boundary = (
+            "This is the #1437 post-factual-alias closeout over the same "
+            "sanitized LongMemEval-S first-500 report. It records the miss "
+            "split, rejects a default exact-line reranker change from this "
+            "evidence, and keeps any candidate-builder follow-up separate from "
+            "source-truth or answer-quality claims."
+        )
+    related_issues = {
+        "https://github.com/Sapientropic/AIppocampus/issues/1092",
+        "https://github.com/Sapientropic/AIppocampus/issues/1193",
+        "https://github.com/Sapientropic/AIppocampus/issues/1327",
+        source_issue,
+    }
+    if post_factual_alias_closeout:
+        related_issues.add("https://github.com/Sapientropic/AIppocampus/issues/1437")
     payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_longmemeval_rerank_analysis",
         "generated_at": now_utc(),
         "source_issue": source_issue,
-        "related_issues": sorted(
-            {
-                "https://github.com/Sapientropic/AIppocampus/issues/1092",
-                "https://github.com/Sapientropic/AIppocampus/issues/1193",
-                "https://github.com/Sapientropic/AIppocampus/issues/1327",
-                source_issue,
-            }
-        ),
+        "related_issues": sorted(related_issues),
         "source_report": {
             "kind": report.get("kind"),
             "status": report.get("status"),
@@ -1125,6 +1315,7 @@ def analyze_rerank_report(
         },
         "source_window_coverage_diagnostic": source_window_coverage,
         "bounded_coverage_improvement": bounded_coverage,
+        "post_factual_alias_closeout": post_factual_alias_closeout,
         "baseline_comparison": baseline_comparison,
         "semantic_cache_path_evaluation": semantic_cache_path_evaluation,
         "full_500_projection": _project_full_run(
