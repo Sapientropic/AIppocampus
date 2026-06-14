@@ -4,6 +4,27 @@ All notable public-facing changes to AIppocampus are summarized here. The
 project is still alpha; release notes distinguish shipped behavior from
 evidence, diagnostics, and claim boundaries.
 
+## 0.3.1 - 2026-06-15
+
+0.3.1 is a small release about foreground manners.
+
+AIppocampus can now let architecture-native route work be felt without turning
+the frontstage into a wiring diagram. When attention-router, macro, topology,
+or local/global cues matter, agents get a tiny navigation hint and the same old
+boundary: deepen before claims.
+
+Human recall output also stops printing long opaque navigation handles by
+default. The handle is still there for JSON and MCP callers; people get a short
+next action instead.
+
+Still alpha. Still source-backed. Less transport noise, more useful handhold.
+
+### Compare
+
+- Source range: `v0.3.0..v0.3.1`
+- Compare URL:
+  https://github.com/Sapientropic/AIppocampus/compare/v0.3.0...v0.3.1
+
 ## 0.3.0 - 2026-06-15
 
 0.3.0 is the release where AIppocampus becomes easier to invite into an
@@ -39,9 +60,9 @@ step."
 
 ### Compare
 
-- Source range: `v0.2.0..HEAD`
+- Source range: `v0.2.0..v0.3.0`
 - Compare URL:
-  https://github.com/Sapientropic/AIppocampus/compare/v0.2.0...main
+  https://github.com/Sapientropic/AIppocampus/compare/v0.2.0...v0.3.0
 
 ## 0.2.0 - 2026-06-07
 
