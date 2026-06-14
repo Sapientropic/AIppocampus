@@ -99,6 +99,9 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     semantic_gate = _as_dict(result.get("semantic_gate"))
     surface_intent = _as_dict(result.get("agent_surface_intent"))
     explicit_surfaces = [str(item) for item in _as_list(surface_intent.get("surfaces"))]
+    skip_without_explicit_agent_surface = (
+        str(result.get("decision") or "") == "skip" and not surface_intent.get("explicit")
+    )
     all_items = working + candidates + evidence + cards + architecture
 
     if any(_is_aippo_working_contract(item) for item in working + candidates) or (
@@ -106,29 +109,49 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
         and surface_intent.get("aippo_status") == "ok"
     ):
         kinds.append("aippo_working_contract")
-    if candidates or evidence or cards:
+    # A skipped hook result may still carry suppressed candidates for telemetry
+    # and debugging. Do not turn those into foreground agent-recall affordances:
+    # generic words like "agent", "Codex", or "plugin" should stay quiet unless
+    # the user explicitly asked for an agent-native AIppocampus surface.
+    if not skip_without_explicit_agent_surface and (candidates or evidence or cards):
         kinds.append("memory_route")
     if (
-        not kinds
+        not skip_without_explicit_agent_surface
+        and not kinds
         and semantic_gate.get("available")
         and str(semantic_gate.get("decision") or "") in {"scent", "evidence"}
     ):
         kinds.append("memory_route")
-    if cognitive_map or any(
-        str(card.get("provenance_class") or "") == "cognitive_map_route" for card in cards
+    if not skip_without_explicit_agent_surface and (
+        cognitive_map
+        or any(
+            str(card.get("provenance_class") or "") == "cognitive_map_route"
+            for card in cards
+        )
     ):
         kinds.append("repo_familiarity")
-    if any(str(card.get("provenance_class") or "") == "continuity_domain_pointer" for card in cards):
+    if not skip_without_explicit_agent_surface and any(
+        str(card.get("provenance_class") or "") == "continuity_domain_pointer"
+        for card in cards
+    ):
         kinds.append("continuity_domain")
-    if any(
+    if not skip_without_explicit_agent_surface and any(
         str(item.get("candidate_type") or "").casefold() == "dream_hypothesis"
         for item in working + cards
     ):
         kinds.append("dream_or_subconscious")
-    if any(_is_avatar_posture(item) for item in all_items) or result.get("avatar_state"):
+    if (
+        not skip_without_explicit_agent_surface
+        and (any(_is_avatar_posture(item) for item in all_items) or result.get("avatar_state"))
+    ):
         kinds.append("avatar_posture")
-    if any(_is_episode_arc(item) for item in all_items) or result.get("episode_arc") or _as_list(
-        result.get("episode_arcs")
+    if (
+        not skip_without_explicit_agent_surface
+        and (
+            any(_is_episode_arc(item) for item in all_items)
+            or result.get("episode_arc")
+            or _as_list(result.get("episode_arcs"))
+        )
     ):
         kinds.append("episode_arc")
     if "avatar_posture" in explicit_surfaces:
@@ -137,10 +160,11 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
         kinds.append("episode_arc")
     if "project_experience" in explicit_surfaces:
         kinds.append("project_experience")
-    if _has_architecture_diagnostic(result, all_items):
+    if not skip_without_explicit_agent_surface and _has_architecture_diagnostic(result, all_items):
         kinds.append("architecture_diagnostic")
-    if result.get("semantic_source_reopen_route") or any(
-        str(card.get("action_grammar") or "") == "reopenable_route" for card in cards
+    if not skip_without_explicit_agent_surface and (
+        result.get("semantic_source_reopen_route")
+        or any(str(card.get("action_grammar") or "") == "reopenable_route" for card in cards)
     ):
         kinds.append("source_required")
 

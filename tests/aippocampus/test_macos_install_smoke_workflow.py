@@ -111,7 +111,13 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
             text,
         )
         self.assertIn("test_memory_health_cwd_uses_canonical_identity_for_path_aliases", text)
-        self.assertIn("test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss", text)
+        self.assertIn(
+            "tests.aippocampus.test_prompt_hook_ambient_cache."
+            "PromptHookAmbientCacheTests."
+            "test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss",
+            text,
+        )
+        self.assertNotIn("AmbientRecallHookTests", text)
 
     def test_release_checklist_includes_install_build_and_macos_path_gate(self) -> None:
         text = RELEASE_CHECKLIST.read_text(encoding="utf-8")

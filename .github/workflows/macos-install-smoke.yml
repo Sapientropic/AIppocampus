@@ -110,7 +110,7 @@ jobs:
             tests.aippocampus.test_ambient_thread_cache.AmbientThreadCacheTests.test_related_thread_cache_canonicalizes_workspace_fingerprint \
             tests.aippocampus.test_aippocampus_mcp_server.AippocampusMcpServerTests.test_memory_health_runs_in_process_for_frozen_binary_entrypoints \
             tests.aippocampus.test_aippocampus_mcp_server.AippocampusMcpServerTests.test_memory_health_cwd_uses_canonical_identity_for_path_aliases \
-            tests.aippocampus.test_aippocampus_prompt_hook.AmbientRecallHookTests.test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss \
+            tests.aippocampus.test_prompt_hook_ambient_cache.PromptHookAmbientCacheTests.test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss \
             | tee .tmp/macos-install-smoke/unittest.txt
 
       - name: Upload smoke evidence

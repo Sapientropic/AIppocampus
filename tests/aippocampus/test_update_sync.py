@@ -57,6 +57,19 @@ def run_update(*args: str) -> tuple[int, dict]:
     return code, payload
 
 
+def source_plugin_version() -> str:
+    manifest = json.loads(
+        (
+            REPO_ROOT
+            / "plugins"
+            / "aippocampus"
+            / ".codex-plugin"
+            / "plugin.json"
+        ).read_text(encoding="utf-8")
+    )
+    return str(manifest["version"])
+
+
 def write_minimal_repo(repo: Path) -> None:
     repo.mkdir(parents=True)
     (repo / "pyproject.toml").write_text("[project]\nname='fixture'\n", encoding="utf-8")
@@ -422,7 +435,7 @@ class UpdateSyncTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         plugin = payload["surfaces"]["plugin"]
-        self.assertEqual(plugin["source_plugin_version"], "0.2.0")
+        self.assertEqual(plugin["source_plugin_version"], source_plugin_version())
         self.assertEqual(plugin["local_marketplace"]["version"], "0.1.0")
         self.assertEqual(plugin["local_marketplace"]["status"], "stale_version")
         self.assertEqual(plugin["installed_cache"]["version"], "0.1.0")

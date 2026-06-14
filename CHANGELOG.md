@@ -4,6 +4,45 @@ All notable public-facing changes to AIppocampus are summarized here. The
 project is still alpha; release notes distinguish shipped behavior from
 evidence, diagnostics, and claim boundaries.
 
+## 0.3.0 - 2026-06-15
+
+0.3.0 is the release where AIppocampus becomes easier to invite into an
+agent's day.
+
+The promise is the same: continuity should come from source trails, not from a
+model pretending it remembers. What changed is the feel. The package now gives
+agents clearer doors to knock on, clearer reasons to stay quiet, and a much
+shorter path from "is this installed?" to "yes, here is the next source-backed
+step."
+
+### What Feels Different
+
+- First run is calmer. The Codex plugin install path, update status, onboard
+  status, sync status, and nested CLI help now speak in one public language.
+- Agents get better handholds: recall, AIppo, deepen, and explain are exposed
+  as agent-native affordances instead of hidden machinery.
+- Prompt-hook recall is more polite. Small casual prompts stay cheap; explicit
+  continuity prompts route toward the right next action.
+- Successful plugin verification is now readable at a glance with
+  `--compact-json`, without local paths or unrelated host noise.
+- Benchmark and evidence work is better organized, with stronger gates against
+  turning diagnostics into grand claims.
+
+### Still Alpha
+
+- 0.3.0 does not change the package classifier. AIppocampus remains
+  `Development Status :: 3 - Alpha`.
+- It does not claim universal recall quality, hosted-service maturity,
+  all-client coverage, or a stable Python SDK.
+- Live pilots, benchmark reports, Dream/macro/Telepathy work, and LongMemEval
+  source-side evidence are useful signposts. They are not a victory lap.
+
+### Compare
+
+- Source range: `v0.2.0..HEAD`
+- Compare URL:
+  https://github.com/Sapientropic/AIppocampus/compare/v0.2.0...main
+
 ## 0.2.0 - 2026-06-07
 
 0.2.0 is the first broad continuity release after the 0.1.x metadata and
