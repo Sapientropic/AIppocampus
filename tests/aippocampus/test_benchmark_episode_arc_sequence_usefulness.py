@@ -14,7 +14,9 @@ BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 if str(BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(BENCHMARKS))
 
-from benchmarks.aippocampus import benchmark_episode_arc_sequence_usefulness as benchmark  # noqa: E402
+from benchmarks.aippocampus import (
+    benchmark_episode_arc_sequence_usefulness as benchmark,  # noqa: E402
+)
 
 
 class EpisodeArcSequenceUsefulnessBenchmarkTests(unittest.TestCase):
