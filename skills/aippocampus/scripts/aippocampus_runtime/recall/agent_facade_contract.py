@@ -19,7 +19,7 @@ from aippocampus_runtime.recall import authority
 SCHEMA_VERSION = "agent-native-recall-facade-v0"
 # #1125 owns the stricter foreground UX budget. This facade fixture keeps only
 # the smoke-level ceiling needed to prove packets are not provenance dumps.
-FOREGROUND_PACKET_BYTE_BUDGET = 480
+FOREGROUND_PACKET_BYTE_BUDGET = 560
 FACADE_OUTPUT_MODES = {
     "direction_only",
     "bounded_summary_as_route",

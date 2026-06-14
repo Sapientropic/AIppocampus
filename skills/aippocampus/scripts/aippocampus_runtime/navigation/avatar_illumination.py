@@ -54,6 +54,11 @@ def build_source_backed_avatar_state(
     semantic_state = semantic_invalidation_state(semantic_invalidation_events)
     state, lifecycle_state, action_grammar = card_state(card, semantic_state, refs)
     illumination = facet_illumination(card, task, refs)
+    selected_for_task = task_relevant(card, task)
+    task_relevance = {
+        "status": "selected_for_task" if selected_for_task else "irrelevant_to_task",
+        "task_present": bool(text(task, 80)),
+    }
     active = lifecycle_state in {"active", "weak", "narrowed"}
     narrow_to = list(semantic_state.get("narrow_to_facets") or []) if lifecycle_state == "narrowed" else []
     if lifecycle_state == "narrowed" and not narrow_to:
@@ -87,6 +92,8 @@ def build_source_backed_avatar_state(
         "first_source_to_reopen": first_source,
         "stop_after": text(card.get("stop_after"), 260),
         "do_not_use_for": strings(card.get("do_not_use_for"), limit=8),
+        "task_relevance": task_relevance,
+        "selected_for_task": selected_for_task,
         "semantic_invalidation": semantic_state,
         "facet_illumination": illumination,
         "active_facets": active_facets,
@@ -148,8 +155,14 @@ def project_avatar_state_for_foreground(
 
     lifecycle = code(state.get("lifecycle_state"))
     action_grammar = text(state.get("action_grammar"), 80) or ACTION_GRAMMAR_BLOCKED
-    emitted = lifecycle in {"active", "weak", "narrowed"} and action_grammar != ACTION_GRAMMAR_BLOCKED
+    selected_for_task = state.get("selected_for_task") is not False
+    emitted = (
+        selected_for_task
+        and lifecycle in {"active", "weak", "narrowed"}
+        and action_grammar != ACTION_GRAMMAR_BLOCKED
+    )
     effect = mapping(state.get("foreground_effect"))
+    blocked_reason = "irrelevant_to_task" if not selected_for_task else ""
     packet = {
         "kind": FOREGROUND_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -161,13 +174,21 @@ def project_avatar_state_for_foreground(
         "attention_bias": strings(effect.get("attention_bias"), limit=4),
         "first_source_to_reopen": text(state.get("first_source_to_reopen"), 220),
         "stop_after": text(state.get("stop_after"), 240),
-        "recommended_next": "continue_with_posture" if emitted and lifecycle != "narrowed" else "reopen_source",
+        "recommended_next": (
+            "continue_with_posture"
+            if emitted and lifecycle != "narrowed"
+            else ("continue_without_avatar" if blocked_reason else "reopen_source")
+        ),
         "source_reopen_required_before_claim": True,
         "authority_level": AUTHORITY_LEVEL,
         "claim_permission": CLAIM_PERMISSION,
         "fact_claim_allowed": False,
         "action_grammar": action_grammar,
     }
+    if blocked_reason:
+        packet["reason"] = blocked_reason
+        packet["posture"] = ""
+        packet["attention_bias"] = []
     packet_size = _packet_size(packet)
     if packet_size > max_packet_bytes:
         packet["stop_after"] = text(packet.get("stop_after"), 120)

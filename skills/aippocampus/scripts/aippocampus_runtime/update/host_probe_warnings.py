@@ -27,6 +27,21 @@ def _stderr_lines(stderr_tail: Any) -> list[str]:
 
 def _classify_line(line: str, *, validation_ok: bool) -> str:
     lower = line.casefold()
+    if validation_ok and "aippocampus" not in lower and any(
+        token in lower
+        for token in (
+            "authorizationrequired",
+            "backend-api/wham/apps",
+            "client error: http request failed",
+            "invalid refresh token",
+            "send initialized notification",
+            "token refresh not possible",
+            "codex_rmcp_client",
+            "rmcp::transport::auth",
+            "rmcp::transport::worker",
+        )
+    ):
+        return "unrelated_host_or_plugin_noise"
     if any(token in lower for token in ("fatal", "traceback", "panic")):
         return "fatal_failures"
     if "ignoring interface.defaultprompt" in lower:

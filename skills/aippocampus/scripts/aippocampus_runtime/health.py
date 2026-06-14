@@ -38,6 +38,11 @@ from aippocampus_runtime.health_trajectory import attach_health_trajectory
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
+from aippocampus_runtime.privacy import (
+    LOCAL_PATH_REDACTION,
+    redact_private_paths,
+    redact_sensitive_values,
+)
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
 from aippocampus_runtime.source.source_intake_health import clean_source_health_summaries
@@ -62,6 +67,7 @@ class HealthOptions:
     question_dormant_days: int = DEFAULT_DORMANT_AFTER_DAYS
     max_stale_messages: int = 25
     max_stale_bytes: int = 5 * 1024 * 1024
+    live_delta_tolerance_messages: int = 1
     max_log_bytes: int | None = None
     checkpoint_messages: int = 30
     deep_graph_messages: int = 1000
@@ -246,6 +252,19 @@ def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, 
     return build_health_report(HealthOptions(cwd=Path.cwd() if cwd is None else cwd, **overrides))
 
 
+def public_health_report(payload: dict[str, Any], *, include_paths: bool = False) -> dict[str, Any]:
+    public = dict(payload) if include_paths else redact_sensitive_values(redact_private_paths(payload))
+    privacy = dict(public.get("privacy") or {})
+    privacy.update(
+        {
+            "paths_included": include_paths,
+            "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
+        }
+    )
+    public["privacy"] = privacy
+    return public
+
+
 def build_health_report(options: HealthOptions) -> dict[str, Any]:
     cwd = Path(options.cwd).resolve()
     rollout = locate_rollout(cwd, codex_home())
@@ -337,7 +356,8 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     indexed_last_line = manifest.get("last_message_line")
     message_delta = max(0, current_message_count - indexed_messages)
     byte_delta = max(0, rollout_stat.st_size - indexed_bytes)
-    if manifest and message_delta > 0:
+    live_delta_tolerance = max(0, int(options.live_delta_tolerance_messages))
+    if manifest and message_delta > live_delta_tolerance:
         index_reasons.append(
             f"{message_delta} latest visible message(s) are newer than the index"
         )
@@ -392,11 +412,11 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         0, expected_clean_source_message_count - clean_source_message_count
     )
     clean_source_turn_delta = max(0, expected_clean_source_turn_count - clean_source_turn_count)
-    if clean_manifest and clean_source_message_delta > 0:
+    if clean_manifest and clean_source_message_delta > live_delta_tolerance:
         clean_reasons.append(
             f"{clean_source_message_delta} latest visible clean-source message(s) are missing"
         )
-    if clean_manifest and clean_source_turn_delta > 0:
+    if clean_manifest and clean_source_turn_delta > live_delta_tolerance:
         clean_reasons.append(
             f"{clean_source_turn_delta} latest clean-source turn(s) are missing"
         )
@@ -563,6 +583,34 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "expected_clean_source_message_count": expected_clean_source_message_count,
         "expected_clean_source_turn_count": expected_clean_source_turn_count,
         "last_clean_source_line": visibility.last_clean_source_line,
+        "live_delta_tolerance_messages": live_delta_tolerance,
+    }
+    blocking_action_count = sum(
+        1 for item in actions if item["severity"] in {"critical", "warning"}
+    )
+    live_delta_tolerated = bool(
+        freshness["latest_visible_gap"]
+        and blocking_action_count == 0
+        and (
+            0 < message_delta <= live_delta_tolerance
+            or 0 < clean_source_message_delta <= live_delta_tolerance
+            or 0 < clean_source_turn_delta <= live_delta_tolerance
+        )
+    )
+    checkpoint_status = "due_when_idle" if checkpoint_due else "current"
+    product_readiness = {
+        "status": (
+            "needs_maintenance"
+            if blocking_action_count
+            else ("ready_with_live_delta" if live_delta_tolerated else "ready")
+        ),
+        "ready": blocking_action_count == 0,
+        "blocking_action_count": blocking_action_count,
+        "live_delta_tolerated": live_delta_tolerated,
+        "checkpoint_status": checkpoint_status,
+        "next_best_action": (
+            "run_checkpoint_when_idle" if checkpoint_due else "continue"
+        ),
     }
 
     result: dict[str, Any] = {
@@ -645,6 +693,8 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "checkpoint": {
             "state": str(checkpoint_state),
             "due": checkpoint_due,
+            "status": checkpoint_status,
+            "blocking": False,
             "last_checked_message_count": checked_count,
             "last_captured_message_count": captured_count,
             "message_delta": checkpoint_delta,
@@ -678,6 +728,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "question_stats": question_stats,
         "background_cognition": background_cognition_health(root=registry_path.resolve().parent, registry_path=registry_path, jobs_path=jobs_path, cwd=cwd, now=now),
         "logs": logs,
+        "product_readiness": product_readiness,
         "recommended_actions": actions,
     }
     attach_health_trajectory(result)
@@ -763,6 +814,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-stale-messages", type=int, default=25)
     parser.add_argument("--max-stale-bytes", type=int, default=5 * 1024 * 1024)
+    parser.add_argument("--live-delta-tolerance-messages", type=int, default=1)
     parser.add_argument("--max-log-bytes", type=int, default=None)
     parser.add_argument("--checkpoint-messages", type=int, default=30)
     parser.add_argument("--deep-graph-messages", type=int, default=1000)
@@ -792,6 +844,7 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
         question_dormant_days=args.question_dormant_days,
         max_stale_messages=args.max_stale_messages,
         max_stale_bytes=args.max_stale_bytes,
+        live_delta_tolerance_messages=args.live_delta_tolerance_messages,
         max_log_bytes=args.max_log_bytes,
         checkpoint_messages=args.checkpoint_messages,
         deep_graph_messages=args.deep_graph_messages,
@@ -822,10 +875,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     result = build_health_report(options_from_args(args))
+    public_result = public_health_report(result, include_paths=bool(args.include_paths))
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:
-        render_health_text(result)
+        render_health_text(public_result)
 
     if args.exit_code and result["recommended_actions"]:
         return 2

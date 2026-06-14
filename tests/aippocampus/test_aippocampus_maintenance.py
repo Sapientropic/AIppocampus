@@ -231,6 +231,83 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             [{"id": "build_index", "severity": "warning", "reason": "still stale"}],
         )
 
+    def test_maintenance_runs_clean_source_before_index_when_health_recommends_it(self) -> None:
+        health_calls = [
+            {
+                "ok": False,
+                "recommended_actions": [
+                    {
+                        "id": "build_clean_source",
+                        "severity": "warning",
+                        "reason": "latest visible gap",
+                    }
+                ],
+            },
+            {
+                "ok": False,
+                "recommended_actions": [
+                    {"id": "build_index", "severity": "warning", "reason": "index stale"}
+                ],
+            },
+            {"ok": True, "recommended_actions": []},
+            {"ok": True, "recommended_actions": []},
+        ]
+        seen_modules: list[str] = []
+
+        def module_for(cmd: list[str]) -> str:
+            return cmd[2] if len(cmd) > 2 and cmd[1] == "-m" else Path(cmd[1]).stem
+
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            module = module_for(cmd)
+            seen_modules.append(module)
+            if module == "aippocampus_runtime.health":
+                return 0, health_calls.pop(0), "{}", ""
+            if module == "aippocampus_runtime.source.clean_source":
+                return 0, {"kind": "aippocampus_clean_source", "message_count": 24}, "{}", ""
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        def fake_text(cmd: list[str]) -> tuple[int, str, str]:
+            module = module_for(cmd)
+            seen_modules.append(module)
+            if module == "aippocampus_runtime.recall.index_builder":
+                return 0, "indexed", ""
+            self.fail(f"unexpected text command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "run_text_checked", side_effect=fake_text),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(
+                [
+                    "--cwd",
+                    ".",
+                    "--no-refresh-cognitive-map",
+                    "--no-refresh-graphify",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["maintenance_status"], "ok")
+        self.assertEqual(
+            [item["id"] for item in payload["action_results"]],
+            ["health_initial", "build_clean_source", "build_index"],
+        )
+        self.assertEqual(payload["remaining_recommended_actions"], [])
+        self.assertEqual(
+            seen_modules,
+            [
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.source.clean_source",
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.recall.index_builder",
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.health",
+            ],
+        )
+
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (
             mock.patch.object(

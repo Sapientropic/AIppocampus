@@ -53,7 +53,7 @@ def task_families(task: str) -> list[str]:
             score += 4
         if score:
             scored.append((score, family))
-    return [family for _, family in sorted(scored, reverse=True)] or ["coding"]
+    return [family for _, family in sorted(scored, reverse=True)]
 
 
 def _is_active_clause(clause: Mapping[str, Any]) -> bool:
@@ -78,6 +78,8 @@ def selected_active_clauses(
     limit: int = 2,
 ) -> list[dict[str, Any]]:
     families = task_families(task)
+    if not families:
+        return []
     active = [dict(clause) for clause in clauses if _is_active_clause(clause)]
 
     def score(clause: Mapping[str, Any]) -> tuple[int, str]:

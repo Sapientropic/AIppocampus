@@ -719,7 +719,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             {"thread_key": "session:projection"},
         )
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn(
+            "Next: call agent_deepen when a handle is present; otherwise call agent_recall first.",
+            context,
+        )
         self.assertNotIn("Source-required recall route", context)
         self.assertNotIn("reopen_registry_thread_source_index", context)
         self.assertNotIn("keep the consent gate beside mutation flow", context)

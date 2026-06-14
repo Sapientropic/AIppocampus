@@ -124,6 +124,13 @@ class PluginInstallerTests(unittest.TestCase):
                 self.assertEqual(result["plugin"]["action"], "marketplace_refreshed")
                 self.assertTrue(result["marketplace_upgrade"]["skipped_non_git"])
                 self.assertEqual(result["agent_callable_status"], "host_live_probe_ok")
+                self.assertEqual(result["host_probe_report"]["status"], "written")
+                cached_probe = plugin_installer.default_host_probe_report_path(codex_home)
+                self.assertTrue(cached_probe.exists())
+                self.assertEqual(
+                    json.loads(cached_probe.read_text(encoding="utf-8"))["validation_ok"],
+                    True,
+                )
                 self.assertFalse(result["hooks_auto_enabled"])
                 installed_cache = (
                     codex_home
@@ -224,6 +231,26 @@ class PluginInstallerTests(unittest.TestCase):
         self.assertEqual(summary["status"], "probe_failed_or_has_fatal_stderr")
         self.assertEqual(len(summary["fatal_failures"]), 2)
         self.assertEqual(len(summary["unrelated_host_or_plugin_noise"]), 1)
+
+    def test_host_probe_warning_summary_keeps_unrelated_auth_fatal_noise_nonfatal_after_success(
+        self,
+    ) -> None:
+        summary = host_probe_warnings.summarize_host_probe_warnings(
+            {
+                "validation_ok": True,
+                "stderr_tail": "\n".join(
+                    [
+                        "Token refresh not possible, re-authorization required.",
+                        "worker quit with fatal: Transport channel closed, when Auth(AuthorizationRequired)",
+                        "worker quit with fatal: Client error: HTTP request failed: error sending request for url (https://chatgpt.com/backend-api/wham/apps), when send initialized notification",
+                    ]
+                ),
+            }
+        )
+
+        self.assertEqual(summary["status"], "verification_passed_with_nonfatal_host_warnings")
+        self.assertEqual(summary["fatal_failures"], [])
+        self.assertEqual(len(summary["unrelated_host_or_plugin_noise"]), 3)
 
     def test_codex_install_tolerates_existing_marketplace_and_still_upgrades(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-existing-marketplace"

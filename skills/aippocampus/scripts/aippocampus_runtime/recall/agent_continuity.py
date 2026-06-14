@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -193,12 +194,168 @@ def _memory_packet_for_route(route: Mapping[str, Any]) -> dict[str, Any]:
     packet = facade.memory_packet_from_route_packet(_route_packet_from_navigation_route(route))
     if packet["next_action"] == "use_hint" and route.get("handle"):
         packet["next_action"] = "reopen_source"
+    route_topic = _safe_code_text(route.get("route_topic"))
+    if route_topic and not packet.get("route_topic"):
+        packet["route_topic"] = route_topic
+    hint = _selection_hint_for_route(route)
+    if hint:
+        packet["selection_hint"] = hint
+    reason_codes = _safe_code_list(route.get("_route_delta_reason_codes"), limit=4)
+    if reason_codes:
+        packet["route_delta_reason_codes"] = reason_codes
+    recommended_next = str(route.get("_recommended_next") or "").strip()
+    if recommended_next:
+        packet["recommended_next"] = recommended_next
+    return _fit_memory_packet_with_route_delta(packet)
+
+
+def _json_bytes(value: Mapping[str, Any]) -> int:
+    return len(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+
+
+def _safe_code_list(value: Any, *, limit: int = 4) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    out: list[str] = []
+    for item in value:
+        clean = "".join(
+            ch for ch in str(item).strip()[:80] if ch.isalnum() or ch in {"_", "-", ":"}
+        )
+        if clean and clean not in out:
+            out.append(clean)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _safe_code_text(value: Any, *, limit: int = 80) -> str:
+    clean = "".join(
+        ch for ch in str(value or "").strip()[:limit] if ch.isalnum() or ch in {"_", "-", ":"}
+    )
+    return clean
+
+
+def _selection_hint_for_route(route: Mapping[str, Any]) -> dict[str, str]:
+    raw = route.get("_selection_hint")
+    if not isinstance(raw, Mapping):
+        return {}
+    source = str(raw.get("source") or "").strip()
+    why = core.compact_text(str(raw.get("why") or "").strip(), 160)
+    if not source or not why:
+        return {}
+    return {"source": source[:80], "why": why}
+
+
+def _fit_memory_packet_with_route_delta(packet: dict[str, Any]) -> dict[str, Any]:
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    packet.pop("route_label_specificity_score", None)
+    packet.pop("label_granularity", None)
+    packet.pop("scope_bucket", None)
+    packet.pop("triage_rank_reason_codes", None)
+    packet.pop("risk_flags", None)
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    hint = packet.get("selection_hint")
+    if isinstance(hint, Mapping):
+        packet["selection_hint"] = {
+            "source": str(hint.get("source") or "")[:80],
+            "why": core.compact_text(str(hint.get("why") or ""), 96),
+        }
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    if "display_hint" in packet:
+        packet["display_hint"] = core.compact_text(str(packet.get("display_hint") or ""), 96)
+    if "route_label" in packet:
+        packet["route_label"] = core.compact_text(str(packet.get("route_label") or ""), 96)
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    packet.pop("route_label", None)
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    if packet.get("route_delta_reason_codes"):
+        packet.pop("display_hint", None)
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    packet.pop("selection_hint", None)
+    if _json_bytes(packet) <= facade.FOREGROUND_PACKET_BYTE_BUDGET:
+        return packet
+    packet.pop("route_topic", None)
     return packet
+
+
+def _unique_codes(*groups: Any, limit: int = 4) -> list[str]:
+    out: list[str] = []
+    for group in groups:
+        for code in _safe_code_list(group, limit=limit):
+            if code not in out:
+                out.append(code)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def _annotate_route_selection_hints(
+    routes: list[dict[str, Any]],
+    *,
+    macro_navigation: Mapping[str, Any],
+    attention_navigation: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    annotated = [dict(route) for route in routes]
+    if not annotated:
+        return annotated
+
+    if macro_navigation.get("applied"):
+        macro_codes = _safe_code_list(macro_navigation.get("reason_codes"), limit=4)
+        active_layer = str(macro_navigation.get("active_layer") or "").strip()
+        why_parts = [
+            code for code in macro_codes if code.startswith("macro_active_layer")
+        ]
+        if active_layer and not why_parts:
+            why_parts.append(f"macro_active_layer_{active_layer}")
+        annotated[0]["_selection_hint"] = {
+            "source": "macro_orientation",
+            "why": why_parts[0] if why_parts else "macro_active_layer",
+        }
+        annotated[0]["_route_delta_reason_codes"] = _unique_codes(
+            ["macro_orientation_recall_prior"],
+            annotated[0].get("_route_delta_reason_codes"),
+            limit=4,
+        )
+        annotated[0]["_recommended_next"] = "deepen_this_route_first"
+
+    if attention_navigation.get("enabled") and attention_navigation.get("top_route_changed"):
+        selected_id = str(attention_navigation.get("selected_route_id") or "").strip()
+        target_index = 0
+        if selected_id:
+            for index, route in enumerate(annotated):
+                if str(route.get("route_id") or "") == selected_id:
+                    target_index = index
+                    break
+        selected = annotated[target_index]
+        selected["_selection_hint"] = {
+            "source": "attention_router",
+            "why": "top_route_changed",
+        }
+        selected["_route_delta_reason_codes"] = _unique_codes(
+            ["attention_router_top_route_changed"],
+            selected.get("_route_delta_reason_codes"),
+            limit=4,
+        )
+        selected["_recommended_next"] = "deepen_this_route_first"
+    return annotated
 
 
 def _deepen_request_for_route(route: Mapping[str, Any], packet: Mapping[str, Any]) -> dict[str, Any]:
     handle = route.get("handle")
-    command = f"aippocampus agent deepen {handle}" if handle else None
+    handle_arg = (
+        json.dumps(handle, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        if isinstance(handle, Mapping)
+        else str(handle)
+        if handle
+        else ""
+    )
+    command = f"aippocampus agent deepen {shlex.quote(handle_arg)}" if handle_arg else None
     return {
         "route_id": packet.get("route_id"),
         "deepen_route_id": packet.get("deepen_route_id"),
@@ -664,6 +821,11 @@ def recall(
     router_policy = attention_router_policy.resolve_policy(attention_router)
     routes, attention_navigation = attention_route_projection.maybe_rerank_routes_with_attention_router(enabled=bool(router_policy["enabled"]), query=str(query or ""), routes=routes, max_routes=effective_limit, project=project)
     attention_navigation["policy"] = router_policy
+    routes = _annotate_route_selection_hints(
+        routes,
+        macro_navigation=macro_navigation,
+        attention_navigation=attention_navigation,
+    )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
     deepen_requests = [
         _deepen_request_for_route(route, memory_packet)
@@ -1079,6 +1241,34 @@ def _json_out(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 
+def _render_recall_human(payload: Mapping[str, Any]) -> str:
+    packets = [packet for packet in payload.get("memory_packets") or [] if isinstance(packet, Mapping)]
+    lines = [f"AIppocampus agent recall: {payload.get('status') or 'unknown'}"]
+    if not packets:
+        lines.append("No compact route surfaced.")
+    for index, packet in enumerate(packets[:3], start=1):
+        label = (
+            packet.get("route_topic")
+            or packet.get("route_label")
+            or packet.get("route_id")
+            or "memory route"
+        )
+        next_action = packet.get("recommended_next") or packet.get("next_action") or "reopen_source"
+        lines.append(f"{index}. {label} -> {next_action}")
+        hint = packet.get("selection_hint")
+        if isinstance(hint, Mapping) and hint.get("source"):
+            lines.append(f"   why: {hint.get('source')}:{hint.get('why') or 'selected'}")
+        reason_codes = packet.get("route_delta_reason_codes") or packet.get("triage_rank_reason_codes")
+        if isinstance(reason_codes, list) and reason_codes:
+            lines.append("   codes: " + ", ".join(str(code) for code in reason_codes[:3]))
+    if payload.get("deepen_requests"):
+        lines.append("Next: call agent_deepen with a handle from --json or MCP agent_recall.")
+    else:
+        lines.append(f"Next: {payload.get('suggested_next') or 'continue_normally'}")
+    lines.append("Boundary: route only; reopen source before quoting or making strong claims.")
+    return "\n".join(lines)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
@@ -1139,18 +1329,20 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "recall":
         query = args.query_flag or " ".join(args.query)
-        _json_out(
-            recall(
-                query,
-                cwd=args.cwd,
-                clean_source_dir=args.clean_source_dir,
-                registry_dir=args.registry_dir,
-                macro_state_path=args.macro_state_jsonl,
-                project=args.project,
-                max_routes=args.max,
-                attention_router=args.attention_router_mode or args.attention_router,
-            )
+        payload = recall(
+            query,
+            cwd=args.cwd,
+            clean_source_dir=args.clean_source_dir,
+            registry_dir=args.registry_dir,
+            macro_state_path=args.macro_state_jsonl,
+            project=args.project,
+            max_routes=args.max,
+            attention_router=args.attention_router_mode or args.attention_router,
         )
+        if args.json:
+            _json_out(payload)
+        else:
+            print(_render_recall_human(payload))
         return 0
     if args.command == "aippo":
         task = args.task_flag or " ".join(args.task)

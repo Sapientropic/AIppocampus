@@ -46,7 +46,10 @@ class PromptContextRenderTests(unittest.TestCase):
             "no raw source, no local paths, no source refs in hook",
         )
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn(
+            "Next: call agent_aippo for the task contract before broad search.",
+            context,
+        )
         self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
         self.assertNotIn("suggested_agent_action=agent_aippo", context)
         self.assertNotIn("not_enough_for_claim=true", context)
@@ -79,7 +82,10 @@ class PromptContextRenderTests(unittest.TestCase):
         self.assertIn("source_required", affordance["lead_kinds"])
         self.assertIn("source_required_route_available", affordance["reason_codes"])
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn(
+            "Next: call agent_deepen when a handle is present; otherwise call agent_recall first.",
+            context,
+        )
         self.assertNotIn("suggested_agent_action=agent_deepen", context)
         self.assertNotIn("source_required_route_available", context)
 

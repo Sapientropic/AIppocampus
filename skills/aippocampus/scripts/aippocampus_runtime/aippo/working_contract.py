@@ -269,12 +269,17 @@ def activation_packet_from_working_contract(
     active = _active_clauses(clauses)
     guidance = usefulness.guidance_snippets(selected)
     families = usefulness.task_families(task)
+    display_hint = (
+        f"AIppo {families[0]} guidance."
+        if families
+        else "AIppo no active contract."
+    )
     packet = {
         "kind": "aippocampus_aippo_activation_packet",
         "schema_version": SCHEMA_VERSION,
         "aippo_id": contract.get("aippo_id") or AIPPO_ID,
         "output_mode": "working_contract",
-        "display_hint": _text(f"AIppo {families[0]} guidance.", 80),
+        "display_hint": _text(display_hint, 80),
         "task_families": families,
         "use_guidance": guidance,
         "allowed_without_reopen": ["planning", "patch_shape", "review", *families],
@@ -292,7 +297,7 @@ def activation_packet_from_working_contract(
     compact = dict(packet)
     active_ids = compact.get("active_clause_ids")
     trimmed_ids: list[Any] = active_ids[:1] if isinstance(active_ids, list) else []
-    compact["display_hint"] = _text(f"AIppo {families[0]} guidance.", 80)
+    compact["display_hint"] = _text(display_hint, 80)
     compact["task_families"] = families[:1]
     compact.pop("allowed_without_reopen", None)
     compact.pop("available_active_clause_count", None)

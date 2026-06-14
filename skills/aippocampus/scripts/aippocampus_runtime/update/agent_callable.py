@@ -12,6 +12,24 @@ from typing import Any
 
 PLUGIN_SECTION_RE = re.compile(r'^\s*\[plugins\."([^"]+)"\]\s*$')
 MCP_SECTION_RE = re.compile(r'^\s*\[(?:mcp_servers|mcpServers)\."?([^"\]]+)"?\]\s*$')
+HOST_PROBE_REPORT_RELATIVE = Path("aippocampus") / "host-probe" / "codex-plugin-install.json"
+
+
+def default_host_probe_report_path(codex_home_path: Path) -> Path:
+    return codex_home_path / HOST_PROBE_REPORT_RELATIVE
+
+
+def write_host_probe_report(codex_home_path: Path, payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not payload:
+        return {"status": "not_written", "reason": "no_probe_payload"}
+    path = default_host_probe_report_path(codex_home_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "status": "written",
+        "source": "plugin_install_verify",
+        "default_for": "aippocampus update status --json",
+    }
 
 
 def command_availability(command: str) -> dict[str, Any]:
@@ -250,7 +268,9 @@ def status_agent_callable(
 
 __all__ = [
     "command_availability",
+    "default_host_probe_report_path",
     "load_json_file",
     "mcp_command_repair_options",
     "status_agent_callable",
+    "write_host_probe_report",
 ]

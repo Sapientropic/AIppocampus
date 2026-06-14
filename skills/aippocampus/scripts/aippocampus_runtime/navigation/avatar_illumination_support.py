@@ -228,7 +228,7 @@ def task_relevant(card: Mapping[str, Any], task: str) -> bool:
     task_words = terms(task)
     if not task_words:
         return True
-    return bool(task_words & card_terms(card))
+    return bool(task_words & card_terms(card, task=""))
 
 
 def source_diversity(refs: Sequence[Mapping[str, Any]]) -> int:

@@ -219,7 +219,47 @@ def main(argv: list[str] | None = None) -> int:
             health = health_payload
             action_results.append({"id": "health_initial", "result": health})
 
-    if has_action(health, "build_index"):
+    if has_action(health, "build_clean_source"):
+        cmd = [
+            sys.executable,
+            "-m",
+            "aippocampus_runtime.source.clean_source",
+            "--cwd",
+            str(cwd),
+            "--json",
+        ]
+        if args.fail_fast:
+            clean_source = run_json(cmd)
+            action_results.append({"id": "build_clean_source", "result": clean_source})
+            health = run_json(health_cmd)
+        else:
+            code, clean_source_payload, stdout, stderr = run_json_checked(cmd)
+            if code == 0 and clean_source_payload is not None:
+                action_results.append(
+                    {
+                        **command_result("build_clean_source", cmd, code),
+                        "result": clean_source_payload,
+                    }
+                )
+                code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
+                if code == 0 and health_payload is not None:
+                    health = health_payload
+                else:
+                    action_failures.append(
+                        failure_result(
+                            "health_after_build_clean_source",
+                            health_cmd,
+                            code,
+                            health_stdout,
+                            health_stderr,
+                        )
+                    )
+            else:
+                action_failures.append(
+                    failure_result("build_clean_source", cmd, code, stdout, stderr)
+                )
+
+    if has_action(health, "build_index") and "build_clean_source" not in failed_action_ids(action_failures):
         cmd = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder", "--cwd", str(cwd)]
         if args.fail_fast:
             out = run_text(cmd)
@@ -240,6 +280,13 @@ def main(argv: list[str] | None = None) -> int:
                     )
             else:
                 action_failures.append(failure_result("build_index", cmd, code, stdout, stderr))
+    elif has_action(health, "build_index") and "build_clean_source" in failed_action_ids(action_failures):
+        skipped_due_to_failure.append(
+            {
+                "id": "build_index",
+                "reason": "depends_on_failed_build_clean_source",
+            }
+        )
 
     if has_action(health, "checkpoint"):
         cmd = [sys.executable, "-m", "aippocampus_runtime.artifacts.checkpoint", "--cwd", str(cwd), "--json"]

@@ -14,6 +14,11 @@ from aippocampus_runtime.core import (
     default_thread_clean_source_dir,
     resolve_artifact_path,
 )
+from aippocampus_runtime.privacy import (
+    LOCAL_PATH_REDACTION,
+    redact_private_paths,
+    redact_sensitive_values,
+)
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
@@ -242,6 +247,15 @@ def render_human_search_result(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def public_search_result(result: dict[str, Any], *, include_paths: bool = False) -> dict[str, Any]:
+    public = dict(result) if include_paths else redact_sensitive_values(redact_private_paths(result))
+    public["privacy"] = {
+        "paths_included": include_paths,
+        "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
+    }
+    return public
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+")
@@ -260,6 +274,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Filter to clean-source messages carrying this scope label. Repeat for OR semantics.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--include-paths",
+        action="store_true",
+        help="Local diagnostic opt-in: include filesystem paths in output.",
+    )
     args = parser.parse_args(argv)
 
     result = search_clean_source(
@@ -270,10 +289,11 @@ def main(argv: list[str] | None = None) -> int:
         snippet_chars=args.snippet_chars,
         scope_labels=args.scope_label,
     )
+    public_result = public_search_result(result, include_paths=bool(args.include_paths))
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:
-        print(render_human_search_result(result))
+        print(render_human_search_result(public_result))
     return 0 if result["matches"] else 1
 
 

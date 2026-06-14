@@ -542,6 +542,32 @@ class AippocampusCliTests(unittest.TestCase):
         tools = json.loads(proc.stdout)["tools"]
         self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
 
+    def test_first_run_command_aliases_are_copy_pasteable(self) -> None:
+        from aippocampus_runtime.cli import facade
+        from aippocampus_runtime.mcp import server as mcp_server
+
+        plugin_status = facade.resolve_command(["plugin", "status", "--json"])
+        maintenance = facade.resolve_command(["maintenance", "--json"])
+
+        self.assertEqual(plugin_status.module_name, "aippocampus_runtime.update.cli")
+        self.assertEqual(plugin_status.args, ["status", "--json"])
+        self.assertEqual(maintenance.module_name, "aippocampus_runtime.ops.maintenance")
+
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = mcp_server.main(["list-tools"])
+        self.assertEqual(code, 0)
+        tools = json.loads(stdout.getvalue())["tools"]
+        self.assertTrue(any(tool["name"] == "memory_health" for tool in tools))
+
+    def test_sync_status_without_sync_dir_matches_mcp_capability_truth(self) -> None:
+        proc = self.run_cli("sync", "status", "--json")
+
+        self.assertEqual(proc.returncode, 0)
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["status"], "available_requires_sync_dir")
+        self.assertEqual(data["backend"], "local_folder")
+        self.assertIn("push", data["commands"])
+
     def test_sync_status_preserves_child_exit_code_and_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             proc = self.run_cli("sync", "status", "--sync-dir", tmp, "--json")

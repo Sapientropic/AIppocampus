@@ -15,6 +15,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.update.agent_callable import (
+    default_host_probe_report_path as _default_host_probe_report_path,
+)
+from aippocampus_runtime.update.agent_callable import (
+    write_host_probe_report,
+)
 from aippocampus_runtime.update.cli import (
     DEFAULT_PLUGIN_OUTPUT,
     _load_plugin_builder,
@@ -47,6 +53,10 @@ IGNORED_TREE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cach
 IGNORED_TREE_SUFFIXES = (".pyc", ".pyo")
 
 HostProbeRunner = Callable[..., dict[str, Any]]
+
+
+def default_host_probe_report_path(codex_home_path: Path) -> Path:
+    return _default_host_probe_report_path(codex_home_path)
 
 
 class AppServerError(RuntimeError):
@@ -602,6 +612,10 @@ def install_codex_plugin(
         else None
     )
     probe = attach_host_probe_warning_summary(probe)
+    host_probe_report = write_host_probe_report(codex_home_resolved, probe) if verify else {
+        "status": "not_written",
+        "reason": "verify_not_requested",
+    }
     agent_status = _agent_callable_status(probe, verify)
     return {
         "kind": "aippocampus_plugin_install",
@@ -615,6 +629,7 @@ def install_codex_plugin(
         "plugin": plugin_result,
         "cache_refresh": cache_refresh,
         "host_probe": probe,
+        "host_probe_report": host_probe_report,
         "agent_callable_status": agent_status,
         "hooks_auto_enabled": False,
         "rollback_command": "aippocampus plugin uninstall --codex",
