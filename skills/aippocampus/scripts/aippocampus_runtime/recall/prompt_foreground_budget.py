@@ -35,8 +35,8 @@ HIGHER_AUTHORITY_ACTIONS = {
     "direction_with_ref",
     "ignore_or_blocked",
 }
-MEMORY_PACKET_MAX_BYTES = 480
-MEMORY_PACKET_TOTAL_MAX_BYTES = 1800
+MEMORY_PACKET_MAX_BYTES = 560
+MEMORY_PACKET_TOTAL_MAX_BYTES = 2200
 MEMORY_PACKET_MAX_HINTS = 4
 PROFILE_LIKE_MARKERS = (
     "adhd",
@@ -60,6 +60,9 @@ FOREGROUND_PACKET_ALLOWED_KEYS = {
     "preview_permission",
     "risk_flags",
     "triage_rank_reason_codes",
+    "selection_hint",
+    "route_delta_reason_codes",
+    "recommended_next",
     "claim_permission",
     "next_action",
     "deepen_route_id",
@@ -287,10 +290,17 @@ def _packet_triage_text(packet: dict[str, Any]) -> str:
     values = [str(packet.get(key) or "") for key in TRIAGE_TEXT_KEYS]
     values.extend(str(value) for value in packet.get("risk_flags") or [])
     values.extend(str(value) for value in packet.get("triage_rank_reason_codes") or [])
+    values.extend(str(value) for value in packet.get("route_delta_reason_codes") or [])
+    hint = packet.get("selection_hint")
+    if isinstance(hint, Mapping):
+        values.extend(str(value) for value in hint.values())
     return " ".join(value for value in values if value)
 
 
 def _has_selection_hint(packet: Mapping[str, Any]) -> bool:
+    structured_hint = packet.get("selection_hint")
+    if isinstance(structured_hint, Mapping) and structured_hint.get("source"):
+        return True
     label = str(packet.get("route_label") or "").strip()
     hint = str(packet.get("display_hint") or "").strip()
     return bool(label) and bool(
@@ -305,6 +315,7 @@ def _triage_signature(packet: Mapping[str, Any]) -> str:
             str(packet.get("route_label") or "").casefold(),
             str(packet.get("display_hint") or "").casefold(),
             ",".join(str(code) for code in packet.get("triage_rank_reason_codes") or []),
+            ",".join(str(code) for code in packet.get("route_delta_reason_codes") or []),
         ]
     )
 

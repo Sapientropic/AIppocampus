@@ -25,6 +25,57 @@ def tool_schema(
 
 TOOLS: list[dict[str, Any]] = [
     tool_schema(
+        "agent_recall",
+        "Return compact opt-in agent MemoryPackets plus explicit deepen handles.",
+        {
+            "query": {"type": "string"},
+            "intent": {"type": "string"},
+            "cwd": {"type": "string"},
+            "clean_source_dir": {"type": "string"},
+            "registry_dir": {"type": "string"},
+            "macro_state_jsonl": {"type": "string"},
+            "project": {"type": "string"},
+            "max": {"type": "integer", "minimum": 1, "maximum": 25},
+            "attention_router": {"type": "boolean"},
+            "attention_router_mode": {"type": "string", "enum": ["off", "on", "auto"]},
+            "include_private_paths": {"type": "boolean"},
+        },
+    ),
+    tool_schema(
+        "agent_aippo",
+        "Return the compact AIppo working-contract activation packet for a task.",
+        {
+            "task": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
+        },
+    ),
+    tool_schema(
+        "agent_deepen",
+        "Deepen an opaque agent_recall handle or AIppo route id before stronger claims.",
+        {
+            "handle": {"type": ["string", "object"]},
+            "cwd": {"type": "string"},
+            "clean_source_dir": {"type": "string"},
+            "registry_dir": {"type": "string"},
+            "macro_state_jsonl": {"type": "string"},
+            "project": {"type": "string"},
+            "max": {"type": "integer", "minimum": 1, "maximum": 25},
+            "include_private_paths": {"type": "boolean"},
+        },
+        ["handle"],
+    ),
+    tool_schema(
+        "agent_explain",
+        "Explain an opaque agent_recall handle or AIppo route id without opening source.",
+        {
+            "handle": {"type": ["string", "object"]},
+            "macro_state_jsonl": {"type": "string"},
+            "project": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
+        },
+        ["handle"],
+    ),
+    tool_schema(
         "search_memory",
         "Search clean-source AIppocampus memory for the current or supplied workspace.",
         {

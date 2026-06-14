@@ -17,6 +17,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.update import cli as update_cli  # noqa: E402
+from aippocampus_runtime.update import plugin_installer  # noqa: E402
 
 PROVIDER_ENV_NAMES = [
     "DEEPSEEK_API_KEY",
@@ -475,6 +476,45 @@ class UpdateSyncTests(unittest.TestCase):
         by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
         self.assertTrue(by_id["active_recall_ready"]["ready"])
         self.assertEqual(by_id["active_recall_ready"]["status"], "ready")
+
+    def test_status_uses_default_host_probe_cache_from_plugin_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = plugin_installer.default_host_probe_report_path(codex_home)
+            probe.parent.mkdir(parents=True)
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {
+                            "tool_names": ["memory_health", "search_memory", "sync_status"]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {
+                            "status": "available_requires_sync_dir",
+                            "backend": "local_folder",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertTrue(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok")
+        self.assertEqual(agent["host_live_probe"]["status"], "ok")
+        self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
 
     def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
         self,

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -73,6 +74,10 @@ def int_range(value: Any, *, default: int, minimum: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(minimum, min(maximum, parsed))
+
+
+def agent_continuity_module() -> Any:
+    return importlib.import_module("aippocampus_runtime.recall.agent_continuity")
 
 
 def clean_source_dir_for(arguments: dict[str, Any]) -> Path:
@@ -233,6 +238,73 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     except RecallNavigationError as exc:
         return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+    return text_result(public_payload(arguments, payload))
+
+
+def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
+    query = str(arguments.get("query") or arguments.get("intent") or "").strip()
+    if not query:
+        return tool_error(
+            "missing_query",
+            "agent_recall requires a non-empty query or intent.",
+            arguments=arguments,
+        )
+    agent = agent_continuity_module()
+    payload = agent.recall(
+        query,
+        cwd=arguments.get("cwd"),
+        clean_source_dir=arguments.get("clean_source_dir"),
+        registry_dir=arguments.get("registry_dir"),
+        macro_state_path=arguments.get("macro_state_jsonl"),
+        project=str(arguments.get("project") or "AIppocampus"),
+        max_routes=int_range(arguments.get("max"), default=agent.MAX_ROUTES, minimum=1, maximum=25),
+        attention_router=arguments.get("attention_router_mode")
+        or bool(arguments.get("attention_router")),
+    )
+    return text_result(public_payload(arguments, payload))
+
+
+def call_agent_aippo(arguments: dict[str, Any]) -> dict[str, Any]:
+    agent = agent_continuity_module()
+    payload = agent.activate_aippo(task=str(arguments.get("task") or ""))
+    return text_result(public_payload(arguments, payload))
+
+
+def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
+    if "handle" not in arguments:
+        return tool_error(
+            "missing_agent_handle",
+            "agent_deepen requires an opaque handle from agent_recall or an AIppo route id.",
+            arguments=arguments,
+            required=["handle"],
+        )
+    agent = agent_continuity_module()
+    payload = agent.deepen(
+        arguments.get("handle"),
+        cwd=arguments.get("cwd"),
+        clean_source_dir=arguments.get("clean_source_dir"),
+        registry_dir=arguments.get("registry_dir"),
+        macro_state_path=arguments.get("macro_state_jsonl"),
+        project=str(arguments.get("project") or "AIppocampus"),
+        max_matches=int_range(arguments.get("max"), default=agent.MAX_ROUTES, minimum=1, maximum=25),
+    )
+    return text_result(public_payload(arguments, payload))
+
+
+def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
+    if "handle" not in arguments:
+        return tool_error(
+            "missing_agent_handle",
+            "agent_explain requires an opaque handle from agent_recall or an AIppo route id.",
+            arguments=arguments,
+            required=["handle"],
+        )
+    agent = agent_continuity_module()
+    payload = agent.explain(
+        arguments.get("handle"),
+        macro_state_path=arguments.get("macro_state_jsonl"),
+        project=str(arguments.get("project") or "AIppocampus"),
+    )
     return text_result(public_payload(arguments, payload))
 
 
@@ -554,6 +626,10 @@ def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOL_CALLS = {
+    "agent_recall": call_agent_recall,
+    "agent_aippo": call_agent_aippo,
+    "agent_deepen": call_agent_deepen,
+    "agent_explain": call_agent_explain,
     "search_memory": call_search_memory,
     "recall_context": call_recall_context,
     "recall_deepen": call_recall_deepen,
@@ -693,11 +769,12 @@ def serve_stdio() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("command", nargs="?", choices=["list-tools"])
     parser.add_argument(
         "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
     )
     args = parser.parse_args(argv)
-    if args.list_tools:
+    if args.list_tools or args.command == "list-tools":
         print(json.dumps({"tools": TOOLS}, ensure_ascii=False, indent=2))
         return 0
     return serve_stdio()

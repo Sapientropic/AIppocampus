@@ -54,6 +54,7 @@ COMMANDS = {
     "plugin": CommandSpec("plugin.py", "aippocampus_runtime.update.plugin_installer"),
     "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
     "logs": CommandSpec("log_retention.py", "aippocampus_runtime.ops.log_retention"),
+    "maintenance": CommandSpec("maintenance.py", "aippocampus_runtime.ops.maintenance"),
     "storage": CommandSpec(
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",
@@ -109,6 +110,7 @@ SCRIPT_MODULES = {
     "update.py": "aippocampus_runtime.update.cli",
     "plugin.py": "aippocampus_runtime.update.plugin_installer",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
+    "maintenance.py": "aippocampus_runtime.ops.maintenance",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
     "issue_work_guard.py": "aippocampus_runtime.ops.issue_work_guard",
     "telepathy_handoff_store.py": "aippocampus_runtime.ops.telepathy_handoff_store",
@@ -232,6 +234,13 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             module_name_for_script("registry.py"),
             _conversation_import_args(rest[1:]),
         )
+    if command == "plugin" and rest and rest[0] == "status":
+        return CommandInvocation(
+            command,
+            "update.py",
+            module_name_for_script("update.py"),
+            ["status", *rest[1:]],
+        )
     if command in COMMANDS:
         return invocation_from_spec(command, COMMANDS[command], rest)
     if command == "mcp":
@@ -354,6 +363,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)
     print("  telepathy           Opt-in local handoff card lifecycle", file=target)
     print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
+    print("  maintenance         Run bounded local maintenance", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
     print("  why-not-recall      Explain why a recall route stayed silent", file=target)

@@ -93,7 +93,7 @@ class PromptForegroundBudgetTests(unittest.TestCase):
         self.assertLessEqual(len(context), 650)
         self.assertLessEqual(context.count("\n") + 1, 9)
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Next: call agent_recall with this cue before broad search.", context)
         self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
         self.assertIn("routes:", context)
         self.assertNotIn("action: direction_only", context)
@@ -225,7 +225,7 @@ class PromptForegroundBudgetTests(unittest.TestCase):
 
         self.assertLessEqual(len(context), 650)
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn("Next: call agent_recall with this cue before broad search.", context)
         self.assertIn("Use as route only; reopen source before quoting or making strong claims.", context)
         for marker in (
             "bounded_evidence",
@@ -286,7 +286,10 @@ class PromptForegroundBudgetTests(unittest.TestCase):
 
         self.assertLessEqual(len(context), 650)
         self.assertIn("AIppocampus: prior context may matter.", context)
-        self.assertIn("Next: call recall_context with this cue before broad search.", context)
+        self.assertIn(
+            "Next: call agent_deepen when a handle is present; otherwise call agent_recall first.",
+            context,
+        )
         self.assertIn("Small hippocampus smoke route", context)
         for marker in (
             "source_required",

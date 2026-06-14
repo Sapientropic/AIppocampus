@@ -82,6 +82,21 @@ class AvatarIlluminationTests(unittest.TestCase):
         self.assertNotIn("source_refs", packet)
         self.assertLessEqual(packet["packet_bytes"], 700)
 
+    def test_unrelated_task_does_not_receive_positive_avatar_posture(self) -> None:
+        state = avatar_illumination.build_source_backed_avatar_state(
+            fixture_card(),
+            task="casual chat about weather",
+        )
+
+        packet = avatar_illumination.project_avatar_state_for_foreground(state)
+
+        self.assertEqual(state["task_relevance"]["status"], "irrelevant_to_task")
+        self.assertFalse(state["selected_for_task"])
+        self.assertFalse(packet["emitted"])
+        self.assertEqual(packet["reason"], "irrelevant_to_task")
+        self.assertEqual(packet["recommended_next"], "continue_without_avatar")
+        self.assertEqual(packet["claim_permission"], "none")
+
     def test_partial_invalidation_narrows_posture_and_retains_shadow_record(self) -> None:
         state = avatar_illumination.build_source_backed_avatar_state(
             fixture_card(),

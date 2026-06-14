@@ -53,14 +53,51 @@ def _is_aippo_working_contract(item: Mapping[str, Any]) -> bool:
     return candidate_type == "aippo_working_contract" or route.startswith("aippo_")
 
 
+def _is_avatar_posture(item: Mapping[str, Any]) -> bool:
+    candidate_type = str(item.get("candidate_type") or "").casefold()
+    provenance = str(item.get("provenance_class") or "").casefold()
+    return candidate_type in {"avatar_posture", "avatar_state"} or provenance in {
+        "avatar_posture",
+        "avatar_state",
+    }
+
+
+def _is_episode_arc(item: Mapping[str, Any]) -> bool:
+    candidate_type = str(item.get("candidate_type") or "").casefold()
+    provenance = str(item.get("provenance_class") or "").casefold()
+    route = str(item.get("route") or item.get("route_id") or "").casefold()
+    return (
+        candidate_type in {"episode_arc", "episode_arc_route"}
+        or provenance in {"episode_arc", "episode_arc_route"}
+        or route.startswith("episode_arc")
+    )
+
+
+def _has_architecture_diagnostic(result: Mapping[str, Any], items: list[dict[str, Any]]) -> bool:
+    if result.get("architecture_diagnostic") or _as_list(result.get("architecture_diagnostics")):
+        return True
+    if result.get("observatory") or result.get("cognitive_observatory"):
+        return True
+    return any(
+        str(item.get("candidate_type") or "").casefold() == "architecture_diagnostic"
+        or str(item.get("surface") or "").casefold()
+        in {"cognitive_observatory", "architecture_diagnostic", "architecture_diagnostics"}
+        for item in items
+    )
+
+
 def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     kinds: list[str] = []
     working = [item for item in _as_list(result.get("working_memory")) if isinstance(item, dict)]
     candidates = [item for item in _as_list(result.get("candidates")) if isinstance(item, dict)]
     evidence = [item for item in _as_list(result.get("evidence")) if isinstance(item, dict)]
     cards = _ambient_cards(result)
+    architecture = [
+        item for item in _as_list(result.get("architecture_diagnostics")) if isinstance(item, dict)
+    ]
     cognitive_map = [item for item in _as_list(result.get("cognitive_map")) if isinstance(item, dict)]
     semantic_gate = _as_dict(result.get("semantic_gate"))
+    all_items = working + candidates + evidence + cards + architecture
 
     if any(_is_aippo_working_contract(item) for item in working + candidates):
         kinds.append("aippo_working_contract")
@@ -83,6 +120,14 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
         for item in working + cards
     ):
         kinds.append("dream_or_subconscious")
+    if any(_is_avatar_posture(item) for item in all_items) or result.get("avatar_state"):
+        kinds.append("avatar_posture")
+    if any(_is_episode_arc(item) for item in all_items) or result.get("episode_arc") or _as_list(
+        result.get("episode_arcs")
+    ):
+        kinds.append("episode_arc")
+    if _has_architecture_diagnostic(result, all_items):
+        kinds.append("architecture_diagnostic")
     if result.get("semantic_source_reopen_route") or any(
         str(card.get("action_grammar") or "") == "reopenable_route" for card in cards
     ):
@@ -104,7 +149,12 @@ def _lead_count(result: Mapping[str, Any], lead_kinds: list[str]) -> int:
         + len(_as_list(result.get("working_memory")))
         + len(_ambient_cards(result))
         + len(_as_list(result.get("cognitive_map")))
+        + len(_as_list(result.get("architecture_diagnostics")))
     )
+    if (result.get("architecture_diagnostic") or result.get("observatory") or result.get("cognitive_observatory")) and count == 0:
+        count = 1
+    if (result.get("avatar_state") or result.get("episode_arc") or _as_list(result.get("episode_arcs"))) and count == 0:
+        count = 1
     if result.get("semantic_source_reopen_route") and count == 0:
         count = 1
     return min(max(count, len(lead_kinds)), 9)
@@ -154,6 +204,12 @@ def _reason_codes(action: str, lead_kinds: list[str]) -> list[str]:
         codes.append("warm_route_available")
     if "source_required" in lead_kinds:
         codes.append("source_required_route_available")
+    if "avatar_posture" in lead_kinds:
+        codes.append("avatar_posture_available")
+    if "episode_arc" in lead_kinds:
+        codes.append("episode_arc_route_available")
+    if "architecture_diagnostic" in lead_kinds:
+        codes.append("architecture_diagnostic_available")
     if action == "read_current_repo_first":
         codes.append("current_repo_fact_intent")
     if action == "stay_silent":
@@ -192,9 +248,16 @@ def build_hook_agent_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
 def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     if not affordance.get("usable_continuity_lead"):
         return None
+    action = str(affordance.get("suggested_agent_action") or "agent_recall")
+    if action == "agent_aippo":
+        next_line = "Next: call agent_aippo for the task contract before broad search."
+    elif action == "agent_deepen":
+        next_line = "Next: call agent_deepen when a handle is present; otherwise call agent_recall first."
+    else:
+        next_line = "Next: call agent_recall with this cue before broad search."
     return (
         "AIppocampus: prior context may matter.\n"
-        "Next: call recall_context with this cue before broad search.\n"
+        f"{next_line}\n"
         "Use as route only; reopen source before quoting or making strong claims."
     )
 

@@ -154,6 +154,21 @@ class AIppoWorkingContractTests(unittest.TestCase):
         )
         self.assertIn("cannot_claim", " ".join(packets["benchmark reporting"]["use_guidance"]))
 
+    def test_unrelated_task_stays_silent_instead_of_defaulting_to_coding(self) -> None:
+        contract = aippo.build_project_workflow_public_safe_contract()
+
+        packet = aippo.activation_packet_from_working_contract(
+            contract,
+            task="casual chat about weather",
+        )
+
+        self.assertEqual(packet["task_families"], [])
+        self.assertEqual(packet["active_clause_count"], 0)
+        self.assertEqual(packet["active_clause_ids"], [])
+        self.assertEqual(packet["use_guidance"], [])
+        self.assertEqual(packet["next_action"], "stay_silent")
+        self.assertEqual(packet["display_hint"], "AIppo no active contract.")
+
     def test_deepen_and_stability_surfaces_preserve_audit_without_foreground_leakage(self) -> None:
         report = aippo.build_aippo_working_contract_fixture_report()
         deepen = report["deepen_surface"]

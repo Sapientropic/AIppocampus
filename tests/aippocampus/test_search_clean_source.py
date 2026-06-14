@@ -351,6 +351,47 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["warnings"][0]["thread_key"], "session:bad-clean")
         self.assertEqual(payload["warnings"][0]["stage"], "clean_source")
 
+    def test_cli_json_redacts_source_path_by_default_and_can_opt_in(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "AIppocampus",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--json",
+                ]
+            )
+        public_payload = json.loads(stdout.getvalue())
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            include_code = search.main(
+                [
+                    "AIppocampus",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--include-paths",
+                    "--json",
+                ]
+            )
+        private_payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(include_code, 0)
+        self.assertNotIn(str(self.cwd), json.dumps(public_payload, ensure_ascii=False))
+        self.assertEqual(public_payload["source"], search.LOCAL_PATH_REDACTION)
+        self.assertFalse(public_payload["privacy"]["paths_included"])
+        self.assertEqual(
+            private_payload["source"],
+            str(self.source / "messages.jsonl"),
+        )
+        self.assertTrue(private_payload["privacy"]["paths_included"])
+
     def test_registry_search_cli_can_request_deep_budget(self) -> None:
         registry_file = self.cwd / "threads.json"
         registry_file.write_text(

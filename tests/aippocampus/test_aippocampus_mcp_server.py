@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -100,6 +101,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertGreaterEqual(
             names,
             {
+                "agent_recall",
+                "agent_aippo",
+                "agent_deepen",
+                "agent_explain",
                 "search_memory",
                 "recall_context",
                 "recall_deepen",
@@ -114,6 +119,60 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "deepen_telepathy_handoff",
             },
         )
+
+    def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
+        listed = mcp.handle_request({"jsonrpc": "2.0", "id": 201, "method": "tools/list"})
+        names = {tool["name"] for tool in listed["result"]["tools"]}
+        self.assertGreaterEqual(
+            names,
+            {"agent_recall", "agent_aippo", "agent_deepen", "agent_explain"},
+        )
+
+        recall_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 202,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_recall",
+                    "arguments": {
+                        "query": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(self.clean),
+                        "max": 2,
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(recall_response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(recall_response["result"].get("isError", False), payload)
+        self.assertEqual(payload["kind"], "aippocampus_agent_continuity_path")
+        self.assertEqual(payload["mode"], "recall")
+        self.assertEqual(payload["surface"], "agent_cli_or_mcp_adapter")
+        self.assertTrue(payload["opt_in_required"])
+        self.assertTrue(payload["policy_boundary"]["navigation_only_not_fact"])
+        self.assertEqual(payload["memory_packets"][0]["claim_permission"], "no_claim_before_reopen")
+        self.assertEqual(payload["deepen_requests"][0]["tool"], "agent deepen")
+        self.assertIn("copy_paste_command", payload["deepen_requests"][0])
+        self.assertNotIn(str(self.cwd), encoded)
+
+        aippo_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 203,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_aippo",
+                    "arguments": {"task": "product usability closeout"},
+                },
+            }
+        )
+        aippo_payload = self.tool_payload(aippo_response)
+        self.assertFalse(aippo_response["result"].get("isError", False), aippo_payload)
+        self.assertEqual(aippo_payload["mode"], "aippo")
+        self.assertTrue(aippo_payload["policy_boundary"]["navigation_only_not_fact"])
 
     def test_tools_only_server_returns_empty_resource_lists(self) -> None:
         resources = mcp.handle_request(
@@ -1197,10 +1256,18 @@ class AippocampusMcpServerTests(unittest.TestCase):
             },
         ]
         stdin = "\n".join(json.dumps(item, ensure_ascii=False) for item in requests) + "\n"
+        env = os.environ.copy()
+        existing_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = (
+            str(SCRIPTS)
+            if not existing_pythonpath
+            else str(SCRIPTS) + os.pathsep + existing_pythonpath
+        )
 
         proc = subprocess.run(
             [sys.executable, "-m", "aippocampus_runtime.mcp.server"],
             input=stdin,
+            env=env,
             text=True,
             encoding="utf-8",
             errors="replace",

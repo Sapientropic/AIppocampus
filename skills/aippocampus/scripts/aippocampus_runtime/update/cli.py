@@ -19,6 +19,7 @@ from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update.agent_callable import (
     command_availability,
+    default_host_probe_report_path,
     load_json_file,
     mcp_command_repair_options,
     status_agent_callable,
@@ -701,9 +702,12 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         "hooks": hooks,
         "llm": llm,
     }
-    host_probe = load_json_file(
-        Path(args.host_probe_report).resolve() if args.host_probe_report else None
+    host_probe_path = (
+        Path(args.host_probe_report).resolve()
+        if args.host_probe_report
+        else default_host_probe_report_path(codex_home_path)
     )
+    host_probe = load_json_file(host_probe_path)
     surfaces["agent_callable"] = status_agent_callable(
         codex_home_path,
         surfaces,

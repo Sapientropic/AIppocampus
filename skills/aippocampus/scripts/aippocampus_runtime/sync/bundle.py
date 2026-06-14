@@ -781,10 +781,23 @@ def status_sync_bundle(sync_dir: str | Path) -> dict:
     }
 
 
+def available_requires_sync_dir_status() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "status": "available_requires_sync_dir",
+        "backend": "local_folder",
+        "backends": ["local_folder", "http_object_store"],
+        "commands": ["status", "push", "pull", "repair"],
+        "next_command": "aippocampus sync status --sync-dir <folder> --json",
+        "raw_rollout_sync": "explicit_only",
+        "claim_boundary": "sync capability exists, but no local sync backend is selected",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["status", "push", "pull", "repair"])
-    parser.add_argument("--sync-dir", required=True)
+    parser.add_argument("--sync-dir")
     parser.add_argument("--registry-dir", default=None)
     parser.add_argument("--include-raw", action="store_true")
     parser.add_argument("--encrypt", action="store_true")
@@ -799,7 +812,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "status":
-            if args.require_encrypted:
+            if not args.sync_dir:
+                result = available_requires_sync_dir_status()
+            elif args.require_encrypted:
                 encrypted_sync_bundle = importlib.import_module(
                     "aippocampus_runtime.sync.encrypted.bundle"
                 )
@@ -813,6 +828,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 result = status_sync_bundle(args.sync_dir)
         elif args.command == "push":
+            if not args.sync_dir:
+                raise ValueError("missing_sync_dir: push requires --sync-dir")
             if args.encrypt:
                 encrypted_sync_bundle = importlib.import_module(
                     "aippocampus_runtime.sync.encrypted.bundle"
@@ -833,6 +850,8 @@ def main(argv: list[str] | None = None) -> int:
                     include_raw=args.include_raw,
                 )
         elif args.command == "pull":
+            if not args.sync_dir:
+                raise ValueError("missing_sync_dir: pull requires --sync-dir")
             if args.require_encrypted:
                 encrypted_sync_bundle = importlib.import_module(
                     "aippocampus_runtime.sync.encrypted.bundle"
@@ -847,6 +866,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 result = pull_sync_bundle(args.sync_dir, args.registry_dir)
         else:
+            if not args.sync_dir:
+                raise ValueError("missing_sync_dir: repair requires --sync-dir")
             if args.require_encrypted:
                 encrypted_sync_bundle = importlib.import_module(
                     "aippocampus_runtime.sync.encrypted.bundle"
@@ -863,7 +884,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         result = {
             "ok": False,
-            "sync_dir": str(Path(args.sync_dir).resolve()),
+            "sync_dir": str(Path(args.sync_dir).resolve()) if args.sync_dir else None,
             "issues": [{"code": str(exc).split(":", 1)[0], "message": str(exc)}],
         }
 

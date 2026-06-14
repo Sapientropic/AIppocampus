@@ -273,6 +273,91 @@ class AippocampusHealthTests(unittest.TestCase):
             any("latest visible" in item["reason"] for item in payload["recommended_actions"])
         )
 
+    def test_health_treats_one_live_message_delta_as_product_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+            rollout.write_text(
+                rollout.read_text(encoding="utf-8")
+                + json.dumps(
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-05T00:02:01Z",
+                        "payload": {
+                            "type": "agent_message",
+                            "phase": "commentary",
+                            "message": "health command is running",
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["freshness"]["raw_newer_than_index"])
+        self.assertEqual(payload["index"]["message_delta"], 1)
+        self.assertEqual(payload["product_readiness"]["status"], "ready_with_live_delta")
+        self.assertTrue(payload["product_readiness"]["live_delta_tolerated"])
+        self.assertNotIn("build_index", [item["id"] for item in payload["recommended_actions"]])
+
+    def test_health_cli_json_redacts_paths_by_default_and_can_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+            args = [
+                "--cwd",
+                str(workspace),
+                "--index-dir",
+                str(paths["index_dir"]),
+                "--clean-source-dir",
+                str(paths["clean_source_dir"]),
+                "--graphify-corpus",
+                str(paths["graphify_corpus"]),
+                "--segments-dir",
+                str(paths["segments_dir"]),
+                "--checkpoint-state",
+                str(paths["checkpoint_state"]),
+                "--anchors",
+                str(paths["anchors"]),
+                "--json",
+            ]
+
+            with (
+                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch("sys.stdout", new=StringIO()) as stdout,
+            ):
+                code = health.main(args)
+            public_payload = json.loads(stdout.getvalue())
+
+            with (
+                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch("sys.stdout", new=StringIO()) as stdout,
+            ):
+                include_code = health.main([*args, "--include-paths"])
+            private_payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(include_code, 0)
+        public_encoded = json.dumps(public_payload, ensure_ascii=False)
+        self.assertNotIn(str(workspace), public_encoded)
+        self.assertEqual(public_payload["cwd"], health.LOCAL_PATH_REDACTION)
+        self.assertFalse(public_payload["privacy"]["paths_included"])
+        self.assertEqual(private_payload["cwd"], str(workspace.resolve()))
+        self.assertTrue(private_payload["privacy"]["paths_included"])
+
     def test_health_trajectory_reports_age_without_age_only_preemptive_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

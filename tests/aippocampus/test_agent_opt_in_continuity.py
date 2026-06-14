@@ -333,6 +333,18 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(routed_report["attention_router_navigation"]["enabled"])
         self.assertEqual(routed_report["attention_router_navigation"]["policy"]["mode"], "on")
         self.assertTrue(routed_report["attention_router_navigation"]["top_route_changed"])
+        self.assertEqual(
+            routed_report["memory_packets"][0]["selection_hint"]["source"],
+            "attention_router",
+        )
+        self.assertIn(
+            "attention_router_top_route_changed",
+            routed_report["memory_packets"][0]["route_delta_reason_codes"],
+        )
+        self.assertEqual(
+            routed_report["memory_packets"][0]["recommended_next"],
+            "deepen_this_route_first",
+        )
         self.assertTrue(routed_report["metrics"]["attention_router_applied"])
         self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
         self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
@@ -442,6 +454,45 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertFalse(report["attention_router_navigation"]["enabled"])
         self.assertEqual(report["memory_packets"][0]["route_id"], "route_generic")
         self.assertIn("safety_red_line_present", policy["promotion_blockers"])
+
+    def test_macro_applied_recall_exposes_compact_route_delta_hint(self) -> None:
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "route_id": "route_macro",
+                    "kind": "source_ref",
+                    "handle": "handle:macro",
+                    "route_label": "project architecture route",
+                    "route_topic": "architecture_validation",
+                    "source_refs": [{"source_id": "src_macro", "message_id": "msg_macro"}],
+                }
+            ],
+        }
+        macro_path = self._macro_state_path(
+            active_layer="人",
+            momentum={"basis": {"support_delta": 0.2}},
+        )
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            report = agent_continuity.recall(
+                "继续架构验收，判断下一步该查哪条产品路径",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                macro_state_path=macro_path,
+                max_routes=1,
+            )
+
+        packet = report["memory_packets"][0]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertTrue(report["macro_navigation"]["applied"])
+        self.assertEqual(packet["selection_hint"]["source"], "macro_orientation")
+        self.assertIn("macro_orientation_recall_prior", packet["route_delta_reason_codes"])
+        self.assertIn("macro_active_layer", packet["selection_hint"]["why"])
+        self.assertEqual(packet["recommended_next"], "deepen_this_route_first")
+        self.assertNotIn("src_macro", encoded)
+        self.assertNotIn("source_refs", encoded)
 
     def test_stale_and_malformed_deepen_cannot_verify(self) -> None:
         recall = agent_continuity.recall(
@@ -773,6 +824,36 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["memory_packets"][0]["kind"], "aippocampus_memory_packet")
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn(str(self.cwd), encoded)
+
+    def test_cli_agent_recall_default_output_is_compact_human_frontstage(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("AIppocampus agent recall: ok", proc.stdout)
+        self.assertIn("Next: call agent_deepen", proc.stdout)
+        self.assertIn("Boundary: route only", proc.stdout)
+        self.assertNotIn('"memory_packets"', proc.stdout)
+        self.assertNotIn("source_refs", proc.stdout)
+        self.assertNotIn(str(self.cwd), proc.stdout)
 
     def test_cli_agent_recall_auto_attention_reports_promotion_blockers(self) -> None:
         proc = subprocess.run(

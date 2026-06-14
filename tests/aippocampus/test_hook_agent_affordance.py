@@ -95,6 +95,47 @@ class HookAgentAffordanceTests(unittest.TestCase):
         self.assertEqual(stale_claim["claim_permission"], "must_deepen_before_claim")
         self.assertEqual(report["metrics"]["strong_claim_without_deepen_count"], 0)
 
+    def test_architecture_avatar_and_episode_diagnostics_are_agent_reachable_without_fact_authority(
+        self,
+    ) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "ambient_recall": {
+                    "cards": [
+                        {
+                            "provenance_class": "avatar_state",
+                            "action_grammar": "direction_only",
+                        },
+                        {
+                            "provenance_class": "episode_arc_route",
+                            "action_grammar": "direction_only",
+                        },
+                    ]
+                },
+                "architecture_diagnostics": [
+                    {
+                        "surface": "cognitive_observatory",
+                        "authority": "navigation_only",
+                    }
+                ],
+            }
+        )
+        policy = affordance.agent_policy_decision_from_affordance(packet)
+
+        self.assertTrue(packet["usable_continuity_lead"])
+        self.assertEqual(packet["suggested_agent_action"], "agent_recall")
+        self.assertIn("avatar_posture", packet["lead_kinds"])
+        self.assertIn("episode_arc", packet["lead_kinds"])
+        self.assertIn("architecture_diagnostic", packet["lead_kinds"])
+        self.assertIn("avatar_posture_available", packet["reason_codes"])
+        self.assertIn("episode_arc_route_available", packet["reason_codes"])
+        self.assertIn("architecture_diagnostic_available", packet["reason_codes"])
+        self.assertTrue(packet["not_enough_for_claim"])
+        self.assertEqual(policy["next_step"], "call_agent_recall")
+        self.assertEqual(policy["claim_permission"], "navigation_only_not_fact")
+
     def test_fixture_report_is_public_safe_and_source_non_authoritative(self) -> None:
         report = affordance.build_hook_agent_affordance_fixture_report()
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
