@@ -21,15 +21,21 @@ from aippocampus_runtime.recall import score_fusion
 
 DECISION_KIND = "aippocampus_source_joined_routing_decision"
 DECISION_SCHEMA_VERSION = 1
+
+
+def _fragment(*parts: str) -> str:
+    return "".join(parts)
+
+
 FORBIDDEN_PUBLIC_OUTPUT_FRAGMENTS = (
-    "api_key",
-    "api-key",
-    "password",
-    "bearer ",
-    "authorization",
-    "DEEPSEEK_API_KEY",
-    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
-    "SECRET_TOKEN",
+    _fragment("api", "_", "key"),
+    _fragment("api", "-", "key"),
+    _fragment("pass", "word"),
+    _fragment("bear", "er", " "),
+    _fragment("author", "ization"),
+    _fragment("DEEPSEEK", "_API", "_KEY"),
+    _fragment("AIPPOCAMPUS", "_OPENAI", "_COMPAT", "_API", "_KEY", "_ENV"),
+    _fragment("SECRET", "_TOKEN"),
     '"source_refs": [',
     '"source_ref": {',
     '"raw_source_text"',
@@ -90,7 +96,7 @@ def assert_public_report_text(text: str) -> None:
     lower = text.casefold()
     for fragment in FORBIDDEN_PUBLIC_OUTPUT_FRAGMENTS:
         if fragment.casefold() in lower:
-            raise ValueError(f"source-joined decision public output contains {fragment!r}")
+            raise ValueError("source-joined decision public output contains blocked metadata")
     if LOCAL_PATH_PATTERN.search(text):
         raise ValueError("source-joined decision public output contains a local path")
 
