@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -88,6 +91,51 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             "python tools/aippocampus/run_tests.py --tier quick",
         )
         self.assertIn("does not replace", payload["boundary"])
+
+    def test_release_preflight_plan_keeps_local_gate_lean(self) -> None:
+        payload = test_plan.build_release_preflight_plan()
+
+        local_required = [command["command"] for command in payload["local_required"]]
+        fallback = [
+            command["command"]
+            for command in payload["local_if_ci_unavailable_or_changed_after_ci"]
+        ]
+        fallback_reasons = [
+            command["reason"]
+            for command in payload["local_if_ci_unavailable_or_changed_after_ci"]
+        ]
+        ci_owned = payload["ci_owned_do_not_repeat_locally_by_default"]
+
+        self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan")
+        self.assertIn(
+            "python tools/aippocampus/release/check_agent_discovery_release.py "
+            "--offline --json",
+            local_required,
+        )
+        self.assertIn("python tools/aippocampus/run_tests.py --tier pr", fallback)
+        self.assertIn("python tools/aippocampus/run_tests.py --tier full", ci_owned)
+        self.assertTrue(any("`pr` includes `quick`" in reason for reason in fallback_reasons))
+        self.assertIn('python -m pip install -e ".[release]"', payload["publish_workflow_owned"])
+        self.assertTrue(any("PyPI publish" in command for command in payload["publish_workflow_owned"]))
+        self.assertTrue(
+            any(
+                "pip install aippocampus" in command["command"]
+                for command in payload["post_publish_required"]
+            )
+        )
+
+    def test_release_preflight_cli_emits_json_without_changed_file_scan(self) -> None:
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(test_plan, "collect_changed_files") as collect_changed_files,
+        ):
+            exit_code = test_plan.main(["--release-preflight", "--json"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan")
+        collect_changed_files.assert_not_called()
 
     def test_collect_changed_files_includes_untracked_files(self) -> None:
         def fake_git(args: list[str]) -> list[str]:
