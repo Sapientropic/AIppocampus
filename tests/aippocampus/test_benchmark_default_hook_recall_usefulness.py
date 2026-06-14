@@ -20,7 +20,7 @@ from benchmarks.aippocampus import (
 
 
 class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
-    def test_same_budget_three_arm_cohort_reports_required_axes(self) -> None:
+    def test_same_budget_four_arm_cohort_reports_required_axes(self) -> None:
         report = benchmark.build_default_hook_recall_usefulness_report()
 
         self.assertEqual(report["kind"], benchmark.REPORT_KIND)
@@ -31,6 +31,7 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
                 "default_no_packet_baseline",
                 "explicit_recall_same_budget",
                 "default_hook_foreground_candidate",
+                "default_hook_tiny_agent_recall_affordance",
             ],
         )
         self.assertTrue(report["comparison_contract"]["same_packet_budget"])
@@ -63,6 +64,12 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         )
         self.assertGreater(
             arm_metrics["default_hook_foreground_candidate"]["activation_rate"],
+            0,
+        )
+        self.assertGreater(
+            arm_metrics["default_hook_tiny_agent_recall_affordance"][
+                "affordance_emission_rate"
+            ],
             0,
         )
 
@@ -107,14 +114,39 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             hook_gap["tiny_agent_recall_affordance_candidate_count"],
             1,
         )
-        self.assertEqual(
-            report["decision"]["tiny_agent_recall_affordance_decision"],
-            "review_opt_in_affordance_only_not_default_foreground",
-        )
         self.assertTrue(
             report["issue_readouts"]["github_1439"][
                 "explicit_route_hook_skip_gap_covered"
             ]
+        )
+
+    def test_tiny_hook_to_agent_affordance_has_separate_readiness_gate(self) -> None:
+        report = benchmark.build_default_hook_recall_usefulness_report()
+        tiny = report["tiny_agent_recall_affordance_readout"]
+        decision = report["decision"]
+        issue = report["issue_readouts"]["github_1449"]
+
+        self.assertTrue(issue["tiny_affordance_eval_separated"])
+        self.assertTrue(issue["fixture_gate_passed"])
+        self.assertTrue(issue["not_foreground_context"])
+        self.assertGreaterEqual(tiny["affordance_emitted_count"], 1)
+        self.assertEqual(
+            tiny["affordance_emitted_count"],
+            tiny["agent_followed_suggested_action_count"],
+        )
+        self.assertGreaterEqual(tiny["recall_after_hint_success_count"], 1)
+        self.assertGreater(tiny["manual_search_reduction_vs_baseline"], 0)
+        self.assertEqual(tiny["wrong_route_drag_count"], 0)
+        self.assertEqual(tiny["irrelevant_memory_drag_count"], 0)
+        self.assertEqual(tiny["source_truth_overclaim_count"], 0)
+        self.assertGreaterEqual(tiny["quiet_for_reason_count"], 1)
+        self.assertEqual(
+            decision["tiny_agent_recall_affordance_decision"],
+            "default_tiny_agent_recall_affordance_ready_not_foreground_context",
+        )
+        self.assertIn(
+            "default_hook_tiny_agent_recall_affordance",
+            decision["eligible_tiny_agent_recall_affordance_surfaces"],
         )
 
     def test_report_is_public_safe_and_not_a_live_default_claim(self) -> None:
@@ -136,6 +168,10 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertIn("live_default_hook_quality", report["cannot_claim"])
         self.assertIn("default_foreground_adoption_ready", report["cannot_claim"])
         self.assertIn(
+            "live_tiny_agent_recall_affordance_quality",
+            report["cannot_claim"],
+        )
+        self.assertNotIn(
             "tiny_agent_recall_affordance_ready_for_default",
             report["cannot_claim"],
         )
@@ -171,6 +207,9 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             written["issue_readouts"]["github_1439"][
                 "default_foreground_adoption_recommended"
             ]
+        )
+        self.assertTrue(
+            written["issue_readouts"]["github_1449"]["fixture_gate_passed"]
         )
 
 

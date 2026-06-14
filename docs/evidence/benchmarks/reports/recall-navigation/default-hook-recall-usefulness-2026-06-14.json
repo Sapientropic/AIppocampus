@@ -3,6 +3,11 @@
     "default_hook_foreground_candidate": {
       "activation_count": 8,
       "activation_rate": 0.727273,
+      "affordance_emission_rate": 0.0,
+      "affordance_emitted_count": 0,
+      "affordance_not_evidence_count": 0,
+      "agent_followed_suggested_action_count": 0,
+      "agent_followed_suggested_action_rate": 0.0,
       "cost_unit_proxy_avg": 0.727273,
       "helpful_next_action_count": 3,
       "helpful_next_action_rate": 0.272727,
@@ -12,15 +17,47 @@
       "manual_search_reduction_vs_baseline": 5,
       "manual_search_steps": 16,
       "quiet_for_reason_count": 2,
+      "recall_after_hint_success_count": 0,
+      "recall_after_hint_success_rate": 0.0,
       "source_reopen_follow_through_count": 3,
       "source_reopen_follow_through_rate": 0.272727,
       "source_truth_overclaim_count": 0,
       "wrong_route_drag_count": 4,
       "wrong_route_drag_rate": 0.363636
     },
+    "default_hook_tiny_agent_recall_affordance": {
+      "activation_count": 7,
+      "activation_rate": 0.636364,
+      "affordance_emission_rate": 0.636364,
+      "affordance_emitted_count": 7,
+      "affordance_not_evidence_count": 7,
+      "agent_followed_suggested_action_count": 7,
+      "agent_followed_suggested_action_rate": 1.0,
+      "cost_unit_proxy_avg": 0.636364,
+      "helpful_next_action_count": 7,
+      "helpful_next_action_rate": 0.636364,
+      "irrelevant_memory_drag_count": 0,
+      "irrelevant_memory_drag_rate": 0.0,
+      "latency_ms_proxy_avg": 9.454545,
+      "manual_search_reduction_vs_baseline": 11,
+      "manual_search_steps": 10,
+      "quiet_for_reason_count": 4,
+      "recall_after_hint_success_count": 7,
+      "recall_after_hint_success_rate": 1.0,
+      "source_reopen_follow_through_count": 7,
+      "source_reopen_follow_through_rate": 0.636364,
+      "source_truth_overclaim_count": 0,
+      "wrong_route_drag_count": 0,
+      "wrong_route_drag_rate": 0.0
+    },
     "default_no_packet_baseline": {
       "activation_count": 0,
       "activation_rate": 0.0,
+      "affordance_emission_rate": 0.0,
+      "affordance_emitted_count": 0,
+      "affordance_not_evidence_count": 0,
+      "agent_followed_suggested_action_count": 0,
+      "agent_followed_suggested_action_rate": 0.0,
       "cost_unit_proxy_avg": 0.0,
       "helpful_next_action_count": 0,
       "helpful_next_action_rate": 0.0,
@@ -30,6 +67,8 @@
       "manual_search_reduction_vs_baseline": 0,
       "manual_search_steps": 21,
       "quiet_for_reason_count": 2,
+      "recall_after_hint_success_count": 0,
+      "recall_after_hint_success_rate": 0.0,
       "source_reopen_follow_through_count": 0,
       "source_reopen_follow_through_rate": 0.0,
       "source_truth_overclaim_count": 0,
@@ -39,6 +78,11 @@
     "explicit_recall_same_budget": {
       "activation_count": 10,
       "activation_rate": 0.909091,
+      "affordance_emission_rate": 0.0,
+      "affordance_emitted_count": 0,
+      "affordance_not_evidence_count": 0,
+      "agent_followed_suggested_action_count": 0,
+      "agent_followed_suggested_action_rate": 0.0,
       "cost_unit_proxy_avg": 0.909091,
       "helpful_next_action_count": 7,
       "helpful_next_action_rate": 0.636364,
@@ -48,6 +92,8 @@
       "manual_search_reduction_vs_baseline": 11,
       "manual_search_steps": 10,
       "quiet_for_reason_count": 4,
+      "recall_after_hint_success_count": 0,
+      "recall_after_hint_success_rate": 0.0,
       "source_reopen_follow_through_count": 7,
       "source_reopen_follow_through_rate": 0.636364,
       "source_truth_overclaim_count": 0,
@@ -57,18 +103,21 @@
   },
   "can_claim": [
     "default_hook_foreground_candidate_was_tested_against_explicit_recall",
+    "default_hook_tiny_agent_recall_affordance_was_tested_separately",
     "representative_public_synthetic_cohort_reports_help_and_drag",
     "explicit_recall_same_budget_outperforms_no_packet_baseline",
     "default_hook_should_remain_diagnostic_only_for_this_slice",
-    "explicit_route_hook_skip_gap_is_measured"
+    "explicit_route_hook_skip_gap_is_measured",
+    "tiny_agent_recall_affordance_fixture_gate_passed_for_not_evidence_action_hints"
   ],
   "cannot_claim": [
     "live_default_hook_quality",
+    "live_tiny_agent_recall_affordance_quality",
     "default_foreground_adoption_ready",
     "broad_private_history_question_quality",
     "theme_rows_as_source_truth",
     "cognitive_load_default_foreground_readiness",
-    "tiny_agent_recall_affordance_ready_for_default"
+    "tiny_affordance_source_claims_without_recall_or_deepen"
   ],
   "cases": [
     {
@@ -83,6 +132,23 @@
           "quiet_for_reason": false,
           "source_reopen_follow_through": false,
           "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
           "wrong_route_drag_count": 0
         },
         "default_no_packet_baseline": {
@@ -143,6 +209,18 @@
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 0
         },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 5,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
         "default_no_packet_baseline": {
           "activated": false,
           "cost_unit_proxy": 0,
@@ -188,6 +266,23 @@
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 0
         },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
+          "wrong_route_drag_count": 0
+        },
         "default_no_packet_baseline": {
           "activated": false,
           "cost_unit_proxy": 0,
@@ -227,6 +322,18 @@
           "helpful_next_action": false,
           "irrelevant_memory_drag_count": 0,
           "latency_ms_proxy": 4,
+          "manual_search_steps": 0,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 5,
           "manual_search_steps": 0,
           "quiet_for_reason": true,
           "source_reopen_follow_through": false,
@@ -278,6 +385,23 @@
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 1
         },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
+          "wrong_route_drag_count": 0
+        },
         "default_no_packet_baseline": {
           "activated": false,
           "cost_unit_proxy": 0,
@@ -323,6 +447,23 @@
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 1
         },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
+          "wrong_route_drag_count": 0
+        },
         "default_no_packet_baseline": {
           "activated": false,
           "cost_unit_proxy": 0,
@@ -366,6 +507,23 @@
           "quiet_for_reason": false,
           "source_reopen_follow_through": true,
           "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
           "wrong_route_drag_count": 0
         },
         "default_no_packet_baseline": {
@@ -415,6 +573,23 @@
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 0
         },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
+          "wrong_route_drag_count": 0
+        },
         "default_no_packet_baseline": {
           "activated": false,
           "cost_unit_proxy": 0,
@@ -461,6 +636,18 @@
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 1
         },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 5,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
         "default_no_packet_baseline": {
           "activated": false,
           "cost_unit_proxy": 0,
@@ -503,6 +690,18 @@
           "latency_ms_proxy": 16,
           "manual_search_steps": 2,
           "quiet_for_reason": false,
+          "source_reopen_follow_through": false,
+          "source_truth_overclaim": false,
+          "wrong_route_drag_count": 0
+        },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": false,
+          "cost_unit_proxy": 0,
+          "helpful_next_action": false,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 5,
+          "manual_search_steps": 1,
+          "quiet_for_reason": true,
           "source_reopen_follow_through": false,
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 0
@@ -551,6 +750,23 @@
           "source_reopen_follow_through": false,
           "source_truth_overclaim": false,
           "wrong_route_drag_count": 1
+        },
+        "default_hook_tiny_agent_recall_affordance": {
+          "activated": true,
+          "affordance_emitted": true,
+          "affordance_not_evidence": true,
+          "agent_followed_suggested_action": true,
+          "cost_unit_proxy": 1,
+          "helpful_next_action": true,
+          "irrelevant_memory_drag_count": 0,
+          "latency_ms_proxy": 12,
+          "manual_search_steps": 1,
+          "quiet_for_reason": false,
+          "recall_after_hint_success": true,
+          "source_reopen_follow_through": true,
+          "source_truth_overclaim": false,
+          "suggested_agent_action": "agent_recall",
+          "wrong_route_drag_count": 0
         },
         "default_no_packet_baseline": {
           "activated": false,
@@ -610,14 +826,17 @@
     "arms": [
       "default_no_packet_baseline",
       "explicit_recall_same_budget",
-      "default_hook_foreground_candidate"
+      "default_hook_foreground_candidate",
+      "default_hook_tiny_agent_recall_affordance"
     ],
     "packet_budget": 2,
     "private_history_used": false,
     "provider_call_count": 0,
     "same_packet_budget": true,
     "same_source_reopen_budget": true,
-    "source_reopen_budget": 1
+    "source_reopen_budget": 1,
+    "tiny_affordance_not_evidence": true,
+    "tiny_affordance_suggested_agent_action": "agent_recall"
   },
   "decision": {
     "adoption_blockers": [
@@ -628,6 +847,9 @@
     "default_foreground_adoption_recommended": false,
     "default_foreground_decision": "keep_default_hook_diagnostic_only",
     "eligible_default_foreground_surfaces": [],
+    "eligible_tiny_agent_recall_affordance_surfaces": [
+      "default_hook_tiny_agent_recall_affordance"
+    ],
     "opt_in_or_diagnostic_surfaces": [
       "explicit_recall_same_budget",
       "default_hook_foreground_candidate",
@@ -635,7 +857,7 @@
       "cognitive_load_sidecar",
       "attention_router_default_hook_candidate"
     ],
-    "tiny_agent_recall_affordance_decision": "review_opt_in_affordance_only_not_default_foreground"
+    "tiny_agent_recall_affordance_decision": "default_tiny_agent_recall_affordance_ready_not_foreground_context"
   },
   "issue_readouts": {
     "github_1439": {
@@ -645,13 +867,29 @@
       "default_hook_validated_before_adoption": true,
       "explicit_route_hook_skip_gap_covered": true,
       "question_theme_gap_covered": true,
+      "same_budget_four_arm_eval_measured": true,
       "same_budget_three_arm_eval_measured": true
+    },
+    "github_1449": {
+      "affordance_emitted_vs_silent_measured": true,
+      "agent_recall_follow_through_measured": true,
+      "default_hook_tiny_agent_recall_affordance_arm": true,
+      "fixture_gate_passed": true,
+      "irrelevant_memory_drag_measured": true,
+      "live_quality_claimed": false,
+      "manual_search_reduction_measured": true,
+      "not_foreground_context": true,
+      "quiet_for_reason_measured": true,
+      "source_truth_overclaim_measured": true,
+      "tiny_affordance_eval_separated": true,
+      "wrong_route_drag_measured": true
     }
   },
   "kind": "aippocampus_default_hook_recall_usefulness_benchmark",
   "metrics": {
     "adoption_blocker_count": 3,
-    "case_count": 11
+    "case_count": 11,
+    "tiny_affordance_gate_passed": true
   },
   "ok": true,
   "privacy_boundary": {
@@ -676,5 +914,20 @@
     "theme_user_review_lift_count": 1,
     "wrong_route_drag_count": 4
   },
-  "schema_version": 1
+  "schema_version": 2,
+  "tiny_agent_recall_affordance_readout": {
+    "affordance_emission_rate": 0.636364,
+    "affordance_emitted_count": 7,
+    "affordance_not_evidence_count": 7,
+    "agent_followed_suggested_action_count": 7,
+    "agent_followed_suggested_action_rate": 1.0,
+    "fixture_gate_passed": true,
+    "irrelevant_memory_drag_count": 0,
+    "manual_search_reduction_vs_baseline": 11,
+    "quiet_for_reason_count": 4,
+    "recall_after_hint_success_count": 7,
+    "recall_after_hint_success_rate": 1.0,
+    "source_truth_overclaim_count": 0,
+    "wrong_route_drag_count": 0
+  }
 }
