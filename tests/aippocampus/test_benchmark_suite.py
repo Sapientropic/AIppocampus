@@ -408,10 +408,27 @@ class BenchmarkSuiteTests(unittest.TestCase):
             payload = suite.run_benchmark_suite(profile="public-fast")
 
         self.assertTrue(payload["ok"])
+        self.assertTrue(payload["runner_ok"])
         self.assertTrue(payload["contract_gate_ok"])
+        self.assertFalse(payload["claim_quality_ok"])
         self.assertFalse(payload["quality_gate_ok"])
         self.assertFalse(payload["public_quality_gate_ok"])
         self.assertEqual(payload["status"], "contract_passed_with_unmatured_tracks")
+        self.assertTrue(payload["linter_required_for_public_quality_gate"])
+        self.assertTrue(payload["contract_gate_status"]["ok"])
+        self.assertIn(
+            "does not imply benchmark contract linter",
+            payload["contract_gate_status"]["meaning"],
+        )
+        self.assertEqual(
+            payload["machine_summary"]["safe_interpretation"],
+            "runner_report_available_but_not_public_quality_support",
+        )
+        self.assertEqual(
+            payload["machine_summary"]["ok_field_meaning"],
+            "runner_ok_baseline_report_available",
+        )
+        self.assertFalse(payload["machine_summary"]["claim_quality_ok"])
         self.assertEqual(
             payload["quality_gate_summary"]["quality_gate_status"],
             "unknown",

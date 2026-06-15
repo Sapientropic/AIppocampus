@@ -18,6 +18,7 @@ from aippocampus_runtime.config.registry import (  # noqa: E402
     CONFIG_STABILITY_BUCKETS,
     config_registry_names,
     config_report,
+    config_summary_report,
 )
 from aippocampus_runtime.contracts import (  # noqa: E402
     PUBLIC_CONTRACT_SUBPACKAGES,
@@ -118,6 +119,30 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, rendered)
 
+    def test_config_summary_report_is_compact_and_action_first(self) -> None:
+        env = {
+            "AIPPOCAMPUS_HOME": "C:/Users/example/private/aippocampus",
+            "AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY": "super-secret-value",
+            "AIPPOCAMPUS_UNKNOWN_LOCAL_FLAG": "do-not-print",
+        }
+
+        summary = config_summary_report(config_report(env))
+        rendered = json.dumps(summary, ensure_ascii=False)
+
+        self.assertEqual(summary["kind"], "aippocampus_config_doctor_summary")
+        self.assertEqual(summary["status"], "partial")
+        self.assertGreater(summary["registered_knob_count"], 0)
+        self.assertEqual(summary["unknown_env_var_count"], 1)
+        self.assertEqual(summary["configured_count"], 2)
+        self.assertEqual(summary["configured_sensitive_count"], 1)
+        self.assertEqual(summary["full_audit_command"], "aippocampus doctor config --json")
+        self.assertTrue(summary["audit_json_available"])
+        self.assertTrue(summary["recommended_actions"])
+        self.assertFalse(summary["privacy"]["values_printed"])
+        self.assertNotIn("C:/Users/example/private/aippocampus", rendered)
+        self.assertNotIn("super-secret-value", rendered)
+        self.assertNotIn("do-not-print", rendered)
+
     def test_config_registry_metadata_is_classified(self) -> None:
         for name, knob in CONFIG_BY_NAME.items():
             with self.subTest(name=name):
@@ -149,3 +174,31 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertTrue(report["data"]["no_write"])
         self.assertNotIn("C:/private/local/home", rendered)
         self.assertNotIn("private-token", rendered)
+
+    def test_doctor_config_compact_json_aliases_are_foreground_bounded(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        for flag in ("--compact-json", "--summary"):
+            with self.subTest(flag=flag):
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "AIPPOCAMPUS_HOME": "C:/private/local/home",
+                            "AIPPOCAMPUS_OBJECT_STORE_TOKEN": "private-token",
+                        },
+                        clear=True,
+                    ),
+                    patch("sys.stdout", new=StringIO()) as stdout,
+                ):
+                    code = facade.main(["doctor", "config", flag])
+
+                self.assertEqual(code, 0)
+                rendered = stdout.getvalue()
+                payload = json.loads(rendered)
+                self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
+                self.assertGreater(payload["registered_knob_count"], 0)
+                self.assertEqual(payload["configured_count"], 2)
+                self.assertNotIn("knobs", payload)
+                self.assertNotIn("C:/private/local/home", rendered)
+                self.assertNotIn("private-token", rendered)

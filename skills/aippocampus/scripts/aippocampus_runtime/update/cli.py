@@ -36,6 +36,7 @@ from aippocampus_runtime.update.plugin_cache import (
     refresh_plugin_cache_layers,
     unique_installed_cache_root,
 )
+from aippocampus_runtime.update.plugin_marketplace import configured_marketplace_root
 
 SCHEMA_VERSION = 1
 PLUGIN_BUILD_SCRIPT = "build_plugin_package.py"
@@ -318,11 +319,21 @@ def enrich_plugin_cache_status(
         resolved_installed_dir = Path(plugin_installed_dir)
     else:
         resolved_installed_dir = None
+    resolved_marketplace_dir = plugin_marketplace_dir
+    if resolved_marketplace_dir is not None:
+        marketplace_dir_source = "explicit_argument"
+    else:
+        resolved_marketplace_dir = configured_marketplace_root(codex_home_path)
+        marketplace_dir_source = (
+            "configured_codex_marketplace"
+            if resolved_marketplace_dir is not None
+            else "not_configured"
+        )
     cache_status = build_plugin_cache_status(
         source_root=repo_root / "plugins" / "aippocampus",
         package_root=output,
         codex_home_path=codex_home_path,
-        marketplace_dir=plugin_marketplace_dir,
+        marketplace_dir=resolved_marketplace_dir,
         installed_dir=resolved_installed_dir,
     )
     plugin.update(
@@ -330,10 +341,13 @@ def enrich_plugin_cache_status(
             "source_plugin_version": cache_status["source_plugin_version"],
             "package_plugin_version": cache_status["package_plugin_version"],
             "local_marketplace": cache_status["local_marketplace"],
+            "local_marketplace_source": marketplace_dir_source,
             "installed_cache": cache_status["installed_cache"],
             "auto_detected_installed_cache_count": cache_status[
                 "auto_detected_installed_cache_count"
             ],
+            "ignored_legacy_cache_count": cache_status["ignored_legacy_cache_count"],
+            "ignored_legacy_cache_roots": cache_status["ignored_legacy_cache_roots"],
             "installed_cache_auto_resolution": cache_status[
                 "installed_cache_auto_resolution"
             ],

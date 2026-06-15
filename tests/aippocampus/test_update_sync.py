@@ -446,6 +446,48 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("plugin", payload["summary"]["needs_action"])
         self.assertIn("plugin", payload["summary"]["nested_action_surfaces"])
 
+    def test_status_uses_configured_codex_marketplace_root_without_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            marketplace_root = root / "local-marketplace"
+            write_minimal_repo(repo)
+            write_plugin_package(
+                repo / "plugins" / "aippocampus",
+                version="0.2.0",
+                include_skill=False,
+            )
+            write_plugin_package(
+                marketplace_root / "plugins" / "aippocampus",
+                version="0.1.0",
+            )
+            codex_home.mkdir(parents=True)
+            (codex_home / "config.toml").write_text(
+                "[marketplaces.aippocampus-local]\n"
+                f"source = '{marketplace_root.as_posix()}'\n",
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0, payload)
+        plugin = payload["surfaces"]["plugin"]
+        self.assertEqual(
+            plugin["local_marketplace_source"],
+            "configured_codex_marketplace",
+        )
+        self.assertEqual(plugin["local_marketplace"]["version"], "0.1.0")
+        self.assertEqual(plugin["local_marketplace"]["status"], "stale_version")
+        self.assertTrue(payload["summary"]["plugin_cache_needs_action"])
+
     def test_status_recommends_auto_for_unique_installed_plugin_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
@@ -476,6 +518,54 @@ class UpdateSyncTests(unittest.TestCase):
             "--plugin-installed-dir auto",
             plugin_status["plugin_cache_recommended_actions"][0],
         )
+
+    def test_status_ignores_stale_cache_from_unconfigured_legacy_marketplace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            source = repo / "plugins" / "aippocampus"
+            output = repo / "dist" / "aippocampus-plugin"
+            current = (
+                codex_home
+                / "plugins"
+                / "cache"
+                / "aippocampus-local"
+                / "aippocampus"
+                / "0.2.0"
+            )
+            legacy = (
+                codex_home
+                / "plugins"
+                / "cache"
+                / "local"
+                / "aippocampus"
+                / "0.1.0-local"
+            )
+            write_plugin_package(source, version="0.2.0", include_skill=False)
+            write_plugin_package(output, version="0.2.0", include_skill=False)
+            write_plugin_package(current, version="0.2.0", include_skill=False)
+            write_plugin_package(legacy, version="0.1.0", include_skill=False)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(repo),
+                "--plugin-output",
+                str(output),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0, payload)
+        plugin_status = payload["surfaces"]["plugin"]
+        self.assertEqual(plugin_status["installed_cache"]["status"], "current")
+        self.assertEqual(plugin_status["auto_detected_installed_cache_count"], 1)
+        self.assertEqual(plugin_status["ignored_legacy_cache_count"], 1)
+        self.assertEqual(plugin_status["plugin_cache_recommended_actions"], [])
+        self.assertFalse(payload["summary"]["plugin_cache_needs_action"])
 
     def test_status_marks_successful_host_probe_as_current_thread_unverified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
