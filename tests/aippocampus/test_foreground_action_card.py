@@ -67,6 +67,9 @@ class ForegroundActionCardTests(unittest.TestCase):
 
         self.assertEqual(card["decision"], "use_route_first")
         self.assertEqual(card["next_action"], "deepen")
+        self.assertEqual(card["canonical_action"]["action_id"], "agent_deepen_selected_route")
+        self.assertEqual(card["canonical_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(card["canonical_action"]["arguments"]["request_index"], 1)
         self.assertEqual(card["claim_boundary"], "no_claim_before_reopen")
         self.assertEqual(card["callable_handle"], report["deepen_requests"][0]["handle"])
         self.assertLessEqual(len(card), foreground_action_card.CARD_FIELD_BUDGET)
@@ -134,20 +137,23 @@ class ForegroundActionCardTests(unittest.TestCase):
             clean_source_dir=self.clean,
             max_routes=1,
         )
+        redacted_card = foreground_action_card.redact_public_card(report["foreground_action_card"])
         public = agent_continuity.public_recall_projection(report)
-        card = public["foreground_action_card"]
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
+        action = public["foreground_action"]
 
-        self.assertNotIn("callable_handle", card)
-        self.assertTrue(card["callable_handle_redacted"])
-        self.assertEqual(card["next_action"], "deepen")
-        self.assertNotIn("short_action_token", card)
-        self.assertLessEqual(len(card), foreground_action_card.CARD_FIELD_BUDGET)
-        self.assertEqual(
-            public["metrics"]["foreground_action_card_field_count"],
-            len(card),
-        )
-        self.assertFalse(public["metrics"]["foreground_action_card_over_field_budget"])
+        self.assertNotIn("callable_handle", redacted_card)
+        self.assertTrue(redacted_card["callable_handle_redacted"])
+        self.assertEqual(redacted_card["canonical_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(redacted_card["canonical_action"]["arguments"]["request_index"], 1)
+        self.assertNotIn("handle", json.dumps(redacted_card["canonical_action"], ensure_ascii=False))
+        self.assertEqual(redacted_card["next_action"], "deepen")
+        self.assertNotIn("short_action_token", redacted_card)
+        self.assertLessEqual(len(redacted_card), foreground_action_card.CARD_FIELD_BUDGET)
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["request_index"], 1)
+        self.assertNotIn("foreground_action_card", public)
+        self.assertNotIn("deepen_requests", public)
         self.assertIn("foreground_action_card.callable_handle", public["local_private_fields"])
         self.assertNotIn(report["foreground_action_card"]["callable_handle"], encoded)
 

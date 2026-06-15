@@ -97,6 +97,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         listed = mcp.handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         names = {tool["name"] for tool in listed["result"]["tools"]}
+        by_name = {tool["name"]: tool for tool in listed["result"]["tools"]}
 
         self.assertGreaterEqual(
             names,
@@ -119,8 +120,20 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "deepen_telepathy_handoff",
             },
         )
+        agent_deepen_schema = by_name["agent_deepen"]["inputSchema"]
+        self.assertNotIn("handle", agent_deepen_schema.get("required") or [])
+        self.assertIn("request_index", agent_deepen_schema["properties"])
+        self.assertIn("last_recall", agent_deepen_schema["properties"])
 
     def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
+        last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
+        old_last_recall = os.environ.get(last_recall_env)
+        os.environ[last_recall_env] = str(self.cwd / "agent-last-recall.json")
+        self.addCleanup(
+            lambda: os.environ.pop(last_recall_env, None)
+            if old_last_recall is None
+            else os.environ.__setitem__(last_recall_env, old_last_recall)
+        )
         listed = mcp.handle_request({"jsonrpc": "2.0", "id": 201, "method": "tools/list"})
         names = {tool["name"] for tool in listed["result"]["tools"]}
         self.assertGreaterEqual(
@@ -150,22 +163,68 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(recall_response["result"].get("isError", False), payload)
         self.assertEqual(payload["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(payload["mode"], "recall")
-        self.assertEqual(payload["surface"], "agent_cli_or_mcp_adapter")
+        self.assertEqual(payload["surface"], "mcp_agent_recall_compact")
         self.assertTrue(payload["opt_in_required"])
-        self.assertEqual(payload["foreground_action_card"]["decision"], "use_route_first")
-        self.assertEqual(payload["foreground_action_card"]["next_action"], "deepen")
-        self.assertIn("callable_handle", payload["foreground_action_card"])
-        self.assertNotIn("short_action_token", payload["foreground_action_card"])
-        self.assertLess(
-            list(payload).index("foreground_action_card"),
-            list(payload).index("memory_packets"),
-        )
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
+        action = payload["foreground_action"]
+        self.assertEqual(action["action_id"], "agent_deepen_selected_route")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["request_index"], 1)
+        self.assertTrue(action["arguments"]["last_recall"])
+        self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+        self.assertNotIn("foreground_action_card", payload)
+        self.assertNotIn("memory_packets", payload)
+        self.assertNotIn("deepen_requests", payload)
+        self.assertNotIn("copy_paste_command", encoded)
+        self.assertNotIn("machine_next_command", encoded)
+        self.assertNotIn("aippo-nav:", encoded)
         self.assertTrue(payload["audit_available"])
         self.assertTrue(payload["policy_boundary"]["navigation_only_not_fact"])
-        self.assertEqual(payload["memory_packets"][0]["claim_permission"], "no_claim_before_reopen")
-        self.assertEqual(payload["deepen_requests"][0]["tool"], "agent deepen")
-        self.assertIn("copy_paste_command", payload["deepen_requests"][0])
         self.assertNotIn(str(self.cwd), encoded)
+
+        deepen_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2022,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_deepen",
+                    "arguments": action["arguments"],
+                },
+            }
+        )
+        deepen_payload = self.tool_payload(deepen_response)
+        deepen_encoded = json.dumps(deepen_payload, ensure_ascii=False)
+        self.assertFalse(deepen_response["result"].get("isError", False), deepen_payload)
+        self.assertEqual(deepen_payload["mode"], "deepen")
+        self.assertEqual(deepen_payload["status"], "ok")
+        self.assertIn("AIppocampus 使用 clean source", deepen_encoded)
+        self.assertNotIn(str(self.cwd), deepen_encoded)
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2021,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_recall",
+                    "arguments": {
+                        "query": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(self.clean),
+                        "max": 2,
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        full_payload = self.tool_payload(full_response)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(full_payload["surface"], "agent_cli_or_mcp_adapter")
+        self.assertIn("memory_packets", full_payload)
+        self.assertIn("deepen_requests", full_payload)
+        self.assertIn("handle", full_payload["deepen_requests"][0])
 
         aippo_response = mcp.handle_request(
             {
@@ -378,6 +437,37 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(resources["result"], {"resources": []})
         self.assertEqual(templates["result"], {"resourceTemplates": []})
 
+    def test_register_thread_requires_explicit_write_shape(self) -> None:
+        with mock.patch.object(mcp.registry, "register_current_thread") as register:
+            empty_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3101,
+                    "method": "tools/call",
+                    "params": {"name": "register_thread", "arguments": {}},
+                }
+            )
+            missing_confirm_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3102,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "register_thread",
+                        "arguments": {"cwd": str(self.cwd), "provider": "codex"},
+                    },
+                }
+            )
+
+        self.assertTrue(empty_response["result"]["isError"])
+        self.assertTrue(missing_confirm_response["result"]["isError"])
+        self.assertEqual(self.tool_payload(empty_response)["error"]["code"], "explicit_write_required")
+        self.assertEqual(
+            self.tool_payload(missing_confirm_response)["error"]["code"],
+            "explicit_write_required",
+        )
+        register.assert_not_called()
+
     def test_register_thread_passes_explicit_provider_to_registry(self) -> None:
         with mock.patch.object(
             mcp.registry,
@@ -394,6 +484,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
                         "arguments": {
                             "cwd": str(self.cwd),
                             "provider": "codex",
+                            "confirm_write": True,
                             "build_index": False,
                         },
                     },
@@ -432,7 +523,12 @@ class AippocampusMcpServerTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {
                         "name": "register_thread",
-                        "arguments": {"cwd": str(self.cwd), "provider": "codex", "build_index": False},
+                        "arguments": {
+                            "cwd": str(self.cwd),
+                            "provider": "codex",
+                            "confirm_write": True,
+                            "build_index": False,
+                        },
                     },
                 }
             )
@@ -441,11 +537,14 @@ class AippocampusMcpServerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError"), payload)
         self.assertEqual(payload["status"], "registered")
-        self.assertEqual(payload["thread_handle"], "session:private-raw-thread-id")
+        self.assertTrue(payload["thread_handle"].startswith("thread_"))
+        self.assertNotEqual(payload["thread_handle"], "session:private-raw-thread-id")
+        self.assertTrue(payload["thread_key_redacted"])
         self.assertEqual(payload["title"], "AIppocampus issue cleanup")
         self.assertEqual(payload["message_count"], 4300)
         self.assertTrue(payload["has_clean_source"])
         self.assertIn("agent_next_action", payload)
+        self.assertNotIn("session:private-raw-thread-id", encoded)
         self.assertNotIn("session_meta", encoded)
         self.assertNotIn("base_instructions", encoded)
         self.assertNotIn("full host instructions", encoded)
@@ -470,6 +569,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
                         "arguments": {
                             "cwd": str(self.cwd),
                             "provider": "codex",
+                            "confirm_write": True,
                             "build_index": False,
                         },
                     },
@@ -536,6 +636,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
                                 "arguments": {
                                     "cwd": str(cwd),
                                     "provider": "codex",
+                                    "confirm_write": True,
                                     "registry_dir": str(registry_dir),
                                     "build_index": False,
                                     "include_private_paths": True,
@@ -619,7 +720,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
         self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
 
-    def test_recall_context_returns_navigation_handle_without_raw_prompt_or_paths(self) -> None:
+    def test_recall_context_default_is_compact_without_opaque_handles(self) -> None:
         response = mcp.handle_request(
             {
                 "jsonrpc": "2.0",
@@ -640,15 +741,47 @@ class AippocampusMcpServerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["kind"], "aippocampus_recall_context")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
         self.assertEqual(payload["support_level"], "navigation")
         self.assertEqual(payload["source_boundary"]["navigation_only_not_fact"], True)
-        self.assertEqual(payload["routes"][0]["evidence_level"], "needs_reopen")
-        self.assertEqual(payload["routes"][0]["source_refs"][0]["message_id"], "msg_final")
-        self.assertEqual(payload["routes"][0]["suggested_next"]["tool"], "recall_deepen")
-        self.assertTrue(str(payload["routes"][0]["handle"]).startswith("aippo-nav:"))
+        route = payload["routes"][0]
+        self.assertEqual(route["evidence_level"], "needs_reopen")
+        self.assertEqual(route["foreground_action"]["tool_name"], "recall_deepen")
+        self.assertEqual(route["foreground_action"]["arguments"]["message_id"], "msg_final")
+        self.assertNotIn("handle", route)
+        self.assertNotIn("source_refs", route)
+        self.assertNotIn("suggested_next", route)
+        self.assertNotIn("source_reopen_path", route)
+        self.assertNotIn("aippo-nav:", encoded)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("继续", encoded)
+
+    def test_recall_context_full_detail_keeps_callable_navigation_handle(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3011,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {
+                        "intent": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "max": 3,
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertFalse(response["result"].get("isError", False), payload)
+        self.assertEqual(payload["detail"], "full")
+        self.assertEqual(payload["routes"][0]["source_refs"][0]["message_id"], "msg_final")
+        self.assertEqual(payload["routes"][0]["suggested_next"]["tool"], "recall_deepen")
+        self.assertTrue(str(payload["routes"][0]["handle"]).startswith("aippo-nav:"))
 
     def test_recall_deepen_reopens_context_handle_with_source_boundary(self) -> None:
         context_response = mcp.handle_request(
@@ -658,7 +791,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "method": "tools/call",
                 "params": {
                     "name": "recall_context",
-                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                    "arguments": {
+                        "intent": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "detail": "full",
+                    },
                 },
             }
         )
@@ -724,7 +861,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "method": "tools/call",
                 "params": {
                     "name": "recall_context",
-                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                    "arguments": {
+                        "intent": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "detail": "full",
+                    },
                 },
             }
         )
@@ -755,7 +896,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "method": "tools/call",
                 "params": {
                     "name": "recall_context",
-                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                    "arguments": {
+                        "intent": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "detail": "full",
+                    },
                 },
             }
         )
@@ -827,7 +972,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "method": "tools/call",
                 "params": {
                     "name": "recall_context",
-                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                    "arguments": {
+                        "intent": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "detail": "full",
+                    },
                 },
             }
         )
@@ -905,7 +1054,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "method": "tools/call",
                 "params": {
                     "name": "recall_context",
-                    "arguments": {"intent": "Path boundary example", "cwd": str(self.cwd)},
+                    "arguments": {
+                        "intent": "Path boundary example",
+                        "cwd": str(self.cwd),
+                        "detail": "full",
+                    },
                 },
             }
         )

@@ -18,8 +18,10 @@ from aippocampus_runtime.mcp.provider_key_bridge import (
     maybe_apply_provider_key_bridge_for_semantic_diagnostic,
 )
 from aippocampus_runtime.mcp.public_projection import (
+    compact_agent_recall_payload,
     compact_health_payload,
     compact_message,
+    compact_recall_context_payload,
     compact_register_thread_payload,
     compact_thread,
     detail_arg,
@@ -41,7 +43,9 @@ from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     RouteLimitError,
+    handle_from_last_recall_cache,
     normalize_route_limit,
+    write_last_recall_cache,
 )
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
@@ -230,6 +234,10 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     except RecallNavigationError as exc:
         return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload = compact_recall_context_payload(payload)
+    else:
+        payload = {"detail": "full", **payload}
     return text_result(public_payload(arguments, payload))
 
 
@@ -295,6 +303,21 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report
+    cache_written = write_last_recall_cache(
+        payload.get("deepen_requests") or [],
+        cwd=arguments.get("cwd"),
+        clean_source_dir=arguments.get("clean_source_dir"),
+        registry_dir=arguments.get("registry_dir"),
+        macro_state_path=arguments.get("macro_state_jsonl"),
+        project=str(arguments.get("project") or "AIppocampus"),
+        max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
+        schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-opt-in-continuity-v0")),
+    )
+    payload["last_recall_cache_available"] = cache_written
+    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload = compact_agent_recall_payload(payload)
+    else:
+        payload = {"detail": "full", **payload}
     return text_result(public_payload(arguments, payload))
 
 
@@ -305,22 +328,45 @@ def call_agent_aippo(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
-    if "handle" not in arguments:
+    handle = arguments.get("handle")
+    cached_context: dict[str, Any] = {}
+    if handle is None and (arguments.get("last_recall") or "request_index" in arguments):
+        request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
+        try:
+            handle, cached_context = handle_from_last_recall_cache(
+                request_index=request_index,
+                path=arguments.get("last_recall_path"),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return tool_error(
+                "last_recall_unavailable",
+                str(exc),
+                arguments=arguments,
+                retryable=False,
+                required=["handle", "request_index + last_recall"],
+            )
+    if handle is None:
         return tool_error(
             "missing_agent_handle",
-            "agent_deepen requires an opaque handle from agent_recall or an AIppo route id.",
+            (
+                "agent_deepen requires an opaque handle from agent_recall, "
+                "an AIppo route id, or request_index + last_recall from the compact foreground action."
+            ),
             arguments=arguments,
-            required=["handle"],
+            required=["handle", "request_index + last_recall"],
         )
     agent = agent_continuity_module()
     payload = agent.deepen(
-        arguments.get("handle"),
-        cwd=arguments.get("cwd"),
-        clean_source_dir=arguments.get("clean_source_dir"),
-        registry_dir=arguments.get("registry_dir"),
-        macro_state_path=arguments.get("macro_state_jsonl"),
-        project=str(arguments.get("project") or "AIppocampus"),
-        max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
+        handle,
+        cwd=arguments.get("cwd") or cached_context.get("cwd"),
+        clean_source_dir=arguments.get("clean_source_dir") or cached_context.get("clean_source_dir"),
+        registry_dir=arguments.get("registry_dir") or cached_context.get("registry_dir"),
+        macro_state_path=arguments.get("macro_state_jsonl") or cached_context.get("macro_state_jsonl"),
+        project=str(arguments.get("project") or cached_context.get("project") or "AIppocampus"),
+        max_matches=route_limit_arg(
+            arguments["max"] if "max" in arguments else cached_context.get("max"),
+            default=agent.MAX_ROUTES,
+        ),
     )
     is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
     return text_result(public_payload(arguments, payload), is_error=is_error)
@@ -555,10 +601,26 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
+    if not arguments.get("confirm_write") and not arguments.get("write"):
+        return tool_error(
+            "explicit_write_required",
+            "register_thread writes to the local AIppocampus registry and requires cwd, provider, and confirm_write=true.",
+            arguments=arguments,
+            required=["cwd", "provider", "confirm_write"],
+            write_effect="register_current_thread",
+        )
+    if not str(arguments.get("cwd") or "").strip() or not str(arguments.get("provider") or "").strip():
+        return tool_error(
+            "explicit_write_required",
+            "register_thread requires explicit cwd and provider before writing the local registry.",
+            arguments=arguments,
+            required=["cwd", "provider", "confirm_write"],
+            write_effect="register_current_thread",
+        )
     registry_dir = (
         Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
     )
-    provider_name = str(arguments.get("provider") or "codex")
+    provider_name = str(arguments.get("provider") or "")
     try:
         provider = create_conversation_provider(provider_name, codex_home_dir=core.codex_home())
     except ValueError:

@@ -81,7 +81,7 @@ language for future low-friction controls, not a claim of complete CLI coverage.
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Opt-in agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, and `agent feedback` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen handles, and low-authority feedback receipts | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, or feedback as source truth |
-| Agent-host read tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
+| Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
 | Agent-native fixture proposals | Linked architecture contracts such as `aippocampus_runtime.recall.agent_facade_contract`, `aippocampus_runtime.recall.agent_pull_gesture`, and `aippocampus_runtime.aippo.working_contract` | Current fixture-backed behavior and public-safe schema direction for trusted host experiments | Public SDK stability, hosted network endpoints, broad package internals, or claim-ready memory facts |
@@ -525,7 +525,9 @@ tool names are:
 
 For these tools:
 
-- Tool names and required input fields are stable.
+- Tool names and required input fields are stable. Mutating setup tools may add
+  explicit consent-shaped required fields when needed to prevent accidental
+  writes.
 - Optional input fields may be added.
 - Output fields may be added.
 - Tool errors use JSON payloads in MCP `content` text as documented in
@@ -580,11 +582,14 @@ next action, and warning counts/classes instead of full operator JSON. Use
 `--compact-json`, `--public`, and `--summary` are equivalent summary aliases.
 
 `recall_context` and `recall_deepen` are the progressive recall navigation
-tools. `recall_context` accepts a fuzzy intent or query and returns small route
-handles, related source-window candidates, scope labels, evidence levels, and
-the next tool to call. It does not return a final answer or factual memory
-claim. `recall_deepen` consumes a route handle or ambient navigation seed and
-opens the next source-backed layer when the handle is still fresh and
+tools. `recall_context` accepts a fuzzy intent or query. Its default MCP result
+is a compact foreground receipt: route labels, evidence level, source boundary,
+and `routes[].foreground_action`, without raw opaque `aippo-nav:` handles,
+source refs, or source windows. Request `detail=full` only for local diagnostic
+or follow-through paths that need the short-lived route handle/source selector.
+It does not return a final answer or factual memory claim. `recall_deepen`
+consumes a route handle, source selector, route object, or ambient navigation
+seed and opens the next source-backed layer when the handle is still fresh and
 reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
 instead of silently becoming evidence.
 
@@ -614,10 +619,16 @@ aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
 ```
 
 `agent recall` is a wrapper over the existing progressive
-`recall_context -> recall_deepen` path. It returns compact `MemoryPacket`
-foreground rows and separate opaque follow-up handles; it must not inline
-source refs, message ids, source windows, head votes, masks, or raw local paths
-into the foreground packet. `agent aippo` exposes only the narrow
+`recall_context -> recall_deepen` path. Human CLI output is compact by default;
+CLI `--json` remains a local diagnostic surface. `--public` /
+`--compact-json` returns a compact foreground projection with one canonical
+`foreground_action`, small route receipts, and no local-private handles. MCP
+`agent_recall` uses the same compact-default posture, with the actual MCP tool
+name and request index, and keeps opaque follow-up handles out of the default
+payload. Full local diagnostics are available in CLI `--json` or MCP
+`detail=full`.
+It must not inline source refs, message ids, source windows, head votes, masks,
+or raw local paths into the foreground packet. `agent aippo` exposes only the narrow
 project/workflow working-contract activation. `agent feedback` records or
 returns calibration/routing evidence only; it cannot ripen a candidate-only,
 Dream-only, or stale clause without source support.
@@ -639,10 +650,13 @@ no-help/specificity diagnostics such as
 `attention_router_bridge_reason_gate_not_satisfied`; consumers should treat
 them as additive diagnostics, not fatal command errors.
 
-For recall output, pass `deepen_requests[].handle` to `agent deepen`.
-`memory_packets[].deepen_route_id` is a display/correlation id, not the
-copy-pasteable recall handle. When available, prefer the emitted
-`deepen_requests[].copy_paste_command`.
+For local diagnostic CLI recall output, pass `deepen_requests[].handle` to
+`agent deepen`. `memory_packets[].deepen_route_id` is a display/correlation id,
+not the copy-pasteable recall handle. When available, prefer the emitted
+`deepen_requests[].copy_paste_command`; for compact public or MCP foreground
+output, prefer the request-index path such as
+`aippocampus agent deepen --request 1 --last-recall` or the MCP
+`foreground_action` object.
 The usefulness gate treats missing copy-pasteable deepen targets, display-handle
 misuse, broad search before recall, and safe route evidence demoted back to
 `scent` as foreground usefulness failures rather than harmless diagnostics.
@@ -697,10 +711,14 @@ returns cue hashes, reason codes, route ids, counts, safe next action, and
 return raw cue text, raw source text, local paths, or a final memory answer.
 
 `register_thread` is an explicit control-plane operation. It is not a general
-memory-write API. Concurrent local agents may call it against the same registry;
-registry metadata writes are serialized by the same-directory registry writer
-lease described in the maintenance reference, while read-only MCP tools remain
-lock-free.
+memory-write API, and default/empty arguments must not write. Callers must pass
+an explicit write shape such as `cwd`, `provider`, and `confirm_write: true`.
+The default compact result returns a stable local fingerprint as
+`thread_handle`; raw `session:<id>` provider keys are private diagnostic
+identifiers, not foreground handles. Concurrent local agents may call it against
+the same registry; registry metadata writes are serialized by the same-directory
+registry writer lease described in the maintenance reference, while read-only
+MCP tools remain lock-free.
 
 ### MCP Control-Plane Boundary
 
@@ -709,7 +727,7 @@ to the AIppocampus registry so later read tools can find source-backed memory.
 For the current public MCP surface, `register_thread` may:
 
 - create or update a registry thread record for the selected provider,
-  workspace, and registry root;
+  workspace, and registry root after explicit `confirm_write`;
 - optionally build generated clean-source/index artifacts from existing
   provider-visible history when `build_index` is true; and
 - return operational status and locators, with local paths redacted unless the

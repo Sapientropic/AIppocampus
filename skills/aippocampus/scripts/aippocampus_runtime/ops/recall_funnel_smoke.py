@@ -56,6 +56,7 @@ def _recall_args(
         "intent": cue,
         "cwd": str(cwd),
         "max": max_routes,
+        "detail": "full",
         "include_private_paths": include_private_paths,
     }
     if clean_source_dir is not None:

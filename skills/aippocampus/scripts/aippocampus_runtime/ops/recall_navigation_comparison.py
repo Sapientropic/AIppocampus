@@ -206,6 +206,7 @@ def _run_progressive_recall(
             "cwd": str(cwd),
             "clean_source_dir": str(clean_source_dir),
             "max": max_routes,
+            "detail": "full",
             "include_private_paths": False,
         }
     )
