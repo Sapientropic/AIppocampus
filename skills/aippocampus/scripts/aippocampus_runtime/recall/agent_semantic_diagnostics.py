@@ -7,6 +7,29 @@ from pathlib import Path
 from typing import Any
 
 
+def _semantic_decision(surface: Mapping[str, Any]) -> str:
+    details = surface.get("details")
+    if isinstance(details, Mapping) and str(details.get("decision") or "").strip():
+        return str(details.get("decision") or "").strip()
+    if str(surface.get("decision") or "").strip():
+        return str(surface.get("decision") or "").strip()
+    status = str(surface.get("status") or "").strip()
+    if status in {"degraded", "unavailable", "skipped", "skip"}:
+        return status
+    return "not_reported"
+
+
+def _semantic_contribution(*, semantic_decision: str, status: str) -> str:
+    decision = semantic_decision.casefold()
+    if status in {"degraded", "unavailable"} or decision in {"skip", "skipped", "degraded"}:
+        return "none_semantic_unavailable_or_skipped"
+    if decision in {"background_only", "not_reported"}:
+        return "diagnostic_only_no_selected_route_change"
+    if decision in {"scent", "evidence", "surfaced"}:
+        return "semantic_sidecar_returned_navigation_signal"
+    return "diagnostic_only_no_selected_route_change"
+
+
 def agent_semantic_gate_diagnostics(
     *,
     query: str,
@@ -43,13 +66,27 @@ def agent_semantic_gate_diagnostics(
         if isinstance(surface, Mapping) and surface.get("surface") == "semantic_gate"
     ]
     surface = surfaces[0] if surfaces else {}
+    status = str(surface.get("status") or "not_run")
+    semantic_decision = _semantic_decision(surface)
     return {
         "requested": True,
         "mode": mode,
         "timeout_seconds": semantic_timeout,
-        "decision": report.get("decision"),
-        "reasons": list(report.get("reasons") or [])[:6],
-        "next_safe_action": report.get("next_safe_action"),
+        "overall_recall_diagnostic": {
+            "decision": report.get("decision"),
+            "reasons": list(report.get("reasons") or [])[:6],
+            "next_safe_action": report.get("next_safe_action"),
+        },
+        "semantic_sidecar": {
+            "status": status,
+            "decision": semantic_decision,
+            "reason_codes": list(surface.get("reason_codes") or [])[:6],
+            "contribution": _semantic_contribution(
+                semantic_decision=semantic_decision,
+                status=status,
+            ),
+        },
+        "agent_next_action": report.get("next_safe_action"),
         "semantic_surface": surface,
         "boundary": "diagnostic_sidecar_only_not_route_truth",
     }

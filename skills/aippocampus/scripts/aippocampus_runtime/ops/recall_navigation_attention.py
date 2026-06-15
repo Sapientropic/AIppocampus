@@ -126,6 +126,7 @@ def run_attention_router_navigation_only(
             "cwd": str(cwd),
             "clean_source_dir": str(clean_source_dir),
             "max": max_routes,
+            "detail": "full",
             "include_private_paths": False,
         }
     )

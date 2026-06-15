@@ -730,6 +730,7 @@ def check_generic_jsonl_reopen_path(
             "clean_source_dir": str(clean_source_dir),
             "registry_dir": str(registry),
             "max": 3,
+            "detail": "full",
         },
     )
     if context_proc.returncode != 0 or not isinstance(context_payload, dict):

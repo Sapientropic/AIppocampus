@@ -460,6 +460,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "cwd": str(cwd),
                             "continuity_domains_snapshot": str(snapshot_path),
                             "max": 5,
+                            "detail": "full",
                         },
                     },
                 }
@@ -491,6 +492,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "cwd": str(cwd),
                             "continuity_domains_snapshot": str(snapshot_path),
                             "max": 5,
+                            "detail": "full",
                         },
                     },
                 }
@@ -565,6 +567,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "continuity_domains_snapshot": str(snapshot_path),
                             "max": 5,
+                            "detail": "full",
                         },
                     },
                 }
@@ -875,6 +878,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }
@@ -893,6 +897,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }
@@ -993,6 +998,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }
@@ -1011,6 +1017,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }
@@ -1095,6 +1102,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }
@@ -1129,6 +1137,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }
@@ -1215,6 +1224,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "clean_source_dir": str(clean),
                             "registry_dir": str(registry_dir),
                             "continuity_domains_snapshot": str(snapshot_path),
+                            "detail": "full",
                         },
                     },
                 }

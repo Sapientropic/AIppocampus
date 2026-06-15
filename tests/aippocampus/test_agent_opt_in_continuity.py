@@ -237,27 +237,25 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("deepen_requests[].handle", public["local_private_fields"])
         self.assertEqual(
             public["output_boundary"],
-            "public_safe_no_local_private_handles",
+            "public_compact_no_local_private_handles",
         )
+        encoded = json.dumps(public, ensure_ascii=False)
+        action = public["foreground_action"]
+        self.assertEqual(public["surface"], "agent_cli_public_compact")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["request_index"], 1)
+        self.assertTrue(action["arguments"]["last_recall"])
         self.assertEqual(
             public["suggested_next_command"],
-            "aippocampus agent deepen <local-private-handle>",
-        )
-        request = public["deepen_requests"][0]
-        card = public["foreground_action_card"]
-        self.assertTrue(request["handle_redacted"])
-        self.assertNotIn("handle", request)
-        self.assertNotIn("copy_paste_command", request)
-        self.assertIn("handle_preview", request)
-        self.assertNotIn("short_action_token", card)
-        self.assertEqual(
-            request["local_followup_command"],
             "aippocampus agent deepen --request 1 --last-recall",
         )
-        self.assertEqual(
-            request["local_followup_boundary"],
-            "same_machine_last_recall_cache_only",
-        )
+        self.assertNotIn("foreground_action_card", public)
+        self.assertNotIn("deepen_requests", public)
+        self.assertNotIn("memory_packets", public)
+        self.assertNotIn("macro_navigation", public)
+        self.assertNotIn("attention_router_navigation", public)
+        self.assertNotIn("aippo-nav:", encoded)
+        self.assertLess(len(encoded.encode("utf-8")), 4096)
 
     def test_recall_route_limit_rejects_explicit_zero_negative_and_overlarge(self) -> None:
         ok = agent_continuity.recall(
@@ -1350,14 +1348,15 @@ class AgentOptInContinuityTests(unittest.TestCase):
         with patch(
             "aippocampus_runtime.recall.why_diagnostics.recall_diagnostic_report",
             return_value={
-                "decision": "degraded",
-                "reasons": ["semantic_provider_timeout"],
-                "next_safe_action": "continue_with_lexical_routes",
+                "decision": "surfaced",
+                "reasons": ["route_returned", "source_reopen_required"],
+                "next_safe_action": "reopen_source",
                 "surface_reports": [
                     {
                         "surface": "semantic_gate",
-                        "status": "degraded",
-                        "reason_codes": ["semantic_provider_timeout"],
+                        "status": "available",
+                        "reason_codes": ["background_only"],
+                        "details": {"decision": "background_only"},
                     }
                 ],
             },
@@ -1374,8 +1373,19 @@ class AgentOptInContinuityTests(unittest.TestCase):
         semantic = report["semantic_gate_diagnostics"]
         self.assertEqual(semantic["mode"], "on")
         self.assertEqual(semantic["timeout_seconds"], 8)
-        self.assertEqual(semantic["reasons"], ["semantic_provider_timeout"])
-        self.assertEqual(semantic["semantic_surface"]["status"], "degraded")
+        self.assertNotIn("decision", semantic)
+        self.assertEqual(semantic["overall_recall_diagnostic"]["decision"], "surfaced")
+        self.assertEqual(
+            semantic["overall_recall_diagnostic"]["reasons"],
+            ["route_returned", "source_reopen_required"],
+        )
+        self.assertEqual(semantic["semantic_sidecar"]["status"], "available")
+        self.assertEqual(semantic["semantic_sidecar"]["decision"], "background_only")
+        self.assertEqual(
+            semantic["semantic_sidecar"]["contribution"],
+            "diagnostic_only_no_selected_route_change",
+        )
+        self.assertEqual(semantic["agent_next_action"], "reopen_source")
 
     def test_cli_agent_recall_auto_attention_reports_promotion_blockers(self) -> None:
         proc = subprocess.run(
@@ -1578,17 +1588,22 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        request = payload["deepen_requests"][0]
         encoded = json.dumps(payload, ensure_ascii=False)
         cache_text = last_recall_path.read_text(encoding="utf-8")
         self.assertTrue(payload["last_recall_cache_available"])
-        self.assertNotIn("handle", request)
-        self.assertNotIn("callable_handle", payload["foreground_action_card"])
-        self.assertNotIn("short_action_token", payload["foreground_action_card"])
+        self.assertEqual(payload["surface"], "agent_cli_public_compact")
+        self.assertNotIn("deepen_requests", payload)
+        self.assertNotIn("foreground_action_card", payload)
+        self.assertNotIn("memory_packets", payload)
+        self.assertNotIn("macro_navigation", payload)
+        self.assertNotIn("attention_router_navigation", payload)
+        self.assertNotIn("aippo-nav:", encoded)
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(
-            request["local_followup_command"],
+            payload["suggested_next_command"],
             "aippocampus agent deepen --request 1 --last-recall",
         )
+        self.assertLess(len(encoded.encode("utf-8")), 4096)
         self.assertNotIn(str(last_recall_path), encoded)
         self.assertNotIn('"handle"', json.dumps(json.loads(cache_text)["requests"]))
         self.assertIn("local_reopen_token", cache_text)

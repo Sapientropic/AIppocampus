@@ -10,7 +10,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.macro import state as macro_state
-from aippocampus_runtime.recall import foreground_action_card
+from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
 DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
@@ -87,40 +87,26 @@ def policy_boundary() -> dict[str, Any]:
 
 
 def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Return recall JSON suitable for issue/discussion/log paste.
+    """Return compact recall JSON suitable for issue/discussion/log paste.
 
-    Full deepen handles are useful local reopen tokens, but they may encode
-    source-route material. Keep local execution easy in default JSON while
-    giving agents a no-handle projection for public handoff.
+    Plain ``--json`` stays the local diagnostic surface with private reopen
+    handles. The public/compact JSON path should be the same frontstage shape a
+    foreground agent can actually use: one action, route receipts, and a clear
+    source boundary, not a redacted audit dump.
     """
 
-    projected = dict(payload)
+    source = dict(payload)
+    source.update(handle_boundary_fields())
+    projected = compact_agent_recall_payload(source)
     projected.update(handle_boundary_fields())
-    projected["suggested_next_command"] = projected.get("public_safe_command_preview")
-    projected["output_boundary"] = "public_safe_no_local_private_handles"
-    card = projected.get("foreground_action_card")
-    if isinstance(card, Mapping):
-        projected["foreground_action_card"] = foreground_action_card.redact_public_card(card)
-        metrics = dict(projected.get("metrics") or {})
-        metrics.update(foreground_action_card.card_metrics(projected["foreground_action_card"]))
-        projected["metrics"] = metrics
-    redacted_requests: list[dict[str, Any]] = []
-    for raw_request in projected.get("deepen_requests") or []:
-        if not isinstance(raw_request, Mapping):
-            continue
-        request = dict(raw_request)
-        for key in ("handle", "callable_handle", "machine_next_command", "copy_paste_command"):
-            request.pop(key, None)
-        request["handle_redacted"] = True
-        request["handle_boundary"] = "local_private_reopen_token"
-        request["public_safe_command_preview"] = "aippocampus agent deepen <local-private-handle>"
-        if projected.get("last_recall_cache_available") and request.get("request_index"):
-            request["local_followup_command"] = (
-                f"aippocampus agent deepen --request {int(request['request_index'])} --last-recall"
-            )
-            request["local_followup_boundary"] = "same_machine_last_recall_cache_only"
-        redacted_requests.append(request)
-    projected["deepen_requests"] = redacted_requests
+    projected["surface"] = "agent_cli_public_compact"
+    projected["output_boundary"] = "public_compact_no_local_private_handles"
+    projected["last_recall_cache_available"] = bool(source.get("last_recall_cache_available"))
+    if projected.get("foreground_action"):
+        projected["suggested_next_command"] = projected["foreground_action"].get(
+            "cli_command",
+            projected.get("public_safe_command_preview"),
+        )
     return projected
 
 

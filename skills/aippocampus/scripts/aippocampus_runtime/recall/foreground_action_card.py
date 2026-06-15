@@ -106,6 +106,32 @@ def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str,
     return "continue_normally"
 
 
+def _canonical_action(decision: str, request: Mapping[str, Any]) -> dict[str, Any]:
+    if decision not in {"use_route_first", "deepen_before_claim"} or not request:
+        return {
+            "action_id": "continue_normally",
+            "tool_name": None,
+            "arguments": {},
+            "claim_boundary": "no_route_claim",
+        }
+    request_index = request.get("request_index") or 1
+    try:
+        request_index = int(request_index)
+    except (TypeError, ValueError):
+        request_index = 1
+    return {
+        "action_id": "agent_deepen_selected_route",
+        "tool_name": "agent_deepen",
+        "arguments": {
+            "request_index": request_index,
+            "last_recall": True,
+        },
+        "cli_command": f"aippocampus agent deepen --request {request_index} --last-recall",
+        "why": "reopen before using this route",
+        "claim_boundary": CLAIM_BOUNDARY,
+    }
+
+
 def build_recall_foreground_action_card(
     *,
     status: Any,
@@ -123,6 +149,7 @@ def build_recall_foreground_action_card(
         "why": _why_for_decision(decision, packet),
         "next_action": _next_action(decision, request, packet),
         "claim_boundary": CLAIM_BOUNDARY if decision != "continue_normally" else "no_route_claim",
+        "canonical_action": _canonical_action(decision, request),
     }
     if packet:
         card["route_label"] = _route_label(packet)
@@ -132,7 +159,11 @@ def build_recall_foreground_action_card(
         )
     if request and decision in {"use_route_first", "deepen_before_claim"}:
         card["callable_handle"] = str(request.get("handle") or request.get("callable_handle") or "")
-    compact = {key: value for key, value in card.items() if value not in {"", None}}
+    compact = {
+        key: value
+        for key, value in card.items()
+        if value is not None and value != ""
+    }
     return schema_profiles.project_record_for_profile(compact, "foreground_action_card")
 
 
@@ -142,7 +173,6 @@ def redact_public_card(card: Mapping[str, Any]) -> dict[str, Any]:
         projected.pop("callable_handle", None)
         projected.pop("short_action_token", None)
         projected["callable_handle_redacted"] = True
-        projected["public_safe_action"] = "aippocampus agent deepen <local-private-handle>"
     return schema_profiles.project_record_for_profile(projected, "foreground_action_card")
 
 
