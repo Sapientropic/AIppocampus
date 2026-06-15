@@ -34,7 +34,8 @@ def configured_marketplace_root(
     *,
     marketplace_name: str = MARKETPLACE_NAME,
 ) -> Path | None:
-    config_path = Path(codex_home_path or codex_home()).expanduser() / "config.toml"
+    config_home = Path(codex_home_path or codex_home()).expanduser()
+    config_path = config_home / "config.toml"
     if not config_path.exists():
         return None
     try:
@@ -47,7 +48,17 @@ def configured_marketplace_root(
     config = marketplaces.get(marketplace_name)
     if not isinstance(config, dict):
         return None
-    return _local_source_path(config.get("source"))
+    root = _local_source_path(config.get("source"))
+    if root is None:
+        return None
+    # Codex config is a host-local file; relative marketplace paths should be
+    # stable from the config/Codex home, not from whichever repository an agent
+    # happens to run `aippocampus update apply --all-local` inside. Otherwise a
+    # short relative source such as a generated cache id can create stray
+    # directories in the current repo during a routine local sync.
+    if not root.is_absolute():
+        root = config_path.parent / root
+    return root.expanduser()
 
 
 def marketplace_manifest_path(marketplace_root: Path) -> Path:

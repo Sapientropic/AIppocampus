@@ -19,11 +19,18 @@ The next slice is about better restraint.
 - Recall learning is less spooky. Feedback, retrieval reconsolidation, warm
   preactivation, and posture calibration produce bounded route hints and review
   rows instead of quietly rewriting memory.
+- Feedback now reaches an actual route surface: useful signals can lift or
+  demote which route an agent reopens first, while source truth stays exactly
+  where it belongs.
+- The old macro router can now read compact macro-field lanes, so posture and
+  timing guidance show up without dragging the whole atlas into the foreground.
 - Subconscious intake is on the normal scheduler path now, with a bypass flag
   and a sidecar trail, so expensive background attention has a doorkeeper.
 - Local closeout got less theatrical: release/test plans say which gate owns
   what, and `update apply --all-local --agent-json` now tells agents the next
   host-reload/foreground-visibility step after syncing local installs.
+- Local install sync also treats relative Codex marketplace paths as living
+  beside the Codex config, not wherever the agent happens to be standing.
 
 Still alpha. Still source-backed. A little more patience in the machinery.
 

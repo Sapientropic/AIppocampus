@@ -83,6 +83,17 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn(str(REPO_ROOT), raw)
         self.assertNotIn(str(SCRIPTS), raw)
 
+    def test_doctor_config_compact_json_is_foreground_agent_sized(self) -> None:
+        proc = self.run_cli("doctor", "config", "--compact-json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
+        self.assertLess(len(proc.stdout.splitlines()), 60)
+        self.assertTrue(payload["audit_json_available"])
+        self.assertFalse(payload["privacy"]["values_printed"])
+        self.assertNotIn("knobs", payload)
+
     def test_nested_operator_help_uses_facade_command_prog(self) -> None:
         mcp = self.run_cli("mcp", "--help")
         maintenance = self.run_cli("maintenance", "--help")

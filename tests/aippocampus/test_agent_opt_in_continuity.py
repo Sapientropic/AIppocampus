@@ -15,7 +15,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity, feedback_events  # noqa: E402
 
 
 class AgentOptInContinuityTests(unittest.TestCase):
@@ -498,6 +498,80 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_handles", encoded)
         self.assertNotIn("head_votes", encoded)
         self.assertNotIn("src_attention", encoded)
+
+    def test_recall_attention_router_consumes_feedback_jsonl(self) -> None:
+        routes = [
+            {
+                "route_id": "route_stale",
+                "route_kind": "active_path",
+                "kind": "source_ref",
+                "handle": "handle:stale",
+                "route_label": "attention router stale drag route",
+                "route_topic": "attention_router",
+                "source_refs": [{"source_id": "src_stale", "message_id": "msg_stale"}],
+            },
+            {
+                "route_id": "route_helpful",
+                "route_kind": "active_path",
+                "kind": "source_ref",
+                "handle": "handle:helpful",
+                "route_label": "attention router helpful reopen route",
+                "route_topic": "attention_router",
+                "source_refs": [{"source_id": "src_helpful", "message_id": "msg_helpful"}],
+            },
+        ]
+        feedback_path = self.cwd / "feedback.jsonl"
+        events = [
+            feedback_events.active_flow_event(
+                route_id=route_id,
+                route_kind="active_path",
+                signal=signal,
+            )
+            for route_id, signal in (
+                ("route_helpful", "source_reopen_success"),
+                ("route_helpful", "user_confirmed"),
+                ("route_stale", "wrong_route_drag"),
+                ("route_stale", "blocked"),
+            )
+        ]
+        with feedback_path.open("w", encoding="utf-8", newline="\n") as handle:
+            for event in events:
+                handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+            handle.write("{not json\n")
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": routes,
+            "route_count": len(routes),
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            report = agent_continuity.recall(
+                "attention router route feedback calibration",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                max_routes=2,
+                attention_router=True,
+                feedback_path=feedback_path,
+            )
+
+        diagnostics = report["attention_router_navigation"]["feedback_calibration"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(report["memory_packets"][0]["route_id"], "route_helpful")
+        self.assertEqual(diagnostics["matched_route_count"], 2)
+        self.assertEqual(diagnostics["positive_delta_count"], 1)
+        self.assertEqual(diagnostics["negative_delta_count"], 1)
+        self.assertEqual(
+            report["metrics"]["attention_router_feedback_calibration_matched_count"],
+            2,
+        )
+        self.assertIn("feedback_calibration_lift", encoded)
+        self.assertNotIn(str(feedback_path), encoded)
+        self.assertNotIn("source_open_token_ids", encoded)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("source_handles", encoded)
+        self.assertNotIn("head_votes", encoded)
+        self.assertNotIn("src_helpful", encoded)
 
     def test_memory_packet_budget_trimming_keeps_route_label(self) -> None:
         packet = {

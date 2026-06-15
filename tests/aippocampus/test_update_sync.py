@@ -49,6 +49,16 @@ def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
                 os.environ[name] = value
 
 
+@contextmanager
+def pushd(path: Path) -> Iterator[None]:
+    old = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(old)
+
+
 def run_update(*args: str) -> tuple[int, dict]:
     stdout = StringIO()
     with redirect_stdout(stdout):
@@ -1408,6 +1418,60 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(plugin_result["ok"])
         self.assertEqual(marketplace_manifest["version"], "0.2.0")
         self.assertIn("local_marketplace", plugin_result["cache_refresh"]["refreshed"])
+
+    def test_all_local_resolves_relative_marketplace_source_from_codex_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            output = repo / "dist" / "aippocampus-plugin"
+            codex_home = root / "codex-home"
+            cwd = root / "agent-cwd"
+            relative_source = Path("relative-marketplace")
+            marketplace_plugin = codex_home / relative_source / "plugins" / "aippocampus"
+            stray_cwd_marketplace = cwd / relative_source
+            write_minimal_repo(repo)
+            cwd.mkdir()
+            plugin = repo / "plugins" / "aippocampus"
+            plugin.mkdir(parents=True)
+            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
+            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+            write_plugin_package(marketplace_plugin, version="0.1.0")
+            codex_home.mkdir(parents=True, exist_ok=True)
+            (codex_home / "config.toml").write_text(
+                "[marketplaces.aippocampus-local]\n"
+                "source = 'relative-marketplace'\n",
+                encoding="utf-8",
+            )
+
+            with pushd(cwd):
+                code, payload = run_update(
+                    "apply",
+                    "--all-local",
+                    "--repo-root",
+                    str(repo),
+                    "--plugin-output",
+                    str(output),
+                    "--codex-home",
+                    str(codex_home),
+                    "--no-child-check",
+                )
+            plugin_result = next(
+                item for item in payload["applied_surfaces"] if item["surface"] == "plugin"
+            )
+            marketplace_manifest = json.loads(
+                (marketplace_plugin / ".codex-plugin" / "plugin.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            stray_created = stray_cwd_marketplace.exists()
+            refreshed = plugin_result["cache_refresh"]["refreshed"]["local_marketplace"]
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(plugin_result["ok"])
+        self.assertEqual(marketplace_manifest["version"], "0.2.0")
+        self.assertFalse(stray_created)
+        self.assertTrue(refreshed["ok"])
+        self.assertIn("<redacted:local-path>", refreshed["target_path"])
 
     def test_plugin_apply_auto_reports_requested_when_multiple_cache_candidates_block_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
