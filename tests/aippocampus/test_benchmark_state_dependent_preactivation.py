@@ -85,7 +85,7 @@ class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
             1.0,
         )
 
-    def test_cli_json_emits_full_sanitized_report_and_output_route(self) -> None:
+    def test_cli_json_emits_summary_and_output_writes_full_sanitized_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "state-dependent-full.json"
             result = subprocess.run(
@@ -108,13 +108,16 @@ class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
             written = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertEqual(payload["kind"], benchmark.PREACTIVATION_BENCHMARK_KIND)
-        self.assertIn("cases", payload)
+        self.assertNotIn("cases", payload)
         self.assertIn("cannot_claim", payload)
         self.assertEqual(payload["contract_gate_ok"], True)
         self.assertEqual(payload["quality_gate_ok"], False)
         self.assertEqual(payload["public_quality_gate_ok"], False)
         self.assertEqual(payload["sample_size"], payload["case_count"])
+        self.assertEqual(payload["full_report_flag"], "--output <path>")
+        self.assertTrue(payload["full_report_written"])
         self.assertEqual(written["kind"], payload["kind"])
+        self.assertIn("cases", written)
 
 
 if __name__ == "__main__":

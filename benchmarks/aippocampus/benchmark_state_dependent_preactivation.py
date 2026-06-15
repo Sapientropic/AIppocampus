@@ -513,6 +513,32 @@ def run_state_dependent_preactivation_benchmark(
     }
 
 
+def public_cli_summary(payload: dict[str, Any], *, full_report_written: bool) -> dict[str, Any]:
+    keys = (
+        "kind",
+        "schema_version",
+        "ok",
+        "status",
+        "contract_gate_ok",
+        "quality_gate_ok",
+        "public_quality_gate_ok",
+        "benchmark_maturity_level",
+        "quality_gate_kind",
+        "case_count",
+        "sample_size",
+        "metrics",
+        "comparison",
+        "quality_gates",
+        "privacy_boundary",
+        "can_claim",
+        "cannot_claim",
+    )
+    summary = {key: payload[key] for key in keys if key in payload}
+    summary["full_report_written"] = full_report_written
+    summary["full_report_flag"] = "--output <path>"
+    return summary
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -525,8 +551,9 @@ def main() -> int:
             json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
             handle.write("\n")
     if args.json_output:
+        stdout_payload = public_cli_summary(payload, full_report_written=bool(args.output))
         sys.stdout.write(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            json.dumps(stdout_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         )
     else:
         sys.stdout.write(

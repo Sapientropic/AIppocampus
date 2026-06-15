@@ -113,15 +113,14 @@ def write_last_recall_cache(
         "requests": requests[:25],
         "context": {
             "cwd": str(cwd) if cwd else None,
-            "clean_source_dir": str(clean_source_dir) if clean_source_dir else None,
-            "registry_dir": str(registry_dir) if registry_dir else None,
-            "macro_state_jsonl": str(macro_state_path) if macro_state_path else None,
             "project": project,
             "max": max_matches,
+            "path_scope": "cwd_only_explicit_overrides_required",
         },
         "privacy_boundary": {
             "local_cache_only": True,
             "default_human_output_prints_cache_path": False,
+            "derived_local_source_paths_persisted": False,
             "opaque_handles_are_navigation_not_facts": True,
         },
     }
