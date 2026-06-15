@@ -6,14 +6,38 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-Small dogfood fixes after 0.3.2:
+Nothing yet.
 
-- Benchmark suite JSON now separates "the runner produced a bounded report"
-  from "this supports a public quality claim."
-- `aippocampus doctor config --compact-json` and `--summary` now give agents a
-  small, privacy-safe config view instead of a thousand-line audit.
-- Codex plugin install/update now follows the already configured local
-  marketplace and ignores stale legacy cache copies when judging sync status.
+## 0.3.3 - 2026-06-15
+
+0.3.3 is a dogfood release for fewer sharp edges.
+
+AIppocampus should feel easier to keep nearby: quieter status, clearer routes,
+less release-theater, and fewer places where an agent has to guess whether a
+diagnostic is evidence.
+
+- Recall gets better handholds: source-backed aliases, safer candidate
+  planning, outcome feedback, route labels that survive packet trimming, and an
+  attention-router guard that will not promote a less relevant route just
+  because it scored loudly.
+- MCP and public outputs are more careful by default. Search is metadata-only
+  unless snippets are requested, thread ids are bounded, storage dry-runs are
+  public-safe, and sync status gives copyable `aippocampus` commands.
+- Install/update is less fussy. `apply --all-local` can refresh the local Codex
+  plugin cache when there is one clear target, and status can acknowledge when
+  the foreground agent already sees the tools.
+- The test and release path is calmer: focused tests first, `pr` at most once
+  locally, and release preflight for the few checks that can drift after CI.
+- Benchmark and doctor reports are smaller and more honest. A report existing
+  is no longer confused with a public-quality claim.
+
+Still alpha. Still source-backed. Fewer knobs in the doorway.
+
+### Compare
+
+- Source range: `v0.3.2..v0.3.3`
+- Compare URL:
+  https://github.com/Sapientropic/AIppocampus/compare/v0.3.2...v0.3.3
 
 ## 0.3.2 - 2026-06-15
 

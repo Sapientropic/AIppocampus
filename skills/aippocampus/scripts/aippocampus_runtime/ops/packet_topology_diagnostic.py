@@ -11,6 +11,13 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.topology.borromean import borromean_relation_diagnostic
+from aippocampus_runtime.topology.primitive_registry import (
+    ANNOTATION_BACKED,
+    REDUCER_BACKED,
+    topology_primitive_registry,
+)
+
 SCHEMA_VERSION = 1
 KIND = "aippocampus_packet_topology_diagnostic"
 FORBIDDEN_MARKERS = (
@@ -136,8 +143,70 @@ def _knot_without_unlinking(row: Mapping[str, Any]) -> bool:
 
 
 def _borromean_break_counted(row: Mapping[str, Any]) -> bool:
-    return _safe_bool(row.get("borromean_break")) and (
-        _safe_bool(row.get("foreground_visible")) or _safe_bool(row.get("action_shaping"))
+    return bool(borromean_relation_diagnostic(row)["break_counted"])
+
+
+def _annotation_missing_middle_reason(row: Mapping[str, Any]) -> str:
+    label = _safe_label(row.get("pathlet_gap") or row.get("source_gap"))
+    if label == "cut_point":
+        return "producer_annotated_cut_point"
+    return "producer_annotated_missing_middle"
+
+
+def _row_provenance(
+    *,
+    reducer_diagnostics: list[str],
+    producer_annotations: list[str],
+) -> str:
+    if reducer_diagnostics:
+        return REDUCER_BACKED
+    if producer_annotations:
+        return ANNOTATION_BACKED
+    return "none"
+
+
+def _row_reason_codes(
+    row: Mapping[str, Any],
+    *,
+    borromean: Mapping[str, Any],
+) -> tuple[list[str], list[str], list[str]]:
+    reason_codes: list[str] = []
+    reducer_diagnostics: list[str] = []
+    producer_annotations: list[str] = []
+
+    reducer_cases = (
+        ("navigation_as_claim", _navigation_as_claim(row), "reducer_navigation_as_claim"),
+        ("macro_as_decision", _macro_as_decision(row), "reducer_macro_as_decision"),
+        ("candidate_as_authority", _candidate_as_authority(row), "reducer_candidate_as_authority"),
+        ("source_handle_as_fact", _source_handle_as_fact(row), "reducer_source_handle_as_fact"),
+        ("explicit_route_cycle", _explicit_route_cycle(row), "reducer_explicit_route_cycle"),
+        ("agency_suppression", _agency_suppression(row), "reducer_agency_suppression"),
+        ("knot_without_unlinking", _knot_without_unlinking(row), "reducer_knot_without_unlinking"),
+    )
+    for primitive_id, matched, reason in reducer_cases:
+        if matched:
+            reducer_diagnostics.append(primitive_id)
+            reason_codes.append(reason)
+
+    if borromean.get("break_counted"):
+        if borromean.get("derived_break"):
+            reducer_diagnostics.append("borromean_relation")
+        elif borromean.get("annotation_break"):
+            producer_annotations.append("borromean_relation")
+        for reason in borromean.get("reason_codes") or []:
+            if reason not in reason_codes:
+                reason_codes.append(str(reason))
+
+    if _missing_middle(row):
+        producer_annotations.append("missing_middle_or_cut_point")
+        reason_codes.append(_annotation_missing_middle_reason(row))
+
+    if not reason_codes:
+        reason_codes.append("relation_preserved")
+    return (
+        list(dict.fromkeys(reason_codes)),
+        list(dict.fromkeys(reducer_diagnostics)),
+        list(dict.fromkeys(producer_annotations)),
     )
 
 
@@ -162,7 +231,12 @@ def _diagnostic_for_row(row: Mapping[str, Any]) -> str:
 
 
 def evaluate_packet(row: Mapping[str, Any]) -> dict[str, Any]:
+    borromean = borromean_relation_diagnostic(row)
     diagnostic = _diagnostic_for_row(row)
+    reason_codes, reducer_diagnostics, producer_annotations = _row_reason_codes(
+        row,
+        borromean=borromean,
+    )
     boundary_crossings: list[str] = []
     if _navigation_as_claim(row):
         boundary_crossings.append("navigation_as_claim")
@@ -172,8 +246,14 @@ def evaluate_packet(row: Mapping[str, Any]) -> dict[str, Any]:
         boundary_crossings.append("candidate_as_authority")
     if _source_handle_as_fact(row):
         boundary_crossings.append("source_handle_as_fact")
-    if _borromean_break_counted(row):
-        boundary_crossings.append("foreground_borromean_break")
+    if borromean["break_counted"]:
+        boundary_crossings.extend(
+            reason
+            for reason in borromean["reason_codes"]
+            if str(reason).startswith("borromean_missing_")
+        )
+        if borromean["annotation_break"]:
+            boundary_crossings.append("producer_annotated_borromean_break")
 
     return {
         "kind": "aippocampus_packet_topology_row",
@@ -182,6 +262,13 @@ def evaluate_packet(row: Mapping[str, Any]) -> dict[str, Any]:
         "packet_type": _packet_type(row),
         "diagnostic": diagnostic,
         "diagnostic_kind": "packet_topology_diagnostic",
+        "diagnostic_provenance": _row_provenance(
+            reducer_diagnostics=reducer_diagnostics,
+            producer_annotations=producer_annotations,
+        ),
+        "reason_codes": reason_codes,
+        "reducer_diagnostics": reducer_diagnostics,
+        "producer_annotations": producer_annotations,
         "preserved_relations": ["route_points_to_source"] if diagnostic == RELATION_PRESERVED else [],
         "boundary_crossings": boundary_crossings,
         "cycles": ["repeated_failed_route"] if _explicit_route_cycle(row) else [],
@@ -189,7 +276,8 @@ def evaluate_packet(row: Mapping[str, Any]) -> dict[str, Any]:
         "knots": ["obligation_knot"] if _knot_without_unlinking(row) else [],
         "unlinking_moves": ["declared_unlinking_move"] if _safe_bool(row.get("unlinking_move_present")) else [],
         "agency_suppression_risk": _agency_suppression(row),
-        "borromean_break_counted": _borromean_break_counted(row),
+        "borromean_relation": borromean,
+        "borromean_break_counted": bool(borromean["break_counted"]),
         "foreground_projection_tiny": True,
         "full_diagnostic_surface": "explain_debug_or_campus",
         "claim_permission": "navigation_only_not_fact",
@@ -258,6 +346,44 @@ def fixture_packet_cases() -> list[dict[str, Any]]:
             "obligation_count": 3,
             "unlinking_move_present": False,
         },
+        {
+            "case_id": "borromean_missing_source_side",
+            "packet_type": "memory_packet",
+            "foreground_visible": True,
+            "task_anchor": "continue bounded route",
+            "agent_agency_room": True,
+            "authority_level": "navigation_only",
+            "claim_permission": "no_claim_before_reopen",
+        },
+        {
+            "case_id": "borromean_missing_user_need_side",
+            "packet_type": "memory_packet",
+            "foreground_visible": True,
+            "source_refs": [{"source_id": "issue:#1548"}],
+            "agent_agency_room": True,
+            "authority_level": "navigation_only",
+            "claim_permission": "no_claim_before_reopen",
+        },
+        {
+            "case_id": "borromean_missing_agent_agency_side",
+            "packet_type": "memory_packet",
+            "action_shaping": True,
+            "source_refs": [{"source_id": "issue:#1548"}],
+            "task_anchor": "continue bounded route",
+            "rendered_as_action_instruction": True,
+            "authority_level": "navigation_only",
+            "claim_permission": "no_claim_before_reopen",
+        },
+        {
+            "case_id": "borromean_healthy_foreground_route",
+            "packet_type": "memory_packet",
+            "foreground_visible": True,
+            "source_refs": [{"source_id": "issue:#1548"}],
+            "task_anchor": "continue bounded route",
+            "agent_agency_room": True,
+            "authority_level": "navigation_only",
+            "claim_permission": "no_claim_before_reopen",
+        },
     ]
 
 
@@ -269,6 +395,9 @@ def build_packet_topology_report(
     counts: Counter[str] = Counter(item["diagnostic"] for item in diagnostics)
     boundary_counts: Counter[str] = Counter(
         crossing for item in diagnostics for crossing in item["boundary_crossings"]
+    )
+    provenance_counts: Counter[str] = Counter(
+        item["diagnostic_provenance"] for item in diagnostics
     )
     forbidden_marker_count = sum(
         1
@@ -289,6 +418,8 @@ def build_packet_topology_report(
         "borromean_break_count": sum(
             1 for item in diagnostics if item["borromean_break_counted"]
         ),
+        "reducer_derived_diagnostic_count": provenance_counts[REDUCER_BACKED],
+        "producer_annotation_diagnostic_count": provenance_counts[ANNOTATION_BACKED],
     }
     red_lines = {
         "raw_private_text_emitted_count": forbidden_marker_count,
@@ -322,6 +453,7 @@ def build_packet_topology_report(
         "topology_is_truth_source": False,
         "default_foreground_projection": "tiny_tag_only_when_action_selection_changes",
         "diagnostics": diagnostics,
+        "topology_primitive_registry": topology_primitive_registry(),
         "metrics": metrics,
         "red_lines": red_lines,
         "privacy_boundary": {
@@ -337,6 +469,8 @@ def build_packet_topology_report(
             "macro_orientation_schema_not_redefined": True,
             "dream_topology_child_remains_candidate_only": True,
             "source_user_need_agent_agency_break_counted_only_when_visible": True,
+            "primitive_provenance_declared": True,
+            "producer_annotations_are_not_independent_discovery": True,
             "topology_names_shape_not_truth": True,
         },
         "cannot_claim": [

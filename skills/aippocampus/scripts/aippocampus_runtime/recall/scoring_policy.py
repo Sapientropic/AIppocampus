@@ -154,6 +154,21 @@ class ScoreFusionPolicy:
         return context if context in self.context_weights_dict() else "normal_recall"
 
 
+@dataclass(frozen=True)
+class FreshnessScoringPolicy:
+    # These values are added after a lexical candidate exists. Do not multiply
+    # SQLite bm25() by freshness: FTS5 ranks lower numbers as better, while the
+    # runtime's lexical_score is already normalized into higher-is-better points.
+    # Freshness is therefore a named diagnostic contribution, not a truth claim.
+    current_first_current_bonus: float = 20.0
+    current_first_stale_penalty: float = -70.0
+    current_first_conflict_penalty: float = -45.0
+    neutral_current_bonus: float = 0.0
+    neutral_stale_penalty: float = 0.0
+    history_stale_penalty: float = 0.0
+    history_conflict_penalty: float = 0.0
+
+
 PHASE_WEIGHT_POLICY = PhaseWeightPolicy()
 MESSAGE_FTS_POLICY = FtsRankPolicy(base=80.0, step=0.5)
 RAG_CHUNK_FTS_POLICY = FtsRankPolicy(base=60.0, step=0.7)
@@ -164,3 +179,4 @@ SEGMENT_MERGE_POLICY = SegmentMergePolicy()
 ACTIVE_RECALL_POLICY = ActiveRecallDecisionPolicy()
 SOURCE_SIGNAL_POLICY = SourceSignalPolicy()
 SCORE_FUSION_POLICY = ScoreFusionPolicy()
+FRESHNESS_SCORING_POLICY = FreshnessScoringPolicy()

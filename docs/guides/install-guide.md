@@ -316,13 +316,16 @@ aippocampus update apply --all-local
 ```
 
 `--all-local` syncs the installable skill, rebuilds the repo-local plugin
-package, and installs AIppocampus-owned Codex hooks. It does not copy private
-memory data, raw rollouts, generated indexes, sync bundles, or package caches.
-Plugin marketplace/cache refresh is opt-in through `--plugin-marketplace-dir`
-or `--plugin-installed-dir`. When an installed cache is refreshed, update apply
-preserves a portable existing `.mcp.json` and still reports that a host app
-reload or reinstall may be required before foreground agent tools are visible.
-It also does not read, print, or store API-key values. If `update status`
+package, refreshes the configured local Codex marketplace when one exists, and
+installs AIppocampus-owned Codex hooks. It does not copy private memory data,
+raw rollouts, generated indexes, sync bundles, or package caches. Installed
+plugin cache refresh is automatic only when update can resolve one clear target,
+either a unique cache or a single cache matching the package version; otherwise
+use `--plugin-installed-dir <path>` for the ambiguous host cache. When an
+installed cache is refreshed, update apply preserves a portable existing
+`.mcp.json` and still reports that a host app reload or reinstall may be
+required before foreground agent tools are visible. It also does not read,
+print, or store API-key values. If `update status`
 reports the LLM surface as missing, set the reported environment variable
 (`DEEPSEEK_API_KEY` by default, or the configured OpenAI-compatible key env)
 in the process that launches Codex, then rerun status. When the key already

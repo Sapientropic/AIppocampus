@@ -306,6 +306,15 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
         "issue": ISSUE_NUMBER,
         "run_at": now_utc(),
         "ok": True,
+        "benchmark_maturity_level": "planning_contract",
+        "measurement_origin": "deterministic_contract",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": True,
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "decision_impact": "diagnostic_only",
+        "decision_impact_not_applicable": True,
+        "case_count": len(selected) + len(deferred),
         "selected_family_count": len(selected),
         "selected_families": selected,
         "deferred_families": deferred,
@@ -319,6 +328,34 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
             ),
         },
         "sanitization_check": _sanitization_check(),
+        "measured_result": "deterministic candidate-family selection report emitted",
+        "supports": [
+            "first #1195 family-promotion decision",
+            "reusable candidate metadata for public-safe cohort construction",
+        ],
+        "useful_now": [
+            "separates candidate-family planning from public cohort quality claims",
+            "points future benchmark work at held-out usefulness and quality gates",
+        ],
+        "agent_action": "use_as_family_promotion_planning_input_not_quality_evidence",
+        "can_support_after_action": [
+            "candidate cohort implementation after held-out measurement and human review"
+        ],
+        "material_limits": [
+            "No selected family is promoted to public cohort quality by this report.",
+            "Candidate case counts are targets, not observed pass/fail results.",
+            "Private history, live host behavior, and answer generation remain out of scope.",
+        ],
+        "cannot_claim": [
+            "public_cohort_quality",
+            "selected_family_runtime_lift",
+            "live_private_history_family_promotion",
+        ],
+        "privacy_boundary": {
+            "raw_private_text_emitted": False,
+            "absolute_paths_emitted": False,
+            "provider_calls": 0,
+        },
         "claim_boundary": {
             "supports": (
                 "First #1195 family-promotion decision and reusable candidate metadata for "

@@ -385,6 +385,7 @@ def build_yi_runtime_interface_audit_report() -> dict[str, object]:
             "hamming_and_momentum": hamming_momentum,
             "topology_sheaf_consumption": topology_sheaf,
         },
+        "momentum_thresholds": momentum.momentum_threshold_report(),
         "metrics": metrics,
         "violations": foreground_violations,
         "authority_level": AUTHORITY_LEVEL,

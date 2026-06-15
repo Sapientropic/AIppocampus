@@ -41,6 +41,12 @@ python tools/aippocampus/test_plan.py --json
 python tools/aippocampus/test_plan.py --release-preflight --json
 ```
 
+The local closeout rule is deliberately small: run focused tests while editing,
+run `pr` at most once when CI is unavailable or stale, then use release
+preflight after CI is green. A failing debt, mypy, docs, or boundary gate is a
+thing to fix or narrow with a focused test, not a cue to rerun the whole stack
+until everyone is tired.
+
 Run the focused commands from the changed-surface plan. The planner's JSON
 commands are the executable authority because they use the active interpreter
 path; the examples in this checklist are human-readable short forms. During

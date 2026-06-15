@@ -23,6 +23,31 @@ def _compat_module() -> ModuleType:
         raise AssertionError("missing local/global compatibility helper") from exc
 
 
+def _source_shape_section(
+    case_id: str,
+    *,
+    scope: str,
+    source_id: str = "issue:#1551",
+    topic_epoch: str = "2026w25",
+    **updates: object,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "case_id": case_id,
+        "kind": "memory_packet",
+        "scope": scope,
+        "source_ids": [source_id] if source_id else [],
+        "topic_epoch": topic_epoch,
+        "authority_level": "navigation_only",
+        "claim_permission": "no_claim_before_reopen",
+        "source_coverage_time": {
+            "start": "2026-06-15T00:00:00Z",
+            "end": "2026-06-15T01:00:00Z",
+        },
+    }
+    payload.update(updates)
+    return payload
+
+
 class LocalGlobalCompatibilityTests(unittest.TestCase):
     def test_fixture_covers_glue_partial_obstruction_and_blocked_boundaries(self) -> None:
         compat = _compat_module()
@@ -349,6 +374,139 @@ class LocalGlobalCompatibilityTests(unittest.TestCase):
         self.assertIn("shi_ying_v0_project_role_hint", row["restriction_edges"])
         self.assertFalse(row["restriction_policy"]["classical_bagua_positions_enabled"])
         self.assertFalse(row["restriction_policy"]["may_change_source_truth"])
+
+    def test_scope_equivalence_glues_explicit_aliases_with_distinct_reason_code(self) -> None:
+        compat = _compat_module()
+        result = compat.evaluate_local_global_compatibility(
+            [
+                _source_shape_section(
+                    "canonical",
+                    scope="project:AIppocampus#canonical:runtime",
+                    scope_aliases=["project:AIppocampus#thread_family:runtime"],
+                ),
+                _source_shape_section(
+                    "display_label",
+                    scope="Runtime continuity thread family",
+                    canonical_scope_id="project:AIppocampus#canonical:runtime",
+                ),
+            ],
+            case_id="explicit_scope_alias",
+        )
+
+        self.assertEqual(result["result"], "glued_route")
+        self.assertIn("normalized_equivalent_scope_match", result["reason_codes"])
+        self.assertEqual(result["overlap_basis"]["scope_match_kind"], "equivalent")
+        self.assertFalse(result["overlap_basis"]["shared_vocabulary_counts_as_overlap"])
+        self.assertEqual(result["authority_level"], "navigation_only")
+        self.assertEqual(result["claim_permission"], "navigation_only_not_fact")
+
+    def test_shared_vocabulary_still_obstructs_without_source_or_scope_equivalence(self) -> None:
+        compat = _compat_module()
+        result = compat.evaluate_local_global_compatibility(
+            [
+                _source_shape_section(
+                    "vocab_a",
+                    scope="project:AIppocampus#area:a",
+                    source_id="",
+                    route_topic="macro topology navigation",
+                ),
+                _source_shape_section(
+                    "vocab_b",
+                    scope="project:AIppocampus#area:b",
+                    source_id="",
+                    route_topic="macro topology navigation",
+                ),
+            ],
+            case_id="shared_vocab_no_glue",
+        )
+
+        self.assertEqual(result["result"], "obstruction")
+        self.assertIn("shared_vocabulary_without_source_scope_support", result["reason_codes"])
+        self.assertEqual(result["overlap_basis"]["scope_match_kind"], "none")
+
+    def test_private_or_stale_sections_are_not_rescued_by_scope_normalization(self) -> None:
+        compat = _compat_module()
+        private = compat.evaluate_local_global_compatibility(
+            [
+                _source_shape_section(
+                    "private",
+                    scope="private-runtime",
+                    canonical_scope_id="project:AIppocampus#canonical:runtime",
+                    privacy_domain="private",
+                ),
+                _source_shape_section(
+                    "public",
+                    scope="project:AIppocampus#display:runtime",
+                    canonical_scope_id="project:AIppocampus#canonical:runtime",
+                ),
+            ],
+            case_id="private_alias_not_rescued",
+        )
+        stale = compat.evaluate_local_global_compatibility(
+            [
+                _source_shape_section(
+                    "stale",
+                    scope="old-runtime",
+                    canonical_scope_id="project:AIppocampus#canonical:runtime",
+                    status="stale",
+                ),
+                _source_shape_section(
+                    "current",
+                    scope="new-runtime",
+                    canonical_scope_id="project:AIppocampus#canonical:runtime",
+                ),
+            ],
+            case_id="stale_alias_not_rescued",
+        )
+
+        self.assertEqual(private["result"], "blocked_boundary")
+        self.assertEqual(private["obstruction_kind"], "privacy_boundary")
+        self.assertEqual(stale["result"], "obstruction")
+        self.assertEqual(stale["obstruction_kind"], "stale_boundary")
+        self.assertEqual(private["overlap_basis"]["scope_match_kind"], "equivalent")
+        self.assertEqual(stale["overlap_basis"]["scope_match_kind"], "equivalent")
+
+    def test_live_local_global_producer_feeds_source_shape_and_degrades_on_obstruction(self) -> None:
+        from aippocampus_runtime.navigation.local_global_source_shape import (
+            build_local_global_source_shape_descriptor,
+        )
+
+        descriptor = build_local_global_source_shape_descriptor(
+            [
+                _source_shape_section("good_a", scope="project:AIppocampus#issue:1549"),
+                _source_shape_section("good_b", scope="project:AIppocampus#issue:1549"),
+            ],
+            producer="local_global_route_bundle",
+            created_at="2026-06-15T01:02:00Z",
+        )
+        obstructed = build_local_global_source_shape_descriptor(
+            [
+                _source_shape_section(
+                    "cut_a",
+                    scope="project:AIppocampus#thread:a",
+                    source_id="",
+                    route_topic="source shape compatibility",
+                ),
+                _source_shape_section(
+                    "cut_b",
+                    scope="project:AIppocampus#thread:b",
+                    source_id="",
+                    route_topic="source shape compatibility",
+                ),
+            ],
+            producer="local_global_route_bundle",
+            created_at="2026-06-15T01:02:00Z",
+        )
+
+        self.assertTrue(descriptor["compatibility_diagnostics_present"])
+        self.assertEqual(descriptor["descriptor_state"], "complete")
+        self.assertTrue(descriptor["projection"]["projection_allowed"])
+        self.assertTrue(obstructed["compatibility_diagnostics_present"])
+        self.assertEqual(obstructed["descriptor_state"], "diagnostic_only")
+        self.assertEqual(obstructed["dominant_guard"]["guard"], "source_availability")
+        self.assertEqual(obstructed["signals"]["compatibility"]["status"], "obstruction")
+        self.assertEqual(obstructed["authority_level"], "direction_only")
+        self.assertEqual(obstructed["claim_permission"], "none")
 
     def test_fixture_links_macro_dream_telepathy_aippo_and_topology_surfaces(self) -> None:
         compat = _compat_module()

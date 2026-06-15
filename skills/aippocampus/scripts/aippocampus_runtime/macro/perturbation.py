@@ -18,6 +18,15 @@ from aippocampus_runtime.macro.signal_scales import (
 AUTHORITY_LEVEL = "navigation_only"
 CLAIM_PERMISSION = "no_claim_before_reopen"
 
+LINE_LAYER_BY_POSITION = {
+    1: "earth",
+    2: "earth",
+    3: "human",
+    4: "human",
+    5: "heaven",
+    6: "heaven",
+}
+
 _BAND_POLICIES: dict[PerturbationBand, dict[str, object]] = {
     "none": {
         "amplitude": "no_shift",
@@ -102,6 +111,31 @@ def _policy_for_band(
     return dict(_BAND_POLICIES[band])
 
 
+def changed_line_layer_diagnostics(lines: tuple[int, ...]) -> dict[str, object]:
+    layers = [{"line": position, "layer": LINE_LAYER_BY_POSITION[position]} for position in lines]
+    counts = {
+        "earth": sum(1 for item in layers if item["layer"] == "earth"),
+        "human": sum(1 for item in layers if item["layer"] == "human"),
+        "heaven": sum(1 for item in layers if item["layer"] == "heaven"),
+    }
+    active_layers = [layer for layer, count in counts.items() if count > 0]
+    if not active_layers:
+        dominant = "none"
+    else:
+        max_count = max(counts.values())
+        leaders = [layer for layer, count in counts.items() if count == max_count and count > 0]
+        dominant = leaders[0] if len(leaders) == 1 else "multi_layer"
+    reason_codes = [f"perturbation_layer_{layer}" for layer in active_layers]
+    if len(active_layers) > 1:
+        reason_codes.append("perturbation_layer_multi")
+    return {
+        "changed_line_layers": layers,
+        "changed_layer_counts": counts,
+        "dominant_changed_layer": dominant,
+        "reason_codes": reason_codes,
+    }
+
+
 def build_perturbation_packet(
     previous: HexagramRef,
     current: HexagramRef,
@@ -115,6 +149,7 @@ def build_perturbation_packet(
     lines = changed_lines(before, after)
     distance = hamming_distance(before, after)
     band = perturbation_band(distance)
+    layer_diagnostics = changed_line_layer_diagnostics(lines)
     project_level_signal = _is_project_level_signal(
         signal_scale=normalized_scale,
         promoted_to_project=promoted_to_project,
@@ -137,6 +172,9 @@ def build_perturbation_packet(
         reason_codes.append("inversion_requires_source_reopen_or_conflict_review")
     if policy.get("stale_conflict_checks_required"):
         reason_codes.append("stale_conflict_checks_required")
+    for reason in layer_diagnostics["reason_codes"]:
+        if reason not in reason_codes:
+            reason_codes.append(str(reason))
 
     return {
         "kind": "macro_perturbation_amplitude",
@@ -146,6 +184,9 @@ def build_perturbation_packet(
         "hamming_distance": distance,
         "changed_lines": list(lines),
         "changed_line_count": len(lines),
+        "changed_line_layers": layer_diagnostics["changed_line_layers"],
+        "changed_layer_counts": layer_diagnostics["changed_layer_counts"],
+        "dominant_changed_layer": layer_diagnostics["dominant_changed_layer"],
         "band": band,
         "amplitude": policy["amplitude"],
         "route_policy": policy["route_policy"],
@@ -202,5 +243,6 @@ __all__ = [
     "CLAIM_PERMISSION",
     "SignalScale",
     "build_perturbation_packet",
+    "changed_line_layer_diagnostics",
     "compact_perturbation_label",
 ]

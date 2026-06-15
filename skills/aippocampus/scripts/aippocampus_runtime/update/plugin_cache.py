@@ -176,6 +176,48 @@ def installed_cache_auto_resolution(
     return {"status": "none", "count": 0}
 
 
+def installed_cache_version_resolution(
+    codex_home_path: Path,
+    *,
+    expected_version: str,
+    plugin_name: str = PLUGIN_NAME,
+    marketplace_name: str | None = MARKETPLACE_NAME,
+) -> dict[str, Any]:
+    roots = _cached_plugin_roots(
+        codex_home_path,
+        plugin_name=plugin_name,
+        marketplace_name=marketplace_name,
+    )
+    matches = [
+        root
+        for root in roots
+        if str(_manifest_info(root).get("version") or "") == expected_version
+    ]
+    base = {
+        "candidate_count": len(roots),
+        "version": expected_version,
+    }
+    if len(matches) == 1:
+        return {
+            **base,
+            "status": "unique_version_match",
+            "count": 1,
+            "root_path": str(matches[0]),
+        }
+    if matches:
+        return {
+            **base,
+            "status": "multiple_version_matches",
+            "count": len(matches),
+            "root_paths": [str(path) for path in matches],
+        }
+    return {
+        **base,
+        "status": "no_version_match",
+        "count": 0,
+    }
+
+
 def unique_installed_cache_root(
     codex_home_path: Path,
     *,
@@ -390,6 +432,7 @@ __all__ = [
     "PLUGIN_NAME",
     "build_plugin_cache_status",
     "installed_cache_auto_resolution",
+    "installed_cache_version_resolution",
     "refresh_plugin_cache_layers",
     "unique_installed_cache_root",
 ]

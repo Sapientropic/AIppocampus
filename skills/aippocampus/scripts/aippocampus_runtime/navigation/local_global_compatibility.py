@@ -19,7 +19,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.navigation import local_global_fixture_catalog, local_global_sections
+from aippocampus_runtime.navigation import (
+    local_global_fixture_catalog,
+    local_global_sections,
+    scope_equivalence,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_local_global_compatibility_report"
@@ -265,6 +269,10 @@ def normalize_local_section(row: Mapping[str, Any]) -> dict[str, Any]:
         "topic_tokens": sorted(_topic_tokens(row)),
         "source_reopen_required_before_claim": True,
     }
+    section["scope_identity"] = scope_equivalence.scope_identity_from_row(
+        row,
+        scope=str(section["scope"]),
+    )
     return local_global_sections.attach_section_contract(section, row)
 
 
@@ -299,10 +307,7 @@ def _any_source_support(sections: Sequence[Mapping[str, Any]]) -> bool:
 
 
 def _scope_overlap(sections: Sequence[Mapping[str, Any]]) -> bool:
-    if any(section.get("scope_missing") for section in sections):
-        return False
-    scopes = {section["scope"] for section in sections if section["scope"]}
-    return len(scopes) == 1
+    return bool(scope_equivalence.scope_match_diagnostic(sections)["matched"])
 
 
 def _topic_epoch_overlap(sections: Sequence[Mapping[str, Any]]) -> bool:
@@ -335,11 +340,13 @@ def _result_and_reasons(
     sections: Sequence[Mapping[str, Any]],
     *,
     source_overlap: set[str],
-    scope_overlap: bool,
+    scope_match: Mapping[str, Any],
     shared_vocabulary: bool,
     source_coverage_time_overlap: bool,
 ) -> tuple[str, list[str], str]:
     reasons: list[str] = []
+    scope_overlap = bool(scope_match.get("matched"))
+    scope_reason = _label(scope_match.get("reason_code"), fallback="")
     if _authority_upgrade_attempt(sections):
         return BLOCKED_BOUNDARY, ["authority_or_claim_permission_upgrade_attempt"], "do_not_cross_boundary"
     if _has_blocked_boundary(sections):
@@ -352,9 +359,19 @@ def _result_and_reasons(
     if explicit_kind:
         return OBSTRUCTION, [f"{explicit_kind}_obstruction"], "review_obstruction_before_action"
     if source_overlap and scope_overlap and _topic_epoch_overlap(sections):
-        return GLUED_ROUTE, ["source_scope_and_epoch_overlap"], "deepen_compatible_route"
+        reason = (
+            "source_scope_and_epoch_overlap"
+            if scope_match.get("match_kind") == "exact"
+            else scope_reason or "normalized_scope_and_epoch_overlap"
+        )
+        return GLUED_ROUTE, [reason], "deepen_compatible_route"
     if scope_overlap and _any_source_support(sections):
-        return PARTIAL_GLUE, ["scope_overlap_without_full_source_overlap"], "deepen_each_section_before_use"
+        reason = (
+            "scope_overlap_without_full_source_overlap"
+            if scope_match.get("match_kind") == "exact"
+            else scope_reason or "normalized_scope_without_full_source_overlap"
+        )
+        return PARTIAL_GLUE, [reason], "deepen_each_section_before_use"
     if source_overlap and local_global_sections.common_restriction_scope(sections):
         return PARTIAL_GLUE, ["narrowed_restriction_preserves_source_overlap"], "deepen_narrowed_scope_before_use"
     if _any_source_support(sections):
@@ -376,13 +393,14 @@ def evaluate_local_global_compatibility(
 ) -> dict[str, Any]:
     normalized = [normalize_local_section(section) for section in sections if isinstance(section, Mapping)]
     source_overlap = _source_overlap(normalized)
-    scope_overlap = _scope_overlap(normalized)
+    scope_match = scope_equivalence.scope_match_diagnostic(normalized)
+    scope_overlap = bool(scope_match["matched"])
     shared_vocabulary = _shared_vocabulary(normalized)
     time_overlap = local_global_sections.source_coverage_time_overlap(normalized)
     result, reasons, next_action = _result_and_reasons(
         normalized,
         source_overlap=source_overlap,
-        scope_overlap=scope_overlap,
+        scope_match=scope_match,
         shared_vocabulary=shared_vocabulary,
         source_coverage_time_overlap=time_overlap,
     )
@@ -423,6 +441,9 @@ def evaluate_local_global_compatibility(
         "overlap_basis": {
             "source_overlap_count": len(source_overlap),
             "scope_overlap": scope_overlap,
+            "scope_match_kind": scope_match["match_kind"],
+            "scope_match_reason_code": scope_match["reason_code"],
+            "common_scope_id": scope_match["common_scope"],
             "topic_epoch_overlap": _topic_epoch_overlap(normalized),
             "source_coverage_time_overlap": time_overlap,
             "privacy_domain_compatible": not _has_blocked_boundary(normalized),

@@ -291,10 +291,17 @@ class StorageGovernanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "dry_run_ready")
         self.assertEqual(payload["candidate_count_total"], 2)
         self.assertEqual(payload["candidates_returned"], 1)
         self.assertTrue(payload["candidates_truncated"])
         self.assertEqual(len(payload["candidates"]), 1)
+        self.assertTrue(payload["candidates"][0]["candidate_handle"].startswith("candidate_"))
+        self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
+        self.assertNotIn("session-one", encoded)
+        self.assertNotIn("session:one", encoded)
         self.assertEqual(payload["full_audit_flag"], "--full")
 
     def test_dry_run_summary_json_is_foreground_bounded(self) -> None:
@@ -318,11 +325,17 @@ class StorageGovernanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "dry_run_ready")
         self.assertIn("candidate_samples", payload)
         self.assertNotIn("candidates", payload)
         self.assertEqual(payload["candidate_count_total"], 2)
         self.assertEqual(payload["candidates_returned"], 1)
         self.assertTrue(payload["candidates_truncated"])
+        self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
+        self.assertNotIn("session-one", encoded)
+        self.assertNotIn("session:one", encoded)
 
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
         self,
@@ -340,6 +353,35 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertNotIn("private phrase", payload)
         self._assert_no_workspace_absolute_paths(plan)
         self.assertEqual(plan["candidates"][0]["source_report"]["kind"], "storage_capacity_report")
+
+    def test_capacity_fallback_cli_redacts_session_like_ids_by_default(self) -> None:
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--dry-run",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--top",
+                    "2",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "dry_run_ready")
+        self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
+        self.assertGreaterEqual(payload["candidate_count_total"], 1)
+        self.assertTrue(payload["candidates"][0]["candidate_handle"].startswith("candidate_"))
+        self.assertNotIn("capacity:session-one", encoded)
+        self.assertNotIn("session-one", encoded)
+        self.assertNotIn("session:one", encoded)
 
     def test_apply_rebuildable_main_sqlite_writes_manifest_and_preserves_sources(self) -> None:
         result = storage_governance.apply_plan(

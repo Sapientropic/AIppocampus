@@ -33,10 +33,20 @@ from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 from aippocampus_runtime.update.plugin_cache import (
     build_plugin_cache_status,
     installed_cache_auto_resolution,
+    installed_cache_version_resolution,
     refresh_plugin_cache_layers,
     unique_installed_cache_root,
 )
 from aippocampus_runtime.update.plugin_marketplace import configured_marketplace_root
+from aippocampus_runtime.update.plugin_status import enrich_plugin_cache_status
+from aippocampus_runtime.update.status_readiness import (
+    CORE_SURFACES,
+    MAGIC_SURFACES,
+    OPERATOR_SURFACES,
+    OPTIONAL_SURFACES,
+    surface_summary_blocker,
+    unready_surfaces,
+)
 
 SCHEMA_VERSION = 1
 PLUGIN_BUILD_SCRIPT = "build_plugin_package.py"
@@ -73,12 +83,23 @@ PROVIDER_KEY_BRIDGE_MARKERS = (
 )
 OLD_MCP_SCRIPT_NAMES = ("aippocampus_mcp_server.py",)
 CURRENT_MCP_MARKERS = ("aippocampus_runtime.mcp.server", "aippocampus mcp")
+RESOLVED_INSTALLED_CACHE_AUTO_STATUSES = {"unique", "unique_version_match"}
 
 
 def _json_default(value: Any) -> str:
     if isinstance(value, Path):
         return str(value)
     return str(value)
+
+
+def _plugin_manifest_version(root: Path) -> str | None:
+    manifest = root / ".codex-plugin" / "plugin.json"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    version = data.get("version") if isinstance(data, dict) else None
+    return str(version) if version else None
 
 
 def _safe_path_text(path: Path | None) -> str | None:
@@ -296,70 +317,6 @@ def compare_plugin(*, repo_root: Path, plugin_output: Path | None = None) -> dic
             "host plugin installation, hooks, and user environment values are not changed",
         ],
     }
-
-
-def enrich_plugin_cache_status(
-    plugin: dict[str, Any],
-    *,
-    repo_root: Path,
-    codex_home_path: Path,
-    plugin_output: Path | None = None,
-    plugin_marketplace_dir: Path | None = None,
-    plugin_installed_dir: Path | str | None = None,
-) -> dict[str, Any]:
-    output = plugin_output or repo_root / DEFAULT_PLUGIN_OUTPUT
-    installed_arg_auto = (
-        str(plugin_installed_dir).strip().casefold() == "auto"
-        if plugin_installed_dir is not None
-        else False
-    )
-    if installed_arg_auto:
-        resolved_installed_dir = unique_installed_cache_root(codex_home_path)
-    elif plugin_installed_dir is not None:
-        resolved_installed_dir = Path(plugin_installed_dir)
-    else:
-        resolved_installed_dir = None
-    resolved_marketplace_dir = plugin_marketplace_dir
-    if resolved_marketplace_dir is not None:
-        marketplace_dir_source = "explicit_argument"
-    else:
-        resolved_marketplace_dir = configured_marketplace_root(codex_home_path)
-        marketplace_dir_source = (
-            "configured_codex_marketplace"
-            if resolved_marketplace_dir is not None
-            else "not_configured"
-        )
-    cache_status = build_plugin_cache_status(
-        source_root=repo_root / "plugins" / "aippocampus",
-        package_root=output,
-        codex_home_path=codex_home_path,
-        marketplace_dir=resolved_marketplace_dir,
-        installed_dir=resolved_installed_dir,
-    )
-    plugin.update(
-        {
-            "source_plugin_version": cache_status["source_plugin_version"],
-            "package_plugin_version": cache_status["package_plugin_version"],
-            "local_marketplace": cache_status["local_marketplace"],
-            "local_marketplace_source": marketplace_dir_source,
-            "installed_cache": cache_status["installed_cache"],
-            "auto_detected_installed_cache_count": cache_status[
-                "auto_detected_installed_cache_count"
-            ],
-            "ignored_legacy_cache_count": cache_status["ignored_legacy_cache_count"],
-            "ignored_legacy_cache_roots": cache_status["ignored_legacy_cache_roots"],
-            "installed_cache_auto_resolution": cache_status[
-                "installed_cache_auto_resolution"
-            ],
-            "plugin_cache_recommended_actions": cache_status["recommended_actions"],
-            "cache_boundary": cache_status["boundary"],
-        }
-    )
-    if installed_arg_auto:
-        plugin["explicit_installed_cache_auto_resolution"] = installed_cache_auto_resolution(
-            codex_home_path
-        )
-    return plugin
 
 
 def status_cli(repo_root: Path) -> dict[str, Any]:
@@ -685,35 +642,6 @@ def status_llm(
     }
 
 
-READY_SURFACE_STATUSES = {"current", "ready", "installed_package"}
-CORE_SURFACES = ("cli", "skill")
-MAGIC_SURFACES = ("hooks", "llm")
-OPTIONAL_SURFACES = ("plugin",)
-OPERATOR_SURFACES = ("mcp", "agent_callable")
-
-
-def _surface_ready(item: dict[str, Any]) -> bool:
-    if item.get("surface") == "llm":
-        return bool(item.get("ready"))
-    if item.get("surface") == "agent_callable":
-        return item.get("ready") is True
-    return item.get("status") in READY_SURFACE_STATUSES
-
-
-def _surface_summary_blocker(name: str, item: dict[str, Any]) -> bool:
-    if _surface_ready(item):
-        return False
-    if name == "agent_callable" and agent_callable_host_probe_ok(item):
-        return False
-    return item.get("status") not in {"not_provided", "not_requested"}
-
-
-def _unready_surfaces(
-    surfaces: dict[str, dict[str, Any]], names: tuple[str, ...]
-) -> list[str]:
-    return [name for name in names if not _surface_ready(surfaces.get(name) or {})]
-
-
 def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
     codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
@@ -730,6 +658,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         plugin,
         repo_root=repo_root,
         codex_home_path=codex_home_path,
+        default_plugin_output=DEFAULT_PLUGIN_OUTPUT,
         plugin_output=Path(args.plugin_output).resolve() if args.plugin_output else None,
         plugin_marketplace_dir=Path(args.plugin_marketplace_dir).resolve()
         if args.plugin_marketplace_dir
@@ -765,21 +694,22 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         codex_home_path,
         surfaces,
         host_probe=host_probe,
+        foreground_tools_visible_asserted=bool(args.foreground_tools_visible),
     )
     actionable = [
-        name for name, item in surfaces.items() if _surface_summary_blocker(name, item)
+        name for name, item in surfaces.items() if surface_summary_blocker(name, item)
     ]
     plugin_cache_action = update_actions.plugin_cache_needs_action(surfaces["plugin"])
     if plugin_cache_action:
-        actionable.append("plugin")
+        actionable.append("plugin_cache")
     actionable = update_actions.unique_names(actionable)
-    core_blockers = _unready_surfaces(surfaces, CORE_SURFACES)
-    magic_blockers = _unready_surfaces(surfaces, MAGIC_SURFACES)
-    optional_surfaces = _unready_surfaces(surfaces, OPTIONAL_SURFACES)
+    core_blockers = unready_surfaces(surfaces, CORE_SURFACES)
+    magic_blockers = unready_surfaces(surfaces, MAGIC_SURFACES)
+    optional_surfaces = unready_surfaces(surfaces, OPTIONAL_SURFACES)
     operator_blockers = [
         name
         for name in OPERATOR_SURFACES
-        if _surface_summary_blocker(name, surfaces.get(name) or {})
+        if surface_summary_blocker(name, surfaces.get(name) or {})
     ]
     core_ready = not core_blockers
     magic_ready = not magic_blockers
@@ -903,22 +833,86 @@ def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
         }
     result = builder.build_package(repo_root, output)
     installed_arg = _optional_path_or_auto(args.plugin_installed_dir)
+    marketplace_arg = (
+        Path(args.plugin_marketplace_dir).resolve()
+        if args.plugin_marketplace_dir
+        else None
+    )
+    if marketplace_arg is None and bool(getattr(args, "all_local", False)):
+        # `--all-local` is the release/dogfood path. If Codex already points at
+        # a local AIppocampus marketplace, refreshing that configured local copy
+        # keeps status actionable without asking the operator to paste the same
+        # path again. Unconfigured marketplaces still require an explicit path.
+        marketplace_arg = configured_marketplace_root(codex_home_path)
     installed_auto_resolution = None
-    if installed_arg == "auto":
+    all_local_auto_cache = bool(getattr(args, "all_local", False)) and installed_arg is None
+    if installed_arg == "auto" or all_local_auto_cache:
         installed_auto_resolution = installed_cache_auto_resolution(codex_home_path)
         installed_arg = unique_installed_cache_root(codex_home_path)
+        if installed_arg is None and installed_auto_resolution.get("status") == "multiple_candidates":
+            expected_version = _plugin_manifest_version(output)
+            if expected_version:
+                version_resolution = installed_cache_version_resolution(
+                    codex_home_path,
+                    expected_version=expected_version,
+                )
+                installed_auto_resolution = {
+                    **installed_auto_resolution,
+                    "version_resolution": version_resolution,
+                }
+                if version_resolution.get("status") == "unique_version_match":
+                    selected_root = version_resolution.get("root_path")
+                    installed_arg = Path(str(selected_root)) if selected_root else None
+                    installed_auto_resolution = {
+                        **installed_auto_resolution,
+                        "status": "unique_version_match",
+                        "root_path": str(installed_arg) if installed_arg else None,
+                        "selection_basis": "matching_plugin_version",
+                    }
+        if all_local_auto_cache and installed_auto_resolution.get("status") == "none":
+            installed_auto_resolution = None
     cache_refresh = refresh_plugin_cache_layers(
         package_root=output,
-        marketplace_dir=Path(args.plugin_marketplace_dir).resolve()
-        if args.plugin_marketplace_dir
-        else None,
+        marketplace_dir=marketplace_arg,
+        installed_dir=installed_arg if isinstance(installed_arg, Path) else None,
+    )
+    cache_status_after_refresh = build_plugin_cache_status(
+        source_root=repo_root / "plugins" / "aippocampus",
+        package_root=output,
+        codex_home_path=codex_home_path,
+        marketplace_dir=marketplace_arg,
         installed_dir=installed_arg if isinstance(installed_arg, Path) else None,
     )
     if installed_auto_resolution is not None:
         cache_refresh["installed_cache_auto_resolution"] = installed_auto_resolution
-        if installed_auto_resolution.get("status") != "unique":
+        installed_cache_status = str(
+            (cache_status_after_refresh.get("installed_cache") or {}).get("status") or ""
+        )
+        cache_refresh["installed_cache_status"] = installed_cache_status
+        auto_resolution_status = str(installed_auto_resolution.get("status") or "")
+        if (
+            auto_resolution_status not in RESOLVED_INSTALLED_CACHE_AUTO_STATUSES
+            and installed_cache_status == "current"
+        ):
+            # Multiple cache generations are common after local dogfood installs.
+            # If status can prove the active/default installed cache is already
+            # current, `--all-local` should not turn a successful sync into a
+            # path-selection chore. Only block when a refresh is actually needed.
+            cache_refresh["auto_refresh_blocked"] = False
+            cache_refresh["auto_refresh_skipped"] = True
+            cache_refresh["skip_reason"] = "installed_cache_already_current"
+            cache_refresh["requested_kind"] = "installed_cache_auto"
+        elif auto_resolution_status not in RESOLVED_INSTALLED_CACHE_AUTO_STATUSES:
             cache_refresh["ok"] = False
+            cache_refresh["requested"] = True
+            cache_refresh["requested_kind"] = "installed_cache_auto"
             cache_refresh["auto_refresh_blocked"] = True
+            cache_refresh["blocked_reason"] = str(
+                installed_auto_resolution.get("status") or "installed_cache_auto_unresolved"
+            )
+            cache_refresh["next_command"] = (
+                "aippocampus update apply --surface plugin --plugin-installed-dir <path>"
+            )
     verification = compare_plugin(repo_root=repo_root, plugin_output=output)
     return {
         "surface": "plugin",
@@ -1089,6 +1083,11 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model-route", default="default")
     parser.add_argument("--provider-env-var")
     parser.add_argument("--no-child-check", action="store_true")
+    parser.add_argument(
+        "--foreground-tools-visible",
+        action="store_true",
+        help="Assert that this foreground agent can see/call AIppocampus tools after a host probe.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(
         "--agent-json",

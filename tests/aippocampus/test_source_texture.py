@@ -9,7 +9,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.source.source_texture import build_source_texture  # noqa: E402
+from aippocampus_runtime.source.source_texture import (  # noqa: E402
+    build_source_texture,
+    build_source_texture_boundary_hints,
+)
 
 
 class SourceTextureTests(unittest.TestCase):
@@ -117,6 +120,43 @@ class SourceTextureTests(unittest.TestCase):
             "API_KEY",
         ):
             self.assertNotIn(raw, serialized)
+
+    def test_boundary_hints_are_derived_read_model_segments(self) -> None:
+        canonical_segment = {
+            "segment_id": "seg-stable-1",
+            "source_refs": [{"message_id": "msg-long", "line": 12}],
+            "start_line": 12,
+            "end_line": 40,
+        }
+        texture_rows = [
+            {
+                "texture_id": "tex-correction",
+                "signal_kind": "self_correction_signal",
+                "signal_detail": "visible_user_correction",
+                "truth_boundary": "texture_signal_not_source_fact",
+                "source_refs": [{"message_id": "msg-long", "line": 18}],
+            },
+            {
+                "texture_id": "tex-failure",
+                "signal_kind": "tool_failure_texture",
+                "signal_detail": "verification_failure",
+                "truth_boundary": "texture_signal_not_source_fact",
+                "source_refs": [{"message_id": "msg-long", "line": 28}],
+            },
+        ]
+
+        before = json.dumps(canonical_segment, sort_keys=True)
+        hints = build_source_texture_boundary_hints([canonical_segment], texture_rows)
+
+        self.assertEqual(json.dumps(canonical_segment, sort_keys=True), before)
+        self.assertEqual(
+            [hint["canonical_segment_id"] for hint in hints],
+            ["seg-stable-1", "seg-stable-1"],
+        )
+        self.assertTrue(all(hint["derived_segment_id"].startswith("texture_hint:") for hint in hints))
+        self.assertTrue(all(hint["read_model_only"] for hint in hints))
+        self.assertTrue(all(hint["source_reopen_required_before_claim"] for hint in hints))
+        self.assertEqual(hints[0]["boundary_reason"], "visible_user_correction")
 
 
 if __name__ == "__main__":

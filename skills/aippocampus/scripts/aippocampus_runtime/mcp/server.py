@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.mcp.mutation_boundary import UNSUPPORTED_MUTATION_TOOLS
 from aippocampus_runtime.mcp.provider_key_bridge import (
     maybe_apply_provider_key_bridge_for_semantic_diagnostic,
 )
@@ -30,6 +31,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_context_packet,
     recall_deepen_packet,
 )
+from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.mcp.tool_readiness import (
     tool_names_summary,
@@ -41,7 +43,11 @@ from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
 from aippocampus_runtime.source import latest_reply as latest_reply_module
-from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
+from aippocampus_runtime.source.search import (
+    iter_clean_messages,
+    public_search_result,
+    search_clean_source,
+)
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
@@ -50,24 +56,6 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 SERVER_NAME = "aippocampus"
 SERVER_VERSION = "0.1.0"
 DEFAULT_PROTOCOL_VERSION = "2025-11-25"
-UNSUPPORTED_MUTATION_TOOLS = {
-    "delete_memory",
-    "enable_hook",
-    "forget_memory",
-    "create_telepathy_handoff",
-    "install_hook",
-    "pull_sync",
-    "push_sync",
-    "repair_sync",
-    "store_memory",
-    "sync_pull",
-    "sync_push",
-    "sync_repair",
-    "release_telepathy_handoff",
-    "uninstall_hook",
-    "update_memory",
-    "write_memory",
-}
 
 
 def cwd_arg(arguments: dict[str, Any]) -> Path:
@@ -179,7 +167,20 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         limit=limit,
     )
     result["limit"] = limit
-    return text_result(public_payload(arguments, result))
+    include_source_snippets = bool(
+        arguments.get("include_source_snippets") or arguments.get("include_snippets")
+    )
+    payload = public_search_result(
+        result,
+        include_paths=bool(arguments.get("include_private_paths")),
+        metadata_only=not include_source_snippets,
+    )
+    if not include_source_snippets:
+        payload["agent_next_action"] = (
+            "Use recall_context or recall_deepen before quoting source; "
+            "set include_source_snippets=true only for local diagnostic work."
+        )
+    return text_result(public_payload(arguments, payload))
 
 
 def registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
@@ -497,7 +498,20 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
     default_limit = 5 if detail == "compact" else len(payload.get("threads") or []) or 0
     limit = int_range(arguments.get("max"), default=default_limit, minimum=1, maximum=100)
     raw_threads = list(payload.get("threads") or [])[:limit]
-    threads = [compact_thread(item) for item in raw_threads] if detail == "compact" else raw_threads
+    include_private_identifiers = bool(
+        arguments.get("include_private_identifiers") or arguments.get("include_private_paths")
+    )
+    threads = (
+        [
+            compact_thread(
+                item,
+                include_private_identifiers=include_private_identifiers,
+            )
+            for item in raw_threads
+        ]
+        if detail == "compact"
+        else raw_threads
+    )
     return text_result(
         public_payload(
             arguments,
@@ -508,6 +522,11 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
                 "threads": threads,
                 "count": len(threads),
                 "total_count": len(payload.get("threads") or []),
+                "identifier_boundary": (
+                    "private_identifiers_included"
+                    if include_private_identifiers
+                    else "compact_thread_handles_are_stable_local_fingerprints"
+                ),
                 "agent_next_action": (
                     "Use recall_context for task-specific routes; request detail=full only for diagnostics."
                 ),
@@ -571,35 +590,10 @@ def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
             public_payload(arguments, sync_bundle.status_sync_bundle(str(arguments["sync_dir"])))
         )
 
-    # Without a selected backend, report capability truth rather than claiming
-    # a global sync state. This keeps plugin users from assuming cross-device
-    # sync is active merely because the MCP server is installed.
     return text_result(
         public_payload(
             arguments,
-            {
-                "cwd": str(cwd),
-                "status": "available_requires_sync_dir",
-                "backend": "local_folder",
-                "backends": ["local_folder", "http_object_store"],
-                "commands": ["status", "push", "pull", "repair"],
-                "command": "python -m aippocampus_runtime.sync.bundle",
-                "object_storage_command": (
-                    "python -m aippocampus_runtime.sync.object_storage.cli"
-                ),
-                "sync_flows": {
-                    "status": "implemented",
-                    "push": "implemented",
-                    "pull": "implemented",
-                    "repair": "implemented",
-                },
-                "object_storage": {
-                    "backend": "http_object_store",
-                    "status": "implemented_requires_object_store_url",
-                    "transport": "HTTP PUT/GET object keys",
-                },
-                "raw_rollout_sync": "explicit_only",
-            },
+            backend_selection_payload(cwd, diagnostic=bool(arguments.get("diagnostic"))),
         )
     )
 

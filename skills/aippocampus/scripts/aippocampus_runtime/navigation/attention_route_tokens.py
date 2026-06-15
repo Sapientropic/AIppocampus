@@ -41,6 +41,16 @@ ALLOWED_ROUTE_HINT_FIELDS: dict[str, tuple[str, ...]] = {
         "risk_reason_codes",
         "explain_only",
     ),
+    "local_global_compatibility": (
+        "status",
+        "severity",
+        "reason_codes",
+        "related_route_ids",
+        "next_safe_action",
+        "authority_level",
+        "claim_permission",
+        "source_reopen_required_before_claim",
+    ),
 }
 
 
@@ -107,6 +117,11 @@ def _safe_float(value: Any) -> float | None:
 def _compact_hint_value(field: str, value: Any) -> Any:
     if field == "semantic_score":
         return _safe_float(value)
+    if field == "severity":
+        try:
+            return max(0, min(3, int(value)))
+        except (TypeError, ValueError):
+            return None
     if field in {
         "semantic_aliases",
         "scout_family_votes",
@@ -114,6 +129,8 @@ def _compact_hint_value(field: str, value: Any) -> Any:
         "route_terms",
         "do_not_use_for",
         "risk_reason_codes",
+        "reason_codes",
+        "related_route_ids",
     }:
         values = _safe_strings(value)
         return values or None
@@ -122,6 +139,7 @@ def _compact_hint_value(field: str, value: Any) -> Any:
         "decision_shadow_present",
         "rejected_route",
         "explain_only",
+        "source_reopen_required_before_claim",
     }:
         return bool(value)
     if field == "source_ref_count":
@@ -159,6 +177,14 @@ def route_hints_from_sources(*sources: Mapping[str, Any]) -> dict[str, dict[str,
         # Topology can explain why a route is risky or ambiguous, never change
         # ranking weights or authority by itself.
         topology["explain_only"] = True
+    compatibility = result.get("local_global_compatibility")
+    if compatibility:
+        # Local/global compatibility is a route-bundle diagnostic. It may ask
+        # the router to be cautious, but it cannot turn either route into
+        # evidence or transfer facts across sections.
+        compatibility["authority_level"] = "navigation_only"
+        compatibility["claim_permission"] = "no_claim_before_reopen"
+        compatibility["source_reopen_required_before_claim"] = True
     return {family: values for family, values in result.items() if values}
 
 

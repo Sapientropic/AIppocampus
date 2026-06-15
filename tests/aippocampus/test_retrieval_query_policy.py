@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -15,7 +17,24 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.recall import index_builder  # noqa: E402
 from aippocampus_runtime.recall import query_policy as policy  # noqa: E402
+from aippocampus_runtime.recall.query_expansion import plan_query_expansion  # noqa: E402
+from aippocampus_runtime.recall.retrieval import search_hybrid_index  # noqa: E402
+
+
+def _message(*, line: int, text: str) -> dict:
+    return {
+        "line": line,
+        "timestamp": "",
+        "role": "user",
+        "kind": "message",
+        "phase": "",
+        "turn_index": line,
+        "is_final": False,
+        "sha1": f"sha-{line}",
+        "text": text,
+    }
 
 
 class RetrievalQueryPolicyTests(unittest.TestCase):
@@ -73,6 +92,58 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
         self.assertNotIn("上次", terms)
         self.assertNotIn("那个", terms)
         self.assertEqual(policy.cjk_query_sidecar_terms("之前 那个 记忆"), [])
+
+    def test_source_backed_alias_expansion_reaches_candidate_before_topk_truncation(self) -> None:
+        alias_rows = [
+            {
+                "kind": "aippocampus_source_factual_alias",
+                "row_id": "sfa_keepsake",
+                "query_aliases": ["keepsake", "souvenir"],
+                "route_terms": ["jade memento", "desk drawer"],
+                "source_refs": [{"message_id": "msg-2", "line": 20}],
+                "source_generation_digest": "gen-public-fixture",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_path = Path(tmp) / "source_index.sqlite"
+            index_builder.make_sqlite(
+                sqlite_path,
+                [
+                    _message(line=1, text="Unrelated release checklist and broad project notes."),
+                    _message(line=2, text="The jade memento lives in the desk drawer."),
+                ],
+                [],
+                [],
+                rag_cache=False,
+            )
+
+            baseline = search_hybrid_index(
+                sqlite_path,
+                ["keepsake"],
+                [],
+                [],
+                limit=1,
+                candidate_limit=1,
+                use_rag_chunks=False,
+            )
+            plan = plan_query_expansion(["keepsake"], source_alias_rows=alias_rows)
+            expanded = search_hybrid_index(
+                sqlite_path,
+                ["keepsake"],
+                plan["expanded_terms"],
+                [],
+                limit=1,
+                candidate_limit=1,
+                use_rag_chunks=False,
+            )
+
+        self.assertEqual(baseline, [])
+        self.assertEqual(expanded[0]["id"], 2)
+        self.assertIn("jade memento", plan["expanded_terms"])
+        self.assertEqual(plan["diagnostics"]["expansion_sources"]["source_factual_alias"], 1)
+        self.assertEqual(plan["diagnostics"]["boundary"], "navigation_only_source_reopen_required")
+        self.assertNotIn("desk drawer", json.dumps(plan["diagnostics"], ensure_ascii=False))
 
 
 if __name__ == "__main__":

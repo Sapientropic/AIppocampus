@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import contextlib
 import io
 import json
@@ -1050,6 +1051,67 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertNotIn("sg_low_churn_1", payload["entries"])
         self.assertEqual(payload["telemetry"]["evictions"], 1)
         self.assertEqual(payload["telemetry"]["eviction_reasons"], {"low_value_churn": 1})
+
+    def test_concurrent_cache_writers_do_not_share_fixed_tmp_path(self) -> None:
+        cache = self.root / "semantic_recall_cache.json"
+
+        def write_one(index: int) -> None:
+            gate.write_cache(
+                cache,
+                f"sg_concurrent_{index}",
+                {
+                    "available": True,
+                    "decision": "scent",
+                    "confidence": 0.7,
+                    "query_aliases": [f"alias-{index}"],
+                },
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            futures = [executor.submit(write_one, index) for index in range(12)]
+            for future in futures:
+                future.result()
+
+        payload = json.loads(cache.read_text(encoding="utf-8"))
+        self.assertEqual(len(payload["entries"]), 12)
+        self.assertEqual(payload["telemetry"]["writes"], 12)
+        self.assertFalse(list(cache.parent.glob("*.tmp")))
+        self.assertFalse(list(cache.parent.glob("*.lock")))
+
+    def test_cache_report_separates_partial_timeout_skip_from_valid_skip(self) -> None:
+        cache = self.root / "semantic_recall_cache.json"
+        gate.write_cache(
+            cache,
+            "sg_valid_skip",
+            {
+                "available": True,
+                "decision": "skip",
+                "confidence": 0.2,
+                "partial_success": False,
+                "partial_failure_reasons": [],
+                "error_buckets": {},
+            },
+        )
+        gate.write_cache(
+            cache,
+            "sg_partial_timeout_skip",
+            {
+                "available": True,
+                "decision": "skip",
+                "confidence": 0.2,
+                "partial_success": True,
+                "partial_failure_reasons": ["read_timeout"],
+                "error_buckets": {"read_timeout": 1},
+            },
+        )
+
+        report = gate.semantic_cache_report(cache)
+
+        self.assertEqual(report["value_classes"]["skip"], 1)
+        self.assertEqual(report["value_classes"]["partial_timeout_skip"], 1)
+        self.assertEqual(report["active_partial_failure_count"], 1)
+        self.assertEqual(report["active_timeout_count"], 1)
+        self.assertEqual(report["degraded_cached_decision_count"], 1)
 
     def test_main_cache_report_json_omits_prompt_and_alias_text(self) -> None:
         cache = self.root / "semantic_recall_cache.json"

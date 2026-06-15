@@ -359,6 +359,53 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertEqual(payload["fanout"]["planned_segment_count"], 3)
         self.assertEqual(payload["fanout"]["skipped_segment_count"], 0)
 
+    def test_search_payload_emits_opt_in_outcome_feedback_without_raw_query(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "seg.sqlite"
+            sqlite_path.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [{"id": "seg-a", "sqlite": str(sqlite_path), "start_line": 1, "end_line": 10}],
+            )
+            feedback_path = root / "recall-outcomes.jsonl"
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                return [
+                    {
+                        "id": 1,
+                        "line": 8,
+                        "timestamp": "",
+                        "role": "assistant",
+                        "kind": "message",
+                        "score": 9.0,
+                        "snippet": "public-safe match",
+                        "source_ref": "src-public",
+                        "signals": {},
+                    }
+                ]
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["where is the jade memento? sk-test-public-fixture"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="hybrid",
+                        outcome_feedback_path=feedback_path,
+                        outcome_signal="ignored",
+                        outcome_run_id="run-public",
+                    )
+                )
+            event = json.loads(feedback_path.read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertTrue(payload["outcome_feedback"]["emitted"])
+        self.assertEqual(event["outcome_signal"], "ignored")
+        self.assertEqual(event["route_family"], "segmented-hybrid")
+        dumped = json.dumps(event, ensure_ascii=False)
+        self.assertNotIn("jade memento", dumped)
+        self.assertNotIn("sk-test-public-fixture", dumped)
+
     def test_merge_topk_dedupes_stable_source_join_keys_across_segments(self) -> None:
         results = [
             {

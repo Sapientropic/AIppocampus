@@ -453,6 +453,34 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["output_boundary"], "public_metadata_only_no_source_snippets_or_reopen_refs")
+        self.assertEqual(payload["matches"][0]["match_index"], 1)
+        self.assertTrue(payload["matches"][0]["snippet_omitted"])
+        self.assertTrue(payload["matches"][0]["source_refs_omitted"])
+        self.assertNotIn("message_id", payload["matches"][0])
+        self.assertNotIn("snippet", payload["matches"][0])
+        self.assertIn("agent_next_action", payload)
+
+    def test_search_memory_can_emit_source_snippets_when_explicitly_requested(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 31,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "clean source 摘要",
+                        "cwd": str(self.cwd),
+                        "max": 3,
+                        "include_source_snippets": True,
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
         self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
 
@@ -980,6 +1008,26 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(payload["manifest_exists"])
         self.assertEqual(payload["file_count"], 3)
 
+    def test_sync_status_without_backend_returns_copyable_public_commands(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 61,
+                "method": "tools/call",
+                "params": {
+                    "name": "sync_status",
+                    "arguments": {"cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["status"], "available_requires_sync_dir")
+        self.assertEqual(payload["command"], "aippocampus sync status --sync-dir <folder> --json")
+        self.assertIn("agent_next_action", payload)
+        self.assertNotIn("python -m aippocampus_runtime", encoded)
+
     def test_sync_status_can_report_http_object_store_backend(self) -> None:
         with mock.patch.object(
             mcp.sync_object_storage,
@@ -1070,11 +1118,18 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("session:test", encoded)
         self.assertEqual(payload["registry"], mcp.LOCAL_PATH_REDACTION)
         self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(
+            payload["identifier_boundary"],
+            "compact_thread_handles_are_stable_local_fingerprints",
+        )
         self.assertIn("agent_next_action", payload)
         self.assertNotIn("debug", encoded)
         self.assertNotIn("paths", payload["threads"][0])
+        self.assertTrue(payload["threads"][0]["thread_key_redacted"])
+        self.assertTrue(payload["threads"][0]["thread_handle"].startswith("thread_"))
 
         full_response = mcp.handle_request(
             {
@@ -1090,6 +1145,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         full_payload = self.tool_payload(full_response)
         full_encoded = json.dumps(full_payload, ensure_ascii=False)
         self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(full_payload["threads"][0]["thread_key"], "session:test")
         self.assertNotIn(str(self.cwd), full_encoded)
         self.assertEqual(
             full_payload["threads"][0]["paths"]["workspace"],
@@ -1346,6 +1402,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertIn("agent_next_action", payload)
         self.assertIsInstance(payload["recommended_actions"][0], dict)
         self.assertEqual(payload["recommended_actions"][0]["id"], "build_index")
+        self.assertIsInstance(payload["recommended_actions"][1], dict)
+        self.assertEqual(payload["recommended_actions"][1]["id"], "recommended_action")
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["agent_next_action"]["id"], "build_index")
         self.assertNotIn(str(self.cwd), encoded)
@@ -1367,7 +1425,12 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "method": "tools/call",
                 "params": {
                     "name": "search_memory",
-                    "arguments": {"query": "clean source", "cwd": str(self.cwd), "max": 2},
+                    "arguments": {
+                        "query": "clean source",
+                        "cwd": str(self.cwd),
+                        "max": 2,
+                        "include_source_snippets": True,
+                    },
                 },
             },
         ]

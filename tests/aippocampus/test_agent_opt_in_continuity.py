@@ -348,6 +348,62 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("head_votes", encoded)
         self.assertNotIn("src_attention", encoded)
 
+    def test_attention_router_does_not_promote_lower_cue_fit_route(self) -> None:
+        routes = [
+            {
+                "route_id": "route_exact",
+                "kind": "source_ref",
+                "handle": "handle:exact",
+                "route_label": "mcp health compact json doctor config route",
+                "route_topic": "mcp_health_doctor_config",
+                "why_this_may_matter": "Matches the foreground MCP health compact JSON task.",
+                "source_refs": [{"source_id": "src_exact", "message_id": "msg_exact"}],
+            },
+            {
+                "route_id": "route_broad",
+                "kind": "source_ref",
+                "handle": "handle:broad",
+                "route_label": "broad topology route",
+                "route_topic": "topology_shape",
+                "why_this_may_matter": "General architecture scent.",
+                "source_refs": [{"source_id": "src_broad", "message_id": "msg_broad"}],
+            },
+        ]
+        fake_packets = [
+            {
+                "route_id": "route_exact",
+                "emitted": True,
+                "output_mode": "reopenable_route",
+                "router_diagnostics": {"score": 0.4, "reason_codes": []},
+            },
+            {
+                "route_id": "route_broad",
+                "emitted": True,
+                "output_mode": "reopenable_route",
+                "router_diagnostics": {"score": 0.95, "reason_codes": []},
+            },
+        ]
+
+        with patch.object(
+            attention_route_projection.attention_hot_router,
+            "route_attention",
+            return_value=fake_packets,
+        ):
+            reordered, diagnostics = (
+                attention_route_projection.rerank_routes_with_attention_router(
+                    query="mcp health compact json",
+                    routes=routes,
+                    max_routes=2,
+                )
+            )
+
+        self.assertEqual(reordered[0]["route_id"], "route_exact")
+        self.assertFalse(diagnostics["top_route_changed"])
+        self.assertTrue(diagnostics["promotion_blocked_lower_cue_fit"])
+        self.assertEqual(diagnostics["promotion_blocked_route_id"], "route_broad")
+        self.assertGreater(diagnostics["selected_query_term_overlap_count"], 0)
+        self.assertEqual(diagnostics["selected_route_id"], "route_exact")
+
     def test_recall_can_opt_into_attention_router_route_selection(self) -> None:
         routes = [
             {
@@ -442,6 +498,46 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_handles", encoded)
         self.assertNotIn("head_votes", encoded)
         self.assertNotIn("src_attention", encoded)
+
+    def test_memory_packet_budget_trimming_keeps_route_label(self) -> None:
+        packet = {
+            "kind": "aippocampus_memory_packet",
+            "route_id": "route_budget",
+            "output_mode": "reopenable_route",
+            "claim_permission": "no_claim_before_reopen",
+            "next_action": "reopen_source",
+            "deepen_route_id": "deepen:route_budget",
+            "route_label": (
+                "mcp health compact json doctor config install sync release gate "
+                "route label"
+            ),
+            "route_topic": "mcp_health_doctor_config_install_sync_release_gate",
+            "display_hint": "Reopen this route before using release gate details. " * 8,
+            "selection_hint": {
+                "source": "attention_router",
+                "why": "attention router top route changed but source reopen is still required " * 8,
+            },
+            "route_delta_reason_codes": [
+                "attention_router_top_route_changed",
+                "topology_requested",
+                "macro_orientation_recall_prior",
+            ],
+            "triage_rank_reason_codes": [
+                "source_reopen_required",
+                "scope_label_available",
+            ],
+            "risk_flags": ["source_reopen_required", "check_currentness"],
+        }
+
+        fitted = agent_continuity._fit_memory_packet_with_route_delta(dict(packet))
+
+        self.assertLessEqual(
+            agent_continuity._json_bytes(fitted),
+            agent_continuity.facade.FOREGROUND_PACKET_BYTE_BUDGET,
+        )
+        self.assertIn("route_label", fitted)
+        self.assertTrue(fitted["route_label"])
+        self.assertIn("mcp health", fitted["route_label"])
 
     def test_attention_router_auto_mode_uses_explicit_recall_gate(self) -> None:
         fake_packet = {
@@ -1258,6 +1354,35 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertIn("host_readiness", packet["task_families"])
         self.assertEqual(packet["next_action"], "verify_plugin_mcp_hooks")
+
+    def test_cli_agent_aippo_product_workflow_terms_are_not_empty_contracts(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--public",
+                "--json",
+                "semantic gate, attention router, MCP health",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        packet = payload["activation_packet"]
+        guidance = " ".join(packet["use_guidance"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("product_workflow", packet["task_families"])
+        self.assertNotEqual(packet["next_action"], "stay_silent")
+        self.assertIn("semantic gate", guidance)
 
     def test_cli_agent_aippo_default_output_is_human_guidance(self) -> None:
         proc = subprocess.run(

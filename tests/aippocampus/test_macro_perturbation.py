@@ -58,6 +58,26 @@ class MacroPerturbationTests(unittest.TestCase):
         )
         self.assertFalse(packet["fact_claim_allowed"])
 
+    def test_changed_lines_project_to_three_powers_layers(self) -> None:
+        earth = perturbation.build_perturbation_packet("乾", hexagram.change_lines("乾", (1,)))
+        human = perturbation.build_perturbation_packet("乾", hexagram.change_lines("乾", (3,)))
+        heaven = perturbation.build_perturbation_packet("乾", hexagram.change_lines("乾", (6,)))
+        mixed = perturbation.build_perturbation_packet("乾", hexagram.change_lines("乾", (1, 3, 6)))
+
+        self.assertEqual(earth["changed_line_layers"], [{"line": 1, "layer": "earth"}])
+        self.assertEqual(earth["changed_layer_counts"], {"earth": 1, "human": 0, "heaven": 0})
+        self.assertEqual(earth["dominant_changed_layer"], "earth")
+        self.assertIn("perturbation_layer_earth", earth["reason_codes"])
+        self.assertEqual(human["dominant_changed_layer"], "human")
+        self.assertIn("perturbation_layer_human", human["reason_codes"])
+        self.assertEqual(heaven["dominant_changed_layer"], "heaven")
+        self.assertIn("perturbation_layer_heaven", heaven["reason_codes"])
+        self.assertEqual(mixed["dominant_changed_layer"], "multi_layer")
+        self.assertEqual(mixed["changed_layer_counts"], {"earth": 1, "human": 1, "heaven": 1})
+        self.assertIn("perturbation_layer_multi", mixed["reason_codes"])
+        self.assertEqual(mixed["changed_lines"], [1, 3, 6])
+        self.assertEqual(mixed["hamming_distance"], 3)
+
     def test_unpromoted_journey_signal_cannot_widen_project_fanout(self) -> None:
         blocked = perturbation.build_perturbation_packet(
             "屯",
