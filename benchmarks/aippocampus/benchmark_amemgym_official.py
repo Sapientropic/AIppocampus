@@ -52,6 +52,9 @@ from benchmarks.aippocampus.adapters.amemgym_openrouter_preflight import (  # no
     probe_openrouter_chat_route,
 )
 from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
+from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
+    json_report_exit_code,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"
@@ -1770,7 +1773,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print_human_summary(payload)
-    return 0 if payload.get("ok") else 1
+    return json_report_exit_code(
+        json_output=args.json_output,
+        report_generation_ok=True,
+        ok=bool(payload.get("ok")),
+    )
 
 
 if __name__ == "__main__":

@@ -93,6 +93,46 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(unrelated_report["decision"], "silent")
         self.assertEqual(visible_report["decision"], "silent")
 
+    def test_project_specific_learning_hint_stays_silent_for_unrelated_pytest(self) -> None:
+        cache_report = action_hint_cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight-other-repo",
+                    "next_action": "run_preflight_before_broad_test",
+                    "guidance_text": "Run ruff before pytest.",
+                    "scope": "project:OtherRepo",
+                    "target_fingerprint": "other-repo:specific-target",
+                    "path_category_fingerprint": "other-repo:tests/payments",
+                    "source_refs": [source_ref("learn")],
+                }
+            ],
+            now_unix=1000,
+        )
+        unrelated = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "pytest tests/completely_unrelated.py",
+                "command_family": "pytest",
+            },
+        }
+        matching = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "pytest tests/payments/test_checkout.py",
+                "command_family": "pytest",
+                "target_fingerprint": "other-repo:specific-target",
+            },
+        }
+
+        unrelated_report = action_hint.evaluate_action_hint(unrelated, cache_report, now_unix=1001)
+        matching_report = action_hint.evaluate_action_hint(matching, cache_report, now_unix=1001)
+
+        self.assertEqual(unrelated_report["decision"], "silent")
+        self.assertEqual(matching_report["decision"], "hint")
+        self.assertEqual(matching_report["hint"]["recommended_action"], "run_preflight_before_broad_test")
+
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(
             {"hook_event_name": "UserPromptSubmit", "prompt": "hello"},

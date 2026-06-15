@@ -43,6 +43,9 @@ from aippocampus_runtime.model.routing import (  # noqa: E402
     route_service_name,
 )
 from aippocampus_runtime.subconscious.worker import parse_model_json  # noqa: E402
+from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
+    json_report_exit_code,
+)
 
 SCHEMA_VERSION = "aippocampus.e2e50_live_behavior_pilot.v0"
 REPORT_KIND = "aippocampus_e2e50_silent_constraint_live_behavior_pilot"
@@ -936,16 +939,62 @@ def run_live_model_benchmark(
     }
 
 
-def cli_summary() -> dict[str, Any]:
+def cli_summary(
+    *,
+    status: str = "summary_only",
+    report_generation_ok: bool = True,
+    ok: bool = False,
+) -> dict[str, Any]:
     # Stdout is a small, whitelisted summary. The sanitized full report belongs
     # in --output so CI logs do not become an accidental model-output channel if
     # future report fields grow more detailed.
     return {
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
-        "status": "summary_only",
+        "status": status,
+        "report_generation_ok": report_generation_ok,
+        "ok": ok,
         "stdout_boundary": "summary_only_use_output_for_sanitized_full_report",
     }
+
+
+def skipped_missing_provider_key_payload() -> dict[str, Any]:
+    return {
+        "kind": REPORT_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "ok": False,
+        "report_generation_ok": True,
+        "benchmark_ok": False,
+        "status": "skipped_missing_provider_key",
+        "measurement_origin": "live_model_runner_preflight",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": True,
+        "public_quality_gate_ok": False,
+        "quality_gate_ok": False,
+        "decision_impact": "not_applicable",
+        "case_count": 0,
+        "missing_provider_credential": True,
+        "reason_code": "missing_provider_auth_env",
+        "privacy_boundary": {
+            "raw_prompt_emitted": False,
+            "raw_model_output_emitted": False,
+            "local_paths_emitted": False,
+        },
+        "cannot_claim": CANNOT_CLAIM,
+        "exit_code_policy": (
+            "json_report_generation_success_returns_zero; live benchmark status lives in JSON"
+        ),
+    }
+
+
+def _cli_missing_provider_key(args: argparse.Namespace) -> bool:
+    route = resolve_model_route(
+        args.model_route,
+        explicit_model=args.model,
+        explicit_base_url=args.base_url,
+        explicit_api_key_env=args.api_key_env,
+    )
+    return not os.environ.get(args.api_key_env or route.api_key_env, "").strip()
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -967,20 +1016,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    payload = run_live_model_benchmark(
-        fixture_path=args.fixture,
-        model_route=args.model_route,
-        model=args.model,
-        base_url=args.base_url,
-        api_key_env=args.api_key_env,
-        timeout=args.timeout,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        max_cases=args.max_cases,
-        prompt_mode=args.prompt_mode,
-    )
+    if _cli_missing_provider_key(args):
+        payload = skipped_missing_provider_key_payload()
+        summary = cli_summary(
+            status="skipped_missing_provider_key",
+            report_generation_ok=True,
+            ok=False,
+        )
+    else:
+        payload = run_live_model_benchmark(
+            fixture_path=args.fixture,
+            model_route=args.model_route,
+            model=args.model,
+            base_url=args.base_url,
+            api_key_env=args.api_key_env,
+            timeout=args.timeout,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            max_cases=args.max_cases,
+            prompt_mode=args.prompt_mode,
+        )
+        summary = cli_summary()
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    summary = cli_summary()
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text + "\n", encoding="utf-8")
@@ -991,7 +1048,11 @@ def main(argv: list[str] | None = None) -> int:
             "aippocampus_e2e50_silent_constraint_live_behavior_pilot: "
             "summary only; use --output for sanitized full report"
         )
-    return 0 if payload.get("ok") else 1
+    return json_report_exit_code(
+        json_output=args.json,
+        report_generation_ok=bool(payload.get("report_generation_ok", True)),
+        ok=bool(payload.get("ok")),
+    )
 
 
 if __name__ == "__main__":

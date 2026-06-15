@@ -157,6 +157,44 @@ def _expected_repeat_targets(signals: Iterable[Mapping[str, Any]]) -> set[tuple[
     return {key for key, count in counts.items() if count >= 2}
 
 
+def _workflow_source_shape_metrics(
+    signals: Iterable[Mapping[str, Any]],
+    workflow_findings: Iterable[Mapping[str, Any]],
+    guidance: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    materialized = [row for row in signals if isinstance(row, Mapping)]
+    findings = [row for row in workflow_findings if isinstance(row, Mapping)]
+    guidance_rows = [row for row in guidance if isinstance(row, Mapping)]
+    eligible_count = len(findings)
+    failure_count = sum(1 for row in materialized if row.get("signal_type") == "failure")
+    ineligible_count = max(0, failure_count - eligible_count)
+    status = (
+        "measured"
+        if eligible_count > 0
+        else "not_applicable_no_eligible_public_shape"
+    )
+    recall = (
+        round(len(guidance_rows) / eligible_count, 6)
+        if eligible_count > 0
+        else None
+    )
+    return {
+        "status": status,
+        "workflow_source_shape_eligible_count": eligible_count,
+        "workflow_source_shape_ineligible_failure_count": ineligible_count,
+        "workflow_guidance_expected_count": eligible_count,
+        "workflow_guidance_detected_count": len(findings),
+        "guidance_surface_count": len(guidance_rows),
+        "workflow_guidance_recall": recall,
+        "wrong_guidance_rate": 0.0 if eligible_count > 0 else None,
+        "zero_denominator_interpretation": (
+            "guidance_not_measured_for_this_public_corpus"
+            if eligible_count == 0
+            else "guidance_measured_on_public_eligible_shape"
+        ),
+    }
+
+
 def _gap_labels(*, workflow_count: int, context_count: int, environment_count: int) -> list[str]:
     gaps: list[str] = []
     if workflow_count == 0:
@@ -192,6 +230,15 @@ def run_public_companion_eval(
     }
     rollout_future = _future_surfaces(rollout_cases)
     vcs_future = _future_surfaces(vcs_cases)
+    route_surface_count = (
+        rollout_future["future_event_surface_before_later_event_count"]
+        + vcs_future["future_event_surface_before_later_event_count"]
+    )
+    negative_no_lesson_count = (
+        rollout_future["negative_no_durable_lesson_count"]
+        + vcs_future["negative_no_durable_lesson_count"]
+    )
+    workflow_shape = _workflow_source_shape_metrics(signals, workflow, guidance)
     context_count = sum(
         1 for row in workflow if row.get("workflow_family") == "context_reopen_before_retry"
     )
@@ -216,32 +263,59 @@ def run_public_companion_eval(
         "recurring_failure_detection_count": len(recurring),
         "workflow_order_detection_count": len(workflow),
         "learning_guidance_count": len(guidance),
+        "workflow_source_shape_eligible_count": workflow_shape[
+            "workflow_source_shape_eligible_count"
+        ],
+        "workflow_guidance_status": workflow_shape["status"],
         "rollout_future_event_surface_before_later_event_count": rollout_future[
             "future_event_surface_before_later_event_count"
         ],
         "vcs_future_event_surface_before_later_event_count": vcs_future[
             "future_event_surface_before_later_event_count"
         ],
-        "negative_no_durable_lesson_count": (
-            rollout_future["negative_no_durable_lesson_count"]
-            + vcs_future["negative_no_durable_lesson_count"]
-        ),
+        "future_event_route_surface_count": route_surface_count,
+        "negative_no_durable_lesson_count": negative_no_lesson_count,
         "state_bench_official_score_claimed": False,
         "state_bench_train_only_shape_check": "not_official_score",
     }
+    route_surface_ok = route_surface_count > 0 and negative_no_lesson_count > 0
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": REPORT_KIND,
-        "ok": public_metrics["vcs_future_event_surface_before_later_event_count"] > 0
-        and public_metrics["negative_no_durable_lesson_count"] > 0,
+        "ok": route_surface_ok,
         "measurement_origin": "public_longitudinal_and_vcs_companion_eval",
         "observed_agent_behavior": False,
         "benchmark_maturity_level": "public_companion_fixture",
         "contract_gate_ok": True,
+        "decision_impact": "diagnostic_only",
+        "quality_gate_kind": "route_surface_companion_not_public_quality",
         "public_quality_gate_ok": False,
         "quality_gate_ok": False,
+        "case_count": len(rollout_cases) + len(vcs_cases),
+        "supports": [
+            "public_future_event_route_surface_reachability",
+            "workflow_guidance_zero_denominator_reported_explicitly",
+        ],
+        "agent_action": (
+            "Use future_event_route_surface_companion as route/source-shape evidence; "
+            "do not treat workflow_guidance_companion as measured when its eligible "
+            "denominator is zero."
+        ),
         "private_dogfood_comparable_metrics": comparable,
         "public_reproducible_metrics": public_metrics,
+        "companion_surfaces": {
+            "future_event_route_surface_companion": {
+                "status": "measured",
+                "ok": route_surface_ok,
+                "future_event_route_surface_count": route_surface_count,
+                "positive_future_event_count": (
+                    rollout_future["positive_future_event_count"]
+                    + vcs_future["positive_future_event_count"]
+                ),
+                "negative_no_durable_lesson_count": negative_no_lesson_count,
+            },
+            "workflow_guidance_companion": workflow_shape,
+        },
         "source_shape_gaps": _gap_labels(
             workflow_count=len(workflow),
             context_count=context_count,

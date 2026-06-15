@@ -172,6 +172,17 @@ def _base_record(
         "source_reopen_required": True,
         "can_support_factual_claim": False,
         "authority": "navigation_only",
+        "scope": str(row.get("scope") or ""),
+        "target_fingerprint": str(row.get("target_fingerprint") or ""),
+        "path_category_fingerprint": str(row.get("path_category_fingerprint") or ""),
+        "workspace_or_environment_profile": str(row.get("workspace_or_environment_profile") or ""),
+        "transferability": str(row.get("transferability") or ""),
+        "requires_applicability_match": bool(
+            row.get("target_fingerprint")
+            or row.get("path_category_fingerprint")
+            or str(row.get("scope") or "").casefold().startswith(("project:", "machine:"))
+        ),
+        "does_not_apply_when": _strings(row.get("does_not_apply_when")),
         "topic_epoch": str(row.get("topic_epoch") or ""),
         "freshness": freshness,
         "expires_at_unix": _expires_at(row, now_unix=now_unix, ttl_seconds=ttl_seconds),

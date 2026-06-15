@@ -1450,7 +1450,7 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print_human_summary(payload)
-    return 0 if payload.get("ok") else 1
+    return 0 if args.json_output or payload.get("ok") else 1
 
 
 if __name__ == "__main__":

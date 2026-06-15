@@ -14,6 +14,8 @@ The next slice is about fewer sharp edges.
 - Learning is more useful without getting louder. Tool failures, good command
   order, environment workarounds, and context-reopen saves can become small
   source-backed hints; stale, local-only, or source-thin lessons stay quiet.
+- Learned hints now keep their address. A lesson from one project or target no
+  longer taps every unrelated `pytest` on the shoulder.
 - Action-time hints have a real front door: cache refresh, install/status
   readiness, malformed-cache fail-open behavior, and public-safe JSON that says
   what is installed, what is fresh, and what still needs a refresh.
@@ -25,6 +27,10 @@ The next slice is about fewer sharp edges.
   errors; semantic MCP recall sees the provider-key bridge; route limits reject
   explicit bad values; macOS commands are copy-pasteable; and local install
   sync points ambiguous plugin caches toward the human-friendly reinstall path.
+- Benchmark gates are less theatrical. JSON entrypoints separate report
+  generation from benchmark quality, public companion reports now say when
+  workflow guidance was not measured, and diagnostic wins no longer masquerade
+  as public-quality proof or product failure.
 
 Still alpha. Still source-backed. Quieter in the doorway.
 

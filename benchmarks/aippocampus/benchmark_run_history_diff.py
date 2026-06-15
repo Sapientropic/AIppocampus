@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from shared.benchmark_entrypoints import missing_required_input_payload
+
 SCHEMA_VERSION = 1
 SUITE_KIND = "aippocampus_benchmark_suite"
 DIFF_KIND = "aippocampus_benchmark_run_history_diff"
@@ -776,8 +778,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "diagnostic trend/regression artifact."
         )
     )
-    parser.add_argument("--baseline", type=Path, required=True)
-    parser.add_argument("--current", type=Path, required=True)
+    parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--current", type=Path)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(
@@ -821,6 +823,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    missing = [
+        flag
+        for flag, value in (("--baseline", args.baseline), ("--current", args.current))
+        if value is None
+    ]
+    if missing:
+        if args.json_output:
+            payload = missing_required_input_payload(
+                kind=DIFF_KIND,
+                missing=missing,
+                supported_runner=(
+                    "benchmarks/aippocampus/benchmark_run_history_diff.py "
+                    "--baseline <old.json> --current <new.json> --json"
+                ),
+                summary=(
+                    "Benchmark run-history diff is a postprocessor and needs two "
+                    "saved benchmark_suite JSON reports."
+                ),
+            )
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        parser.error("the following arguments are required: " + ", ".join(missing))
+    assert args.baseline is not None
+    assert args.current is not None
     baseline = load_json(args.baseline)
     current = load_json(args.current)
     payload = compare_benchmark_runs(

@@ -63,3 +63,39 @@ def library_only_main(
             "for the supported public benchmark surface."
         )
     return 0
+
+
+def json_report_exit_code(*, json_output: bool, report_generation_ok: bool = True, ok: bool) -> int:
+    """Exit-code policy for benchmark JSON report collectors.
+
+    In `--json` mode, a valid machine-readable report is a successful command
+    even when the benchmark quality gate inside the report is false. CI paths
+    that want nonzero on quality failure should use an explicit strict wrapper
+    instead of making report collectors guess whether stdout is trustworthy.
+    """
+
+    if json_output and report_generation_ok:
+        return 0
+    return 0 if ok else 1
+
+
+def missing_required_input_payload(
+    *,
+    kind: str,
+    missing: Sequence[str],
+    supported_runner: str,
+    summary: str,
+) -> dict[str, object]:
+    return {
+        "kind": kind,
+        "ok": False,
+        "report_generation_ok": True,
+        "benchmark_ok": False,
+        "status": "missing_required_input",
+        "missing_required_input": list(missing),
+        "supported_runner": supported_runner,
+        "summary": summary,
+        "exit_code_policy": (
+            "json_report_generation_success_returns_zero; benchmark status lives in JSON"
+        ),
+    }

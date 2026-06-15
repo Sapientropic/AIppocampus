@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -17,6 +18,22 @@ def run_repo_python(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         timeout=30,
         check=False,
+    )
+
+
+def run_repo_python_without_provider_keys(*args: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    for key in list(env):
+        if any(token in key.upper() for token in ("API_KEY", "TOKEN", "SECRET", "PASSWORD")):
+            env.pop(key, None)
+    return subprocess.run(
+        [sys.executable, *args],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+        env=env,
     )
 
 
@@ -62,6 +79,53 @@ class BenchmarkEntrypointTests(unittest.TestCase):
                 payload = json.loads(json_result.stdout)
                 self.assertEqual(payload["status"], "library_only")
                 self.assertEqual(payload["supported_runner"], "benchmarks/aippocampus/benchmark_memory_decision_gate.py")
+
+    def test_json_postprocessors_report_missing_required_inputs_structurally(self) -> None:
+        cases = (
+            (
+                "benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py",
+                ["--report"],
+            ),
+            (
+                "benchmarks/aippocampus/benchmark_run_history_diff.py",
+                ["--baseline", "--current"],
+            ),
+        )
+        for script, missing in cases:
+            with self.subTest(script=script):
+                result = run_repo_python(script, "--json")
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                payload = json.loads(result.stdout)
+                self.assertEqual(payload["status"], "missing_required_input")
+                self.assertEqual(payload["missing_required_input"], missing)
+                self.assertTrue(payload["report_generation_ok"])
+
+    def test_live_provider_benchmark_reports_missing_key_as_json_skip(self) -> None:
+        result = run_repo_python_without_provider_keys(
+            "benchmarks/aippocampus/benchmark_e2e50_behavior_live.py",
+            "--json",
+            "--max-cases",
+            "1",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "skipped_missing_provider_key")
+        self.assertTrue(payload["report_generation_ok"])
+        self.assertFalse(payload["ok"])
+
+    def test_json_report_generation_success_does_not_use_quality_failure_exit_code(self) -> None:
+        result = run_repo_python(
+            "benchmarks/aippocampus/benchmark_locomo_answer_usefulness.py",
+            "--json",
+            "--max-cases",
+            "1",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["report_generation_ok"])
 
 
 if __name__ == "__main__":

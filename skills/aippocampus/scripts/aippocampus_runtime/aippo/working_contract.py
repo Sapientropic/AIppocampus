@@ -171,6 +171,8 @@ def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
         "clause_id": _text(row.get("clause_id"), 100),
         "kind": _text(row.get("kind"), 80) or "working_conclusion",
         "scope": _text(row.get("scope"), 160) or "project_or_task_family",
+        "target_fingerprint": _text(row.get("target_fingerprint"), 160),
+        "path_category_fingerprint": _text(row.get("path_category_fingerprint"), 160),
         "topic_epoch": _text(row.get("topic_epoch"), 120) or "default",
         "workspace_or_environment_profile": _text(
             row.get("workspace_or_environment_profile"),
@@ -178,6 +180,7 @@ def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
         )
         or "unknown_environment",
         "guidance": _text(row.get("guidance"), 320),
+        "next_action": _text(row.get("next_action"), 100) or _next_action(status),
         "applies_when": _strings(row.get("applies_when"), limit=8),
         "does_not_apply_when": _strings(row.get("does_not_apply_when"), limit=8),
         "allowed_without_reopen_for": _strings(
@@ -197,7 +200,7 @@ def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
             "degrade_to": "working_contract" if status == "ripe" else "reopenable_route",
         },
         "activation": {
-            "next_action": _next_action(status),
+            "next_action": _text(row.get("next_action"), 100) or _next_action(status),
             "foreground_eligible": status == "ripe" and review_state in {"machine_checked", "reviewed"},
         },
         "claim_permission": (

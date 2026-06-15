@@ -21,6 +21,7 @@ for _path in (
 import benchmark_family_promotion_candidates as family_promotion  # noqa: E402
 import benchmark_suite as suite  # noqa: E402
 from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
+from shared.benchmark_suite_quality import track_quality_state  # noqa: E402
 
 
 def fake_gate_payload() -> dict:
@@ -482,6 +483,85 @@ class BenchmarkSuiteTests(unittest.TestCase):
         )
         self.assertTrue(accepted["ok"])
         self.assertTrue(accepted["positive_support_present"])
+
+    def test_linter_accepts_bounded_support_fields_without_public_quality_claim(self) -> None:
+        bounded = {
+            "benchmark_maturity_level": "diagnostic_proxy",
+            "measurement_origin": "scripted_proxy",
+            "observed_agent_behavior": False,
+            "contract_gate_ok": True,
+            "public_quality_gate_ok": False,
+            "quality_gate_ok": False,
+            "decision_impact": "diagnostic_only",
+            "metrics": {"case_count": 4},
+            "privacy_boundary": {"raw_text_emitted": False},
+            "cannot_claim": ["public_quality_lift"],
+            "usefulness_metrics": {"positive_case_count": 4, "hinted_positive_count": 4},
+            "promotion_gates": {"replay_fixture_gate_ok": True},
+        }
+
+        lint = benchmark_report_contract_lint(bounded)
+
+        self.assertTrue(lint["ok"], lint)
+        self.assertIn("usefulness_metrics", lint["positive_support_fields"])
+        self.assertIn("promotion_gates", lint["positive_support_fields"])
+
+    def test_linter_requires_denominator_math_for_public_quality_claims(self) -> None:
+        base = {
+            "benchmark_maturity_level": "public_cohort",
+            "measurement_origin": "deterministic_contract",
+            "observed_agent_behavior": False,
+            "contract_gate_ok": True,
+            "public_quality_gate_ok": True,
+            "quality_gate_ok": True,
+            "quality_gate_kind": "public_quality",
+            "decision_impact": "not_applicable",
+            "privacy_boundary": {"raw_text_emitted": False},
+            "cannot_claim": ["live_host_behavior_lift"],
+            "supports": ["public cohort route quality"],
+        }
+        missing_denominator = {**base, "case_count": 3}
+        invalid_denominator = {
+            **base,
+            "case_count": 3,
+            "metrics": {"precision": {"numerator": 4, "denominator": 3, "rate": 1.333}},
+        }
+        valid = {
+            **base,
+            "metrics": {
+                "case_count": 3,
+                "precision": {"numerator": 3, "denominator": 3, "rate": 1.0},
+            },
+        }
+
+        self.assertIn(
+            "public_quality_claim_without_reusable_denominator",
+            benchmark_report_contract_lint(missing_denominator)["findings"],
+        )
+        self.assertIn(
+            "invalid_rate_denominator_math",
+            benchmark_report_contract_lint(invalid_denominator)["findings"],
+        )
+        self.assertTrue(benchmark_report_contract_lint(valid)["ok"])
+
+    def test_suite_quality_interprets_diagnostic_quality_as_not_public_quality(self) -> None:
+        state = track_quality_state(
+            "density_curve",
+            {
+                "ok": True,
+                "contract_gate_ok": True,
+                "quality_gate_ok": True,
+                "public_quality_gate_ok": False,
+                "quality_gate_kind": "diagnostic_curve",
+                "benchmark_maturity_level": "diagnostic_proxy",
+            },
+        )
+
+        self.assertFalse(state["quality_gate_ok"])
+        self.assertEqual(
+            state["quality_gate_status"],
+            "diagnostic_passed_not_public_quality",
+        )
 
     def test_family_promotion_candidates_report_satisfies_benchmark_contract_linter(self) -> None:
         report = family_promotion.build_family_promotion_candidate_report()

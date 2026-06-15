@@ -138,6 +138,57 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertEqual(matches[0]["provider_family"], "aar_v2")
         self.assertEqual(matches[0]["authority"], "navigation_only")
 
+    def test_project_specific_learning_guidance_requires_target_or_path_match(self) -> None:
+        report = cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight-other-repo",
+                    "next_action": "run_preflight_before_broad_test",
+                    "guidance_text": "Run ruff before pytest.",
+                    "scope": "project:OtherRepo",
+                    "target_fingerprint": "other-repo:specific-target",
+                    "path_category_fingerprint": "other-repo:tests/payments",
+                    "workspace_or_environment_profile": "linux-ci",
+                    "source_refs": [source_ref("learn")],
+                    "reason_codes": ["learning_guidance_surface"],
+                }
+            ],
+            now_unix=1000,
+        )
+        record = report["records"][0]
+        base_features = {
+            "terms": ["pytest", "test", "preflight"],
+            "tool_names": ["Bash"],
+            "command_terms": ["pytest", "test"],
+            "path_terms": [],
+            "issue_ids": [],
+            "risk_modes": [],
+            "active_recall_locks": [],
+            "anti_nag_token_ids": [],
+            "visible_source_refs": [],
+        }
+
+        self.assertEqual(record["scope"], "project:OtherRepo")
+        self.assertEqual(record["target_fingerprint"], "other-repo:specific-target")
+        self.assertEqual(record["path_category_fingerprint"], "other-repo:tests/payments")
+        self.assertTrue(record["requires_applicability_match"])
+        self.assertEqual(cache.read_action_hint_records(report, base_features, now_unix=1001), [])
+
+        target_features = {
+            **base_features,
+            "target_fingerprint": "other-repo:specific-target",
+        }
+        path_features = {
+            **base_features,
+            "path_category_fingerprint": "other-repo:tests/payments",
+        }
+
+        self.assertEqual(
+            cache.read_action_hint_records(report, target_features, now_unix=1001)[0]["next_action"],
+            "run_preflight_before_broad_test",
+        )
+        self.assertEqual(len(cache.read_action_hint_records(report, path_features, now_unix=1001)), 1)
+
     def test_missing_providers_are_explicit_without_becoming_errors(self) -> None:
         report = cache.build_action_hint_cache_report(now_unix=1000)
 

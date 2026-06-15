@@ -55,11 +55,31 @@ privacy/source red lines and still leave `quality_gate_ok=false` if foreground
 packets are too noisy, indistinct, over-filtered, or expensive for the user or
 agent attention they save.
 
+## Gate Vocabulary
+
+Use the narrowest gate name that matches the evidence:
+
+- `contract_gate_ok`: the deterministic report or safety contract ran within
+  its declared scope.
+- `diagnostic_gate_ok`: a local diagnostic threshold passed; this is useful
+  signal, not public/product quality.
+- `public_quality_gate_ok`: a public or external cohort passed with explicit
+  denominator, rate, sample/family floor, and holdout/no-tuning metadata where
+  applicable.
+- `claim_quality_ok`: the report is safe to cite as scoped quality evidence.
+- `runtime_policy_adoption_gate_ok`: the evidence is strong enough to change
+  a runtime/default policy.
+
+Legacy `quality_gate_ok` must be accompanied by `quality_gate_kind` or
+`quality_gate_ok_means`. Suite aggregation treats diagnostic or contract
+success as bounded positive evidence, not as public-quality proof and not as an
+ordinary product failure.
+
 ## Initial Fixture Annotations
 
 | Surface | Current level | Current sample | Next promotion target | Why not public quality yet |
 | --- | --- | --- | --- | --- |
-| Attention navigation quality | `contract_smoke` | 12 selected cases across route families | `public_cohort_candidate` | Small author-written fixture; no public/external cohort or holdout. |
+| Attention navigation quality | `public_cohort` for the explicit agent-pull path; older `contract_smoke` retained as red-line smoke | 270 public-safe cases, 9 families, 90 holdout; plus 12 selected smoke cases | Default/live foreground adoption remains separate | Public/holdout gate now passes for explicit agent pull; it still does not claim live host behavior or default foreground-hook adoption. |
 | Map-rot lifecycle-debt | `contract_smoke` | 9 selected lifecycle-state cases with no-write maintenance actions | `public_cohort_candidate` | Exercises state taxonomy, red lines, and bounded operator actions, not real map-rot distribution or completed cleanup. |
 | Agent continuity loop | `contract_smoke` | 8 selected integration cases | `public_cohort_candidate` | Proves composition behavior, not live host or private-history usefulness. |
 | Dream public shadow | `contract_smoke` | 4 synthetic public behavior cases | `public_cohort_candidate` | Useful falsifiable behavior smoke, but too small for broad Dream quality. |

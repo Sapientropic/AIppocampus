@@ -27,6 +27,9 @@ import smoke_source_evidence_recall_eval as source_evidence_eval
 import benchmark_fts5_recall as fts5_benchmark
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from benchmarks.aippocampus.shared import sharegpt_sampling
+from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
+    json_report_exit_code,
+)
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 from source_evidence.defaults import (
     DEFAULT_FTS5_CASES,
@@ -1116,7 +1119,11 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print_human_summary(payload)
-    return 0 if payload.get("ok") else 1
+    return json_report_exit_code(
+        json_output=args.json_output,
+        report_generation_ok=True,
+        ok=bool(payload.get("ok")),
+    )
 
 
 if __name__ == "__main__":
