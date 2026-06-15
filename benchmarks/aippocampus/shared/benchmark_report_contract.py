@@ -18,6 +18,12 @@ POSITIVE_SUPPORT_FIELDS = (
     "agent_action",
     "can_support_after_action",
     "material_limits",
+    "can_claim",
+    "usefulness_metrics",
+    "promotion_gates",
+    "issue_readouts",
+    "decision",
+    "tiny_agent_recall_affordance_readout",
 )
 
 DECISION_IMPACT_FIELDS = (
@@ -66,11 +72,85 @@ def _field_value(report: Mapping[str, Any], field: str) -> Any:
         value = maturity.get(field)
         if value not in (None, "", [], {}):
             return value
+    metrics = report.get("metrics")
+    if isinstance(metrics, Mapping):
+        value = metrics.get(field)
+        if value not in (None, "", [], {}):
+            return value
     return None
 
 
 def _has_any_field(report: Mapping[str, Any], fields: tuple[str, ...]) -> bool:
     return any(_field_value(report, field) is not None for field in fields)
+
+
+def _sample_size(report: Mapping[str, Any]) -> Any:
+    metrics = report.get("metrics")
+    coverage = report.get("coverage")
+    maturity = report.get("benchmark_maturity")
+    candidates = [
+        _field_value(report, "case_count"),
+        _field_value(report, "sample_size"),
+        _field_value(report, "coverage"),
+        metrics.get("total_cases") if isinstance(metrics, Mapping) else None,
+        metrics.get("case_count") if isinstance(metrics, Mapping) else None,
+        coverage.get("case_count") if isinstance(coverage, Mapping) else None,
+        maturity.get("case_count") if isinstance(maturity, Mapping) else None,
+        maturity.get("external_or_public_cohort_case_count") if isinstance(maturity, Mapping) else None,
+    ]
+    return next((value for value in candidates if value not in (None, "", [], {})), None)
+
+
+def _walk_mappings(value: Any) -> list[Mapping[str, Any]]:
+    mappings: list[Mapping[str, Any]] = []
+    if isinstance(value, Mapping):
+        mappings.append(value)
+        for child in value.values():
+            mappings.extend(_walk_mappings(child))
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            mappings.extend(_walk_mappings(child))
+    return mappings
+
+
+def _valid_public_quality_denominator(report: Mapping[str, Any]) -> tuple[bool, list[str]]:
+    """Return whether a public-quality claim exposes reusable denominator math.
+
+    Public-quality gates need a denominator a second agent can inspect. A
+    top-level case count proves sample presence, but a rate/numerator pair is
+    what prevents a pretty report from silently becoming an untestable claim.
+    """
+
+    reasons: list[str] = []
+    sample = _sample_size(report)
+    try:
+        sample_int = int(sample) if sample is not None else 0
+    except (TypeError, ValueError):
+        sample_int = 0
+    if sample_int <= 0:
+        reasons.append("missing_positive_sample_size")
+
+    valid_rate = False
+    invalid_rate = False
+    for mapping in _walk_mappings(report):
+        if "numerator" not in mapping or "denominator" not in mapping:
+            continue
+        try:
+            numerator = float(mapping.get("numerator") or 0)
+            denominator = float(mapping.get("denominator") or 0)
+        except (TypeError, ValueError):
+            invalid_rate = True
+            continue
+        if denominator <= 0 or numerator < 0 or numerator > denominator:
+            invalid_rate = True
+            continue
+        valid_rate = True
+
+    if invalid_rate:
+        reasons.append("invalid_rate_denominator_math")
+    if not valid_rate:
+        reasons.append("missing_rate_denominator")
+    return not reasons, reasons
 
 
 def benchmark_report_contract_lint(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -99,11 +179,7 @@ def benchmark_report_contract_lint(report: Mapping[str, Any]) -> dict[str, Any]:
         missing_fields.append("cannot_claim")
     if _field_value(report, "privacy_boundary") is None:
         missing_fields.append("privacy_boundary")
-    sample_size = (
-        _field_value(report, "case_count")
-        or _field_value(report, "sample_size")
-        or _field_value(report, "coverage")
-    )
+    sample_size = _sample_size(report)
     if sample_size is None:
         missing_fields.append("case_count_or_sample_size")
 
@@ -115,6 +191,13 @@ def benchmark_report_contract_lint(report: Mapping[str, Any]) -> dict[str, Any]:
         findings.append("missing_contract_metadata")
     if boundary_only_projection:
         findings.append("boundary_only_projection_without_positive_support")
+
+    public_quality_claimed = bool(_field_value(report, "public_quality_gate_ok"))
+    if public_quality_claimed:
+        denominator_ok, denominator_findings = _valid_public_quality_denominator(report)
+        if not denominator_ok:
+            findings.append("public_quality_claim_without_reusable_denominator")
+            findings.extend(denominator_findings)
 
     synthetic_or_proxy = str(_field_value(report, "measurement_origin") or "") in {
         MEASUREMENT_DETERMINISTIC_CONTRACT,
@@ -144,6 +227,11 @@ def benchmark_report_contract_lint(report: Mapping[str, Any]) -> dict[str, Any]:
             field for field in POSITIVE_SUPPORT_FIELDS if _field_value(report, field) is not None
         ],
         "positive_support_present": positive_support_present,
+        "public_quality_denominator_ok": (
+            _valid_public_quality_denominator(report)[0]
+            if bool(_field_value(report, "public_quality_gate_ok"))
+            else None
+        ),
         "boundary_only_projection": boundary_only_projection,
         "decision_impact": decision_impact or "not_declared",
         "decision_impact_gate_ok": bool(decision_gate) if decision_gate is not None else None,

@@ -24,6 +24,9 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.core import now_utc
+from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
+    missing_required_input_payload,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_FULL_RUN_QUESTIONS = 500
@@ -1429,7 +1432,7 @@ def print_human_summary(payload: Mapping[str, Any]) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--report", type=Path)
     parser.add_argument("--baseline-report", type=Path)
     parser.add_argument("--semantic-pilot-report", type=Path)
     parser.add_argument("--full-run-questions", type=int, default=DEFAULT_FULL_RUN_QUESTIONS)
@@ -1439,7 +1442,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    args = build_arg_parser().parse_args()
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    if args.report is None:
+        if args.json_output:
+            payload = missing_required_input_payload(
+                kind="aippocampus_longmemeval_rerank_analysis",
+                missing=["--report"],
+                supported_runner=(
+                    "benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py "
+                    "--report <report.json> --json"
+                ),
+                summary=(
+                    "LongMemEval rerank analysis is a postprocessor and needs an "
+                    "already generated sanitized rerank report."
+                ),
+            )
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        parser.error("the following arguments are required: --report")
+    assert args.report is not None
     payload = analyze_rerank_report(
         args.report,
         baseline_report_path=args.baseline_report,

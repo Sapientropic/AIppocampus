@@ -46,6 +46,9 @@ from aippocampus_runtime.recall.retrieval import (
 from aippocampus_runtime.registry.api import load_registry as load_thread_registry
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.search import iter_clean_messages
+from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
+    json_report_exit_code,
+)
 
 DEFAULT_CASES = 80
 DEFAULT_SEED = 20260527
@@ -1158,7 +1161,11 @@ def main(argv: list[str] | None = None) -> int:
                 "- negative false positives: "
                 f"{production['negative_false_positive_count']}"
             )
-        return 0 if payload.get("ok") else 1
+        return json_report_exit_code(
+            json_output=args.json_output,
+            report_generation_ok=True,
+            ok=bool(payload.get("ok")),
+        )
 
     top_k = args.top_k if args.top_k is not None else DEFAULT_TOP_K
     payload = run_benchmark(
@@ -1178,7 +1185,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print_human_summary(payload)
-    return 0 if payload.get("ok") else 1
+    return json_report_exit_code(
+        json_output=args.json_output,
+        report_generation_ok=True,
+        ok=bool(payload.get("ok")),
+    )
 
 
 if __name__ == "__main__":

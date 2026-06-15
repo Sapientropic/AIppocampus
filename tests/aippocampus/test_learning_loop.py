@@ -175,6 +175,34 @@ class LearningLoopTests(unittest.TestCase):
         self.assertNotIn("target:wrong", encoded)
         self.assertEqual(guidance[0]["next_action"], "run_preflight_before_broad_test")
         self.assertTrue(guidance[0]["source_reopen_required_before_claim"])
+        self.assertEqual(guidance[0]["scope"], "project:AIppocampus")
+        self.assertEqual(guidance[0]["target_fingerprint"], "target:tests:a")
+
+    def test_action_time_guidance_preserves_public_safe_specificity(self) -> None:
+        guidance = project_action_time_guidance(
+            [
+                {
+                    "finding_id": "specific-preflight",
+                    "finding_kind": "workflow_order_finding",
+                    "workflow_family": "cheap_preflight_before_broad_test",
+                    "status": "open",
+                    "scope": "project:OtherRepo",
+                    "target_fingerprint": "other-repo:specific-target",
+                    "path_category_fingerprint": "other-repo:tests/payments",
+                    "workspace_or_environment_profile": "linux-ci",
+                    "occurrence_count": 2,
+                    "confidence": "high",
+                    "foreground_eligible": True,
+                    "source_refs": [source_ref("specific-preflight")],
+                }
+            ],
+            query_terms=["pytest", "preflight"],
+        )
+
+        self.assertEqual(guidance[0]["scope"], "project:OtherRepo")
+        self.assertEqual(guidance[0]["target_fingerprint"], "other-repo:specific-target")
+        self.assertEqual(guidance[0]["path_category_fingerprint"], "other-repo:tests/payments")
+        self.assertEqual(guidance[0]["workspace_or_environment_profile"], "linux-ci")
 
     def test_workflow_order_detector_covers_environment_and_context_recovery(self) -> None:
         rows = [

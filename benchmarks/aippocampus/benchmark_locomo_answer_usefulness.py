@@ -22,6 +22,8 @@ import benchmark_locomo_public_users as locomo
 
 _paths.ensure_paths()
 
+from shared.benchmark_entrypoints import json_report_exit_code  # noqa: E402
+
 SCHEMA_VERSION = 1
 DEFAULT_DATASET = locomo.DEFAULT_DATASET
 DEFAULT_ANSWER_MODEL = "deterministic_oracle_fixture"
@@ -572,7 +574,11 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print_human_summary(payload)
-    return 0 if payload.get("ok") else 1
+    return json_report_exit_code(
+        json_output=args.json_output,
+        report_generation_ok=bool(payload.get("report_generation_ok", True)),
+        ok=bool(payload.get("ok")),
+    )
 
 
 if __name__ == "__main__":

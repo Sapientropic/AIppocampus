@@ -27,6 +27,23 @@ class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
         self.assertFalse(public["state_bench_official_score_claimed"])
         self.assertFalse(report["public_quality_gate_ok"])
         self.assertFalse(report["quality_gate_ok"])
+        self.assertEqual(
+            public["workflow_guidance_status"],
+            "not_applicable_no_eligible_public_shape",
+        )
+        self.assertEqual(public["workflow_source_shape_eligible_count"], 0)
+        surfaces = report["companion_surfaces"]
+        self.assertTrue(surfaces["future_event_route_surface_companion"]["ok"])
+        self.assertEqual(
+            surfaces["workflow_guidance_companion"]["status"],
+            "not_applicable_no_eligible_public_shape",
+        )
+        self.assertEqual(
+            surfaces["workflow_guidance_companion"][
+                "zero_denominator_interpretation"
+            ],
+            "guidance_not_measured_for_this_public_corpus",
+        )
         self.assertIn("official_state_bench_score", report["cannot_claim"])
         self.assertIn("benchmark_vcs_future_event_recall.py", " ".join(report["reused_benchmark_files"]))
 

@@ -629,6 +629,7 @@ def project_action_time_guidance(
         else:
             next_action = "reopen_source_before_action"
             guidance_text = "Reopen the source-backed learning trail before treating this as guidance."
+        transferability = "this_repo_only" if scope.startswith("project:") else "this_project_family"
         haystack = _query_tokens([workflow, next_action, guidance_text, finding.get("workflow_order")])
         if query and not (query & haystack):
             continue
@@ -640,16 +641,16 @@ def project_action_time_guidance(
                 "title": "Source-backed learning guidance",
                 "guidance_text": guidance_text,
                 "next_action": next_action,
+                "scope": finding.get("scope") or "project_or_task_family",
+                "target_fingerprint": finding.get("target_fingerprint") or "",
+                "path_category_fingerprint": finding.get("path_category_fingerprint") or "",
+                "workspace_or_environment_profile": finding.get("workspace_or_environment_profile") or "",
+                "transferability": finding.get("transferability") or transferability,
                 "source_refs": refs[:3],
-                "source_reopen_required_before_claim": True,
-                "claim_permission": CLAIM_PERMISSION,
+                "source_reopen_required_before_claim": True, "claim_permission": CLAIM_PERMISSION,
                 "navigation_only": True,
                 "truth_boundary": TRUTH_BOUNDARY,
-                "reason_codes": [
-                    "learning_guidance_surface",
-                    "action_time_match",
-                    "source_reopen_required",
-                ],
+                "reason_codes": ["learning_guidance_surface", "action_time_match", "source_reopen_required"],
             }
         )
     return guidance

@@ -192,6 +192,8 @@ def learning_findings_to_aippo_source_rows(
                 else "workflow_order_clause"
             ),
             "scope": _text(finding.get("scope"), 160) or "project_or_task_family",
+            "target_fingerprint": _text(finding.get("target_fingerprint"), 160),
+            "path_category_fingerprint": _text(finding.get("path_category_fingerprint"), 160),
             "topic_epoch": _text(finding.get("topic_epoch"), 120) or "learning-loop",
             "workspace_or_environment_profile": _text(
                 finding.get("workspace_or_environment_profile"),

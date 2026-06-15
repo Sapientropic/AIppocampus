@@ -32,8 +32,6 @@ COMMAND_FAMILY_TERMS = {
     "tsc",
     "uv",
 }
-
-
 def _terms(*values: Any) -> list[str]:
     tokens: set[str] = set()
     for value in values:
@@ -71,6 +69,15 @@ def _strings(value: Any, *, limit: int = 8) -> list[str]:
 
 def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _safe_label(value: Any, *, limit: int = 160) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if re.search(r"(^[a-zA-Z]:[\\/]|^/Users/|^/home/|\\\\)", text):
+        return ""
+    return text[:limit]
 
 
 def _raw_tool_args(envelope: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -179,6 +186,20 @@ def extract_pending_action_features(envelope: Mapping[str, Any]) -> dict[str, An
         "command_terms": command_terms,
         "terms": terms,
         "topic_epoch": str(envelope.get("topic_epoch") or raw_args.get("topic_epoch") or ""),
+        "scope": _safe_label(envelope.get("scope") or raw_args.get("scope")),
+        "target_fingerprint": _safe_label(
+            envelope.get("target_fingerprint") or raw_args.get("target_fingerprint")
+        ),
+        "path_category_fingerprint": _safe_label(
+            envelope.get("path_category_fingerprint")
+            or raw_args.get("path_category_fingerprint")
+        ),
+        "workspace_or_environment_profile": _safe_label(
+            envelope.get("workspace_or_environment_profile")
+            or raw_args.get("workspace_or_environment_profile")
+            or envelope.get("environment_profile")
+            or raw_args.get("environment_profile")
+        ),
         "active_recall_locks": _strings(
             envelope.get("active_recall_locks") or raw_args.get("active_recall_locks")
         ),

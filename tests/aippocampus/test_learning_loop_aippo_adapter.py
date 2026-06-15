@@ -30,6 +30,8 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
                 "source_ref_count": 3,
                 "source_refs": [source_ref("fail"), source_ref("ruff"), source_ref("pass")],
                 "scope": "project:OtherRepo",
+                "target_fingerprint": "other-repo:specific-target",
+                "path_category_fingerprint": "other-repo:tests/payments",
                 "topic_epoch": "release-hardening",
                 "workspace_or_environment_profile": "linux-ci",
                 "raw_output": "Traceback PRIVATE_STDOUT should not leak",
@@ -46,6 +48,8 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
         self.assertTrue(report["ok"], encoded)
         self.assertEqual(report["metrics"]["aippo_source_row_count"], 1)
         self.assertEqual(report["source_rows"][0]["scope"], "project:OtherRepo")
+        self.assertEqual(report["source_rows"][0]["target_fingerprint"], "other-repo:specific-target")
+        self.assertEqual(report["source_rows"][0]["path_category_fingerprint"], "other-repo:tests/payments")
         self.assertEqual(report["source_rows"][0]["topic_epoch"], "release-hardening")
         self.assertEqual(report["source_rows"][0]["workspace_or_environment_profile"], "linux-ci")
         self.assertEqual(report["metrics"]["prepared_hint_provider_count"], 1)
@@ -58,7 +62,7 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
         self.assertNotIn("private_path.py", encoded)
         self.assertEqual(report["red_lines"]["source_truth_overclaim_count"], 0)
 
-        matches = action_hint_cache.read_action_hint_records(
+        unrelated_matches = action_hint_cache.read_action_hint_records(
             report["prepared_cache"],
             {
                 "terms": ["coding", "preflight", "broad", "test"],
@@ -73,9 +77,28 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
             },
             now_unix=1001,
         )
+        matches = action_hint_cache.read_action_hint_records(
+            report["prepared_cache"],
+            {
+                "terms": ["coding", "preflight", "broad", "test"],
+                "tool_names": [],
+                "command_terms": ["pytest", "test"],
+                "path_terms": [],
+                "issue_ids": [],
+                "risk_modes": [],
+                "active_recall_locks": [],
+                "anti_nag_token_ids": [],
+                "visible_source_refs": [],
+                "target_fingerprint": "other-repo:specific-target",
+            },
+            now_unix=1001,
+        )
 
+        self.assertEqual(unrelated_matches, [])
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["provider_family"], "aippo_learned_clause")
+        self.assertEqual(matches[0]["next_action"], "run_preflight_before_broad_test")
+        self.assertEqual(matches[0]["target_fingerprint"], "other-repo:specific-target")
         self.assertFalse(matches[0]["can_support_factual_claim"])
 
     def test_immature_private_stale_and_expected_red_findings_do_not_foreground(self) -> None:

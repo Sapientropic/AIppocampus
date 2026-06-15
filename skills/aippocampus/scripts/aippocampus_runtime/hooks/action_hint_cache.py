@@ -35,6 +35,36 @@ def _visible_ref_overlap(record: Mapping[str, Any], features: Mapping[str, Any])
     return bool(visible & refs)
 
 
+def _text(value: Any) -> str:
+    return str(value or "").strip().casefold()
+
+
+def _specific_applicability_matches(record: Mapping[str, Any], features: Mapping[str, Any]) -> bool:
+    if _text(record.get("transferability")) in {
+        "general_agent_workflow",
+        "general",
+        "global",
+        "cross_project",
+    }:
+        return True
+    target = _text(record.get("target_fingerprint"))
+    path = _text(record.get("path_category_fingerprint"))
+    scope = _text(record.get("scope"))
+    profile = _text(record.get("workspace_or_environment_profile"))
+    topic = _text(record.get("topic_epoch"))
+    if target or path:
+        return target == _text(features.get("target_fingerprint")) or path == _text(
+            features.get("path_category_fingerprint")
+        )
+    if scope.startswith("project:") or scope.startswith("machine:"):
+        return scope == _text(features.get("scope"))
+    if profile and profile != "unknown_environment":
+        return profile == _text(features.get("workspace_or_environment_profile"))
+    if topic:
+        return topic == _text(features.get("topic_epoch"))
+    return True
+
+
 def _eligible_record(record: Mapping[str, Any], features: Mapping[str, Any], *, now_unix: float) -> bool:
     if str(record.get("freshness") or "").casefold() in BLOCKED_STATES:
         return False
@@ -51,6 +81,8 @@ def _eligible_record(record: Mapping[str, Any], features: Mapping[str, Any], *, 
         return False
     anti_nag = {str(value) for value in features.get("anti_nag_token_ids") or []}
     if anti_nag & {str(record.get("record_id") or ""), *map(str, record.get("anti_nag_ids") or [])}:
+        return False
+    if not _specific_applicability_matches(record, features):
         return False
     return not _visible_ref_overlap(record, features)
 

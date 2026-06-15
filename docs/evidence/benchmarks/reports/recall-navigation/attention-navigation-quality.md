@@ -15,6 +15,24 @@ python benchmarks\aippocampus\benchmark_attention_navigation_quality.py --json
 
 The report kind is `aippocampus_attention_navigation_quality`.
 
+## Current Public/Holdout Result
+
+The current public-quality evidence is the public/holdout cohort, not the
+older 12-case contract smoke. The cohort covers 270 public-safe cases across 9
+families, with 90 held out from tuning:
+
+- `route_precision_at_1 = 270/270 = 1.0`
+- `route_recall_at_k = 210/210 = 1.0`
+- `source_reopen_success_rate = 210/210 = 1.0`
+- `wrong_source_evidence_rate = 0/30 = 0.0`
+- `false_preactivation_rate = 0/60 = 0.0`
+- `public_quality_gate_ok = true`
+
+Boundary: this supports the narrow explicit agent-pull attention-router path.
+It still does not claim live host behavior, answer-generation quality,
+private-history behavior, broad default-session usefulness, or default
+foreground-hook adoption.
+
 ## What It Measures
 
 - `route_precision_at_1`
@@ -38,9 +56,9 @@ Hard red lines are separate from route averages:
 Red-line counts must stay zero; a high average route rate cannot hide a red-line
 failure.
 
-## 2026-06-10 Public Fixture Result
+## 2026-06-10 Contract-Smoke Fixture
 
-The checked-in fixture cohort covers 12 cases across:
+The older checked-in fixture cohort covers 12 cases across:
 
 - positive source-backed routes;
 - privacy hard masks;
