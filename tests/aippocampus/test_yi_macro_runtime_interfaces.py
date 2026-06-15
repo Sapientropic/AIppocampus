@@ -8,7 +8,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import audit, cross_grain, hexagram, transform_orbit  # noqa: E402
+from aippocampus_runtime.macro import (  # noqa: E402
+    audit,
+    cross_grain,
+    hexagram,
+    transform_orbit,
+    transition_taxonomy,
+)
 
 
 class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
@@ -155,8 +161,13 @@ class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
         inversion = cross_grain.macro_transition_record("乾", (1, 2, 3, 4, 5, 6), source_refs=[{"source_id": "inversion"}])
 
         self.assertEqual(local["perturbation_band"], "local")
+        self.assertEqual(local["changed_line_layers"], [{"line": 1, "layer": "earth"}])
+        self.assertEqual(local["dominant_changed_layer"], "earth")
         self.assertEqual(medium["perturbation_band"], "medium")
+        self.assertEqual(medium["changed_layer_counts"], {"earth": 2, "human": 1, "heaven": 0})
+        self.assertEqual(medium["dominant_changed_layer"], "earth")
         self.assertEqual(inversion["perturbation_band"], "inversion")
+        self.assertEqual(inversion["dominant_changed_layer"], "multi_layer")
         self.assertTrue(inversion["review_policy"]["requires_conflict_review_before_action"])
         for packet in (local, medium, inversion):
             self.assertEqual(packet["authority_level"], "navigation_only")
@@ -173,6 +184,48 @@ class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
         self.assertFalse(policy["ranking_weight_changes"])
         self.assertFalse(policy["source_support_from_basin_membership"])
         self.assertFalse(policy["foreground_emitted"])
+
+    def test_transition_taxonomy_composes_existing_structural_reducers(self) -> None:
+        same = transition_taxonomy.transition_taxonomy("乾", "乾")
+        next_pair = transition_taxonomy.transition_taxonomy("蹇", "解")
+        orbit = transition_taxonomy.transition_taxonomy("既济", "未济")
+        distant = transition_taxonomy.transition_taxonomy("乾", "兑")
+
+        self.assertIn("same_state", same["structural_labels"])
+        self.assertIn("king_wen_next", next_pair["structural_labels"])
+        self.assertIn("king_wen_pair_internal", next_pair["structural_labels"])
+        self.assertIn("king_wen_pair_reverse", next_pair["structural_labels"])
+        self.assertIn("reverse_and_opposite", orbit["structural_labels"])
+        self.assertIn("same_cr_orbit", orbit["structural_labels"])
+        self.assertIn("hamming_2", distant["structural_labels"])
+        self.assertIn("perturbation_local", distant["structural_labels"])
+        for packet in (same, next_pair, orbit, distant):
+            self.assertTrue(packet["structural_labels"])
+            self.assertEqual(packet["authority_level"], "navigation_only")
+            self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
+            self.assertFalse(packet["fact_claim_allowed"])
+            self.assertFalse(packet["foreground_action_allowed"])
+
+    def test_transition_inventory_covers_all_64x64_pairs_with_stable_counts(self) -> None:
+        inventory = transition_taxonomy.transition_inventory()
+        counts = inventory["label_counts"]
+
+        self.assertEqual(inventory["state_count"], 64)
+        self.assertEqual(inventory["transition_count"], 4096)
+        self.assertEqual(counts["same_state"], 64)
+        self.assertEqual(counts["hamming_1"], 384)
+        self.assertEqual(counts["perturbation_local"], 1344)
+        self.assertEqual(counts["king_wen_next"], 63)
+        self.assertEqual(counts["king_wen_prev"], 63)
+        self.assertEqual(counts["king_wen_pair_internal"], 64)
+        self.assertEqual(counts["opposite"], 64)
+        self.assertEqual(counts["reverse"], 64)
+        self.assertEqual(counts["same_cr_orbit"], 224)
+        self.assertEqual(inventory["authority_level"], "navigation_only")
+        self.assertEqual(inventory["claim_permission"], "no_claim_before_reopen")
+        self.assertFalse(inventory["fact_claim_allowed"])
+        self.assertNotIn("poem", inventory["non_goals"])
+        self.assertFalse(inventory["raw_source_or_user_data_included"])
 
 
 if __name__ == "__main__":

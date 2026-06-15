@@ -433,6 +433,8 @@ def build_plan(
 
     return {
         "schema_version": SCHEMA_VERSION,
+        "ok": True,
+        "status": "dry_run_ready",
         "created_at": now_utc(),
         "mode": "dry_run",
         "requested_class": class_filter,
@@ -443,6 +445,7 @@ def build_plan(
             "reads_json_manifests": True,
             "loads_existing_retention_report": retention_report is not None,
             "absolute_paths_included": include_paths,
+            "local_private_identifiers_included": include_paths,
         },
         "policy_model": {
             "canonical_source_tier": {

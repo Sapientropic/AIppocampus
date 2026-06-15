@@ -54,6 +54,13 @@ DIRECT_JOURNEY_GUIDANCE = {
             "Separate package freshness, host-visible tools, and current-thread availability.",
         ],
     },
+    "product_workflow": {
+        "next_action": "inspect_product_workflow_boundary",
+        "guidance": [
+            "Before changing semantic gate, attention router, or MCP health, reopen issue, test, and source diagnostics.",
+            "Keep product workflow guidance public-safe: route first, then reopen exact source before claims or release notes.",
+        ],
+    },
 }
 
 

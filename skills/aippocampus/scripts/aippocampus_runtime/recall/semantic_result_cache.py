@@ -8,9 +8,12 @@ be surfaced.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import tempfile
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -31,6 +34,8 @@ CACHE_TELEMETRY_KEYS = (
 )
 _VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
 _DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
+_LOCK_TIMEOUT_SECONDS = 5.0
+_LOCK_STALE_AFTER_SECONDS = 60.0
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -45,13 +50,56 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-        newline="\n",
-    )
-    tmp.replace(path)
+    tmp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            newline="\n",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            tmp_name = handle.name
+            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+        Path(tmp_name).replace(path)
+    finally:
+        if tmp_name:
+            with contextlib.suppress(FileNotFoundError):
+                Path(tmp_name).unlink()
+
+
+@contextlib.contextmanager
+def _cache_file_lock(path: Path) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.with_suffix(path.suffix + ".lock")
+    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+    fd: int | None = None
+    while fd is None:
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()} {time.time():.6f}\n".encode("utf-8"))
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > _LOCK_STALE_AFTER_SECONDS:
+                    lock.unlink()
+                    continue
+            except FileNotFoundError:
+                continue
+            except OSError:
+                pass
+            if time.monotonic() >= deadline:
+                raise TimeoutError("semantic result cache lock busy") from None
+            time.sleep(0.025)
+    try:
+        yield
+    finally:
+        if fd is not None:
+            os.close(fd)
+        with contextlib.suppress(FileNotFoundError):
+            lock.unlink()
 
 
 def _public_count(value: Any) -> int:
@@ -151,7 +199,27 @@ def _cache_value_metadata(result: Mapping[str, Any]) -> dict[str, Any]:
     )
     score = decision_score * 10.0 + _public_confidence(result.get("confidence")) * 10.0
     score += min(4, alias_count)
+    partial_failure_reasons = [
+        str(item) for item in result.get("partial_failure_reasons") or []
+    ]
+    raw_error_buckets = result.get("error_buckets")
+    error_buckets: dict[str, Any] = (
+        dict(raw_error_buckets) if isinstance(raw_error_buckets, Mapping) else {}
+    )
+    partial_success = bool(result.get("partial_success"))
+    timeout_degraded = bool(
+        partial_success
+        and decision == "skip"
+        and (
+            "read_timeout" in partial_failure_reasons
+            or "overall_deadline" in partial_failure_reasons
+            or error_buckets.get("read_timeout")
+            or error_buckets.get("overall_deadline")
+        )
+    )
     value_class = decision if decision in _VALID_DECISIONS else "skip"
+    if timeout_degraded:
+        value_class = "partial_timeout_skip"
     if semantic_cue_key and decision_score >= _DECISION_RANK["scent"]:
         # This is eviction protection for source-backed cue reuse, not an
         # evidence claim. Cached aliases remain routing hints only.
@@ -161,6 +229,8 @@ def _cache_value_metadata(result: Mapping[str, Any]) -> dict[str, Any]:
         "value_class": value_class,
         "value_score": round(score, 4),
         "protected": value_class == "source_backed_semantic_cue",
+        "partial_failure": partial_success,
+        "timeout_degraded": timeout_degraded,
     }
 
 
@@ -191,43 +261,44 @@ def read_cache(
     ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    data = _load_json(path)
-    entries = _cache_entries(data)
-    entry = entries.get(key)
-    _bump_cache_telemetry(data, "lookups")
-    if not isinstance(entry, dict):
+    with _cache_file_lock(path):
+        data = _load_json(path)
+        entries = _cache_entries(data)
+        entry = entries.get(key)
+        _bump_cache_telemetry(data, "lookups")
+        if not isinstance(entry, dict):
+            telemetry = _bump_cache_telemetry(data, "misses")
+            if diagnostics is not None:
+                diagnostics.update({"lookup": "miss", "telemetry": telemetry})
+            if path.exists():
+                _save_cache(path, {**data, "entries": entries})
+            return None
+        if _cache_entry_is_expired(entry, ttl_seconds=ttl_seconds):
+            entries.pop(key, None)
+            _bump_cache_telemetry(data, "misses")
+            telemetry = _bump_cache_telemetry(data, "expired")
+            if diagnostics is not None:
+                diagnostics.update({"lookup": "expired", "telemetry": telemetry})
+            _save_cache(path, {**data, "entries": entries})
+            return None
+        result = entry.get("result")
+        if isinstance(result, dict):
+            entry["hit_count"] = _public_count(entry.get("hit_count")) + 1
+            entry["last_hit_at"] = now_utc()
+            entry["last_hit_unix"] = time.time()
+            entries[key] = entry
+            telemetry = _bump_cache_telemetry(data, "hits")
+            _save_cache(path, {**data, "entries": entries})
+            if diagnostics is not None:
+                diagnostics.update({"lookup": "hit", "telemetry": telemetry})
+            result = dict(result)
+            result["cached"] = True
+            return result
         telemetry = _bump_cache_telemetry(data, "misses")
         if diagnostics is not None:
             diagnostics.update({"lookup": "miss", "telemetry": telemetry})
-        if path.exists():
-            _save_cache(path, {**data, "entries": entries})
-        return None
-    if _cache_entry_is_expired(entry, ttl_seconds=ttl_seconds):
-        entries.pop(key, None)
-        _bump_cache_telemetry(data, "misses")
-        telemetry = _bump_cache_telemetry(data, "expired")
-        if diagnostics is not None:
-            diagnostics.update({"lookup": "expired", "telemetry": telemetry})
         _save_cache(path, {**data, "entries": entries})
         return None
-    result = entry.get("result")
-    if isinstance(result, dict):
-        entry["hit_count"] = _public_count(entry.get("hit_count")) + 1
-        entry["last_hit_at"] = now_utc()
-        entry["last_hit_unix"] = time.time()
-        entries[key] = entry
-        telemetry = _bump_cache_telemetry(data, "hits")
-        _save_cache(path, {**data, "entries": entries})
-        if diagnostics is not None:
-            diagnostics.update({"lookup": "hit", "telemetry": telemetry})
-        result = dict(result)
-        result["cached"] = True
-        return result
-    telemetry = _bump_cache_telemetry(data, "misses")
-    if diagnostics is not None:
-        diagnostics.update({"lookup": "miss", "telemetry": telemetry})
-    _save_cache(path, {**data, "entries": entries})
-    return None
 
 
 def write_cache(
@@ -237,34 +308,35 @@ def write_cache(
     *,
     max_entries: int = DEFAULT_MAX_CACHE_ENTRIES,
 ) -> None:
-    data = _load_json(path)
-    entries = _cache_entries(data)
-    entries[key] = _cache_entry_for_result(result, previous=entries.get(key))
-    _bump_cache_telemetry(data, "writes")
-    if len(entries) > max_entries:
-        sorted_entries = sorted(
-            entries.items(),
-            key=lambda item: (
-                bool((item[1] or {}).get("protected")),
-                float((item[1] or {}).get("value_score") or 0.0),
-                float(
-                    (item[1] or {}).get("last_hit_unix")
-                    or (item[1] or {}).get("updated_unix")
-                    or (item[1] or {}).get("created_unix")
-                    or 0.0
+    with _cache_file_lock(path):
+        data = _load_json(path)
+        entries = _cache_entries(data)
+        entries[key] = _cache_entry_for_result(result, previous=entries.get(key))
+        _bump_cache_telemetry(data, "writes")
+        if len(entries) > max_entries:
+            sorted_entries = sorted(
+                entries.items(),
+                key=lambda item: (
+                    bool((item[1] or {}).get("protected")),
+                    float((item[1] or {}).get("value_score") or 0.0),
+                    float(
+                        (item[1] or {}).get("last_hit_unix")
+                        or (item[1] or {}).get("updated_unix")
+                        or (item[1] or {}).get("created_unix")
+                        or 0.0
+                    ),
                 ),
-            ),
-        )
-        evict_count = len(entries) - max_entries
-        for evicted_key, _entry in sorted_entries[:evict_count]:
-            entries.pop(evicted_key, None)
-        _bump_cache_telemetry(
-            data,
-            "evictions",
-            evict_count,
-            eviction_reason="low_value_churn",
-        )
-    _save_cache(path, {**data, "entries": entries})
+            )
+            evict_count = len(entries) - max_entries
+            for evicted_key, _entry in sorted_entries[:evict_count]:
+                entries.pop(evicted_key, None)
+            _bump_cache_telemetry(
+                data,
+                "evictions",
+                evict_count,
+                eviction_reason="low_value_churn",
+            )
+        _save_cache(path, {**data, "entries": entries})
 
 
 def semantic_cache_report(
@@ -275,16 +347,25 @@ def semantic_cache_report(
     active = 0
     expired = 0
     protected = 0
+    active_partial_failures = 0
+    active_timeouts = 0
+    degraded_cached_decisions = 0
     value_classes: dict[str, int] = {}
     for entry in entries.values():
         if not isinstance(entry, Mapping):
             continue
-        if _cache_entry_is_expired(entry, ttl_seconds=ttl_seconds):
-            expired += 1
-        else:
+        active_entry = not _cache_entry_is_expired(entry, ttl_seconds=ttl_seconds)
+        if active_entry:
             active += 1
+        else:
+            expired += 1
         if entry.get("protected"):
             protected += 1
+        if active_entry and entry.get("partial_failure"):
+            active_partial_failures += 1
+        if active_entry and entry.get("timeout_degraded"):
+            active_timeouts += 1
+            degraded_cached_decisions += 1
         value_class = str(entry.get("value_class") or "unknown")
         value_classes[value_class] = value_classes.get(value_class, 0) + 1
     return {
@@ -294,6 +375,9 @@ def semantic_cache_report(
         "active_entry_count": active,
         "expired_entry_count": expired,
         "protected_entry_count": protected,
+        "active_partial_failure_count": active_partial_failures,
+        "active_timeout_count": active_timeouts,
+        "degraded_cached_decision_count": degraded_cached_decisions,
         "value_classes": value_classes,
         "telemetry": normalized_cache_telemetry(data),
         "output_boundary": "semantic_cache_report_counts_only",

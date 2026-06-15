@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Sequence
+from typing import Any, Mapping
+
+from aippocampus_runtime.macro import momentum_priors
+from aippocampus_runtime.macro.momentum_thresholds import (
+    MOMENTUM_THRESHOLD_METADATA,
+    MOMENTUM_THRESHOLD_SET_ID,
+    NEGATIVE_PHASE_THRESHOLDS,
+    POSITIVE_PHASE_THRESHOLDS,
+    momentum_threshold_report,
+)
 
 AUTHORITY_LEVEL = "navigation_only"
 ACTION_GRAMMAR = "direction_only"
 CLAIM_PERMISSION = "no_claim_before_reopen"
-MOMENTUM_BASIS_KEYS = (
-    "support_delta",
-    "counter_evidence_delta",
-    "route_success_delta",
-    "staleness_delta",
-    "user_correction_delta",
-)
+MOMENTUM_BASIS_KEYS = ("support_delta", "counter_evidence_delta", "route_success_delta", "staleness_delta", "user_correction_delta")
 PHASE_ORDER = (
     "fu",
     "lin",
@@ -147,28 +151,14 @@ def phase_from_momentum_basis(basis: Mapping[str, object] | None = None) -> str:
     if all(abs(value) < 0.000001 for value in values.values()):
         return "kun"
     score = _score_from_basis(values)
-    if score >= 1.20:
-        return "qian"
-    if score >= 0.90:
-        return "guai"
-    if score >= 0.60:
-        return "dazhuang"
-    if score >= 0.35:
-        return "tai"
-    if score >= 0.15:
-        return "lin"
     if score > 0.0:
+        for threshold, phase in POSITIVE_PHASE_THRESHOLDS:
+            if score >= threshold:
+                return phase
         return "fu"
-    if score <= -1.20:
-        return "kun"
-    if score <= -0.90:
-        return "bo"
-    if score <= -0.60:
-        return "guan"
-    if score <= -0.35:
-        return "pi"
-    if score <= -0.15:
-        return "dun"
+    for threshold, phase in NEGATIVE_PHASE_THRESHOLDS:
+        if score <= threshold:
+            return phase
     return "gou"
 
 
@@ -201,6 +191,8 @@ def build_momentum_block(
         },
         "route_policy": info["route_policy"],
         "recheck_on": recheck_on,
+        "threshold_set_id": MOMENTUM_THRESHOLD_SET_ID,
+        "threshold_calibration_state": MOMENTUM_THRESHOLD_METADATA["calibration_state"],
         "authority_level": AUTHORITY_LEVEL,
         "action_grammar": ACTION_GRAMMAR,
         "claim_permission": CLAIM_PERMISSION,
@@ -212,6 +204,15 @@ def build_momentum_block(
             "no_energy_or_metaphysical_score": True,
         },
     }
+
+
+def phase_transition_prior(
+    history: Sequence[Any],
+    *,
+    current_phase: str | None = None,
+    top_n: int = 3,
+) -> dict[str, object]:
+    return momentum_priors.phase_transition_prior(history, phases=PHASES, phase_order=PHASE_ORDER, current_phase=current_phase, top_n=top_n)
 
 
 def coerce_momentum_block(value: Mapping[str, object] | None = None) -> dict[str, object]:
@@ -277,13 +278,19 @@ __all__ = [
     "AUTHORITY_LEVEL",
     "CLAIM_PERMISSION",
     "MOMENTUM_BASIS_KEYS",
+    "MOMENTUM_THRESHOLD_METADATA",
+    "MOMENTUM_THRESHOLD_SET_ID",
+    "NEGATIVE_PHASE_THRESHOLDS",
     "PHASE_ORDER",
     "PHASES",
+    "POSITIVE_PHASE_THRESHOLDS",
     "build_momentum_block",
     "coerce_momentum_block",
     "default_momentum_basis",
     "momentum_recheck_triggers",
+    "momentum_threshold_report",
     "normalize_momentum_basis",
+    "phase_transition_prior",
     "phase_from_momentum_basis",
     "stale_after_days_for_momentum",
     "validate_momentum_block",

@@ -37,12 +37,31 @@ def compact_message(item: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in pairs.items() if value not in (None, "")}
 
 
-def compact_thread(item: dict[str, Any]) -> dict[str, Any]:
+def compact_thread(
+    item: dict[str, Any],
+    *,
+    include_private_identifiers: bool = False,
+) -> dict[str, Any]:
     paths = item.get("paths") if isinstance(item.get("paths"), dict) else {}
+    raw_thread_key = str(item.get("thread_key") or "").strip()
+    thread_handle = (
+        raw_thread_key
+        if include_private_identifiers
+        else core.stable_text_fingerprint(
+            raw_thread_key or str(item.get("title") or item.get("workspace_name") or "unknown"),
+            namespace="mcp-thread-handle",
+            length=12,
+            prefix="thread",
+        )
+    )
     pairs = {
-        "thread_key": item.get("thread_key"),
+        "thread_handle": thread_handle,
         "title": core.compact_text(
-            str(item.get("title") or item.get("workspace_name") or item.get("thread_key") or ""),
+            str(
+                item.get("title")
+                or item.get("workspace_name")
+                or ("private thread" if raw_thread_key else "")
+            ),
             120,
         ),
         "project_label": item.get("project_label"),
@@ -53,6 +72,10 @@ def compact_thread(item: dict[str, Any]) -> dict[str, Any]:
         "scope_labels": item.get("scope_labels") if isinstance(item.get("scope_labels"), list) else None,
         "has_clean_source": bool(paths.get("clean_source_messages_jsonl")),
     }
+    if include_private_identifiers and raw_thread_key:
+        pairs["thread_key"] = raw_thread_key
+    elif raw_thread_key:
+        pairs["thread_key_redacted"] = True
     return {key: value for key, value in pairs.items() if value not in (None, "", [])}
 
 

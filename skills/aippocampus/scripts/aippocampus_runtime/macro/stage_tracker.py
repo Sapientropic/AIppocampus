@@ -4,7 +4,12 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal, TypeAlias
 
-from aippocampus_runtime.macro.hexagram import Hexagram, HexagramRef, resolve_hexagram
+from aippocampus_runtime.macro.hexagram import (
+    Hexagram,
+    HexagramRef,
+    resolve_hexagram,
+)
+from aippocampus_runtime.macro.hexagram_navigation import king_wen_pair_relation
 from aippocampus_runtime.macro.perturbation import AUTHORITY_LEVEL, CLAIM_PERMISSION
 from aippocampus_runtime.macro.signal_scales import (
     is_project_level_signal,
@@ -137,6 +142,19 @@ def _movement_state(previous: Hexagram, current: Hexagram) -> MovementState:
     return "jumped"
 
 
+def _pair_transition(previous: Hexagram, current: Hexagram) -> tuple[str, dict[str, object]]:
+    relation = king_wen_pair_relation(previous)
+    mate = relation.get("pair_mate")
+    mate_number = mate.get("number") if isinstance(mate, Mapping) else None
+    if current.number == previous.number:
+        transition = "same_state"
+    elif current.number == mate_number:
+        transition = "pair_internal"
+    else:
+        transition = "cross_pair"
+    return transition, relation
+
+
 def _candidate_targets(events: Iterable[Mapping[str, Any]]) -> list[Hexagram]:
     by_number: dict[int, Hexagram] = {}
     for event in events:
@@ -184,10 +202,15 @@ def build_stage_update(
     forked = len(targets) > 1
     current = targets[0] if targets else previous_hexagram
     movement: MovementState = "forked" if forked else _movement_state(previous_hexagram, current)
+    pair_transition, pair_relation = _pair_transition(previous_hexagram, current)
     if forked:
         diagnostics.append("stage_fork_requires_review")
     if movement == "jumped":
         diagnostics.append("non_adjacent_stage_jump_requires_review")
+    if pair_transition == "pair_internal":
+        diagnostics.append("king_wen_pair_internal_perspective_shift")
+    elif pair_transition == "cross_pair":
+        diagnostics.append("king_wen_cross_pair_transition")
     if not targets:
         diagnostics.append("no_project_level_stage_event")
     momentum = _momentum_summary(eligible)
@@ -205,6 +228,8 @@ def build_stage_update(
             "current": current.name,
             "current_number": current.number,
             "movement_state": movement,
+            "pair_transition": pair_transition,
+            "king_wen_pair": pair_relation,
             "fork_candidates": [
                 {"name": target.name, "number": target.number} for target in targets
             ]

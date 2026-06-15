@@ -55,6 +55,42 @@ class MacroHexagramTests(unittest.TestCase):
         self.assertIsNone(hexagram.hexagram_by_name("乾").wen_prev)
         self.assertIsNone(hexagram.hexagram_by_name("未济").wen_next)
 
+    def test_six_bit_gray_walk_covers_all_states_with_single_line_steps(self) -> None:
+        sequence = hexagram.SIX_BIT_GRAY_WALK_SEQUENCE
+
+        self.assertEqual(len(sequence), 64)
+        self.assertEqual({item.lines for item in sequence}, {item.lines for item in hexagram.HEXAGRAMS})
+        for index, (left, right) in enumerate(zip(sequence, sequence[1:], strict=False)):
+            with self.subTest(index=index):
+                self.assertEqual(hexagram.hamming_distance(left, right), 1)
+        self.assertEqual(hexagram.gray_walk_index(sequence[0]), 0)
+        self.assertEqual(hexagram.hexagram_by_gray_walk_index(0).lines, sequence[0].lines)
+        self.assertIsNone(hexagram.gray_walk_prev(sequence[0]))
+        self.assertIsNone(hexagram.gray_walk_next(sequence[-1]))
+        self.assertEqual(
+            hexagram.hamming_distance(
+                hexagram.gray_walk_prev(sequence[0], wrap=True),
+                sequence[0],
+            ),
+            1,
+        )
+
+    def test_king_wen_pair_relation_classifies_all_adjacent_pairs(self) -> None:
+        inventory = hexagram.king_wen_pair_relation_inventory()
+        qian = hexagram.king_wen_pair_relation("乾")
+        ji = hexagram.king_wen_pair_relation("既济")
+
+        self.assertEqual(inventory["pair_count"], 32)
+        self.assertEqual(inventory["relation_counts"]["reverse"], 24)
+        self.assertEqual(inventory["relation_counts"]["opposite"], 4)
+        self.assertEqual(inventory["relation_counts"]["reverse_and_opposite"], 4)
+        self.assertEqual(qian["pair_mate"]["name"], "坤")
+        self.assertEqual(qian["relation"], "opposite")
+        self.assertEqual(ji["pair_mate"]["name"], "未济")
+        self.assertEqual(ji["relation"], "reverse_and_opposite")
+        self.assertEqual(qian["authority_level"], "navigation_only")
+        self.assertFalse(qian["fact_claim_allowed"])
+
     def test_hamming_helpers_report_exact_structure_not_advice(self) -> None:
         self.assertEqual(hexagram.hamming_distance("屯", "蒙"), 4)
         self.assertEqual(hexagram.changed_lines("屯", "蒙"), (1, 2, 5, 6))

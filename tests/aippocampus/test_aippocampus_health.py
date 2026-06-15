@@ -341,6 +341,10 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["clean_source"]["expected_message_delta"], 2)
         self.assertIn("build_index", action_ids)
         self.assertIn("build_clean_source", action_ids)
+        self.assertLess(action_ids.index("build_clean_source"), action_ids.index("build_index"))
+        index_action = next(item for item in payload["recommended_actions"] if item["id"] == "build_index")
+        self.assertEqual(index_action["depends_on"], ["build_clean_source"])
+        self.assertEqual(index_action["blocked_until"], "build_clean_source_current")
         self.assertTrue(
             any("latest visible" in item["reason"] for item in payload["recommended_actions"])
         )
@@ -502,7 +506,7 @@ class AippocampusHealthTests(unittest.TestCase):
         trajectory = payload["health_trajectory"]
         self.assertEqual(
             trajectory["preemptive_actions"],
-            ["build_index", "build_clean_source"],
+            ["build_clean_source", "build_index"],
         )
         self.assertIn("rag_cache_missing", trajectory["preemptive_reason_codes"])
         self.assertIn("clean_source_schema_drift", trajectory["preemptive_reason_codes"])

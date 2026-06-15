@@ -28,14 +28,24 @@ TASK_FAMILY_TERMS = {
         "install plugin",
         "plugin install",
         "mcp host",
+        "mcp health",
         "host readiness",
         "verify mcp",
         "plugin readiness",
         "tools visible",
     ),
+    "product_workflow": (
+        "semantic gate",
+        "attention router",
+        "mcp health",
+        "memory_health",
+        "recall diagnostic",
+        "source-backed attention",
+        "working contract",
+    ),
 }
 
-DIRECT_GUIDANCE_FAMILIES = {"fresh_thread_recall", "host_readiness"}
+DIRECT_GUIDANCE_FAMILIES = {"fresh_thread_recall", "host_readiness", "product_workflow"}
 
 
 def _text(value: Any, limit: int = 240) -> str:

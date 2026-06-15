@@ -31,6 +31,7 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.health_actions import action, dependency_ordered_actions
 from aippocampus_runtime.health_background_cognition import background_cognition_health
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_registry import registry_health_report
@@ -174,10 +175,6 @@ def aggregate_question_health_stats(payload: Mapping[str, Any]) -> dict[str, Any
 def count_messages(rollout: Path) -> tuple[int, int | None]:
     stats = rollout_visibility_stats(rollout)
     return stats.message_count, stats.last_message_line
-
-
-def action(action_id: str, severity: str, reason: str, command: str) -> dict[str, str]:
-    return {"id": action_id, "severity": severity, "reason": reason, "command": command}
 
 
 def quote_posix_double(value: str | Path) -> str:
@@ -565,7 +562,9 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         actions.append(
             action("consider_graphify", "info", "thread size crossed the deep graph threshold", f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.')
         )
+    actions = dependency_ordered_actions(actions)
     logs = log_retention.add_health_action(actions, registry_path.resolve().parent, max_bytes=options.max_log_bytes)
+    actions = dependency_ordered_actions(actions)
     question_stats = (
         {"available": False, "reason": "not_requested"}
         if not options.include_question_stats

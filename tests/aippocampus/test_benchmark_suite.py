@@ -18,6 +18,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+import benchmark_family_promotion_candidates as family_promotion  # noqa: E402
 import benchmark_suite as suite  # noqa: E402
 from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
 
@@ -481,6 +482,16 @@ class BenchmarkSuiteTests(unittest.TestCase):
         )
         self.assertTrue(accepted["ok"])
         self.assertTrue(accepted["positive_support_present"])
+
+    def test_family_promotion_candidates_report_satisfies_benchmark_contract_linter(self) -> None:
+        report = family_promotion.build_family_promotion_candidate_report()
+        lint = benchmark_report_contract_lint(report)
+
+        self.assertTrue(lint["ok"], lint)
+        self.assertIn("supports", lint["positive_support_fields"])
+        self.assertIn("material_limits", lint["positive_support_fields"])
+        self.assertEqual(report["decision_impact"], "diagnostic_only")
+        self.assertFalse(report["quality_gate_ok"])
 
     def test_suite_report_warns_when_profile_surface_is_narrowed(self) -> None:
         with (

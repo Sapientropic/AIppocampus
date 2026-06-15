@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-PREEMPTIVE_ACTION_ORDER = ("build_index", "build_clean_source")
+PREEMPTIVE_ACTION_ORDER = ("build_clean_source", "build_index")
 PREEMPTIVE_ACTION_REASON_CODES = {
     "build_index": {
         "anchor_changed",

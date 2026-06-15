@@ -410,6 +410,97 @@ def build_source_texture(
     return out
 
 
+def _ref_line(ref: Mapping[str, Any]) -> int | None:
+    value = ref.get("line", ref.get("source_line"))
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _segment_contains_ref(segment: Mapping[str, Any], source_ref: Mapping[str, Any]) -> bool:
+    ref_line = _ref_line(source_ref)
+    start_line = _ref_line({"line": segment.get("start_line")})
+    end_line = _ref_line({"line": segment.get("end_line")})
+    if ref_line is not None and start_line is not None and end_line is not None:
+        if start_line <= ref_line <= end_line:
+            return True
+    ref_message = source_ref.get("message_id")
+    if ref_message:
+        for seg_ref in segment.get("source_refs") or []:
+            if isinstance(seg_ref, Mapping) and str(seg_ref.get("message_id") or "") == str(ref_message):
+                return True
+    return False
+
+
+def _hint_confidence(texture_row: Mapping[str, Any]) -> float:
+    kind = str(texture_row.get("signal_kind") or "")
+    if kind in {"self_correction_signal", "tool_failure_texture"}:
+        return 0.86
+    if kind in {"abandoned_direction", "process_route_note"}:
+        return 0.78
+    return 0.64
+
+
+def build_source_texture_boundary_hints(
+    canonical_segments: Iterable[Mapping[str, Any]],
+    texture_rows: Iterable[Mapping[str, Any]],
+    *,
+    limit: int = 64,
+) -> list[dict[str, Any]]:
+    """Project texture rows into optional read-model segment hints.
+
+    These hints are derived ids that point back to canonical segment/source refs.
+    They must not replace clean-source rows, mutate stable source ids, or grant
+    claim authority. Consumers may use them to choose where to look next.
+    """
+
+    segments = [dict(segment) for segment in canonical_segments]
+    hints: list[dict[str, Any]] = []
+    boundary_kinds = {
+        "self_correction_signal",
+        "tool_failure_texture",
+        "abandoned_direction",
+        "uncertainty_or_frontier_signal",
+        "process_route_note",
+    }
+    for row in texture_rows:
+        signal_kind = str(row.get("signal_kind") or "")
+        if signal_kind not in boundary_kinds:
+            continue
+        refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, Mapping)]
+        if not refs:
+            continue
+        for segment in segments:
+            if not any(_segment_contains_ref(segment, ref) for ref in refs):
+                continue
+            canonical_id = str(segment.get("segment_id") or segment.get("id") or "segment")
+            detail = str(row.get("signal_detail") or signal_kind)
+            hint_id = _stable_id("sthint", canonical_id, row.get("texture_id"), detail)
+            hints.append(
+                {
+                    "kind": "aippocampus_source_texture_boundary_hint",
+                    "hint_id": hint_id,
+                    "derived_segment_id": f"texture_hint:{canonical_id}:{hint_id.rsplit('_', 1)[-1]}",
+                    "canonical_segment_id": canonical_id,
+                    "canonical_source_refs": _dedupe_refs(segment.get("source_refs") or [])[:4],
+                    "source_refs": _dedupe_refs(refs)[:4],
+                    "boundary_source": "source_texture",
+                    "boundary_reason": detail,
+                    "signal_kind": signal_kind,
+                    "confidence": _hint_confidence(row),
+                    "truth_boundary": "texture_hint_read_model_not_source_fact",
+                    "read_model_only": True,
+                    "canonical_source_ref_mutation_allowed": False,
+                    "source_reopen_required_before_claim": True,
+                }
+            )
+            break
+        if len(hints) >= limit:
+            break
+    return hints
+
+
 def write_source_texture_sidecar(
     output_dir: Path,
     rows: list[dict[str, Any]],

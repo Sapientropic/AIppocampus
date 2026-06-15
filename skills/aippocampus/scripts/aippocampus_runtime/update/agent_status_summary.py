@@ -28,8 +28,14 @@ def compact_agent_status_report(
     *,
     schema_version: int,
 ) -> dict[str, Any]:
-    summary = report.get("summary") or {}
+    summary = report.get("summary") or report.get("post_status") or {}
     surfaces = report.get("surfaces") or {}
+    if not surfaces:
+        surfaces = {
+            str(item.get("surface")): item
+            for item in report.get("applied_surfaces") or []
+            if isinstance(item, dict) and item.get("surface")
+        }
     agent = surfaces.get("agent_callable") or {}
     plugin = surfaces.get("plugin") or {}
     needs_action = [
@@ -38,7 +44,7 @@ def compact_agent_status_report(
         if str(item) not in {"", "agent_callable"}
     ]
     actions: list[dict[str, Any]] = []
-    for surface in needs_action[:4]:
+    for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
         item = surfaces.get(surface) or {}
         command = item.get("next_command") or item.get("documented_install_command")
         reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
@@ -51,8 +57,24 @@ def compact_agent_status_report(
                 command=str(agent.get("next_command")),
             )
         )
-    if summary.get("plugin_cache_needs_action"):
+    cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None
+    if isinstance(cache_refresh, dict) and cache_refresh.get("ok") is False:
+        reason = str(
+            cache_refresh.get("blocked_reason")
+            or cache_refresh.get("installed_cache_status")
+            or "plugin cache refresh failed"
+        )
+        actions.append(
+            _compact_update_action(
+                surface="plugin_cache",
+                reason=reason,
+                command=cache_refresh.get("next_command"),
+            )
+        )
+    elif summary.get("plugin_cache_needs_action"):
         plugin_action = (plugin.get("plugin_cache_recommended_actions") or [None])[0]
+        if plugin_action is None:
+            plugin_action = (summary.get("plugin_cache_recommended_actions") or [None])[0]
         actions.append(
             _compact_update_action(
                 surface="plugin_cache",
@@ -60,6 +82,22 @@ def compact_agent_status_report(
                 command=str(plugin_action) if plugin_action else None,
             )
         )
+    agent_ready = (
+        bool(summary.get("agent_callable_ready"))
+        if "agent_callable_ready" in summary
+        else bool(agent.get("ready"))
+    )
+    agent_host_ready = (
+        bool(summary.get("agent_callable_host_ready"))
+        if "agent_callable_host_ready" in summary
+        else agent_callable_host_probe_ok(agent)
+    )
+    agent_thread_visible = (
+        bool(summary.get("agent_callable_current_thread_visible"))
+        if "agent_callable_current_thread_visible" in summary
+        else bool(agent.get("ready"))
+    )
+    agent_status = agent.get("status") or summary.get("agent_callable_status")
     public = {
         "kind": f"aippocampus_update_{report.get('mode') or 'status'}_agent_json",
         "schema_version": schema_version,
@@ -70,16 +108,19 @@ def compact_agent_status_report(
             "magic_ready": bool(summary.get("magic_ready")),
             "core_blockers": summary.get("core_blockers") or [],
             "magic_blockers": summary.get("magic_blockers") or [],
-            "agent_callable_ready": bool(agent.get("ready")),
-            "agent_callable_host_ready": agent_callable_host_probe_ok(agent),
-            "agent_callable_current_thread_visible": bool(agent.get("ready")),
-            "agent_callable_status": agent.get("status"),
+            "agent_callable_ready": agent_ready,
+            "agent_callable_host_ready": agent_host_ready,
+            "agent_callable_current_thread_visible": agent_thread_visible,
+            "agent_callable_status": agent_status,
             "needs_action": needs_action,
         },
         "agent_callable": {
-            "status": agent.get("status"),
+            "status": agent_status,
             "host_live_probe_status": (agent.get("host_live_probe") or {}).get("status"),
-            "host_live_probe_ok": (agent.get("host_live_probe") or {}).get("ok") is True,
+            "host_live_probe_ok": (
+                (agent.get("host_live_probe") or {}).get("ok") is True
+                or agent_host_ready
+            ),
             "current_thread_tool_discovery": agent.get("current_thread_tool_discovery"),
             "foreground_tools_visible": agent.get("foreground_tools_visible"),
             "next_command": agent.get("next_command"),

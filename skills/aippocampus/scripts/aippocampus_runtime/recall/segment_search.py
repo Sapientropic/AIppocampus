@@ -46,6 +46,12 @@ from aippocampus_runtime.recall.segment_metadata import (
     empty_turn_boundary_diagnostics,
     turn_boundary_diagnostics,
 )
+from aippocampus_runtime.recall.segment_search_extras import (
+    add_sidecar_arguments,
+    maybe_emit_outcome_feedback,
+    query_expansion_plan,
+)
+from aippocampus_runtime.recall.strategy_planner import select_recall_strategy
 from aippocampus_runtime.recall.structure_time import parse_datetime_utc, parse_temporal_cue
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -77,6 +83,10 @@ class SegmentSearchOptions:
     deep_candidate_budget: int | None = None
     deep_elapsed_budget_ms: int | None = None
     deep_terms_per_hop: int = 8
+    source_aliases: str | Path | None = None
+    outcome_feedback_path: str | Path | None = None
+    outcome_signal: str | None = None
+    outcome_run_id: str | None = None
 
 
 def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
@@ -331,21 +341,31 @@ def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
     anchor_path = resolve_anchor_path(str(cwd), str(options.anchors))
     query_terms = split_query_terms(patterns)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
-    expanded_terms = (
+    anchor_expanded_terms = (
         expanded_terms_from_anchors(query_terms, anchors)
         if options.mode == "hybrid"
         else query_terms
     )
+    expansion_plan = query_expansion_plan(
+        query_terms,
+        seed_terms=anchor_expanded_terms,
+        source_aliases=options.source_aliases,
+        cwd=cwd,
+    )
+    expanded_terms = expansion_plan["expanded_terms"]
     graph = (
         graph_neighbors(auto_graph_path(str(cwd)), expanded_terms)
         if options.mode == "hybrid"
         else []
     )
+    strategy = select_recall_strategy(" ".join(str(item) for item in patterns))
     return {
         "query_terms": query_terms,
         "expanded_terms": expanded_terms,
         "matched_anchors": anchors,
         "graph_neighbors": graph,
+        "query_expansion": expansion_plan["diagnostics"],
+        "recall_strategy": strategy,
     }
 
 
@@ -556,12 +576,22 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         )
         rag_context = rag_context[: options.rag_context]
         available = searched_segment_count > 0 or not planned_segments
+        mode = f"segmented-{options.mode}"
+        outcome_feedback = maybe_emit_outcome_feedback(
+            outcome_feedback_path=options.outcome_feedback_path,
+            outcome_signal=options.outcome_signal,
+            outcome_run_id=options.outcome_run_id,
+            patterns=patterns,
+            mode=mode,
+            strategy=query_payload.get("recall_strategy") or {},
+            results=results,
+        )
 
         return {
             "ok": available,
             "status": "ok" if available else "segments_unavailable",
             "source": str(manifest),
-            "mode": f"segmented-{options.mode}",
+            "mode": mode,
             "segment_count": int(data.get("segment_count") or len(data.get("segments") or [])),
             "query_terms": query_terms,
             "expanded_terms": expanded_terms,
@@ -574,6 +604,7 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
             "fanout": fanout,
             "deep_recall": deep_recall,
             "turn_boundary_diagnostics": boundary_diagnostics,
+            "outcome_feedback": outcome_feedback,
             "availability": {
                 "reason": "available" if available else "sqlite_missing",
                 "build_required": bool(missing_index_count),
@@ -606,6 +637,10 @@ def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
         deep_candidate_budget=args.deep_candidate_budget,
         deep_elapsed_budget_ms=args.deep_elapsed_budget_ms,
         deep_terms_per_hop=args.deep_terms_per_hop,
+        source_aliases=args.source_aliases,
+        outcome_feedback_path=args.outcome_feedback_path,
+        outcome_signal=args.outcome_signal,
+        outcome_run_id=args.outcome_run_id,
     )
 
 
@@ -677,6 +712,7 @@ def main() -> int:
         default=8,
         help="Maximum navigation terms extracted from source-joined hits per deep hop.",
     )
+    add_sidecar_arguments(parser)
     parser.add_argument("--show-anchors", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--max", type=int, default=30)

@@ -198,6 +198,7 @@ def status_agent_callable(
     surfaces: dict[str, dict[str, Any]],
     *,
     host_probe: dict[str, Any] | None = None,
+    foreground_tools_visible_asserted: bool = False,
 ) -> dict[str, Any]:
     config_text = _read_config_text(codex_home_path)
     plugin_ids = _configured_plugin_ids(config_text)
@@ -207,7 +208,9 @@ def status_agent_callable(
     host_probe_status = _host_probe_status(host_probe)
     foreground_override = os.environ.get("AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
     foreground_tools_visible: bool | None
-    if foreground_override in {"1", "true", "TRUE", "yes"}:
+    if foreground_tools_visible_asserted:
+        foreground_tools_visible = True
+    elif foreground_override in {"1", "true", "TRUE", "yes"}:
         foreground_tools_visible = True
     elif host_plugin_installed or host_mcp_registered:
         foreground_tools_visible = None
@@ -273,7 +276,9 @@ def status_agent_callable(
         "host_probe_missing_agent_native_tools": missing_agent_native_tools,
         "foreground_tools_visible": foreground_tools_visible,
         "foreground_tools_visibility_source": (
-            "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE"
+            "cli:--foreground-tools-visible"
+            if foreground_tools_visible_asserted
+            else "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE"
             if foreground_override
             else "current_thread_unverified_after_host_probe"
             if host_probe_status.get("ok") is True

@@ -12,7 +12,11 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.navigation import attention_hot_router, attention_route_tokens
+from aippocampus_runtime.navigation import (
+    attention_hot_router,
+    attention_route_tokens,
+    route_compatibility_diagnostics,
+)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -42,8 +46,8 @@ def _split_terms(values: Sequence[Any]) -> list[str]:
     return terms
 
 
-def _route_hints(route: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    return attention_route_tokens.route_hints_from_sources(route)
+def _route_hints(*sources: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    return attention_route_tokens.route_hints_from_sources(*sources)
 
 
 def _hint_terms(route_hints: Mapping[str, Mapping[str, Any]]) -> list[str]:
@@ -154,20 +158,53 @@ def attention_terms_for_route(route: Mapping[str, Any]) -> list[str]:
     return _split_terms([text])[:32]
 
 
-def attention_token_for_route(route: Mapping[str, Any], *, index: int) -> dict[str, Any]:
+def _compatibility_score_penalty(value: Mapping[str, Any] | None) -> float:
+    if not value:
+        return 0.0
+    try:
+        severity = int(value.get("severity") or 0)
+    except (TypeError, ValueError):
+        severity = 0
+    return min(0.36, max(0.0, severity * 0.12))
+
+
+def attention_token_for_route(
+    route: Mapping[str, Any],
+    *,
+    index: int,
+    compatibility: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     currentness = str(route.get("currentness") or "").strip() or "needs_reopen"
     source_handles = source_handles_for_attention_route(route)
-    route_hints = _route_hints(route)
+    compatibility_hint = route_compatibility_diagnostics.public_route_compatibility(
+        compatibility
+    )
+    compatibility_source: dict[str, Any] = (
+        {"route_hints": {"local_global_compatibility": compatibility_hint}}
+        if compatibility_hint
+        else {}
+    )
+    route_hints = _route_hints(route, compatibility_source)
     semantic_score = max(
         0.45 if route.get("route_topic") else 0.25,
         _semantic_hint_score(route_hints),
     )
     risk_flags = [*_as_list(route.get("risk_flags")), *_topology_risk_codes(route_hints)]
+    if compatibility_hint and compatibility_hint["severity"] > 0:
+        risk_flags.append(f"route_bundle_{compatibility_hint['status']}")
+    conflict = str(route.get("conflict") or "none")
+    if (
+        compatibility_hint
+        and compatibility_hint["severity"] > 0
+        and conflict in {"", "none", "unknown"}
+    ):
+        conflict = f"route_bundle_{compatibility_hint['status']}"
     token: dict[str, Any] = {
         "kind": "aippocampus_attention_route_token",
         "token_id": str(route.get("route_id") or f"attention_route_{index}"),
         "route_token_level": "source_span_token" if source_handles else "episode_or_question_token",
         "source_handles": source_handles,
+        "hard_masks": _as_list(route.get("hard_masks")),
         "route_label": str(route.get("route_label") or ""),
         "why_may_matter": str(route.get("why_this_may_matter") or ""),
         "scope": "project:AIppocampus",
@@ -177,7 +214,7 @@ def attention_token_for_route(route: Mapping[str, Any], *, index: int) -> dict[s
             "salience": "high" if index < 2 else "medium",
             "currentness": currentness,
             "privacy": "public",
-            "conflict": str(route.get("conflict") or "none"),
+            "conflict": conflict,
         },
         "route_features": {
             "terms": attention_terms_for_route(route),
@@ -286,6 +323,7 @@ def rerank_routes_with_attention_router(
     routes: Sequence[Mapping[str, Any]],
     max_routes: int,
     project: str = "AIppocampus",
+    compatibility_diagnostics: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Return routes reordered by attention-router packet score.
 
@@ -296,8 +334,20 @@ def rerank_routes_with_attention_router(
     """
 
     original_routes = [dict(route) for route in routes]
+    compatibility_report = route_compatibility_diagnostics.report_for_routes(
+        original_routes,
+        compatibility_diagnostics,
+    )
+    compatibility_by_route = route_compatibility_diagnostics.compatibility_by_route_id(
+        original_routes,
+        compatibility_diagnostics,
+    )
     tokens = [
-        attention_token_for_route(route, index=index)
+        attention_token_for_route(
+            route,
+            index=index,
+            compatibility=compatibility_by_route.get(str(route.get("route_id") or "")),
+        )
         for index, route in enumerate(original_routes)
     ]
     query_terms = set(_split_terms([query]))
@@ -316,9 +366,14 @@ def rerank_routes_with_attention_router(
         if packet.get("emitted") and packet.get("output_mode") == "reopenable_route":
             token_terms = _token_terms(tokens[index]) if index < len(tokens) else set()
             query_overlap = len(query_terms & token_terms)
+            route_id = str(original_routes[index].get("route_id") or "")
+            compatibility_penalty = _compatibility_score_penalty(
+                compatibility_by_route.get(route_id)
+            )
+            raw_score = float(_as_dict(packet.get("router_diagnostics")).get("score") or 0.0)
             ranked.append(
                 (
-                    float(_as_dict(packet.get("router_diagnostics")).get("score") or 0.0),
+                    raw_score - compatibility_penalty,
                     query_overlap,
                     len(token_terms),
                     index,
@@ -358,8 +413,6 @@ def rerank_routes_with_attention_router(
         selected_index = None
         selected_packet = None
         selected_route = None
-    selected_public = public_attention_packet(selected_packet)
-    selected_route_id = str(selected_public.get("route_id") or "")
     original_top = str(original_routes[0].get("route_id") or "") if original_routes else ""
     new_top = str(reordered[0].get("route_id") or "") if reordered else ""
     top_route_changed = bool(original_top and new_top and original_top != new_top)
@@ -368,6 +421,39 @@ def rerank_routes_with_attention_router(
         route=selected_route,
         packet=selected_packet,
     )
+    original_top_terms = set(attention_terms_for_route(original_routes[0])) if original_routes else set()
+    original_top_overlap = len(query_terms & original_top_terms)
+    promotion_blocked_lower_cue_fit = bool(
+        top_route_changed
+        and selected_overlap < original_top_overlap
+        and not helpfulness["explicit_bridge_reason_present"]
+    )
+    blocked_candidate_route_id = new_top if promotion_blocked_lower_cue_fit else ""
+    if promotion_blocked_lower_cue_fit and original_routes:
+        reordered = [
+            dict(original_routes[0]),
+            *[
+                route
+                for route in reordered
+                if str(route.get("route_id") or "") != original_top
+            ],
+        ]
+        selected_index = 0
+        selected_route = original_routes[0]
+        selected_packet = packets[0] if packets else None
+        selected_score = float(
+            _as_dict(_as_dict(selected_packet or {}).get("router_diagnostics")).get("score") or 0.0
+        )
+        selected_overlap = original_top_overlap
+        selected_specificity = len(original_top_terms)
+        top_route_changed = False
+        helpfulness = route_helpfulness_diagnostics(
+            query=query,
+            route=selected_route,
+            packet=selected_packet,
+        )
+    selected_public = public_attention_packet(selected_packet)
+    selected_route_id = str(selected_public.get("route_id") or "")
     applied_but_no_help = bool(
         ranked_indexes
         and not top_route_changed
@@ -388,7 +474,12 @@ def rerank_routes_with_attention_router(
         "selected_query_term_overlap_count": selected_overlap,
         "selected_route_term_count": selected_specificity,
         "top_route_changed": top_route_changed,
+        "promotion_blocked_lower_cue_fit": promotion_blocked_lower_cue_fit,
+        "promotion_blocked_route_id": blocked_candidate_route_id or None,
         "attention_router_applied_but_no_help": applied_but_no_help,
+        "compatibility_diagnostic_count": compatibility_report["diagnostic_count"],
+        "compatibility_affected_route_count": compatibility_report["affected_route_count"],
+        "compatibility_boundary": compatibility_report["boundary"],
         **helpfulness,
         "foreground_packet_bytes": packet_bytes(selected_public) if selected_public else 0,
         "selected_packet": selected_public,
@@ -409,6 +500,7 @@ def maybe_rerank_routes_with_attention_router(
     routes: Sequence[Mapping[str, Any]],
     max_routes: int,
     project: str = "AIppocampus",
+    compatibility_diagnostics: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not enabled:
         return [dict(route) for route in routes], disabled_attention_router_diagnostics()
@@ -417,6 +509,7 @@ def maybe_rerank_routes_with_attention_router(
         routes=routes,
         max_routes=max_routes,
         project=project,
+        compatibility_diagnostics=compatibility_diagnostics,
     )
 
 
@@ -436,6 +529,9 @@ def metrics_for_attention_navigation(diagnostics: Mapping[str, Any]) -> dict[str
         ),
         "attention_router_foreground_packet_bytes": int(
             diagnostics.get("foreground_packet_bytes") or 0
+        ),
+        "attention_router_compatibility_diagnostic_count": int(
+            diagnostics.get("compatibility_diagnostic_count") or 0
         ),
     }
 
