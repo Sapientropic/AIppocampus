@@ -162,11 +162,7 @@ def _signature(row: Mapping[str, Any]) -> dict[str, str]:
         "target_class": _text(row, "target_class", "unknown"),
         "target_fingerprint": _target_fingerprint(row),
         "path_category_fingerprint": _path_category_fingerprint(row),
-        "workspace_or_environment_profile": _text(
-            row,
-            "workspace_or_environment_profile",
-            "unknown",
-        ),
+        "workspace_or_environment_profile": _text(row, "workspace_or_environment_profile", "unknown"),
         "scope": _text(row, "scope", "project_or_task_family"),
         "freshness_window": _text(row, "freshness_window", "recent"),
     }
@@ -739,19 +735,61 @@ def extract_workflow_candidates(
     existing_assets: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, Any]]:
     assets = existing_assets or {}
-    skill_names = {str(item) for item in assets.get("skills", [])}
+    asset_order = (
+        "skills",
+        "aippo_clauses",
+        "docs_routes",
+        "checklists",
+        "automations",
+        "subagents",
+        "action_hints",
+        "recall_routes",
+    )
+    asset_index = {
+        kind: {str(item) for item in assets.get(kind, [])}
+        for kind in asset_order
+    }
+
+    def existing_asset(workflow: str) -> tuple[str, str]:
+        for kind in asset_order:
+            if workflow in asset_index[kind]:
+                return kind, workflow
+        return "", ""
+
+    def transferability_for(finding: Mapping[str, Any], workflow: str) -> str:
+        scope = str(finding.get("scope") or "").casefold()
+        profile = str(finding.get("workspace_or_environment_profile") or "").casefold()
+        material = " ".join(
+            [
+                workflow.casefold(),
+                str(finding.get("finding_kind") or "").casefold(),
+                " ".join(str(item).casefold() for item in finding.get("reason_codes") or []),
+            ]
+        )
+        if scope.startswith("machine:") or profile.startswith("local-only") or "path" in material:
+            return "this_machine_only"
+        if "environment" in material or "toolchain" in material:
+            return "this_toolchain_only"
+        if scope.startswith("project:"):
+            return "this_repo_only"
+        if workflow in {"stable_repeated_manual_workflow", "cheap_preflight_before_broad_test"}:
+            return "general_agent_workflow"
+        return "this_project_family"
+
     candidates: list[dict[str, Any]] = []
     for finding in findings:
         occurrence_count = int(finding.get("occurrence_count") or 0)
         confidence = str(finding.get("confidence") or "medium")
         workflow = str(finding.get("workflow_family") or finding.get("finding_kind") or "workflow")
+        transferability = transferability_for(finding, workflow)
+        existing_kind, existing_id = existing_asset(workflow)
         if occurrence_count < 2 or confidence == "low":
             form = "skip"
             skip_reason = "thin_or_one_off_evidence"
-        elif workflow in skill_names:
-            form = "extend_existing_skill"
+        elif existing_kind:
+            form = "extend_existing_skill" if existing_kind == "skills" else "extend_existing_asset"
             skip_reason = ""
-        elif workflow == "automation_candidate" or str(finding.get("scope") or "").startswith("machine:"):
+        elif workflow == "automation_candidate" or transferability == "this_machine_only":
             form = "create_automation"
             skip_reason = ""
         elif finding.get("finding_kind") == "semantic_context_miss":
@@ -771,6 +809,15 @@ def extract_workflow_candidates(
                 "repeated_workflow_summary": workflow,
                 "recommended_form": form,
                 "skip_reason": skip_reason,
+                "transferability": transferability,
+                "existing_asset_kind": existing_kind,
+                "existing_asset_id": existing_id,
+                "asset_match_reason": "workflow_family_exact_match" if existing_kind else "",
+                "packaging_boundary": (
+                    "machine_local_lesson_not_general_skill"
+                    if transferability == "this_machine_only"
+                    else "asset_creation_requires_review"
+                ),
                 "source_refs": _safe_refs(finding.get("source_refs")),
                 "source_evidence_count": len(_safe_refs(finding.get("source_refs"))),
                 "frequency": occurrence_count,
@@ -784,7 +831,9 @@ def extract_workflow_candidates(
                 "reason_codes": [
                     "workflow_candidate_detected",
                     "asset_creation_requires_explicit_action",
-                    *(["existing_asset_checked"] if skill_names else []),
+                    *(["existing_asset_checked"] if any(asset_index.values()) else []),
+                    *([f"existing_{existing_kind}_matched"] if existing_kind else []),
+                    f"transferability:{transferability}",
                 ],
             }
         )

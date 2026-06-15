@@ -125,19 +125,21 @@ Useful portable commands:
 - Check the local provider matrix without writing artifacts:
   `aippocampus onboard --provider auto --status`.
 - Search clean source: `aippocampus search "query" --cwd "$PWD"`.
+- For module fallbacks, use `python3 -m ...` on macOS/Linux, `py -m ...`
+  on Windows, or `python -m ...` only inside an activated virtualenv.
 - Run deterministic active recall for vague continuity prompts:
-  `python -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
+  `python3 -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
 - Locate the current rollout when exact source location matters:
-  `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
+  `python3 -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
 - Recover the latest assistant closeout:
-  `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+  `python3 -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
 
 Repair and setup are explicit operator actions, not ambient prompt behavior:
 
 - Build the daily source layer:
-  `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
+  `python3 -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
 - Build or refresh the index:
-  `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
+  `python3 -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
 - First-install or full-machine onboarding after explicit user consent:
   `aippocampus onboard --provider codex --all --format json`.
 - Claude Code transcript onboarding uses an explicit provider; preview first,
@@ -149,7 +151,7 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
   `docs/guides/setup/claude-code-mcp.md`; Claude Code onboarding does not imply
   AIppocampus Claude hook support.
 - Register an old rollout:
-  `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
+  `python3 -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
 - Inspect MCP only when a plugin or agent host needs it:
   `aippocampus mcp list-tools`.
 

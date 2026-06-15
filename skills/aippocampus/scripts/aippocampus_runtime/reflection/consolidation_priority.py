@@ -563,6 +563,17 @@ def _event_from_row(
         producer = "frontier_question"
         signal_type = "frontier_question"
         strength = _clamp(row.get("confidence"), default=0.7)
+    elif kind == "aippocampus_semantic_learning_hypothesis" or event_type == "semantic_learning_hypothesis":
+        refs = _refs_from_row(row)
+        status = str(row.get("status") or "").casefold()
+        privacy = str(row.get("privacy") or row.get("privacy_domain") or "").casefold()
+        if status in {"review_only", "retired", "stale", "blocked"} or privacy in {"private", "restricted", "blocked"}:
+            return None
+        if not refs:
+            return None
+        producer = "frontier_question"
+        signal_type = "frontier_question"
+        strength = _clamp(row.get("confidence"), default=0.55)
     else:
         return None
 

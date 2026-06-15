@@ -185,6 +185,39 @@ class ConsolidationPriorityTests(unittest.TestCase):
         self.assertIn("frontier_question", reasons)
         self.assertIn("failed_command", reasons)
 
+    def test_semantic_learning_hypothesis_enters_review_priority_when_source_backed(self) -> None:
+        events = priority.events_from_candidate_rows(
+            [
+                {
+                    "kind": "aippocampus_semantic_learning_hypothesis",
+                    "status": "candidate",
+                    "source_refs": [source_ref(43)],
+                    "confidence": 1.0,
+                    "summary": "Review whether this recurring trap is useful.",
+                },
+                {
+                    "kind": "aippocampus_semantic_learning_hypothesis",
+                    "status": "review_only",
+                    "source_refs": [source_ref(44)],
+                },
+                {
+                    "kind": "aippocampus_semantic_learning_hypothesis",
+                    "status": "candidate",
+                    "privacy": "private",
+                    "source_refs": [source_ref(45)],
+                },
+            ],
+            thread_id="session:priority-test",
+            workspace="AIppocampus",
+            created_at="2026-06-09T02:30:00Z",
+        )
+        report = priority.priority_queue_projection(events)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["producer"], "frontier_question")
+        self.assertEqual(events[0]["truth_status"], "priority_observation_not_memory_truth")
+        self.assertEqual(report["eligible_count"], 1)
+
     def test_append_only_public_report_omits_raw_refs_and_private_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             events_path = Path(tmp) / "consolidation-priority.jsonl"

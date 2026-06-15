@@ -362,7 +362,7 @@ export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 Use a repo-local virtual environment for verification tools:
 
 ```sh
-python -m venv .venv
+python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
@@ -379,7 +379,7 @@ repair only that virtualenv:
 
 ```sh
 chflags -R nohidden .venv
-python tools/aippocampus/run_tests.py --tier quick
+python3 tools/aippocampus/run_tests.py --tier quick
 ```
 
 If direct commands still fail and specific `.pth` files remain hidden after
@@ -387,7 +387,7 @@ clearing the tree, clear those files too:
 
 ```sh
 find .venv -name '*.pth' -exec chflags nohidden {} +
-python tools/aippocampus/run_tests.py --tier quick
+python3 tools/aippocampus/run_tests.py --tier quick
 ```
 
 Copy the installable skill package into Codex home:
@@ -410,8 +410,8 @@ Maintainer verification from a repository checkout, not required for a first
 recall, starts with the changed-surface planner:
 
 ```sh
-python tools/aippocampus/test_plan.py --json
-python tools/aippocampus/docs/check_docs_health.py --json
+python3 tools/aippocampus/test_plan.py --json
+python3 tools/aippocampus/docs/check_docs_health.py --json
 ```
 
 Use targeted tests or `quick` while editing. Use `pr` as the broad pre-push
@@ -421,7 +421,7 @@ includes `quick`, so do not run both as closeout ceremony.
 When you do run Ruff, use the staged hard gate from `pyproject.toml`:
 
 ```sh
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
+python3 -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 ```
 
 Broader `--select ALL --statistics` output is advisory lint debt, not a normal
@@ -431,8 +431,8 @@ For benchmark work from a fresh clone, install the stable benchmark extra and
 run the deterministic smoke lane before attempting broader benchmark tiers:
 
 ```sh
-python -m pip install -e ".[benchmark]"
-python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
+python3 -m pip install -e ".[benchmark]"
+python3 tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
 ```
 
 The `benchmark` extra is currently empty because the deterministic benchmark
@@ -445,7 +445,7 @@ affordances, host hooks, or provider-facing docs, run the provider conformance
 kit:
 
 ```sh
-python benchmarks/aippocampus/benchmark_provider_conformance.py --json
+python3 benchmarks/aippocampus/benchmark_provider_conformance.py --json
 ```
 
 This kit uses public-safe fixtures plus real `generic-jsonl` and `claude-code`
@@ -484,7 +484,7 @@ surfaces.
 For a repo-level Stage 0-5 public-readiness smoke, run:
 
 ```sh
-python ./tools/aippocampus/smoke/run_stage_0_5_smoke.py --repo-root . --json
+python3 ./tools/aippocampus/smoke/run_stage_0_5_smoke.py --repo-root . --json
 ```
 
 This runs the documented local smoke gates, package-level plugin staging,
@@ -500,7 +500,7 @@ coverage rather than an overall pass.
 For the source-evidence selection slice directly, run:
 
 ```sh
-python ./tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py --json
+python3 ./tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py --json
 ```
 
 By default this is a semantic-sidecar-required smoke: it only selects
@@ -639,7 +639,7 @@ the key.
 Maintainers can smoke-test the OS credential-store bridge separately:
 
 ```sh
-python tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py --source auto --json
+python3 tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py --source auto --json
 ```
 
 The smoke creates a temporary test credential in the selected OS store, verifies
@@ -652,8 +652,8 @@ paths. Unsupported platforms or missing OS store tools return an explicit
 Package modules remain available when the facade is not installed:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.mcp.server --list-tools
-PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.onboarding.facade --provider codex --all --format json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.mcp.server --list-tools
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python3 -m aippocampus_runtime.onboarding.facade --provider codex --all --format json
 ```
 
 Tool errors use stable JSON payloads inside MCP `content` text:
@@ -689,7 +689,7 @@ fresh install from an existing registry that simply has no matching threads.
 Build the repo-local Codex plugin package:
 
 ```sh
-python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
+python3 ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 ```
 
 Build output is restricted to `dist/`. The plugin bundles the skill and MCP
@@ -713,7 +713,7 @@ smokes and record the exact client/runtime used.
 Run the package-level install/uninstall smoke:
 
 ```sh
-python ./plugins/aippocampus/smoke_plugin_install.py --repo-root . --json
+python3 ./plugins/aippocampus/smoke_plugin_install.py --repo-root . --json
 ```
 
 This stages the built plugin in a temporary plugin root, runs the bundled MCP
@@ -728,7 +728,7 @@ When you intentionally want to exercise the real Codex app-server plugin
 manager and host MCP path, run:
 
 ```sh
-python ./plugins/aippocampus/smoke_real_codex_host.py --repo-root . --json
+python3 ./plugins/aippocampus/smoke_real_codex_host.py --repo-root . --json
 ```
 
 This creates a run-id-scoped local marketplace, installs the plugin through the
@@ -772,9 +772,9 @@ module-level commands below only when the `aippocampus` facade is not installed
 or you are testing the packaged skill copy directly:
 
 ```sh
-PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.hooks.install_prompt status --json
-PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.hooks.install_prompt status --last --json
-PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.hooks.install_lifecycle status --json
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python3 -m aippocampus_runtime.hooks.install_prompt status --json
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python3 -m aippocampus_runtime.hooks.install_prompt status --last --json
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python3 -m aippocampus_runtime.hooks.install_lifecycle status --json
 ```
 
 Use `install` or `uninstall` on those scripts when you intentionally want to
@@ -789,40 +789,40 @@ local paths.
 The first sync backend is a local folder:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle status --sync-dir <folder> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle push --sync-dir <folder> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle pull --sync-dir <folder> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle repair --sync-dir <folder> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle status --sync-dir <folder> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle push --sync-dir <folder> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle pull --sync-dir <folder> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle repair --sync-dir <folder> --json
 ```
 
 Raw rollouts are excluded from plaintext sync. Normal `--include-raw` usage
 requires encrypted sync:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle status --sync-dir <folder> --require-encrypted --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle status --sync-dir <folder> --require-encrypted --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
 ```
 
 Device-key helpers keep local private identity material under the registry's
 encrypted sync state and store only public trusted recipients for future pushes:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key init --registry-dir <registry> --device-name <name> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key recipient --registry-dir <registry>
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key trust --registry-dir <registry> --recipient <second-device-recipient> --device-name <name> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key trust --registry-dir <registry> --recipient <offline-recovery-recipient> --device-name paper-recovery-kit --recovery --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key list --registry-dir <registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key revoke --registry-dir <registry> --recipient <old-recipient> --dry-run --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key init --registry-dir <registry> --device-name <name> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key recipient --registry-dir <registry>
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key trust --registry-dir <registry> --recipient <second-device-recipient> --device-name <name> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key trust --registry-dir <registry> --recipient <offline-recovery-recipient> --device-name paper-recovery-kit --recovery --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key list --registry-dir <registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key revoke --registry-dir <registry> --recipient <old-recipient> --dry-run --json
 ```
 
 The key-provider status surface is explicit and fail-closed:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key provider-status --registry-dir <registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key provider-configure --registry-dir <registry> --provider file --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key provider-configure --registry-dir <registry> --provider windows-credential-manager --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key provider-status --registry-dir <registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key provider-configure --registry-dir <registry> --provider file --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin key provider-configure --registry-dir <registry> --provider windows-credential-manager --json
 ```
 
 Current public output reports the active provider, availability, and whether a
@@ -863,11 +863,11 @@ encrypted target, run encrypted repair or pull, then explicitly clean up the old
 plaintext files:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --dry-run --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle repair --sync-dir <new-encrypted-folder> --require-encrypted --identity-file <age-identity> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin cleanup-plaintext --sync-dir <old-plaintext-folder> --dry-run --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin cleanup-plaintext --sync-dir <old-plaintext-folder> --confirm --verified-encrypted-target --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --dry-run --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle repair --sync-dir <new-encrypted-folder> --require-encrypted --identity-file <age-identity> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-plaintext --sync-dir <old-plaintext-folder> --dry-run --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-plaintext --sync-dir <old-plaintext-folder> --confirm --verified-encrypted-target --json
 ```
 
 Cleanup reports and deletes only plaintext files managed by the plaintext sync
@@ -896,10 +896,10 @@ cleanup:
 export AIPPOCAMPUS_OBJECT_STORE_URL="https://object-store.example/bucket"
 export AIPPOCAMPUS_OBJECT_PREFIX="aippocampus/sync"
 export AIPPOCAMPUS_OBJECT_STORE_TOKEN="<optional bearer token>"
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli status --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli push --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli pull --registry-dir <target-registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli repair --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli status --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli pull --registry-dir <target-registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli repair --json
 ```
 
 For S3-compatible providers, use provider-aware signing instead of bearer
@@ -911,7 +911,7 @@ export AIPPOCAMPUS_OBJECT_BUCKET="aippocampus-memory"
 export AIPPOCAMPUS_OBJECT_REGION="us-east-1"
 export AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID="<access key id>"
 export AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY="<secret access key>"
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli push --encrypt --recipient <age-recipient> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --encrypt --recipient <age-recipient> --json
 ```
 
 For Cloudflare R2, set `AIPPOCAMPUS_OBJECT_PROVIDER=r2` and
@@ -925,10 +925,10 @@ Raw rollouts are still excluded from plaintext object-storage sync. Use
 encrypted:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli push --encrypt --recipient <age-recipient> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli status --require-encrypted --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli repair --require-encrypted --identity-file <age-identity> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --encrypt --recipient <age-recipient> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli status --require-encrypted --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli repair --require-encrypted --identity-file <age-identity> --json
 ```
 
 Object-storage plaintext migration uses the same admin CLI. The target prefix
@@ -936,11 +936,11 @@ must be fresh; dry-run reads the plaintext manifest and reports managed objects
 without uploading or deleting:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --dry-run --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli repair --require-encrypted --object-prefix <new-encrypted-prefix> --identity-file <age-identity> --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --dry-run --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --confirm --verified-encrypted-target --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --dry-run --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli repair --require-encrypted --object-prefix <new-encrypted-prefix> --identity-file <age-identity> --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --dry-run --json
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --confirm --verified-encrypted-target --json
 ```
 
 Object cleanup deletes only objects listed in the plaintext sync manifest,
@@ -952,7 +952,7 @@ The local object-storage smoke verifies the protocol path without requiring clou
 credentials:
 
 ```sh
-python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
+python3 ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```
 
 To verify a real managed provider or remote object-store environment, configure
@@ -960,7 +960,7 @@ To verify a real managed provider or remote object-store environment, configure
 provider credentials, then run the encrypted real-provider smoke:
 
 ```sh
-python ./tools/aippocampus/smoke/smoke_real_provider_encrypted_sync.py --json
+python3 ./tools/aippocampus/smoke/smoke_real_provider_encrypted_sync.py --json
 ```
 
 If those variables are absent, the command should fail early with a missing

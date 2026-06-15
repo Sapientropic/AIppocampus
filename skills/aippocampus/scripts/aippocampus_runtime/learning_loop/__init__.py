@@ -22,9 +22,15 @@ from aippocampus_runtime.learning_loop.core import (
     project_action_time_guidance,
     project_guidance_to_route_readiness,
 )
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (
+    apply_effectiveness_to_guidance,
+    ledger_rows_from_guidance_outcomes,
+    summarize_effectiveness_ledger,
+)
 
 __all__ = [
     "adapt_behavior_events_to_review_signals",
+    "apply_effectiveness_to_guidance",
     "build_contract_from_learning_findings",
     "build_learning_action_time_packet",
     "build_learning_aippo_bridge_report",
@@ -35,6 +41,8 @@ __all__ = [
     "extract_learning_activations",
     "extract_workflow_candidates",
     "learning_findings_to_aippo_source_rows",
+    "ledger_rows_from_guidance_outcomes",
     "project_action_time_guidance",
     "project_guidance_to_route_readiness",
+    "summarize_effectiveness_ledger",
 ]

@@ -6,13 +6,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.hooks.action_hint_cache import load_action_hint_records_with_diagnostics
+from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
 from aippocampus_runtime.hooks.host_boundary import add_host_integration
 from aippocampus_runtime.hooks.install_prompt import (
     load_hooks,
@@ -25,6 +29,14 @@ DEFAULT_ACTION_HINT_MODULE = "aippocampus_runtime.hooks.action_hint"
 DEFAULT_ACTION_HINT_TIMEOUT_SECONDS = 3
 ACTION_HINT_EVENT = "PreToolUse"
 SUPPORTED_HOST = "codex"
+CACHE_ARG_RE = re.compile(r"""--cache-jsonl\s+(?:"([^"]+)"|'([^']+)'|(\S+))""")
+
+
+def positive_timeout(value: str | int) -> int:
+    timeout = int(value)
+    if timeout < 1:
+        raise argparse.ArgumentTypeError("--timeout must be at least 1 second")
+    return timeout
 
 
 def hooks_json_path(codex_home_path: Path | None = None) -> Path:
@@ -59,10 +71,11 @@ def action_hint_hook(
     cache_jsonl: Path | None = None,
     timeout: int = DEFAULT_ACTION_HINT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
+    timeout = positive_timeout(timeout)
     return {
         "type": "command",
         "command": command_for(module=module, cache_jsonl=cache_jsonl),
-        "timeout": int(timeout),
+        "timeout": timeout,
     }
 
 
@@ -75,6 +88,89 @@ def is_action_hint_handler(
     return module in command or "aippocampus_runtime.hooks.action_hint" in command
 
 
+def cache_path_from_command(command: str) -> Path | None:
+    match = CACHE_ARG_RE.search(command)
+    if not match:
+        return None
+    raw = next((group for group in match.groups() if group), "")
+    if not raw:
+        return None
+    raw = raw.strip().strip('"').strip("'")
+    return Path(raw)
+
+
+def _cache_status(commands: list[str]) -> dict[str, Any]:
+    paths = [cache_path_from_command(command) for command in commands]
+    valid_paths = [path for path in paths if path is not None]
+    if not valid_paths:
+        return {
+            "cache_status": "without_cache_path",
+            "cache_path_configured": False,
+            "cache_exists": False,
+            "cache_record_count": 0,
+            "fresh_record_count": 0,
+            "expired_record_count": 0,
+            "malformed_cache_line_count": 0,
+            "provider_counts": {},
+            "cache_path": "",
+            "next_command": (
+                "aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json; "
+                "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json"
+            ),
+        }
+    path = valid_paths[0]
+    if not path.exists():
+        return {
+            "cache_status": "with_missing_cache_file",
+            "cache_path_configured": True,
+            "cache_exists": False,
+            "cache_record_count": 0,
+            "fresh_record_count": 0,
+            "expired_record_count": 0,
+            "malformed_cache_line_count": 0,
+            "provider_counts": {},
+            "cache_path": str(path),
+            "next_command": f"aippocampus hooks action refresh-cache --cache-jsonl {path} --write --json",
+        }
+    cache = load_action_hint_records_with_diagnostics(path)
+    records = [row for row in cache.get("records") or [] if isinstance(row, Mapping)]
+    now_unix = time.time()
+    provider_counts: dict[str, int] = {}
+    fresh_count = 0
+    expired_count = 0
+    for record in records:
+        provider = str(record.get("provider_family") or "unknown")
+        provider_counts[provider] = provider_counts.get(provider, 0) + 1
+        freshness = str(record.get("freshness") or "").casefold()
+        try:
+            expires_at = float(record.get("expires_at_unix") or 0)
+        except (TypeError, ValueError):
+            expires_at = 0.0
+        if freshness in BLOCKED_STATES or (expires_at and expires_at <= now_unix):
+            expired_count += 1
+        else:
+            fresh_count += 1
+    count = len(records)
+    if count == 0:
+        cache_status = "with_empty_cache"
+    elif fresh_count:
+        cache_status = "with_fresh_records"
+    else:
+        cache_status = "with_expired_records"
+    return {
+        "cache_status": cache_status,
+        "cache_path_configured": True,
+        "cache_exists": True,
+        "cache_record_count": count,
+        "fresh_record_count": fresh_count,
+        "expired_record_count": expired_count,
+        "malformed_cache_line_count": int(cache.get("malformed_cache_line_count") or 0),
+        "provider_counts": provider_counts,
+        "cache_path": str(path),
+        "next_command": f"aippocampus hooks action refresh-cache --cache-jsonl {path} --write --json",
+    }
+
+
 def event_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
     hooks = data.setdefault("hooks", {})
     groups = hooks.setdefault(ACTION_HINT_EVENT, [])
@@ -85,7 +181,7 @@ def event_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _unsupported(path: Path, *, host: str) -> dict[str, Any]:
-    return add_host_integration(
+    result = add_host_integration(
         {
             "installed": False,
             "changed": False,
@@ -93,8 +189,17 @@ def _unsupported(path: Path, *, host: str) -> dict[str, Any]:
             "surface_event": ACTION_HINT_EVENT,
             "event_supported": False,
             "support_status": f"unsupported_host:{host}",
+            "requested_host": host,
+            "effective_host": SUPPORTED_HOST,
         }
     )
+    result["host_integration"] = {
+        **dict(result.get("host_integration") or {}),
+        "status": f"unsupported_host:{host}",
+        "requested_host": host,
+        "effective_host": SUPPORTED_HOST,
+    }
+    return result
 
 
 def install(
@@ -258,23 +363,53 @@ def status(
                 "event_supported": True,
                 "support_status": "supported_by_codex_hooks_json",
                 "commands": commands,
+                **(_cache_status(commands) if commands else {
+                    "cache_status": "not_installed",
+                    "cache_path_configured": False,
+                    "cache_exists": False,
+                    "cache_record_count": 0,
+                    "fresh_record_count": 0,
+                    "expired_record_count": 0,
+                    "malformed_cache_line_count": 0,
+                    "provider_counts": {},
+                    "cache_path": "",
+                    "next_command": "aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json",
+                }),
             }
         )
-    if not include_private_paths:
-        result["path"] = path.name
-        result["path_redacted"] = True
-        raw_commands = result.get("commands")
-        if isinstance(raw_commands, list) and raw_commands:
-            result["commands"] = ["<redacted:hook-command>" for _ in raw_commands]
-            result["commands_redacted"] = True
-        else:
-            result["commands_redacted"] = False
-        result.pop("command", None)
-    return result
+    return result if include_private_paths else redact_public_result(result, path=path)
+
+
+def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
+    public = dict(result)
+    raw_cache_path = str(public.get("cache_path") or "")
+    public["path"] = path.name
+    public["path_redacted"] = True
+    raw_commands = public.get("commands")
+    if isinstance(raw_commands, list) and raw_commands:
+        public["commands"] = ["<redacted:hook-command>" for _ in raw_commands]
+        public["commands_redacted"] = True
+    else:
+        public["commands_redacted"] = False
+    if public.get("cache_path"):
+        public["cache_path"] = "<redacted:cache-jsonl>"
+        public["cache_path_redacted"] = True
+    else:
+        public["cache_path_redacted"] = False
+    next_command = public.get("next_command")
+    if raw_cache_path and isinstance(next_command, str):
+        public["next_command"] = next_command.replace(raw_cache_path, "<local-cache.jsonl>")
+    public.pop("command", None)
+    return public
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        epilog=(
+            "Refresh prepared cache through the facade with: "
+            "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json"
+        )
+    )
     parser.add_argument(
         "action",
         choices=["install", "uninstall", "status"],
@@ -285,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hooks-json")
     parser.add_argument("--host", default=SUPPORTED_HOST)
     parser.add_argument("--cache-jsonl")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_ACTION_HINT_TIMEOUT_SECONDS)
+    parser.add_argument("--timeout", type=positive_timeout, default=DEFAULT_ACTION_HINT_TIMEOUT_SECONDS)
     parser.add_argument("--include-private-paths", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
@@ -294,11 +429,19 @@ def main(argv: list[str] | None = None) -> int:
     path = Path(args.hooks_json).resolve() if args.hooks_json else hooks_json_path(root)
     cache_jsonl = Path(args.cache_jsonl).resolve() if args.cache_jsonl else None
     if args.action == "install":
-        result = install(path, host=args.host, cache_jsonl=cache_jsonl, timeout=args.timeout)
+        install_result = install(path, host=args.host, cache_jsonl=cache_jsonl, timeout=args.timeout)
+        status_result = status(path, host=args.host, include_private_paths=True)
+        result = {
+            **status_result,
+            "changed": bool(install_result.get("changed")),
+            "install_action": "install",
+        }
     elif args.action == "uninstall":
         result = uninstall(path)
     else:
-        result = status(path, host=args.host, include_private_paths=args.include_private_paths)
+        result = status(path, host=args.host, include_private_paths=True)
+    if not args.include_private_paths:
+        result = redact_public_result(result, path=path)
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

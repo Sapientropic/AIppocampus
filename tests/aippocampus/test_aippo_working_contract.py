@@ -113,17 +113,20 @@ class AIppoWorkingContractTests(unittest.TestCase):
             report["metrics"]["foreground_packet_bytes"],
             report["foreground_packet_budget_bytes"],
         )
-        self.assertEqual(packet["active_clause_count"], 2)
+        self.assertEqual(packet["active_clause_count"], len(packet["active_clause_ids"]))
         self.assertEqual(report["metrics"]["available_active_clause_count"], 3)
         self.assertEqual(report["metrics"]["suppressed_clause_count"], 3)
         self.assertGreater(report["metrics"]["active_clause_information_density"], 0)
         self.assertEqual(report["metrics"]["generic_safety_posture_only_count"], 0)
-        self.assertGreaterEqual(report["metrics"]["stable_workflow_search_avoided_count"], 2)
+        self.assertGreaterEqual(
+            report["metrics"]["stable_workflow_search_avoided_count"],
+            len(packet["active_clause_ids"]),
+        )
         self.assertEqual(report["metrics"]["aippo_next_action_delta_count"], 1)
         self.assertGreaterEqual(report["metrics"]["stale_clause_suppressed_count"], 2)
         self.assertGreaterEqual(
             report["metrics"]["low_risk_guidance_allowed_without_reopen_count"],
-            2,
+            len(packet["active_clause_ids"]),
         )
         self.assertEqual(report["continuity_usefulness"]["kind"], "continuity_usefulness")
         self.assertTrue(report["continuity_usefulness"]["quality_gate_ok"])
@@ -136,6 +139,27 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertNotIn("support_ledger", encoded)
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
+
+    def test_compacted_activation_counts_match_visible_clause_ids(self) -> None:
+        contract = aippo.build_project_workflow_public_safe_contract()
+        packet = aippo.activation_packet_from_working_contract(
+            contract,
+            task="benchmark reporting issue closeout",
+            max_packet_bytes=360,
+        )
+        metrics = aippo.usefulness.usefulness_metrics(contract, packet)
+        continuity = aippo.usefulness.continuity_usefulness_for_activation(
+            packet,
+            {"source_backed_claim_without_reopen": 0},
+        )
+
+        self.assertEqual(packet["active_clause_count"], len(packet["active_clause_ids"]))
+        self.assertLessEqual(packet["active_clause_count"], 1)
+        self.assertEqual(
+            metrics["stable_workflow_search_avoided_count"],
+            len(packet["active_clause_ids"]),
+        )
+        self.assertEqual(continuity["useful_packet_rate"], 1.0)
 
     def test_task_family_selection_changes_activation_emphasis(self) -> None:
         contract = aippo.build_project_workflow_public_safe_contract()
@@ -186,6 +210,38 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertIn("host_readiness", readiness["task_families"])
         self.assertEqual(readiness["next_action"], "verify_plugin_mcp_hooks")
         self.assertIn("plugin verify/update status", " ".join(readiness["use_guidance"]))
+
+    def test_project_dogfood_aliases_activate_related_workflow_tasks(self) -> None:
+        contract = aippo.build_project_workflow_public_safe_contract()
+        probes = {
+            "fix hook install UX": "host_readiness",
+            "debug action hint hook cache readiness": "product_workflow",
+            "make action-time hint status public safe": "product_workflow",
+            "update install guide python3 macOS": "product_workflow",
+            "write upstream issue about MCP semantic auth": "issue_writing",
+            "review plugin install and hook status": "host_readiness",
+        }
+
+        for task, family in probes.items():
+            with self.subTest(task=task):
+                packet = aippo.activation_packet_from_working_contract(contract, task=task)
+                self.assertIn(family, packet["task_families"])
+                self.assertTrue(packet["use_guidance"])
+                self.assertNotEqual(packet["next_action"], "stay_silent")
+
+    def test_unmatched_task_reports_public_safe_no_family_reason(self) -> None:
+        contract = aippo.build_project_workflow_public_safe_contract()
+
+        packet = aippo.activation_packet_from_working_contract(
+            contract,
+            task="casual chat about weather",
+        )
+
+        self.assertEqual(packet["no_active_contract_reason"], "no_task_family_match")
+        self.assertEqual(
+            packet["next_safe_action"],
+            "run_agent_recall_if_prior_source_matters",
+        )
 
     def test_deepen_and_stability_surfaces_preserve_audit_without_foreground_leakage(self) -> None:
         report = aippo.build_aippo_working_contract_fixture_report()

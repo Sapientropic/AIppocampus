@@ -332,7 +332,7 @@ the documented baseline before running source-checkout verification.
 For repository contributors, the dev extra install path is:
 
 ```sh
-python -m pip install -e ".[dev]"
+python3 -m pip install -e ".[dev]"
 ```
 
 Public claims still need the maintainer lanes in

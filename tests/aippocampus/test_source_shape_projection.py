@@ -49,6 +49,56 @@ class SourceShapeProjectionTests(unittest.TestCase):
         self.assertEqual(report["red_lines"]["authority_raised_above_navigation_only_count"], 0)
         self.assertNotIn("PRIVATE", encoded)
 
+    def test_non_aippocampus_scope_and_topic_are_preserved_through_aippo_glue(self) -> None:
+        report = projection.project_learning_findings_to_source_shape(
+            [
+                {
+                    "finding_id": "other-repo-preflight",
+                    "finding_kind": "workflow_order_finding",
+                    "workflow_family": "cheap_preflight_before_broad_test",
+                    "candidate_family": "workflow_order_candidate",
+                    "status": "open",
+                    "confidence": "high",
+                    "source_ref_count": 3,
+                    "source_refs": [source_ref("other-fail"), source_ref("other-pass")],
+                    "scope": "project:OtherRepo",
+                    "topic_epoch": "release-hardening",
+                    "workspace_or_environment_profile": "linux-ci",
+                }
+            ]
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["aippo_clause_seeds"][0]["scope"], "project:OtherRepo")
+        self.assertEqual(report["aippo_clause_seeds"][0]["topic_epoch"], "release-hardening")
+        self.assertEqual(report["local_global_checks"][0]["result"], "glued_route")
+        contracts = report["local_global_checks"][0]["section_contracts"]
+        self.assertTrue(any(item["scope"] == "project:OtherRepo" for item in contracts))
+
+    def test_aippo_scope_mismatch_becomes_obstruction_not_glue(self) -> None:
+        row = local_global_compatibility.evaluate_local_global_compatibility(
+            [
+                {
+                    "case_id": "learning",
+                    "kind": "learning_loop_section",
+                    "scope": "project:OtherRepo",
+                    "topic_epoch": "release-hardening",
+                    "source_ids": ["src:shared"],
+                },
+                {
+                    "case_id": "aippo",
+                    "kind": "aippocampus_aippo_activation_packet",
+                    "scope": "project:AIppocampus",
+                    "topic_epoch": "learning-loop",
+                    "source_ids": ["src:shared"],
+                },
+            ],
+            case_id="scope_mismatch",
+        )
+
+        self.assertEqual(row["result"], "obstruction")
+        self.assertIn("source_supported_sections_need_scope_review", row["reason_codes"])
+
     def test_stale_and_local_only_findings_stay_suppressed_without_poisoning_active_path(self) -> None:
         report = projection.project_learning_findings_to_source_shape(
             [

@@ -19,7 +19,6 @@ from aippocampus_runtime.core import (
     cli_error_payload,
     cli_error_payload_from_message,
     cli_exit_code_for_error_code,
-    cli_public_error_object,
     compact_text,
 )
 from aippocampus_runtime.model.client import (
@@ -37,11 +36,11 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious import circuit_feedback, semantic_subregion_budget
 from aippocampus_runtime.subconscious.continuity_domain_salience import (
     add_continuity_domain_salience_args,
     continuity_domain_salience_kwargs,
     continuity_domain_salience_write_enabled,
-    public_continuity_domain_salience_summary,
     run_continuity_domain_salience_adapter,
 )
 from aippocampus_runtime.subconscious.deterministic_jobs import (
@@ -51,7 +50,6 @@ from aippocampus_runtime.subconscious.deterministic_jobs import (
 from aippocampus_runtime.subconscious.event_salience_gate import (
     filter_salient_turns,
     merge_event_salience_reports,
-    public_event_salience_summary,
     write_event_salience_sidecar,
 )
 from aippocampus_runtime.subconscious.job_circuits import (
@@ -83,6 +81,11 @@ from aippocampus_runtime.subconscious.jobs_config import (
     JobsRunConfig,
     default_jobs_output_path,
     jobs_run_config_from_args,
+)
+from aippocampus_runtime.subconscious.jobs_public import (
+    feedback_inputs_from_job_results,
+    public_jobs_payload,
+    worker_specs_from_job_specs,
 )
 from aippocampus_runtime.subconscious.question_diagnostics import (
     question_axis_repair_feedback,
@@ -128,89 +131,6 @@ __all__ = [
     "validation_audit",
     "validate_findings",
 ]
-
-
-def public_count(value: Any) -> int:
-    try:
-        return max(0, int(value))
-    except (TypeError, ValueError):
-        return 0
-
-
-def public_float(value: Any) -> float:
-    try:
-        return max(0.0, float(value))
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def public_model_route(route: Any) -> dict[str, str]:
-    if not isinstance(route, Mapping):
-        return {}
-    provider = str(route.get("provider") or "").strip()
-    safe = "".join(char for char in provider[:48] if char.isalnum() or char in {"_", "-", "."})
-    return {"provider": safe or "unknown"}
-
-
-def public_cache(cache: Any) -> dict[str, Any]:
-    if not isinstance(cache, Mapping):
-        return {}
-    result: dict[str, Any] = {"available": bool(cache.get("available"))}
-    for key in ("hit_tokens", "miss_tokens"):
-        if key in cache:
-            result[key] = public_count(cache.get(key))
-    if "hit_rate" in cache:
-        result["hit_rate"] = public_float(cache.get("hit_rate"))
-    return result
-
-
-def public_usage(usage: Any) -> dict[str, int]:
-    if not isinstance(usage, Mapping):
-        return {}
-    keys = ("prompt_tokens", "completion_tokens", "total_tokens")
-    return {key: public_count(usage.get(key)) for key in keys if key in usage}
-
-
-def public_error(error: Any) -> dict[str, str] | None:
-    if not isinstance(error, Mapping):
-        return None
-    return cli_public_error_object(error)
-
-
-def public_jobs_payload(result: Mapping[str, Any]) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "ok": bool(result.get("ok")),
-        "job_count": public_count(result.get("job_count")),
-        "successful_job_count": public_count(result.get("successful_job_count")),
-        "failure_count": public_count(result.get("failure_count")),
-        "partial_failure": bool(result.get("partial_failure")),
-        "requested_job_count": public_count(result.get("requested_job_count")),
-        "samples_per_job": public_count(result.get("samples_per_job")),
-        "concurrency": public_count(result.get("concurrency")),
-        "finding_count": public_count(result.get("finding_count")),
-        "edge_count": public_count(result.get("edge_count")),
-        "wrote": bool(result.get("wrote")),
-        "dry_run": bool(result.get("dry_run")),
-        "cache": public_cache(result.get("cache")),
-        "usage": public_usage(result.get("usage")),
-        "model_route": public_model_route(result.get("model_route")),
-        "thinking": str(result.get("thinking") or "provider"),
-        "reasoning_effort": str(result.get("reasoning_effort") or "provider"),
-        "output_private_artifacts": bool(result.get("jobs_output") or result.get("edges_output")),
-        "output_boundary": "job_details_are_local_private_artifacts",
-    }
-    if isinstance(result.get("event_salience_gate"), Mapping):
-        payload["event_salience_gate"] = public_event_salience_summary(
-            result["event_salience_gate"]
-        )
-    if isinstance(result.get("continuity_domain_salience_adapter"), Mapping):
-        payload["continuity_domain_salience_adapter"] = public_continuity_domain_salience_summary(
-            result["continuity_domain_salience_adapter"]
-        )
-    error = public_error(result.get("error"))
-    if error:
-        payload["error"] = error
-    return payload
 
 
 def response_content(response: dict[str, Any]) -> str:
@@ -767,6 +687,16 @@ def run_jobs(
         if event_salience_gate
         else {}
     )
+    cognitive_feedback = circuit_feedback.build_circuit_feedback_report(
+        feedback_inputs_from_job_results(results)
+    )
+    dynamic_plan = circuit_feedback.dynamic_job_orchestration_plan(
+        JOB_SPECS,
+        cognitive_feedback.get("rows") or [],
+    )
+    budget_report = semantic_subregion_budget.build_semantic_subregion_budget_report(
+        worker_specs_from_job_specs(JOB_SPECS)
+    )
     return {
         "ok": overall_ok,
         "jobs": results,
@@ -800,6 +730,9 @@ def run_jobs(
             if isinstance(result.get("quality_diagnostics"), dict)
             and result.get("quality_diagnostics")
         ],
+        "cognitive_runtime_feedback": cognitive_feedback,
+        "dynamic_job_orchestration": dynamic_plan,
+        "semantic_subregion_budget": budget_report,
         "wrote": False if no_write or dry_run else any(bool(result.get("wrote")) for result in results),
     }
 

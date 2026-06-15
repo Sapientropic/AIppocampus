@@ -155,6 +155,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action_card"]["decision"], "use_route_first")
         self.assertEqual(payload["foreground_action_card"]["next_action"], "deepen")
         self.assertIn("callable_handle", payload["foreground_action_card"])
+        self.assertNotIn("short_action_token", payload["foreground_action_card"])
         self.assertLess(
             list(payload).index("foreground_action_card"),
             list(payload).index("memory_packets"),
@@ -181,6 +182,71 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(aippo_response["result"].get("isError", False), aippo_payload)
         self.assertEqual(aippo_payload["mode"], "aippo")
         self.assertTrue(aippo_payload["policy_boundary"]["navigation_only_not_fact"])
+
+    def test_agent_recall_rejects_explicit_invalid_max_values(self) -> None:
+        valid = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2031,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_recall",
+                    "arguments": {
+                        "query": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(self.clean),
+                        "max": 1,
+                    },
+                },
+            }
+        )
+        self.assertFalse(valid["result"].get("isError", False), self.tool_payload(valid))
+        self.assertEqual(self.tool_payload(valid)["metrics"]["requested_max_routes"], 1)
+
+        for request_id, value, message in [
+            (2032, 0, "max must be >= 1"),
+            (2033, -1, "max must be >= 1"),
+            (2034, 26, "max must be <= 25"),
+        ]:
+            with self.subTest(value=value):
+                response = mcp.handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "agent_recall",
+                            "arguments": {
+                                "query": "clean source continuity",
+                                "cwd": str(self.cwd),
+                                "clean_source_dir": str(self.clean),
+                                "max": value,
+                            },
+                        },
+                    }
+                )
+                payload = self.tool_payload(response)
+                self.assertTrue(response["result"]["isError"])
+                self.assertEqual(payload["error"]["code"], "invalid_argument")
+                self.assertIn(message, payload["error"]["message"])
+
+    def test_agent_deepen_marks_cannot_verify_as_mcp_error(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2035,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_deepen",
+                    "arguments": {"handle": "not-a-navigation-handle", "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertFalse(payload["ok"])
 
     def test_recall_diagnostic_applies_provider_bridge_before_live_semantic_gate(self) -> None:
         env_var = "MCP_PROVIDER_BRIDGE_TEST_KEY"
@@ -221,6 +287,67 @@ class AippocampusMcpServerTests(unittest.TestCase):
                         "cue": "vague continuity cue",
                         "run_semantic_gate": True,
                         "semantic_gate_mode": "on",
+                    }
+                )
+        finally:
+            if old_value is None:
+                os.environ.pop(env_var, None)
+            else:
+                os.environ[env_var] = old_value
+
+        payload = json.loads(response["content"][0]["text"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(observed["env_value"], secret_value)
+        self.assertEqual(
+            payload["provider_key_bridge"]["status"],
+            "applied_to_current_mcp_process",
+        )
+        self.assertEqual(payload["provider_key_bridge"]["provider_env_vars"], [env_var])
+        self.assertNotIn(secret_value, encoded)
+        self.assertNotIn(str(dotenv), encoded)
+
+    def test_agent_recall_applies_provider_bridge_before_live_semantic_gate(self) -> None:
+        env_var = "MCP_AGENT_RECALL_PROVIDER_BRIDGE_TEST_KEY"
+        secret_value = "mcp-agent-recall-provider-bridge-secret-value"
+        codex_home = self.cwd / "codex-home-agent"
+        dotenv = self.cwd / "agent-provider.env"
+        dotenv.write_text(f"{env_var}={secret_value}\n", encoding="utf-8")
+        provider_key_bridge.write_bridge_manifest(
+            provider_key_bridge.bridge_manifest_path(codex_home),
+            provider_key_bridge.build_bridge_manifest(
+                target="codex-hooks",
+                source="explicit-dotenv",
+                provider_env_var=env_var,
+                credential_dotenv=dotenv,
+            ),
+        )
+        observed: dict[str, str | None] = {}
+
+        class FakeAgent:
+            MAX_ROUTES = 5
+
+            @staticmethod
+            def recall(*_args: object, **_kwargs: object) -> dict[str, object]:
+                observed["env_value"] = os.environ.get(env_var)
+                return {
+                    "kind": "aippocampus_agent_continuity_path",
+                    "status": "ok",
+                    "semantic_gate_diagnostics": {"decision": "available"},
+                }
+
+        old_value = os.environ.pop(env_var, None)
+        try:
+            with (
+                mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False),
+                mock.patch.object(mcp, "agent_continuity_module", return_value=FakeAgent),
+            ):
+                os.environ.pop(env_var, None)
+                response = mcp.call_agent_recall(
+                    {
+                        "cwd": str(self.cwd),
+                        "query": "vague continuity cue",
+                        "run_semantic_gate": True,
+                        "semantic": "on",
                     }
                 )
         finally:

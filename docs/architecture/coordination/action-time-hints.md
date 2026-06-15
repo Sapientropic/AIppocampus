@@ -13,7 +13,7 @@ it cannot say "this claim is true."
 
 | Surface | Owner | Boundary |
 | --- | --- | --- |
-| Prepared cache | `aippocampus_runtime.hooks.action_hint_cache` | Collects already-reviewed or deterministic anchors into compact records. It stores ids, provider family, controlled terms, source refs/handles, TTL/currentness, anti-nag ids, and authority flags only. |
+| Prepared cache | `aippocampus_runtime.hooks.action_hint_cache` / `action_hint_cache_records` | `action_hint_cache_records` materializes already-reviewed or deterministic provider rows into compact records; `action_hint_cache` reads, matches, writes, and refreshes the cache. They store ids, provider family, controlled terms, source refs/handles, TTL/currentness, anti-nag ids, and authority flags only. |
 | Hot hook | `aippocampus_runtime.hooks.action_hint` | Accepts Codex-style `PreToolUse` envelopes, extracts public-safe action features, reads prepared records, and emits at most one tiny `navigation_only` hint. |
 | Installer/status | `aippocampus_runtime.hooks.install_action_hint` | Adds or inspects the Codex `PreToolUse` hook when the host supports the event; unsupported hosts must report unsupported instead of pretending installation worked. |
 | Replay telemetry | `aippocampus_runtime.hooks.action_hint_replay` | Runs public-safe with/without-hint replay cases and reports usefulness, cost, and red lines separately. |
@@ -21,6 +21,17 @@ it cannot say "this claim is true."
 The agent-facing CLI facade routes `aippocampus hooks action ...` to the same
 installer/status owner, so local setup no longer depends on remembering the
 module path.
+
+Refresh prepared cache after installing a cache-backed hook:
+
+```powershell
+aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json
+aippocampus hooks action status --json
+```
+
+Status distinguishes `without_cache_path`, `with_missing_cache_file`,
+`with_empty_cache`, `with_fresh_records`, and `with_expired_records`; it also
+reports malformed cache-line counts while redacting local paths by default.
 
 ## Provider Boundary
 
@@ -30,6 +41,8 @@ Prepared records can come from existing providers such as:
 - Learning-loop action guidance from `aippocampus_runtime.learning_loop`.
 - Low-authority learned AIppo clauses prepared by
   `aippocampus_runtime.learning_loop.aippo_adapter`.
+- AIppo verification probes from growing clauses, as tiny source-reopen hints
+  only.
 - Active recall locks from `aippocampus_runtime.recall.active_recall_lock`.
 - Attention route tokens or handles from the recall/navigation layer.
 

@@ -29,7 +29,9 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
                 "occurrence_count": 3,
                 "source_ref_count": 3,
                 "source_refs": [source_ref("fail"), source_ref("ruff"), source_ref("pass")],
-                "scope": "project:AIppocampus",
+                "scope": "project:OtherRepo",
+                "topic_epoch": "release-hardening",
+                "workspace_or_environment_profile": "linux-ci",
                 "raw_output": "Traceback PRIVATE_STDOUT should not leak",
                 "command": "pytest tests/private_path.py",
             }
@@ -43,6 +45,9 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], encoded)
         self.assertEqual(report["metrics"]["aippo_source_row_count"], 1)
+        self.assertEqual(report["source_rows"][0]["scope"], "project:OtherRepo")
+        self.assertEqual(report["source_rows"][0]["topic_epoch"], "release-hardening")
+        self.assertEqual(report["source_rows"][0]["workspace_or_environment_profile"], "linux-ci")
         self.assertEqual(report["metrics"]["prepared_hint_provider_count"], 1)
         self.assertEqual(
             report["prepared_cache"]["provider_counts"]["aippo_learned_clause"],

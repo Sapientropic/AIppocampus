@@ -61,7 +61,15 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn('python -m pip install -e ".[dev]"', text)
         self.assertIn("aippocampus hooks status --codex-home .tmp/ci-codex-home --json", text)
         self.assertIn("aippocampus hooks install --codex-home .tmp/ci-codex-home --json", text)
-        self.assertIn("python -m build --sdist --wheel", text)
+        self.assertTrue(
+            any(
+                command in text
+                for command in [
+                    "python -m build --sdist --wheel",
+                    "python3 -m build --sdist --wheel",
+                ]
+            )
+        )
 
     def test_pr_ci_runs_macos_default_tmpdir_path_identity_gate(self) -> None:
         text = CI_WORKFLOW.read_text(encoding="utf-8")
@@ -124,8 +132,24 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         flattened = " ".join(text.split())
 
         self.assertIn("test_plan.py --release-preflight --json", text)
-        self.assertIn('python -m pip install -e ".[release]"', text)
-        self.assertIn("python -m build --sdist --wheel", text)
+        self.assertTrue(
+            any(
+                command in text
+                for command in [
+                    'python -m pip install -e ".[release]"',
+                    'python3 -m pip install -e ".[release]"',
+                ]
+            )
+        )
+        self.assertTrue(
+            any(
+                command in text
+                for command in [
+                    "python -m build --sdist --wheel",
+                    "python3 -m build --sdist --wheel",
+                ]
+            )
+        )
         self.assertIn("Do not flatten them into one local marathon", flattened)
         self.assertIn("macOS", text)
         self.assertIn("TMPDIR", text)

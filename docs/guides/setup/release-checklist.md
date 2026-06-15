@@ -37,8 +37,8 @@ marathon.
 Start with the planner:
 
 ```sh
-python tools/aippocampus/test_plan.py --json
-python tools/aippocampus/test_plan.py --release-preflight --json
+python3 tools/aippocampus/test_plan.py --json
+python3 tools/aippocampus/test_plan.py --release-preflight --json
 ```
 
 The local closeout rule is deliberately small: run focused tests while editing,
@@ -57,9 +57,9 @@ For a normal patch or minor release whose PR CI is green, the local tag
 preflight is:
 
 ```sh
-python tools/aippocampus/docs/check_docs_health.py --json
-python tools/aippocampus/release/check_public_boundary.py --json
-python tools/aippocampus/release/check_agent_discovery_release.py --offline --json
+python3 tools/aippocampus/docs/check_docs_health.py --json
+python3 tools/aippocampus/release/check_public_boundary.py --json
+python3 tools/aippocampus/release/check_agent_discovery_release.py --offline --json
 git clean -ndX
 git diff --check
 ```
@@ -72,7 +72,7 @@ after publication.
 PR CI owns these routine release signals by default:
 
 - Ruff and mypy.
-- `python tools/aippocampus/run_tests.py --tier pr` under coverage.
+- `python3 tools/aippocampus/run_tests.py --tier pr` under coverage.
 - Sharded `broad-pr`.
 - `benchmark-smoke --benchmark-suite-profile public-fast`.
 - Python 3.13 `quick`.
@@ -81,12 +81,12 @@ PR CI owns these routine release signals by default:
 
 The publish workflow owns:
 
-- `python -m pip install -e ".[release]"`.
+- `python3 -m pip install -e ".[release]"`.
 - Docs health and `pr` tests at the tag commit.
 - MCP Registry schema validation.
-- `python -m build --sdist --wheel`.
-- `python -m twine check dist/*`.
-- `python tools/aippocampus/release/check_wheel_contract.py --wheel dist/*.whl --json`.
+- `python3 -m build --sdist --wheel`.
+- `python3 -m twine check dist/*`.
+- `python3 tools/aippocampus/release/check_wheel_contract.py --wheel dist/*.whl --json`.
 - PyPI and MCP Registry publication.
 
 Escalate locally only when the changed surface owns the risk:
@@ -112,7 +112,7 @@ below when choosing future lint hardening work; do not treat its full count as a
 release blocker without a separate rule-selection issue:
 
 ```sh
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus --select ALL --statistics
+python3 -m ruff check skills plugins tests tools benchmarks benchmark_corpus --select ALL --statistics
 ```
 
 Run the full tier before a repository-health or broad public-readiness claim
@@ -120,14 +120,14 @@ that actually needs full coverage. Do not use it as a routine patch-release
 tax after green PR CI:
 
 ```sh
-python tools/aippocampus/run_tests.py --tier full
+python3 tools/aippocampus/run_tests.py --tier full
 ```
 
 For an agent-discoverability release, run the stricter public-state gate after
 PyPI and MCP Registry publication:
 
 ```sh
-python tools/aippocampus/release/check_agent_discovery_release.py --wait-ready --wait-seconds 300 --poll-interval 20 --fail-on-not-ready
+python3 tools/aippocampus/release/check_agent_discovery_release.py --wait-ready --wait-seconds 300 --poll-interval 20 --fail-on-not-ready
 ```
 
 The non-strict check may report `pending` before publication. Do not translate
@@ -154,7 +154,7 @@ gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-v
 - Run the release-facing public-boundary scanner:
 
   ```sh
-  python tools/aippocampus/release/check_public_boundary.py --json
+  python3 tools/aippocampus/release/check_public_boundary.py --json
   ```
 
 - Add local-only `--private-needle` values for machine or user-specific strings

@@ -141,6 +141,13 @@ class ForegroundActionCardTests(unittest.TestCase):
         self.assertNotIn("callable_handle", card)
         self.assertTrue(card["callable_handle_redacted"])
         self.assertEqual(card["next_action"], "deepen")
+        self.assertNotIn("short_action_token", card)
+        self.assertLessEqual(len(card), foreground_action_card.CARD_FIELD_BUDGET)
+        self.assertEqual(
+            public["metrics"]["foreground_action_card_field_count"],
+            len(card),
+        )
+        self.assertFalse(public["metrics"]["foreground_action_card_over_field_budget"])
         self.assertIn("foreground_action_card.callable_handle", public["local_private_fields"])
         self.assertNotIn(report["foreground_action_card"]["callable_handle"], encoded)
 
@@ -151,3 +158,16 @@ class ForegroundActionCardTests(unittest.TestCase):
         self.assertGreater(report["broad_manual_search_reduction_proxy"], 0)
         self.assertEqual(report["red_lines"]["audit_key_in_card_count"], 0)
         self.assertIn("causal_live_agent_behavior_lift", report["cannot_claim"])
+
+    def test_card_metrics_use_central_profile_and_count_audit_key_leaks(self) -> None:
+        card = {
+            "decision": "use_route_first",
+            "why": "Route likely matters.",
+            "next_action": "deepen",
+            "claim_boundary": "no_claim_before_reopen",
+            "metrics": {"audit": True},
+        }
+        metrics = foreground_action_card.card_metrics(card)
+
+        self.assertEqual(metrics["foreground_action_card_audit_key_leak_count"], 1)
+        self.assertTrue(metrics["foreground_action_card_profile_ok"])

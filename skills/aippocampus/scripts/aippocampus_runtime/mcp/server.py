@@ -39,6 +39,10 @@ from aippocampus_runtime.mcp.tool_readiness import (
 )
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
+from aippocampus_runtime.recall.agent_continuity_cli_support import (
+    RouteLimitError,
+    normalize_route_limit,
+)
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
@@ -68,6 +72,17 @@ def int_range(value: Any, *, default: int, minimum: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(minimum, min(maximum, parsed))
+
+
+class MCPArgumentError(ValueError):
+    """Invalid MCP arguments that should become client-visible tool errors."""
+
+
+def route_limit_arg(value: Any, *, default: int) -> int:
+    try:
+        return normalize_route_limit(value, default=default, field="max")
+    except RouteLimitError as exc:
+        raise MCPArgumentError(str(exc)) from exc
 
 
 def agent_continuity_module() -> Any:
@@ -211,7 +226,7 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             clean_source_dir=source_dir,
             registry_dir=registry_dir_arg(arguments),
             continuity_domains_snapshot_path=continuity_domains_snapshot_arg(arguments),
-            max_routes=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
+            max_routes=route_limit_arg(arguments.get("max"), default=5),
         )
     except RecallNavigationError as exc:
         return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
@@ -241,7 +256,7 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             registry_dir=registry_dir,
             lock_path=lock_path,
             continuity_domains_snapshot_path=continuity_domains_snapshot_arg(arguments),
-            max_matches=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
+            max_matches=route_limit_arg(arguments.get("max"), default=5),
         )
     except RecallNavigationError as exc:
         return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
@@ -257,6 +272,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
         )
     agent = agent_continuity_module()
+    provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = agent.recall(
         query,
         cwd=arguments.get("cwd"),
@@ -264,7 +280,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         registry_dir=arguments.get("registry_dir"),
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
-        max_routes=int_range(arguments.get("max"), default=agent.MAX_ROUTES, minimum=1, maximum=25),
+        max_routes=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
         attention_router=arguments.get("attention_router_mode")
         or bool(arguments.get("attention_router")),
         run_semantic_gate=bool(arguments.get("run_semantic_gate")),
@@ -277,6 +293,8 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
         ),
     )
+    if provider_bridge_report is not None:
+        payload["provider_key_bridge"] = provider_bridge_report
     return text_result(public_payload(arguments, payload))
 
 
@@ -302,9 +320,10 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         registry_dir=arguments.get("registry_dir"),
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
-        max_matches=int_range(arguments.get("max"), default=agent.MAX_ROUTES, minimum=1, maximum=25),
+        max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
     )
-    return text_result(public_payload(arguments, payload))
+    is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
+    return text_result(public_payload(arguments, payload), is_error=is_error)
 
 
 def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -339,7 +358,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
         cwd=cwd_arg(arguments),
         clean_source_dir=arguments.get("clean_source_dir"),
         registry_dir=arguments.get("registry_dir"),
-        max_routes=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
+        max_routes=route_limit_arg(arguments.get("max"), default=5),
         handle=arguments.get("handle"),
         thread_id=arguments.get("thread_id"),
         topic_epoch=arguments.get("topic_epoch"),
@@ -743,6 +762,11 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             )
         try:
             return jsonrpc_result(request_id, handler(arguments))
+        except MCPArgumentError as exc:
+            return jsonrpc_result(
+                request_id,
+                tool_error("invalid_argument", str(exc), arguments=arguments),
+            )
         except Exception as exc:
             return jsonrpc_result(
                 request_id,

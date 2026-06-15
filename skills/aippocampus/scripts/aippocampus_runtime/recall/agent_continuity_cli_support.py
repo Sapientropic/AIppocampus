@@ -27,6 +27,42 @@ LOCAL_PRIVATE_HANDLE_FIELDS = [
 ]
 LOCAL_REOPEN_TOKEN_ENCODING = "utf8_xor_v1_not_encryption"
 _LOCAL_REOPEN_TOKEN_MASK = 0xA5
+MIN_ROUTE_LIMIT = 1
+MAX_ROUTE_LIMIT = 25
+
+
+class RouteLimitError(ValueError):
+    """Raised when a caller passes an explicit, unsafe recall route limit."""
+
+
+def normalize_route_limit(
+    value: Any,
+    *,
+    default: int,
+    field: str = "max",
+    minimum: int = MIN_ROUTE_LIMIT,
+    maximum: int = MAX_ROUTE_LIMIT,
+) -> int:
+    """Validate route limits without treating explicit zero as "use default".
+
+    The recall facade used to coerce ``0`` through ``value or default`` and then
+    clamp other invalid values. That made omitted limits and explicit invalid
+    limits indistinguishable, which is surprising in both CLI and MCP surfaces.
+    Keep omission ergonomic, but reject values that would silently change the
+    caller's requested route budget.
+    """
+
+    if value is None or value == "":
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise RouteLimitError(f"{field} must be an integer") from exc
+    if parsed < minimum:
+        raise RouteLimitError(f"{field} must be >= {minimum}")
+    if parsed > maximum:
+        raise RouteLimitError(f"{field} must be <= {maximum}")
+    return parsed
 
 
 def handle_boundary_fields() -> dict[str, Any]:
@@ -65,6 +101,9 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     card = projected.get("foreground_action_card")
     if isinstance(card, Mapping):
         projected["foreground_action_card"] = foreground_action_card.redact_public_card(card)
+        metrics = dict(projected.get("metrics") or {})
+        metrics.update(foreground_action_card.card_metrics(projected["foreground_action_card"]))
+        projected["metrics"] = metrics
     redacted_requests: list[dict[str, Any]] = []
     for raw_request in projected.get("deepen_requests") or []:
         if not isinstance(raw_request, Mapping):
@@ -75,6 +114,11 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
         request["handle_redacted"] = True
         request["handle_boundary"] = "local_private_reopen_token"
         request["public_safe_command_preview"] = "aippocampus agent deepen <local-private-handle>"
+        if projected.get("last_recall_cache_available") and request.get("request_index"):
+            request["local_followup_command"] = (
+                f"aippocampus agent deepen --request {int(request['request_index'])} --last-recall"
+            )
+            request["local_followup_boundary"] = "same_machine_last_recall_cache_only"
         redacted_requests.append(request)
     projected["deepen_requests"] = redacted_requests
     return projected

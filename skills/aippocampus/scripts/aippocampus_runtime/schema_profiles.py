@@ -27,6 +27,35 @@ FIELD_ADDITION_GOVERNANCE_REQUIRED = (
     "projection_policy",
 )
 
+FOREGROUND_ACTION_CARD_REQUIRED_FIELDS = (
+    "decision",
+    "why",
+    "next_action",
+    "claim_boundary",
+)
+
+FOREGROUND_ACTION_CARD_OPTIONAL_FIELDS = (
+    "route_label",
+    "route_family",
+    "callable_handle",
+    "callable_handle_redacted",
+    "public_safe_action",
+)
+
+FOREGROUND_ACTION_CARD_AUDIT_ONLY_KEYS = (
+    "attention_router_navigation",
+    "cannot_claim",
+    "deepen_requests",
+    "feedback_calibration",
+    "macro_navigation",
+    "memory_packets",
+    "metrics",
+    "navigation_signals",
+    "policy_boundary",
+    "red_lines",
+    "semantic_gate_diagnostics",
+)
+
 
 @dataclass(frozen=True)
 class SchemaProfile:
@@ -128,6 +157,21 @@ PROFILES: dict[str, SchemaProfile] = {
             "access_policy",
         ),
     ),
+    "foreground_action_card": SchemaProfile(
+        name="foreground_action_card",
+        purpose=(
+            "Tiny agent-facing action card: one decision, one reason, one next "
+            "action, and one claim boundary. Rich diagnostics stay in audit "
+            "surfaces."
+        ),
+        required_fields=FOREGROUND_ACTION_CARD_REQUIRED_FIELDS,
+        optional_fields=FOREGROUND_ACTION_CARD_OPTIONAL_FIELDS,
+        cannot_claim=BASE_CANNOT_CLAIM
+        + (
+            "foreground_card_is_not_audit_payload",
+            "action_card_does_not_support_factual_claims",
+        ),
+    ),
 }
 
 
@@ -205,6 +249,9 @@ def field_addition_governance_required() -> tuple[str, ...]:
 __all__ = [
     "BASE_CANNOT_CLAIM",
     "FIELD_ADDITION_GOVERNANCE_REQUIRED",
+    "FOREGROUND_ACTION_CARD_AUDIT_ONLY_KEYS",
+    "FOREGROUND_ACTION_CARD_OPTIONAL_FIELDS",
+    "FOREGROUND_ACTION_CARD_REQUIRED_FIELDS",
     "IDENTITY_MINIMAL_FIELDS",
     "PROFILES",
     "PROFILE_SCHEMA_VERSION",

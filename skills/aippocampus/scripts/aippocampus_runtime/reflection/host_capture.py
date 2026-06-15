@@ -3,12 +3,16 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.learning_loop import core as learning_core
 from aippocampus_runtime.reflection import reconsolidation as corr
+from aippocampus_runtime.source import behavior_events
 
 CORRECTION_SIGNAL_RE = re.compile(
     r"(?i)\b(correction|correcting|actually|instead|not that|wrong route|wrong source|"
@@ -119,6 +123,172 @@ def _optional_list(value: Any) -> list[Any]:
     return [value]
 
 
+def _stable_id(prefix: str, *parts: Any) -> str:
+    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
+    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _host_scope(payload: Mapping[str, Any]) -> str:
+    return compact_text(str(payload.get("scope") or "project_or_task_family"), 160)
+
+
+def _host_workspace_profile(payload: Mapping[str, Any]) -> str:
+    return compact_text(
+        str(payload.get("workspace_or_environment_profile") or payload.get("environment_profile") or "host_runtime"),
+        160,
+    )
+
+
+def _post_tool_exit_code(payload: Mapping[str, Any]) -> int | None:
+    raw = payload.get("exit_code")
+    if raw is None:
+        raw = payload.get("tool_exit_code") or payload.get("returncode")
+    if raw is not None:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    text = str(payload.get("tool_response") or payload.get("output") or payload.get("error") or "")
+    return behavior_events.parse_tool_exit_code(text)
+
+
+def _post_tool_failed(payload: Mapping[str, Any]) -> bool:
+    status = str(payload.get("status") or payload.get("tool_status") or "").casefold()
+    if status in {"failed", "failure", "error", "timeout", "cancelled"}:
+        return True
+    if payload.get("success") is False:
+        return True
+    exit_code = _post_tool_exit_code(payload)
+    if exit_code is not None:
+        return exit_code != 0
+    return bool(payload.get("error") or payload.get("exception") or payload.get("tool_error"))
+
+
+def _expected_or_exploratory_failure(payload: Mapping[str, Any]) -> bool:
+    phase = str(payload.get("failure_phase") or payload.get("review_semantics") or "").casefold()
+    return bool(
+        payload.get("expected_local_red")
+        or payload.get("expected_red")
+        or payload.get("exploratory_failure")
+        or phase in {"expected_local_red", "review_only_expected_red", "exploratory", "tdd_red"}
+    )
+
+
+def _post_tool_behavior_event(
+    payload: Mapping[str, Any],
+    *,
+    refs: Sequence[Mapping[str, Any]],
+    created_at: str | None,
+) -> dict[str, Any]:
+    tool_name = compact_text(
+        str(payload.get("tool_name") or payload.get("name") or payload.get("tool") or "tool"),
+        120,
+    )
+    raw_input = payload.get("tool_input") or payload.get("arguments") or payload.get("args") or {}
+    command = ""
+    if isinstance(raw_input, Mapping):
+        command = str(raw_input.get("command") or raw_input.get("cmd") or raw_input.get("script") or "")
+    command_family = str(payload.get("command_family") or "") or behavior_events.classify_command_family(
+        tool_name,
+        command,
+    )
+    command_class = str(payload.get("command_class") or "") or behavior_events.classify_tool_command(
+        tool_name,
+        command,
+    )
+    target_class = str(payload.get("target_class") or "") or behavior_events.classify_target_class(
+        command_family,
+        command,
+    )
+    exit_code = _post_tool_exit_code(payload)
+    output_text = str(payload.get("tool_response") or payload.get("output") or payload.get("stderr") or payload.get("error") or "")
+    failure_family = str(payload.get("failure_family") or "") or behavior_events.classify_failure_family(
+        output_text,
+        exit_code if exit_code is not None else 1,
+    )
+    path_bits = behavior_events.path_breadcrumbs(raw_input, command)
+    path_fingerprint = str(payload.get("path_category_fingerprint") or "")
+    if not path_fingerprint:
+        path_fingerprint = _stable_id(
+            "host_pathcat",
+            path_bits.get("path_categories"),
+            path_bits.get("path_extensions"),
+            path_bits.get("path_fingerprints"),
+        )
+    target_fingerprint = str(payload.get("target_fingerprint") or "")
+    if not target_fingerprint:
+        target_fingerprint = _stable_id(
+            "host_target",
+            command_family,
+            target_class,
+            path_fingerprint,
+            payload.get("issue_ids") or [],
+        )
+    event_id = compact_text(
+        str(payload.get("event_id") or payload.get("tool_call_id") or payload.get("call_id") or ""),
+        160,
+    ) or _stable_id("host_post_tool", tool_name, command_family, failure_family, refs)
+    row: dict[str, Any] = {
+        "kind": "behavior_event",
+        "event_id": event_id,
+        "timestamp": created_at or payload.get("timestamp") or payload.get("created_at"),
+        "event_kind": "tool_call_observed",
+        "hard_event_kind": "tool_call_failed",
+        "tool_payload_kind": "host_post_tool_use",
+        "tool_name": tool_name,
+        "command_class": command_class,
+        "tool_intent": behavior_events.classify_tool_intent(tool_name, command_class, command),
+        "command_family": command_family,
+        "target_class": target_class,
+        "failure_family": failure_family,
+        "exit_code": exit_code,
+        "status": "failed",
+        "target_fingerprint": target_fingerprint,
+        "path_category_fingerprint": path_fingerprint,
+        "workspace_or_environment_profile": _host_workspace_profile(payload),
+        "scope": _host_scope(payload),
+        "freshness_window": str(payload.get("freshness_window") or "recent"),
+        "source_refs": [dict(ref) for ref in refs],
+        "sequence_index": int(payload.get("sequence_index") or payload.get("turn_index") or 1),
+        "expected_local_red": _expected_or_exploratory_failure(payload),
+        "behavior_backed": True,
+    }
+    row.update(path_bits)
+    return row
+
+
+def _capture_post_tool_learning_activation(
+    payload: Mapping[str, Any],
+    *,
+    refs: Sequence[Mapping[str, Any]],
+    host_event_name: str,
+    created_at: str | None,
+) -> dict[str, Any]:
+    event = _post_tool_behavior_event(payload, refs=refs, created_at=created_at)
+    signals = learning_core.adapt_behavior_events_to_review_signals([event])
+    activations = learning_core.extract_learning_activations(signals)
+    for activation in activations:
+        activation["source"] = "live_host_event_capture"
+        activation["host_event_name"] = host_event_name
+        activation["capture_mode"] = "post_tool_failure_source_ref_gated"
+    return {
+        "ok": True,
+        "kind": "aippocampus_correction_host_event_capture",
+        "schema_version": corr.SCHEMA_VERSION,
+        "created": bool(activations),
+        "event_kind": learning_core.ACTIVATION_KIND,
+        "host_event_name": host_event_name,
+        "events": activations,
+        "review_signals": signals,
+        "cannot_claim": [
+            "formal_memory_promotion",
+            "live_semantic_adjudication_quality",
+            "private_real_history_quality",
+            "learning_activation_is_not_source_truth",
+        ],
+    }
+
+
 def _host_blocked_result(
     reason: str,
     *,
@@ -205,6 +375,13 @@ def capture_host_correction_event(payload: Mapping[str, Any], *, created_at: str
     if host_event_name in {"Stop", "PostToolUse", "SubagentStop", "PreCompact"}:
         activation_id = compact_text(str(payload.get("activation_event_id") or ""), 120)
         if not activation_id:
+            if host_event_name == "PostToolUse" and _post_tool_failed(payload):
+                return _capture_post_tool_learning_activation(
+                    payload,
+                    refs=refs,
+                    host_event_name=host_event_name,
+                    created_at=created_at,
+                )
             return _host_blocked_result(
                 "missing_activation_event_id",
                 host_event_name=host_event_name,

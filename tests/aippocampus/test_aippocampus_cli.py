@@ -336,6 +336,20 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(action_hook_status.args, ["status", "--json"])
 
+        action_cache_refresh = facade.resolve_command(
+            ["hooks", "action", "refresh-cache", "--cache-jsonl", "cache.jsonl", "--write", "--json"]
+        )
+        self.assertEqual(action_cache_refresh.command, "hooks")
+        self.assertEqual(
+            action_cache_refresh.module_name,
+            "aippocampus_runtime.hooks.action_hint_cache",
+        )
+        self.assertEqual(action_cache_refresh.script_name, "action_hint_cache.py")
+        self.assertEqual(
+            action_cache_refresh.args,
+            ["refresh-cache", "--cache-jsonl", "cache.jsonl", "--write", "--json"],
+        )
+
         claude_hook_status = facade.resolve_command(
             ["hooks", "claude-code", "status", "--json"]
         )

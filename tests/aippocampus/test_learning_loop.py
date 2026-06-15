@@ -300,6 +300,24 @@ class LearningLoopTests(unittest.TestCase):
             },
             {
                 "kind": "aippocampus_learning_finding",
+                "finding_kind": "semantic_context_miss",
+                "workflow_family": "aippo_existing_clause",
+                "occurrence_count": 3,
+                "source_refs": [source_ref("aippo")],
+                "scope": "project:AIppocampus",
+                "confidence": "high",
+            },
+            {
+                "kind": "aippocampus_learning_finding",
+                "finding_kind": "workflow_order_finding",
+                "workflow_family": "docs_existing_route",
+                "occurrence_count": 3,
+                "source_refs": [source_ref("docs")],
+                "scope": "project:AIppocampus",
+                "confidence": "high",
+            },
+            {
+                "kind": "aippocampus_learning_finding",
                 "finding_kind": "workflow_order_finding",
                 "workflow_family": "stable_repeated_manual_workflow",
                 "occurrence_count": 3,
@@ -320,16 +338,30 @@ class LearningLoopTests(unittest.TestCase):
 
         candidates = extract_workflow_candidates(
             findings,
-            existing_assets={"skills": ["cheap_preflight_before_broad_test"]},
+            existing_assets={
+                "skills": ["cheap_preflight_before_broad_test"],
+                "aippo_clauses": ["aippo_existing_clause"],
+                "docs_routes": ["docs_existing_route"],
+            },
         )
         forms = {row["recommended_form"] for row in candidates}
+        by_workflow = {row["repeated_workflow_summary"]: row for row in candidates}
 
         self.assertIn("extend_existing_skill", forms)
+        self.assertIn("extend_existing_asset", forms)
         self.assertIn("create_narrow_skill", forms)
         self.assertIn("create_automation", forms)
         self.assertIn("create_subagent", forms)
         self.assertIn("add_checklist", forms)
         self.assertIn("skip", forms)
+        self.assertEqual(by_workflow["aippo_existing_clause"]["existing_asset_kind"], "aippo_clauses")
+        self.assertEqual(by_workflow["docs_existing_route"]["existing_asset_kind"], "docs_routes")
+        self.assertEqual(by_workflow["automation_candidate"]["transferability"], "this_machine_only")
+        self.assertEqual(
+            by_workflow["automation_candidate"]["packaging_boundary"],
+            "machine_local_lesson_not_general_skill",
+        )
+        self.assertIn("transferability", by_workflow["stable_repeated_manual_workflow"])
         self.assertTrue(all(row["auto_create_asset"] is False for row in candidates))
         self.assertTrue(any(row["skip_reason"] == "thin_or_one_off_evidence" for row in candidates))
 

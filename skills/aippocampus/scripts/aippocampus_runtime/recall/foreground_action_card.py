@@ -11,25 +11,13 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from aippocampus_runtime import core
+from aippocampus_runtime import core, schema_profiles
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 CARD_FIELD_BUDGET = 8
 CARD_BYTE_BUDGET = 900
 CLAIM_BOUNDARY = "no_claim_before_reopen"
-AUDIT_ONLY_KEYS = {
-    "attention_router_navigation",
-    "cannot_claim",
-    "deepen_requests",
-    "feedback_calibration",
-    "macro_navigation",
-    "memory_packets",
-    "metrics",
-    "navigation_signals",
-    "policy_boundary",
-    "red_lines",
-    "semantic_gate_diagnostics",
-}
+AUDIT_ONLY_KEYS = set(schema_profiles.FOREGROUND_ACTION_CARD_AUDIT_ONLY_KEYS)
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -144,28 +132,31 @@ def build_recall_foreground_action_card(
         )
     if request and decision in {"use_route_first", "deepen_before_claim"}:
         card["callable_handle"] = str(request.get("handle") or request.get("callable_handle") or "")
-        card["short_action_token"] = f"request:{int(request.get('request_index') or 1)}"
-    return {key: value for key, value in card.items() if value not in {"", None}}
+    compact = {key: value for key, value in card.items() if value not in {"", None}}
+    return schema_profiles.project_record_for_profile(compact, "foreground_action_card")
 
 
 def redact_public_card(card: Mapping[str, Any]) -> dict[str, Any]:
     projected = dict(card)
     if "callable_handle" in projected:
         projected.pop("callable_handle", None)
+        projected.pop("short_action_token", None)
         projected["callable_handle_redacted"] = True
         projected["public_safe_action"] = "aippocampus agent deepen <local-private-handle>"
-    return projected
+    return schema_profiles.project_record_for_profile(projected, "foreground_action_card")
 
 
 def card_metrics(card: Mapping[str, Any]) -> dict[str, Any]:
     encoded = json.dumps(card, ensure_ascii=False, sort_keys=True)
     leaked_keys = sorted(AUDIT_ONLY_KEYS & set(card))
+    profile_report = schema_profiles.validate_profile_record(card, "foreground_action_card")
     return {
         "foreground_action_card_field_count": len(card),
         "foreground_action_card_byte_count": len(encoded.encode("utf-8")),
         "foreground_action_card_over_field_budget": len(card) > CARD_FIELD_BUDGET,
         "foreground_action_card_over_byte_budget": len(encoded.encode("utf-8")) > CARD_BYTE_BUDGET,
         "foreground_action_card_audit_key_leak_count": len(leaked_keys),
+        "foreground_action_card_profile_ok": bool(profile_report["ok"]),
     }
 
 

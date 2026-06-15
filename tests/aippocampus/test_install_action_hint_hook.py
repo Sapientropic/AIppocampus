@@ -4,6 +4,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -65,9 +67,84 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(result["path_redacted"])
         self.assertEqual(result["commands"], ["<redacted:hook-command>"])
         self.assertTrue(result["commands_redacted"])
+        self.assertEqual(result["cache_status"], "without_cache_path")
+        self.assertEqual(result["cache_record_count"], 0)
         self.assertEqual(result["support_status"], "supported_by_codex_hooks_json")
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
+
+    def test_status_reports_cache_records_without_leaking_cache_path(self) -> None:
+        cache_path = self.codex_home / "action-hints.jsonl"
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_action_hint_prepared_cache",
+                    "records": [
+                        {
+                            "kind": "aippocampus_action_hint_prepared_record",
+                            "record_id": "record-1",
+                            "provider_family": "learning_loop",
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        installer.install(self.hooks_json, cache_jsonl=cache_path, timeout=3)
+
+        result = installer.status(self.hooks_json)
+        encoded = json.dumps(result, ensure_ascii=False)
+
+        self.assertEqual(result["cache_status"], "with_fresh_records")
+        self.assertEqual(result["cache_record_count"], 1)
+        self.assertEqual(result["fresh_record_count"], 1)
+        self.assertEqual(result["expired_record_count"], 0)
+        self.assertEqual(result["provider_counts"], {"learning_loop": 1})
+        self.assertEqual(result["cache_path"], "<redacted:cache-jsonl>")
+        self.assertTrue(result["cache_path_redacted"])
+        self.assertNotIn(str(cache_path), encoded)
+
+    def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
+        missing = self.codex_home / "missing-action-hints.jsonl"
+        installer.install(self.hooks_json, cache_jsonl=missing, timeout=3)
+        missing_status = installer.status(self.hooks_json)
+        self.assertEqual(missing_status["cache_status"], "with_missing_cache_file")
+        self.assertFalse(missing_status["cache_exists"])
+
+        empty = self.codex_home / "empty-action-hints.jsonl"
+        empty.write_text("", encoding="utf-8")
+        installer.install(self.hooks_json, cache_jsonl=empty, timeout=3)
+        empty_status = installer.status(self.hooks_json)
+        self.assertEqual(empty_status["cache_status"], "with_empty_cache")
+        self.assertTrue(empty_status["cache_exists"])
+
+        expired = self.codex_home / "expired-action-hints.jsonl"
+        expired.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_action_hint_prepared_cache",
+                    "records": [
+                        {
+                            "kind": "aippocampus_action_hint_prepared_record",
+                            "record_id": "old",
+                            "provider_family": "learning_loop",
+                            "expires_at_unix": 1,
+                        }
+                    ],
+                }
+            )
+            + "\nnot-json\n",
+            encoding="utf-8",
+        )
+        installer.install(self.hooks_json, cache_jsonl=expired, timeout=3)
+        expired_status = installer.status(self.hooks_json)
+        self.assertEqual(expired_status["cache_status"], "with_expired_records")
+        self.assertEqual(expired_status["cache_record_count"], 1)
+        self.assertEqual(expired_status["fresh_record_count"], 0)
+        self.assertEqual(expired_status["expired_record_count"], 1)
+        self.assertEqual(expired_status["malformed_cache_line_count"], 1)
+        self.assertEqual(expired_status["cache_path"], "<redacted:cache-jsonl>")
 
     def test_unsupported_host_status_does_not_pretend_installation(self) -> None:
         result = installer.status(self.hooks_json, host="claude-code")
@@ -75,6 +152,54 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertFalse(result["installed"])
         self.assertFalse(result["event_supported"])
         self.assertEqual(result["support_status"], "unsupported_host:claude-code")
+        self.assertEqual(result["requested_host"], "claude-code")
+        self.assertEqual(result["effective_host"], "codex")
+        self.assertEqual(result["host_integration"]["status"], "unsupported_host:claude-code")
+
+    def test_cli_install_json_is_public_safe_by_default_and_reports_cache_status(self) -> None:
+        cache_path = self.codex_home / "action-hints.jsonl"
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "install",
+                    "--codex-home",
+                    str(self.codex_home),
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertTrue(payload["changed"])
+        self.assertEqual(payload["cache_status"], "with_missing_cache_file")
+        self.assertEqual(payload["cache_path"], "<redacted:cache-jsonl>")
+        self.assertNotIn(str(self.codex_home), encoded)
+        self.assertNotIn(str(cache_path), encoded)
+        self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
+
+    def test_cli_rejects_zero_or_negative_timeout_before_writing(self) -> None:
+        for value in ("0", "-1"):
+            stdout = StringIO()
+            stderr = StringIO()
+            with self.assertRaises(SystemExit) as raised:
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    installer.main(
+                        [
+                            "install",
+                            "--codex-home",
+                            str(self.codex_home),
+                            "--timeout",
+                            value,
+                            "--json",
+                        ]
+                    )
+            self.assertEqual(raised.exception.code, 2)
+            self.assertIn("at least 1", stderr.getvalue())
 
 
 if __name__ == "__main__":

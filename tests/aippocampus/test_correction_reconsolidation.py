@@ -407,6 +407,63 @@ class CorrectionReconsolidationTests(unittest.TestCase):
         self.assertNotIn(FAKE_TEST_BEARER_TOKEN, encoded)
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
 
+    def test_host_post_tool_use_failure_creates_learning_activation_when_source_backed(self) -> None:
+        result = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "PostToolUse",
+                "session_id": "session:tool-failure",
+                "cwd": fake_test_windows_path("AIppocampus"),
+                "topic_epoch": "epoch-live",
+                "tool_name": "shell_command",
+                "tool_input": {"command": f"pytest {fake_test_windows_path('private_test.py')}"},
+                "exit_code": 1,
+                "tool_response": f"AssertionError with token {FAKE_TEST_SECRET_VALUE}",
+                "source_refs": [source_ref(60)],
+                "scope": "project:AIppocampus",
+                "workspace_or_environment_profile": "public-ci-windows",
+            }
+        )
+        encoded = json.dumps(result, ensure_ascii=False)
+
+        self.assertTrue(result["created"], result)
+        self.assertEqual(result["event_kind"], "aippocampus_learning_activation")
+        activation = result["events"][0]
+        self.assertEqual(activation["activation_kind"], "tool_failure_activation")
+        self.assertTrue(activation["durable_activation"])
+        self.assertEqual(activation["host_event_name"], "PostToolUse")
+        self.assertTrue(activation["source_reopen_required_before_claim"])
+        self.assertNotIn(FAKE_TEST_SECRET_VALUE, encoded)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
+
+    def test_host_post_tool_use_expected_red_is_review_only_and_missing_source_blocks(self) -> None:
+        expected_red = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "PostToolUse",
+                "session_id": "session:tool-failure",
+                "tool_name": "shell_command",
+                "tool_input": {"command": "pytest tests/public_fixture.py"},
+                "exit_code": 1,
+                "tool_response": "AssertionError",
+                "expected_local_red": True,
+                "source_refs": [source_ref(61)],
+            }
+        )
+        missing_source = host_capture.capture_host_correction_event(
+            {
+                "hook_event_name": "PostToolUse",
+                "session_id": "session:tool-failure",
+                "tool_name": "shell_command",
+                "exit_code": 1,
+                "tool_response": "AssertionError",
+            }
+        )
+
+        self.assertTrue(expected_red["created"])
+        self.assertFalse(expected_red["events"][0]["durable_activation"])
+        self.assertEqual(expected_red["events"][0]["activation_status"], "review_only_expected_red")
+        self.assertFalse(missing_source["created"])
+        self.assertEqual(missing_source["reason"], "missing_source_refs")
+
 
 if __name__ == "__main__":
     unittest.main()
