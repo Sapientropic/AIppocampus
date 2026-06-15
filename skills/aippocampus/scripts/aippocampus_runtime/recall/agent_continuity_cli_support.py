@@ -10,6 +10,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.macro import state as macro_state
+from aippocampus_runtime.recall import foreground_action_card
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
 DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
@@ -18,6 +19,7 @@ DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
 )
 LOCAL_PRIVATE_HANDLE_FIELDS = [
     "suggested_next_command",
+    "foreground_action_card.callable_handle",
     "deepen_requests[].handle",
     "deepen_requests[].callable_handle",
     "deepen_requests[].machine_next_command",
@@ -60,6 +62,9 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     projected.update(handle_boundary_fields())
     projected["suggested_next_command"] = projected.get("public_safe_command_preview")
     projected["output_boundary"] = "public_safe_no_local_private_handles"
+    card = projected.get("foreground_action_card")
+    if isinstance(card, Mapping):
+        projected["foreground_action_card"] = foreground_action_card.redact_public_card(card)
     redacted_requests: list[dict[str, Any]] = []
     for raw_request in projected.get("deepen_requests") or []:
         if not isinstance(raw_request, Mapping):

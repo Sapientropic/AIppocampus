@@ -124,9 +124,17 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(report["mode"], "recall")
         self.assertTrue(report["opt_in_required"])
         self.assertEqual(report["status"], "ok")
+        self.assertEqual(report["foreground_action_card"]["decision"], "use_route_first")
+        self.assertEqual(report["foreground_action_card"]["next_action"], "deepen")
+        self.assertEqual(
+            report["foreground_action_card"]["claim_boundary"],
+            "no_claim_before_reopen",
+        )
+        self.assertTrue(report["audit_available"])
         self.assertFalse(report["policy_boundary"]["default_hook_foreground"])
         self.assertTrue(report["policy_boundary"]["source_reopen_required_for_strong_claims"])
         self.assertEqual(report["metrics"]["foreground_forbidden_key_count"], 0)
+        self.assertEqual(report["metrics"]["foreground_action_card_audit_key_leak_count"], 0)
         self.assertEqual(report["metrics"]["blind_deepen_required_count"], 0)
         self.assertGreaterEqual(report["metrics"]["top_route_selection_hint_present_count"], 1)
         self.assertGreaterEqual(report["metrics"]["topic_label_present_count"], 1)

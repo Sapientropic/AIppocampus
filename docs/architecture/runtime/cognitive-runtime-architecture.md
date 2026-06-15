@@ -111,6 +111,11 @@ pool, whether it was pruned by `top_k` / threshold / budget / source filtering,
 and whether the verifier actually saw it. These diagnostics explain misses;
 they do not upgrade candidate scores into truth.
 
+`aippocampus_runtime.navigation.microcircuit_router` is the current compact
+fixture owner for this shape. It reports raw-pool and prune-stage counts and
+can apply controlled salience decay to stale, superseded, noisy, or local-only
+candidates. Decay is a routing preference, not deletion and not source truth.
+
 ## Semantic Subregions
 
 A fast LLM is not a cell. It is a semantic subregion.
@@ -128,6 +133,11 @@ It should be called when the task requires fuzzy integration:
 Fast LLM calls should usually run in the subconscious layer, not foreground
 hooks. They can be highly concurrent because their outputs are provisional and
 the parent process can serialize writes.
+
+`aippocampus_runtime.subconscious.semantic_subregion_budget` keeps that promise
+small: foreground semantic work must declare a timeout and remains a routing
+scent. Job-circuit semantic work can run broader, but it still returns
+candidate rows that need deterministic validation before any write.
 
 ## Minimal Agent Shells
 
@@ -374,6 +384,12 @@ This is intentionally earlier and weaker than consolidation priority events.
 Event salience decides what is worth spending subconscious model attention on;
 consolidation priority orders later review over already source-joined signals.
 Consumers must still reopen source before making factual claims.
+
+`aippocampus_runtime.subconscious.circuit_feedback` sits beside this gate as an
+append-only feedback ledger. It records source-ref validation failures,
+candidate misses, stale-scent exposure, useful-route outcomes, and policy
+adjustments for later orchestration. The ledger may branch, pause, decay, or
+deepen a circuit; it must not silently mutate source truth or create cycles.
 
 ## Consolidation Priority Events
 

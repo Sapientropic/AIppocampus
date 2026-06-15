@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.navigation import microcircuit_router
 from aippocampus_runtime.navigation.parallel_derivation_bundle import (
     preflattening_gate_for_route_affordance,
 )
@@ -553,6 +554,25 @@ def _foreground_eligible(
     return True
 
 
+def _transition_constraints(
+    *,
+    status: str,
+    source_thickness: str,
+    affordance: str,
+    action_grammar: str,
+) -> list[str]:
+    constraints: list[str] = []
+    if status in TERMINAL_SUPPRESSED_STATUSES:
+        constraints.append("terminal_status_forces_silent_ignore_or_blocked")
+    if status in {"corrected", "stale"}:
+        constraints.append("corrected_or_stale_requires_reopen_before_foreground")
+    if source_thickness == "thin":
+        constraints.append("source_thin_caps_action_grammar_to_direction_only")
+    if affordance == "surface_warning" and action_grammar != "reopenable_route":
+        constraints.append("warning_requires_reopenable_route")
+    return constraints
+
+
 def _route_has_next_step(route: Mapping[str, Any], signals: Sequence[Mapping[str, Any]]) -> bool:
     if _text(route.get("proposed_action") or route.get("action_delta_required") or route.get("current_frontier")):
         return True
@@ -836,6 +856,12 @@ def _potential_from_route(
             "signal_count": len(signals),
             "signals": signals,
             "suppressed_reason": status if selected_affordance == "silent" else "",
+            "transition_constraints": _transition_constraints(
+                status=status,
+                source_thickness=source_thickness,
+                affordance=selected_affordance,
+                action_grammar=grammar,
+            ),
             "parallel_derivation_preflattening_gate": dict(parallel_preflattening_gate)
             if parallel_preflattening_gate is not None
             else None,
@@ -894,6 +920,13 @@ def build_navigation_potential_projection(
         ),
         reverse=True,
     )
+    microcircuit_report = microcircuit_router.route_candidates(
+        potentials,
+        policy_profile="navigation_potential",
+        top_k=max(1, len(potentials)),
+        threshold=0.0,
+        diversity_key="route_id",
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": PROJECTION_KIND,
@@ -903,6 +936,7 @@ def build_navigation_potential_projection(
         "foreground_eligible_count": len([item for item in potentials if item.get("foreground_eligible")]),
         "potentials": potentials,
         "agency_affordance_inputs": navigation_potentials_to_agency_inputs(potentials),
+        "microcircuit_diagnostics": microcircuit_report["diagnostics"],
         "rules": {
             "navigation_not_truth": True,
             "source_refs_required_for_non_state_check_foreground": True,
@@ -910,6 +944,7 @@ def build_navigation_potential_projection(
             "suppressed_statuses": sorted(TERMINAL_SUPPRESSED_STATUSES),
             "raw_prompt_stored": False,
             "parallel_derivation_gate_is_navigation_only": True,
+            "joint_transition_constraints_declared": True,
         },
         "parallel_derivation_preflattening_gate": parallel_preflattening_gate,
     }

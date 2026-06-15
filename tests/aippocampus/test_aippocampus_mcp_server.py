@@ -152,6 +152,14 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "recall")
         self.assertEqual(payload["surface"], "agent_cli_or_mcp_adapter")
         self.assertTrue(payload["opt_in_required"])
+        self.assertEqual(payload["foreground_action_card"]["decision"], "use_route_first")
+        self.assertEqual(payload["foreground_action_card"]["next_action"], "deepen")
+        self.assertIn("callable_handle", payload["foreground_action_card"])
+        self.assertLess(
+            list(payload).index("foreground_action_card"),
+            list(payload).index("memory_packets"),
+        )
+        self.assertTrue(payload["audit_available"])
         self.assertTrue(payload["policy_boundary"]["navigation_only_not_fact"])
         self.assertEqual(payload["memory_packets"][0]["claim_permission"], "no_claim_before_reopen")
         self.assertEqual(payload["deepen_requests"][0]["tool"], "agent deepen")

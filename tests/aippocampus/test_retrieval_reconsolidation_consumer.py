@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.recall.active_path_packet import build_active_path_packet  # noqa: E402
 from aippocampus_runtime.reflection import (  # noqa: E402
     retrieval_reconsolidation,
     retrieval_reconsolidation_consumer,
@@ -55,6 +56,29 @@ class RetrievalReconsolidationConsumerTests(unittest.TestCase):
         self.assertEqual(row["final_state"], "needs_source_reopen")
         self.assertFalse(row["rank_eligible"])
         self.assertIn("retrieval_consumer_updates_source_truth", report["cannot_claim"])
+
+    def test_active_path_packet_consumes_navigation_metadata_without_claim_upgrade(self) -> None:
+        packet = build_active_path_packet(
+            retrieval_reconsolidation_candidates=[
+                _candidate("still_current_candidate", "still_current"),
+                _candidate("revision_candidate", "stale"),
+                _candidate("supersession_candidate", "superseded"),
+                _candidate("revision_candidate", "conflicted"),
+                _candidate("still_current_candidate", "still_current", refs=False),
+            ],
+            max_paths=5,
+        )
+        paths = [row for row in packet["paths"] if row["origin"] == "retrieval_reconsolidation"]
+        routes = {row["route"] for row in paths}
+        serialized = str(packet)
+
+        self.assertIn("reopen", routes)
+        self.assertIn("ignore", routes)
+        self.assertTrue(all(row["source_boundary"]["navigation_not_truth"] for row in paths))
+        self.assertTrue(all(row["support_level"] == "candidate" for row in paths))
+        self.assertNotIn("raw source", serialized.casefold())
+        self.assertNotIn("conflicted", {row["currentness"] for row in paths})
+        self.assertNotIn("source_open", {row["action_grammar"] for row in paths})
 
 
 if __name__ == "__main__":

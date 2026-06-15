@@ -1,0 +1,153 @@
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime.recall import agent_continuity, foreground_action_card  # noqa: E402
+
+
+class ForegroundActionCardTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = Path(self.tmp.name)
+        self.clean = self.cwd / ".aippocampus" / "clean-source"
+        self.clean.mkdir(parents=True)
+        with (self.clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "message_id": "msg_card",
+                        "turn_id": "turn_card",
+                        "source_id": "src_card",
+                        "source_line": 1,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 1,
+                        "is_final": True,
+                        "text": "Agent recall should surface one action card before audit details.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _packet(self, routes: list[dict[str, object]]) -> dict[str, object]:
+        return {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": routes,
+        }
+
+    def _recall_with_routes(self, routes: list[dict[str, object]]) -> dict[str, object]:
+        with patch.object(agent_continuity, "recall_context_packet", return_value=self._packet(routes)):
+            return agent_continuity.recall(
+                "foreground action card",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                max_routes=3,
+            )
+
+    def test_positive_route_card_precedes_audit_payload_and_has_callable_action(self) -> None:
+        report = agent_continuity.recall(
+            "agent recall foreground action card",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=1,
+        )
+        card = report["foreground_action_card"]
+
+        self.assertEqual(card["decision"], "use_route_first")
+        self.assertEqual(card["next_action"], "deepen")
+        self.assertEqual(card["claim_boundary"], "no_claim_before_reopen")
+        self.assertEqual(card["callable_handle"], report["deepen_requests"][0]["handle"])
+        self.assertLessEqual(len(card), foreground_action_card.CARD_FIELD_BUDGET)
+        self.assertEqual(report["metrics"]["foreground_action_card_audit_key_leak_count"], 0)
+        self.assertLess(
+            list(report).index("foreground_action_card"),
+            list(report).index("memory_packets"),
+        )
+        self.assertTrue(report["audit_available"])
+        self.assertFalse(foreground_action_card.AUDIT_ONLY_KEYS & set(card))
+
+    def test_no_route_card_says_continue_normally(self) -> None:
+        report = self._recall_with_routes([])
+        card = report["foreground_action_card"]
+
+        self.assertEqual(report["status"], "no_routes")
+        self.assertEqual(card["decision"], "continue_normally")
+        self.assertEqual(card["next_action"], "continue_normally")
+        self.assertEqual(card["claim_boundary"], "no_route_claim")
+        self.assertNotIn("metrics", card)
+
+    def test_blocked_private_route_card_does_not_offer_a_handle(self) -> None:
+        report = self._recall_with_routes(
+            [
+                {
+                    "route_id": "route_private",
+                    "kind": "source_ref",
+                    "route_label": "private route should not foreground",
+                    "action_grammar": "ignore_or_blocked",
+                }
+            ]
+        )
+        card = report["foreground_action_card"]
+        encoded = json.dumps(card, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(card["decision"], "ignore_or_blocked")
+        self.assertEqual(card["next_action"], "continue_normally")
+        self.assertNotIn("callable_handle", card)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_stale_or_conflicted_route_card_requires_deepen_before_claim(self) -> None:
+        report = self._recall_with_routes(
+            [
+                {
+                    "route_id": "route_stale",
+                    "kind": "source_ref",
+                    "route_label": "stale route",
+                    "handle": "handle:stale-route",
+                    "currentness": "stale",
+                    "conflict": "source_conflict",
+                }
+            ]
+        )
+        card = report["foreground_action_card"]
+
+        self.assertEqual(card["decision"], "deepen_before_claim")
+        self.assertEqual(card["next_action"], "deepen")
+        self.assertEqual(card["callable_handle"], "handle:stale-route")
+        self.assertIn("currentness", card["why"])
+
+    def test_public_projection_redacts_card_handle_but_keeps_action_shape(self) -> None:
+        report = agent_continuity.recall(
+            "agent recall foreground action card",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=1,
+        )
+        public = agent_continuity.public_recall_projection(report)
+        card = public["foreground_action_card"]
+        encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
+
+        self.assertNotIn("callable_handle", card)
+        self.assertTrue(card["callable_handle_redacted"])
+        self.assertEqual(card["next_action"], "deepen")
+        self.assertIn("foreground_action_card.callable_handle", public["local_private_fields"])
+        self.assertNotIn(report["foreground_action_card"]["callable_handle"], encoded)
+
+    def test_replay_report_shows_card_reduces_manual_compile_steps_without_truth_claim(self) -> None:
+        report = foreground_action_card.build_action_card_replay_report()
+
+        self.assertTrue(report["ok"])
+        self.assertGreater(report["broad_manual_search_reduction_proxy"], 0)
+        self.assertEqual(report["red_lines"]["audit_key_in_card_count"], 0)
+        self.assertIn("causal_live_agent_behavior_lift", report["cannot_claim"])
