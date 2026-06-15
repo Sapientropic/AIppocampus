@@ -23,6 +23,10 @@ def _section(index: int, **overrides: object) -> dict[str, object]:
         "source_refs": [{"source_id": f"source:{index}"}],
         "task_family": "seed",
         "status": "active",
+        "source_coverage_time": {
+            "start": "2026-06-15T00:00:00Z",
+            "end": "2026-06-15T01:00:00Z",
+        },
     }
     row.update(overrides)
     return row
@@ -46,10 +50,65 @@ class MacroFieldAtlasTests(unittest.TestCase):
         self.assertEqual(report["pairwise_hard_check_count"], 6)
         self.assertLess(report["pairwise_hard_check_count"], report["total_possible_pair_count"])
         self.assertFalse(report["all_pairs_recomputed"])
+        self.assertTrue(report["source_shape_descriptor"]["compatibility_diagnostics_present"])
         hard_edges = [edge for edge in report["edges"] if edge["edge_kind"] == "hard_overlap_edge"]
         self.assertEqual(len(hard_edges), 6)
         self.assertIn("basis", hard_edges[0])
         self.assertIn(hard_edges[0]["status"], {"active", "needs_overlap_recheck", "needs_source_reopen"})
+
+    def test_materializer_emits_local_global_source_shape_for_selected_sections(self) -> None:
+        report = macro_field_atlas.materialize_macro_field_atlas(
+            [
+                _section(1, title="source shape selected", source_refs=[{"source_id": "shared"}]),
+                _section(2, title="source shape selected", source_refs=[{"source_id": "shared"}]),
+                _section(3, title="background"),
+            ],
+            query="source shape selected",
+            top_n=2,
+        )
+
+        descriptor = report["source_shape_descriptor"]
+        self.assertEqual(descriptor["producer"], "macro_field_atlas")
+        self.assertEqual(descriptor["descriptor_state"], "complete")
+        self.assertTrue(descriptor["compatibility_diagnostics_present"])
+        self.assertTrue(descriptor["projection"]["projection_allowed"])
+        self.assertEqual(descriptor["authority_level"], "direction_only")
+        self.assertEqual(descriptor["claim_permission"], "none")
+        self.assertEqual(
+            descriptor["temporal_semantics"]["source_coverage_time"]["start"],
+            "2026-06-15T00:00:00Z",
+        )
+
+    def test_materializer_source_shape_degrades_on_obstruction_and_blocked_boundary(self) -> None:
+        obstructed = macro_field_atlas.materialize_macro_field_atlas(
+            [
+                _section(1, title="split runtime", scope="project:a", source_refs=[{"source_id": "a"}]),
+                _section(2, title="split runtime", scope="project:b", source_refs=[{"source_id": "b"}]),
+            ],
+            query="split runtime",
+            top_n=2,
+        )
+        blocked = macro_field_atlas.materialize_macro_field_atlas(
+            [
+                _section(1, title="private route", privacy_state="private", source_refs=[{"source_id": "private"}]),
+                _section(2, title="private route", source_refs=[{"source_id": "public"}]),
+            ],
+            query="private route",
+            top_n=2,
+        )
+
+        obstruction_descriptor = obstructed["source_shape_descriptor"]
+        self.assertEqual(obstruction_descriptor["descriptor_state"], "incomplete")
+        self.assertFalse(obstruction_descriptor["projection"]["projection_allowed"])
+        self.assertEqual(obstruction_descriptor["signals"]["compatibility"]["status"], "obstruction")
+        blocked_descriptor = blocked["source_shape_descriptor"]
+        self.assertEqual(blocked_descriptor["descriptor_state"], "diagnostic_only")
+        self.assertEqual(blocked_descriptor["dominant_guard"]["guard"], "privacy_boundary")
+        self.assertEqual(blocked_descriptor["degrade_to"], "ignore_or_blocked")
+        self.assertFalse(blocked_descriptor["projection"]["projection_allowed"])
+        encoded = json.dumps(blocked_descriptor, ensure_ascii=False)
+        self.assertNotIn("C:\\", encoded)
+        self.assertNotIn("raw_private_source_text", encoded)
 
     def test_declared_and_posture_edges_do_not_satisfy_glue(self) -> None:
         sections = [

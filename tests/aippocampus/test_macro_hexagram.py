@@ -91,6 +91,42 @@ class MacroHexagramTests(unittest.TestCase):
         self.assertEqual(qian["authority_level"], "navigation_only")
         self.assertFalse(qian["fact_claim_allowed"])
 
+    def test_king_wen_sequence_profile_is_aggregate_navigation_audit_only(self) -> None:
+        profile = hexagram.king_wen_sequence_profile()
+
+        self.assertEqual(profile["state_count"], 64)
+        self.assertEqual(profile["unique_state_count"], 64)
+        self.assertEqual(profile["adjacent_transition_count"], 63)
+        self.assertEqual(profile["wrap_policy"], "no_wrap")
+        self.assertEqual(profile["adjacent_hamming"]["distance_counts"], {1: 2, 2: 20, 3: 13, 4: 19, 6: 9})
+        self.assertEqual(profile["adjacent_hamming"]["mean"], 3.349206)
+        self.assertEqual(profile["adjacent_hamming"]["population_variance"], 1.909801)
+        self.assertEqual(profile["lag_1_distance_autocorrelation"]["value"], -0.263503)
+        self.assertEqual(
+            profile["group_of_four_yang_balance"]["counts"],
+            [10, 10, 16, 12, 10, 8, 14, 12, 12, 12, 16, 10, 12, 12, 14, 12],
+        )
+        self.assertEqual(
+            profile["group_of_four_yang_balance"]["count_distribution"],
+            {8: 1, 10: 4, 12: 7, 14: 2, 16: 2},
+        )
+        self.assertEqual(profile["pair_transition_hamming"]["within_pair"]["distance_counts"], {2: 12, 4: 12, 6: 8})
+        self.assertEqual(profile["pair_transition_hamming"]["between_pair"]["distance_counts"], {1: 2, 2: 8, 3: 13, 4: 7, 6: 1})
+        self.assertEqual(
+            profile["pair_transition_hamming"]["within_pair_relation_counts"],
+            {"opposite": 4, "reverse": 24, "reverse_and_opposite": 4},
+        )
+        self.assertTrue(profile["boundary"]["not_training_schedule"])
+        self.assertTrue(profile["boundary"]["not_ranking_weight"])
+        self.assertTrue(profile["boundary"]["not_source_evidence"])
+        self.assertEqual(profile["authority_level"], "navigation_only")
+        self.assertEqual(profile["claim_permission"], "no_claim_before_reopen")
+        self.assertFalse(profile["fact_claim_allowed"])
+        self.assertFalse(profile["foreground_action_allowed"])
+        encoded = json.dumps(profile, ensure_ascii=False)
+        self.assertNotIn("爻辞", encoded)
+        self.assertNotIn("training_schedule_allowed", encoded)
+
     def test_hamming_helpers_report_exact_structure_not_advice(self) -> None:
         self.assertEqual(hexagram.hamming_distance("屯", "蒙"), 4)
         self.assertEqual(hexagram.changed_lines("屯", "蒙"), (1, 2, 5, 6))

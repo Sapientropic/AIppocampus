@@ -466,6 +466,8 @@ def build_source_texture_boundary_hints(
     }
     for row in texture_rows:
         signal_kind = str(row.get("signal_kind") or "")
+        if str(row.get("truth_boundary") or "") != SOURCE_TEXTURE_BOUNDARY:
+            continue
         if signal_kind not in boundary_kinds:
             continue
         refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, Mapping)]

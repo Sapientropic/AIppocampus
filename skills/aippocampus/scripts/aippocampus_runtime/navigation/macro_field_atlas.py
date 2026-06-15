@@ -16,6 +16,9 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.navigation import avatar_posture, local_global_compatibility
+from aippocampus_runtime.navigation.local_global_source_shape import (
+    build_local_global_source_shape_descriptor,
+)
 
 SCHEMA_VERSION = 1
 AUTHORITY_LEVEL = "direction_only"
@@ -57,6 +60,32 @@ def _safe_refs(value: Any) -> list[dict[str, Any]]:
     return refs[:8]
 
 
+def _safe_time_value(value: Any) -> str:
+    text = _text(value)
+    if len(text) <= 40 and all(char.isalnum() or char in "-_:.+TZ" for char in text):
+        return text
+    return ""
+
+
+def _safe_time_window(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    start = _safe_time_value(value.get("start"))
+    end = _safe_time_value(value.get("end"))
+    out: dict[str, str] = {}
+    if start:
+        out["start"] = start
+    if end:
+        out["end"] = end
+    return out
+
+
+def _privacy_domain(value: str) -> str:
+    if value in {"private", "restricted", "personal", "blocked", "private_blocked"}:
+        return "private"
+    return "public"
+
+
 def normalize_atlas_section(row: Mapping[str, Any], *, index: int = 0) -> dict[str, Any]:
     posture = (
         {"posture_id": row.get("posture_id"), "reason_codes": ["explicit_posture_id"]}
@@ -75,8 +104,13 @@ def normalize_atlas_section(row: Mapping[str, Any], *, index: int = 0) -> dict[s
         "topic_epoch": _text(row.get("topic_epoch") or row.get("epoch") or "current"),
         "time_bucket": _text(row.get("time_bucket") or row.get("created_bucket") or "current"),
         "lifecycle": _text(row.get("lifecycle") or row.get("status") or "active"),
+        "status": _text(row.get("status") or row.get("lifecycle") or "active"),
         "freshness": _text(row.get("freshness") or row.get("currentness") or "current"),
         "privacy_state": _text(row.get("privacy_state") or row.get("privacy") or "public_safe"),
+        "privacy_domain": _privacy_domain(_text(row.get("privacy_state") or row.get("privacy") or "public_safe")),
+        "source_coverage_time": _safe_time_window(
+            row.get("source_coverage_time") or row.get("section_time_window")
+        ),
         "source_refs": source_refs,
         "source_ref_count": len(source_refs),
         "authority_level": AUTHORITY_LEVEL,
@@ -339,6 +373,15 @@ def materialize_macro_field_atlas(
     ]
     posture = posture_edges(selected)
     edges = [*hard, *declared, *posture]
+    # The atlas is the first real runtime producer for local/global source-shape:
+    # it only passes the bounded query-time top-N sections, preserving source
+    # handles and guard diagnostics without turning atlas shape into evidence.
+    source_shape_descriptor = build_local_global_source_shape_descriptor(
+        selected,
+        producer="macro_field_atlas",
+        case_id=_stable_id("macro_field_atlas", query, sorted(known_ids)),
+        source_shape_id=_stable_id("macro_field_source_shape", query, sorted(known_ids)),
+    )
     projection = compact_foreground_lanes(
         selected,
         edges,
@@ -362,6 +405,7 @@ def materialize_macro_field_atlas(
         "selected_sections": selected,
         "edges": edges,
         "edge_counts": dict(Counter(str(edge.get("edge_kind")) for edge in edges)),
+        "source_shape_descriptor": source_shape_descriptor,
         "foreground_projection": projection,
         "authority_level": AUTHORITY_LEVEL,
         "claim_permission": CLAIM_PERMISSION,

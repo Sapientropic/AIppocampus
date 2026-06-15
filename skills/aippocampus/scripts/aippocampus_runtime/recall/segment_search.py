@@ -48,6 +48,7 @@ from aippocampus_runtime.recall.segment_metadata import (
 )
 from aippocampus_runtime.recall.segment_search_extras import (
     add_sidecar_arguments,
+    apply_source_texture_hints,
     maybe_emit_outcome_feedback,
     query_expansion_plan,
 )
@@ -87,6 +88,7 @@ class SegmentSearchOptions:
     outcome_feedback_path: str | Path | None = None
     outcome_signal: str | None = None
     outcome_run_id: str | None = None
+    source_texture: str | Path | None = None
 
 
 def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
@@ -523,6 +525,9 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         boundary_diagnostics = turn_boundary_diagnostics(segments, boundary_contexts)
         temporal_cue = _temporal_cue_for_options(options)
         planned_segments, fanout = plan_segments(segments, options, temporal_cue=temporal_cue)
+        planned_segments = apply_source_texture_hints(
+            options.source_texture, cwd, segments, planned_segments, fanout, query_terms, expanded_terms
+        )
         started_at = now_seconds()
         first_pass = _search_segment_pass(
             options=options,
@@ -641,6 +646,7 @@ def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
         outcome_feedback_path=args.outcome_feedback_path,
         outcome_signal=args.outcome_signal,
         outcome_run_id=args.outcome_run_id,
+        source_texture=args.source_texture,
     )
 
 

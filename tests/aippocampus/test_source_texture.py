@@ -158,6 +158,51 @@ class SourceTextureTests(unittest.TestCase):
         self.assertTrue(all(hint["source_reopen_required_before_claim"] for hint in hints))
         self.assertEqual(hints[0]["boundary_reason"], "visible_user_correction")
 
+    def test_boundary_hints_only_project_trusted_boundary_rows(self) -> None:
+        canonical_segment = {
+            "segment_id": "seg-stable-1",
+            "source_refs": [{"message_id": "msg-long", "line": 12}],
+            "start_line": 12,
+            "end_line": 40,
+        }
+        texture_rows = [
+            {
+                "texture_id": "tex-good",
+                "signal_kind": "self_correction_signal",
+                "signal_detail": "visible_user_correction",
+                "truth_boundary": "texture_signal_not_source_fact",
+                "source_refs": [{"message_id": "msg-long", "line": 18}],
+            },
+            {
+                "texture_id": "tex-wrong-boundary",
+                "signal_kind": "self_correction_signal",
+                "signal_detail": "visible_user_correction",
+                "truth_boundary": "raw_private_note",
+                "source_refs": [{"message_id": "msg-long", "line": 18}],
+            },
+            {
+                "texture_id": "tex-unsupported",
+                "signal_kind": "affect_marker",
+                "signal_detail": "affect_only",
+                "truth_boundary": "texture_signal_not_source_fact",
+                "source_refs": [{"message_id": "msg-long", "line": 18}],
+            },
+            {
+                "texture_id": "tex-missing-refs",
+                "signal_kind": "tool_failure_texture",
+                "signal_detail": "verification_failure",
+                "truth_boundary": "texture_signal_not_source_fact",
+                "source_refs": [],
+            },
+        ]
+
+        hints = build_source_texture_boundary_hints([canonical_segment], texture_rows)
+
+        self.assertEqual(len(hints), 1)
+        self.assertEqual(hints[0]["hint_id"].split("_", 1)[0], "sthint")
+        self.assertEqual(hints[0]["boundary_reason"], "visible_user_correction")
+        self.assertEqual(hints[0]["truth_boundary"], "texture_hint_read_model_not_source_fact")
+
 
 if __name__ == "__main__":
     unittest.main()

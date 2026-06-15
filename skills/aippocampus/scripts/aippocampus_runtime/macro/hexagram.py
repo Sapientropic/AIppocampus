@@ -255,6 +255,7 @@ _NAVIGATION_EXPORTS = (
     "hexagram_by_gray_walk_index",
     "king_wen_pair_relation",
     "king_wen_pair_relation_inventory",
+    "king_wen_sequence_profile",
 )
 
 

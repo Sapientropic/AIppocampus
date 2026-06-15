@@ -111,6 +111,12 @@ def transition_inventory(*, include_rows: bool = False) -> dict[str, Any]:
         "transition_count": len(rows),
         "label_counts": dict(sorted(counts.items())),
         "labels_are_reducer_backed": True,
+        "aggregate_audit_context": {
+            "king_wen_sequence_profile": hexagram_navigation.king_wen_sequence_profile(),
+            "pair_label_effect": "none",
+            "ranking_weight_effect": "none",
+            "claim_permission_effect": "none",
+        },
         "raw_source_or_user_data_included": False,
         "authority_level": AUTHORITY_LEVEL,
         "claim_permission": CLAIM_PERMISSION,
