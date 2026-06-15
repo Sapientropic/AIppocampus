@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,8 @@ LOCAL_PRIVATE_HANDLE_FIELDS = [
     "deepen_requests[].machine_next_command",
     "deepen_requests[].copy_paste_command",
 ]
+LOCAL_REOPEN_TOKEN_ENCODING = "utf8_xor_v1_not_encryption"
+_LOCAL_REOPEN_TOKEN_MASK = 0xA5
 
 
 def handle_boundary_fields() -> dict[str, Any]:
@@ -82,8 +84,41 @@ def last_recall_cache_path(explicit: str | Path | None = None) -> Path:
     return core.aippocampus_registry_dir().resolve() / "agent" / "last-recall.json"
 
 
+def _encode_local_reopen_token(value: Any) -> dict[str, Any]:
+    """Encode a local reopen token so it is not stored as ordinary text.
+
+    This is an accidental-disclosure guard for a same-machine cache, not a
+    cryptographic promise. The handle remains local-private navigation material;
+    public output should keep using `--public` / `--compact-json`.
+    """
+
+    raw = str(value or "").encode("utf-8")
+    return {
+        "encoding": LOCAL_REOPEN_TOKEN_ENCODING,
+        "bytes": [byte ^ _LOCAL_REOPEN_TOKEN_MASK for byte in raw],
+    }
+
+
+def _decode_local_reopen_token(value: Any) -> str:
+    if isinstance(value, Mapping) and value.get("encoding") == LOCAL_REOPEN_TOKEN_ENCODING:
+        raw_bytes = value.get("bytes")
+        if not isinstance(raw_bytes, list):
+            return ""
+        try:
+            return bytes(int(byte) ^ _LOCAL_REOPEN_TOKEN_MASK for byte in raw_bytes).decode(
+                "utf-8"
+            )
+        except (TypeError, ValueError, UnicodeDecodeError):
+            return ""
+    return ""
+
+
+def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
 def write_last_recall_cache(
-    payload: Mapping[str, Any],
+    deepen_requests: Iterable[Any],
     *,
     cwd: str | Path | None,
     clean_source_dir: str | Path | None,
@@ -94,15 +129,17 @@ def write_last_recall_cache(
     schema_version: str,
     path: str | Path | None = None,
 ) -> bool:
-    requests = [
-        {
-            "request_index": request.get("request_index"),
-            "route_id": request.get("route_id"),
-            "handle": request.get("handle"),
-        }
-        for request in payload.get("deepen_requests") or []
-        if isinstance(request, Mapping) and request.get("handle")
-    ]
+    requests: list[dict[str, Any]] = []
+    for request in deepen_requests:
+        if not isinstance(request, Mapping) or not request.get("handle"):
+            continue
+        requests.append(
+            {
+                "request_index": request.get("request_index"),
+                "route_id": request.get("route_id"),
+                "local_reopen_token": _encode_local_reopen_token(request.get("handle")),
+            }
+        )
     if not requests:
         return False
     target = last_recall_cache_path(path)
@@ -122,15 +159,18 @@ def write_last_recall_cache(
             "default_human_output_prints_cache_path": False,
             "derived_local_source_paths_persisted": False,
             "opaque_handles_are_navigation_not_facts": True,
+            "opaque_handles_cleartext_persisted": False,
+            "local_reopen_token_encoding": LOCAL_REOPEN_TOKEN_ENCODING,
+            "local_reopen_token_encoding_is_encryption": False,
         },
     }
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_suffix(target.suffix + ".tmp")
         # Local-only reopen handles are not credentials, but they are still
-        # intentionally private navigation tokens. Keep the cache out of human
+        # intentionally private navigation tokens. The cache stores an encoded
+        # token for same-machine follow-through only; keep it out of human
         # output and avoid persisting derived source/registry paths above.
-        # codeql[py/clear-text-storage-sensitive-data]
         tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(target)
     except OSError:
@@ -159,7 +199,12 @@ def handle_from_last_recall_cache(
         except (TypeError, ValueError):
             index = 0
         if index == request_index:
-            return request.get("handle"), dict(cache.get("context") or {})
+            handle = _decode_local_reopen_token(request.get("local_reopen_token"))
+            if not handle and request.get("handle"):
+                # Backward compatibility for caches written before the
+                # local-reopen-token boundary existed.
+                handle = str(request.get("handle") or "")
+            return handle, dict(cache.get("context") or {})
     raise ValueError(f"last recall cache does not contain request {request_index}")
 
 
@@ -261,22 +306,22 @@ def render_deepen_human(payload: Mapping[str, Any]) -> str:
     surface = str(payload.get("surface") or "unknown")
     lines = [f"AIppocampus agent deepen: {status}", f"Surface: {surface}"]
     result = payload.get("result")
-    data = result if isinstance(result, Mapping) else {}
+    data = _mapping_or_empty(result)
     if status != "ok":
-        error = data.get("error") if isinstance(data.get("error"), Mapping) else {}
+        error = _mapping_or_empty(data.get("error"))
         message = error.get("message") or data.get("message") or "Could not verify this handle."
         lines.append("Why: " + core.compact_text(str(message), 180))
         lines.append("Next: rerun agent recall and use the fresh handle.")
     elif surface == "aippo":
-        ledger = data.get("source_support_ledger") if isinstance(data.get("source_support_ledger"), Mapping) else {}
+        ledger = _mapping_or_empty(data.get("source_support_ledger"))
         lines.append(f"Source support refs: {ledger.get('source_ref_count', 0)}")
         lines.append("Next: use --json only when auditing the working contract source ledger.")
     elif surface == "macro":
-        validation = data.get("validation") if isinstance(data.get("validation"), Mapping) else {}
+        validation = _mapping_or_empty(data.get("validation"))
         lines.append(f"Macro validation: {'ok' if validation.get('ok') else 'needs_attention'}")
         lines.append("Next: inspect --json before using source refs or derivation details.")
     else:
-        window = data.get("source_window") if isinstance(data.get("source_window"), Mapping) else {}
+        window = _mapping_or_empty(data.get("source_window"))
         message_count = int(window.get("message_count") or len(window.get("messages") or []))
         evidence = data.get("evidence_level") or data.get("support_level") or "source_open"
         lines.append(f"Evidence: {evidence}; source windows opened: {message_count}")

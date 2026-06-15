@@ -1377,7 +1377,7 @@ def main(argv: list[str] | None = None) -> int:
             _json_out(payload)
         else:
             cache_written = write_last_recall_cache(
-                payload,
+                payload.get("deepen_requests") or [],
                 cwd=args.cwd,
                 clean_source_dir=args.clean_source_dir,
                 registry_dir=args.registry_dir,

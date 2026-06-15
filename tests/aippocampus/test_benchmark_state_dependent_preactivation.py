@@ -116,6 +116,10 @@ class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["sample_size"], payload["case_count"])
         self.assertEqual(payload["full_report_flag"], "--output <path>")
         self.assertTrue(payload["full_report_written"])
+        self.assertEqual(payload["stdout_boundary"], "public_summary_no_cases_or_source_refs")
+        self.assertNotIn("metrics", payload)
+        self.assertNotIn("quality_gates", payload)
+        self.assertFalse(payload["privacy_boundary"]["source_refs_emitted_to_stdout"])
         self.assertEqual(written["kind"], payload["kind"])
         self.assertIn("cases", written)
 

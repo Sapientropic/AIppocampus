@@ -1071,13 +1071,19 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn('"memory_packets"', proc.stdout)
         self.assertNotIn("source_refs", proc.stdout)
         self.assertNotIn(str(self.cwd), proc.stdout)
-        cache = json.loads(Path(env[agent_continuity.LAST_RECALL_CACHE_ENV]).read_text())
+        cache_text = Path(env[agent_continuity.LAST_RECALL_CACHE_ENV]).read_text()
+        cache = json.loads(cache_text)
         cache_context = cache["context"]
         self.assertEqual(cache_context["path_scope"], "cwd_only_explicit_overrides_required")
         self.assertNotIn("clean_source_dir", cache_context)
         self.assertNotIn("registry_dir", cache_context)
         self.assertNotIn("macro_state_jsonl", cache_context)
         self.assertFalse(cache["privacy_boundary"]["derived_local_source_paths_persisted"])
+        self.assertFalse(cache["privacy_boundary"]["opaque_handles_cleartext_persisted"])
+        self.assertFalse(cache["privacy_boundary"]["local_reopen_token_encoding_is_encryption"])
+        self.assertNotIn("aippo-nav:", cache_text)
+        self.assertNotIn('"handle"', json.dumps(cache["requests"], ensure_ascii=False))
+        self.assertIn("local_reopen_token", cache["requests"][0])
 
     def test_cli_agent_deepen_default_output_is_compact_human_frontstage(self) -> None:
         recall_proc = subprocess.run(
