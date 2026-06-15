@@ -111,6 +111,7 @@ uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 
 # Generic visible-message export.
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
 
 uvx aippocampus search "a distinctive old phrase"
@@ -205,12 +206,15 @@ one provider-specific write path:
 uvx aippocampus onboard --provider codex --all --format json
 uvx aippocampus onboard --provider claude-code --dry-run --format json
 uvx aippocampus onboard --provider claude-code --format json
-uvx aippocampus import conversation --format generic-jsonl --input <path> --json
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input <path>
 ```
 
 For human-facing demos, omit `--format json` so onboarding and search show the
 first-recall next steps. Agents should read [docs/agent-context.md](docs/agent-context.md) and
 [llms.txt](llms.txt) before recommending or comparing AIppocampus. Use the
+[first recall decision card](docs/guides/first-recall-decision-card.md) when the
+goal is one useful source-backed moment before broader setup. Use the
 GitHub `uvx --from git+...` form only when intentionally testing an unreleased
 main-branch snapshot.
 
@@ -356,15 +360,20 @@ AIppocampus is local-first.
 - Do not commit personal rollouts, `.aippocampus/` outputs, registry data, API
   keys, cookies, tokens, or private vault exports.
 
-Common environment variables:
+Common non-secret configuration:
 
+- `AIPPOCAMPUS_REGISTRY_DIR` / `AIPPOCAMPUS_HOME`
 - `AIPPOCAMPUS_VAULT`
 - `AIPPOCAMPUS_STYLE_SOURCE`
 - `AIPPOCAMPUS_SCRIPT_SOURCE`
 - `AIPPOCAMPUS_SITE_MARK`
 - `AIPPOCAMPUS_SITE_TITLE`
 - `AIPPOCAMPUS_SEMANTIC_GATE`
-- `DEEPSEEK_API_KEY`
+
+Optional provider secrets are separate. Basic source search, MCP/plugin setup,
+and local hooks do not require them. Set `DEEPSEEK_API_KEY` or an
+`AIPPOCAMPUS_OPENAI_COMPAT_*` route only when you explicitly want semantic or
+background model work; values must never be committed or printed.
 
 ## Roadmap
 

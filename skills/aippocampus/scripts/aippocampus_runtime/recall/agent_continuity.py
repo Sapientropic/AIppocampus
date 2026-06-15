@@ -42,10 +42,13 @@ from aippocampus_runtime.recall import (
 )
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     DEFAULT_MACRO_STATE_RELATIVE_PATHS,
+    capture_feedback,
+    compact_feedback_receipt,
     handle_boundary_fields,
     handle_from_last_recall_cache,
     macro_schema_help,
     macro_state_template,
+    missing_feedback_route_payload,
     normalize_route_limit,
     policy_boundary,
     public_recall_projection,
@@ -1138,56 +1141,6 @@ def explain(
     )
 
 
-def capture_feedback(
-    *,
-    route_id: str,
-    outcome: str,
-    route_kind: str = "active_path",
-    reason: str = "",
-    feedback_path: str | Path | None = None,
-) -> dict[str, Any]:
-    """Capture low-authority outcome feedback without changing source truth."""
-
-    event = feedback_events.active_flow_event(
-        route_id=route_id,
-        route_kind=route_kind,
-        signal=outcome,
-        source_id=route_id,
-        reason=reason,
-    )
-    wrote_event = False
-    if feedback_path:
-        target = Path(feedback_path).resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("a", encoding="utf-8", newline="\n") as f:
-            f.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        wrote_event = True
-    report = feedback_events.recall_feedback_report([event])
-    return _public_payload(
-        {
-            "kind": KIND,
-            "schema_version": SCHEMA_VERSION,
-            "mode": "feedback",
-            "status": "captured",
-            "authority": "low_authority_feedback_signal",
-            "event": event,
-            "feedback_report": report,
-            "wrote_event": wrote_event,
-            "storage": "jsonl" if wrote_event else "receipt_only",
-            "policy_boundary": {
-                **policy_boundary(),
-                "feedback_is_source_truth": False,
-                "feedback_can_ripen_candidate_without_source": False,
-                "source_reopen_required_for_claims": True,
-            },
-            "red_lines": {
-                "feedback_promoted_without_source": 0,
-                "source_truth_changed_by_feedback": 0,
-            },
-        }
-    )
-
-
 def build_macro_orientation_packet_fixture_report() -> dict[str, Any]:
     moving = macro_state.build_macro_orientation_state(
         project="AIppocampus",
@@ -1294,6 +1247,15 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
         description="Opt-in agent recall, AIppo activation, deepen, explain, and feedback.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "First useful loop:\n"
+            '  aippocampus agent recall "old cue" --json\n'
+            "  aippocampus agent deepen --request 1 --last-recall --json\n"
+            "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n\n"
+            "Default recall JSON is compact and foreground-safe. Use --detail full only for "
+            "local diagnostics that may include private handles."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -1322,7 +1284,13 @@ def _parser() -> argparse.ArgumentParser:
         "--compact-json",
         action="store_true",
         dest="public_json",
-        help="With --json, omit local-private deepen handles and commands.",
+        help="Compatibility alias for the default compact JSON foreground surface.",
+    )
+    recall_parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="Use full only for local diagnostics that may include private reopen handles.",
     )
     recall_parser.add_argument("--json", action="store_true")
 
@@ -1336,7 +1304,20 @@ def _parser() -> argparse.ArgumentParser:
     )
     aippo_parser.add_argument("--json", action="store_true")
 
-    macro_parser = sub.add_parser("macro")
+    macro_parser = sub.add_parser(
+        "macro",
+        description=(
+            "Show a compact macro-orientation navigation packet. Macro state is a "
+            "navigation prior only; reopen source before factual claims."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  aippocampus agent macro --project AIppocampus\n"
+            "  aippocampus agent macro --explain-schema\n"
+            "  aippocampus agent macro --init-template --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     macro_parser.add_argument("--project", default="AIppocampus")
     macro_parser.add_argument("--cwd")
     macro_parser.add_argument("--macro-state-jsonl")
@@ -1363,15 +1344,31 @@ def _parser() -> argparse.ArgumentParser:
     explain_parser.add_argument("--project", default="AIppocampus")
     explain_parser.add_argument("--json", action="store_true")
 
-    feedback_parser = sub.add_parser("feedback")
-    feedback_parser.add_argument("route_id")
+    feedback_parser = sub.add_parser(
+        "feedback",
+        description=(
+            "Record whether a recall/deepen route helped. Feedback is a low-authority "
+            "calibration signal, never source truth."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n"
+            "  aippocampus agent feedback <route_id> --outcome wrong_route --reason \"wrong project\" --json\n\n"
+            "Add --feedback-jsonl <path> to persist the signal for future route ordering; "
+            "without it, the command returns a receipt only."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    feedback_parser.add_argument("route_id", nargs="?")
     feedback_parser.add_argument(
         "--outcome",
         default="candidate_delivered",
         help=(
-            "Feedback outcome: "
+            "What happened in plain words first: helped/useful, wrong/noisy, stale, "
+            "prevented. Stored outcome values: "
             + ", ".join(sorted(feedback_events.ACTIVE_FLOW_SIGNALS))
-            + "; alias: wrong_route=wrong_route_drag."
+            + "; aliases include helped=source_reopen_success, wrong=wrong_route_drag, "
+            "stale=expired."
         ),
     )
     feedback_parser.add_argument(
@@ -1382,6 +1379,11 @@ def _parser() -> argparse.ArgumentParser:
     feedback_parser.add_argument("--reason", default="")
     feedback_parser.add_argument("--feedback-jsonl")
     feedback_parser.add_argument("--json", action="store_true")
+    feedback_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full feedback report diagnostics instead of the compact receipt.",
+    )
     return parser
 
 
@@ -1417,8 +1419,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         payload = {**payload, "last_recall_cache_available": cache_written}
         if args.json:
-            if args.public_json:
+            if args.public_json or args.detail != "full":
                 payload = public_recall_projection(payload)
+            else:
+                payload = {
+                    "detail": "full",
+                    "output_boundary": "local_private_diagnostic_full",
+                    "agent_next_action": (
+                        "Use --detail full only for local diagnostics; foreground agents should "
+                        "prefer compact JSON or the human request-index action."
+                    ),
+                    **payload,
+                }
             _json_out(payload)
         else:
             print(render_recall_human(payload))
@@ -1525,7 +1537,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("AIppocampus agent explain: cannot verify handle")
                 print("Reason: " + str(error.get("code") or "malformed recall handle"))
                 print(
-                    "Use: run `aippocampus agent recall --json ...` and pass "
+                    "Use: run `aippocampus agent recall --json --detail full ...` and pass "
                     "`deepen_requests[].handle`, or use `agent deepen --request N --last-recall`."
                 )
             else:
@@ -1533,6 +1545,17 @@ def main(argv: list[str] | None = None) -> int:
                 print("next_safe_action: " + str(data.get("next_safe_action") or "reopen_source"))
         return 2 if payload.get("status") == "cannot_verify" else 0
     if args.command == "feedback":
+        if not args.route_id:
+            payload = missing_feedback_route_payload(
+                schema_version=SCHEMA_VERSION,
+                kind=KIND,
+            )
+            if args.json:
+                _json_out(payload)
+            else:
+                print("AIppocampus agent feedback: route_id required")
+                print("Next: " + payload["agent_next_action"])
+            return 2
         try:
             payload = capture_feedback(
                 route_id=args.route_id,
@@ -1540,6 +1563,8 @@ def main(argv: list[str] | None = None) -> int:
                 route_kind=args.route_kind,
                 reason=args.reason,
                 feedback_path=args.feedback_jsonl,
+                schema_version=SCHEMA_VERSION,
+                kind=KIND,
             )
         except feedback_events.InvalidFeedbackValue as exc:
             payload = _public_payload(
@@ -1562,7 +1587,21 @@ def main(argv: list[str] | None = None) -> int:
             )
             _json_out(payload)
             return 2
-        _json_out(payload)
+        if args.json or args.operator_json:
+            _json_out(
+                payload
+                if args.operator_json
+                else compact_feedback_receipt(payload, schema_version=SCHEMA_VERSION, kind=KIND)
+            )
+        else:
+            compact = compact_feedback_receipt(
+                payload,
+                schema_version=SCHEMA_VERSION,
+                kind=KIND,
+            )
+            print("AIppocampus agent feedback: captured")
+            print("storage: " + str(compact["write_boundary"]["storage"]))
+            print("next: " + str(compact["agent_next_action"]))
         return 0
     return 2
 

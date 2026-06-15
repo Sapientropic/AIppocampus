@@ -217,7 +217,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("handle_preview", report["deepen_requests"][0])
         self.assertIn("handle_sha256_12", report["deepen_requests"][0])
         self.assertIn("deepen route 1", human)
-        self.assertIn("--json for callable handle", human)
+        self.assertIn("--json --detail full for local-private handle", human)
         self.assertNotIn(long_handle, human)
         self.assertNotIn("aippo-nav:", human)
         self.assertLess(max(len(line) for line in human.splitlines()), 180)
@@ -1132,7 +1132,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(receipt["red_lines"]["feedback_promoted_without_source"], 0)
         self.assertTrue(receipt["policy_boundary"]["source_reopen_required_for_claims"])
 
-    def test_cli_agent_recall_outputs_json(self) -> None:
+    def test_cli_agent_recall_default_json_is_compact_foreground(self) -> None:
         proc = subprocess.run(
             [
                 sys.executable,
@@ -1159,8 +1159,52 @@ class AgentOptInContinuityTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         self.assertEqual(payload["mode"], "recall")
-        self.assertEqual(payload["memory_packets"][0]["kind"], "aippocampus_memory_packet")
+        self.assertEqual(payload["surface"], "agent_cli_public_compact")
+        self.assertEqual(payload["output_boundary"], "public_compact_no_local_private_handles")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(payload["foreground_action"]["arguments"]["request_index"], 1)
+        self.assertNotIn("memory_packets", payload)
+        self.assertNotIn("deepen_requests", payload)
+        self.assertNotIn("foreground_action_card", payload)
+        self.assertNotIn('"copy_paste_command":', encoded)
+        self.assertNotIn("aippo-nav:", encoded)
         self.assertNotIn("source_refs", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_cli_agent_recall_full_json_is_explicit_local_diagnostic(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+                "--detail",
+                "full",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(payload["detail"], "full")
+        self.assertEqual(payload["output_boundary"], "local_private_diagnostic_full")
+        self.assertIn("memory_packets", payload)
+        self.assertIn("deepen_requests", payload)
+        self.assertIn("foreground_action_card", payload)
+        self.assertIn("aippo-nav:", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_cli_agent_feedback_rejects_unknown_route_kind_as_structured_json(self) -> None:
@@ -1305,6 +1349,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
                 "--clean-source-dir",
                 str(self.clean),
                 "--json",
+                "--detail",
+                "full",
             ],
             cwd=SCRIPTS,
             text=True,
@@ -1387,6 +1433,42 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
         self.assertEqual(semantic["agent_next_action"], "reopen_source")
 
+    def test_agent_recall_semantic_timeout_is_degraded_no_contribution(self) -> None:
+        with patch(
+            "aippocampus_runtime.recall.why_diagnostics.recall_diagnostic_report",
+            return_value={
+                "decision": "degraded",
+                "reasons": [
+                    "route_returned",
+                    "source_reopen_required",
+                    "semantic_provider_timeout",
+                ],
+                "next_safe_action": "reopen_source",
+                "surface_reports": [
+                    {
+                        "surface": "semantic_gate",
+                        "status": "available",
+                        "reason_codes": ["semantic_provider_timeout", "route_returned"],
+                        "details": {"decision": "evidence"},
+                    }
+                ],
+            },
+        ):
+            report = agent_continuity.recall(
+                "what should I remember before filing a GitHub issue for AIppocampus",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                semantic_gate_mode="auto",
+                run_semantic_gate=True,
+                semantic_timeout=8,
+            )
+
+        sidecar = report["semantic_gate_diagnostics"]["semantic_sidecar"]
+        self.assertEqual(sidecar["status"], "degraded")
+        self.assertEqual(sidecar["decision"], "degraded")
+        self.assertEqual(sidecar["contribution"], "none_semantic_timeout")
+        self.assertIn("semantic_provider_timeout", sidecar["reason_codes"])
+
     def test_cli_agent_recall_auto_attention_reports_promotion_blockers(self) -> None:
         proc = subprocess.run(
             [
@@ -1403,6 +1485,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
                 "--attention-router-mode",
                 "auto",
                 "--json",
+                "--detail",
+                "full",
             ],
             cwd=SCRIPTS,
             text=True,
@@ -1608,16 +1692,15 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn('"handle"', json.dumps(json.loads(cache_text)["requests"]))
         self.assertIn("local_reopen_token", cache_text)
 
-    def test_cli_agent_macro_missing_state_explains_schema_repair(self) -> None:
+    def test_cli_agent_recall_help_marks_full_json_as_local_diagnostic(self) -> None:
         proc = subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "aippocampus_runtime.cli.facade",
                 "agent",
-                "macro",
-                "--cwd",
-                str(self.cwd),
+                "recall",
+                "--help",
             ],
             cwd=SCRIPTS,
             text=True,
@@ -1628,95 +1711,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("AIppocampus agent macro: missing_macro_state_path", proc.stdout)
-        self.assertIn(".aippocampus/macro-orientation.jsonl", proc.stdout)
-        self.assertIn("aippocampus agent macro --explain-schema", proc.stdout)
-        self.assertNotIn('"memory_packets"', proc.stdout)
-
-    def test_cli_agent_macro_schema_and_template_are_available(self) -> None:
-        schema_proc = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "aippocampus_runtime.cli.facade",
-                "agent",
-                "macro",
-                "--explain-schema",
-            ],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
-        template_proc = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "aippocampus_runtime.cli.facade",
-                "agent",
-                "macro",
-                "--init-template",
-                "--json",
-            ],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
-        template = json.loads(template_proc.stdout)
-
-        self.assertEqual(schema_proc.returncode, 0, schema_proc.stderr)
-        self.assertEqual(template_proc.returncode, 0, template_proc.stderr)
-        self.assertIn("AIppocampus agent macro schema", schema_proc.stdout)
-        self.assertEqual(template["kind"], "macro_orientation_state")
-        self.assertTrue(template["source_refs"])
-
-    def test_cli_agent_macro_outputs_compact_packet(self) -> None:
-        macro_path = self.cwd / "macro-orientation.jsonl"
-        entry = macro_state.build_macro_orientation_state(
-            project="AIppocampus",
-            hexagram="乾",
-            changing_lines=(1,),
-            source_refs=({"source_id": "macro-cli-source"},),
-            updated_at="2026-06-11T10:00:00Z",
-        )
-        macro_state.append_macro_orientation_state(macro_path, entry)
-        proc = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "aippocampus_runtime.cli.facade",
-                "agent",
-                "macro",
-                "--project",
-                "AIppocampus",
-                "--macro-state-jsonl",
-                str(macro_path),
-                "--json",
-            ],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
-
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
-        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        self.assertEqual(payload["mode"], "macro")
-        self.assertEqual(
-            payload["memory_packets"][0]["packet_kind"],
-            "macro_orientation_packet",
-        )
-        self.assertNotIn("source_refs", encoded)
-        self.assertNotIn("macro-cli-source", encoded)
-
+        self.assertIn("--detail {compact,full}", proc.stdout)
+        self.assertIn("Use full only for local diagnostics", proc.stdout)
 
 if __name__ == "__main__":
     unittest.main()

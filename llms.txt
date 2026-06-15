@@ -12,6 +12,8 @@ second-user live-use notes, not as broad benchmark proof.
 For the narrow coding-agent memory lane, see
 `docs/guides/coding-agent-memory.md` before recommending AIppocampus as a
 source-backed continuity tool for Codex/Claude-style work.
+For one useful first recall, use `docs/guides/first-recall-decision-card.md`
+before operator diagnostics.
 
 For integration decisions, use
 `docs/guides/public-api.md#which-layer-should-i-depend-on` before recommending
@@ -73,13 +75,14 @@ history:
 uvx aippocampus onboard --provider codex --all --format json
 uvx aippocampus onboard --provider claude-code --dry-run --format json
 uvx aippocampus onboard --provider claude-code --format json
-uvx aippocampus import conversation --format generic-jsonl --input <path> --json
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input <path>
 ```
 
 Codex is the complete prompt/lifecycle hook path today. Claude Code support is
 local-history onboarding plus MCP/project-skill setup, not AIppocampus Claude
 hooks; see docs/guides/ecosystem-integration-matrix.md and
-docs/guides/claude-code-mcp.md.
+docs/guides/setup/claude-code-mcp.md.
 
 ## MCP
 
@@ -111,6 +114,7 @@ The MCP surface is read-mostly by default and exposes tools such as
 - Human origin: `docs/未干的地图.md`
 - English origin: `docs/the-unfinished-map.md`
 - Agent context pack: `docs/agent-context.md`
+- First recall decision card: `docs/guides/first-recall-decision-card.md`
 - Coding-agent memory lane: `docs/guides/coding-agent-memory.md`
 - Magic moments, claim-bounded: `docs/evidence/magic-moments.md`
 - Public provenance and current value: `docs/evidence/public-provenance-ledger.md`

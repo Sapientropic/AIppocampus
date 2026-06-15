@@ -204,6 +204,118 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
             self.assertNotIn(str(root), raw_output)
             self.assertNotIn("private-rollout.jsonl", raw_output)
 
+    def test_cli_list_empty_state_tells_agent_what_to_do_next(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = root / "handoffs.jsonl"
+            json_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "list",
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            text_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "list",
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(json_proc.returncode, 0, json_proc.stdout + json_proc.stderr)
+            self.assertEqual(text_proc.returncode, 0, text_proc.stdout + text_proc.stderr)
+            payload = json.loads(json_proc.stdout)
+            self.assertEqual(payload["count"], 0)
+            self.assertEqual(
+                payload["empty_state"]["state"],
+                "no_matching_telepathy_handoffs",
+            )
+            self.assertIn("normal recall/search", payload["empty_state"]["agent_next_action"])
+            self.assertIn("next:", text_proc.stdout)
+            self.assertIn("telepathy create --preset handoff", text_proc.stdout)
+
+    def test_cli_create_preset_human_needed_hides_internal_enums_from_first_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = root / "handoffs.jsonl"
+            help_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "create",
+                    "--help",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            create_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "create",
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                    "--preset",
+                    "human-needed",
+                    "--scope",
+                    "release decision",
+                    "--owner",
+                    "codex-a",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(help_proc.returncode, 0, help_proc.stdout + help_proc.stderr)
+            self.assertIn("--preset", help_proc.stdout)
+            self.assertIn("human-needed", help_proc.stdout)
+            self.assertEqual(create_proc.returncode, 0, create_proc.stdout + create_proc.stderr)
+            payload = json.loads(create_proc.stdout)
+            self.assertEqual(payload["card"]["coordination_mode"], "human_needed")
+            self.assertEqual(payload["card"]["status"], "blocked")
+            self.assertEqual(payload["card"]["next_safe_action"], "ask_human_before_handoff")
+
     def test_private_or_path_like_scope_uses_hash_only_preview(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

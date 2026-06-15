@@ -113,7 +113,8 @@ The status output is a provider-matrix readiness view. It may include Codex,
 Claude Code, and generic JSONL providers when they are locally detectable; do
 not read that as Codex-only provider-scoped evidence, source quality, recall
 quality, or consent to ingest every detected provider. The default human output
-is a bounded first-run card; use `--json` or `--details` only for operator
+is a bounded first-run card; ordinary `--json` keeps that bounded status for
+agents. Use `--operator-json` or `--details` only for the full provider
 inventory.
 
 Register local history only after the user explicitly agrees, then choose the
@@ -123,6 +124,7 @@ matching provider path:
 uvx aippocampus onboard --provider codex --all
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus search "a distinctive old phrase"
 ```
@@ -527,7 +529,8 @@ only after user consent, with an explicit provider:
 aippocampus onboard --provider codex --all
 aippocampus onboard --provider claude-code --dry-run --format json
 aippocampus onboard --provider claude-code --format json
-aippocampus import conversation --format generic-jsonl --input <path> --json
+aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
+aippocampus import conversation --format generic-jsonl --input <path>
 aippocampus search "a distinctive old phrase"
 ```
 
@@ -789,20 +792,27 @@ local paths.
 The first sync backend is a local folder:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle status --sync-dir <folder> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle push --sync-dir <folder> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle pull --sync-dir <folder> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle repair --sync-dir <folder> --json
+aippocampus sync status --sync-dir <folder> --json
+aippocampus sync push --sync-dir <folder> --plan --json
+aippocampus sync push --sync-dir <folder> --json
+aippocampus sync pull --sync-dir <folder> --plan --json
+aippocampus sync pull --sync-dir <folder> --json
+aippocampus sync repair --sync-dir <folder> --plan --json
+aippocampus sync repair --sync-dir <folder> --json
 ```
+
+`push` reads the local registry and writes the sync folder. `pull` reads the
+sync folder and writes the local registry. `repair` verifies sync files and
+rewrites the sync manifest. Use `--plan` when an agent is unsure.
 
 Raw rollouts are excluded from plaintext sync. Normal `--include-raw` usage
 requires encrypted sync:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle status --sync-dir <folder> --require-encrypted --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+aippocampus sync push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+aippocampus sync status --sync-dir <folder> --require-encrypted --json
+aippocampus sync pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+aippocampus sync repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
 ```
 
 Device-key helpers keep local private identity material under the registry's
@@ -865,7 +875,7 @@ plaintext files:
 ```sh
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --dry-run --json
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.bundle repair --sync-dir <new-encrypted-folder> --require-encrypted --identity-file <age-identity> --json
+aippocampus sync repair --sync-dir <new-encrypted-folder> --require-encrypted --identity-file <age-identity> --json
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-plaintext --sync-dir <old-plaintext-folder> --dry-run --json
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-plaintext --sync-dir <old-plaintext-folder> --confirm --verified-encrypted-target --json
 ```

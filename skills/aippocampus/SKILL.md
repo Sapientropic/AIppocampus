@@ -121,10 +121,21 @@ Start route-first:
 
 Useful portable commands:
 
+- Install or sync the local Codex plugin, then verify the front door:
+  `aippocampus plugin install --codex --verify`, then
+  `aippocampus update status`.
 - Check state before or after long work: `aippocampus health --cwd "$PWD"`.
 - Check the local provider matrix without writing artifacts:
   `aippocampus onboard --provider auto --status`.
+- First recall for a vague handoff or old decision:
+  `aippocampus agent recall "query" --json`. This default is a bounded
+  foreground projection. Use `--detail full` only for local diagnostics that may
+  show private handles.
 - Search clean source: `aippocampus search "query" --cwd "$PWD"`.
+- If a foreground agent is about to write feedback, a self-note, an action-hint
+  cache, or continuity-domain data, use
+  `docs/guides/write-like-memory-decision-card.md` to choose the right surface
+  and durability before writing.
 - For module fallbacks, use `python3 -m ...` on macOS/Linux, `py -m ...`
   on Windows, or `python -m ...` only inside an activated virtualenv.
 - Run deterministic active recall for vague continuity prompts:
@@ -132,7 +143,8 @@ Useful portable commands:
 - Locate the current rollout when exact source location matters:
   `python3 -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
 - Recover the latest assistant closeout:
-  `python3 -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+  `aippocampus latest-reply --cwd "$PWD"`. Commentary-only output is a
+  diagnostic card, not a final closeout.
 
 Repair and setup are explicit operator actions, not ambient prompt behavior:
 
@@ -146,6 +158,9 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
   then register only after consent:
   `aippocampus onboard --provider claude-code --dry-run --format json`, then
   `aippocampus onboard --provider claude-code --format json`.
+- Generic transcript import is preview-first:
+  `aippocampus import conversation --format generic-jsonl --input "<path>" --dry-run --json`,
+  then rerun without `--dry-run` only after consent.
 - For exact host boundaries, use the repository docs
   `docs/guides/ecosystem-integration-matrix.md` and
   `docs/guides/setup/claude-code-mcp.md`; Claude Code onboarding does not imply
@@ -162,8 +177,9 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
 2. When a thread may outgrow the current context, keep anchors and clean source
    fresh; use hooks for routine refreshes and explicit commands for repair.
 3. When the user asks for "last reply", use
-   `aippocampus_runtime.source.latest_reply`; it should return the latest
-   `final_answer`, or clearly mark commentary fallback.
+   `aippocampus latest-reply`; it should return the latest `final_answer`, or
+   clearly mark commentary fallback as not a final closeout. Use the internal
+   module only for explicit operator diagnostics.
 4. When the user asks why a thread is huge, run
    `aippocampus_runtime.ops.rollout_size_audit` and answer from byte buckets
    and largest-line evidence.

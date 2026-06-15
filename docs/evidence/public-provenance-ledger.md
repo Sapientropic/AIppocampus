@@ -11,7 +11,9 @@ Use this before issue archaeology. For exact metrics, supersession, cohorts,
 and cannot-claim retirement rules, reopen
 [`current-claims.md`](current-claims.md). For benchmark owners and runner
 profiles, use [`benchmark-evidence-map.md`](benchmark-evidence-map.md). For the
-positive proof map, use [`can-claim-ladder.md`](can-claim-ladder.md).
+positive proof map, use [`can-claim-ladder.md`](can-claim-ladder.md). For one
+useful source-backed recall moment, start with
+[`first-recall-decision-card.md`](../guides/first-recall-decision-card.md).
 
 ## Evidence Classes
 

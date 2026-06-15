@@ -7,6 +7,7 @@ import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import unquote
@@ -237,6 +238,87 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertIn("GET", methods)
         object_keys = {request["key"] for request in self.server.requests}
         self.assertIn(f"{self.prefix}/{sync_bundle.SYNC_MANIFEST_NAME}", object_keys)
+
+    def test_object_sync_status_cli_redacts_endpoint_and_prefix_by_default(self) -> None:
+        device = self.create_registry()
+        push = sync_object_storage.push_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+        )
+        self.assertTrue(push["ok"], push)
+
+        with (
+            patch.dict(os.environ, {"AIPPOCAMPUS_OBJECT_PROVIDER": "r2"}),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            code = sync_object_storage.main(
+                [
+                    "status",
+                    "--object-store-url",
+                    self.endpoint,
+                    "--object-prefix",
+                    self.prefix,
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_object_sync_status")
+        self.assertEqual(payload["object_store"], "<object-store-redacted>")
+        self.assertEqual(payload["object_prefix"], "<object-prefix-redacted>")
+        self.assertFalse(payload["privacy_boundary"]["endpoint_included"])
+        self.assertNotIn(self.endpoint, encoded)
+        self.assertNotIn(self.prefix, encoded)
+
+        with (
+            patch.dict(os.environ, {"AIPPOCAMPUS_OBJECT_PROVIDER": "r2"}),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            operator_code = sync_object_storage.main(
+                [
+                    "status",
+                    "--object-store-url",
+                    self.endpoint,
+                    "--object-prefix",
+                    self.prefix,
+                    "--operator-json",
+                ]
+            )
+        operator_payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(operator_code, 0)
+        self.assertIn("object_store", operator_payload)
+        self.assertIn("object_prefix", operator_payload)
+        self.assertEqual(operator_payload["object_prefix"], self.prefix)
+
+        (self.bucket / self.prefix / sync_bundle.SYNC_MANIFEST_NAME).unlink()
+        with (
+            patch.dict(os.environ, {"AIPPOCAMPUS_OBJECT_PROVIDER": "r2"}),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            missing_code = sync_object_storage.main(
+                [
+                    "status",
+                    "--object-store-url",
+                    self.endpoint,
+                    "--object-prefix",
+                    self.prefix,
+                    "--json",
+                ]
+            )
+        missing_payload = json.loads(stdout.getvalue())
+        missing_encoded = json.dumps(missing_payload, ensure_ascii=False)
+
+        self.assertEqual(missing_code, 1)
+        self.assertEqual(missing_payload["issues"][0]["code"], "missing_manifest")
+        self.assertEqual(
+            missing_payload["issues"][0]["path"], "<object-path-redacted>"
+        )
+        self.assertNotIn(self.endpoint, missing_encoded)
+        self.assertNotIn(self.prefix, missing_encoded)
 
     def test_object_store_token_requires_https_unless_endpoint_is_loopback(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires HTTPS"):

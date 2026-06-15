@@ -324,10 +324,19 @@ def _public_cli_payload(result: Mapping[str, Any]) -> dict[str, Any]:
 
 def _status_main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus warm status")
+    parser.add_argument(
+        "--cwd",
+        help="Accepted for CLI consistency; warm status is registry/job-dir scoped.",
+    )
     parser.add_argument("--job-dir")
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--strict-exit-code",
+        action="store_true",
+        help="Return non-zero when the optional warm queue is blocked.",
+    )
     args = parser.parse_args(list(argv))
     job_dir = (
         Path(args.job_dir)
@@ -343,7 +352,9 @@ def _status_main(argv: Sequence[str]) -> int:
         print()
     else:
         activity = payload.get("job_activity") or {}
-        print(f"warm ambient status: {payload.get('status')}")
+        print("AIppocampus warm ambient")
+        print(f"status: {payload.get('status')}")
+        print(f"ordinary recall: {'usable' if payload.get('ordinary_recall_usable') else 'degraded'}")
         print(
             "jobs: "
             f"pending={activity.get('pending_recent_count', 0)}, "
@@ -351,8 +362,12 @@ def _status_main(argv: Sequence[str]) -> int:
             f"completed={activity.get('completed_count', 0)}"
         )
         print(f"worker: {activity.get('worker_evidence')}")
-        print(f"next: {payload.get('next_command')}")
-    return 0 if payload.get("ok") else 2
+        print(f"next: {payload.get('action_code')}")
+        print(f"action: {payload.get('next_command')}")
+        print("boundary: optional background warming; first recall and search do not wait for it")
+    if args.strict_exit_code and not payload.get("ok"):
+        return 2
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:

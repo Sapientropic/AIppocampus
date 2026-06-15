@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -189,6 +190,66 @@ class ActionHintCacheTests(unittest.TestCase):
         )
         self.assertEqual(len(cache.read_action_hint_records(report, path_features, now_unix=1001)), 1)
 
+    def test_empty_target_and_path_features_do_not_match_specific_guidance(self) -> None:
+        base_features = {
+            "terms": ["pytest", "test", "preflight"],
+            "tool_names": ["Bash"],
+            "command_terms": ["pytest", "test"],
+            "path_terms": [],
+            "issue_ids": [],
+            "risk_modes": [],
+            "active_recall_locks": [],
+            "anti_nag_token_ids": [],
+            "visible_source_refs": [],
+        }
+        path_only = cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight-payments",
+                    "next_action": "run_preflight_before_broad_test",
+                    "scope": "project:OtherRepo",
+                    "path_category_fingerprint": "other-repo:tests/payments",
+                    "source_refs": [source_ref("learn")],
+                }
+            ],
+            now_unix=1000,
+        )
+        target_only = cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight-target",
+                    "next_action": "run_preflight_before_broad_test",
+                    "scope": "project:OtherRepo",
+                    "target_fingerprint": "other-repo:specific-target",
+                    "source_refs": [source_ref("learn")],
+                }
+            ],
+            now_unix=1000,
+        )
+
+        self.assertEqual(cache.read_action_hint_records(path_only, base_features, now_unix=1001), [])
+        self.assertEqual(cache.read_action_hint_records(target_only, base_features, now_unix=1001), [])
+        self.assertEqual(
+            len(
+                cache.read_action_hint_records(
+                    path_only,
+                    {**base_features, "path_category_fingerprint": "tests/payments"},
+                    now_unix=1001,
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                cache.read_action_hint_records(
+                    target_only,
+                    {**base_features, "target_fingerprint": "other-repo:specific-target"},
+                    now_unix=1001,
+                )
+            ),
+            1,
+        )
+
     def test_missing_providers_are_explicit_without_becoming_errors(self) -> None:
         report = cache.build_action_hint_cache_report(now_unix=1000)
 
@@ -244,6 +305,40 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertEqual(result["cache_status"], "with_cache_records")
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["provider_family"], "learning_loop")
+
+    def test_refresh_cache_loads_default_learning_findings_into_aippo_clauses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            findings_path = root / ".aippocampus" / "learning-loop" / "findings.jsonl"
+            findings_path.parent.mkdir(parents=True)
+            finding = {
+                "finding_id": "learned-preflight",
+                "finding_kind": "workflow_order_finding",
+                "workflow_family": "cheap_preflight_before_broad_test",
+                "status": "open",
+                "scope": "project:AIppocampus",
+                "confidence": "high",
+                "occurrence_count": 2,
+                "source_ref_count": 2,
+                "source_refs": [source_ref("learn-a"), source_ref("learn-b")],
+            }
+            findings_path.write_text(json.dumps(finding, ensure_ascii=False) + "\n", encoding="utf-8")
+            cache_path = root / "action-hints.jsonl"
+
+            result = cache.refresh_action_hint_cache(
+                cwd=root,
+                cache_jsonl=cache_path,
+                write=True,
+                now_unix=1000,
+            )
+            records = cache.load_action_hint_records(cache_path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["learned_provider_intake"]["status"], "included")
+        self.assertEqual(result["learned_provider_intake"]["finding_count"], 1)
+        self.assertEqual(result["learned_provider_intake"]["included_count"], 1)
+        self.assertEqual(result["learned_provider_intake"]["prepared_record_count"], 1)
+        self.assertEqual(records[0]["provider_family"], "aippo_learned_clause")
 
 
 if __name__ == "__main__":

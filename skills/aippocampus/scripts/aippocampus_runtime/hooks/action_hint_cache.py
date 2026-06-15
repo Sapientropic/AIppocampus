@@ -39,6 +39,12 @@ def _text(value: Any) -> str:
     return str(value or "").strip().casefold()
 
 
+def _list_values(value: Any) -> list[Any]:
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value] if value else []
+
+
 def _specific_applicability_matches(record: Mapping[str, Any], features: Mapping[str, Any]) -> bool:
     if _text(record.get("transferability")) in {
         "general_agent_workflow",
@@ -53,9 +59,17 @@ def _specific_applicability_matches(record: Mapping[str, Any], features: Mapping
     profile = _text(record.get("workspace_or_environment_profile"))
     topic = _text(record.get("topic_epoch"))
     if target or path:
-        return target == _text(features.get("target_fingerprint")) or path == _text(
-            features.get("path_category_fingerprint")
-        )
+        target_match = bool(target) and target == _text(features.get("target_fingerprint"))
+        feature_paths = {
+            _text(value)
+            for value in [
+                features.get("path_category_fingerprint"),
+                *_list_values(features.get("path_category_fingerprints")),
+            ]
+            if _text(value)
+        }
+        path_match = bool(path) and any(_path_category_matches(path, value) for value in feature_paths)
+        return target_match or path_match
     if scope.startswith("project:") or scope.startswith("machine:"):
         return scope == _text(features.get("scope"))
     if profile and profile != "unknown_environment":
@@ -63,6 +77,16 @@ def _specific_applicability_matches(record: Mapping[str, Any], features: Mapping
     if topic:
         return topic == _text(features.get("topic_epoch"))
     return True
+
+
+def _path_category_matches(record_path: str, feature_path: str) -> bool:
+    if record_path == feature_path:
+        return True
+    if ":" in record_path and ":" not in feature_path:
+        return record_path.endswith(f":{feature_path}")
+    if ":" in feature_path and ":" not in record_path:
+        return feature_path.endswith(f":{record_path}")
+    return False
 
 
 def _eligible_record(record: Mapping[str, Any], features: Mapping[str, Any], *, now_unix: float) -> bool:
@@ -209,22 +233,112 @@ def _load_provider_rows(path: Path | None) -> list[dict[str, Any]] | None:
     return []
 
 
+def _default_learning_finding_paths(cwd: Path | None) -> list[Path]:
+    if cwd is None:
+        return []
+    root = cwd.resolve()
+    return [
+        root / ".aippocampus" / "learning-loop" / "findings.jsonl",
+        root / ".aippocampus" / "learning-loop" / "findings.json",
+        root / ".aippocampus" / "learning" / "findings.jsonl",
+        root / ".aippocampus" / "learning" / "findings.json",
+    ]
+
+
+def _load_default_learning_findings(cwd: Path | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    candidates = _default_learning_finding_paths(cwd)
+    for path in candidates:
+        if path.exists():
+            rows = _load_provider_rows(path) or []
+            return rows, {
+                "status": "found",
+                "source": "default_learning_findings",
+                "candidate_count": len(candidates),
+                "finding_count": len(rows),
+            }
+    return [], {
+        "status": "not_found",
+        "source": "default_learning_findings",
+        "candidate_count": len(candidates),
+        "finding_count": 0,
+    }
+
+
+def _aippo_clauses_from_learning_findings(rows: Iterable[Mapping[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    materialized = [dict(row) for row in rows if isinstance(row, Mapping)]
+    if not materialized:
+        return [], {"finding_count": 0, "included_count": 0, "skipped_or_blocked_count": 0}
+    from aippocampus_runtime.aippo import working_contract
+    from aippocampus_runtime.learning_loop import aippo_adapter
+
+    aippo_rows = aippo_adapter.learning_findings_to_aippo_source_rows(materialized)
+    contract = working_contract.select_aippo_working_contract(
+        working_contract.build_aippo_working_contracts(aippo_rows)
+    )
+    clauses = [dict(clause) for clause in contract.get("clauses") or [] if isinstance(clause, Mapping)]
+    return clauses, {
+        "finding_count": len(materialized),
+        "included_count": len(aippo_rows),
+        "learned_clause_count": len(clauses),
+        "skipped_or_blocked_count": max(0, len(materialized) - len(aippo_rows)),
+    }
+
+
 def refresh_action_hint_cache(
     *,
+    cwd: Path | None = None,
     cache_jsonl: Path | None = None,
     write: bool = False,
     aar_v2_records: Iterable[Mapping[str, Any]] | None = None,
     learning_guidance: Iterable[Mapping[str, Any]] | None = None,
+    learning_findings: Iterable[Mapping[str, Any]] | None = None,
     aippo_learned_clauses: Iterable[Mapping[str, Any]] | None = None,
     aippo_verification_probes: Iterable[Mapping[str, Any]] | None = None,
     active_recall_locks: Iterable[Mapping[str, Any]] | None = None,
     attention_route_tokens: Iterable[Mapping[str, Any]] | None = None,
     now_unix: float | None = None,
+    include_default_learning: bool = True,
 ) -> dict[str, Any]:
+    learned_intake: dict[str, Any] = {
+        "status": "not_requested",
+        "source": "none",
+        "finding_count": 0,
+        "included_count": 0,
+        "skipped_or_blocked_count": 0,
+        "prepared_record_count": 0,
+    }
+    effective_aippo_clauses = (
+        [dict(row) for row in aippo_learned_clauses if isinstance(row, Mapping)]
+        if aippo_learned_clauses is not None
+        else None
+    )
+    if effective_aippo_clauses is None:
+        source_rows: Iterable[Mapping[str, Any]] | None = learning_findings
+        if source_rows is None and include_default_learning:
+            loaded, load_report = _load_default_learning_findings(cwd)
+            source_rows = loaded
+            learned_intake.update(load_report)
+        elif source_rows is not None:
+            learned_intake.update({"status": "found", "source": "explicit_learning_findings"})
+        if source_rows is not None:
+            effective_aippo_clauses, conversion = _aippo_clauses_from_learning_findings(source_rows)
+            learned_intake.update(conversion)
+            if learned_intake.get("status") == "not_found" and conversion.get("finding_count"):
+                learned_intake["status"] = "found"
+            if conversion.get("finding_count"):
+                learned_intake["status"] = "included" if conversion.get("included_count") else "blocked"
+    else:
+        learned_intake.update(
+            {
+                "status": "explicit_aippo_clauses",
+                "source": "explicit_aippo_clauses",
+                "learned_clause_count": len(effective_aippo_clauses),
+            }
+        )
     report = build_action_hint_cache_report(
         aar_v2_records=aar_v2_records,
         learning_guidance=learning_guidance,
-        aippo_learned_clauses=aippo_learned_clauses,
+        aippo_learned_clauses=effective_aippo_clauses,
         aippo_verification_probes=aippo_verification_probes,
         active_recall_locks=active_recall_locks,
         attention_route_tokens=attention_route_tokens,
@@ -238,6 +352,10 @@ def refresh_action_hint_cache(
         "wrote": False,
         "cache_status": "without_cache_path" if cache_jsonl is None else "not_written",
         "cache": report,
+        "learned_provider_intake": {
+            **learned_intake,
+            "prepared_record_count": report["provider_counts"].get("aippo_learned_clause", 0),
+        },
         "privacy_boundary": report["privacy_boundary"],
     }
     if write:
@@ -256,29 +374,35 @@ def refresh_action_hint_cache(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["report", "refresh-cache"], nargs="?", default="report")
+    parser.add_argument("--cwd", type=Path)
     parser.add_argument("--cache-jsonl", type=Path)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--aar-v2-json", type=Path)
     parser.add_argument("--learning-guidance-json", type=Path)
+    parser.add_argument("--learning-findings-json", type=Path)
     parser.add_argument("--aippo-clauses-json", type=Path)
     parser.add_argument("--aippo-probes-json", type=Path)
     parser.add_argument("--active-recall-locks-json", type=Path)
     parser.add_argument("--attention-route-tokens-json", type=Path)
+    parser.add_argument("--no-default-learning", action="store_true")
     parser.add_argument("--now-unix", type=float)
     parser.add_argument("--include-private-paths", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
     result = refresh_action_hint_cache(
+        cwd=args.cwd.resolve() if args.cwd else Path.cwd(),
         cache_jsonl=args.cache_jsonl.resolve() if args.cache_jsonl else None,
         write=args.write,
         aar_v2_records=_load_provider_rows(args.aar_v2_json),
         learning_guidance=_load_provider_rows(args.learning_guidance_json),
+        learning_findings=_load_provider_rows(args.learning_findings_json),
         aippo_learned_clauses=_load_provider_rows(args.aippo_clauses_json),
         aippo_verification_probes=_load_provider_rows(args.aippo_probes_json),
         active_recall_locks=_load_provider_rows(args.active_recall_locks_json),
         attention_route_tokens=_load_provider_rows(args.attention_route_tokens_json),
         now_unix=args.now_unix,
+        include_default_learning=not args.no_default_learning,
     )
     if not args.include_private_paths and isinstance(result.get("write_report"), Mapping):
         result["write_report"] = {

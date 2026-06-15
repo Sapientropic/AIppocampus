@@ -21,6 +21,39 @@ def render_health_text(result: dict[str, Any]) -> None:
     trajectory = result.get("health_trajectory") or {}
     actions = result["recommended_actions"]
 
+    readiness = result.get("product_readiness") or {}
+    if readiness:
+        usable = "yes" if readiness.get("ready") else "partial"
+        first_action = next((item for item in actions if item.get("severity") in {"critical", "warning"}), None)
+        print("AIppocampus health")
+        print(f"readiness: {usable} ({readiness.get('status') or status})")
+        if first_action:
+            print(f"best next action: {first_action.get('id')}")
+            if first_action.get("facade_command") or first_action.get("command"):
+                print(f"fix: {first_action.get('facade_command') or first_action.get('command')}")
+        else:
+            print("best next action: continue; run maintenance only when a specific check asks for it")
+        works: list[str] = []
+        if clean_source.get("exists"):
+            works.append("clean source exists")
+        if index.get("exists"):
+            works.append("index exists")
+        if works:
+            print("works now: " + ", ".join(works))
+        stale_optional: list[str] = []
+        if checkpoint.get("due"):
+            stale_optional.append("checkpoint due when idle")
+        if graphify.get("stale"):
+            stale_optional.append("graphify corpus stale")
+        if background and (
+            background.get("blocked_lane_count")
+            or background.get("stale_lane_count")
+            or background.get("due_lane_count")
+        ):
+            stale_optional.append("background cognition needs review")
+        if stale_optional:
+            print("not blocking first recall: " + ", ".join(stale_optional))
+        print("")
     print(f"thread memory health: {status}")
     if storage:
         print(
@@ -98,7 +131,7 @@ def render_health_text(result: dict[str, Any]) -> None:
         if runnable:
             print("\nNext:")
             for index, item in enumerate(runnable[:3], start=1):
-                print(f"{index}. {item['id']}: {item['command']}")
+                print(f"{index}. {item['id']}: {item.get('facade_command') or item['command']}")
 
 
 def render_registry_health_text(result: dict[str, Any]) -> None:

@@ -1036,6 +1036,7 @@ def render_text(report: dict[str, Any]) -> str:
     surfaces = report.get("surfaces") or {}
     label = "plan" if mode == "plan" else "status"
     lines = [f"AIppocampus update {label}"]
+    lines.extend(update_actions.foreground_status_lines(report))
     lines.append(f"- Core ready: {str(summary.get('core_ready')).lower()}")
     if summary.get("core_blockers"):
         lines.append("- Core blockers: " + ", ".join(summary.get("core_blockers") or []))
@@ -1077,7 +1078,10 @@ def render_text(report: dict[str, Any]) -> str:
         if name == "agent_callable":
             lines.extend(update_actions.agent_callable_probe_lines(item))
     if mode == "plan":
-        lines.append("- Apply all local package/effect surfaces: aippocampus update apply --all-local")
+        lines.append(
+            "- Apply local package/effect surfaces together when that is really the goal: "
+            "aippocampus update apply --all-local"
+        )
         lines.append("- API key values are never read or written by update; configure the env var explicitly.")
     return "\n".join(lines) + "\n"
 

@@ -153,6 +153,36 @@ class RegisterRolloutTests(unittest.TestCase):
         data = json.loads((self.registry_dir / "threads.json").read_text(encoding="utf-8"))
         self.assertEqual(data["threads"][0]["thread_key"], "session:session-other")
 
+    def test_registry_search_human_output_shows_source_receipts_not_scores(self) -> None:
+        registry.register_rollout_thread(
+            self.rollout,
+            project="Life OS",
+            registry_dir=self.registry_dir,
+        )
+
+        proc = subprocess.run(
+            [
+                *REGISTRY_CMD,
+                "--registry-dir",
+                str(self.registry_dir),
+                "search",
+                "clean-source",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        raw = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0, raw)
+        self.assertIn("source receipts:", proc.stdout)
+        self.assertIn("line 3 | assistant", proc.stdout)
+        self.assertIn("next: reopen/deepen source before quoting or making claims.", proc.stdout)
+        self.assertNotIn("index hits:", proc.stdout)
+        self.assertNotIn("| score ", proc.stdout)
+
     def test_existing_registry_json_corruption_blocks_write_path(self) -> None:
         registry_path = self.registry_dir / "threads.json"
         self.registry_dir.mkdir()

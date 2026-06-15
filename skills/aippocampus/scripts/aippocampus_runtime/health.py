@@ -216,6 +216,20 @@ def recommended_script_command(script_name: str, cwd: str | Path) -> str:
     )
 
 
+def recommended_facade_command(action_id: str, cwd: str | Path) -> str:
+    del action_id
+    if os.name == "nt":
+        windows_cwd = str(PureWindowsPath(str(cwd)))
+        return f'aippocampus maintenance --cwd "{windows_cwd}"'
+    return f"aippocampus maintenance --cwd {quote_posix_double(cwd)}"
+
+
+def health_action(action_id: str, severity: str, reason: str, script_name: str, cwd: Path) -> dict[str, Any]:
+    item = action(action_id, severity, reason, recommended_script_command(script_name, cwd))
+    item["facade_command"] = recommended_facade_command(action_id, cwd)
+    return item
+
+
 def load_question_stats(
     *,
     jobs_path: Path | None,
@@ -514,48 +528,53 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     if index_stale:
         severity = "critical" if not manifest else "warning"
         actions.append(
-            action(
+            health_action(
                 "build_index",
                 severity,
                 "; ".join(index_reasons),
-                recommended_script_command("build_index.py", cwd),
+                "build_index.py",
+                cwd,
             )
         )
     if clean_source_stale:
         actions.append(
-            action(
+            health_action(
                 "build_clean_source",
                 "warning" if clean_manifest else "critical",
                 "; ".join(clean_reasons),
-                recommended_script_command("build_clean_source.py", cwd),
+                "build_clean_source.py",
+                cwd,
             )
         )
     if checkpoint_due:
         actions.append(
-            action(
+            health_action(
                 "checkpoint",
                 "suggestion",
                 f"{checkpoint_delta} messages since the last captured checkpoint",
-                recommended_script_command("checkpoint.py", cwd),
+                "checkpoint.py",
+                cwd,
             )
         )
     if graphify_stale:
         actions.append(
-            action(
+            health_action(
                 "prepare_graphify_corpus",
                 "info",
                 "; ".join(graphify_reasons),
-                recommended_script_command("prepare_graphify_corpus.py", cwd),
+                "prepare_graphify_corpus.py",
+                cwd,
             )
         )
     if segments_stale:
         severity = "warning" if segments_manifest else "info"
         actions.append(
-            action(
+            health_action(
                 "build_segments",
                 severity,
                 "; ".join(segments_reasons),
-                recommended_script_command("build_segments.py", cwd),
+                "build_segments.py",
+                cwd,
             )
         )
     if deep_graph_recommended:
@@ -834,6 +853,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Emit compact agent-facing JSON with next actions instead of operator detail.",
     )
     parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit the full local operator audit JSON. Without this, --json is compact.",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Alias for --operator-json on the thread health surface.",
+    )
+    parser.add_argument(
         "--exit-code", action="store_true", help="Exit 2 when maintenance is recommended."
     )
     return parser
@@ -888,7 +917,8 @@ def main(argv: list[str] | None = None) -> int:
 
     result = build_health_report(options_from_args(args))
     public_result = public_health_report(result, include_paths=bool(args.include_paths))
-    if args.agent_json:
+    compact_json = bool(args.agent_json or (args.json_output and not (args.operator_json or args.full)))
+    if compact_json:
         print(json.dumps(compact_health_payload(public_result), ensure_ascii=False, indent=2))
     elif args.json_output:
         print(json.dumps(public_result, ensure_ascii=False, indent=2))

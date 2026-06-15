@@ -19,6 +19,15 @@ from typing import Any
 
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync import contract as sync_contract
+from aippocampus_runtime.sync.object_storage.cli_support import (
+    explicit_object_store_url_arg,
+    object_provider_kwargs,
+    object_sync_direction,
+    object_sync_direction_plan,
+    parser_command,
+    print_object_sync_human_result,
+    public_object_sync_status,
+)
 from aippocampus_runtime.sync.object_storage.client import (
     DEFAULT_PREFIX,
     DEFAULT_TIMEOUT_SECONDS,
@@ -533,52 +542,76 @@ def token_from_env(env_name: str | None) -> str | None:
     return os.environ.get(env_name)
 
 
-def _parser_command(argv: list[str] | None, base_prog: str) -> tuple[str, list[str] | None, str | None]:
-    commands = {"status", "push", "pull", "repair"}
-    if argv and argv[0] in commands and any(arg in {"-h", "--help"} for arg in argv[1:]):
-        return f"{base_prog} {argv[0]}", list(argv[1:]), argv[0]
-    return base_prog, argv, None
-
-
 def main(argv: list[str] | None = None) -> int:
-    prog, parse_argv, command_override = _parser_command(argv, "aippocampus object-sync")
-    parser = argparse.ArgumentParser(prog=prog)
+    prog, parse_argv, command_override = parser_command(argv, "aippocampus object-sync")
+    command_label = command_override or "COMMAND"
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description=object_sync_direction(command_label)["description"]
+        if command_override
+        else "Object-storage sync status/push/pull/repair for AIppocampus.",
+        epilog=(
+            "Plan first: add --plan (or --dry-run) to show read/write sides without mutating. "
+            "Status is always non-mutating."
+        ),
+    )
     if command_override is None:
         parser.add_argument("command", choices=["status", "push", "pull", "repair"])
+    explicit_object_store_url = explicit_object_store_url_arg(parse_argv)
     parser.add_argument(
         "--object-store-url", default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL")
     )
     parser.add_argument(
         "--object-prefix", default=os.environ.get("AIPPOCAMPUS_OBJECT_PREFIX", DEFAULT_PREFIX)
     )
-    parser.add_argument(
-        "--object-provider", default=os.environ.get("AIPPOCAMPUS_OBJECT_PROVIDER")
-    )
-    parser.add_argument("--object-bucket", default=os.environ.get("AIPPOCAMPUS_OBJECT_BUCKET"))
-    parser.add_argument("--object-region", default=os.environ.get("AIPPOCAMPUS_OBJECT_REGION"))
-    parser.add_argument(
-        "--object-account-id", default=os.environ.get("AIPPOCAMPUS_OBJECT_ACCOUNT_ID")
-    )
+    parser.add_argument("--object-provider", default=None)
+    parser.add_argument("--object-bucket", default=None)
+    parser.add_argument("--object-region", default=None)
+    parser.add_argument("--object-account-id", default=None)
     parser.add_argument("--token-env", default="AIPPOCAMPUS_OBJECT_STORE_TOKEN")
     parser.add_argument("--access-key-env", default="AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID")
     parser.add_argument("--secret-key-env", default="AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY")
     parser.add_argument("--session-token-env", default="AIPPOCAMPUS_OBJECT_SESSION_TOKEN")
     parser.add_argument("--registry-dir", default=None)
-    parser.add_argument("--include-raw", action="store_true")
-    parser.add_argument("--encrypt", action="store_true")
-    parser.add_argument("--require-encrypted", action="store_true")
+    parser.add_argument(
+        "--include-raw",
+        action="store_true",
+        help="include raw rollout audit files; clean-source sync remains the default",
+    )
+    parser.add_argument(
+        "--encrypt",
+        action="store_true",
+        help="encrypt a push using the encrypted object-sync adapter",
+    )
+    parser.add_argument(
+        "--require-encrypted",
+        action="store_true",
+        help="refuse plaintext pull/status/repair and use the encrypted adapter",
+    )
     parser.add_argument("--recipient", action="append", default=[])
     parser.add_argument("--recipient-file", action="append", default=[])
     parser.add_argument("--identity-file", action="append", default=[])
     parser.add_argument("--age-bin", default=None)
     parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="With status, emit full local endpoint/prefix diagnostics.",
+    )
     args = parser.parse_args(parse_argv)
     if command_override is not None:
         args.command = command_override
 
-    if not args.object_store_url and not args.object_provider:
+    provider_kwargs = object_provider_kwargs(
+        args,
+        explicit_object_store_url=explicit_object_store_url,
+        read_env=token_from_env,
+    )
+
+    if not args.object_store_url and not provider_kwargs["provider"]:
         message = (
             "--object-store-url/AIPPOCAMPUS_OBJECT_STORE_URL or "
             "--object-provider/AIPPOCAMPUS_OBJECT_PROVIDER is required"
@@ -604,16 +637,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(message)
 
     token = token_from_env(args.token_env)
-    provider_kwargs = {
-        "provider": args.object_provider,
-        "bucket": args.object_bucket,
-        "region": args.object_region,
-        "account_id": args.object_account_id,
-        "access_key_id": token_from_env(args.access_key_env),
-        "secret_access_key": token_from_env(args.secret_key_env),
-        "session_token": token_from_env(args.session_token_env),
-    }
-    if args.command == "status":
+    if args.plan:
+        result = object_sync_direction_plan(args)
+    elif args.command == "status":
         if args.require_encrypted:
             result = status_encrypted_object_storage_bundle(
                 args.object_store_url,
@@ -696,14 +722,15 @@ def main(argv: list[str] | None = None) -> int:
                 **provider_kwargs,
             )
 
-    if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.json_output or args.operator_json:
+        output = (
+            public_object_sync_status(result)
+            if args.command == "status" and not args.operator_json
+            else result
+        )
+        print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
-        print(f"object sync {args.command}: {'ok' if result.get('ok') else 'needs attention'}")
-        if result.get("manifest_key"):
-            print(f"manifest object: {result['manifest_key']}")
-        for issue in result.get("issues") or []:
-            print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")
+        print_object_sync_human_result(str(args.command), result)
     return 0 if result.get("ok") else 1
 
 

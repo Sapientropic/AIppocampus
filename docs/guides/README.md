@@ -10,7 +10,8 @@ should help a reader choose a path without reading every guide.
 
 | Need | Start with |
 | --- | --- |
-| First install and first recall | [install-guide.md](install-guide.md) |
+| First install and first recall | [first-recall-decision-card.md](first-recall-decision-card.md), then [install-guide.md](install-guide.md) |
+| Which write-like memory path is safe | [write-like-memory-decision-card.md](write-like-memory-decision-card.md) |
 | Public API, CLI, MCP, JSON, and SDK boundary | [public-api.md](public-api.md) |
 | Codex / Claude-style coding-agent continuity | [coding-agent-memory.md](coding-agent-memory.md) |
 | Public-core licensing and adapter boundary | [public-core-boundary.md](public-core-boundary.md) |

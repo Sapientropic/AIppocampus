@@ -788,12 +788,17 @@ def render_html(report: Mapping[str, Any]) -> str:
 def render_text(report: Mapping[str, Any]) -> str:
     metrics = report.get("metrics") or {}
     contract = report.get("contract") or {}
+    next_action = "Use ready routes only as navigation; reopen source before claims."
     return "\n".join(
         [
             "Cognitive Observatory readout",
             f"  route ready: {metrics.get('route_ready_count', 0)}",
             f"  route suppressed: {metrics.get('route_suppressed_count', 0)}",
             f"  activation surfaces: {metrics.get('activation_surface_count', 0)}",
+            f"  useful now: {metrics.get('campus_useful_now_count', 0)}",
+            f"  wasted motion: {metrics.get('campus_wasted_motion_count', 0)}",
+            f"  quiet for a reason: {metrics.get('campus_quiet_for_a_reason_count', 0)}",
+            f"  next: {next_action}",
             f"  no write: {str(report.get('no_write')).lower()}",
             f"  control plane: {str(not contract.get('not_control_plane')).lower()}",
             "",
@@ -801,8 +806,33 @@ def render_text(report: Mapping[str, Any]) -> str:
     )
 
 
+def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
+    metrics = report.get("metrics") or {}
+    return {
+        "kind": "aippocampus_cognitive_observatory_summary",
+        "ok": bool(report.get("ok")),
+        "read_only": bool(report.get("no_write")),
+        "not_control_plane": bool((report.get("contract") or {}).get("not_control_plane")),
+        "route_ready_count": metrics.get("route_ready_count", 0),
+        "route_suppressed_count": metrics.get("route_suppressed_count", 0),
+        "activation_surface_count": metrics.get("activation_surface_count", 0),
+        "useful_now_count": metrics.get("campus_useful_now_count", 0),
+        "wasted_motion_count": metrics.get("campus_wasted_motion_count", 0),
+        "quiet_for_a_reason_count": metrics.get("campus_quiet_for_a_reason_count", 0),
+        "needs_ripening_count": metrics.get("campus_needs_ripening_count", 0),
+        "surfaces": list(report.get("surfaces") or [])[:12],
+        "full_audit_flag": "--json",
+        "html_flag": "--html",
+        "privacy_boundary": report.get("privacy_boundary"),
+        "agent_next_action": (
+            "Use ready rows as navigation only, reopen source before claims, and treat suppressed rows as intentional silence."
+        ),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
+        prog="aippocampus observatory",
         description="Emit a public-safe, no-write Cognitive Observatory readout."
     )
     parser.add_argument("--fixture", action="store_true", help="Use deterministic fixture rows.")
@@ -816,11 +846,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cognitive-load-calibration", help="JSON cognitive-load calibration report.")
     parser.add_argument("--min-roi-score", type=float, default=1.0)
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help="Emit a compact foreground summary instead of the full audit JSON.",
+    )
     parser.add_argument("--html", action="store_true", dest="html_output")
     parser.add_argument("--output", type=Path, help="Write the selected output to a file.")
     args = parser.parse_args(argv)
-    if args.json_output and args.html_output:
-        parser.error("--json and --html are mutually exclusive")
+    if sum(bool(item) for item in (args.json_output, args.summary_json, args.html_output)) > 1:
+        parser.error("--json, --summary-json, and --html are mutually exclusive")
 
     if args.fixture:
         report = fixture_cognitive_observatory_readout()
@@ -842,7 +877,9 @@ def main(argv: list[str] | None = None) -> int:
             ),
             min_roi_score=args.min_roi_score,
         )
-    if args.json_output:
+    if args.summary_json:
+        output = json.dumps(summary_projection(report), ensure_ascii=False, indent=2) + "\n"
+    elif args.json_output:
         output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     elif args.html_output:
         output = render_html(report)

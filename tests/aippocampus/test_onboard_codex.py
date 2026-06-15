@@ -260,8 +260,7 @@ class OnboardCodexTests(unittest.TestCase):
 
         proc = self._run_onboard_facade(
             "--status",
-            "--format",
-            "json",
+            "--operator-json",
             "--cwd",
             str(self.cwd),
             env_extra={
@@ -276,10 +275,74 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(providers["codex"]["state"], "write_enabled")
         self.assertEqual(providers["claude-code"]["state"], "write_enabled")
         self.assertTrue(providers["claude-code"]["current_cwd_match"])
+        self.assertEqual(
+            providers["claude-code"]["next_action_code"],
+            "try_search_existing_registry",
+        )
+        self.assertIn("aippocampus search", providers["claude-code"]["search_command"])
         self.assertIn("blocked", data["data"]["state_legend"])
         self.assertEqual(data["data"]["storage"]["source"], "AIPPOCAMPUS_HOME/registry")
         self.assertFalse(data["data"]["storage"]["legacy_fallback"])
+        self.assertEqual(data["data"]["storage"]["path"], "<local-path-redacted>")
+        self.assertTrue(data["data"]["storage"]["path_redacted"])
         self.assertEqual(data["data"]["legacy_aliases"]["active_count"], 0)
+
+    def test_onboard_status_json_defaults_to_bounded_frontstage_inventory(self) -> None:
+        self._write_claude_transcript(
+            self.root / "claude-home" / "projects" / "-project" / "claude-session.jsonl"
+        )
+
+        proc = self._run_onboard_facade(
+            "--status",
+            "--format",
+            "json",
+            "--cwd",
+            str(self.cwd),
+            env_extra={"CLAUDE_HOME": str(self.root / "claude-home")},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        providers = {item["provider"]: item for item in data["data"]["providers"]}
+        self.assertEqual(data["data"]["detail_level"], "frontstage")
+        self.assertFalse(providers["claude-code"]["current_cwd_match"])
+        self.assertIn("scan_status", providers["claude-code"])
+        self.assertEqual(
+            providers["claude-code"]["next_action_code"],
+            "preview_current_project_registration",
+        )
+        self.assertIn("preview_command", providers["claude-code"])
+        self.assertIn("next_actions", data["data"])
+        self.assertIn("current project", providers["claude-code"]["agent_next_action"])
+        self.assertNotIn(str(self.root), proc.stdout)
+
+    def test_onboard_status_json_redacts_storage_path_by_default_and_can_opt_in(self) -> None:
+        private_home = self.root / "aippo-home"
+        base_args = [
+            "--status",
+            "--format",
+            "json",
+            "--cwd",
+            str(self.cwd),
+        ]
+
+        redacted = self._run_onboard_facade(
+            *base_args,
+            env_extra={"AIPPOCAMPUS_HOME": str(private_home)},
+        )
+        full = self._run_onboard_facade(
+            *base_args,
+            "--include-private-paths",
+            env_extra={"AIPPOCAMPUS_HOME": str(private_home)},
+        )
+
+        self.assertEqual(redacted.returncode, 0, redacted.stdout + redacted.stderr)
+        self.assertEqual(full.returncode, 0, full.stdout + full.stderr)
+        redacted_payload = json.loads(redacted.stdout)
+        full_payload = json.loads(full.stdout)
+        self.assertEqual(redacted_payload["data"]["storage"]["path"], "<local-path-redacted>")
+        self.assertNotIn(str(private_home), redacted.stdout)
+        self.assertIn(str(private_home), full_payload["data"]["storage"]["path"])
 
     def test_onboard_status_json_reports_legacy_storage_alias_without_private_path(self) -> None:
         legacy_registry = self.root / "private-legacy-registry"
@@ -351,6 +414,10 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(providers["codex"]["state"], "write_enabled")
         self.assertEqual(providers["claude-code"]["state"], "blocked")
         self.assertFalse(providers["claude-code"]["detected"])
+        self.assertEqual(
+            providers["claude-code"]["next_action_code"],
+            "provider_not_detected",
+        )
         self.assertEqual(providers["generic-jsonl"]["state"], "blocked")
         self.assertFalse(providers["generic-jsonl"]["detected"])
         self.assertIn("AIPPOCAMPUS_GENERIC_IMPORT_DIR", providers["generic-jsonl"]["blockers"][0])
@@ -367,8 +434,9 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("AIppocampus provider status", proc.stdout)
-        self.assertIn("- codex: write_enabled", proc.stdout)
+        self.assertIn("- codex: registration_available_after_consent", proc.stdout)
         self.assertIn("- claude-code: blocked", proc.stdout)
+        self.assertNotIn("write_enabled", proc.stdout)
         self.assertIn("registry configured", proc.stdout)
         self.assertIn("CODEX_HOME/aippocampus-registry legacy fallback", proc.stdout)
         self.assertNotIn(str(self.root), proc.stdout)
@@ -386,7 +454,8 @@ class OnboardCodexTests(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("- codex: write_enabled", proc.stdout)
+        self.assertIn("- codex: registration_available_after_consent", proc.stdout)
+        self.assertNotIn("write_enabled", proc.stdout)
         self.assertNotIn("claude-code", proc.stdout)
         self.assertNotIn(str(self.root), proc.stdout)
 

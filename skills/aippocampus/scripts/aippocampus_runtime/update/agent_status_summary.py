@@ -6,6 +6,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.update import status_actions as update_actions
 
 
 def agent_callable_host_probe_ok(item: dict[str, Any]) -> bool:
@@ -127,6 +128,7 @@ def compact_agent_status_report(
         else bool(agent.get("ready"))
     )
     agent_status = agent.get("status") or summary.get("agent_callable_status")
+    foreground_cards = update_actions.foreground_status_cards(report)
     public = {
         "kind": f"aippocampus_update_{report.get('mode') or 'status'}_agent_json",
         "schema_version": schema_version,
@@ -144,8 +146,14 @@ def compact_agent_status_report(
             "action_hints_ready": action_hints_ready,
             "action_hints_installed": bool(action_hints.get("installed")),
             "action_hints_status": str(action_hints.get("cache_status") or "not_installed_optional"),
+            "foreground_actions": [
+                str(card.get("id") or "")
+                for card in foreground_cards
+                if str(card.get("id") or "")
+            ],
             "needs_action": needs_action,
         },
+        "foreground_status_cards": foreground_cards,
         "action_hints": {
             "installed": bool(action_hints.get("installed")),
             "ready": action_hints_ready,

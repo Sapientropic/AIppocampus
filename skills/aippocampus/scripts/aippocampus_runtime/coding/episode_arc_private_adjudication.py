@@ -402,8 +402,33 @@ def _resolve_registry_path(raw: str | None) -> Path:
     return registry_paths(aippocampus_registry_dir())[0]
 
 
+def render_text(report: dict[str, Any]) -> str:
+    raw_metrics = report.get("metrics")
+    metrics: Mapping[str, Any] = raw_metrics if isinstance(raw_metrics, Mapping) else {}
+    raw_input_surface = report.get("input_surface")
+    input_surface: Mapping[str, Any] = (
+        raw_input_surface if isinstance(raw_input_surface, Mapping) else {}
+    )
+    raw_privacy = report.get("privacy_boundary")
+    privacy: Mapping[str, Any] = raw_privacy if isinstance(raw_privacy, Mapping) else {}
+    lines = [
+        "AIppocampus episode-arcs",
+        f"status: {'ok' if report.get('ok') else 'attention_needed'}",
+        f"threads scanned: {input_surface.get('thread_count_scanned', 0)}",
+        f"message rows scanned: {input_surface.get('message_rows_scanned', 0)}",
+        f"episode arcs: {metrics.get('episode_arc_count', 0)}",
+        "next: use --json only for local private-history audit details",
+        "boundary: source text, thread ids, local paths, and source refs stay out of default output",
+    ]
+    if privacy:
+        lines.append(
+            f"privacy: raw_text={str(bool(privacy.get('raw_source_text_emitted'))).lower()}"
+        )
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="aippocampus episode-arcs", description=__doc__)
     parser.add_argument("--registry", help="Registry file or directory. Defaults to AIppocampus registry.")
     parser.add_argument("--max-threads", type=int, default=DEFAULT_MAX_THREADS)
     parser.add_argument("--max-line-gap", type=int, default=DEFAULT_MAX_LINE_GAP)
@@ -421,8 +446,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output + "\n", encoding="utf-8")
-    if args.json_output or not args.output:
+    if args.json_output:
         print(output)
+    elif not args.output:
+        print(render_text(report))
     return 0
 
 

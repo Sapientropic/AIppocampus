@@ -168,6 +168,19 @@ def clean_source_unavailable(
     )
 
 
+def clean_source_message_sort_key(item: dict[str, Any]) -> int:
+    ordinal = item.get("clean_ordinal")
+    if ordinal is not None:
+        try:
+            return int(ordinal)
+        except (TypeError, ValueError):
+            pass
+    try:
+        return int(item.get("source_line") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     query = str(arguments.get("query") or "").strip()
     if not query:
@@ -454,8 +467,7 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
     rollout = Path(str(arguments["rollout"])) if arguments.get("rollout") else core.locate_rollout(cwd)
     payload = latest_reply_module.latest_reply(rollout)
     if isinstance(payload, dict):
-        payload = dict(payload)
-        payload.setdefault("detail", detail)
+        payload = latest_reply_module.public_latest_reply_result(payload, detail=detail)
     return text_result(public_payload(arguments, payload))
 
 
@@ -470,6 +482,11 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
             "get_turn_context requires turn_id, message_id, or turn_index.",
             arguments=arguments,
             required_any=["turn_id", "message_id", "turn_index"],
+            agent_next_action=(
+                "Call agent_recall or recall_context first, then pass a message_id, "
+                "turn_id, or turn_index from the selected route."
+            ),
+            example_arguments={"message_id": "<message_id from route>", "clean_source_dir": "<optional>"},
         )
 
     required = ["messages.jsonl", "turns.jsonl"]
@@ -525,9 +542,7 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         or item.get("id") in message_ids
         or item.get("turn_id") == selected_turn.get("turn_id")
     ]
-    selected_messages.sort(
-        key=lambda item: int(item.get("clean_ordinal") or item.get("source_line") or 0)
-    )
+    selected_messages.sort(key=clean_source_message_sort_key)
     return text_result(
         public_payload(
             arguments,
@@ -869,7 +884,7 @@ def serve_stdio() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus mcp")
-    parser.add_argument("command", nargs="?", choices=["list-tools"])
+    parser.add_argument("command", nargs="?", choices=["list-tools", "status"])
     parser.add_argument(
         "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
     )
@@ -891,8 +906,8 @@ def main(argv: list[str] | None = None) -> int:
         help="For list-tools, emit only visible tool names as JSON.",
     )
     args = parser.parse_args(argv)
-    if args.list_tools or args.command == "list-tools":
-        if args.summary_json:
+    if args.list_tools or args.command in {"list-tools", "status"}:
+        if args.summary_json or args.command == "status":
             print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
             return 0
         if args.names:

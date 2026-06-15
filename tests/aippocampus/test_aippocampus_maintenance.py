@@ -337,9 +337,58 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_maintenance_summary")
         self.assertEqual(payload["cwd"], "<local-path-redacted>")
         self.assertEqual(payload["maintenance_status"], "ok")
+        self.assertEqual(payload["mode"], "applied")
+        self.assertFalse(payload["read_only"])
         self.assertEqual(payload["failure_count"], 0)
         self.assertNotIn("health_final", payload)
         self.assertEqual(payload["full_audit_flag"], "--json")
+        self.assertEqual(payload["plan_first_command"], "aippocampus maintenance --plan --summary-json")
+
+    def test_plan_is_read_only_and_does_not_run_maintenance_actions(self) -> None:
+        seen_modules: list[str] = []
+
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            seen_modules.append(cmd[2])
+            if cmd[2] == "aippocampus_runtime.health":
+                return (
+                    0,
+                    {
+                        "ok": False,
+                        "recommended_actions": [
+                            {"id": "build_clean_source", "severity": "warning"},
+                            {"id": "build_index", "severity": "warning"},
+                        ],
+                    },
+                    "{}",
+                    "",
+                )
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(
+                [
+                    "--cwd",
+                    ".",
+                    "--no-refresh-cognitive-map",
+                    "--no-refresh-graphify",
+                    "--plan",
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(seen_modules, ["aippocampus_runtime.health"])
+        self.assertEqual(payload["kind"], "aippocampus_maintenance_plan")
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(
+            payload["would_run_action_ids"],
+            ["build_clean_source", "build_index"],
+        )
+        self.assertEqual(payload["apply_command"], "aippocampus maintenance --summary-json")
 
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (

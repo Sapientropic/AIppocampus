@@ -6,38 +6,27 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-The next slice is about fewer sharp edges.
+The next slice is about the first five minutes feeling less like a control
+room.
 
-- Agent recall now opens with a tiny action card: the next route, the next
-  deepen step, and the same old boundary: do not make claims before source is
-  reopened.
-- Learning is more useful without getting louder. Tool failures, good command
-  order, environment workarounds, and context-reopen saves can become small
-  source-backed hints; stale, local-only, or source-thin lessons stay quiet.
-- Learned hints now keep their address. A lesson from one project or target no
-  longer taps every unrelated `pytest` on the shoulder.
-- Action-time hints have a real front door: cache refresh, install/status
-  readiness, malformed-cache fail-open behavior, and public-safe JSON that says
-  what is installed, what is fresh, and what still needs a refresh.
-- AIppo, source-shape routes, macro posture, and subconscious intake now share
-  the same discipline: navigation first, source truth later, no backstage
-  material promoted just because it is interesting.
-- Public and local handoff got less fussy. Public recall output no longer
-  exposes local handles or fake-short MCP tokens; MCP errors are marked as
-  errors; semantic MCP recall sees the provider-key bridge; route limits reject
-  explicit bad values; macOS commands are copy-pasteable; and local install
-  sync points ambiguous plugin caches toward the human-friendly reinstall path.
-- Benchmark gates are less theatrical. JSON entrypoints separate report
-  generation from benchmark quality, public companion reports now say when
-  workflow guidance was not measured, and diagnostic wins no longer masquerade
-  as public-quality proof or product failure.
-- Semantic bridges learned some manners. They now carry source-shaped context,
-  can widen search before FTS when there are refs, and keep a ledger of whether
-  they actually helped; stale, private, source-free, or wrong-route bridges stay
-  quiet. MemoryAgentBench, STATE-Bench, and LongMemEval-V2 reports now include
-  AIppocampus runtime arms without pretending those arms are official scores.
+- First recall has one small decision card. Check health, search exact wording,
+  recall vague handoffs, deepen only when a source route matters, and preview
+  imports before writing local history.
+- Agent and MCP surfaces are quieter by default. Compact recall no longer
+  leaks private handles, `mcp status` gives a readiness card, and tool errors
+  say what an agent should do next.
+- Setup and sync are less brittle. Plugin install/help, onboard status,
+  provider-key guidance, local sync, object-sync, logs, and maintenance now
+  separate status, plan, and apply more clearly.
+- Optional background magic stays optional. Warm ambient, action-time hints,
+  Telepathy cards, self-notes, Observatory, and episode arcs now say when they
+  are navigation only, when they are empty, and when source must be reopened.
+- Release gates are calmer: focused tests first, `pr` when the changed surface
+  deserves it, and broad/benchmark gates only for claims that actually depend on
+  them.
 
-Still alpha. Still source-backed. Quieter in the doorway.
+Still alpha. Still source-backed. Less ceremony before the first useful thread
+comes back into view.
 
 ## 0.3.3 - 2026-06-15
 

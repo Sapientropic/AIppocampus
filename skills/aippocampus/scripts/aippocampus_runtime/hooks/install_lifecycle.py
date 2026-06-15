@@ -25,6 +25,8 @@ PROVIDER_BRIDGE_MARKERS = (
     "aippocampus_provider_bridge_hook.py",
     "aippocampus_runtime.hooks.provider_bridge",
 )
+LOCAL_PATH_REDACTION = "<local-path-redacted>"
+HOOK_COMMAND_REDACTION = "<hook-command-redacted>"
 
 
 def hooks_json_path(codex_home_path: Path | None = None) -> Path:
@@ -306,6 +308,40 @@ def status(
     )
 
 
+def public_lifecycle_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Return a foreground-safe lifecycle hook result.
+
+    Hook commands are private host wiring, not useful action guidance. Keep the
+    event names and counts so agents can tell whether the hook is installed,
+    but require --operator-json for raw paths/commands.
+    """
+
+    public = dict(result)
+    if "path" in public:
+        public["path"] = LOCAL_PATH_REDACTION
+        public["path_redacted"] = True
+    events = public.get("events")
+    if isinstance(events, dict):
+        public["events"] = {
+            str(event): {
+                "installed": True,
+                "command_count": len(commands) if isinstance(commands, list) else 0,
+                "commands": [HOOK_COMMAND_REDACTION]
+                if isinstance(commands, list) and commands
+                else [],
+            }
+            for event, commands in events.items()
+        }
+    public["local_private_fields"] = ["path", "events.commands"]
+    public["operator_json_available"] = True
+    public["privacy_boundary"] = {
+        "local_path_serialized": False,
+        "hook_command_serialized": False,
+        "operator_json_required_for_raw_hook_wiring": True,
+    }
+    return public
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -320,6 +356,12 @@ def main(argv: list[str] | None = None) -> int:
         "--log", action="store_true", help="Ask the hook to write sanitized lifecycle debug events."
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit raw local hooks.json path and commands for local diagnostics.",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.codex_home).resolve()
@@ -333,12 +375,13 @@ def main(argv: list[str] | None = None) -> int:
         result = status(path, script, module=args.module)
 
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        output = result if args.operator_json else public_lifecycle_result(result)
+        print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         print(
             f"Codex lifecycle hooks {'installed' if result.get('installed') else 'not installed'}"
         )
-        print(f"hooks: {result.get('path')}")
+        print(f"hooks: {LOCAL_PATH_REDACTION}")
         for line in host_integration_text_lines():
             print(line)
         if result.get("changed") is not None:

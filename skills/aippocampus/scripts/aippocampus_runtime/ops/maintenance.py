@@ -161,6 +161,8 @@ def summary_payload(result: dict) -> dict:
     return {
         "kind": "aippocampus_maintenance_summary",
         "ok": result.get("maintenance_status") in {"ok", "degraded"},
+        "mode": "applied",
+        "read_only": False,
         "maintenance_status": result.get("maintenance_status"),
         "cwd": LOCAL_PATH_REDACTION,
         "cwd_label": result.get("cwd_label"),
@@ -187,6 +189,50 @@ def summary_payload(result: dict) -> dict:
         ],
         "full_audit_available": True,
         "full_audit_flag": "--json",
+        "plan_first_command": "aippocampus maintenance --plan --summary-json",
+        "agent_next_action": (
+            "Use --plan for a no-write preview; use --summary-json when applying bounded local maintenance."
+        ),
+    }
+
+
+def plan_payload(
+    *,
+    cwd: Path,
+    health: dict | None,
+    health_returncode: int,
+    health_error: str = "",
+    refresh_cognitive_map: bool,
+    refresh_graphify: bool,
+) -> dict:
+    recommended = list((health or {}).get("recommended_actions") or [])
+    would_run_ids = [str(item.get("id") or "") for item in recommended if item.get("id")]
+    if refresh_cognitive_map:
+        would_run_ids.append("build_cognitive_map")
+    if refresh_graphify and any(item.get("id") == "prepare_graphify_corpus" for item in recommended):
+        would_run_ids.append("prepare_graphify_corpus")
+    return {
+        "kind": "aippocampus_maintenance_plan",
+        "ok": health_returncode == 0 and health is not None,
+        "mode": "plan",
+        "read_only": True,
+        "cwd": LOCAL_PATH_REDACTION,
+        "cwd_label": cwd.name or str(cwd),
+        "health_returncode": health_returncode,
+        "health_error": health_error[:500] if health_error else "",
+        "recommended_action_count": len(recommended),
+        "would_run_action_ids": would_run_ids[:16],
+        "apply_command": "aippocampus maintenance --summary-json",
+        "full_audit_apply_command": "aippocampus maintenance --json",
+        "privacy_boundary": {
+            "local_paths_included": False,
+            "writes_performed": False,
+            "source_text_included": False,
+        },
+        "agent_next_action": (
+            "If this plan matches the intended release gate, apply once with "
+            "`aippocampus maintenance --summary-json`; do not repeat broad tests just to inspect status."
+        ),
     }
 
 
@@ -231,7 +277,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--summary-json",
         action="store_true",
-        help="Emit a bounded foreground summary instead of the full maintenance audit payload.",
+        help="Apply bounded maintenance and emit a foreground summary instead of the full audit payload.",
+    )
+    parser.add_argument(
+        "--plan",
+        "--dry-run",
+        action="store_true",
+        dest="plan",
+        help="No-write preview of health-driven maintenance actions.",
     )
     args = parser.parse_args(argv)
 
@@ -247,17 +300,38 @@ def main(argv: list[str] | None = None) -> int:
         str(cwd),
         "--json",
     ]
+    initial_health_returncode = 0
+    initial_health_error = ""
     if args.fail_fast:
         health = run_json(health_cmd)
         action_results.append({"id": "health_initial", "result": health})
     else:
         code, health_payload, stdout, stderr = run_json_checked(health_cmd)
+        initial_health_returncode = code
+        initial_health_error = (stderr or stdout or "").strip()
         if code != 0 or health_payload is None:
             action_failures.append(failure_result("health_initial", health_cmd, code, stdout, stderr))
             health = {}
         else:
             health = health_payload
             action_results.append({"id": "health_initial", "result": health})
+
+    if args.plan:
+        payload = plan_payload(
+            cwd=cwd,
+            health=health,
+            health_returncode=initial_health_returncode,
+            health_error=initial_health_error,
+            refresh_cognitive_map=not args.no_refresh_cognitive_map,
+            refresh_graphify=not args.no_refresh_graphify,
+        )
+        if args.json_output or args.summary_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"maintenance plan for {payload['cwd_label']}: no writes")
+            print(f"would run: {', '.join(payload['would_run_action_ids']) or 'nothing'}")
+            print(f"next: {payload['apply_command']}")
+        return 0 if payload["ok"] else 1
 
     if has_action(health, "build_clean_source"):
         cmd = [

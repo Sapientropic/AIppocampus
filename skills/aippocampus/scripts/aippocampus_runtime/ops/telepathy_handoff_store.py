@@ -24,6 +24,41 @@ DEEPEN_KIND = "aippocampus_telepathy_handoff_deepen"
 DIAGNOSE_KIND = "aippocampus_telepathy_handoff_diagnostic"
 ERROR_KIND = "aippocampus_telepathy_handoff_error"
 
+HANDOFF_PRESETS: dict[str, dict[str, Any]] = {
+    "handoff": {
+        "coordination_mode": "handoff",
+        "source_support": "reopenable_route",
+        "status": "ready_for_handoff",
+        "handoff_readiness": "route_ready",
+        "boundary_flags": [],
+        "label": "another agent can continue after reopening source",
+    },
+    "soft-lock": {
+        "coordination_mode": "soft_lock",
+        "source_support": "reopenable_route",
+        "status": "active",
+        "handoff_readiness": "blocked",
+        "boundary_flags": ["task_boundary"],
+        "label": "keep attention on a scope without claiming distributed locking",
+    },
+    "human-needed": {
+        "coordination_mode": "human_needed",
+        "source_support": "candidate_only",
+        "status": "blocked",
+        "handoff_readiness": "needs_human",
+        "boundary_flags": ["candidate_only_not_fact", "source_reopen_required"],
+        "label": "mark a local handoff that needs human judgment before action",
+    },
+    "source-reopen": {
+        "coordination_mode": "handoff",
+        "source_support": "reopenable_route",
+        "status": "active",
+        "handoff_readiness": "route_ready",
+        "boundary_flags": ["source_reopen_required"],
+        "label": "leave a navigation-only route that must be reopened before claims",
+    },
+}
+
 ACTIVE_LIFECYCLE_STATUSES = {"active", "ready_for_handoff", "blocked"}
 SAFE_SOURCE_REF_KEYS = {
     "claim_id",
@@ -390,6 +425,21 @@ def list_handoffs_payload(
         ]
     cards = [card for card in cards if _status_matches(card, status)]
     limited = cards[: max(1, min(int(limit or 20), 100))]
+    empty_state: dict[str, Any] | None = None
+    if not cards:
+        empty_state = {
+            "state": "no_matching_telepathy_handoffs",
+            "meaning": "No active opt-in handoff card is waiting for this filter.",
+            "agent_next_action": (
+                "Continue with normal recall/search, or create a handoff only when a "
+                "human or upstream agent explicitly wants local coordination."
+            ),
+            "create_examples": [
+                'aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex',
+                'aippocampus telepathy create --preset human-needed --scope "release decision" --owner codex',
+            ],
+            "privacy_boundary": "Telepathy cards are navigation-only and not source-backed truth.",
+        }
     return {
         "ok": True,
         "kind": LIST_KIND,
@@ -401,6 +451,7 @@ def list_handoffs_payload(
         "cards": [_card_summary(card) for card in limited],
         "count": len(limited),
         "total_matching_count": len(cards),
+        "empty_state": empty_state,
     }
 
 
@@ -591,10 +642,26 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
     print(f"{payload.get('kind', 'telepathy_handoff')}: {status}")
     if "count" in payload:
         print(f"count: {payload['count']}")
+    empty_state = payload.get("empty_state")
+    if isinstance(empty_state, Mapping):
+        print(f"next: {empty_state.get('agent_next_action')}")
+        examples = empty_state.get("create_examples")
+        if isinstance(examples, list) and examples:
+            print(f"example: {examples[0]}")
     if "card" in payload and isinstance(payload["card"], Mapping):
         card = payload["card"]
         print(f"card_id: {card.get('card_id')}")
         print(f"next_safe_action: {card.get('next_safe_action')}")
+
+
+def _preset_help() -> str:
+    lines = ["presets:"]
+    for name, preset in HANDOFF_PRESETS.items():
+        lines.append(f"  {name}: {preset['label']}")
+    lines.append(
+        'example: aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex'
+    )
+    return "\n".join(lines)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -606,17 +673,18 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument("--json", action="store_true", help="Emit JSON.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    create = subparsers.add_parser("create", parents=[common])
+    create = subparsers.add_parser("create", parents=[common], epilog=_preset_help())
+    create.add_argument("--preset", choices=sorted(HANDOFF_PRESETS), default="handoff")
     create.add_argument("--scope", required=True)
     create.add_argument("--owner", required=True)
     create.add_argument(
         "--coordination-mode",
-        default="handoff",
+        default=None,
         choices=sorted(packets.COORDINATION_MODES),
     )
     create.add_argument(
         "--source-support",
-        default="reopenable_route",
+        default=None,
         choices=sorted(packets.SOURCE_SUPPORT),
     )
     create.add_argument("--status", choices=sorted(packets.STATUSES))
@@ -644,14 +712,16 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "create":
+            preset = HANDOFF_PRESETS.get(args.preset, HANDOFF_PRESETS["handoff"])
+            boundary_flags = list(preset.get("boundary_flags") or []) + list(args.boundary_flag)
             payload = create_handoff(
                 scope=args.scope,
                 owner=args.owner,
-                coordination_mode=args.coordination_mode,
-                source_support=args.source_support,
-                status=args.status,
-                handoff_readiness=args.handoff_readiness,
-                boundary_flags=args.boundary_flag,
+                coordination_mode=args.coordination_mode or preset["coordination_mode"],
+                source_support=args.source_support or preset["source_support"],
+                status=args.status or preset["status"],
+                handoff_readiness=args.handoff_readiness or preset["handoff_readiness"],
+                boundary_flags=boundary_flags,
                 source_refs=_load_source_ref_json(args.source_ref_json),
                 case_id=args.case_id,
                 cwd=args.cwd,

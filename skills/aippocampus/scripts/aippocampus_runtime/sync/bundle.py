@@ -13,6 +13,12 @@ from typing import Any, Iterable
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
+from aippocampus_runtime.sync.cli_support import (
+    parser_command,
+    print_sync_human_result,
+    sync_direction,
+    sync_direction_plan,
+)
 from aippocampus_runtime.sync.contract import (
     LOCAL_FOLDER_BACKEND,
     SYNC_BUNDLE_KIND,
@@ -794,35 +800,74 @@ def available_requires_sync_dir_status() -> dict[str, Any]:
     }
 
 
-def _parser_command(argv: list[str] | None, base_prog: str) -> tuple[str, list[str] | None, str | None]:
-    commands = {"status", "push", "pull", "repair"}
-    if argv and argv[0] in commands and any(arg in {"-h", "--help"} for arg in argv[1:]):
-        return f"{base_prog} {argv[0]}", list(argv[1:]), argv[0]
-    return base_prog, argv, None
+def _estimate_plan_file_count(command: str, sync_dir: str | None, registry_dir: str | None) -> int | None:
+    try:
+        if command == "push":
+            registry_root = Path(registry_dir).resolve() if registry_dir else aippocampus_registry_dir()
+            return sum(1 for _ in iter_registry_sync_files(registry_root)) + sum(
+                1 for _ in iter_clean_source_sync_files(registry_root)
+            )
+        if sync_dir:
+            manifest = load_sync_manifest(Path(sync_dir).resolve() / SYNC_MANIFEST_NAME, missing_ok=True)
+            files = manifest.get("files") if isinstance(manifest, dict) else None
+            return len(files) if isinstance(files, list) else 0
+    except Exception:
+        return None
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
-    prog, parse_argv, command_override = _parser_command(argv, "aippocampus sync")
-    parser = argparse.ArgumentParser(prog=prog)
+    prog, parse_argv, command_override = parser_command(argv, "aippocampus sync")
+    command_label = command_override or "COMMAND"
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description=sync_direction(command_label)["description"]
+        if command_override
+        else "Local-folder sync status/push/pull/repair for AIppocampus.",
+        epilog=(
+            "Plan first: add --plan (or --dry-run) to show read/write sides without mutating. "
+            "Status is always non-mutating."
+        ),
+    )
     if command_override is None:
         parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     parser.add_argument("--sync-dir")
     parser.add_argument("--registry-dir", default=None)
-    parser.add_argument("--include-raw", action="store_true")
-    parser.add_argument("--encrypt", action="store_true")
-    parser.add_argument("--require-encrypted", action="store_true")
+    parser.add_argument(
+        "--include-raw",
+        action="store_true",
+        help="include raw rollout audit files; clean-source sync remains the default",
+    )
+    parser.add_argument(
+        "--encrypt",
+        action="store_true",
+        help="encrypt a push using the encrypted local-folder sync adapter",
+    )
+    parser.add_argument(
+        "--require-encrypted",
+        action="store_true",
+        help="refuse plaintext pull/status/repair and use the encrypted adapter",
+    )
     parser.add_argument("--recipient", action="append", default=[])
     parser.add_argument("--recipient-file", action="append", default=[])
     parser.add_argument("--identity-file", action="append", default=[])
     parser.add_argument("--age-bin", default=None)
     parser.add_argument("--no-decrypt", action="store_true")
+    parser.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(parse_argv)
     if command_override is not None:
         args.command = command_override
 
     try:
-        if args.command == "status":
+        if args.plan:
+            result = sync_direction_plan(
+                args,
+                estimated_file_count=_estimate_plan_file_count(
+                    str(args.command), args.sync_dir, args.registry_dir
+                ),
+            )
+        elif args.command == "status":
             if not args.sync_dir:
                 result = available_requires_sync_dir_status()
             elif args.require_encrypted:
@@ -902,17 +947,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        if result.get("status") == "available_requires_sync_dir":
-            print("sync status: capability available; no sync folder selected")
-            print(f"next: {result.get('next_command')}")
-            print(f"boundary: {result.get('claim_boundary')}")
-        else:
-            print(f"sync {args.command}: {'ok' if result.get('ok') else 'needs attention'}")
-        if result.get("manifest"):
-            print(f"manifest: {result['manifest']}")
-        if result.get("issues"):
-            for issue in result["issues"]:
-                print(f"- {issue.get('code')}: {issue.get('path')}")
+        print_sync_human_result(str(args.command), result)
     return 0 if result.get("ok") else 1
 
 

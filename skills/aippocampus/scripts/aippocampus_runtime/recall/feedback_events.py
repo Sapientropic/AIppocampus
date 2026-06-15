@@ -65,7 +65,16 @@ DEFAULT_SIGNAL_DELTAS = {
     "expired": -0.4,
 }
 NON_FOREGROUND_SIGNALS = {"blocked", "wrong_route_drag", "superseded", "expired"}
-OUTCOME_ALIASES = {"wrong_route": "wrong_route_drag"}
+OUTCOME_ALIASES = {
+    "helped": "source_reopen_success",
+    "useful": "source_reopen_success",
+    "confirmed": "user_confirmed",
+    "wrong": "wrong_route_drag",
+    "wrong_route": "wrong_route_drag",
+    "noisy": "wrong_route_drag",
+    "stale": "expired",
+    "prevented": "prevented_failure",
+}
 
 
 class InvalidFeedbackValue(ValueError):

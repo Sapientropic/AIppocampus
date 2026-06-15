@@ -300,6 +300,22 @@ def public_search_result(
             if public.get("matches")
             else "public_safe_no_source_snippets"
         )
+    if not public.get("matches"):
+        public["decision"] = "no_source_backed_snippet_found"
+        public["agent_next_action"] = (
+            "Refine the cue with exact wording, a project/object name, or a time clue; "
+            "run `aippocampus onboard --status` if local history may not be registered."
+        )
+        public["recovery_actions"] = [
+            'aippocampus search "distinctive exact phrase" --json',
+            'aippocampus agent recall "vague old cue" --json',
+            "aippocampus onboard --status --json",
+        ]
+        public["source_boundary"] = {
+            "source_backed_claim_allowed": False,
+            "candidate_routes_are_navigation_only": True,
+            "reopen_required_before_quoting": True,
+        }
     public["privacy"] = {
         "paths_included": include_paths,
         "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,

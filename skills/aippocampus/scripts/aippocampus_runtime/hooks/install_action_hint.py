@@ -202,6 +202,55 @@ def _unsupported(path: Path, *, host: str) -> dict[str, Any]:
     return result
 
 
+def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, Any]:
+    cache_status = str(status_result.get("cache_status") or "not_installed")
+    installed = bool(status_result.get("installed"))
+    ready = installed and cache_status == "with_fresh_records"
+    if not installed:
+        first_command = "aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json"
+    elif not ready:
+        first_command = (
+            "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> "
+            "--write --json"
+        )
+    else:
+        first_command = "aippocampus hooks action status --json"
+    next_steps = [{"label": "check", "command": "aippocampus hooks action status --json"}]
+    if not installed:
+        next_steps.append({"label": "install", "command": first_command})
+    elif not ready:
+        next_steps.append({"label": "refresh_cache", "command": first_command})
+    next_steps.append(
+        {
+            "label": "rollback",
+            "command": "aippocampus hooks action uninstall --json",
+        }
+    )
+    return {
+        "kind": "aippocampus_action_hint_frontstage_card",
+        "title": "Action-time hints",
+        "status": "ready" if ready else cache_status,
+        "installed": installed,
+        "ready": ready,
+        "optional": True,
+        "fail_open": True,
+        "authority": "navigation_only",
+        "event": ACTION_HINT_EVENT,
+        "cache_status": cache_status,
+        "cache_record_count": int(status_result.get("cache_record_count") or 0),
+        "fresh_record_count": int(status_result.get("fresh_record_count") or 0),
+        "purpose": "Small PreToolUse nudges for learned source routes; never source evidence.",
+        "when_useful": [
+            "after learning-loop or AIppo guidance has prepared action hints",
+            "before broad tests, retries, or source-sensitive edits",
+        ],
+        "reads": ["prepared action-hint cache"],
+        "writes": ["Codex hooks.json only during explicit install/uninstall"],
+        "next_steps": next_steps,
+        "claim_boundary": "Hints are route guidance only; reopen or deepen source before claims.",
+    }
+
+
 def install(
     path: Path,
     *,
@@ -377,6 +426,7 @@ def status(
                 }),
             }
         )
+    result["frontstage_card"] = action_hint_frontstage_card(result)
     return result if include_private_paths else redact_public_result(result, path=path)
 
 
@@ -446,10 +496,22 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(
-            f"Codex action hint hook {'installed' if result.get('installed') else 'not installed'}"
+            f"Action-time hints: {((result.get('frontstage_card') or {}).get('status') or 'unknown')}"
         )
+        print("optional: true; fail-open: true; authority: navigation_only")
         print(f"event: {ACTION_HINT_EVENT}")
         print(f"support: {result.get('support_status')}")
+        steps = (result.get("frontstage_card") or {}).get("next_steps") or []
+        if steps:
+            preferred = next(
+                (
+                    step
+                    for step in steps
+                    if step.get("label") in {"install", "refresh_cache"}
+                ),
+                next((step for step in steps if step.get("label") == "check"), steps[0]),
+            )
+            print(f"next: {preferred.get('command')}")
     return 0
 
 

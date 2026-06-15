@@ -34,7 +34,7 @@ def deepen_request_for_route(
     human_next_action = (
         command
         if command and len(command) <= 180
-        else f"deepen route {request_index}; rerun with --json for callable handle"
+        else f"deepen route {request_index}; rerun with --json --detail full for local-private handle"
     )
     return {
         "request_index": request_index,

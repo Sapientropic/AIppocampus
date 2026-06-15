@@ -15,7 +15,7 @@ from typing import Any
 
 from aippocampus_runtime.aippo import working_contract
 from aippocampus_runtime.core import compact_text
-from aippocampus_runtime.hooks import action_hint_cache
+from aippocampus_runtime.hooks.action_hint_cache_records import build_action_hint_cache_report
 
 SCHEMA_VERSION = 1
 ADAPTER_REPORT_KIND = "aippocampus_learning_aippo_bridge_report"
@@ -269,7 +269,7 @@ def build_learning_aippo_bridge_report(
         working_contract.build_aippo_working_contracts(rows)
     )
     activation = working_contract.activation_packet_from_working_contract(contract, task=task)
-    cache_report = action_hint_cache.build_action_hint_cache_report(
+    cache_report = build_action_hint_cache_report(
         aippo_learned_clauses=contract.get("clauses") or [],
         now_unix=now_unix,
     )

@@ -11,6 +11,8 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall import feedback_events
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
 DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
@@ -84,6 +86,137 @@ def policy_boundary() -> dict[str, Any]:
         "public_sdk_stability_claim": False,
         "hosted_api_claim": False,
     }
+
+
+def _public_payload(payload: Any) -> Any:
+    return redact_sensitive_values(redact_private_paths(payload))
+
+
+def capture_feedback(
+    *,
+    route_id: str,
+    outcome: str,
+    route_kind: str = "active_path",
+    reason: str = "",
+    feedback_path: str | Path | None = None,
+    schema_version: str = "agent-opt-in-continuity-v0",
+    kind: str = "aippocampus_agent_continuity_path",
+) -> dict[str, Any]:
+    """Capture low-authority outcome feedback without changing source truth."""
+
+    event = feedback_events.active_flow_event(
+        route_id=route_id,
+        route_kind=route_kind,
+        signal=outcome,
+        source_id=route_id,
+        reason=reason,
+    )
+    wrote_event = False
+    if feedback_path:
+        target = Path(feedback_path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+        wrote_event = True
+    report = feedback_events.recall_feedback_report([event])
+    return _public_payload(
+        {
+            "kind": kind,
+            "schema_version": schema_version,
+            "mode": "feedback",
+            "status": "captured",
+            "authority": "low_authority_feedback_signal",
+            "event": event,
+            "feedback_report": report,
+            "wrote_event": wrote_event,
+            "storage": "jsonl" if wrote_event else "receipt_only",
+            "policy_boundary": {
+                **policy_boundary(),
+                "feedback_is_source_truth": False,
+                "feedback_can_ripen_candidate_without_source": False,
+                "source_reopen_required_for_claims": True,
+            },
+            "red_lines": {
+                "feedback_promoted_without_source": 0,
+                "source_truth_changed_by_feedback": 0,
+            },
+        }
+    )
+
+
+def compact_feedback_receipt(
+    payload: Mapping[str, Any],
+    *,
+    schema_version: str = "agent-opt-in-continuity-v0",
+    kind: str = "aippocampus_agent_continuity_path",
+) -> dict[str, Any]:
+    raw_event = payload.get("event")
+    event: Mapping[str, Any] = raw_event if isinstance(raw_event, Mapping) else {}
+    wrote_event = bool(payload.get("wrote_event"))
+    return _public_payload(
+        {
+            "kind": kind,
+            "schema_version": schema_version,
+            "mode": "feedback",
+            "status": payload.get("status") or "captured",
+            "ok": True,
+            "authority": "low_authority_feedback_signal",
+            "receipt": {
+                "route_id": event.get("route_id"),
+                "route_kind": event.get("route_kind"),
+                "outcome": event.get("signal"),
+                "reason_recorded": bool(event.get("reason")),
+            },
+            "write_boundary": {
+                "storage": "jsonl" if wrote_event else "receipt_only",
+                "wrote_event": wrote_event,
+                "will_affect_future_routes": wrote_event,
+                "source_truth_changed_by_feedback": False,
+                "feedback_is_source_truth": False,
+            },
+            "agent_next_action": (
+                "Feedback was written to the local JSONL calibration lane; continue the task "
+                "and reopen source before making claims."
+                if wrote_event
+                else "This is only a receipt. Add --feedback-jsonl <path> when you want future "
+                "agent recall to consume the feedback signal."
+            ),
+            "operator_json_available": True,
+            "policy_boundary": {
+                **policy_boundary(),
+                "source_reopen_required_for_claims": True,
+            },
+        }
+    )
+
+
+def missing_feedback_route_payload(
+    *,
+    schema_version: str = "agent-opt-in-continuity-v0",
+    kind: str = "aippocampus_agent_continuity_path",
+) -> dict[str, Any]:
+    return _public_payload(
+        {
+            "kind": kind,
+            "schema_version": schema_version,
+            "mode": "feedback",
+            "status": "needs_route_id",
+            "ok": False,
+            "agent_next_action": (
+                "Run `aippocampus agent recall \"old cue\" --json`, deepen the selected route "
+                "if needed, then pass the route_id to `aippocampus agent feedback <route_id>`."
+            ),
+            "examples": [
+                'aippocampus agent recall "old cue" --json',
+                "aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
+            ],
+            "write_boundary": {
+                "wrote_event": False,
+                "storage": "none",
+                "feedback_is_source_truth": False,
+            },
+        }
+    )
 
 
 def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -401,12 +534,18 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
     if deepen_requests:
         first = deepen_requests[0]
         next_action = str(first.get("human_next_action") or "").strip()
-        if payload.get("last_recall_cache_available") and "--json for callable handle" in next_action:
+        if payload.get("last_recall_cache_available") and (
+            "--json for callable handle" in next_action
+            or "--json --detail full for local-private handle" in next_action
+        ):
             request_index = int(first.get("request_index") or 1)
             next_action = f"aippocampus agent deepen --request {request_index} --last-recall"
         if not next_action:
             request_index = int(first.get("request_index") or 1)
-            next_action = f"deepen route {request_index}; rerun with --json for callable handle"
+            next_action = (
+                f"deepen route {request_index}; rerun with --json --detail full "
+                "for local-private handle"
+            )
         lines.append(f"Next: {next_action}.")
     elif suggested_command and "aippo-nav:" not in suggested_command and len(suggested_command) <= 160:
         lines.append(f"Next: {suggested_command}")

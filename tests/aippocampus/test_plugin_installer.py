@@ -98,6 +98,50 @@ def successful_probe_with_noisy_stderr() -> dict:
 
 
 class PluginInstallerTests(unittest.TestCase):
+    def test_plugin_install_and_uninstall_help_show_rollback_and_dry_run_paths(self) -> None:
+        install = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "plugin",
+                "install",
+                "--help",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        uninstall = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "plugin",
+                "uninstall",
+                "--help",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        self.assertEqual(install.returncode, 0, install.stderr)
+        self.assertEqual(uninstall.returncode, 0, uninstall.stderr)
+        self.assertIn("writes local plugin files only", install.stdout)
+        self.assertIn("Rollback:", install.stdout)
+        self.assertIn("--dry-run --json", install.stdout)
+        self.assertIn("Use --dry-run first", uninstall.stdout)
+        self.assertIn("Safe preview:", uninstall.stdout)
+
     def test_codex_install_builds_marketplace_refreshes_versioned_cache_and_verifies(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-install"
         try:
@@ -567,3 +611,62 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertEqual(result["execute_command"], "aippocampus plugin uninstall --codex")
             self.assertTrue(marketplace_root.exists())
             self.assertTrue(installed_cache.exists())
+
+    def test_plugin_uninstall_cli_json_redacts_local_paths_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp) / "codex-home"
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "plugin",
+                    "uninstall",
+                    "--codex",
+                    "--codex-home",
+                    str(codex_home),
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            operator = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "plugin",
+                    "uninstall",
+                    "--codex",
+                    "--codex-home",
+                    str(codex_home),
+                    "--dry-run",
+                    "--json",
+                    "--operator-json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(
+            payload["kind"],
+            "aippocampus_plugin_uninstall_preview_public_summary",
+        )
+        self.assertIn("agent_next_action", payload)
+        self.assertFalse(payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertNotIn(str(codex_home), encoded)
+        self.assertEqual(operator.returncode, 0, operator.stderr)
+        operator_payload = json.loads(operator.stdout)
+        self.assertEqual(operator_payload["codex_home"], str(codex_home))

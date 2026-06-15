@@ -32,6 +32,8 @@ COMMAND_FAMILY_TERMS = {
     "tsc",
     "uv",
 }
+
+
 def _terms(*values: Any) -> list[str]:
     tokens: set[str] = set()
     for value in values:
@@ -80,6 +82,26 @@ def _safe_label(value: Any, *, limit: int = 160) -> str:
     return text[:limit]
 
 
+def _path_values(raw_args: Mapping[str, Any]) -> list[str]:
+    values: list[str] = []
+    for field in ("file_path", "file_paths", "path", "paths", "target_file"):
+        value = raw_args.get(field)
+        if isinstance(value, (list, tuple, set)):
+            values.extend(str(item or "") for item in value if item)
+        elif value:
+            values.append(str(value))
+    return values[:8]
+
+
+def _looks_private_or_absolute_path(text: str) -> bool:
+    normalized = text.replace("\\", "/").strip()
+    return bool(
+        re.search(r"^[a-zA-Z]:/", normalized)
+        or normalized.startswith(("/", "~", "//"))
+        or re.search(r"(^|/)(users|home)/[^/]+/", normalized.casefold())
+    )
+
+
 def _raw_tool_args(envelope: Mapping[str, Any]) -> Mapping[str, Any]:
     for field in ("tool_args", "tool_input", "input", "args"):
         value = envelope.get(field)
@@ -99,21 +121,40 @@ def _tool_name(envelope: Mapping[str, Any]) -> str:
 
 
 def _path_terms(raw_args: Mapping[str, Any]) -> list[str]:
-    values: list[Any] = []
-    for field in ("file_path", "file_paths", "path", "paths", "target_file"):
-        value = raw_args.get(field)
-        if isinstance(value, (list, tuple, set)):
-            values.extend(value)
-        elif value:
-            values.append(value)
     terms: set[str] = set()
-    for value in values:
-        text = str(value or "").replace("\\", "/")
+    for text in _path_values(raw_args):
+        normalized = text.replace("\\", "/")
         # Keep only path fragments useful for matching. Full absolute paths stay
         # out of hook output and diagnostics.
-        fragments = [part for part in text.split("/") if part and ":" not in part]
-        terms.update(_terms(fragments[-1:]))
+        fragments = [part for part in normalized.split("/") if part and ":" not in part]
+        if _looks_private_or_absolute_path(normalized):
+            terms.update(_terms(fragments[-1:]))
+        else:
+            terms.update(_terms(fragments[-4:]))
     return sorted(terms)[:16]
+
+
+def _path_category_fingerprints(raw_args: Mapping[str, Any]) -> list[str]:
+    categories: list[str] = []
+    seen: set[str] = set()
+    for text in _path_values(raw_args):
+        normalized = text.replace("\\", "/").strip().strip("/")
+        if _looks_private_or_absolute_path(normalized):
+            continue
+        fragments = [part for part in normalized.split("/") if part and ":" not in part]
+        if len(fragments) < 2:
+            continue
+        dirs = fragments[:-1]
+        for size in (2, 1):
+            if len(dirs) >= size:
+                category = "/".join(dirs[-size:])
+                key = category.casefold()
+                if category and key not in seen:
+                    seen.add(key)
+                    categories.append(category)
+        if len(categories) >= 4:
+            break
+    return categories[:4]
 
 
 def _issue_ids(*values: Any) -> list[str]:
@@ -156,6 +197,13 @@ def extract_pending_action_features(envelope: Mapping[str, Any]) -> dict[str, An
     tool_name = _tool_name(envelope)
     command_terms = _command_terms(raw_args)
     path_terms = _path_terms(raw_args)
+    explicit_path_category = _safe_label(
+        envelope.get("path_category_fingerprint")
+        or raw_args.get("path_category_fingerprint")
+    )
+    derived_path_categories = _path_category_fingerprints(raw_args)
+    path_categories = [explicit_path_category, *derived_path_categories]
+    path_categories = [category for index, category in enumerate(path_categories) if category and category not in path_categories[:index]]
     issue_ids = _issue_ids(
         raw_args.get("issue_ids"),
         raw_args.get("issue"),
@@ -190,10 +238,8 @@ def extract_pending_action_features(envelope: Mapping[str, Any]) -> dict[str, An
         "target_fingerprint": _safe_label(
             envelope.get("target_fingerprint") or raw_args.get("target_fingerprint")
         ),
-        "path_category_fingerprint": _safe_label(
-            envelope.get("path_category_fingerprint")
-            or raw_args.get("path_category_fingerprint")
-        ),
+        "path_category_fingerprint": path_categories[0] if path_categories else "",
+        "path_category_fingerprints": path_categories,
         "workspace_or_environment_profile": _safe_label(
             envelope.get("workspace_or_environment_profile")
             or raw_args.get("workspace_or_environment_profile")
