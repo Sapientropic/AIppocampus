@@ -123,6 +123,7 @@ def _run_direct_search(
                 "clean_source_dir": str(clean_source_dir),
                 "max": max_matches,
                 "include_private_paths": False,
+                "include_source_snippets": True,
             }
         )
         payload = _tool_payload(result)

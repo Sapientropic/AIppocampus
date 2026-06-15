@@ -128,6 +128,7 @@ def mcp_search(cwd: Path, clean_source_dir: Path, query: str) -> dict[str, Any]:
                     "clean_source_dir": str(clean_source_dir),
                     "query": query,
                     "max": 4,
+                    "include_source_snippets": True,
                 },
             },
         }
