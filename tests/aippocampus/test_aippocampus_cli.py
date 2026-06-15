@@ -322,6 +322,20 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(prompt_hook_status.args, ["status", "--last", "--json"])
 
+        action_hook_status = facade.resolve_command(
+            ["hooks", "action", "status", "--json"]
+        )
+        self.assertEqual(action_hook_status.command, "hooks")
+        self.assertEqual(
+            action_hook_status.module_name,
+            "aippocampus_runtime.hooks.install_action_hint",
+        )
+        self.assertEqual(
+            action_hook_status.script_name,
+            "install_aippocampus_action_hint_hook.py",
+        )
+        self.assertEqual(action_hook_status.args, ["status", "--json"])
+
         claude_hook_status = facade.resolve_command(
             ["hooks", "claude-code", "status", "--json"]
         )

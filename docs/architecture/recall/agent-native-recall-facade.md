@@ -77,6 +77,15 @@ unless a specific packet family documents that behavior. `agent recall` also
 emits `deepen_requests[].copy_paste_command` so a fresh agent can follow the
 active-pull path without guessing which id is callable.
 
+Default JSON and MCP recall output now begins with `foreground_action_card`.
+The card is the working surface: one decision, one short reason, one next
+action, and one claim boundary. Full `memory_packets`, `deepen_requests`,
+router/macro diagnostics, red lines, policy boundaries, and metrics remain
+available in the same JSON for audit/debug, but they are not the foreground
+field profile. Public projections redact
+`foreground_action_card.callable_handle` the same way they redact
+`deepen_requests[].handle`.
+
 ## Default Agent Pull Gesture
 
 `aippocampus_runtime.recall.agent_pull_gesture` defines the copyable #1130

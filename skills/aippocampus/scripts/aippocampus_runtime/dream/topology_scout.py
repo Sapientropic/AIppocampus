@@ -324,6 +324,16 @@ def candidate_or_rejection(row: Mapping[str, Any]) -> dict[str, Any]:
             "candidate_emitted": False,
         }
 
+    cross_layer_projection = {}
+    learning_finding_id = _safe_anchor(row.get("learning_finding_id"))
+    if learning_finding_id:
+        cross_layer_projection = {
+            "learning_finding_id": learning_finding_id,
+            "trigger_job": "pattern_completion_learning_loop_review",
+            "authority": "navigation_only",
+            "source_reopen_required_before_claim": True,
+            "does_not_raise_authority": True,
+        }
     return {
         "kind": CANDIDATE_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -344,6 +354,7 @@ def candidate_or_rejection(row: Mapping[str, Any]) -> dict[str, Any]:
         "user_diagnosis": False,
         "profile_claim": False,
         "unsupported_symbolic_claim": False,
+        "cross_layer_projection": cross_layer_projection,
     }
 
 

@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime.hooks import action_hint_cache as cache  # noqa: E402
+from aippocampus_runtime.learning_loop.core import project_action_time_guidance  # noqa: E402
+from aippocampus_runtime.reflection.aar_v2 import build_aar_v2_report  # noqa: E402
+
+
+def source_ref(name: str) -> dict[str, str]:
+    return {"source_id": f"clean:{name}", "segment_id": f"msg-{name}"}
+
+
+class ActionHintCacheTests(unittest.TestCase):
+    def test_materializes_two_existing_provider_families(self) -> None:
+        aar_report = build_aar_v2_report(
+            [
+                {
+                    "kind": "source_backed_correction",
+                    "review_status": "accepted",
+                    "source_refs": [source_ref("aar")],
+                    "action_class": "specific_memory_source_claim",
+                    "summary": "Weak context produced a specific source claim.",
+                }
+            ]
+        )
+        learning_guidance = project_action_time_guidance(
+            [
+                {
+                    "finding_id": "learn-preflight",
+                    "workflow_family": "cheap_preflight_before_broad_test",
+                    "status": "open",
+                    "scope": "project:AIppocampus",
+                    "occurrence_count": 2,
+                    "confidence": "high",
+                    "foreground_eligible": True,
+                    "source_refs": [source_ref("learn")],
+                }
+            ],
+            query_terms=["pytest", "test"],
+        )
+
+        report = cache.build_action_hint_cache_report(
+            aar_v2_records=aar_report["candidate_records"],
+            learning_guidance=learning_guidance,
+            now_unix=1000,
+        )
+
+        self.assertEqual(report["kind"], cache.CACHE_KIND)
+        self.assertEqual(report["record_count"], 2)
+        self.assertEqual(report["provider_counts"]["aar_v2"], 1)
+        self.assertEqual(report["provider_counts"]["learning_loop"], 1)
+        for record in report["records"]:
+            self.assertTrue(record["navigation_only"])
+            self.assertTrue(record["no_claim_before_reopen"])
+            self.assertTrue(record["source_reopen_required"])
+            self.assertFalse(record["can_support_factual_claim"])
+
+    def test_read_filters_pending_action_features_and_suppression_boundaries(self) -> None:
+        report = cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight",
+                    "next_action": "run_preflight_before_broad_test",
+                    "guidance_text": "Run ruff before pytest.",
+                    "source_refs": [source_ref("learn")],
+                    "reason_codes": ["learning_guidance_surface"],
+                }
+            ],
+            now_unix=1000,
+        )
+        features = {
+            "terms": ["pytest", "test", "preflight"],
+            "tool_names": ["Bash"],
+            "command_terms": ["pytest", "test"],
+            "path_terms": [],
+            "issue_ids": [],
+            "risk_modes": [],
+            "active_recall_locks": [],
+            "anti_nag_token_ids": [],
+            "visible_source_refs": [],
+        }
+
+        matches = cache.read_action_hint_records(report, features, now_unix=1001)
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["provider_family"], "learning_loop")
+
+        stale = {**matches[0], "freshness": "stale"}
+        private = {**matches[0], "freshness": "private"}
+        expired = {**matches[0], "expires_at_unix": 999}
+        low_one_off = {**matches[0], "confidence": "low", "occurrence_count": 1}
+        visible = {**features, "visible_source_refs": [source_ref("learn")]}
+        anti_nag = {**features, "anti_nag_token_ids": [matches[0]["record_id"]]}
+
+        self.assertEqual(cache.read_action_hint_records([stale], features, now_unix=1001), [])
+        self.assertEqual(cache.read_action_hint_records([private], features, now_unix=1001), [])
+        self.assertEqual(cache.read_action_hint_records([expired], features, now_unix=1001), [])
+        self.assertEqual(cache.read_action_hint_records([low_one_off], features, now_unix=1001), [])
+        self.assertEqual(cache.read_action_hint_records([matches[0]], visible, now_unix=1001), [])
+        self.assertEqual(cache.read_action_hint_records([matches[0]], anti_nag, now_unix=1001), [])
+
+    def test_source_claim_action_matches_aar_v2_record_without_authority_upgrade(self) -> None:
+        report = cache.build_action_hint_cache_report(
+            aar_v2_records=[
+                {
+                    "record_id": "aar-record",
+                    "action_class": "specific_memory_source_claim",
+                    "source_refs": [source_ref("aar")],
+                    "nudge": {"recommended_action": "reopen_source_before_specific_claim"},
+                }
+            ],
+            now_unix=1000,
+        )
+        features = {
+            "terms": ["memory", "claim"],
+            "tool_names": [],
+            "command_terms": [],
+            "path_terms": [],
+            "issue_ids": [],
+            "risk_modes": [],
+            "active_recall_locks": [],
+            "anti_nag_token_ids": [],
+            "visible_source_refs": [],
+            "action_class": "specific_memory_source_claim",
+            "support_level": "candidate",
+        }
+
+        matches = cache.read_action_hint_records(report, features, now_unix=1001)
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["provider_family"], "aar_v2")
+        self.assertEqual(matches[0]["authority"], "navigation_only")
+
+    def test_missing_providers_are_explicit_without_becoming_errors(self) -> None:
+        report = cache.build_action_hint_cache_report(now_unix=1000)
+
+        self.assertEqual(report["record_count"], 0)
+        self.assertEqual(report["missing_provider_count"], 5)
+        self.assertFalse(report["privacy_boundary"]["raw_tool_args_serialized"])
+
+
+if __name__ == "__main__":
+    unittest.main()

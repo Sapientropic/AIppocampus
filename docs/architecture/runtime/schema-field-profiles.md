@@ -19,6 +19,7 @@ see or require.
 | --- | --- | --- | --- |
 | `identity_minimal` | Stable id, source pointer, content hash, created/updated time. | None by default. | Joins, dedupe, portable fixture identity, and minimal round-trip checks. |
 | `retrieval_runtime` | `identity_minimal`. | Retrieval keys, source refs, reopen hint, modality, privacy class. | Candidate selection and source reopen. |
+| `foreground_action_card` | `decision`, `why`, `next_action`, `claim_boundary`. | `route_label`, `route_family`, one local-private callable handle or short action token. | Working foreground agents that need the next safe move before audit details. |
 | `governance_extended` | `identity_minimal`. | Authority, review, lifecycle, privacy, conflict, supersession, signature, access policy. | Review, lifecycle, sync, and audit surfaces. |
 | `diagnostic_metrics` | `identity_minimal` plus diagnostics. | Metrics, cost, latency, ROI, benchmark fields. | Operator reports and benchmarks. |
 | `high_risk_required` | `identity_minimal` plus authority, review, lifecycle, privacy, conflict, and source-reopen policy. | Jurisdiction, effective-date, human-review, and access-policy boundaries. | High-risk answer gates and similarly strict call sites. |
@@ -84,6 +85,14 @@ Model-visible packets should project only the fields needed for the current
 decision. For example, a prompt-time recall card usually needs source refs,
 reopen hints, and privacy-safe boundaries. It usually does not need lifecycle
 signatures, benchmark latency, or high-risk jurisdiction fields.
+
+For explicit agent recall and MCP foreground use, the first surface is
+`foreground_action_card`. It answers four questions: whether to use the route,
+why it matters, what to do next, and what not to claim yet. Audit-only fields
+such as `metrics`, `red_lines`, `policy_boundary`, `cannot_claim`,
+`attention_router_navigation`, `macro_navigation`, and full
+`memory_packets` / `deepen_requests` stay available in JSON diagnostics, but
+they must not enter the action card.
 
 ## Field Addition Rule
 

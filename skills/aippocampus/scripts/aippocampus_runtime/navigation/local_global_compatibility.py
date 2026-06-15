@@ -386,6 +386,56 @@ def _result_and_reasons(
     return OBSTRUCTION, reasons, "review_obstruction_before_action"
 
 
+def _obstruction_localization(
+    *,
+    result: str,
+    reasons: Sequence[str],
+    obstruction_kind: str,
+) -> dict[str, Any]:
+    if result not in {OBSTRUCTION, BLOCKED_BOUNDARY}:
+        return {
+            "dimension": "none",
+            "feedback_layer": "none",
+            "reason_code": "",
+            "diagnostic_only": True,
+        }
+    reason_set = set(reasons)
+    if "authority_or_claim_permission_upgrade_attempt" in reason_set:
+        return {
+            "dimension": "authority",
+            "feedback_layer": "aippo_or_claim_gate",
+            "reason_code": "authority_upgrade_blocked",
+            "diagnostic_only": True,
+        }
+    if "privacy_or_boundary_flag_blocks_glue" in reason_set:
+        return {
+            "dimension": "privacy_boundary",
+            "feedback_layer": "source_ground",
+            "reason_code": "privacy_boundary_blocked",
+            "diagnostic_only": True,
+        }
+    if obstruction_kind in {"stale_boundary", "time_window_mismatch"}:
+        return {
+            "dimension": "freshness",
+            "feedback_layer": "lifecycle_calibration",
+            "reason_code": obstruction_kind,
+            "diagnostic_only": True,
+        }
+    if any("source" in reason for reason in reason_set):
+        return {
+            "dimension": "source_or_scope",
+            "feedback_layer": "source_shape_projection",
+            "reason_code": sorted(reason_set)[0],
+            "diagnostic_only": True,
+        }
+    return {
+        "dimension": "scope",
+        "feedback_layer": "local_global_review",
+        "reason_code": sorted(reason_set)[0] if reason_set else obstruction_kind,
+        "diagnostic_only": True,
+    }
+
+
 def evaluate_local_global_compatibility(
     sections: Sequence[Mapping[str, Any]],
     *,
@@ -438,6 +488,11 @@ def evaluate_local_global_compatibility(
         "restriction_narrowing": narrowing,
         "topology_shape": local_global_sections.topology_shape(normalized),
         "obstruction_kind": obstruction_kind,
+        "obstruction_localization": _obstruction_localization(
+            result=result,
+            reasons=reasons,
+            obstruction_kind=obstruction_kind,
+        ),
         "overlap_basis": {
             "source_overlap_count": len(source_overlap),
             "scope_overlap": scope_overlap,

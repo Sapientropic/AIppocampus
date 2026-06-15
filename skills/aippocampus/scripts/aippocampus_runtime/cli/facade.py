@@ -190,6 +190,7 @@ SCRIPT_MODULES = {
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
     "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
+    "install_aippocampus_action_hint_hook.py": "aippocampus_runtime.hooks.install_action_hint",
     "aippocampus_claude_code_hooks.py": "aippocampus_runtime.hooks.claude_code",
 }
 
@@ -347,13 +348,14 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             )
         hook_kind = "prompt"
         hook_args = list(rest)
-        if hook_args and hook_args[0] in {"prompt", "lifecycle"}:
+        if hook_args and hook_args[0] in {"prompt", "lifecycle", "action"}:
             hook_kind = hook_args.pop(0)
-        script = (
-            "install_aippocampus_lifecycle_hook.py"
-            if hook_kind == "lifecycle"
-            else "install_aippocampus_prompt_hook.py"
-        )
+        script_by_kind = {
+            "prompt": "install_aippocampus_prompt_hook.py",
+            "lifecycle": "install_aippocampus_lifecycle_hook.py",
+            "action": "install_aippocampus_action_hint_hook.py",
+        }
+        script = script_by_kind[hook_kind]
         return CommandInvocation(command, script, module_name_for_script(script), hook_args)
     return None
 
@@ -452,7 +454,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
     print("  plugin install      Install/verify the local Codex plugin", file=target)
     print(
-        "  hooks [kind]        Host hook status/install/uninstall surfaces",
+        "  hooks [kind]        Host hook status/install/uninstall surfaces (prompt/lifecycle/action)",
         file=target,
     )
     print("", file=target)

@@ -423,6 +423,72 @@ def _route_readiness_paths(route_readiness: Any, *, origin: str = "route_readine
     return paths
 
 
+def _retrieval_reconsolidation_paths(candidates: Any) -> list[dict[str, Any]]:
+    if not candidates:
+        return []
+    from aippocampus_runtime.reflection.retrieval_reconsolidation_consumer import (
+        consume_retrieval_reconsolidation_candidates,
+    )
+
+    report = consume_retrieval_reconsolidation_candidates(candidates)
+    paths: list[dict[str, Any]] = []
+    for row in report.get("navigation_metadata") or []:
+        if not isinstance(row, Mapping):
+            continue
+        final_state = str(row.get("final_state") or "")
+        refs = _refs(row.get("source_refs"))
+        if final_state in {"blocked", "needs_source_reopen"} and not refs:
+            continue
+        if final_state == "routed":
+            route = "reopen"
+            currentness = "current"
+            next_action = _next_reopen_action(refs)
+            source_reopen_required = True
+            reason = "Reviewed retrieval signal is still current; reopen source before using it."
+            visibility = "foreground"
+        elif final_state == "needs_source_reopen":
+            route = "reopen"
+            currentness = "possibly_stale"
+            next_action = _next_reopen_action(refs)
+            source_reopen_required = True
+            reason = "Retrieval signal needs source reopen before it can shape a route."
+            visibility = "foreground"
+        elif final_state == "superseded":
+            route = "ignore"
+            currentness = "superseded"
+            next_action = "ignore"
+            source_reopen_required = False
+            reason = "Retrieval signal was superseded or refuted; block it as current route guidance."
+            visibility = "blocked"
+        else:
+            route = "ignore"
+            currentness = "unknown"
+            next_action = "ignore"
+            source_reopen_required = False
+            reason = "Retrieval signal is blocked from route ranking."
+            visibility = "blocked"
+        paths.append(
+            _path(
+                title=row.get("route") or row.get("candidate_type") or "Retrieval reconsolidation route",
+                why_lit=reason,
+                route=route,
+                currentness=currentness,
+                source_refs=refs,
+                confidence="medium" if route == "reopen" else "low",
+                next_action=next_action,
+                reason_codes=[
+                    "retrieval_reconsolidation_consumer",
+                    *[str(code) for code in row.get("reason_codes") or []],
+                ],
+                source_reopen_required=source_reopen_required,
+                origin="retrieval_reconsolidation",
+                visibility=visibility,
+                support_level="candidate",
+            )
+        )
+    return paths
+
+
 def _priority(path: Mapping[str, Any]) -> tuple[int, int, str]:
     route_rank = {"evidence": 0, "reopen": 1, "scent": 2, "ignore": 3}
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
@@ -506,6 +572,7 @@ def build_active_path_packet(
     active_locks: Iterable[Mapping[str, Any]] | None = None,
     route_readiness: Any = None,
     route_notes: Any = None,
+    retrieval_reconsolidation_candidates: Any = None,
     max_paths: int = DEFAULT_MAX_PATHS,
     include_drawer: bool = False,
 ) -> dict[str, Any]:
@@ -523,6 +590,7 @@ def build_active_path_packet(
         *_active_lock_paths(active_locks),
         *_route_readiness_paths(route_readiness),
         *_route_readiness_paths(route_notes, origin="route_note"),
+        *_retrieval_reconsolidation_paths(retrieval_reconsolidation_candidates),
     ]
     selected = _trim_paths(candidates, max(max_paths, MIN_MAX_PATHS))
     packet = {

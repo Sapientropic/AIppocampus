@@ -22,6 +22,25 @@ The next slice is about better restraint.
 - Feedback now reaches an actual route surface: useful signals can lift or
   demote which route an agent reopens first, while source truth stays exactly
   where it belongs.
+- Agent learning has a calmer loop: repeated tool/test failures, useful
+  command order, environment workarounds, and context-reopen saves can become
+  source-backed guidance for the next agent without copying raw output or
+  pretending a fixture is proof.
+- Those lessons can now travel farther without getting louder: eligible
+  findings may seed low-authority AIppo clauses, source-shape routes, and
+  prepared action-time hints, while stale, local-only, immature, or
+  source-thin rows stay quiet.
+- Growing AIppo clauses now have a lifecycle: probes, prerequisites,
+  conflicts, freshness decay, and severity-weighted feedback can move a clause
+  toward use, review, or deeper source reopening without rewriting clean
+  source.
+- The new route diagnostics are more honest about misses. Microcircuits report
+  where a candidate fell out of budget, semantic subregions keep foreground
+  work on a leash, and circuit feedback records what changed instead of
+  silently tuning the machinery.
+- Agent recall now starts with a tiny action card: use this route first, deepen
+  this handle, or continue normally. The audit payload is still there, but it
+  no longer has to be the first thing a working agent mentally compiles.
 - The old macro router can now read compact macro-field lanes, so posture and
   timing guidance show up without dragging the whole atlas into the foreground.
 - Subconscious intake is on the normal scheduler path now, with a bypass flag

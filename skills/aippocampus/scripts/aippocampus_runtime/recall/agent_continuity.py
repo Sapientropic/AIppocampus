@@ -33,6 +33,8 @@ from aippocampus_runtime.recall import (
     architecture_navigation_affordance,
     attention_router_policy,
     feedback_events,
+    foreground_action_card,
+    macro_field_live,
     macro_live_recall,
 )
 from aippocampus_runtime.recall import (
@@ -734,6 +736,11 @@ def recall(
             max_routes=effective_limit,
         )
     except RecallNavigationError as exc:
+        action_card = foreground_action_card.build_recall_foreground_action_card(
+            status="cannot_verify",
+            memory_packets=[],
+            deepen_requests=[],
+        )
         return _public_payload(
             {
                 "kind": KIND,
@@ -742,6 +749,8 @@ def recall(
                 "surface": "agent_cli_or_mcp_adapter",
                 "status": "cannot_verify",
                 "opt_in_required": True,
+                "foreground_action_card": action_card,
+                "audit_available": True,
                 "memory_packets": [],
                 "deepen_requests": [],
                 "result": navigation_error_payload(exc),
@@ -758,6 +767,27 @@ def recall(
     routes: list[dict[str, Any]] = [
         dict(route) for route in packet.get("routes") or [] if isinstance(route, Mapping)
     ]
+    if macro_context is not None:
+        foreground_outcomes = [
+            outcome
+            for route in routes
+            for outcome in (route.get("foreground_outcomes") or route.get("runtime_outcomes") or [])
+            if isinstance(outcome, Mapping)
+        ]
+        macro_transition_history = [
+            state
+            for route in routes
+            for state in (route.get("macro_transition_history") or [])
+            if state
+        ]
+        live_macro = macro_field_live.materialize_for_recall(
+            query=str(query or ""),
+            routes=routes,
+            foreground_outcomes=foreground_outcomes,
+            macro_transition_history=macro_transition_history,
+        )
+        macro_projection = macro_field_live.merge_projection(macro_projection, live_macro)
+        macro_context = macro_live_recall.context_from_projection(macro_projection)
     macro_navigation = macro_live_recall.navigation_diagnostics(
         projection=macro_projection,
         context=macro_context,
@@ -807,6 +837,11 @@ def recall(
         )
         if route.get("handle")
     ]
+    action_card = foreground_action_card.build_recall_foreground_action_card(
+        status="ok" if memory_packets else "no_routes",
+        memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+    )
     navigation_signals = architecture_navigation_affordance.navigation_signals_for_recall(
         query=str(query or ""),
         macro_navigation=macro_navigation,
@@ -832,6 +867,8 @@ def recall(
         "surface": "agent_cli_or_mcp_adapter",
         "status": "ok" if memory_packets else "no_routes",
         "opt_in_required": True,
+        "foreground_action_card": action_card,
+        "audit_available": True,
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
         "macro_navigation": macro_navigation,
@@ -852,6 +889,7 @@ def recall(
             "requested_max_routes": requested_limit,
             "effective_max_routes": effective_limit,
             "foreground_forbidden_key_count": forbidden_count,
+            **foreground_action_card.card_metrics(action_card),
             **triage_metrics,
             **macro_metrics,
             "source_reopen_success_rate_observed": None,

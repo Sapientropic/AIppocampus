@@ -38,10 +38,129 @@ def _mentions_benchmark_architecture(text: str) -> bool:
     )
 
 
+def _safe_refs(value: Any) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for item in value or []:
+        if not isinstance(item, Mapping):
+            continue
+        clean = {
+            str(key): item.get(key)
+            for key in (
+                "thread_key",
+                "source_id",
+                "message_id",
+                "turn_id",
+                "turn_index",
+                "line",
+                "source_line",
+            )
+            if item.get(key) not in (None, "", [])
+        }
+        marker = tuple(sorted((key, str(val)) for key, val in clean.items()))
+        if clean and marker not in seen:
+            seen.add(marker)
+            refs.append(clean)
+    return refs[:6]
+
+
+def _candidate_kind_for_finding(row: Mapping[str, Any]) -> str:
+    explicit = str(row.get("candidate_family") or "")
+    if explicit:
+        return explicit
+    finding = str(row.get("finding_kind") or "")
+    if finding == "workflow_order_finding":
+        return "workflow_order_candidate"
+    if finding == "environment_workaround_finding":
+        return "environment_workaround_candidate"
+    if finding == "context_miss_finding":
+        return "context_reopen_candidate"
+    if finding == "do_not_repeat_finding":
+        return "do_not_repeat_candidate"
+    if finding == "recurring_failure_finding":
+        return "verification_preflight_candidate"
+    return "route_constraint_candidate"
+
+
+def _structured_lesson_for_finding(
+    row: Mapping[str, Any],
+    candidate_kind: str,
+) -> dict[str, Any]:
+    scope = str(row.get("scope") or "project_or_task_family")
+    trigger = str(row.get("failure_family") or row.get("workflow_family") or row.get("finding_kind") or "learning_loop")
+    action_by_kind = {
+        "verification_preflight_candidate": "run the cheap or focused verifier before the broad retry",
+        "workflow_order_candidate": "follow the source-backed workflow order before repeating the route",
+        "environment_workaround_candidate": "reopen the environment workaround source before retrying the failed route",
+        "context_reopen_candidate": "reopen the relevant source trail before acting from memory",
+        "do_not_repeat_candidate": "avoid the rejected route until source/currentness is checked",
+        "route_constraint_candidate": "apply the route constraint only as bounded navigation guidance",
+    }
+    return {
+        "trigger_condition": trigger,
+        "scope": scope,
+        "environment_profile": row.get("workspace_or_environment_profile") or scope,
+        "observed_pattern": row.get("finding_kind") or "source_backed_learning_finding",
+        "safer_next_action": action_by_kind.get(candidate_kind, action_by_kind["route_constraint_candidate"]),
+        "source_route_to_reopen": _safe_refs(row.get("source_refs"))[:3],
+        "freshness": row.get("freshness") or "current",
+        "invalidation_condition": "stale, superseded, refuted, local-only, or repeated successful retries",
+        "confidence": row.get("confidence") or "medium",
+        "promotion_status": "candidate",
+        "source_reopen_required": True,
+        "model_generated_wording_is_load_bearing": False,
+    }
+
+
+def _candidate_from_learning_finding(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    if row.get("kind") != "aippocampus_learning_finding":
+        return None
+    candidate_kind = _candidate_kind_for_finding(row)
+    refs = _safe_refs(row.get("source_refs"))
+    stale = str(row.get("status") or "") in {"stale", "superseded", "refuted", "retired", "archived"}
+    freshness = str(row.get("freshness") or "current")
+    local_only = str(row.get("scope") or "").casefold() in {"local-only", "machine:local-only"}
+    thin = int(row.get("occurrence_count") or 0) < 2 or not refs
+    backstage = stale or freshness in {"stale", "superseded"} or local_only or thin
+    structured = _structured_lesson_for_finding(row, candidate_kind)
+    return {
+        "kind": "source_backed_lesson_candidate",
+        "schema_version": SCHEMA_VERSION,
+        "candidate_kind": candidate_kind,
+        "status": "backstage" if backstage else "growing",
+        "scope": [str(row.get("scope") or "project_or_task_family")],
+        "failed_route": str(row.get("failed_route") or row.get("workflow_family") or row.get("finding_kind") or ""),
+        "source_refs": refs,
+        "source_ref_count": len(refs),
+        "independent_trail_count": int(row.get("independent_trail_count") or 1),
+        "explicit_confirmation_seen": bool(row.get("explicit_confirmation_seen")),
+        "structured_lesson": structured,
+        "proposed_lesson": (
+            f"When {structured['trigger_condition']} appears in {structured['scope']}, "
+            f"{structured['safer_next_action']}."
+        ),
+        "promotes_to": [
+            "active_pull_route_constraint",
+            "action_time_learning_guidance",
+        ],
+        "claim_permission": "working_guidance_only_not_fact",
+        "candidate_inputs_are_truth": False,
+        "foreground_activation_allowed": False,
+        "promotion_blocked_reason": "thin_stale_or_local_only" if backstage else "",
+    }
+
+
 def extract_source_backed_lesson_candidates(
     events: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     rows = list(events)
+    learning_candidates = [
+        candidate
+        for row in rows
+        if (candidate := _candidate_from_learning_finding(row)) is not None
+    ]
+    if learning_candidates:
+        return learning_candidates
     joined = "\n".join(_event_text(row) for row in rows)
     if not _mentions_benchmark_architecture(joined):
         return []
@@ -96,6 +215,12 @@ def promote_lesson_candidate(
     independent_trail_count: int | None = None,
 ) -> dict[str, Any]:
     payload = dict(candidate)
+    if payload.get("status") in {"backstage", "retired", "refuted", "archived"} or payload.get(
+        "promotion_blocked_reason"
+    ):
+        payload["foreground_activation_allowed"] = False
+        payload["claim_permission"] = "working_guidance_only_not_fact"
+        return payload
     trail_count = (
         int(independent_trail_count)
         if independent_trail_count is not None
@@ -121,7 +246,20 @@ def apply_lesson_constraints_to_packet(
         if lesson.get("status") != "ripe" or not lesson.get("foreground_activation_allowed"):
             continue
         failed_route = str(lesson.get("failed_route") or "")
-        if failed_route == "benchmark_local_provider_prompt":
+        candidate_kind = str(lesson.get("candidate_kind") or "")
+        if candidate_kind == "verification_preflight_candidate":
+            constraints.append("run_verification_preflight_before_broad_check")
+        elif candidate_kind == "workflow_order_candidate":
+            constraints.append("respect_source_backed_workflow_order")
+        elif candidate_kind == "environment_workaround_candidate":
+            constraints.append("reopen_environment_workaround_before_retry")
+        elif candidate_kind == "context_reopen_candidate":
+            constraints.append("reopen_source_before_context_sensitive_route")
+        elif candidate_kind == "do_not_repeat_candidate":
+            constraints.append("do_not_repeat_rejected_route")
+        elif candidate_kind == "route_constraint_candidate":
+            constraints.append("respect_source_backed_route_constraint")
+        elif failed_route == "benchmark_local_provider_prompt":
             constraints.append("do_not_repeat_benchmark_local_provider_prompt")
         else:
             constraints.append("do_not_build_manual_scaffold_before_existing_route")

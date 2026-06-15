@@ -60,7 +60,9 @@ def _final_state(candidate: Mapping[str, Any]) -> str:
         "contradicted",
     }:
         return "superseded"
-    if ctype in {"revision_candidate"} or outcome in {"conflicted", "corrected", "stale"}:
+    if outcome == "conflicted":
+        return "blocked"
+    if ctype in {"revision_candidate"} or outcome in {"corrected", "stale"}:
         return "needs_source_reopen"
     if ctype == "still_current_candidate" or outcome in {"still_current", "pinned"}:
         return "routed"

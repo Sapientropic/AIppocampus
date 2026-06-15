@@ -25,7 +25,7 @@ from aippocampus_runtime.hooks.host_boundary import (
     host_integration_text_lines,
 )
 
-DEFAULT_EVENTS = ("UserPromptSubmit", "Stop")
+DEFAULT_EVENTS = ("UserPromptSubmit", "PreToolUse", "Stop")
 DEFAULT_DIAGNOSTIC_PROMPT = (
     "Can you recover the last memory-system discussion and relevant context?"
 )
@@ -40,6 +40,7 @@ SAFE_HOOK_SCRIPT_NAMES = {
     "memory_maintenance_hook.py",
 }
 SAFE_HOOK_MODULES = {
+    "aippocampus_runtime.hooks.action_hint",
     "aippocampus_runtime.hooks.prompt",
     "aippocampus_runtime.hooks.lifecycle",
 }

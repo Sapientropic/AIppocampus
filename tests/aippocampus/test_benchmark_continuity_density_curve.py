@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -45,6 +46,78 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
         self.assertFalse(lint["boundary_only_projection"])
         self.assertIn("supports", report)
         self.assertIn("private_real_history_density_curve", report["cannot_claim"])
+
+    def test_replay_measurement_computes_density_tiers_from_counts(self) -> None:
+        report = density_curve.build_replay_backed_density_report()
+        tiers = {row["tier"]: row for row in report["tiers"]}
+
+        self.assertEqual(
+            report["kind"],
+            "aippocampus_continuity_density_replay_measurement",
+        )
+        self.assertEqual(report["measurement_origin"], "aggregate_replay_fixture")
+        self.assertTrue(report["contract_gate_ok"])
+        self.assertFalse(report["public_quality_gate_ok"])
+        self.assertFalse(report["quality_gate_ok"])
+        self.assertTrue(report["measured_result"]["density_tiers_computed_from_counts"])
+        self.assertEqual(
+            set(tiers),
+            {"cold", "light", "medium", "heavy", "noisy_saturated_control"},
+        )
+        self.assertGreater(
+            tiers["medium"]["source_reopen_success_rate"],
+            tiers["cold"]["source_reopen_success_rate"],
+        )
+        self.assertLess(
+            tiers["medium"]["manual_search_step_count"],
+            tiers["cold"]["manual_search_step_count"],
+        )
+        self.assertGreater(
+            tiers["noisy_saturated_control"]["wrong_route_drag_rate"],
+            tiers["medium"]["wrong_route_drag_rate"],
+        )
+        self.assertGreater(
+            tiers["noisy_saturated_control"]["context_pressure"],
+            tiers["heavy"]["context_pressure"],
+        )
+        self.assertIn("public_quality_lift", report["cannot_claim"])
+
+    def test_replay_measurement_sanitizes_private_identifiers(self) -> None:
+        rows = [
+            {
+                "case_id": "public-no-sensitive-id",
+                "thread_id": "thread-secret-123",
+                "source_refs": ["private://rollout/source-secret"],
+                "private_source_refs": ["turn-very-private"],
+                "local_path": "E:/Users/private/project/source.jsonl",
+                "raw_text": "the private prompt should never serialize",
+                "source_ref_count": 1,
+                "registry_route_count": 1,
+                "route_handle_count": 1,
+                "source_reopen_attempted_count": 1,
+                "source_reopen_success_count": 1,
+                "manual_search_step_count": 3,
+                "route_candidate_count": 3,
+                "wrong_route_count": 0,
+                "noisy_route_count": 0,
+                "context_token_count": 1200,
+                "context_budget_token_count": 4000,
+            }
+        ]
+        report = density_curve.build_replay_backed_density_report(rows)
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertNotIn("thread-secret-123", serialized)
+        self.assertNotIn("source-secret", serialized)
+        self.assertNotIn("turn-very-private", serialized)
+        self.assertNotIn("E:/Users/private", serialized)
+        self.assertNotIn("private prompt", serialized)
+        self.assertFalse(report["privacy_boundary"]["raw_text_serialized"])
+        self.assertFalse(report["privacy_boundary"]["thread_ids_serialized"])
+        self.assertFalse(report["privacy_boundary"]["source_refs_serialized"])
+        dropped = report["tiers"][0]["input_fields_dropped_to_preserve_public_boundary"]
+        self.assertIn("thread_id", dropped)
+        self.assertIn("raw_text", dropped)
 
 
 if __name__ == "__main__":

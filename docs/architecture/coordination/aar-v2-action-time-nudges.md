@@ -11,6 +11,9 @@ class first: making a specific memory/source claim from weak context.
 
 The runtime owner is
 `skills/aippocampus/scripts/aippocampus_runtime/reflection/aar_v2.py`.
+The broader #435 `PreToolUse` delivery owner is
+[`action-time-hints.md`](action-time-hints.md); AAR v2 is one prepared provider
+for that hot surface, not the cache or installer owner.
 
 ## Objects
 
