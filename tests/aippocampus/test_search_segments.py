@@ -139,6 +139,220 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertTrue(payload["fanout"]["budget_exhausted"])
         self.assertEqual(payload["matches"][0]["segment_id"], "seg-new")
 
+    def test_segment_search_uses_opt_in_texture_hint_for_fanout_precision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target_sqlite = root / "seg-target.sqlite"
+            mid_sqlite = root / "seg-mid.sqlite"
+            noisy_sqlite = root / "seg-new-noisy.sqlite"
+            for path in (target_sqlite, mid_sqlite, noisy_sqlite):
+                path.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [
+                    {
+                        "id": "seg-target",
+                        "sqlite": str(target_sqlite),
+                        "start_line": 1,
+                        "end_line": 10,
+                        "source_refs": [{"message_id": "msg-target", "line": 4}],
+                    },
+                    {"id": "seg-mid", "sqlite": str(mid_sqlite), "start_line": 11, "end_line": 20},
+                    {"id": "seg-new-noisy", "sqlite": str(noisy_sqlite), "start_line": 21, "end_line": 30},
+                ],
+            )
+            sidecar = root / "source-texture.jsonl"
+            sidecar.write_text(
+                json.dumps(
+                    {
+                        "texture_id": "tex-verification",
+                        "signal_kind": "tool_failure_texture",
+                        "signal_detail": "verification_failure",
+                        "truth_boundary": "texture_signal_not_source_fact",
+                        "source_refs": [{"message_id": "msg-target", "line": 4}],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            opened: list[Path] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                opened.append(Path(index))
+                if Path(index) != target_sqlite:
+                    return []
+                return [
+                    self._source_hit(
+                        stable_source_id="clean:target",
+                        source_ref="source:target",
+                        snippet="The verification failure changed the route.",
+                        score=9.0,
+                        line=4,
+                        message_id="msg-target",
+                    )
+                ]
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["verification failure"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                        fanout_budget=1,
+                        source_texture=sidecar,
+                    )
+                )
+
+        self.assertEqual(opened, [target_sqlite])
+        self.assertEqual(payload["matches"][0]["segment_id"], "seg-target")
+        hints = payload["fanout"]["source_texture_hints"]
+        self.assertTrue(hints["enabled"])
+        self.assertEqual(hints["texture_hint_count"], 1)
+        self.assertEqual(hints["texture_hints_used"], 1)
+        self.assertEqual(hints["source_truth_authority"], "none")
+        self.assertTrue(hints["source_reopen_required_before_claim"])
+        self.assertTrue(payload["fanout"]["planned_segments"][0]["texture_hint_used"])
+        skipped = {row["segment_id"]: row for row in payload["fanout"]["skipped_segments"]}
+        self.assertEqual(skipped["seg-new-noisy"]["reason"], "texture_hint_reprioritized")
+
+    def test_segment_search_ignores_texture_hints_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old_sqlite = root / "seg-old.sqlite"
+            new_sqlite = root / "seg-new.sqlite"
+            old_sqlite.write_text("", encoding="utf-8")
+            new_sqlite.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [
+                    {
+                        "id": "seg-old",
+                        "sqlite": str(old_sqlite),
+                        "start_line": 1,
+                        "end_line": 10,
+                        "source_refs": [{"message_id": "msg-old", "line": 3}],
+                    },
+                    {"id": "seg-new", "sqlite": str(new_sqlite), "start_line": 11, "end_line": 20},
+                ],
+            )
+            (root / "source-texture.jsonl").write_text(
+                json.dumps(
+                    {
+                        "texture_id": "tex-old",
+                        "signal_kind": "self_correction_signal",
+                        "signal_detail": "visible_user_correction",
+                        "truth_boundary": "texture_signal_not_source_fact",
+                        "source_refs": [{"message_id": "msg-old", "line": 3}],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            opened: list[Path] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                opened.append(Path(index))
+                return []
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["visible user correction"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                        fanout_budget=1,
+                    )
+                )
+
+        self.assertEqual(opened, [new_sqlite])
+        self.assertFalse(payload["fanout"]["source_texture_hints"]["enabled"])
+        self.assertEqual(payload["fanout"]["planned_segments"][0]["segment_id"], "seg-new")
+
+    def test_segment_search_suppresses_noisy_texture_hints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old_sqlite = root / "seg-old.sqlite"
+            new_sqlite = root / "seg-new.sqlite"
+            old_sqlite.write_text("", encoding="utf-8")
+            new_sqlite.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [
+                    {
+                        "id": "seg-old",
+                        "sqlite": str(old_sqlite),
+                        "start_line": 1,
+                        "end_line": 10,
+                        "source_refs": [{"message_id": "msg-old", "line": 3}],
+                    },
+                    {"id": "seg-new", "sqlite": str(new_sqlite), "start_line": 11, "end_line": 20},
+                ],
+            )
+            sidecar = root / "texture-hints.jsonl"
+            sidecar.write_text(
+                "\n".join(
+                    json.dumps(row)
+                    for row in [
+                        {
+                            "kind": "aippocampus_source_texture_boundary_hint",
+                            "canonical_segment_id": "seg-old",
+                            "derived_segment_id": "texture_hint:seg-old:bad",
+                            "truth_boundary": "wrong_boundary",
+                            "read_model_only": True,
+                            "source_reopen_required_before_claim": True,
+                            "source_refs": [{"message_id": "msg-old", "line": 3}],
+                            "boundary_reason": "visible_user_correction",
+                        },
+                        {
+                            "kind": "aippocampus_source_texture_boundary_hint",
+                            "canonical_segment_id": "seg-missing",
+                            "derived_segment_id": "texture_hint:seg-missing:bad",
+                            "truth_boundary": "texture_hint_read_model_not_source_fact",
+                            "read_model_only": True,
+                            "source_reopen_required_before_claim": True,
+                            "source_refs": [{"message_id": "msg-old", "line": 3}],
+                            "boundary_reason": "visible_user_correction",
+                        },
+                        {
+                            "texture_id": "raw-wrong-boundary",
+                            "signal_kind": "self_correction_signal",
+                            "signal_detail": "visible_user_correction",
+                            "truth_boundary": "wrong_boundary",
+                            "source_refs": [{"message_id": "msg-old", "line": 3}],
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            opened: list[Path] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                opened.append(Path(index))
+                return []
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["visible user correction"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                        fanout_budget=1,
+                        source_texture=sidecar,
+                    )
+                )
+
+        self.assertEqual(opened, [new_sqlite])
+        hints = payload["fanout"]["source_texture_hints"]
+        self.assertEqual(hints["texture_hints_used"], 0)
+        self.assertEqual(hints["suppression_reasons"]["hint_boundary_mismatch"], 1)
+        self.assertEqual(hints["suppression_reasons"]["canonical_segment_missing"], 1)
+        self.assertEqual(hints["suppression_reasons"]["source_texture_boundary_mismatch"], 1)
+        self.assertEqual(payload["fanout"]["planned_segments"][0]["segment_id"], "seg-new")
+
     def test_segment_planning_keeps_recency_order_without_temporal_cue(self) -> None:
         segments = [
             {

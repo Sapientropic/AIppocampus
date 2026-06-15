@@ -8,9 +8,14 @@ evidence, diagnostics, and claim boundaries.
 
 The next slice is about better restraint.
 
+- Segment search can now opt into source-texture sidecars. Texture may help pick
+  the right shard to reopen, but it stays a read-model hint, not evidence.
 - AIppocampus can now hold a compact macro-field view: posture lanes, timing
   affordance, local/global obstructions, and Yi-structure diagnostics all stay
   navigation-only until source is reopened.
+- Macro navigation got a firmer spine: the atlas carries a local/global
+  source-shape descriptor, and the King Wen sequence is audited as movement
+  shape, not a training schedule, ranking weight, or oracle.
 - Recall learning is less spooky. Feedback, retrieval reconsolidation, warm
   preactivation, and posture calibration produce bounded route hints and review
   rows instead of quietly rewriting memory.
