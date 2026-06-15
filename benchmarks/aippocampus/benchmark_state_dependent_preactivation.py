@@ -552,6 +552,9 @@ def main() -> int:
             handle.write("\n")
     if args.json_output:
         stdout_payload = public_cli_summary(payload, full_report_written=bool(args.output))
+        # Stdout is the public summary only; fixture cases and source refs stay
+        # in the explicit --output report. CodeQL cannot infer that projection.
+        # codeql[py/clear-text-logging-sensitive-data]
         sys.stdout.write(
             json.dumps(stdout_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         )

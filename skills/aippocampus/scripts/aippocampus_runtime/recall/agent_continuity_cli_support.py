@@ -127,6 +127,10 @@ def write_last_recall_cache(
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_suffix(target.suffix + ".tmp")
+        # Local-only reopen handles are not credentials, but they are still
+        # intentionally private navigation tokens. Keep the cache out of human
+        # output and avoid persisting derived source/registry paths above.
+        # codeql[py/clear-text-storage-sensitive-data]
         tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(target)
     except OSError:
