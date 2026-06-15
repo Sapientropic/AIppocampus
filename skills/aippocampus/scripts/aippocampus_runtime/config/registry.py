@@ -193,14 +193,63 @@ def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
     )
 
 
+def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
+    raw_data = report.get("data")
+    data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
+    knobs = data.get("knobs") if isinstance(data.get("knobs"), list) else []
+    configured = [item for item in knobs if isinstance(item, dict) and item.get("configured")]
+    configured_sensitive = [item for item in configured if item.get("sensitive")]
+    unknown_count = int(data.get("unknown_count") or 0)
+    warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+    recommended_actions: list[dict[str, str]] = []
+    if unknown_count:
+        recommended_actions.append(
+            {
+                "id": "review_unknown_aippocampus_env",
+                "message": "Review unknown AIPPOCAMPUS_* environment names before assuming they affect runtime behavior.",
+            }
+        )
+    return {
+        "schema_version": 1,
+        "kind": "aippocampus_config_doctor_summary",
+        "ok": bool(report.get("ok")),
+        "status": str(report.get("status") or "unknown"),
+        "registered_knob_count": len(knobs),
+        "unknown_env_var_count": unknown_count,
+        "configured_count": len(configured),
+        "configured_sensitive_count": len(configured_sensitive),
+        "warning_count": len(warnings),
+        "warnings": warnings[:5],
+        "recommended_actions": recommended_actions,
+        "audit_json_available": True,
+        "full_audit_command": "aippocampus doctor config --json",
+        "privacy": {
+            "values_printed": False,
+            "configured_values_presence_only": True,
+            "local_paths_included": False,
+            "unknown_env_values_printed": False,
+        },
+        "cannot_claim": list(report.get("cannot_claim") or []),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report registered AIppocampus configuration knobs.")
     parser.add_argument("command", nargs="?", default="report", choices=("report",))
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    parser.add_argument(
+        "--compact-json",
+        "--summary",
+        action="store_true",
+        dest="summary_json",
+        help="Emit compact foreground-agent JSON instead of the full knob catalog.",
+    )
     args = parser.parse_args(argv)
 
     report = config_report()
-    if args.json:
+    if args.summary_json:
+        print(json.dumps(config_summary_report(report), ensure_ascii=False, indent=2))
+    elif args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         raw_data = report.get("data")

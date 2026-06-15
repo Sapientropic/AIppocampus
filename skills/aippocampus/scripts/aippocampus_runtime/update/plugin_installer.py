@@ -50,6 +50,7 @@ from aippocampus_runtime.update.plugin_marketplace import (
     MARKETPLACE_MARKER,
     MARKETPLACE_NAME,
     PLUGIN_NAME,
+    configured_marketplace_root,
     default_marketplace_root,
     marketplace_manifest_path,
 )
@@ -549,11 +550,19 @@ def install_codex_plugin(
         Path(codex_home_path).expanduser().resolve() if codex_home_path else codex_home()
     )
     output = Path(plugin_output).resolve() if plugin_output else repo / DEFAULT_PLUGIN_OUTPUT
-    marketplace = (
-        Path(marketplace_root).expanduser().resolve()
-        if marketplace_root
-        else default_marketplace_root(codex_home_resolved)
+    configured_marketplace = configured_marketplace_root(
+        codex_home_resolved,
+        marketplace_name=marketplace_name,
     )
+    if marketplace_root:
+        marketplace = Path(marketplace_root).expanduser().resolve()
+        marketplace_source = "explicit_argument"
+    elif configured_marketplace is not None:
+        marketplace = configured_marketplace.expanduser().resolve()
+        marketplace_source = "configured_codex_marketplace"
+    else:
+        marketplace = default_marketplace_root(codex_home_resolved).resolve()
+        marketplace_source = "default_aippocampus_marketplace"
     runner = runner or _default_runner
     host_probe_runner = host_probe_runner or run_codex_host_probe
 
@@ -621,6 +630,7 @@ def install_codex_plugin(
         "codex_home": str(codex_home_resolved),
         "plugin_package": build_result,
         "marketplace": marketplace_result,
+        "marketplace_source": marketplace_source,
         "marketplace_add": marketplace_add,
         "marketplace_upgrade": marketplace_upgrade,
         "plugin": plugin_result,

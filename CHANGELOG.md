@@ -6,7 +6,14 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-Nothing yet.
+Small dogfood fixes after 0.3.2:
+
+- Benchmark suite JSON now separates "the runner produced a bounded report"
+  from "this supports a public quality claim."
+- `aippocampus doctor config --compact-json` and `--summary` now give agents a
+  small, privacy-safe config view instead of a thousand-line audit.
+- Codex plugin install/update now follows the already configured local
+  marketplace and ignores stale legacy cache copies when judging sync status.
 
 ## 0.3.2 - 2026-06-15
 

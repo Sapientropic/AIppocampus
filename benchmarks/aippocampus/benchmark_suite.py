@@ -30,6 +30,7 @@ import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
 from shared.benchmark_report_contract import benchmark_report_contract_lint
 from shared.benchmark_suite_quality import suite_quality_summary
+from suite_status import suite_status_fields
 
 SCHEMA_VERSION = 1
 BASELINE_PROFILE = "baseline"
@@ -1106,15 +1107,19 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
             else set()
         )
     )
+    runner_ok = bool(baseline_captured)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_benchmark_suite",
         "generated_at": now_utc(),
         "status": status,
-        "ok": bool(baseline_captured),
-        "contract_gate_ok": bool(baseline_captured),
-        "quality_gate_ok": bool(quality_gate_ok),
-        "public_quality_gate_ok": bool(quality_gate_ok),
+        **suite_status_fields(
+            runner_ok=runner_ok,
+            contract_gate_ok=runner_ok,
+            benchmark_contract_linter_ok=benchmark_contract_linter_ok,
+            public_quality_gate_ok=bool(quality_gate_ok),
+            status=status,
+        ),
         "quality_gate_summary": quality_summary,
         "benchmark_contract_linter_ok": bool(benchmark_contract_linter_ok),
         "benchmark_contract_lint": benchmark_contract_lint,

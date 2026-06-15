@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 PLUGIN_NAME = "aippocampus"
+MARKETPLACE_NAME = "aippocampus-local"
 MANIFEST_RELATIVE = Path(".codex-plugin") / "plugin.json"
 IGNORED_DIR_NAMES = {
     "__pycache__",
@@ -107,6 +108,9 @@ def _resolve_plugin_root(path: Path | None, *, plugin_name: str = PLUGIN_NAME) -
         return None
     if (path / MANIFEST_RELATIVE).exists():
         return path
+    marketplace_plugin = path / "plugins" / plugin_name
+    if (marketplace_plugin / MANIFEST_RELATIVE).exists():
+        return marketplace_plugin
     direct = path / plugin_name
     if (direct / MANIFEST_RELATIVE).exists():
         return direct
@@ -118,12 +122,24 @@ def _resolve_plugin_root(path: Path | None, *, plugin_name: str = PLUGIN_NAME) -
     return candidates[-1] if candidates else path
 
 
-def _cached_plugin_roots(codex_home_path: Path, *, plugin_name: str = PLUGIN_NAME) -> list[Path]:
+def _cached_plugin_roots(
+    codex_home_path: Path,
+    *,
+    plugin_name: str = PLUGIN_NAME,
+    marketplace_name: str | None = None,
+) -> list[Path]:
     cache_root = codex_home_path / "plugins" / "cache"
     if not cache_root.exists():
         return []
     roots: list[Path] = []
-    for marketplace in sorted(item for item in cache_root.iterdir() if item.is_dir()):
+    marketplaces = (
+        [cache_root / marketplace_name]
+        if marketplace_name
+        else sorted(item for item in cache_root.iterdir() if item.is_dir())
+    )
+    for marketplace in marketplaces:
+        if not marketplace.is_dir():
+            continue
         plugin_parent = marketplace / plugin_name
         if not plugin_parent.exists():
             continue
@@ -135,9 +151,16 @@ def _cached_plugin_roots(codex_home_path: Path, *, plugin_name: str = PLUGIN_NAM
 
 
 def installed_cache_auto_resolution(
-    codex_home_path: Path, *, plugin_name: str = PLUGIN_NAME
+    codex_home_path: Path,
+    *,
+    plugin_name: str = PLUGIN_NAME,
+    marketplace_name: str | None = MARKETPLACE_NAME,
 ) -> dict[str, Any]:
-    roots = _cached_plugin_roots(codex_home_path, plugin_name=plugin_name)
+    roots = _cached_plugin_roots(
+        codex_home_path,
+        plugin_name=plugin_name,
+        marketplace_name=marketplace_name,
+    )
     if len(roots) == 1:
         return {
             "status": "unique",
@@ -154,9 +177,16 @@ def installed_cache_auto_resolution(
 
 
 def unique_installed_cache_root(
-    codex_home_path: Path, *, plugin_name: str = PLUGIN_NAME
+    codex_home_path: Path,
+    *,
+    plugin_name: str = PLUGIN_NAME,
+    marketplace_name: str | None = MARKETPLACE_NAME,
 ) -> Path | None:
-    resolution = installed_cache_auto_resolution(codex_home_path, plugin_name=plugin_name)
+    resolution = installed_cache_auto_resolution(
+        codex_home_path,
+        plugin_name=plugin_name,
+        marketplace_name=marketplace_name,
+    )
     root = resolution.get("root_path") if resolution.get("status") == "unique" else None
     return Path(str(root)) if root else None
 
@@ -202,10 +232,25 @@ def build_plugin_cache_status(
         str(package.get("tree_hash") or "") if package.get("tree_hash") else str(source.get("tree_hash") or "")
     )
     local_marketplace_root = _resolve_plugin_root(marketplace_dir, plugin_name=plugin_name)
-    cached_roots = _cached_plugin_roots(codex_home_path, plugin_name=plugin_name)
+    cached_roots = _cached_plugin_roots(
+        codex_home_path,
+        plugin_name=plugin_name,
+        marketplace_name=MARKETPLACE_NAME,
+    )
+    all_cached_roots = _cached_plugin_roots(
+        codex_home_path,
+        plugin_name=plugin_name,
+        marketplace_name=None,
+    )
+    ignored_cached_roots = [
+        path
+        for path in all_cached_roots
+        if path not in set(cached_roots)
+    ]
     auto_resolution = installed_cache_auto_resolution(
         codex_home_path,
         plugin_name=plugin_name,
+        marketplace_name=MARKETPLACE_NAME,
     )
     installed_root = _resolve_plugin_root(installed_dir, plugin_name=plugin_name)
     if installed_root is None and cached_roots:
@@ -248,6 +293,8 @@ def build_plugin_cache_status(
         "local_marketplace": local_marketplace,
         "installed_cache": installed_cache,
         "auto_detected_installed_cache_count": len(cached_roots),
+        "ignored_legacy_cache_count": len(ignored_cached_roots),
+        "ignored_legacy_cache_roots": [str(path) for path in ignored_cached_roots],
         "installed_cache_auto_resolution": auto_resolution,
         "recommended_actions": recommended_actions,
         "boundary": {

@@ -181,6 +181,59 @@ class PluginInstallerTests(unittest.TestCase):
         finally:
             shutil.rmtree(output, ignore_errors=True)
 
+    def test_codex_install_refreshes_existing_configured_marketplace_root(self) -> None:
+        output = REPO_ROOT / "dist" / "test-plugin-installer-configured-marketplace"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                codex_home = root / "codex-home"
+                configured_marketplace = root / "old-local-marketplace"
+                codex_home.mkdir()
+                (codex_home / "config.toml").write_text(
+                    "[marketplaces.aippocampus-local]\n"
+                    f"source = '{configured_marketplace}'\n",
+                    encoding="utf-8",
+                )
+                runner = FakeCodexRunner(
+                    marketplace_upgrade_returncode=1,
+                    marketplace_upgrade_stderr=(
+                        "Error: marketplace `aippocampus-local` is not configured as a Git marketplace"
+                    ),
+                )
+
+                result = plugin_installer.install_codex_plugin(
+                    repo_root=REPO_ROOT,
+                    codex_home_path=codex_home,
+                    plugin_output=output,
+                    verify=False,
+                    runner=runner,
+                )
+
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["marketplace_source"], "configured_codex_marketplace")
+                self.assertEqual(Path(result["marketplace"]["root"]), configured_marketplace)
+                self.assertTrue(
+                    (
+                        configured_marketplace
+                        / "plugins"
+                        / "aippocampus"
+                        / ".codex-plugin"
+                        / "plugin.json"
+                    ).exists()
+                )
+                self.assertIn(
+                    [
+                        "plugin",
+                        "marketplace",
+                        "add",
+                        str(configured_marketplace),
+                    ],
+                    runner.command_tails,
+                )
+                self.assertFalse((codex_home / "aippocampus-marketplace").exists())
+        finally:
+            shutil.rmtree(output, ignore_errors=True)
+
     def test_codex_install_buckets_nonfatal_host_probe_stderr_after_success(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-stderr-summary"
         try:

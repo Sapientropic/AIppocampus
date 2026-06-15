@@ -344,6 +344,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Report registered AIPPOCAMPUS_* configuration without printing values.",
     )
     config_parser.add_argument("--json", action="store_true", dest="json_output")
+    config_parser.add_argument(
+        "--compact-json",
+        "--summary",
+        action="store_true",
+        dest="summary_json",
+        help="Emit compact foreground-agent JSON instead of the full knob catalog.",
+    )
     args = parser.parse_args(argv)
 
     if args.command == "spend":
@@ -369,7 +376,15 @@ def main(argv: list[str] | None = None) -> int:
         from aippocampus_runtime.config import registry as config_registry  # noqa: PLC0415
 
         report = config_registry.config_report()
-        if args.json_output:
+        if args.summary_json:
+            print(
+                json.dumps(
+                    config_registry.config_summary_report(report),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.json_output:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(render_config_text(report))
