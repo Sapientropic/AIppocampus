@@ -996,6 +996,7 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
     post_status = build_status(args, mode="status")
+    next_actions = update_actions.post_apply_next_actions(results)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_update_apply",
@@ -1003,6 +1004,7 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
         "ok": all(bool(item.get("ok")) for item in results),
         "applied_surfaces": results,
         "post_status": post_status["summary"],
+        "next_actions": next_actions,
         "safety_notes": post_status["safety_notes"],
     }
 
@@ -1018,6 +1020,7 @@ def render_text(report: dict[str, Any]) -> str:
         lines.append(f"- Magic ready: {str(post.get('magic_ready')).lower()}")
         if post.get("needs_action"):
             lines.append("- Still needs action: " + ", ".join(post.get("needs_action") or []))
+        lines.extend(update_actions.apply_next_action_lines(report))
         return "\n".join(lines) + "\n"
 
     summary = report.get("summary") or {}

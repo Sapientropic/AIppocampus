@@ -134,6 +134,11 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         ci_owned = payload["ci_owned_do_not_repeat_locally_by_default"]
 
         self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan")
+        self.assertTrue(payload["gate_policy"]["do_not_stack_quick_before_pr"])
+        self.assertIn(
+            py_script("tools/aippocampus/run_tests.py", "--tier pr"),
+            payload["local_closeout_sequence"],
+        )
         self.assertIn(
             py_script(
                 "tools/aippocampus/release/check_agent_discovery_release.py",

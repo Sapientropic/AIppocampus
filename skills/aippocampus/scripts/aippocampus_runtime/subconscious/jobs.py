@@ -77,6 +77,7 @@ from aippocampus_runtime.subconscious.job_validation import (
 )
 from aippocampus_runtime.subconscious.jobs_config import (
     DEFAULT_CONCURRENCY,
+    DEFAULT_EVENT_SALIENCE_GATE,
     DEFAULT_JOBS_OUTPUT_NAME,
     DEFAULT_SAMPLES_PER_JOB,
     JobsRunConfig,
@@ -861,7 +862,20 @@ def main() -> int:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     parser.add_argument("--samples-per-job", type=int, default=DEFAULT_SAMPLES_PER_JOB)
-    parser.add_argument("--event-salience-gate", action="store_true")
+    salience_group = parser.add_mutually_exclusive_group()
+    salience_group.add_argument(
+        "--event-salience-gate",
+        action="store_true",
+        dest="event_salience_gate",
+        help="Prefer source-backed high-salience turns before broad job sampling (default).",
+    )
+    salience_group.add_argument(
+        "--no-event-salience-gate",
+        action="store_false",
+        dest="event_salience_gate",
+        help="Disable salience intake gating for local reproduction/debugging.",
+    )
+    parser.set_defaults(event_salience_gate=DEFAULT_EVENT_SALIENCE_GATE)
     add_continuity_domain_salience_args(parser)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-write", action="store_true")

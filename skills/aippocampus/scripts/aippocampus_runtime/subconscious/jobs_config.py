@@ -21,6 +21,7 @@ from aippocampus_runtime.subconscious.worker import (
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 DEFAULT_EVENT_SALIENCE_OUTPUT_NAME = "subconscious_event_salience.jsonl"
+DEFAULT_EVENT_SALIENCE_GATE = True
 DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
 DEFAULT_CONTINUITY_DOMAIN_SALIENCE_MODE = os.environ.get(
@@ -54,7 +55,7 @@ class JobsRunConfig:
     model_route: str | None = None
     concurrency: int = DEFAULT_CONCURRENCY
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB
-    event_salience_gate: bool = False
+    event_salience_gate: bool = DEFAULT_EVENT_SALIENCE_GATE
     continuity_domain_salience_mode: str = "off"
     continuity_domain_events_path: Path | None = None
     continuity_domain_snapshot_dir: Path | None = None
@@ -171,7 +172,9 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         temperature=args.temperature,
         concurrency=args.concurrency,
         samples_per_job=args.samples_per_job,
-        event_salience_gate=bool(getattr(args, "event_salience_gate", False)),
+        event_salience_gate=bool(
+            getattr(args, "event_salience_gate", DEFAULT_EVENT_SALIENCE_GATE)
+        ),
         continuity_domain_salience_mode=continuity_domain_salience_mode,
         continuity_domain_events_path=(
             Path(args.continuity_domain_events_output).resolve()

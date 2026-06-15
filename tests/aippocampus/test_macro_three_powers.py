@@ -67,7 +67,10 @@ class MacroThreePowersTests(unittest.TestCase):
         self.assertEqual(earth["ranked_candidates"][0]["route_id"], "route_tests")
         self.assertEqual(human["ranked_candidates"][0]["route_id"], "route_issue")
         self.assertEqual(heaven["ranked_candidates"][0]["route_id"], "route_roadmap")
-        self.assertEqual(earth["facet_counts"], {"earth": 1, "human": 1, "heaven": 1})
+        self.assertEqual(
+            earth["facet_counts"],
+            {"earth": 1, "human": 1, "heaven": 1, "unknown": 0},
+        )
         for packet in (earth, human, heaven):
             self.assertEqual(packet["authority_level"], "navigation_only")
             self.assertEqual(packet["claim_permission"], "no_claim_before_reopen")
@@ -78,25 +81,69 @@ class MacroThreePowersTests(unittest.TestCase):
         earth = three_powers.infer_active_layer("show benchmark evidence and tests")
         human = three_powers.infer_active_layer("what issue or PR should the agent do next")
         heaven = three_powers.infer_active_layer("roadmap thesis and public positioning")
+        unknown = three_powers.infer_active_layer("continue the thing")
 
         self.assertEqual(explicit["active_layer"], "earth")
         self.assertEqual(explicit["source"], "explicit")
         self.assertEqual(earth["active_layer"], "earth")
         self.assertEqual(human["active_layer"], "human")
         self.assertEqual(heaven["active_layer"], "heaven")
+        self.assertEqual(unknown["active_layer"], "unknown")
+        self.assertEqual(unknown["source"], "semantic_profile_absent")
         self.assertEqual(explicit["ambiguity_status"], "explicit_override")
         self.assertEqual(earth["ambiguity_status"], "clear")
+        self.assertTrue(earth["keyword_fallback_used"])
 
     def test_mixed_queries_report_active_layer_ambiguity_without_upgrading_authority(self) -> None:
         issue_tests = three_powers.infer_active_layer("issue PR test source coverage")
         roadmap_evidence = three_powers.infer_active_layer("roadmap benchmark")
 
-        self.assertEqual(issue_tests["active_layer"], "human")
+        self.assertEqual(issue_tests["active_layer"], "unknown")
         self.assertEqual(issue_tests["ambiguity_status"], "ambiguous_tie")
         self.assertEqual(issue_tests["candidate_layers"], ["earth", "human"])
         self.assertIn("ambiguous_layer_tie", issue_tests["reason_codes"])
         self.assertEqual(roadmap_evidence["ambiguity_status"], "ambiguous_tie")
         self.assertEqual(roadmap_evidence["candidate_layers"], ["earth", "heaven"])
+        self.assertIn("semantic_profile_absent", issue_tests["reason_codes"])
+
+    def test_keyword_fallback_cannot_dominate_source_backed_route_signal(self) -> None:
+        packet = three_powers.apply_three_powers_fanout(
+            "issue issue issue",
+            [
+                {
+                    "route_id": "keyword_issue_without_sources",
+                    "source_family": "issue",
+                    "source_handles": [],
+                },
+                {
+                    "route_id": "source_backed_tests",
+                    "source_family": "tests",
+                    "source_handles": [
+                        {"source_id": "s1"},
+                        {"source_id": "s2"},
+                        {"source_id": "s3"},
+                        {"source_id": "s4"},
+                    ],
+                },
+            ],
+        )
+
+        self.assertTrue(packet["keyword_fallback_used"])
+        self.assertEqual(packet["layer_match_bonus"], 2)
+        self.assertEqual(packet["ranked_candidates"][0]["route_id"], "source_backed_tests")
+        self.assertIn("keyword_fallback_used", packet["diagnostics"])
+
+    def test_semantic_layer_profile_can_drive_ranking_without_keyword_fallback(self) -> None:
+        packet = three_powers.apply_three_powers_fanout(
+            "",
+            _route_candidates(),
+            three_powers_layer_profile={"scores": {"heaven": 0.9, "earth": 0.1}},
+        )
+
+        self.assertEqual(packet["active_layer"], "heaven")
+        self.assertFalse(packet["keyword_fallback_used"])
+        self.assertEqual(packet["three_powers_layer_profile_source"], "semantic_profile")
+        self.assertEqual(packet["ranked_candidates"][0]["route_id"], "route_roadmap")
 
     def test_perturbation_amplitude_controls_layer_aware_fanout(self) -> None:
         routes = [

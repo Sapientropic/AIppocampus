@@ -59,3 +59,38 @@ def agent_callable_probe_lines(item: dict[str, Any]) -> list[str]:
     if not item.get("ready"):
         return ["  warn: foreground host tool visibility is not confirmed"]
     return []
+
+
+def post_apply_next_actions(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    applied_names = {
+        str(item.get("surface") or "")
+        for item in results
+        if item.get("applied") and item.get("ok")
+    }
+    if not ({"plugin", "hooks"} & applied_names):
+        return []
+    return [
+        {
+            "surface": "agent_callable",
+            "reason": (
+                "local plugin or hook files changed; the host may need a reload "
+                "before the current foreground thread can see updated tools"
+            ),
+            "command": (
+                "reload Codex Desktop, then run "
+                "`aippocampus update status --foreground-tools-visible --agent-json` "
+                "from a thread that can see AIppocampus tools"
+            ),
+        }
+    ]
+
+
+def apply_next_action_lines(report: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for action in report.get("next_actions") or []:
+        if not isinstance(action, dict):
+            continue
+        command = action.get("command")
+        if command:
+            lines.append(f"- Next: {command}")
+    return lines

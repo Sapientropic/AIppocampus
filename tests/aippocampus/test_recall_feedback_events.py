@@ -97,6 +97,11 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["wrong_route_drag_count"], 1)
         self.assertEqual(report["metrics"]["blocked_count"], 1)
         self.assertEqual(report["policy_boundary"]["activation_weights_are_not_source_truth"], True)
+        self.assertEqual(
+            report["policy_boundary"]["default_route_weighting_consumer"],
+            "bounded_route_activation_metadata",
+        )
+        self.assertEqual(report["calibration"]["consumer"], "bounded_route_activation_metadata")
 
     def test_public_fixture_covers_positive_and_negative_route_feedback(self) -> None:
         report = feedback.public_route_feedback_fixture_report()
@@ -106,7 +111,10 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertGreaterEqual(report["metrics"]["wrong_route_drag_count"], 1)
         self.assertGreaterEqual(report["metrics"]["blocked_count"], 1)
         self.assertEqual(report["privacy_boundary"]["public_replayable_events_only"], True)
-        self.assertEqual(report["policy_boundary"]["default_route_weighting_unchanged"], True)
+        self.assertEqual(
+            report["policy_boundary"]["default_route_weighting_consumer"],
+            "bounded_route_activation_metadata",
+        )
 
     def test_public_route_feedback_fixture_file_is_replayable(self) -> None:
         fixture_path = REPO_ROOT / "benchmark_corpus" / "route_feedback" / "fixture.json"
@@ -150,6 +158,51 @@ class RecallFeedbackEventTests(unittest.TestCase):
                 source_id="source:test",
             )
         self.assertEqual(context.exception.field, "route_kind")
+
+    def test_feedback_calibration_report_lifts_demotes_and_falls_back_on_sparse_conflict(self) -> None:
+        events = [
+            feedback.active_flow_event(
+                route_id="route:helpful",
+                route_kind="pathlet",
+                signal="source_reopen_success",
+                source_id="source:1",
+            ),
+            feedback.active_flow_event(
+                route_id="route:helpful",
+                route_kind="pathlet",
+                signal="user_confirmed",
+                source_id="source:1",
+            ),
+            feedback.active_flow_event(
+                route_id="route:wrong",
+                route_kind="active_path",
+                signal="wrong_route_drag",
+                source_id="source:2",
+            ),
+            feedback.active_flow_event(
+                route_id="route:conflict",
+                route_kind="active_path",
+                signal="source_reopen_success",
+                source_id="source:3",
+            ),
+            feedback.active_flow_event(
+                route_id="route:conflict",
+                route_kind="active_path",
+                signal="wrong_route_drag",
+                source_id="source:3",
+            ),
+        ]
+
+        report = feedback.recall_feedback_calibration_report(events)
+        by_route = {row["route_id"]: row for row in report["deltas"]}
+
+        self.assertGreater(by_route["route:helpful"]["route_weight_delta"], 0)
+        self.assertEqual(by_route["route:wrong"]["route_weight_delta"], 0.0)
+        self.assertTrue(by_route["route:wrong"]["sparse_feedback_fallback"])
+        self.assertEqual(by_route["route:conflict"]["route_weight_delta"], 0.0)
+        self.assertTrue(by_route["route:conflict"]["conflicting_feedback_fallback"])
+        self.assertFalse(report["policy_boundary"]["clean_source_mutation_allowed"])
+        self.assertIn("feedback_calibration_can_emit_source_open", report["cannot_claim"])
 
 
 if __name__ == "__main__":
