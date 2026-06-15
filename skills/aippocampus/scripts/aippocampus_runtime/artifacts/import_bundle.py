@@ -67,6 +67,8 @@ def safe_extract(zip_file: zipfile.ZipFile, extract_dir: Path) -> None:
 
 def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
     bundle = Path(args.bundle).resolve()
+    if not bundle.is_file():
+        raise FileNotFoundError(f"bundle not found: {bundle}")
     dest = Path(args.dest).resolve()
     name = args.name or f"aippocampus-import-{timestamp_slug()}"
     extract_dir = dest / name
@@ -99,7 +101,7 @@ def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="aippocampus import")
     parser.add_argument("bundle")
     parser.add_argument("--dest", default=os.getcwd())
     parser.add_argument("--name")
@@ -109,7 +111,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    print(json.dumps(import_bundle(args), ensure_ascii=False, indent=2))
+    try:
+        payload = import_bundle(args)
+    except FileNotFoundError as exc:
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "bundle_not_found",
+                "message": str(exc),
+                "next_command": "aippocampus import <existing-bundle.zip> --dest <folder>",
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 

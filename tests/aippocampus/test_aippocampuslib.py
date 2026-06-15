@@ -734,6 +734,36 @@ class AippocampusLibTests(unittest.TestCase):
             self.assertEqual(raised.exception.asdict()["code"], "orphan_assistant")
             self.assertEqual(raised.exception.asdict()["line"], 1)
 
+    def test_generic_jsonl_provider_skips_directory_named_jsonl(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cwd = root / "project"
+            cwd.mkdir()
+            directory = root / "looks-like-file.jsonl"
+            directory.mkdir()
+            transcript = root / "valid.jsonl"
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "session_id": "generic-session",
+                        "cwd": str(cwd),
+                        "role": "user",
+                        "text": "hello from a real file",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            provider = GenericConversationProvider(root)
+
+            sessions = list(provider.discover_sessions())
+
+            self.assertEqual([session.path for session in sessions], [transcript])
+            with self.assertRaises(GenericJsonlValidationError) as raised:
+                provider.read_normalized_messages(directory)
+            self.assertEqual(raised.exception.asdict()["code"], "source_not_file")
+
     def test_conversation_provider_factory_creates_claude_code_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             provider = create_conversation_provider("claude_code", claude_home_dir=Path(tmp))

@@ -146,6 +146,20 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["commands_redacted"])
         self.assertNotIn(fixture_value, encoded)
 
+    def test_status_json_redacts_paths_and_commands_by_default_without_last(self) -> None:
+        installer.install(self.hooks_json, timeout=5)
+
+        result = installer.status(self.hooks_json)
+        encoded = json.dumps(result, ensure_ascii=False)
+
+        self.assertTrue(result["installed"])
+        self.assertEqual(result["path"], "hooks.json")
+        self.assertTrue(result["path_redacted"])
+        self.assertEqual(result["commands"], ["<redacted:hook-command>"])
+        self.assertTrue(result["commands_redacted"])
+        self.assertNotIn(str(self.codex_home), encoded)
+        self.assertNotIn(str(SCRIPTS.resolve()), encoded)
+
     def test_uninstall_removes_only_ambient_hook(self) -> None:
         installer.install(self.hooks_json, timeout=5)
         data = self.read_hooks()

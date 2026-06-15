@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -22,6 +24,11 @@ class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
 
         self.assertTrue(payload["ok"])
+        self.assertTrue(payload["contract_gate_ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertFalse(payload["public_quality_gate_ok"])
+        self.assertEqual(payload["benchmark_maturity_level"], "contract_smoke")
+        self.assertEqual(payload["sample_size"], payload["case_count"])
         self.assertEqual(payload["kind"], "aippocampus_state_dependent_preactivation_benchmark")
         self.assertFalse(payload["privacy_boundary"]["input_text_leak_emitted"])
         self.assertFalse(payload["privacy_boundary"]["local_paths_emitted"])
@@ -77,6 +84,37 @@ class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
             unsafe_case["arms"]["state_dependent"]["metrics"]["foreground_noise_suppression_rate"],
             1.0,
         )
+
+    def test_cli_json_emits_full_sanitized_report_and_output_route(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "state-dependent-full.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "benchmarks/aippocampus/benchmark_state_dependent_preactivation.py",
+                    "--json",
+                    "--output",
+                    str(output),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            written = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["kind"], benchmark.PREACTIVATION_BENCHMARK_KIND)
+        self.assertIn("cases", payload)
+        self.assertIn("cannot_claim", payload)
+        self.assertEqual(payload["contract_gate_ok"], True)
+        self.assertEqual(payload["quality_gate_ok"], False)
+        self.assertEqual(payload["public_quality_gate_ok"], False)
+        self.assertEqual(payload["sample_size"], payload["case_count"])
+        self.assertEqual(written["kind"], payload["kind"])
 
 
 if __name__ == "__main__":

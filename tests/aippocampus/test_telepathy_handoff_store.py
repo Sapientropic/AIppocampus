@@ -37,11 +37,23 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
 
             self.assertTrue(created["ok"], json.dumps(created, indent=2))
             card_id = created["card"]["card_id"]
+            self.assertEqual(
+                created["card"]["scope_label"],
+                "project:AIppocampus#issue:1287",
+            )
+            self.assertEqual(
+                created["card"]["scope_visibility"],
+                "operator_supplied_public_safe",
+            )
             self.assertEqual(len(store.read_text(encoding="utf-8").splitlines()), 1)
 
             listed = telepathy_handoff_store.list_handoffs_payload(store_path=store, cwd=root)
             self.assertEqual(listed["count"], 1)
             self.assertEqual(listed["cards"][0]["card_id"], card_id)
+            self.assertEqual(
+                listed["cards"][0]["scope_label"],
+                "project:AIppocampus#issue:1287",
+            )
             self.assertEqual(listed["cards"][0]["claim_permission"], "navigation_only_not_fact")
 
             deepened = telepathy_handoff_store.deepen_handoff_payload(
@@ -55,6 +67,10 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
                 sort_keys=True,
             )
             self.assertTrue(deepened["ok"], json.dumps(deepened, indent=2))
+            self.assertEqual(
+                deepened["card"]["scope_label"],
+                "project:AIppocampus#issue:1287",
+            )
             self.assertIn("msg_public", encoded_source_refs)
             self.assertIn("source_ref_hash", encoded_source_refs)
             self.assertNotIn(str(root), encoded_source_refs)
@@ -157,6 +173,10 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
             self.assertEqual(create_proc.returncode, 0, create_proc.stdout + create_proc.stderr)
             create_payload = json.loads(create_proc.stdout)
             card_id = create_payload["card"]["card_id"]
+            self.assertEqual(
+                create_payload["card"]["scope_label"],
+                "project:AIppocampus#issue:1287",
+            )
 
             list_proc = subprocess.run(
                 [
@@ -183,6 +203,33 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
             self.assertEqual(json.loads(list_proc.stdout)["cards"][0]["card_id"], card_id)
             self.assertNotIn(str(root), raw_output)
             self.assertNotIn("private-rollout.jsonl", raw_output)
+
+    def test_private_or_path_like_scope_uses_hash_only_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = root / "handoffs.jsonl"
+            private_scope = str(root / "private-scope.jsonl")
+
+            created = telepathy_handoff_store.create_handoff(
+                scope=private_scope,
+                owner="codex-a",
+                store_path=store,
+                cwd=root,
+            )
+            listed = telepathy_handoff_store.list_handoffs_payload(store_path=store, cwd=root)
+            deepened = telepathy_handoff_store.deepen_handoff_payload(
+                card_id=created["card"]["card_id"],
+                store_path=store,
+                cwd=root,
+            )
+
+            encoded = json.dumps([created, listed, deepened], ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(created["card"]["scope_visibility"], "redacted_hash_only")
+        self.assertEqual(listed["cards"][0]["scope_visibility"], "redacted_hash_only")
+        self.assertEqual(deepened["card"]["scope_visibility"], "redacted_hash_only")
+        self.assertNotIn("private-scope.jsonl", encoded)
+        self.assertNotIn(private_scope, encoded)
 
 
 if __name__ == "__main__":

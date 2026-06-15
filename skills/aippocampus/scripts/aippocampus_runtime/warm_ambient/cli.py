@@ -7,12 +7,13 @@ import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV
 from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL, DEFAULT_MODEL
-from aippocampus_runtime.warm_ambient import recall
+from aippocampus_runtime.warm_ambient import recall, scheduler
 from aippocampus_runtime.warm_ambient.config import warm_recall_config_from_env
 
 PUBLIC_STATUSES = {
@@ -321,8 +322,45 @@ def _public_cli_payload(result: Mapping[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _status_main(argv: Sequence[str]) -> int:
+    parser = argparse.ArgumentParser(prog="aippocampus warm status")
+    parser.add_argument("--job-dir")
+    parser.add_argument("--registry")
+    parser.add_argument("--registry-dir")
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    args = parser.parse_args(list(argv))
+    job_dir = (
+        Path(args.job_dir)
+        if args.job_dir
+        else scheduler.default_warm_job_dir(
+            registry_path=args.registry,
+            registry_dir=args.registry_dir,
+        )
+    )
+    payload = scheduler.warm_status_payload(job_dir=job_dir)
+    if args.json_output:
+        json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
+        print()
+    else:
+        activity = payload.get("job_activity") or {}
+        print(f"warm ambient status: {payload.get('status')}")
+        print(
+            "jobs: "
+            f"pending={activity.get('pending_recent_count', 0)}, "
+            f"stale={activity.get('pending_stale_count', 0)}, "
+            f"completed={activity.get('completed_count', 0)}"
+        )
+        print(f"worker: {activity.get('worker_evidence')}")
+        print(f"next: {payload.get('next_command')}")
+    return 0 if payload.get("ok") else 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    raw_args = list(argv) if argv is not None else sys.argv[1:]
+    if raw_args and raw_args[0] == "status":
+        return _status_main(raw_args[1:])
+
+    parser = argparse.ArgumentParser(prog="aippocampus warm")
     parser.add_argument("--prompt")
     parser.add_argument("--job-file")
     parser.add_argument("--cwd", default=os.getcwd())
@@ -359,7 +397,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(list(argv) if argv is not None else None)
+    args = parser.parse_args(raw_args)
 
     if args.job_file:
         summary = recall.run_warm_job_file(args.job_file)

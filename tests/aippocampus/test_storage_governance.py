@@ -270,6 +270,60 @@ class StorageGovernanceTests(unittest.TestCase):
             "blocked_by_default",
         )
 
+    def test_dry_run_json_cli_bounds_candidates_by_top_unless_full_requested(self) -> None:
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--dry-run",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--retention-report",
+                    str(self.retention_path),
+                    "--top",
+                    "1",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["candidate_count_total"], 2)
+        self.assertEqual(payload["candidates_returned"], 1)
+        self.assertTrue(payload["candidates_truncated"])
+        self.assertEqual(len(payload["candidates"]), 1)
+        self.assertEqual(payload["full_audit_flag"], "--full")
+
+    def test_dry_run_summary_json_is_foreground_bounded(self) -> None:
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--dry-run",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--retention-report",
+                    str(self.retention_path),
+                    "--top",
+                    "1",
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertIn("candidate_samples", payload)
+        self.assertNotIn("candidates", payload)
+        self.assertEqual(payload["candidate_count_total"], 2)
+        self.assertEqual(payload["candidates_returned"], 1)
+        self.assertTrue(payload["candidates_truncated"])
+
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
         self,
     ) -> None:

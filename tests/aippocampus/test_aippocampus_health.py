@@ -28,6 +28,78 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
 
 
 class AippocampusHealthTests(unittest.TestCase):
+    def test_agent_json_health_is_compact_and_path_redacted(self) -> None:
+        private_path = "C:/private/aippocampus/clean-source/messages.jsonl"
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": False,
+                    "cwd": private_path,
+                    "checks": [{"name": "clean_source", "path": private_path}],
+                    "recommended_actions": [
+                        {
+                            "id": "refresh_clean_source",
+                            "reason": "clean source is stale",
+                            "command": "python -m aippocampus_runtime.source.clean_source",
+                        }
+                    ],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+
+        raw = stdout.getvalue()
+        payload = json.loads(raw)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["detail"], "compact")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["agent_next_action"]["id"], "refresh_clean_source")
+        self.assertIsInstance(payload["recommended_actions"][0], dict)
+        self.assertNotIn(private_path, raw)
+        self.assertIn("<local-path-redacted>", raw)
+
+    def test_human_health_prints_copy_pasteable_next_commands(self) -> None:
+        payload = {
+            "ok": False,
+            "rollout": {"path": "rollout.jsonl", "size": 10, "message_count": 2},
+            "index": {"stale": True, "message_delta": 1, "byte_delta": 1, "rag": {}},
+            "clean_source": {"stale": True},
+            "segments": {"exists": False, "needed": False},
+            "checkpoint": {"due": False},
+            "graphify": {"stale": False},
+            "storage": {},
+            "question_stats": {},
+            "background_cognition": {},
+            "logs": {},
+            "health_trajectory": {},
+            "recommended_actions": [
+                {
+                    "id": "build_clean_source",
+                    "severity": "warning",
+                    "reason": "latest visible clean-source messages are missing",
+                    "command": "python -m aippocampus_runtime.source.clean_source --cwd .",
+                },
+                {
+                    "id": "build_index",
+                    "severity": "warning",
+                    "reason": "latest visible messages are newer than the index",
+                    "command": "python -m aippocampus_runtime.recall.index_builder --cwd .",
+                },
+            ],
+        }
+
+        with mock.patch("sys.stdout", new=StringIO()) as stdout:
+            health.render_health_text(payload)
+
+        text = stdout.getvalue()
+        self.assertIn("recommended actions:", text)
+        self.assertIn("Next:", text)
+        self.assertIn("1. build_clean_source: python -m", text)
+        self.assertIn("2. build_index: python -m", text)
+
     def write_rollout(
         self,
         path: Path,
@@ -557,7 +629,8 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(
             command,
             'PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" '
-            'python -m aippocampus_runtime.recall.index_builder --cwd "/tmp/work space"',
+            f'{health.quote_posix_double(sys.executable)} '
+            '-m aippocampus_runtime.recall.index_builder --cwd "/tmp/work space"',
         )
 
     def test_recommended_script_command_keeps_powershell_shape_on_windows(self) -> None:
@@ -568,7 +641,8 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(
             command,
             '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
-            f'python -m aippocampus_runtime.recall.index_builder --cwd "{expected_cwd}"',
+            f'& "{health.PureWindowsPath(sys.executable)}" '
+            f'-m aippocampus_runtime.recall.index_builder --cwd "{expected_cwd}"',
         )
 
     def test_question_stats_are_fail_open_diagnostics(self) -> None:
@@ -778,6 +852,48 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
         self.assertNotIn(str(workspace), encoded)
         self.assertNotIn("private-project-label", encoded)
+
+    def test_warm_ambient_pending_job_is_not_reported_as_running(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            jobs_path = root / "subconscious_jobs.jsonl"
+            jobs_path.write_text("", encoding="utf-8")
+            warm_dir = root / "ambient_warm_jobs"
+            warm_dir.mkdir()
+            (warm_dir / "warm-public.json").write_text(
+                json.dumps({"created_at": "2026-06-06T09:35:00Z"}),
+                encoding="utf-8",
+            )
+            now = health.datetime(2026, 6, 6, 9, 40, 0, tzinfo=health.timezone.utc)
+
+            with mock.patch.dict(
+                health.os.environ,
+                {
+                    "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "0",
+                    "AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "1",
+                    "AIPPOCAMPUS_SEMANTIC_GATE": "off",
+                    "AIPPOCAMPUS_DREAM_DELIVERY_MODE": "off",
+                },
+                clear=True,
+            ):
+                payload = health.background_cognition_health(
+                    root=root,
+                    registry_path=root / "threads.json",
+                    jobs_path=jobs_path,
+                    cwd=workspace,
+                    now=now,
+                )
+
+        warm = payload["lanes"]["warm_ambient"]
+        activity = warm["job_activity"]
+        self.assertFalse(warm["currently_running"])
+        self.assertFalse(activity["worker_process_active"])
+        self.assertFalse(activity["pending_jobs_are_worker_evidence"])
+        self.assertEqual(activity["pending_recent_count"], 1)
+        self.assertEqual(warm["next_operator_action"], "aippocampus warm status --json")
+        self.assertEqual(payload["running_lane_count"], 0)
 
     def test_registry_wide_health_aggregates_without_default_private_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

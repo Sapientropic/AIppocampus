@@ -1328,6 +1328,53 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertTrue(all(ref.get("thread_key") == "little-thread" for ref in event["source_refs"]))
         self.assertIn("小海马体", event["activation_cues"])
 
+    def test_continuity_domain_producer_preview_is_readable_without_raw_local_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_registry_clean_source_fixture(root)
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "continuity-domain",
+                    "produce",
+                    "--registry-dir",
+                    str(registry_dir),
+                    "--preview",
+                    "--min-support",
+                    "2",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            payload = json.loads(proc.stdout)
+            encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["detail"], "agent_preview")
+        self.assertNotIn("candidate_events", payload)
+        self.assertTrue(payload["candidate_previews"])
+        preview = payload["candidate_previews"][0]
+        self.assertIn("小海马体", preview["title"])
+        self.assertGreaterEqual(preview["source_ref_count"], 2)
+        self.assertTrue(preview["source_reopen_required_before_claim"])
+        self.assertEqual(
+            payload["agent_next_action"]["id"],
+            "review_then_append_continuity_domains",
+        )
+        self.assertNotIn('"source_refs"', encoded)
+        self.assertNotIn('"thread_key"', encoded)
+        self.assertNotIn("little-thread", encoded)
+        self.assertNotIn(str(root), encoded)
+
     def test_continuity_domain_producer_uses_signal_rows_only_as_candidate_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

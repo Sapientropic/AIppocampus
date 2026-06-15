@@ -7,6 +7,7 @@ import argparse
 import importlib
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
@@ -36,6 +37,7 @@ from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
 from aippocampus_runtime.health_trajectory import attach_health_trajectory
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
+from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.privacy import (
@@ -186,6 +188,12 @@ def quote_posix_double(value: str | Path) -> str:
     return f'"{escaped}"'
 
 
+def current_python_command() -> str:
+    if os.name == "nt":
+        return f'& "{PureWindowsPath(sys.executable)}"'
+    return quote_posix_double(sys.executable)
+
+
 SCRIPT_MODULES = {
     "build_index.py": "aippocampus_runtime.recall.index_builder",
     "build_clean_source.py": "aippocampus_runtime.source.clean_source",
@@ -201,12 +209,12 @@ def recommended_script_command(script_name: str, cwd: str | Path) -> str:
         windows_cwd = str(PureWindowsPath(str(cwd)))
         return (
             '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
-            f"python -m {module} "
+            f"{current_python_command()} -m {module} "
             f'--cwd "{windows_cwd}"'
         )
     return (
         'PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" '
-        f"python -m {module} "
+        f"{current_python_command()} -m {module} "
         f"--cwd {quote_posix_double(cwd)}"
     )
 
@@ -740,7 +748,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # Python 3.14 changed argparse's default prog to reflect how __main__ was
     # executed. Keep the public compatibility-shim identity stable for direct
     # installed-script help, facade dispatch, and cross-platform smoke tests.
-    parser = argparse.ArgumentParser(prog="aippocampus_health.py")
+    parser = argparse.ArgumentParser(prog="aippocampus health")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
         "--registry-wide",
@@ -822,6 +830,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--segment-threshold-bytes", type=int, default=100 * 1024 * 1024)
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(
+        "--agent-json",
+        action="store_true",
+        help="Emit compact agent-facing JSON with next actions instead of operator detail.",
+    )
+    parser.add_argument(
         "--exit-code", action="store_true", help="Exit 2 when maintenance is recommended."
     )
     return parser
@@ -876,7 +889,9 @@ def main(argv: list[str] | None = None) -> int:
 
     result = build_health_report(options_from_args(args))
     public_result = public_health_report(result, include_paths=bool(args.include_paths))
-    if args.json_output:
+    if args.agent_json:
+        print(json.dumps(compact_health_payload(public_result), ensure_ascii=False, indent=2))
+    elif args.json_output:
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:
         render_health_text(public_result)

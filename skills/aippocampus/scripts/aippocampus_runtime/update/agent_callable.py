@@ -67,12 +67,14 @@ def mcp_command_repair_options(command: str) -> list[str]:
     options: list[str] = []
     if shutil.which("aippocampus"):
         options.append("aippocampus mcp")
+    current_executable = str(Path(sys.executable))
+    if " " in current_executable:
+        current_executable = f'"{current_executable}"'
+    options.append(f"{current_executable} -m aippocampus_runtime.cli.facade mcp")
     if shutil.which("python3"):
         options.append("python3 -m aippocampus_runtime.cli.facade mcp")
     if shutil.which("python"):
         options.append("python -m aippocampus_runtime.cli.facade mcp")
-    current = f"{Path(sys.executable).name} -m aippocampus_runtime.cli.facade mcp"
-    options.append(current)
     options.append("uvx aippocampus mcp")
     seen: set[str] = set()
     unique: list[str] = []

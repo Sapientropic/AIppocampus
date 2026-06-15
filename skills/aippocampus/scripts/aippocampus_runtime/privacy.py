@@ -134,12 +134,11 @@ def _is_private_path_key(key: str, value=None) -> bool:
         return False
     if normalized == "source":
         return isinstance(value, str) and _looks_like_path(value)
-    return (
-        normalized in PRIVATE_PATH_KEYS
-        or normalized.endswith("_path")
-        or normalized.endswith("_dir")
-        or normalized.endswith("_file")
-    )
+    if normalized in PRIVATE_PATH_KEYS:
+        return True
+    if normalized.endswith(("_path", "_dir", "_file")):
+        return _value_looks_like_path(value)
+    return False
 
 
 def _redact_private_path_value(value):
@@ -182,3 +181,13 @@ def _looks_like_path(value: str) -> bool:
         or bool(re.match(r"^[A-Za-z]:", text))
         or text.endswith((".jsonl", ".json", ".sqlite", ".md"))
     )
+
+
+def _value_looks_like_path(value) -> bool:
+    if isinstance(value, str):
+        return _looks_like_path(value)
+    if isinstance(value, dict):
+        return any(_value_looks_like_path(item) for item in value.values())
+    if isinstance(value, list | tuple):
+        return any(_value_looks_like_path(item) for item in value)
+    return False

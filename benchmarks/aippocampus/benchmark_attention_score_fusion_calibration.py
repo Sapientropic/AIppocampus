@@ -243,11 +243,24 @@ def run_attention_score_fusion_calibration() -> dict[str, Any]:
         and runtime_default["metrics"]["route_recall_at_threshold"]["rate"]
         >= calibrated["metrics"]["route_recall_at_threshold"]["rate"]
     )
+    runtime_policy_adoption_gate_ok = bool(
+        ok
+        and len(rows) == 12
+        and runtime_default["red_lines"]["privacy_bypass_count"] == 0
+        and runtime_default["red_lines"]["hard_mask_override_count"] == 0
+        and runtime_default["red_lines"]["anti_nag_violation_count"] == 0
+    )
     return {
         "kind": "aippocampus_attention_score_fusion_calibration",
         "schema_version": SCHEMA_VERSION,
         "run_at": now_utc(),
         "ok": ok,
+        "contract_gate_ok": bool(ok),
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "runtime_policy_adoption_gate_ok": runtime_policy_adoption_gate_ok,
+        "benchmark_maturity_level": "contract_smoke",
+        "quality_gate_kind": "fixture_contract_not_public_quality",
         "feature_rows": {
             "row_count": len(rows),
             "feature_names": sorted(rows[0]["features"]) if rows else [],
@@ -261,8 +274,34 @@ def run_attention_score_fusion_calibration() -> dict[str, Any]:
         },
         "decision": {
             "selected_arm": "runtime_default_policy" if ok else "none",
-            "default_adoption": "adopted_by_hot_router" if ok else "not_adopted",
+            "default_adoption": "guarded_runtime_default" if ok else "not_adopted",
+            "runtime_policy_adoption_gate_ok": runtime_policy_adoption_gate_ok,
             "hard_masks_remain_policy_gates": True,
+            "adoption_scope": (
+                "deterministic_fixture_guarded"
+                if runtime_policy_adoption_gate_ok
+                else "not_adopted"
+            ),
+        },
+        "adoption_scope": (
+            "deterministic_fixture_guarded"
+            if runtime_policy_adoption_gate_ok
+            else "not_adopted"
+        ),
+        "adoption_evidence": {
+            "row_count": len(rows),
+            "family_count": len({row["family"] for row in rows}),
+            "holdout_case_count": 0,
+            "external_or_public_cohort_case_count": 0,
+            "generated_or_fixture_rows": "repository_fixture_rows",
+            "tuning_leakage_status": "same_fixture_compared_to_runtime_default_no_holdout",
+            "public_quality_supported": False,
+        },
+        "rollback_or_guardrail": {
+            "hard_masks_remain_policy_gates": True,
+            "score_fusion_affects_routing_only": True,
+            "disable_path": "switch runtime default policy away from calibrated_rule_grid_v1",
+            "diagnostic_fallback": "current_deterministic_weights_arm_remains_reported",
         },
         "privacy_boundary": {
             "raw_text_emitted": False,
@@ -277,6 +316,8 @@ def run_attention_score_fusion_calibration() -> dict[str, Any]:
             "answer_generation_quality",
             "hard_masks_are_learnable",
             "source_truth_from_scores",
+            "public_quality_adoption_from_12_row_fixture",
+            "holdout_supported_runtime_policy_quality",
         ],
     }
 

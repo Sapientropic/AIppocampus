@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
+
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -155,6 +157,39 @@ def failed_action_ids(failures: list[dict]) -> set[str]:
     return {str(item.get("id") or "") for item in failures}
 
 
+def summary_payload(result: dict) -> dict:
+    return {
+        "kind": "aippocampus_maintenance_summary",
+        "ok": result.get("maintenance_status") in {"ok", "degraded"},
+        "maintenance_status": result.get("maintenance_status"),
+        "cwd": LOCAL_PATH_REDACTION,
+        "cwd_label": result.get("cwd_label"),
+        "action_count": len(result.get("action_results") or []),
+        "failure_count": len(result.get("action_failures") or []),
+        "skipped_count": len(result.get("skipped_due_to_failure") or []),
+        "remaining_recommended_action_count": len(result.get("remaining_recommended_actions") or []),
+        "action_ids": [item.get("id") for item in (result.get("action_results") or [])[:12]],
+        "failure_samples": [
+            {
+                "id": item.get("id"),
+                "returncode": item.get("returncode"),
+                "message": item.get("message"),
+            }
+            for item in (result.get("action_failures") or [])[:5]
+        ],
+        "remaining_recommended_actions": [
+            {
+                "id": item.get("id"),
+                "severity": item.get("severity"),
+                "reason": item.get("reason"),
+            }
+            for item in (result.get("remaining_recommended_actions") or [])[:8]
+        ],
+        "full_audit_available": True,
+        "full_audit_flag": "--json",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus maintenance")
     parser.add_argument("--cwd", default=os.getcwd())
@@ -193,6 +228,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Allow activation owner files to be rewritten; dry-run is the default.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help="Emit a bounded foreground summary instead of the full maintenance audit payload.",
+    )
     args = parser.parse_args(argv)
 
     cwd = Path(args.cwd).resolve()
@@ -520,7 +560,8 @@ def main(argv: list[str] | None = None) -> int:
             action_failures.append(failure_result("health_final", health_cmd, code, stdout, stderr))
     remaining = health_final.get("recommended_actions", []) if health_final else []
     result = {
-        "cwd": str(cwd),
+        "cwd": LOCAL_PATH_REDACTION,
+        "cwd_label": cwd.name or str(cwd),
         "actions": action_results,
         "action_results": action_results,
         "action_failures": action_failures,
@@ -535,6 +576,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif args.summary_json:
+        print(json.dumps(summary_payload(result), ensure_ascii=False, indent=2))
     else:
         print(f"memory maintenance {result['maintenance_status']} for {cwd}")
         for item in action_results[1:]:

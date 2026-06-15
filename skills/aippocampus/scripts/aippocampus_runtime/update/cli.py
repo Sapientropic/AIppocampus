@@ -25,10 +25,16 @@ from aippocampus_runtime.update.agent_callable import (
     mcp_command_repair_options,
     status_agent_callable,
 )
+from aippocampus_runtime.update.agent_status_summary import (
+    agent_callable_host_probe_ok,
+    compact_agent_status_report,
+)
 from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 from aippocampus_runtime.update.plugin_cache import (
     build_plugin_cache_status,
+    installed_cache_auto_resolution,
     refresh_plugin_cache_layers,
+    unique_installed_cache_root,
 )
 
 SCHEMA_VERSION = 1
@@ -76,6 +82,14 @@ def _json_default(value: Any) -> str:
 
 def _safe_path_text(path: Path | None) -> str | None:
     return str(path) if path is not None else None
+
+
+def _optional_path_or_auto(value: str | None) -> Path | str | None:
+    if not value:
+        return None
+    if value.strip().casefold() == "auto":
+        return "auto"
+    return Path(value).resolve()
 
 
 def _path_is_under(child: Path, parent: Path) -> bool:
@@ -290,15 +304,25 @@ def enrich_plugin_cache_status(
     codex_home_path: Path,
     plugin_output: Path | None = None,
     plugin_marketplace_dir: Path | None = None,
-    plugin_installed_dir: Path | None = None,
+    plugin_installed_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     output = plugin_output or repo_root / DEFAULT_PLUGIN_OUTPUT
+    installed_arg_auto = (
+        str(plugin_installed_dir).strip().casefold() == "auto"
+        if plugin_installed_dir is not None
+        else False
+    )
+    resolved_installed_dir = (
+        unique_installed_cache_root(codex_home_path)
+        if installed_arg_auto
+        else plugin_installed_dir
+    )
     cache_status = build_plugin_cache_status(
         source_root=repo_root / "plugins" / "aippocampus",
         package_root=output,
         codex_home_path=codex_home_path,
         marketplace_dir=plugin_marketplace_dir,
-        installed_dir=plugin_installed_dir,
+        installed_dir=resolved_installed_dir,
     )
     plugin.update(
         {
@@ -309,10 +333,17 @@ def enrich_plugin_cache_status(
             "auto_detected_installed_cache_count": cache_status[
                 "auto_detected_installed_cache_count"
             ],
+            "installed_cache_auto_resolution": cache_status[
+                "installed_cache_auto_resolution"
+            ],
             "plugin_cache_recommended_actions": cache_status["recommended_actions"],
             "cache_boundary": cache_status["boundary"],
         }
     )
+    if installed_arg_auto:
+        plugin["explicit_installed_cache_auto_resolution"] = installed_cache_auto_resolution(
+            codex_home_path
+        )
     return plugin
 
 
@@ -654,6 +685,14 @@ def _surface_ready(item: dict[str, Any]) -> bool:
     return item.get("status") in READY_SURFACE_STATUSES
 
 
+def _surface_summary_blocker(name: str, item: dict[str, Any]) -> bool:
+    if _surface_ready(item):
+        return False
+    if name == "agent_callable" and agent_callable_host_probe_ok(item):
+        return False
+    return item.get("status") not in {"not_provided", "not_requested"}
+
+
 def _unready_surfaces(
     surfaces: dict[str, dict[str, Any]], names: tuple[str, ...]
 ) -> list[str]:
@@ -680,9 +719,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         plugin_marketplace_dir=Path(args.plugin_marketplace_dir).resolve()
         if args.plugin_marketplace_dir
         else None,
-        plugin_installed_dir=Path(args.plugin_installed_dir).resolve()
-        if args.plugin_installed_dir
-        else None,
+        plugin_installed_dir=_optional_path_or_auto(args.plugin_installed_dir),
     )
     hooks = status_hooks(
         codex_home_path,
@@ -715,10 +752,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         host_probe=host_probe,
     )
     actionable = [
-        name
-        for name, item in surfaces.items()
-        if not _surface_ready(item)
-        and item.get("status") not in {"not_provided", "not_requested"}
+        name for name, item in surfaces.items() if _surface_summary_blocker(name, item)
     ]
     plugin_cache_action = update_actions.plugin_cache_needs_action(surfaces["plugin"])
     if plugin_cache_action:
@@ -727,7 +761,11 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     core_blockers = _unready_surfaces(surfaces, CORE_SURFACES)
     magic_blockers = _unready_surfaces(surfaces, MAGIC_SURFACES)
     optional_surfaces = _unready_surfaces(surfaces, OPTIONAL_SURFACES)
-    operator_blockers = _unready_surfaces(surfaces, OPERATOR_SURFACES)
+    operator_blockers = [
+        name
+        for name in OPERATOR_SURFACES
+        if _surface_summary_blocker(name, surfaces.get(name) or {})
+    ]
     core_ready = not core_blockers
     magic_ready = not magic_blockers
     capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
@@ -748,6 +786,10 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "operator_blockers": operator_blockers,
             "agent_callable_ready": surfaces["agent_callable"]["ready"],
             "agent_callable_status": surfaces["agent_callable"]["status"],
+            "agent_callable_host_ready": agent_callable_host_probe_ok(
+                surfaces["agent_callable"]
+            ),
+            "agent_callable_current_thread_visible": surfaces["agent_callable"]["ready"],
             "capability_ladder": capability_ladder,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
@@ -833,6 +875,7 @@ def _load_plugin_builder(repo_root: Path):
 
 def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
     repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
+    codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
     output = Path(args.plugin_output).resolve() if args.plugin_output else repo_root / DEFAULT_PLUGIN_OUTPUT
     builder = _load_plugin_builder(repo_root)
     if builder is None or not hasattr(builder, "build_package"):
@@ -844,20 +887,28 @@ def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
             "message": "plugin package builder is not available in this installation",
         }
     result = builder.build_package(repo_root, output)
+    installed_arg = _optional_path_or_auto(args.plugin_installed_dir)
+    installed_auto_resolution = None
+    if installed_arg == "auto":
+        installed_auto_resolution = installed_cache_auto_resolution(codex_home_path)
+        installed_arg = unique_installed_cache_root(codex_home_path)
     cache_refresh = refresh_plugin_cache_layers(
         package_root=output,
         marketplace_dir=Path(args.plugin_marketplace_dir).resolve()
         if args.plugin_marketplace_dir
         else None,
-        installed_dir=Path(args.plugin_installed_dir).resolve()
-        if args.plugin_installed_dir
-        else None,
+        installed_dir=installed_arg if isinstance(installed_arg, Path) else None,
     )
+    if installed_auto_resolution is not None:
+        cache_refresh["installed_cache_auto_resolution"] = installed_auto_resolution
+        if installed_auto_resolution.get("status") != "unique":
+            cache_refresh["ok"] = False
+            cache_refresh["auto_refresh_blocked"] = True
     verification = compare_plugin(repo_root=repo_root, plugin_output=output)
     return {
         "surface": "plugin",
         "applied": True,
-        "ok": verification["status"] == "current",
+        "ok": verification["status"] == "current" and cache_refresh.get("ok", True),
         "builder": result,
         "verification": verification["diff"]["counts"],
         "cache_refresh": cache_refresh,
@@ -1024,6 +1075,11 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--provider-env-var")
     parser.add_argument("--no-child-check", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--agent-json",
+        action="store_true",
+        help="Emit compact agent-facing JSON with readiness tiers and next actions.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1060,7 +1116,7 @@ def main(argv: list[str] | None = None) -> int:
         # Public CLI output must not echo raw exception text; install/update
         # failures can include local paths or environment-derived diagnostics.
         del exc
-        if getattr(args, "json_output", False):
+        if getattr(args, "json_output", False) or getattr(args, "agent_json", False):
             emit_public_text(
                 json.dumps(
                     {
@@ -1080,7 +1136,16 @@ def main(argv: list[str] | None = None) -> int:
             emit_public_text("AIppocampus update failed: update_failed", stream=sys.stderr)
         return 1
 
-    if args.json_output:
+    if args.agent_json:
+        emit_public_text(
+            json.dumps(
+                compact_agent_status_report(report, schema_version=SCHEMA_VERSION),
+                ensure_ascii=False,
+                indent=2,
+                default=_json_default,
+            )
+        )
+    elif args.json_output:
         emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
     else:
         emit_public_text(render_text(report), end="")

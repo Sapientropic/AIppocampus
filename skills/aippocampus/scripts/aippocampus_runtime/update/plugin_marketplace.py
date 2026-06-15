@@ -1,0 +1,52 @@
+"""Shared local marketplace paths and ownership checks for the Codex plugin."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from aippocampus_runtime.core import codex_home
+
+PLUGIN_NAME = "aippocampus"
+MARKETPLACE_NAME = "aippocampus-local"
+MARKETPLACE_RELATIVE_MANIFEST = Path(".agents") / "plugins" / "marketplace.json"
+MARKETPLACE_MARKER = ".aippocampus-owned-marketplace.json"
+
+
+def default_marketplace_root(codex_home_path: Path | None = None) -> Path:
+    return Path(codex_home_path or codex_home()).expanduser() / "aippocampus-marketplace"
+
+
+def marketplace_manifest_path(marketplace_root: Path) -> Path:
+    return marketplace_root / MARKETPLACE_RELATIVE_MANIFEST
+
+
+def owned_marketplace_manifest(
+    marketplace_root: Path,
+    *,
+    marketplace_name: str = MARKETPLACE_NAME,
+    plugin_name: str = PLUGIN_NAME,
+) -> bool:
+    marker = marketplace_root / MARKETPLACE_MARKER
+    if marker.exists():
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+        return data.get("owner") == plugin_name and data.get("safe_to_remove") is True
+    manifest = marketplace_manifest_path(marketplace_root)
+    if not manifest.exists():
+        return False
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    plugins = data.get("plugins")
+    return (
+        data.get("name") == marketplace_name
+        and isinstance(plugins, list)
+        and len(plugins) == 1
+        and isinstance(plugins[0], dict)
+        and plugins[0].get("name") == plugin_name
+        and (plugins[0].get("source") or {}).get("path") == f"./plugins/{plugin_name}"
+    )

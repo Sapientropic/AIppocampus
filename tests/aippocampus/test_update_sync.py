@@ -446,6 +446,37 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("plugin", payload["summary"]["needs_action"])
         self.assertIn("plugin", payload["summary"]["nested_action_surfaces"])
 
+    def test_status_recommends_auto_for_unique_installed_plugin_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            installed = codex_home / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
+            write_minimal_repo(repo)
+            plugin = repo / "plugins" / "aippocampus"
+            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+            write_plugin_package(installed, version="0.1.0")
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0, payload)
+        plugin_status = payload["surfaces"]["plugin"]
+        self.assertEqual(
+            plugin_status["installed_cache_auto_resolution"]["status"],
+            "unique",
+        )
+        self.assertIn(
+            "--plugin-installed-dir auto",
+            plugin_status["plugin_cache_recommended_actions"][0],
+        )
+
     def test_status_marks_successful_host_probe_as_current_thread_unverified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
@@ -497,6 +528,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
         self.assertIn("reload Codex Desktop", agent["next_command"])
+        self.assertTrue(payload["summary"]["agent_callable_host_ready"])
+        self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
+        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
         by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
         self.assertFalse(by_id["active_recall_ready"]["ready"])
         self.assertEqual(
@@ -584,6 +619,59 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
+        self.assertTrue(payload["summary"]["agent_callable_host_ready"])
+        self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
+        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+
+    def test_status_agent_json_is_compact_and_splits_host_from_current_thread(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {"tool_names": ["memory_health", "search_memory"]},
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {"status": "available_requires_sync_dir"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "status",
+                        "--repo-root",
+                        str(REPO_ROOT),
+                        "--codex-home",
+                        str(codex_home),
+                        "--host-probe-report",
+                        str(probe),
+                        "--no-child-check",
+                        "--agent-json",
+                    ]
+                )
+
+        raw = stdout.getvalue()
+        payload = json.loads(raw)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_update_status_agent_json")
+        self.assertTrue(payload["summary"]["agent_callable_host_ready"])
+        self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertEqual(
+            payload["agent_callable"]["status"],
+            "host_live_probe_ok_current_thread_unverified",
+        )
+        self.assertTrue(payload["agent_callable"]["host_live_probe_ok"])
+        self.assertIsInstance(payload["next_actions"], list)
+        self.assertNotIn(str(codex_home), raw)
+        self.assertNotIn(str(probe), raw)
 
     def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
         self,
@@ -1147,6 +1235,47 @@ class UpdateSyncTests(unittest.TestCase):
             installed_mcp["mcpServers"]["aippocampus"]["command"],
             "python3",
         )
+
+    def test_plugin_apply_can_refresh_unique_installed_cache_with_auto(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            output = repo / "dist" / "aippocampus-plugin"
+            installed = root / "codex-home" / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
+            write_minimal_repo(repo)
+            plugin = repo / "plugins" / "aippocampus"
+            plugin.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
+            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+            write_plugin_package(installed, version="0.1.0", mcp_command="python3")
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "plugin",
+                "--repo-root",
+                str(repo),
+                "--plugin-output",
+                str(output),
+                "--plugin-installed-dir",
+                "auto",
+                "--codex-home",
+                str(root / "codex-home"),
+                "--no-child-check",
+            )
+
+            applied = payload["applied_surfaces"][0]
+            installed_manifest = json.loads(
+                (installed / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(applied["ok"])
+        self.assertEqual(
+            applied["cache_refresh"]["installed_cache_auto_resolution"]["status"],
+            "unique",
+        )
+        self.assertEqual(installed_manifest["version"], "0.2.0")
 
 
 if __name__ == "__main__":

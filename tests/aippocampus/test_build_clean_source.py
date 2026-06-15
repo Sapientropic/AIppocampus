@@ -491,6 +491,37 @@ class BuildCleanSourceTests(unittest.TestCase):
             "redacted profiles preserve join keys but are not canonical source truth",
         )
 
+    def test_clean_source_public_metadata_projection_omits_text_and_session_refs(self) -> None:
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T04:20:03Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": "private issue attachment should not include this clean-source text",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(
+            self.cwd,
+            rollout=self.rollout,
+            redaction_profiles=["public-metadata"],
+        )
+        projection_path = Path(
+            result["outputs"]["redaction_profiles"]["public-metadata"]["messages_jsonl"]
+        )
+        rows = [
+            json.loads(line) for line in projection_path.read_text(encoding="utf-8").splitlines()
+        ]
+        encoded = json.dumps(rows, ensure_ascii=False, sort_keys=True)
+
+        self.assertNotIn("private issue attachment", encoded)
+        self.assertNotIn("session-test", encoded)
+        self.assertTrue(all(row["text"] == "" for row in rows))
+        self.assertTrue(all(str(row["source_ref"]).startswith("source_hash:") for row in rows))
+        self.assertTrue(all(row["redaction_policy"]["source_text_exported"] is False for row in rows))
+
     def test_clean_source_builds_from_provider_normalized_generic_transcript(self) -> None:
         transcript = self.cwd / "generic.jsonl"
         rows = [

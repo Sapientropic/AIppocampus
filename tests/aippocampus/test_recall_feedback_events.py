@@ -131,6 +131,26 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertGreaterEqual(report["metrics"]["wrong_route_drag_count"], 1)
         self.assertGreaterEqual(report["metrics"]["blocked_count"], 1)
 
+    def test_wrong_route_alias_stays_negative_and_unknown_route_kind_is_rejected(self) -> None:
+        event = feedback.active_flow_event(
+            route_id="route:test",
+            route_kind="continuity_domain",
+            signal="wrong_route",
+            source_id="source:test",
+        )
+
+        self.assertEqual(event["signal"], "wrong_route_drag")
+        self.assertEqual(event["weight_delta"], -1.0)
+
+        with self.assertRaises(feedback.InvalidFeedbackValue) as context:
+            feedback.active_flow_event(
+                route_id="route:test",
+                route_kind="recall_context",
+                signal="wrong_route_drag",
+                source_id="source:test",
+            )
+        self.assertEqual(context.exception.field, "route_kind")
+
 
 if __name__ == "__main__":
     unittest.main()

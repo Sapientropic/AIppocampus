@@ -196,6 +196,32 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
+    def test_why_not_recall_distinguishes_low_specificity_surface_from_silence(self) -> None:
+        payload = why.recall_diagnostic_report(
+            cue="vague context",
+            mode="why-not-recall",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            recall_context_payload={
+                "status": "ok",
+                "query_terms": ["vague"],
+                "routes": [
+                    {
+                        "route_id": f"route-{index}",
+                        "source_refs": [{"source_id": f"src-{index}"}],
+                        "source_reopen_required": True,
+                    }
+                    for index in range(5)
+                ],
+            },
+        )
+
+        self.assertEqual(payload["decision"], "surfaced")
+        self.assertEqual(payload["diagnostic_class"], "surfaced_but_low_specificity")
+        self.assertFalse(payload["why_not_applicable"])
+        self.assertEqual(payload["route_specificity"], "low")
+        self.assertIn("tighten_cue", payload["suggested_next"])
+
     def test_mcp_recall_diagnostic_returns_public_safe_payload(self) -> None:
         response = mcp.handle_request(
             {

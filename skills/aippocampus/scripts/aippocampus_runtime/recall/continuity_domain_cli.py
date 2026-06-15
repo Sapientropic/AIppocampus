@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.continuity_domain_producer import (
     propose_continuity_domain_events_from_registry,
 )
@@ -159,9 +161,65 @@ def _strip_producer_local_detail(payload: MappingPayload) -> MappingPayload:
     return clean
 
 
+def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload]:
+    previews: list[MappingPayload] = []
+    for event in payload.get("candidate_events") or []:
+        if not isinstance(event, dict):
+            continue
+        refs = event.get("source_refs") or []
+        cues = [
+            compact_text(str(cue), 80)
+            for cue in event.get("activation_cues") or []
+            if str(cue).strip()
+        ][:6]
+        previews.append(
+            {
+                "domain_handle": event.get("domain_id"),
+                "title": compact_text(str(event.get("title") or "untitled domain"), 96),
+                "domain_type": event.get("domain_type"),
+                "scale": event.get("scale"),
+                "activation_cues": cues,
+                "source_ref_count": len(refs) if isinstance(refs, list) else 0,
+                "source_reopen_required_before_claim": True,
+            }
+        )
+    return previews
+
+
+def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
+    clean = _strip_producer_local_detail(payload)
+    previews = _producer_candidate_previews(payload)
+    clean["detail"] = "agent_preview"
+    clean["candidate_previews"] = previews
+    clean["preview_boundary"] = {
+        "candidate_events_emitted": False,
+        "raw_source_refs_emitted": False,
+        "local_paths_emitted": False,
+        "preview_is_not_source_truth": True,
+    }
+    if previews:
+        clean["agent_next_action"] = {
+            "id": "review_then_append_continuity_domains",
+            "label": "Review candidate_previews, then append/publish if they match the intended continuity domains.",
+            "command": "aippocampus continuity-domain produce --append --publish --json",
+            "requires_operator_review": True,
+        }
+    else:
+        clean["agent_next_action"] = {
+            "id": "no_continuity_domain_candidates",
+            "label": "No supported continuity-domain candidates were found; keep the public dry-run report as evidence.",
+            "requires_operator_review": False,
+        }
+    return redact_sensitive_values(redact_private_paths(clean))
+
+
 def produce_command(args: argparse.Namespace) -> MappingPayload:
     if args.dry_run and args.append:
         raise ValueError("produce accepts --dry-run or --append, not both")
+    if args.preview and args.append:
+        raise ValueError("produce --preview is dry-run only; use --append after review")
+    if args.preview and args.include_local_detail:
+        raise ValueError("produce accepts --preview or --include-local-detail, not both")
     proposal = propose_continuity_domain_events_from_registry(
         registry_path=Path(args.registry).resolve() if args.registry else None,
         registry_dir=Path(args.registry_dir).resolve() if args.registry_dir else None,
@@ -175,7 +233,12 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
         ),
     )
     events = list(proposal.get("candidate_events") or [])
-    payload = proposal if args.include_local_detail else _strip_producer_local_detail(proposal)
+    if args.preview:
+        payload = _producer_agent_preview(proposal)
+    elif args.include_local_detail:
+        payload = proposal
+    else:
+        payload = _strip_producer_local_detail(proposal)
     payload["mode"] = "append" if args.append else "dry_run"
     if not args.append:
         return payload
@@ -214,6 +277,7 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="aippocampus continuity-domain",
         description="Append and publish explicit continuity-domain events.",
     )
     parser.add_argument("--cwd", default=".")
@@ -251,6 +315,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     produce.add_argument("--refresh-query-pattern-routes", action="store_true")
     produce.add_argument("--no-refresh-query-pattern-routes", action="store_true")
     produce.add_argument("--include-local-detail", action="store_true")
+    produce.add_argument("--preview", action="store_true")
     produce.add_argument("--min-support", type=int, default=2)
     produce.add_argument("--max-threads", type=int)
     produce.add_argument("--max-candidates", type=int, default=24)

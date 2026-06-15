@@ -324,6 +324,34 @@ class PromptHookTelemetryAuditTests(AmbientRecallHookCase):
         self.assertNotIn("private candidate title", encoded)
         self.assertNotIn("private cached theme", encoded)
 
+    def test_last_prompt_hook_status_projects_skip_reason_and_next_action(self) -> None:
+        status_path = self.root / "prompt-hook-skip-status.json"
+        hook.write_prompt_hook_audit_status(
+            {
+                "decision": "skip",
+                "score": 0.0,
+                "confidence": "low",
+                "candidates": [],
+                "working_memory": [],
+                "evidence": [],
+                "cognitive_map": [],
+                "ambient_recall": {
+                    "cache_status": {"status": "miss", "card_count": 0},
+                },
+                "elapsed_ms": 42.0,
+            },
+            status_path=status_path,
+        )
+
+        status = hook.prompt_hook_audit_status(status_path=status_path)
+        latest = status["last_prompt_hook"]
+
+        self.assertEqual(latest["decision"], "skip")
+        self.assertEqual(latest["memory_surface"], "no_memory")
+        self.assertEqual(latest["skip_reason"], "cache_miss_no_relevant_route")
+        self.assertEqual(latest["next_diagnostic"], "aippocampus why-not-recall <cue> --json")
+        self.assertEqual(latest["next_repair"], "aippocampus health")
+
     def test_prompt_hook_skip_telemetry_can_be_disabled(self) -> None:
         telemetry_path = self.root / "disabled-skip-telemetry.json"
         result = {
@@ -537,4 +565,3 @@ class PromptHookTelemetryAuditTests(AmbientRecallHookCase):
             timeout_public["route_delivery_diagnostic"]["semantic_reuse_source"],
             "semantic_provider_timeout",
         )
-

@@ -20,20 +20,33 @@ def commands_for(paths: list[str]) -> list[str]:
     return [str(command["command"]) for command in payload["commands"]]
 
 
+def py_command(args: str) -> str:
+    return test_plan.py_command(args)
+
+
+def py_script(script: str, args: str = "") -> str:
+    return test_plan.py_script(script, args)
+
+
 class ChangedSurfaceTestPlanTests(unittest.TestCase):
     def test_docs_only_change_recommends_docs_health_without_pr_reflex(self) -> None:
         payload = test_plan.build_test_plan(["docs/guides/install-guide.md"])
         commands = [command["command"] for command in payload["commands"]]
 
         self.assertIn("docs", payload["categories"])
-        self.assertEqual(commands, ["python tools/aippocampus/docs/check_docs_health.py --json"])
+        self.assertEqual(
+            commands,
+            [py_script("tools/aippocampus/docs/check_docs_health.py", "--json")],
+        )
 
     def test_benchmark_change_recommends_public_fast_benchmark_smoke(self) -> None:
         commands = commands_for(["benchmarks/aippocampus/benchmark_longmemeval.py"])
 
         self.assertIn(
-            "python tools/aippocampus/run_tests.py --tier benchmark-smoke "
-            "--benchmark-suite-profile public-fast",
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+            ),
             commands,
         )
 
@@ -43,7 +56,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         )
 
         self.assertTrue(any("test_prompt_hook_hot_path" in command for command in commands))
-        self.assertIn("python tools/aippocampus/run_tests.py --tier pr", commands)
+        self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
 
     def test_mcp_change_recommends_mcp_contract_and_pr_gate(self) -> None:
         commands = commands_for(
@@ -51,10 +64,10 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "python -m unittest tests.aippocampus.test_aippocampus_mcp_server -v",
+            py_command("-m unittest tests.aippocampus.test_aippocampus_mcp_server -v"),
             commands,
         )
-        self.assertIn("python tools/aippocampus/run_tests.py --tier pr", commands)
+        self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
 
     def test_test_runner_change_recommends_tier_contract_and_report(self) -> None:
         payload = test_plan.build_test_plan(
@@ -65,7 +78,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("ci_workflow", payload["categories"])
         self.assertTrue(any("test_run_tests_tiers" in command for command in commands))
         self.assertTrue(any("test_test_plan" in command for command in commands))
-        self.assertIn("python tools/aippocampus/run_tests.py --report-json", commands)
+        self.assertIn(py_script("tools/aippocampus/run_tests.py", "--report-json"), commands)
 
     def test_release_tool_change_recommends_release_contracts_and_boundary_scan(self) -> None:
         payload = test_plan.build_test_plan(["tools/aippocampus/release/check_public_boundary.py"])
@@ -74,7 +87,10 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("release_tool", payload["categories"])
         self.assertTrue(any("test_agent_discovery_release_check" in command for command in commands))
         self.assertTrue(any("test_public_boundary_check" in command for command in commands))
-        self.assertIn("python tools/aippocampus/release/check_public_boundary.py --json", commands)
+        self.assertIn(
+            py_script("tools/aippocampus/release/check_public_boundary.py", "--json"),
+            commands,
+        )
 
     def test_changed_tests_run_their_modules_first(self) -> None:
         commands = commands_for(
@@ -86,9 +102,11 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
         self.assertEqual(
             commands[0],
-            "python -m unittest "
-            "tests.aippocampus.test_benchmark_longmemeval "
-            "tests.aippocampus.test_run_tests_tiers -v",
+            py_command(
+                "-m unittest "
+                "tests.aippocampus.test_benchmark_longmemeval "
+                "tests.aippocampus.test_run_tests_tiers -v"
+            ),
         )
 
     def test_no_changes_recommends_quick_sanity(self) -> None:
@@ -97,7 +115,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertEqual(payload["changed_files"], [])
         self.assertEqual(
             payload["commands"][0]["command"],
-            "python tools/aippocampus/run_tests.py --tier quick",
+            py_script("tools/aippocampus/run_tests.py", "--tier quick"),
         )
         self.assertIn("does not replace", payload["boundary"])
 
@@ -117,15 +135,20 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
         self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan")
         self.assertIn(
-            "python tools/aippocampus/release/check_agent_discovery_release.py "
-            "--offline --json",
+            py_script(
+                "tools/aippocampus/release/check_agent_discovery_release.py",
+                "--offline --json",
+            ),
             local_required,
         )
-        self.assertIn("python tools/aippocampus/release/check_public_boundary.py --json", local_required)
-        self.assertIn("python tools/aippocampus/run_tests.py --tier pr", fallback)
-        self.assertIn("python tools/aippocampus/run_tests.py --tier full", ci_owned)
+        self.assertIn(
+            py_script("tools/aippocampus/release/check_public_boundary.py", "--json"),
+            local_required,
+        )
+        self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), fallback)
+        self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier full"), ci_owned)
         self.assertTrue(any("`pr` includes `quick`" in reason for reason in fallback_reasons))
-        self.assertIn('python -m pip install -e ".[release]"', payload["publish_workflow_owned"])
+        self.assertIn(py_command('-m pip install -e ".[release]"'), payload["publish_workflow_owned"])
         self.assertTrue(any("PyPI publish" in command for command in payload["publish_workflow_owned"]))
         self.assertTrue(
             any(

@@ -192,6 +192,41 @@ class PromptHookRoutingScentTests(AmbientRecallHookCase):
         self.assertEqual(result["decision"], "skip")
         self.assertIsNone(hook.context_for_hook(result))
 
+    def test_exact_generic_agent_plugin_question_stays_silent(self) -> None:
+        registry_path = self.root / "generic-agent-plugin-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:unrelated-tooling",
+                            "title": "Old plugin debugging route",
+                            "project_label": "OtherProject",
+                            "anchor_titles": ["Agent plugin transport debugging"],
+                            "keywords": ["agent", "plugin", "tool", "memory"],
+                            "summary": "Old unrelated debugging notes.",
+                            "paths": {"workspace": str(self.old)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "这个 agent plugin 看着怎么样",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertIsNone(hook.context_for_hook(result))
+
     def test_chinese_hook_cue_emits_scent(self) -> None:
         result = hook.assess_prompt(
             "我重启了一下 Codex，你看看实测钩子效果如何",

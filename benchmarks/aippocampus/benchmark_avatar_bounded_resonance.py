@@ -33,6 +33,12 @@ from aippocampus_runtime.model.routing import (  # noqa: E402
     route_service_name,
 )
 from aippocampus_runtime.subconscious.worker import parse_model_json  # noqa: E402
+from shared.benchmark_report_contract import (  # noqa: E402
+    MEASUREMENT_MODEL_JUDGED,
+    MEASUREMENT_SCRIPTED_PROXY,
+    benchmark_cli_summary,
+    measurement_origin_metadata,
+)
 
 SCHEMA_VERSION = "avatar-bounded-resonance-pilot-v0"
 REPORT_KIND = "aippocampus_avatar_bounded_resonance_pilot"
@@ -430,6 +436,18 @@ def run_benchmark(fixture: Mapping[str, Any] | None = None) -> dict[str, Any]:
         and c_drift > d_drift
     )
     bounded_beats_baselines = d_score > a_score and d_score > b_score
+    measurement = measurement_origin_metadata(
+        measurement_origin=MEASUREMENT_SCRIPTED_PROXY,
+        observed_agent_behavior=False,
+        eligible_for_runtime_policy_adoption=False,
+        eligible_for_public_quality_claim=False,
+        evidence_note=(
+            "Scores are assigned by the deterministic fixture, so arm deltas are "
+            "hypothesis-proxy signals rather than observed agent behavior."
+        ),
+    )
+    for arm in arms.values():
+        arm.update(measurement)
     return {
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -440,6 +458,9 @@ def run_benchmark(fixture: Mapping[str, Any] | None = None) -> dict[str, Any]:
         "ok": contract_gate_ok,
         "contract_gate_ok": contract_gate_ok,
         "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "benchmark_maturity_level": "diagnostic_proxy",
+        **measurement,
         "execution": {
             "mode": "deterministic_scripted_proxy_v0",
             "live_model_calls": 0,
@@ -457,6 +478,9 @@ def run_benchmark(fixture: Mapping[str, Any] | None = None) -> dict[str, Any]:
         "metrics": {
             "bounded_resonance_beats_explicit_instruction_proxy": bounded_beats_baselines and d_score > a_score,
             "bounded_resonance_beats_neutral_posture_proxy": bounded_beats_baselines and d_score > b_score,
+            "proxy_bounded_resonance_scores_above_explicit_instruction_under_scripted_proxy": bounded_beats_baselines and d_score > a_score,
+            "proxy_bounded_resonance_scores_above_neutral_posture_under_scripted_proxy": bounded_beats_baselines and d_score > b_score,
+            "proxy_alias_only_drifts_more_than_bounded_resonance_under_scripted_proxy": c_drift > d_drift,
             "alias_only_drifts_more_than_bounded_resonance": c_drift > d_drift,
             "best_proxy_arm": max(ARM_ORDER, key=lambda arm_id: arms[arm_id]["average_helpfulness_score"]),
         },
@@ -619,6 +643,18 @@ def run_live_model_benchmark(
     token_usage = _usage_totals(rows)
     cost_estimate = _deepseek_cost_estimate(route.provider, resolved_model, token_usage)
     temperature_sent = temperature is not None and thinking != "enabled" and not reasoning_effort
+    measurement = measurement_origin_metadata(
+        measurement_origin=MEASUREMENT_MODEL_JUDGED,
+        observed_agent_behavior=False,
+        eligible_for_runtime_policy_adoption=False,
+        eligible_for_public_quality_claim=False,
+        evidence_note=(
+            "Live-model rows are model-judged synthetic scenarios, not observed "
+            "behavior from a host agent using avatar packets."
+        ),
+    )
+    for arm in arms.values():
+        arm.update(measurement)
     return {
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -629,6 +665,9 @@ def run_live_model_benchmark(
         "ok": contract_gate_ok,
         "contract_gate_ok": contract_gate_ok,
         "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "benchmark_maturity_level": "diagnostic_proxy",
+        **measurement,
         "execution": {
             "mode": "live_model_public_fixture_v0",
             "live_model_calls": len(rows),
@@ -697,11 +736,17 @@ def run_live_model_benchmark(
     }
 
 
-def cli_summary() -> dict[str, Any]:
+def cli_summary(report: Mapping[str, Any]) -> dict[str, Any]:
     # Stdout is intentionally a whitelisted operational summary. The full
     # report remains available via --output so CI logs never become a secondary
     # place for model excerpts or future benchmark fields.
     return {
+        **benchmark_cli_summary(
+            kind=REPORT_KIND,
+            schema_version=SCHEMA_VERSION,
+            report=report,
+            status="summary_only",
+        ),
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
         "status": "summary_only",
@@ -740,7 +785,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         payload = run_benchmark(fixture)
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    summary = cli_summary()
+    summary = cli_summary(payload)
     if args.output:
         args.output.write_text(text + "\n", encoding="utf-8")
     if args.json:

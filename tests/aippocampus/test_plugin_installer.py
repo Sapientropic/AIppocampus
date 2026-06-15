@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -255,6 +256,75 @@ class PluginInstallerTests(unittest.TestCase):
         )
 
         self.assertTrue(args.public_summary)
+        self.assertFalse(args.operator_json)
+
+    def test_install_json_defaults_to_compact_success_summary(self) -> None:
+        probe = plugin_installer.attach_host_probe_warning_summary(
+            successful_probe_with_noisy_stderr()
+        )
+        result = {
+            "kind": "aippocampus_plugin_install",
+            "ok": True,
+            "plugin": {
+                "id": "aippocampus@aippocampus-local",
+                "version": "0.3.2",
+                "action": "marketplace_refreshed",
+                "installed": True,
+                "enabled": True,
+            },
+            "host_probe": probe,
+            "agent_callable_status": "host_live_probe_ok",
+            "rollback_command": "aippocampus plugin uninstall --codex",
+        }
+
+        with (
+            mock.patch.object(plugin_installer, "install_codex_plugin", return_value=result),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = plugin_installer.main(["install", "--codex", "--verify", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_plugin_install_public_summary")
+        self.assertEqual(payload["agent_callable_status"], "host_live_probe_ok")
+        self.assertFalse(payload["aippocampus_action_required"])
+        self.assertGreaterEqual(payload["nonfatal_host_warning_count"], 1)
+        self.assertNotIn("stderr_tail", encoded)
+        self.assertNotIn("other/plugin.json", encoded)
+        self.assertNotIn("marketplace_add", encoded)
+
+    def test_operator_json_preserves_full_install_report_for_deep_debug(self) -> None:
+        probe = plugin_installer.attach_host_probe_warning_summary(
+            successful_probe_with_noisy_stderr()
+        )
+        result = {
+            "kind": "aippocampus_plugin_install",
+            "ok": True,
+            "plugin": {
+                "id": "aippocampus@aippocampus-local",
+                "version": "0.3.2",
+                "action": "marketplace_refreshed",
+                "installed": True,
+                "enabled": True,
+            },
+            "marketplace_add": {"stdout": "added"},
+            "host_probe": probe,
+            "agent_callable_status": "host_live_probe_ok",
+            "rollback_command": "aippocampus plugin uninstall --codex",
+        }
+
+        with (
+            mock.patch.object(plugin_installer, "install_codex_plugin", return_value=result),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = plugin_installer.main(["install", "--codex", "--verify", "--operator-json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_plugin_install")
+        self.assertIn("stderr_tail", payload["host_probe"])
+        self.assertIn("marketplace_add", payload)
 
     def test_host_probe_warning_summary_does_not_downgrade_failed_probe_noise(self) -> None:
         summary = host_probe_warnings.summarize_host_probe_warnings(
@@ -402,3 +472,45 @@ class PluginInstallerTests(unittest.TestCase):
             ["plugin", "marketplace", "remove", "aippocampus-local"],
             runner.command_tails,
         )
+
+    def test_codex_uninstall_dry_run_reports_plan_without_removing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            marketplace_root = plugin_installer.default_marketplace_root(codex_home)
+            package = root / "package"
+            (package / ".codex-plugin").mkdir(parents=True)
+            (package / ".codex-plugin" / "plugin.json").write_text(
+                json.dumps({"name": "aippocampus", "version": "0.3.2"}),
+                encoding="utf-8",
+            )
+            plugin_installer.write_local_marketplace(
+                marketplace_root,
+                package_root=package,
+                marketplace_name="aippocampus-local",
+            )
+            installed_cache = (
+                codex_home
+                / "plugins"
+                / "cache"
+                / "aippocampus-local"
+                / "aippocampus"
+                / "0.3.2"
+            )
+            plugin_installer.refresh_plugin_cache_layers(
+                package_root=package,
+                installed_dir=installed_cache,
+            )
+
+            result = plugin_installer.uninstall_codex_plugin_preview(
+                codex_home_path=codex_home,
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertTrue(result["would_remove_installed_cache"])
+            self.assertTrue(result["would_remove_marketplace_root"])
+            self.assertTrue(result["marketplace_owned_by_aippocampus"])
+            self.assertEqual(result["execute_command"], "aippocampus plugin uninstall --codex")
+            self.assertTrue(marketplace_root.exists())
+            self.assertTrue(installed_cache.exists())

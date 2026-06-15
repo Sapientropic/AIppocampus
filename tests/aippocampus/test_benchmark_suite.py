@@ -19,6 +19,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import benchmark_suite as suite  # noqa: E402
+from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
 
 
 def fake_gate_payload() -> dict:
@@ -385,6 +386,84 @@ class BenchmarkSuiteTests(unittest.TestCase):
             payload["suite_level_cannot_claim"],
         )
         self.assertNotIn("payload_fidelity", payload["suite_level_cannot_claim"])
+
+    def test_suite_does_not_promote_missing_quality_metadata_to_quality_gate(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(profile="public-fast")
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["contract_gate_ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertFalse(payload["public_quality_gate_ok"])
+        self.assertEqual(payload["status"], "contract_passed_with_unmatured_tracks")
+        self.assertEqual(
+            payload["quality_gate_summary"]["quality_gate_status"],
+            "unknown",
+        )
+        self.assertEqual(
+            payload["quality_gate_summary"]["unknown_tracks"],
+            ["gate_decision", "payload_fidelity"],
+        )
+        self.assertEqual(
+            payload["quality_gate_summary"]["track_quality_states"]["gate_decision"][
+                "metadata_source"
+            ],
+            "missing_quality_metadata",
+        )
+        self.assertIn("suite_quality_gate_passed", payload["cannot_claim"])
+        self.assertFalse(payload["benchmark_contract_linter_ok"])
+        self.assertIn("gate_decision", payload["benchmark_contract_lint"])
+        self.assertIn(
+            "boundary_only_projection_without_positive_support",
+            payload["benchmark_contract_lint"]["gate_decision"]["findings"],
+        )
+        self.assertIn("benchmark_contract_linter_passed", payload["cannot_claim"])
+
+    def test_benchmark_contract_linter_requires_positive_support_beside_boundaries(self) -> None:
+        boundary_only = {
+            "benchmark_maturity_level": "diagnostic_proxy",
+            "measurement_origin": "scripted_proxy",
+            "observed_agent_behavior": False,
+            "contract_gate_ok": True,
+            "public_quality_gate_ok": False,
+            "decision_impact": "diagnostic_only",
+            "case_count": 3,
+            "privacy_boundary": {"raw_text_emitted": False},
+            "cannot_claim": ["live_agent_behavior"],
+        }
+        useful = {
+            **boundary_only,
+            "useful_now": ["route narrows source search"],
+            "agent_action": "deepen_or_reopen_source",
+        }
+
+        rejected = benchmark_report_contract_lint(boundary_only)
+        accepted = benchmark_report_contract_lint(useful)
+
+        self.assertFalse(rejected["ok"])
+        self.assertTrue(rejected["boundary_only_projection"])
+        self.assertIn(
+            "boundary_only_projection_without_positive_support",
+            rejected["findings"],
+        )
+        self.assertTrue(accepted["ok"])
+        self.assertTrue(accepted["positive_support_present"])
 
     def test_suite_report_warns_when_profile_surface_is_narrowed(self) -> None:
         with (

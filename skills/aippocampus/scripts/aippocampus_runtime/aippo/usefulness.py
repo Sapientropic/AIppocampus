@@ -14,7 +14,28 @@ TASK_FAMILY_TERMS = {
     "benchmark_reporting": ("benchmark", "report", "evidence", "claim"),
     "PR_review": ("pr", "review", "pull request"),
     "coding": ("code", "coding", "patch", "implementation", "test"),
+    "fresh_thread_recall": (
+        "fresh agent",
+        "fresh thread",
+        "old vague context",
+        "vague context",
+        "remember old",
+        "recall old",
+        "continuity recall",
+        "before answering",
+    ),
+    "host_readiness": (
+        "install plugin",
+        "plugin install",
+        "mcp host",
+        "host readiness",
+        "verify mcp",
+        "plugin readiness",
+        "tools visible",
+    ),
 }
+
+DIRECT_GUIDANCE_FAMILIES = {"fresh_thread_recall", "host_readiness"}
 
 
 def _text(value: Any, limit: int = 240) -> str:
@@ -100,6 +121,8 @@ def selected_active_clauses(
 
     ranked = sorted(active, key=score, reverse=True)
     selected = [clause for clause in ranked if score(clause)[0] > 0][:limit]
+    if DIRECT_GUIDANCE_FAMILIES.intersection(families):
+        return selected
     return selected or ranked[:limit]
 
 

@@ -66,7 +66,7 @@ class GenericConversationProvider:
             yield self.home
             return
         if self.home.exists():
-            yield from self.home.rglob("*.jsonl")
+            yield from (path for path in self.home.rglob("*.jsonl") if path.is_file())
 
     def read_metadata(self, source: str | Path | ConversationSourceRef) -> dict[str, Any] | None:
         path = source_path(source)
@@ -152,6 +152,22 @@ class GenericConversationProvider:
         include_tools: bool = False,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         path = source_path(source)
+        if not path.exists():
+            raise GenericJsonlValidationError(
+                line=0,
+                code="input_not_found",
+                message="Input file does not exist or is not readable.",
+                path_kind="missing",
+                path_redacted=True,
+            )
+        if not path.is_file():
+            raise GenericJsonlValidationError(
+                line=0,
+                code="source_not_file",
+                message="generic JSONL source must be a file, not a directory or missing path",
+                path_kind="directory",
+                path_redacted=True,
+            )
         messages: list[dict[str, Any]] = []
         turn_ids: dict[str, int] = {}
         current_turn = 0

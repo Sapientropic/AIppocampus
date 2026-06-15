@@ -54,6 +54,7 @@ this section remains the no-clone/API-stability path.
 
    ```sh
    aippocampus health --cwd "$PWD" --json
+   aippocampus mcp list-tools --compact
    aippocampus mcp list-tools
    ```
 
@@ -204,12 +205,28 @@ The CLI contract applies to documented operator commands, especially:
   active locks, ambient cache, and semantic-gate state
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
+- `aippocampus search "<cue>" --public` / `--metadata-only` as the
+  public-safe metadata projection for issue attachments, support reports, or
+  other surfaces that should not emit snippets, source refs, handles, or local
+  identifiers. `--snippet-chars 0` is supported when automation wants normal
+  match rows but no snippet text.
+- `aippocampus export --redaction-profile public-export --no-raw` as the
+  metadata-only public bundle path. It omits clean-source text, session refs,
+  host session metadata, anchors, graph labels, raw rollouts, and searchable
+  SQLite indexes. Use `raw-private` or `redacted-local` only for private
+  searchable transfer bundles.
 - `aippocampus telepathy create|list|deepen|release|diagnose` as the explicit
   local handoff-card lifecycle over the Telepathy packet contract. MCP exposes
   `list_telepathy_handoffs` and `deepen_telepathy_handoff` as read-only host
   tools; create/release through MCP is intentionally unsupported.
 - `aippocampus logs status|rotate` as public-safe local log retention
   diagnostics and cleanup over artifact names and byte counts, not log contents
+- `aippocampus warm status --json` as public-safe, read-only warm ambient queue
+  status over counts and worker-evidence boundaries, without model calls,
+  prompt text, provider payloads, or local paths
+- `aippocampus health` human output as a bounded repair card. It may show the
+  highest-priority copy-pasteable `Next:` commands from structured
+  `recommended_actions`; automation should still use `--json`.
 - `aippocampus storage gc --apply --class rebuildable` as the explicit
   path-level rebuildable-cache eviction path for retention-report-backed main
   SQLite caches and capacity-report-backed old source-index / segment
@@ -224,9 +241,12 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus plugin install --codex --verify` as the local Codex plugin
   happy path over package build, AIppocampus-owned local marketplace refresh,
   current Codex marketplace add/upgrade, versioned installed-cache refresh, MCP
-  host reload, and `sync_status` probe; add `--compact-json`, `--public`, or
-  `--summary` for the public-safe success summary; `aippocampus plugin
-  uninstall --codex` is the paired rollback.
+  host reload, and `sync_status` probe; `--json` returns the public-safe
+  success summary by default, while `--operator-json` exposes the full
+  operator report for deep debugging. `--compact-json`, `--public`, and
+  `--summary` remain explicit summary aliases; `aippocampus plugin uninstall
+  --codex --dry-run` previews the paired rollback plan and `aippocampus plugin
+  uninstall --codex` applies it.
 - `aippocampus episode-arcs --json`
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
@@ -300,11 +320,18 @@ For these commands:
   `route_ids`, `next_safe_action`, `cannot_claim`, and
   `privacy_boundary`. The command may inspect existing local artifacts and can
   run the semantic gate only when `--run-semantic-gate` is explicitly supplied.
+  `why-not-recall` distinguishes true silence from surfaced-but-low-specificity
+  routes, so a caller can choose between changing the cue and deepening an
+  existing route.
   Default output must not emit the raw cue, raw source text, local paths, source
   snippets, prompts, tool payloads, or secrets. The Cognitive Observatory
   tracked in GitHub issue #576 may use this packet as a read-only "why this
   route" drilldown, but the packet is not a control plane and cannot establish
   source truth without source reopen.
+- `aippocampus agent recall --json --public` / `--compact-json` is the
+  public-safe recall projection for logs, issue reports, and agent handoffs. It
+  labels local-private deepen handles, omits full handles and copy-paste
+  commands, and keeps only preview/hash fields suitable for later local reopen.
 - `observatory --json` emits a public-safe, no-write Cognitive Observatory
   readout; `observatory --html --output <path>` renders the same sanitized
   readout as a static, no-script operator view. The first stable slice
@@ -407,7 +434,7 @@ The initial stable classes are:
 | --- | --- | --- | --- |
 | `usage_error` | Caller selected an unsupported operation or malformed command shape. | `usage_error`, `unsupported_operation` | `2` |
 | `validation_error` | Caller input was present but invalid. | `invalid_json`, `validation_error`, `missing_required_fields`, `unsupported_role`, `unknown_turn_id` | `2` |
-| `missing_prerequisite` | A required file, credential, provider, or local artifact is absent. | `missing_api_key`, `missing_file`, `missing_prerequisite` | `2` |
+| `missing_prerequisite` | A required file, credential, provider, or local artifact is absent. | `missing_api_key`, `missing_file`, `input_not_found`, `missing_prerequisite` | `2` |
 | `privacy_block` | The command refused to expose or transport private data without an explicit safe mode. | `privacy_blocked` | `2` |
 | `runtime_error` | The command reached an unexpected runtime failure or an unclassified downstream error. | `runtime_error`, unknown future codes without a class | `1` |
 
@@ -546,10 +573,11 @@ host reload or reinstall evidence is still separate from package freshness.
 `aippocampus plugin install --codex --verify` is the higher-level local install
 path that may perform the Codex local marketplace/cache refresh and host probe
 directly; it does not enable Codex hooks or configure external-model keys. Use
-`aippocampus plugin install --codex --verify --compact-json` for a user-facing
+`aippocampus plugin install --codex --verify --json` for a user-facing
 public-safe summary with top-level success, tool count, action-required status,
-next action, and warning counts/classes instead of full operator JSON.
-`--public` and `--summary` are equivalent aliases.
+next action, and warning counts/classes instead of full operator JSON. Use
+`--operator-json` for the complete marketplace/cache/host-probe report.
+`--compact-json`, `--public`, and `--summary` are equivalent summary aliases.
 
 `recall_context` and `recall_deepen` are the progressive recall navigation
 tools. `recall_context` accepts a fuzzy intent or query and returns small route

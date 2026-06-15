@@ -43,6 +43,12 @@ def provider_for_explicit_source(provider_name: str, source: Path) -> Conversati
 
 
 def generic_validation_error_payload(exc: GenericJsonlValidationError) -> dict:
+    details = dict(exc.details)
+    next_action = (
+        "Check --input, or run aippocampus import conversation --help for the expected generic-jsonl format."
+        if exc.code == "input_not_found"
+        else "Run aippocampus import conversation --help for the expected generic-jsonl format."
+    )
     return {
         "ok": False,
         "error": {
@@ -50,7 +56,9 @@ def generic_validation_error_payload(exc: GenericJsonlValidationError) -> dict:
             "class": cli_error_class_for_error_code(exc.code),
             "message": str(exc),
             "line": exc.line,
-            "details": exc.details,
+            "path_redacted": bool(details.pop("path_redacted", False)),
+            "next_action": next_action,
+            "details": details,
         },
         "data": None,
     }

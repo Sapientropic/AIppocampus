@@ -15,7 +15,11 @@ from aippocampus_runtime.recall.semantic_recall_gate import (
 )
 from aippocampus_runtime.subconscious import scheduler as subconscious_scheduler
 from aippocampus_runtime.subconscious.scheduler_public import public_scheduler_diagnostic
-from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
+from aippocampus_runtime.warm_ambient.scheduler import (
+    WARM_STATUS_COMMAND,
+    warm_background_enabled,
+    warm_job_activity,
+)
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 BACKGROUND_COGNITION_STALE_SECONDS = 24 * 60 * 60
@@ -194,54 +198,6 @@ def _lock_summary(path: Path, *, now: datetime) -> dict[str, Any]:
         active = age is not None and age <= subconscious_scheduler.DEFAULT_STALE_LOCK_SECONDS
         stale = age is not None and age > subconscious_scheduler.DEFAULT_STALE_LOCK_SECONDS
     return {"exists": exists, "active": active, "stale": stale, "age_seconds": age}
-
-
-def _warm_job_activity(job_dir: Path, *, now: datetime) -> dict[str, Any]:
-    latest = None
-    pending_recent = 0
-    pending_stale = 0
-    scanned = 0
-    if not job_dir.exists():
-        return {
-            "job_dir_present": False,
-            "latest_at": None,
-            "pending_recent_count": 0,
-            "pending_stale_count": 0,
-            "scanned_job_count": 0,
-        }
-    for job_path in sorted(job_dir.glob("*.json"), key=lambda item: item.name)[-200:]:
-        if job_path.name.endswith(".result.json"):
-            continue
-        scanned += 1
-        job_latest = _latest_json_file_timestamp(
-            job_path,
-            ("created_at",),
-            ("completed_at",),
-            ("updated_at",),
-        )
-        latest = _latest_timestamp(latest, job_latest)
-        result_path = job_path.with_name(job_path.stem + ".result.json")
-        result_latest = _latest_json_file_timestamp(
-            result_path,
-            ("created_at",),
-            ("completed_at",),
-            ("updated_at",),
-        )
-        latest = _latest_timestamp(latest, result_latest)
-        if result_path.exists():
-            continue
-        age = age_seconds_since(job_latest, now=now)
-        if age is not None and age <= BACKGROUND_COGNITION_STALE_SECONDS:
-            pending_recent += 1
-        else:
-            pending_stale += 1
-    return {
-        "job_dir_present": True,
-        "latest_at": latest,
-        "pending_recent_count": pending_recent,
-        "pending_stale_count": pending_stale,
-        "scanned_job_count": scanned,
-    }
 
 
 def _freshness_state(
@@ -510,9 +466,9 @@ def _warm_ambient_lane(*, root: Path, now: datetime) -> dict[str, Any]:
     status = load_json_fail_open(root / "aippocampus_prompt_hook_last_status.json")
     warm_status = _mapping(_mapping(status.get("last_prompt_hook")).get("warm_background"))
     hook_at = _nested_timestamp(status, "last_prompt_hook", "timestamp")
-    activity = _warm_job_activity(root / "ambient_warm_jobs", now=now)
+    activity = warm_job_activity(root / "ambient_warm_jobs", now=now)
     last_artifact_at = _latest_timestamp(activity.get("latest_at"), hook_at)
-    currently_running = bool(activity.get("pending_recent_count"))
+    currently_running = bool(activity.get("worker_process_active"))
     due_state = "not_due" if enabled else "disabled"
     skip_reason = None
     if not enabled:
@@ -532,8 +488,10 @@ def _warm_ambient_lane(*, root: Path, now: datetime) -> dict[str, Any]:
         skip_reason=skip_reason,
         currently_running=currently_running,
         next_operator_action=(
-            "inspect_warm_ambient_jobs"
+            WARM_STATUS_COMMAND
             if due_state == "blocked"
+            else WARM_STATUS_COMMAND
+            if activity.get("pending_recent_count")
             else "wait_for_next_cache_miss"
             if enabled
             else "enable_warm_background_if_budget_allows"
@@ -652,4 +610,3 @@ def background_cognition_health(
             "candidate_contents_included": False,
         },
     }
-

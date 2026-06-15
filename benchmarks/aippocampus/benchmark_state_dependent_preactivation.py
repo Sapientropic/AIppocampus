@@ -467,8 +467,14 @@ def run_state_dependent_preactivation_benchmark(
         "kind": PREACTIVATION_BENCHMARK_KIND,
         "schema_version": PREACTIVATION_BENCHMARK_SCHEMA_VERSION,
         "ok": bool(selected_cases) and bool(quality_gates["passed"]),
+        "contract_gate_ok": bool(selected_cases) and bool(quality_gates["passed"]),
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "benchmark_maturity_level": "contract_smoke",
+        "quality_gate_kind": "fixture_contract_not_public_quality",
         "status": "sufficient" if selected_cases and quality_gates["passed"] else "insufficient",
         "case_count": len(selected_cases),
+        "sample_size": len(selected_cases),
         "metrics": {
             "simple_warm_baseline": baseline_metrics,
             "state_dependent": stateful_metrics,
@@ -510,12 +516,18 @@ def run_state_dependent_preactivation_benchmark(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--output", help="Optional sanitized full-report JSON path.")
     args = parser.parse_args()
     payload = run_state_dependent_preactivation_benchmark()
     passed = payload.get("ok") is True
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
     if args.json_output:
-        cli_payload = CLI_SUCCESS_PAYLOAD if passed else CLI_FAILURE_PAYLOAD
-        sys.stdout.write(json.dumps(cli_payload, ensure_ascii=False, indent=2) + "\n")
+        sys.stdout.write(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
     else:
         sys.stdout.write(
             "state-dependent preactivation benchmark: "

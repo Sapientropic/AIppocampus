@@ -144,9 +144,22 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             decision["tiny_agent_recall_affordance_decision"],
             "default_tiny_agent_recall_affordance_ready_not_foreground_context",
         )
+        self.assertEqual(decision["eligible_tiny_agent_recall_affordance_surfaces"], [])
         self.assertIn(
             "default_hook_tiny_agent_recall_affordance",
-            decision["eligible_tiny_agent_recall_affordance_surfaces"],
+            decision["diagnostic_tiny_agent_recall_affordance_surfaces"],
+        )
+        self.assertEqual(tiny["measurement_origin"], "derived_from_arm")
+        self.assertFalse(tiny["observed_agent_behavior"])
+        self.assertFalse(tiny["eligible_for_runtime_policy_adoption"])
+        self.assertFalse(tiny["eligible_for_public_quality_claim"])
+        self.assertEqual(
+            tiny["proxy_assumed_agent_followed_suggested_action_count"],
+            tiny["agent_followed_suggested_action_count"],
+        )
+        self.assertEqual(
+            tiny["proxy_recall_success_if_agent_follows_hint_rate"],
+            tiny["recall_after_hint_success_rate"],
         )
 
     def test_report_is_public_safe_and_not_a_live_default_claim(self) -> None:

@@ -94,6 +94,11 @@ def render_health_text(result: dict[str, Any]) -> None:
         print("\nrecommended actions:")
         for item in actions:
             print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
+        runnable = [item for item in actions if item.get("command")]
+        if runnable:
+            print("\nNext:")
+            for index, item in enumerate(runnable[:3], start=1):
+                print(f"{index}. {item['id']}: {item['command']}")
 
 
 def render_registry_health_text(result: dict[str, Any]) -> None:

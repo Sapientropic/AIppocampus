@@ -147,6 +147,13 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["ok"], payload)
         self.assertEqual(payload["kind"], "aippocampus_hippocampal_hard_negative_benchmark")
         self.assertEqual(payload["status"], "production_like_public_synthetic_slice")
+        self.assertTrue(payload["contract_gate_ok"])
+        self.assertTrue(payload["production_slice_gate_ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertFalse(payload["public_quality_gate_ok"])
+        self.assertEqual(payload["benchmark_maturity_level"], "diagnostic_proxy")
+        self.assertEqual(payload["measurement_origin"], "deterministic_fixture")
+        self.assertFalse(payload["observed_agent_behavior"])
         self.assertEqual(
             set(payload["outcome_counts"]),
             {
@@ -176,6 +183,10 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["honest_uncertainty_count"], 5)
         self.assertEqual(payload["metrics"]["source_reopen_count"], 11)
         self.assertEqual(payload["metrics"]["evidence_source_reopen_rate"], 1.0)
+        taxonomy = payload["contract_taxonomy_slice"]
+        self.assertTrue(taxonomy["ok"])
+        self.assertTrue(taxonomy["failures_expected_for_taxonomy_coverage"])
+        self.assertEqual(taxonomy["metrics"]["major_failure_count"], 7)
         self.assertEqual(
             payload["metrics"]["family_counts"],
             {

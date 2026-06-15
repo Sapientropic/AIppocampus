@@ -3,7 +3,7 @@
 
 Foreground hooks are allowed to enqueue warming, but they must not run the
 50-lane scout batch inline. This module writes a small redacted job file in the
-local registry area and, when requested, starts `warm_ambient_recall.py` in a
+local registry area and, when requested, starts the packaged warm CLI in a
 detached process. The cache writer remains the only path that mutates ambient
 cards, so late scout results can warm the next turn without making the current
 hook wait.
@@ -16,6 +16,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -47,6 +48,8 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = (
     DEFAULT_WARM_DETACHED_JOB_CONFIG.prefix_cache_warmup_delay
 )
 DEFAULT_DETACHED_WARM_TIMEOUT = DEFAULT_WARM_DETACHED_JOB_CONFIG.timeout
+DEFAULT_WARM_JOB_STALE_SECONDS = 24 * 60 * 60
+WARM_STATUS_COMMAND = "aippocampus warm status --json"
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -89,12 +92,18 @@ def _job_id(*, thread_id: str, workspace: Path, topic_epoch: str | None, prompt:
 
 
 def spawn_warm_job(job_path: Path, *, cwd: Path | None = None) -> dict[str, Any]:
-    script = Path(__file__).resolve().parents[2] / "warm_ambient_recall.py"
     flags = 0
     if os.name == "nt":
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
     subprocess.Popen(
-        [sys.executable, str(script), "--job-file", str(job_path), "--json"],
+        [
+            sys.executable,
+            "-m",
+            "aippocampus_runtime.warm_ambient.cli",
+            "--job-file",
+            str(job_path),
+            "--json",
+        ],
         cwd=str(cwd or Path.cwd()),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -103,6 +112,177 @@ def spawn_warm_job(job_path: Path, *, cwd: Path | None = None) -> dict[str, Any]
         creationflags=flags,
     )
     return {"spawned": True}
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _age_seconds_since(value: Any, *, now: datetime) -> int | None:
+    parsed = _parse_timestamp(value)
+    if parsed is None:
+        return None
+    return max(0, int((now - parsed).total_seconds()))
+
+
+def _iso_from_mtime(path: Path) -> str | None:
+    try:
+        if not path.exists():
+            return None
+        return (
+            datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+    except OSError:
+        return None
+
+
+def _latest_timestamp(*values: Any) -> str | None:
+    latest: datetime | None = None
+    latest_text: str | None = None
+    for value in values:
+        parsed = _parse_timestamp(value)
+        if parsed is None:
+            continue
+        if latest is None or parsed > latest:
+            latest = parsed
+            latest_text = parsed.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return latest_text
+
+
+def _load_json_fail_open(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _json_file_timestamp(path: Path) -> str | None:
+    payload = _load_json_fail_open(path)
+    return _latest_timestamp(
+        payload.get("completed_at"),
+        payload.get("updated_at"),
+        payload.get("created_at"),
+        payload.get("timestamp"),
+        _iso_from_mtime(path),
+    )
+
+
+def _result_path_for_job(job_path: Path) -> Path:
+    return job_path.with_name(job_path.stem + ".result.json")
+
+
+def warm_job_activity(
+    job_dir: Path | str,
+    *,
+    now: datetime | None = None,
+    stale_after_seconds: int = DEFAULT_WARM_JOB_STALE_SECONDS,
+) -> dict[str, Any]:
+    current = now or datetime.now(timezone.utc)
+    target = Path(job_dir)
+    latest = None
+    pending_recent = 0
+    pending_stale = 0
+    completed = 0
+    scanned = 0
+    if not target.exists():
+        return {
+            "job_dir_present": False,
+            "latest_at": None,
+            "pending_recent_count": 0,
+            "pending_stale_count": 0,
+            "completed_count": 0,
+            "scanned_job_count": 0,
+            "queue_state": "missing",
+            "stale_queue_blocked": False,
+            "worker_process_active": False,
+            "worker_evidence": "not_available",
+            "pending_jobs_are_worker_evidence": False,
+            "status_command": WARM_STATUS_COMMAND,
+        }
+    for job_path in sorted(target.glob("*.json"), key=lambda item: item.name)[-200:]:
+        if job_path.name.endswith(".result.json"):
+            continue
+        scanned += 1
+        job_latest = _json_file_timestamp(job_path)
+        latest = _latest_timestamp(latest, job_latest)
+        result_path = _result_path_for_job(job_path)
+        result_latest = _json_file_timestamp(result_path)
+        latest = _latest_timestamp(latest, result_latest)
+        if result_path.exists():
+            completed += 1
+            continue
+        age = _age_seconds_since(job_latest, now=current)
+        if age is not None and age <= stale_after_seconds:
+            pending_recent += 1
+        else:
+            pending_stale += 1
+    if pending_stale:
+        queue_state = "blocked_stale_pending"
+    elif pending_recent:
+        queue_state = "pending"
+    elif scanned:
+        queue_state = "complete"
+    else:
+        queue_state = "empty"
+    return {
+        "job_dir_present": True,
+        "latest_at": latest,
+        "pending_recent_count": pending_recent,
+        "pending_stale_count": pending_stale,
+        "completed_count": completed,
+        "scanned_job_count": scanned,
+        "queue_state": queue_state,
+        "stale_queue_blocked": bool(pending_stale),
+        # A pending job file means work is queued, not that a detached process is
+        # alive. Keep this false until the scheduler grows an explicit heartbeat.
+        "worker_process_active": False,
+        "worker_evidence": "not_available",
+        "pending_jobs_are_worker_evidence": False,
+        "status_command": WARM_STATUS_COMMAND,
+    }
+
+
+def warm_status_payload(
+    *,
+    job_dir: Path | str,
+    enabled: bool | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    activity = warm_job_activity(job_dir, now=now)
+    if activity.get("stale_queue_blocked"):
+        status = "blocked"
+    elif activity.get("pending_recent_count"):
+        status = "pending"
+    elif activity.get("completed_count"):
+        status = "complete"
+    else:
+        status = "idle"
+    return {
+        "kind": "aippocampus_warm_ambient_status",
+        "ok": status != "blocked",
+        "enabled": warm_background_enabled(enabled),
+        "status": status,
+        "job_activity": activity,
+        "next_command": WARM_STATUS_COMMAND,
+        "privacy_boundary": {
+            "raw_prompt_emitted": False,
+            "raw_job_payload_emitted": False,
+            "local_paths_included": False,
+            "provider_payload_included": False,
+        },
+    }
 
 
 def public_warm_schedule_status(result: dict[str, Any] | None) -> dict[str, Any]:

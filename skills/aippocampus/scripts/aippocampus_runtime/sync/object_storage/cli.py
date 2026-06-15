@@ -533,9 +533,18 @@ def token_from_env(env_name: str | None) -> str | None:
     return os.environ.get(env_name)
 
 
+def _parser_command(argv: list[str] | None, base_prog: str) -> tuple[str, list[str] | None, str | None]:
+    commands = {"status", "push", "pull", "repair"}
+    if argv and argv[0] in commands and any(arg in {"-h", "--help"} for arg in argv[1:]):
+        return f"{base_prog} {argv[0]}", list(argv[1:]), argv[0]
+    return base_prog, argv, None
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["status", "push", "pull", "repair"])
+    prog, parse_argv, command_override = _parser_command(argv, "aippocampus object-sync")
+    parser = argparse.ArgumentParser(prog=prog)
+    if command_override is None:
+        parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     parser.add_argument(
         "--object-store-url", default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL")
     )
@@ -565,13 +574,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(parse_argv)
+    if command_override is not None:
+        args.command = command_override
 
     if not args.object_store_url and not args.object_provider:
-        parser.error(
+        message = (
             "--object-store-url/AIPPOCAMPUS_OBJECT_STORE_URL or "
             "--object-provider/AIPPOCAMPUS_OBJECT_PROVIDER is required"
         )
+        if args.json_output:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "object_store_config_required",
+                            "message": message,
+                            "next_command": (
+                                "aippocampus object-sync status --object-store-url <url> --json"
+                            ),
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 2
+        parser.error(message)
 
     token = token_from_env(args.token_env)
     provider_kwargs = {

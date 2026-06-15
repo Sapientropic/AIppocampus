@@ -230,13 +230,22 @@ into one giant fixture file. Use this map when changing core recall behavior:
 | Architecture and coupling guardrails | `tests/aippocampus/test_import_coupling.py`, `tests/aippocampus/test_architecture_boundaries.py`, `tests/aippocampus/test_compat_shim_inventory.py` | Import boundaries, no flat runtime scripts, large-module debt registration, and high-risk mypy coverage. |
 
 For ordinary changes, start with
-`python tools/aippocampus/test_plan.py --json` so agents run focused tests before
-escalating. The small inner-loop command is
-`python tools/aippocampus/run_tests.py --tier quick`; the fast local PR gate is
-`python tools/aippocampus/run_tests.py --tier pr`; the broader deterministic
-pre-merge lane is `python tools/aippocampus/run_tests.py --tier broad-pr`. For
-targeted recall-policy work, run the relevant tests above in addition to the
-tier command when the change touches that surface.
+`python tools/aippocampus/test_plan.py --json` so agents run focused tests
+before escalating. The planner output is the command authority: it emits the
+active interpreter path so Windows, editable installs, and multi-Python shells
+do not turn verification into a guessing game. The examples here are readable
+short forms, not a requirement to rerun work with a different `python`.
+
+Use `quick` only as a cheap inner loop. Use `pr` as the ordinary local pre-push
+gate; it already includes `quick`, so do not run both during closeout by
+reflex. Use `broad-pr`, benchmark, slow, provider, or full tiers only when the
+changed surface owns that risk or CI is stale/unavailable. For releases, follow
+`docs/guides/setup/release-checklist.md` and
+`python tools/aippocampus/test_plan.py --release-preflight --json` instead of
+replaying every historical lane locally.
+
+For targeted recall-policy work, run the relevant tests above in addition to
+the tier command when the change touches that surface.
 
 ## Maintenance Rule
 

@@ -177,6 +177,65 @@ def _recall_context_report(
     return recall_context_surface_report(payload)
 
 
+def _recall_context_counts(reports: list[dict[str, Any]]) -> dict[str, int]:
+    for report in reports:
+        if report.get("surface") == "recall_context":
+            counts = report.get("counts")
+            return counts if isinstance(counts, dict) else {}
+    return {}
+
+
+def _why_not_projection(
+    *,
+    mode: str,
+    decision: str,
+    route_ids: list[str],
+    reports: list[dict[str, Any]],
+    max_routes: int,
+) -> dict[str, Any]:
+    if mode != "why-not-recall":
+        return {
+            "diagnostic_class": "why_recall",
+            "why_not_applicable": None,
+            "route_specificity": None,
+            "suggested_next": "deepen_returned_route_if_continuity_matters"
+            if route_ids
+            else "continue_normally_or_refine_cue",
+        }
+    counts = _recall_context_counts(reports)
+    route_count = safe_int(counts.get("route_count"))
+    source_ref_count = safe_int(counts.get("source_ref_count"))
+    query_term_count = safe_int(counts.get("query_term_count"))
+    low_specificity = bool(
+        route_ids
+        and (
+            query_term_count <= 2
+            or route_count >= max_routes
+            or source_ref_count <= max(1, route_count)
+        )
+    )
+    if not route_ids or decision in {"missing", "unknown"}:
+        return {
+            "diagnostic_class": "actually_silent",
+            "why_not_applicable": False,
+            "route_specificity": "none",
+            "suggested_next": "inspect_reason_codes_or_run_health_if_recall_was_expected",
+        }
+    if low_specificity:
+        return {
+            "diagnostic_class": "surfaced_but_low_specificity",
+            "why_not_applicable": False,
+            "route_specificity": "low",
+            "suggested_next": "tighten_cue_or_use_why_recall_deepen_only_if_continuity_matters",
+        }
+    return {
+        "diagnostic_class": "surfaced_so_why_not_is_not_applicable",
+        "why_not_applicable": True,
+        "route_specificity": "medium",
+        "suggested_next": "use_why_recall_or_deepen_the_returned_route",
+    }
+
+
 def recall_diagnostic_report(
     *,
     cue: str,
@@ -270,13 +329,22 @@ def recall_diagnostic_report(
         ],
         limit=24,
     )
+    decision = overall_decision(reasons)
+    projection = _why_not_projection(
+        mode=normalized_mode,
+        decision=decision,
+        route_ids=route_ids,
+        reports=reports,
+        max_routes=limit,
+    )
     return redact_private_paths(
         {
             "kind": DIAGNOSTIC_KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": normalized_mode,
             "cue_hash": cue_hash(cue),
-            "decision": overall_decision(reasons),
+            "decision": decision,
+            **projection,
             "searched_surfaces": ["recall_context", "active_lock", "ambient_cache", "semantic_gate"],
             "surface_reports": reports,
             "reasons": reasons,

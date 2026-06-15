@@ -30,6 +30,20 @@ from aippocampus_runtime.source.semantic_scope_labels import (
 LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 
 
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return parsed
+
+
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return parsed
+
+
 def iter_clean_messages(path: Path) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     if not path.exists():
@@ -155,7 +169,10 @@ def search_clean_source(
                 "scope_labels": message_scope_labels,
                 "semantic_scope_labels": semantic_scope_labels,
                 "score": round(score, 3),
-                "snippet": compact_text(str(message.get("text") or ""), snippet_chars),
+                "snippet": compact_text(str(message.get("text") or ""), snippet_chars)
+                if snippet_chars
+                else "",
+                "snippet_omitted": snippet_chars == 0,
             }
         )
     matches.sort(
@@ -247,17 +264,55 @@ def render_human_search_result(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def public_search_result(result: dict[str, Any], *, include_paths: bool = False) -> dict[str, Any]:
+def public_search_result(
+    result: dict[str, Any],
+    *,
+    include_paths: bool = False,
+    metadata_only: bool = False,
+) -> dict[str, Any]:
     public = dict(result) if include_paths else redact_sensitive_values(redact_private_paths(result))
+    if metadata_only:
+        matches: list[dict[str, Any]] = []
+        for index, match in enumerate(public.get("matches") or [], start=1):
+            timestamp = str(match.get("timestamp") or "")
+            matches.append(
+                {
+                    "match_index": index,
+                    "score": match.get("score"),
+                    "role": match.get("role"),
+                    "phase": match.get("phase") or "",
+                    "is_final": bool(match.get("is_final")),
+                    "scope_labels": match.get("scope_labels") or [],
+                    "semantic_scope_labels": match.get("semantic_scope_labels") or [],
+                    "date": timestamp[:10] if timestamp else None,
+                    "snippet_omitted": True,
+                    "source_refs_omitted": True,
+                }
+            )
+        public["matches"] = matches
+        if not include_paths:
+            public["source"] = LOCAL_PATH_REDACTION
+            public["source_omitted"] = True
+        public["output_boundary"] = "public_metadata_only_no_source_snippets_or_reopen_refs"
+    else:
+        public["output_boundary"] = (
+            "local_private_source_snippets"
+            if public.get("matches")
+            else "public_safe_no_source_snippets"
+        )
     public["privacy"] = {
         "paths_included": include_paths,
         "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
+        "metadata_only": metadata_only,
+        "raw_source_snippets_emitted": bool(public.get("matches")) and not metadata_only,
+        "local_reopen_refs_emitted": bool(public.get("matches")) and not metadata_only,
     }
+    public["match_count"] = len(public.get("matches") or [])
     return public
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="aippocampus search")
     parser.add_argument("patterns", nargs="+")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
@@ -265,8 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Defaults to global clean source, with project-local legacy fallback.",
     )
-    parser.add_argument("--max", type=int, default=10)
-    parser.add_argument("--snippet-chars", type=int, default=700)
+    parser.add_argument("--max", type=positive_int, default=10)
+    parser.add_argument("--snippet-chars", type=non_negative_int, default=700)
     parser.add_argument(
         "--scope-label",
         action="append",
@@ -279,6 +334,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Local diagnostic opt-in: include filesystem paths in output.",
     )
+    parser.add_argument(
+        "--public",
+        "--metadata-only",
+        action="store_true",
+        dest="metadata_only",
+        help="Emit public-safe metadata only: no snippets, source refs, message ids, or local reopen ids.",
+    )
     args = parser.parse_args(argv)
 
     result = search_clean_source(
@@ -289,7 +351,11 @@ def main(argv: list[str] | None = None) -> int:
         snippet_chars=args.snippet_chars,
         scope_labels=args.scope_label,
     )
-    public_result = public_search_result(result, include_paths=bool(args.include_paths))
+    public_result = public_search_result(
+        result,
+        include_paths=bool(args.include_paths),
+        metadata_only=bool(args.metadata_only),
+    )
     if args.json_output:
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:

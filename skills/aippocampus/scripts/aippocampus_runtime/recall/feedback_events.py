@@ -63,6 +63,19 @@ DEFAULT_SIGNAL_DELTAS = {
     "expired": -0.4,
 }
 NON_FOREGROUND_SIGNALS = {"blocked", "wrong_route_drag", "superseded", "expired"}
+OUTCOME_ALIASES = {"wrong_route": "wrong_route_drag"}
+
+
+class InvalidFeedbackValue(ValueError):
+    """Raised when feedback would otherwise be silently misclassified."""
+
+    def __init__(self, field: str, value: Any, accepted: set[str], aliases: Mapping[str, str] | None = None):
+        self.field = field
+        self.value = value
+        self.accepted = set(accepted)
+        self.aliases = dict(aliases or {})
+        valid = sorted(self.accepted | set(self.aliases))
+        super().__init__(f"unsupported {field}: {value!r}; expected one of {', '.join(valid)}")
 
 
 def _stable_hash(prefix: str, *parts: Any, length: int = 18) -> str:
@@ -84,6 +97,21 @@ def _safe_token(value: Any, *, fallback_prefix: str) -> str:
 def _safe_kind(value: Any, accepted: set[str], default: str) -> str:
     text = str(value or "").strip()
     return text if text in accepted else default
+
+
+def _validated_kind(
+    value: Any,
+    accepted: set[str],
+    *,
+    field: str,
+    aliases: Mapping[str, str] | None = None,
+) -> str:
+    text = str(value or "").strip()
+    if aliases and text in aliases:
+        return aliases[text]
+    if text in accepted:
+        return text
+    raise InvalidFeedbackValue(field, text, accepted, aliases)
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -199,14 +227,20 @@ def active_flow_event(
     weight_delta: float | None = None,
     reason: str = "",
 ) -> dict[str, Any]:
-    safe_signal = _safe_kind(signal, ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+    safe_signal = _validated_kind(
+        signal,
+        ACTIVE_FLOW_SIGNALS,
+        field="outcome",
+        aliases=OUTCOME_ALIASES,
+    )
+    safe_route_kind = _validated_kind(route_kind, ROUTE_KINDS, field="route_kind")
     delta = DEFAULT_SIGNAL_DELTAS[safe_signal] if weight_delta is None else _safe_float(weight_delta)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ACTIVE_FLOW_EVENT_KIND,
         "created_at": timestamp or now_utc(),
         "route_id": _safe_token(route_id, fallback_prefix="route"),
-        "route_kind": _safe_kind(route_kind, ROUTE_KINDS, "active_path"),
+        "route_kind": safe_route_kind,
         "signal": safe_signal,
         "source_id": _safe_token(source_id or source_ref, fallback_prefix="source"),
         "weight_delta": round(delta, 6),

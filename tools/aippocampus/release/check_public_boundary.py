@@ -288,6 +288,18 @@ def scan_artifacts(
         elif suffixes.endswith(".tar.gz") or archive.suffix in {".tgz", ".tar"}:
             iterator = _iter_tar_texts(archive)
         else:
+            text = read_text_file(archive)
+            if text is None:
+                continue
+            scanned += 1
+            findings.extend(
+                scan_text(
+                    text,
+                    source="artifact",
+                    path=archive.name,
+                    private_needles=private_needles,
+                )
+            )
             continue
         for member_name, text in iterator:
             scanned += 1
@@ -306,8 +318,7 @@ def artifact_files(paths: Iterable[Path]) -> list[Path]:
     archives: list[Path] = []
     for path in paths:
         if path.is_dir():
-            for pattern in ("*.whl", "*.zip", "*.tar.gz", "*.tgz", "*.tar"):
-                archives.extend(sorted(path.glob(pattern)))
+            archives.extend(sorted(child for child in path.rglob("*") if child.is_file()))
         else:
             archives.append(path)
     return archives
@@ -320,6 +331,7 @@ def build_report(
     dist_paths: Iterable[Path] = (),
     private_needles: Iterable[str] = (),
     include_default_excluded: bool = False,
+    max_findings: int = 200,
 ) -> dict[str, object]:
     tracked_paths = list(paths) if paths is not None else git_tracked_files(repo)
     scanned_files, findings = scan_paths(
@@ -334,18 +346,25 @@ def build_report(
     )
     findings.extend(artifact_findings)
     findings.sort(key=lambda finding: (finding.source, finding.path, finding.line, finding.check_id))
+    total_findings = len(findings)
+    safe_max_findings = max(0, int(max_findings))
+    returned_findings = findings[:safe_max_findings] if safe_max_findings else []
     return {
         "kind": "aippocampus_public_boundary_report",
         "schema_version": 1,
         "ok": not findings,
         "scanned_files": scanned_files,
         "scanned_artifact_files": scanned_artifact_files,
-        "finding_count": len(findings),
-        "findings": [asdict(finding) for finding in findings],
+        "finding_count": total_findings,
+        "findings_returned": len(returned_findings),
+        "findings_truncated": len(returned_findings) < total_findings,
+        "max_findings": safe_max_findings,
+        "findings": [asdict(finding) for finding in returned_findings],
         "default_excluded_prefixes": list(DEFAULT_EXCLUDED_PREFIXES),
         "notes": [
             "Default scan excludes noisy redaction-test fixture zones; use --include-default-excluded for audits.",
             "Use --private-needle locally for machine/user-specific strings; do not commit those strings.",
+            "finding_count is the total count; findings is capped by --max-findings for agent-readable output.",
         ],
     }
 
@@ -376,6 +395,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include tests, benchmarks, benchmark_corpus, and binary-like tracked paths.",
     )
+    parser.add_argument(
+        "--max-findings",
+        type=int,
+        default=200,
+        help="Maximum finding samples to include in output; finding_count still reports the total.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     return parser
 
@@ -391,6 +416,7 @@ def main(argv: list[str] | None = None) -> int:
         dist_paths=dist_paths,
         private_needles=args.private_needle,
         include_default_excluded=args.include_default_excluded,
+        max_findings=args.max_findings,
     )
 
     if args.json:
@@ -400,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"scanned_files={report['scanned_files']}")
         print(f"scanned_artifact_files={report['scanned_artifact_files']}")
         print(f"finding_count={report['finding_count']}")
+        if report.get("findings_truncated"):
+            print(f"findings_truncated=true returned={report['findings_returned']} max={report['max_findings']}")
         findings = cast(list[dict[str, object]], report["findings"])
         for finding in findings:
             print(

@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.artifacts.publish import ArtifactLeaseBusyError
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.health import health_report
 from aippocampus_runtime.recall.active_recall_lock import (
@@ -20,6 +21,10 @@ from aippocampus_runtime.recall.active_recall_lock import (
     reopen_lock_sources,
     start_or_update_recall_lock,
     summarize_lock_roi,
+)
+from aippocampus_runtime.recall.active_recall_public import (
+    emit_index_lease_busy,
+    public_json_payload,
 )
 from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
 from aippocampus_runtime.recall.continuity_domains import (
@@ -524,6 +529,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-lock-version", type=int)
     parser.add_argument("--max", type=int, default=8)
     parser.add_argument("--context", type=int, default=1)
+    parser.add_argument(
+        "--include-private-paths",
+        action="store_true",
+        help="Include local diagnostic paths in JSON output. Default JSON redacts them for agent-safe use.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -647,30 +657,48 @@ def main(argv: list[str] | None = None) -> int:
         segments = health.get("segments") or {}
         use_segments = bool(segments.get("exists")) or bool(segments.get("needed"))
         if use_segments:
-            search_payload = search_segments_payload(
-                SegmentSearchOptions(
-                    patterns=search_terms,
-                    cwd=cwd,
-                    mode="hybrid",
-                    max_results=args.max,
-                    context=args.context,
-                    # Foreground recall must never turn a user prompt into a
-                    # segment rebuild. Missing or stale shards are reported as
-                    # structured availability and owned by maintenance hooks.
-                    build_segments=False,
+            try:
+                search_payload = search_segments_payload(
+                    SegmentSearchOptions(
+                        patterns=search_terms,
+                        cwd=cwd,
+                        mode="hybrid",
+                        max_results=args.max,
+                        context=args.context,
+                        # Foreground recall must never turn a user prompt into a
+                        # segment rebuild. Missing or stale shards are reported as
+                        # structured availability and owned by maintenance hooks.
+                        build_segments=False,
+                    )
                 )
-            )
+            except ArtifactLeaseBusyError as exc:
+                return emit_index_lease_busy(
+                    exc,
+                    prompt=prompt,
+                    cwd=cwd,
+                    json_output=args.json_output,
+                    include_private_paths=args.include_private_paths,
+                )
         else:
-            search_payload = search_rollout_payload(
-                RolloutSearchOptions(
-                    patterns=search_terms,
-                    cwd=cwd,
-                    build_index=True,
-                    mode="hybrid",
-                    max_results=args.max,
-                    context=args.context,
+            try:
+                search_payload = search_rollout_payload(
+                    RolloutSearchOptions(
+                        patterns=search_terms,
+                        cwd=cwd,
+                        build_index=True,
+                        mode="hybrid",
+                        max_results=args.max,
+                        context=args.context,
+                    )
                 )
-            )
+            except ArtifactLeaseBusyError as exc:
+                return emit_index_lease_busy(
+                    exc,
+                    prompt=prompt,
+                    cwd=cwd,
+                    json_output=args.json_output,
+                    include_private_paths=args.include_private_paths,
+                )
 
     result = {
         "prompt": prompt,
@@ -691,7 +719,13 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                public_json_payload(result, include_private_paths=args.include_private_paths),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
         print(
             f"decision: {decision['decision']} (score={decision['score']}, confidence={decision['confidence']})"

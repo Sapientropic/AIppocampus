@@ -6,12 +6,43 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-Release work is less of a maze now.
+Nothing yet.
 
-The local preflight says which checks are actually needed, the quick lane has a
-budget guard, public-boundary scanning has a real command, and post-publish
-agent discovery waits for PyPI and MCP Registry to be visible before anyone
-claims the release is ready.
+## 0.3.2 - 2026-06-15
+
+0.3.2 is a cleanup release for trust at the edges.
+
+The main change is not louder memory. It is calmer proof. Install, export,
+maintenance, benchmark, and release paths now say more clearly what happened,
+what is safe to share, and what still needs a human or operator look.
+
+### What Feels Different
+
+- Release checks are less ceremonial. The planner now points to the checks that
+  matter for the changed surface, and local preflight no longer tries to be CI.
+- Codex plugin install success is readable at a glance. `--json` now returns a
+  compact success summary; `--operator-json` keeps the full deep-debug report.
+  Rollback also has a dry-run preview.
+- Public issue attachments have a real metadata-only `public-export` path.
+  Clean-source text, session ids, anchors, graph labels, and searchable SQLite
+  indexes stay out.
+- Search, recall, MCP tool listing, health, and CLI help now have quieter
+  public-safe modes for agents that need the next step, not the whole machine.
+- Expected operator failures return structured JSON and useful exit codes
+  instead of tracebacks.
+- Maintenance and storage reports are bounded by default, with full audits kept
+  explicit.
+- Warm ambient status now separates queued work from actual worker evidence.
+- Benchmark reports are more honest about proxies, fixture gates, and public
+  quality claims.
+
+Still alpha. Still source-backed. Less smoke, clearer lantern.
+
+### Compare
+
+- Source range: `v0.3.1..v0.3.2`
+- Compare URL:
+  https://github.com/Sapientropic/AIppocampus/compare/v0.3.1...v0.3.2
 
 ## 0.3.1 - 2026-06-15
 
