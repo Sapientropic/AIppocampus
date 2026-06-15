@@ -31,6 +31,11 @@ The next slice is about fewer sharp edges.
   generation from benchmark quality, public companion reports now say when
   workflow guidance was not measured, and diagnostic wins no longer masquerade
   as public-quality proof or product failure.
+- Semantic bridges learned some manners. They now carry source-shaped context,
+  can widen search before FTS when there are refs, and keep a ledger of whether
+  they actually helped; stale, private, source-free, or wrong-route bridges stay
+  quiet. MemoryAgentBench, STATE-Bench, and LongMemEval-V2 reports now include
+  AIppocampus runtime arms without pretending those arms are official scores.
 
 Still alpha. Still source-backed. Quieter in the doorway.
 

@@ -19,12 +19,14 @@ from aippocampus_runtime.recall.query_expansion import (
     load_source_factual_alias_rows,
     plan_query_expansion,
 )
+from aippocampus_runtime.recall.semantic_bridge_map import load_semantic_bridge_rows
 from aippocampus_runtime.source.source_texture import (
     SOURCE_TEXTURE_BOUNDARY,
     build_source_texture_boundary_hints,
 )
 
 SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
+SEMANTIC_BRIDGES_FILENAME = "semantic-bridges.jsonl"
 SOURCE_TEXTURE_FILENAME = "source-texture.jsonl"
 TEXTURE_HINT_BOUNDARY = "texture_hint_read_model_not_source_fact"
 
@@ -34,6 +36,14 @@ def add_sidecar_arguments(parser: argparse.ArgumentParser) -> None:
         "--source-aliases",
         default=None,
         help="Optional source-backed factual alias JSONL path for query expansion.",
+    )
+    parser.add_argument(
+        "--semantic-bridges",
+        default=None,
+        help=(
+            "Optional source-backed semantic bridge JSONL path for query expansion. "
+            "Bridges are navigation-only and never count as evidence."
+        ),
     )
     parser.add_argument(
         "--outcome-feedback-path",
@@ -72,18 +82,33 @@ def source_factual_aliases_path(source_aliases: str | Path | None, cwd: Path) ->
     return next((path for path in candidates if path.exists()), None)
 
 
+def semantic_bridges_path(semantic_bridges: str | Path | None, cwd: Path) -> Path | None:
+    if semantic_bridges:
+        path = Path(semantic_bridges)
+        return path if path.is_absolute() else cwd / path
+    candidates = [
+        cwd / SEMANTIC_BRIDGES_FILENAME,
+        cwd / "clean-source" / SEMANTIC_BRIDGES_FILENAME,
+        cwd / ".aippocampus" / "clean-source" / SEMANTIC_BRIDGES_FILENAME,
+    ]
+    return next((path for path in candidates if path.exists()), None)
+
+
 def query_expansion_plan(
     query_terms: Sequence[str],
     *,
     seed_terms: Sequence[str],
     source_aliases: str | Path | None,
+    semantic_bridges: str | Path | None = None,
     cwd: Path,
 ) -> dict[str, Any]:
     alias_path = source_factual_aliases_path(source_aliases, cwd)
+    bridge_path = semantic_bridges_path(semantic_bridges, cwd)
     return plan_query_expansion(
         query_terms,
         seed_terms=seed_terms,
         source_alias_rows=load_source_factual_alias_rows(alias_path),
+        semantic_bridge_rows=load_semantic_bridge_rows(bridge_path),
     )
 
 

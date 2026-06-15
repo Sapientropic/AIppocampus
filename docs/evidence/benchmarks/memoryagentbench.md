@@ -216,6 +216,15 @@ Test-Time Learning and Conflict Resolution rows. It reports:
 It still does not generate answers, call a model, invoke an LLM judge, expose
 raw benchmark text, or claim official MemoryAgentBench runner compatibility.
 
+The Stage 3 report now also includes a side-by-side AIppocampus runtime arm for
+Test-Time Learning and Conflict Resolution. The static/hash contract remains as
+the no-score baseline. The AIppocampus arm projects TTL rows into
+source-backed lesson candidates and CR rows into local/global compatibility
+diagnostics, reporting source-ref preservation, foreground-guidance readiness,
+stale/currentness obstruction, and `claim_permission` boundaries. This is
+runtime-semantics evidence for the adapter shape, not an official
+MemoryAgentBench score or answer-quality result.
+
 ### Stage 4: Comparative Runs
 
 Comparable scores require fixed model/provider versions, cost and latency

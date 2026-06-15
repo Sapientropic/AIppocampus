@@ -869,6 +869,10 @@ V2 mapping reports have
   scoring are supported, diagnostic-only, or not run.
 - `cases`: hashed case ids with domain, environment family, question type,
   mapping status, and candidate counts only.
+- `arms`: `lexical_baseline` plus `aippocampus_continuity_context`. The
+  continuity arm reports routing-only AIppo/Ficus/learning guidance and whether
+  non-lexical guidance changes the context-pack route; activation packets are
+  not factual evidence and still require source reopen.
 - `cannot_claim`: legacy compatibility boundary field for V2 source-evidence hit
   rate, MRR, answer accuracy, LAFS, SOTA, and benchmark-grade
   context-gathering score limits.
