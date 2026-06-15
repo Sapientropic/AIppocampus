@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,7 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scri
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.subconscious import circuit_feedback as feedback  # noqa: E402
+from aippocampus_runtime.subconscious import jobs as job_runtime  # noqa: E402
 
 
 class CircuitFeedbackTests(unittest.TestCase):
@@ -75,6 +77,38 @@ class CircuitFeedbackTests(unittest.TestCase):
         )
         self.assertFalse(cyclic["cycle_prevention_ok"])
         self.assertTrue(cyclic["cycle_errors"])
+
+    def test_jobs_runtime_exposes_feedback_plan_and_worker_budget_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = job_runtime.run_jobs(
+                jobs=[],
+                registry_path=root / "registry.json",
+                timeline_path=root / "timeline.json",
+                concept_graph_path=root / "graph.json",
+                jobs_output_path=root / "jobs.jsonl",
+                edges_output_path=root / "edges.jsonl",
+                project=None,
+                objective="",
+                max_turns=1,
+                max_steps=1,
+                min_tool_steps=0,
+                model="deepseek-chat",
+                base_url="https://api.deepseek.com",
+                api_key=None,
+                max_tokens=None,
+                timeout=1,
+                temperature=0.0,
+                dry_run=True,
+                no_write=True,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertIn("cognitive_runtime_feedback", result)
+        self.assertIn("dynamic_job_orchestration", result)
+        self.assertIn("semantic_subregion_budget", result)
+        self.assertTrue(result["dynamic_job_orchestration"]["cycle_prevention_ok"])
+        self.assertGreater(result["semantic_subregion_budget"]["job_circuit_count"], 0)
 
 
 if __name__ == "__main__":

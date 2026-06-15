@@ -806,9 +806,49 @@ class UpdateSyncTests(unittest.TestCase):
             "host_live_probe_ok_current_thread_unverified",
         )
         self.assertTrue(payload["agent_callable"]["host_live_probe_ok"])
+        self.assertFalse(payload["summary"]["action_hints_ready"])
+        self.assertFalse(payload["summary"]["action_hints_installed"])
+        self.assertEqual(payload["summary"]["action_hints_status"], "not_installed")
+        self.assertTrue(payload["action_hints"]["optional"])
+        self.assertEqual(payload["action_hints"]["status"], "not_installed")
+        self.assertNotIn("action_hints", payload["summary"]["needs_action"])
         self.assertIsInstance(payload["next_actions"], list)
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(probe), raw)
+
+    def test_status_agent_json_splits_action_hint_cache_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            cache_path = codex_home / "missing-action-hints.jsonl"
+            update_cli.install_action_hint.install(hooks_json, cache_jsonl=cache_path)
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "status",
+                        "--repo-root",
+                        str(REPO_ROOT),
+                        "--codex-home",
+                        str(codex_home),
+                        "--no-child-check",
+                        "--agent-json",
+                    ]
+                )
+
+        raw = stdout.getvalue()
+        payload = json.loads(raw)
+        self.assertEqual(code, 0, payload)
+        self.assertFalse(payload["summary"]["action_hints_ready"])
+        self.assertTrue(payload["summary"]["action_hints_installed"])
+        self.assertEqual(payload["summary"]["action_hints_status"], "with_missing_cache_file")
+        self.assertEqual(payload["action_hints"]["status"], "with_missing_cache_file")
+        self.assertFalse(payload["action_hints"]["cache_exists"])
+        self.assertIn("action_hints", {action["surface"] for action in payload["next_actions"]})
+        self.assertNotIn(str(codex_home), raw)
+        self.assertNotIn(str(cache_path), raw)
 
     def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
         self,
@@ -1512,7 +1552,9 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(cache_refresh["requested_kind"], "installed_cache_auto")
         self.assertTrue(cache_refresh["auto_refresh_blocked"])
         self.assertEqual(cache_refresh["blocked_reason"], "multiple_candidates")
-        self.assertIn("--plugin-installed-dir <path>", cache_refresh["next_command"])
+        self.assertEqual(cache_refresh["candidate_count"], 2)
+        self.assertIn("plugin install --codex --verify --compact-json", cache_refresh["next_command"])
+        self.assertIn("--plugin-installed-dir <path>", cache_refresh["manual_selection_command"])
 
     def test_apply_agent_json_reports_plugin_cache_failure_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -1555,7 +1597,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("plugin_cache", payload["summary"]["needs_action"])
         action = next(item for item in payload["next_actions"] if item["surface"] == "plugin_cache")
         self.assertIn("multiple_candidates", action["reason"])
-        self.assertIn("--plugin-installed-dir <path>", action["command"])
+        self.assertIn("2 candidates", action["reason"])
+        self.assertIn("plugin install --codex --verify --compact-json", action["command"])
 
     def test_all_local_refreshes_matching_version_among_multiple_cache_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

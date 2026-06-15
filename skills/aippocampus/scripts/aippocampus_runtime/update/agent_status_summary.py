@@ -38,12 +38,25 @@ def compact_agent_status_report(
         }
     agent = surfaces.get("agent_callable") or {}
     plugin = surfaces.get("plugin") or {}
+    hooks = surfaces.get("hooks") or {}
+    action_hints = hooks.get("action_hints") if isinstance(hooks, dict) else {}
+    if not isinstance(action_hints, dict):
+        action_hints = {}
     needs_action = [
         str(item)
         for item in summary.get("needs_action") or []
         if str(item) not in {"", "agent_callable"}
     ]
+    action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
     actions: list[dict[str, Any]] = []
+    if action_hints.get("installed") and not action_hints_ready and action_hints.get("next_command"):
+        actions.append(
+            _compact_update_action(
+                surface="action_hints",
+                reason=str(action_hints.get("cache_status") or "action-time hints not ready"),
+                command=str(action_hints.get("next_command")),
+            )
+        )
     for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
         item = surfaces.get(surface) or {}
         command = item.get("next_command") or item.get("documented_install_command")
@@ -64,6 +77,8 @@ def compact_agent_status_report(
             or cache_refresh.get("installed_cache_status")
             or "plugin cache refresh failed"
         )
+        if cache_refresh.get("candidate_count"):
+            reason = f"{reason}: {int(cache_refresh.get('candidate_count') or 0)} candidates"
         actions.append(
             _compact_update_action(
                 surface="plugin_cache",
@@ -126,7 +141,25 @@ def compact_agent_status_report(
             "agent_callable_host_ready": agent_host_ready,
             "agent_callable_current_thread_visible": agent_thread_visible,
             "agent_callable_status": agent_status,
+            "action_hints_ready": action_hints_ready,
+            "action_hints_installed": bool(action_hints.get("installed")),
+            "action_hints_status": str(action_hints.get("cache_status") or "not_installed_optional"),
             "needs_action": needs_action,
+        },
+        "action_hints": {
+            "installed": bool(action_hints.get("installed")),
+            "ready": action_hints_ready,
+            "status": str(action_hints.get("cache_status") or "not_installed_optional"),
+            "cache_path_configured": bool(action_hints.get("cache_path_configured")),
+            "cache_exists": bool(action_hints.get("cache_exists")),
+            "cache_record_count": int(action_hints.get("cache_record_count") or 0),
+            "fresh_record_count": int(action_hints.get("fresh_record_count") or 0),
+            "expired_record_count": int(action_hints.get("expired_record_count") or 0),
+            "malformed_cache_line_count": int(action_hints.get("malformed_cache_line_count") or 0),
+            "provider_counts": action_hints.get("provider_counts") or {},
+            "optional": True,
+            "next_command": action_hints.get("next_command"),
+            "claim_boundary": "action-time hints are optional PreToolUse cache-backed nudges, not ambient hook readiness or source truth",
         },
         "agent_callable": {
             "status": agent_status,

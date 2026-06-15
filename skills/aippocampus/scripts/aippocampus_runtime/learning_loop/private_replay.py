@@ -20,6 +20,15 @@ from aippocampus_runtime.learning_loop.core import (
     detect_workflow_order_findings,
     project_action_time_guidance,
 )
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (
+    ledger_rows_from_guidance_outcomes,
+    summarize_effectiveness_ledger,
+)
+from aippocampus_runtime.learning_loop.private_export import (
+    export_private_replay_events,
+    load_behavior_event_rows,
+    validate_private_replay_export,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_learning_loop_private_replay_report"
@@ -153,7 +162,11 @@ def _raw_leak_count(report: Mapping[str, Any]) -> int:
 
 def build_private_history_replay_report(
     events: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    input_origin: str | None = None,
+    sanitized_export_summary: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    fixture_input = events is None
     rows = [dict(row) for row in (events if events is not None else private_replay_fixture_events())]
     signals = adapt_behavior_events_to_review_signals(rows)
     duplicated_signals = [*signals, *signals]
@@ -163,6 +176,20 @@ def build_private_history_replay_report(
         workflow,
         query_terms=["test", "pytest", "preflight", "context", "reopen"],
     )
+    ledger_rows = ledger_rows_from_guidance_outcomes(
+        guidance,
+        [
+            {
+                "lesson_id": row.get("guidance_id"),
+                "outcome": "prevented_repeat",
+                "surface": "private_replay",
+                "source_refs": row.get("source_refs") or [],
+            }
+            for row in guidance
+        ],
+        surface="private_replay",
+    )
+    ledger_report = summarize_effectiveness_ledger(ledger_rows)
     expected_targets = _expected_repeat_targets(duplicated_signals)
     detected_targets = {
         (str(row.get("target_fingerprint") or ""), str(row.get("failure_family") or ""))
@@ -202,6 +229,9 @@ def build_private_history_replay_report(
         "schema_version": SCHEMA_VERSION,
         "kind": REPORT_KIND,
         "ok": bool(guidance) and bool(context_workflows),
+        "fixture_input": fixture_input,
+        "input_origin": input_origin or ("fixture_synthetic" if fixture_input else "real_sanitized_history"),
+        "sanitized_export_summary": dict(sanitized_export_summary or validate_private_replay_export(rows)),
         "input_event_count": len(rows),
         "private_history_role": "local_private_dogfood_harness",
         "private_dogfood_comparable_metrics": comparable,
@@ -212,7 +242,10 @@ def build_private_history_replay_report(
             "one_off_suppressed_count": one_off_suppressed,
             "expected_tdd_red_suppressed_count": expected_red_suppressed,
             "guidance_count": len(guidance),
+            "effectiveness_ledger_row_count": len(ledger_rows),
         },
+        "effectiveness_ledger": ledger_report,
+        "effectiveness_ledger_rows": ledger_rows,
         "guidance_authority": {
             "all_navigation_only": all(row.get("navigation_only") for row in guidance),
             "all_source_reopen_required": all(
@@ -245,28 +278,37 @@ def build_private_history_replay_report(
 
 
 def _load_events(path: Path) -> list[dict[str, Any]]:
-    if path.suffix.lower() == ".jsonl":
-        return [
-            dict(json.loads(line))
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(payload, list):
-        return [dict(row) for row in payload if isinstance(row, Mapping)]
-    if isinstance(payload, Mapping):
-        rows = payload.get("events") or payload.get("behavior_events") or []
-        return [dict(row) for row in rows if isinstance(row, Mapping)]
-    return []
+    return load_behavior_event_rows(path)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--events", type=Path, help="Sanitized behavior events JSON/JSONL.")
+    parser.add_argument("--clean-source-events", type=Path, help="Sanitized clean-source behavior events to export first.")
+    parser.add_argument("--rollout", type=Path, help="Operator-selected raw rollout; exported to sanitized behavior events before replay.")
+    parser.add_argument("--export-output", type=Path, help="Where to write temporary sanitized replay events.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
+    export_summary = None
+    input_origin = None
     events = _load_events(args.events) if args.events else None
-    report = build_private_history_replay_report(events)
+    if args.clean_source_events or args.rollout:
+        if not args.export_output:
+            parser.error("--clean-source-events/--rollout requires --export-output")
+        export_summary = export_private_replay_events(
+            clean_source_events=args.clean_source_events,
+            rollout=args.rollout,
+            output=args.export_output,
+        )
+        events = _load_events(args.export_output)
+        input_origin = str(export_summary.get("input_origin") or "real_sanitized_history")
+    elif events is not None:
+        input_origin = "real_sanitized_history"
+    report = build_private_history_replay_report(
+        events,
+        input_origin=input_origin,
+        sanitized_export_summary=export_summary,
+    )
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

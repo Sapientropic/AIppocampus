@@ -9,18 +9,20 @@ from typing import Any
 def maybe_apply_provider_key_bridge_for_semantic_diagnostic(
     arguments: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Expose provider-key bridge env to a live semantic diagnostic call.
+    """Expose provider-key bridge env to a live semantic MCP call.
 
     The bridge manifest is an explicit user/operator install artifact. Reading
-    it here is deliberately scoped to `recall_diagnostic` with a requested live
-    semantic gate, because agents otherwise see missing-auth diagnostics even
-    after hooks or CLI were configured. Secret values are copied only into this
-    MCP process env; the returned report is value/path-free.
+    it here is deliberately scoped to MCP calls with a requested live semantic
+    gate, because agents otherwise see missing-auth diagnostics even after
+    hooks or CLI were configured. Secret values are copied only into this MCP
+    process env; the returned report is value/path-free.
     """
 
     if not arguments.get("run_semantic_gate"):
         return None
-    semantic_gate_mode = str(arguments.get("semantic_gate_mode") or "off").strip().casefold()
+    semantic_gate_mode = str(
+        arguments.get("semantic_gate_mode") or arguments.get("semantic") or "off"
+    ).strip().casefold()
     if semantic_gate_mode == "off":
         return None
     try:

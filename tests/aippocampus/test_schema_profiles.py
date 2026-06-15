@@ -134,6 +134,25 @@ class SchemaProfileTests(unittest.TestCase):
         self.assertIn("diagnostics", diagnostic_projection)
         self.assertNotIn("authority", diagnostic_projection)
 
+    def test_foreground_action_card_profile_projects_out_audit_only_fields(self) -> None:
+        card = {
+            "decision": "use_route_first",
+            "why": "A source-backed route is likely relevant.",
+            "next_action": "deepen",
+            "claim_boundary": "no_claim_before_reopen",
+            "route_label": "release route",
+            "metrics": {"too_much": True},
+            "red_lines": {"audit": True},
+        }
+
+        projected = schema_profiles.project_record_for_profile(card, "foreground_action_card")
+        report = schema_profiles.validate_profile_record(projected, "foreground_action_card")
+
+        self.assertTrue(report["ok"], report)
+        self.assertNotIn("metrics", projected)
+        self.assertNotIn("red_lines", projected)
+        self.assertIn("metrics", schema_profiles.FOREGROUND_ACTION_CARD_AUDIT_ONLY_KEYS)
+
 
 if __name__ == "__main__":
     unittest.main()

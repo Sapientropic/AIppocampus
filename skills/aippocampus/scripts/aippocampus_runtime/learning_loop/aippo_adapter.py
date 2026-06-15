@@ -191,6 +191,13 @@ def learning_findings_to_aippo_source_rows(
                 if kind in REOPEN_FIRST_FINDINGS
                 else "workflow_order_clause"
             ),
+            "scope": _text(finding.get("scope"), 160) or "project_or_task_family",
+            "topic_epoch": _text(finding.get("topic_epoch"), 120) or "learning-loop",
+            "workspace_or_environment_profile": _text(
+                finding.get("workspace_or_environment_profile"),
+                160,
+            )
+            or "unknown_environment",
             "guidance": guidance,
             "next_action": next_action,
             "applies_when": _strings(

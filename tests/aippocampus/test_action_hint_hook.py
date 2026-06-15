@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -30,6 +33,8 @@ class ActionHintHookTests(unittest.TestCase):
             ],
             now_unix=1000,
         )
+        for record in cache_report["records"]:
+            record["expires_at_unix"] = 9999999999
         envelope = {
             "hook_event_name": "PreToolUse",
             "tool_name": "Bash",
@@ -97,6 +102,80 @@ class ActionHintHookTests(unittest.TestCase):
 
         self.assertEqual(report["decision"], "silent")
         self.assertEqual(report["reason"], "unsupported_event")
+
+    def test_malformed_stdin_fails_open_without_raw_payload_echo(self) -> None:
+        env = {**os.environ, "PYTHONPATH": str(SCRIPTS)}
+        proc = subprocess.run(
+            [sys.executable, "-m", "aippocampus_runtime.hooks.action_hint", "--json"],
+            input="not-json PRIVATE_INPUT",
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(payload["decision"], "silent")
+        self.assertEqual(payload["reason"], "malformed_input")
+        self.assertNotIn("PRIVATE_INPUT", encoded)
+        self.assertNotIn("JSONDecodeError", proc.stderr)
+
+    def test_malformed_cache_lines_are_skipped_and_valid_records_still_match(self) -> None:
+        cache_report = action_hint_cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight",
+                    "next_action": "run_preflight_before_broad_test",
+                    "source_refs": [source_ref("learn")],
+                }
+            ],
+            now_unix=1000,
+        )
+        for record in cache_report["records"]:
+            record["expires_at_unix"] = 9999999999
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "action-hints.jsonl"
+            cache_path.write_text(
+                "not-json PRIVATE_CACHE_LINE\n"
+                + json.dumps(cache_report, ensure_ascii=False)
+                + "\n"
+                + "{bad-json\n",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "PYTHONPATH": str(SCRIPTS)}
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.hooks.action_hint",
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                ],
+                input=json.dumps(
+                    {
+                        "hook_event_name": "PreToolUse",
+                        "tool_name": "Bash",
+                        "tool_input": {"command": "pytest tests/foo.py"},
+                    }
+                ),
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(payload["decision"], "hint")
+        self.assertEqual(payload["diagnostics"]["malformed_cache_line_count"], 2)
+        self.assertEqual(payload["diagnostics"]["prepared_record_count"], 1)
+        self.assertNotIn("PRIVATE_CACHE_LINE", encoded)
 
 
 if __name__ == "__main__":

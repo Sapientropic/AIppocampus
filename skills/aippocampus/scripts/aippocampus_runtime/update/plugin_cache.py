@@ -319,6 +319,10 @@ def build_plugin_cache_status(
             recommended_actions.append(
                 "run `aippocampus update apply --surface plugin --plugin-installed-dir auto` to refresh the detected Codex plugin cache"
             )
+        elif auto_resolution.get("status") == "multiple_candidates":
+            recommended_actions.append(
+                "run `aippocampus plugin install --codex --verify --compact-json` to refresh the Codex plugin cache without choosing a path manually"
+            )
         else:
             recommended_actions.append(
                 "run `aippocampus update apply --surface plugin --plugin-installed-dir <path>` or reinstall the Codex plugin cache"

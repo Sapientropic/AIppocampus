@@ -31,7 +31,7 @@ Use the repository probe to record the current host status without reading
 private transcripts:
 
 ```sh
-python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json
+python3 tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json
 ```
 
 If the `claude` CLI is missing or the server is not configured, the smoke
@@ -42,7 +42,7 @@ For a persistent-config diagnostic that does not mutate Claude settings or
 spend model budget, add `--persistent-diagnostic`:
 
 ```sh
-python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --persistent-diagnostic --cwd "$PWD"
+python3 tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --persistent-diagnostic --cwd "$PWD"
 ```
 
 This parses `claude mcp get aippocampus`, redacts local paths and secret-like
@@ -86,7 +86,7 @@ Common manual repairs:
 For an opt-in live Claude Code tool-call proof, run:
 
 ```sh
-python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20
+python3 tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20
 ```
 
 `--call-tool` starts a minimal `claude -p --bare --strict-mcp-config` session
@@ -100,7 +100,7 @@ To test a Windows standalone binary as the stdio MCP server instead of the
 Python script, build the artifact first and pass the binary command explicitly:
 
 ```sh
-python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20 --server-command /path/to/aippocampus.exe --server-arg mcp
+python3 tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20 --server-command /path/to/aippocampus.exe --server-arg mcp
 ```
 
 This uses a temporary strict MCP config only; it does not replace the user's

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
-from aippocampus_runtime.hooks import install_lifecycle, install_prompt
+from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, install_prompt
 from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update import status_actions as update_actions
@@ -513,6 +513,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
     path = hooks_json or install_prompt.hooks_json_path(codex_home_path)
     data = install_prompt.load_hooks(path)
     rows = _hook_rows(data)
+    action_hint_status = install_action_hint.status(path, include_private_paths=False)
     provider_key_bridge_rows = [
         {"event": row["event"], "handler_index": row["handler_index"]}
         for row in rows
@@ -588,6 +589,10 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "prompt_installed": prompt_current,
         "lifecycle_installed": lifecycle_current,
         "lifecycle_events": sorted(lifecycle_current_events),
+        "action_hints": action_hint_status,
+        "action_hints_installed": bool(action_hint_status.get("installed")),
+        "action_hints_ready": action_hint_status.get("cache_status") == "with_fresh_records",
+        "action_hints_status": action_hint_status.get("cache_status") or "not_installed",
         "provider_key_bridge_installed": bool(provider_key_bridge_rows),
         "provider_key_bridge_handlers": provider_key_bridge_rows,
         "duplicate_effective_hook_execution": duplicate_effective_hooks,
@@ -911,8 +916,12 @@ def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
                 installed_auto_resolution.get("status") or "installed_cache_auto_unresolved"
             )
             cache_refresh["next_command"] = (
+                "aippocampus plugin install --codex --verify --compact-json"
+            )
+            cache_refresh["manual_selection_command"] = (
                 "aippocampus update apply --surface plugin --plugin-installed-dir <path>"
             )
+            cache_refresh["candidate_count"] = int(installed_auto_resolution.get("count") or 0)
     verification = compare_plugin(repo_root=repo_root, plugin_output=output)
     return {
         "surface": "plugin",

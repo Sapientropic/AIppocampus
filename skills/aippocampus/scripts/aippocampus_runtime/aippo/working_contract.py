@@ -170,6 +170,13 @@ def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "clause_id": _text(row.get("clause_id"), 100),
         "kind": _text(row.get("kind"), 80) or "working_conclusion",
+        "scope": _text(row.get("scope"), 160) or "project_or_task_family",
+        "topic_epoch": _text(row.get("topic_epoch"), 120) or "default",
+        "workspace_or_environment_profile": _text(
+            row.get("workspace_or_environment_profile"),
+            160,
+        )
+        or "unknown_environment",
         "guidance": _text(row.get("guidance"), 320),
         "applies_when": _strings(row.get("applies_when"), limit=8),
         "does_not_apply_when": _strings(row.get("does_not_apply_when"), limit=8),
@@ -328,6 +335,13 @@ def activation_packet_from_working_contract(
         ),
         "deepen_route_id": f"deepen:{contract.get('aippo_id') or AIPPO_ID}",
     }
+    if not families:
+        packet["no_active_contract_reason"] = (
+            "no_task_family_match"
+            if str(task or "").strip()
+            else "no_task_hint"
+        )
+        packet["next_safe_action"] = "run_agent_recall_if_prior_source_matters"
     if _json_bytes(packet) <= max_packet_bytes:
         return packet
     compact = dict(packet)
@@ -339,6 +353,7 @@ def activation_packet_from_working_contract(
     compact.pop("available_active_clause_count", None)
     compact.pop("suppressed_clause_count", None)
     compact["active_clause_ids"] = trimmed_ids
+    compact["active_clause_count"] = len(trimmed_ids)
     use_guidance = compact.get("use_guidance")
     compact["use_guidance"] = use_guidance[:1] if isinstance(use_guidance, list) else []
     if _json_bytes(compact) <= max_packet_bytes:

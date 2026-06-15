@@ -18,14 +18,22 @@ known mistake; it does not become evidence.
   fingerprints, scope, environment profile, freshness, and sequence order.
 - `extract_learning_activations(...)` opens source-ref-gated learning
   activations for failed tool/test events. Expected TDD red stays review-only.
+  Live `PostToolUse` failures can enter this path only after host payloads are
+  scrubbed into behavior-event-shaped rows with source refs.
 - `detect_recurring_failure_findings(...)` groups repeated failures by a narrow
   signature and retires patterns after later successful retries.
 - `detect_workflow_order_findings(...)` recognizes guarded deterministic
   sequences: cheap preflight before broad tests, environment workaround before
   retry, and source/context reopen before retry.
 - `extract_workflow_candidates(...)` recommends the smallest asset shape:
-  extend an existing skill, create a narrow skill, create a subagent, create an
-  automation, add a checklist, or skip.
+  extend an existing skill/AIppo/docs/checklist/automation/subagent/action-hint
+  route, create a narrow skill, create a subagent, create an automation, add a
+  checklist, or skip. Machine-local lessons are labelled as such and must not
+  be packaged as general agent workflows.
+- `aippocampus_runtime.learning_loop.effectiveness_ledger` records surfaced
+  guidance and later outcomes as append-only navigation metadata.
+- `aippocampus_runtime.learning_loop.private_export` converts operator-selected
+  private rollouts or clean-source behavior files into sanitized replay events.
 - `build_learning_action_time_packet(...)` projects eligible guidance into
   Active Path Packet route-readiness rows for fresh-thread or post-compaction
   orientation.
@@ -62,14 +70,17 @@ causal behavior lift.
 ## Replay Evidence
 
 - Private dogfood harness:
-  `python -m aippocampus_runtime.learning_loop.private_replay --events <sanitized-events.jsonl> --json`.
+  `python3 -m aippocampus_runtime.learning_loop.private_replay --events <sanitized-events.jsonl> --json`.
   The input is a local/private behavior-event export, not raw rollout text. The
   report emits aggregate metrics such as
   `repeated_failure_detection_recall`, `workflow_order_detection_count`,
   `context_reopen_before_action_rate`, `false_positive_nudge_rate`, and
   `raw_private_text_leak_count`.
+- Opt-in export+replay:
+  `python3 -m aippocampus_runtime.learning_loop.private_replay --rollout <local-rollout.jsonl> --export-output <tmp-events.jsonl> --json`.
+  The export output is local-private and should not be committed.
 - Public companion eval:
-  `python benchmarks/aippocampus/benchmark_learning_loop_public_companion.py --json`.
+  `python3 benchmarks/aippocampus/benchmark_learning_loop_public_companion.py --json`.
   It reuses `benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v2.json`
   and `vcs_future_events_v1.jsonl`, separates
   `private_dogfood_comparable_metrics` from `public_reproducible_metrics`, and
@@ -79,6 +90,9 @@ causal behavior lift.
 Private dogfood can show local usefulness. The public companion keeps a
 shareable counterpart. Neither one is an official STATE-Bench held-out score,
 private-history generality proof, or causal product-lift claim.
+
+Latest local private-history readout:
+[`learning-loop-private-replay-2026-06-15.md`](../../evidence/reports/learning-loop-private-replay-2026-06-15.md).
 
 ## Cross-Layer Fixture Surface
 
@@ -91,5 +105,5 @@ controlled salience decay while preserving source-reopen boundaries.
 Run the focused fixture set with:
 
 ```powershell
-python -m unittest tests.aippocampus.test_learning_loop_aippo_adapter tests.aippocampus.test_aippo_clause_lifecycle tests.aippocampus.test_source_shape_projection tests.aippocampus.test_circuit_feedback tests.aippocampus.test_microcircuit_router tests.aippocampus.test_semantic_subregion_budget -v
+python3 -m unittest tests.aippocampus.test_learning_loop_aippo_adapter tests.aippocampus.test_aippo_clause_lifecycle tests.aippocampus.test_source_shape_projection tests.aippocampus.test_circuit_feedback tests.aippocampus.test_microcircuit_router tests.aippocampus.test_semantic_subregion_budget -v
 ```

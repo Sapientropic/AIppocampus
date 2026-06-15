@@ -46,6 +46,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     handle_from_last_recall_cache,
     macro_schema_help,
     macro_state_template,
+    normalize_route_limit,
     policy_boundary,
     public_recall_projection,
     render_aippo_human,
@@ -716,7 +717,7 @@ def recall(
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
     registry_path = _as_path(registry_dir, Path()) if registry_dir else None
-    requested_limit = max(1, min(25, int(max_routes or MAX_ROUTES)))
+    requested_limit = normalize_route_limit(max_routes, default=MAX_ROUTES)
     macro_projection = _load_macro_projection(
         project=project,
         macro_state_path=macro_state_path,
@@ -978,12 +979,13 @@ def deepen(
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
     registry_path = _as_path(registry_dir, Path()) if registry_dir else None
+    match_limit = normalize_route_limit(max_matches, default=MAX_ROUTES)
     try:
         payload = recall_deepen_packet(
             handle=handle,
             clean_source_dir=source_dir,
             registry_dir=registry_path,
-            max_matches=max(1, min(25, int(max_matches or MAX_ROUTES))),
+            max_matches=match_limit,
         )
     except RecallNavigationError as exc:
         macro_projection = _load_macro_projection(
@@ -1005,7 +1007,7 @@ def deepen(
                 "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                     projection=macro_projection,
                     context=macro_context,
-                    requested_limit=MAX_ROUTES,
+                    requested_limit=match_limit,
                 ),
                 "policy_boundary": policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
@@ -1028,7 +1030,7 @@ def deepen(
             "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                 projection=macro_projection,
                 context=macro_context,
-                requested_limit=MAX_ROUTES,
+                requested_limit=match_limit,
             ),
             "policy_boundary": policy_boundary(),
             "cannot_claim": ["facts_outside_opened_source_scope"],
@@ -1281,6 +1283,13 @@ def _json_out(payload: Mapping[str, Any]) -> None:
 _render_recall_human = render_recall_human
 
 
+def _route_limit_arg(value: str) -> int:
+    try:
+        return normalize_route_limit(value, default=MAX_ROUTES)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
@@ -1296,7 +1305,7 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--registry-dir")
     recall_parser.add_argument("--macro-state-jsonl")
     recall_parser.add_argument("--project", default="AIppocampus")
-    recall_parser.add_argument("--max", type=int, default=MAX_ROUTES)
+    recall_parser.add_argument("--max", type=_route_limit_arg, default=MAX_ROUTES)
     recall_parser.add_argument("--attention-router", action="store_true", help="Use attention router opt-in route sorting.")
     recall_parser.add_argument("--attention-router-mode", choices=attention_router_policy.VALID_MODES)
     recall_parser.add_argument(
@@ -1345,7 +1354,7 @@ def _parser() -> argparse.ArgumentParser:
     deepen_parser.add_argument("--registry-dir")
     deepen_parser.add_argument("--macro-state-jsonl")
     deepen_parser.add_argument("--project", default="AIppocampus")
-    deepen_parser.add_argument("--max", type=int, default=MAX_ROUTES)
+    deepen_parser.add_argument("--max", type=_route_limit_arg, default=MAX_ROUTES)
     deepen_parser.add_argument("--json", action="store_true")
 
     explain_parser = sub.add_parser("explain")
@@ -1395,23 +1404,23 @@ def main(argv: list[str] | None = None) -> int:
             semantic_timeout=args.semantic_timeout,
             feedback_path=args.feedback_jsonl,
         )
+        cache_written = write_last_recall_cache(
+            payload.get("deepen_requests") or [],
+            cwd=args.cwd,
+            clean_source_dir=args.clean_source_dir,
+            registry_dir=args.registry_dir,
+            macro_state_path=args.macro_state_jsonl,
+            project=args.project,
+            max_matches=args.max,
+            schema_version=SCHEMA_VERSION,
+            path=args.last_recall_path,
+        )
+        payload = {**payload, "last_recall_cache_available": cache_written}
         if args.json:
             if args.public_json:
                 payload = public_recall_projection(payload)
             _json_out(payload)
         else:
-            cache_written = write_last_recall_cache(
-                payload.get("deepen_requests") or [],
-                cwd=args.cwd,
-                clean_source_dir=args.clean_source_dir,
-                registry_dir=args.registry_dir,
-                macro_state_path=args.macro_state_jsonl,
-                project=args.project,
-                max_matches=args.max,
-                schema_version=SCHEMA_VERSION,
-                path=args.last_recall_path,
-            )
-            payload = {**payload, "last_recall_cache_available": cache_written}
             print(render_recall_human(payload))
         return 0
     if args.command == "aippo":

@@ -10,7 +10,11 @@ from typing import Any
 from aippocampus_runtime.aippo import working_contract
 from aippocampus_runtime.hooks import action_hint_cache
 from aippocampus_runtime.learning_loop import aippo_adapter
-from aippocampus_runtime.navigation import local_global_compatibility, navigation_potential
+from aippocampus_runtime.navigation import (
+    local_global_compatibility,
+    microcircuit_router,
+    navigation_potential,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_learning_source_shape_projection"
@@ -107,9 +111,12 @@ def _aippo_section(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "case_id": str(row.get("clause_id") or _stable_id("aippo", row)),
         "kind": "aippocampus_aippo_activation_packet",
-        "scope": "project:AIppocampus",
+        "scope": str(row.get("scope") or "project_or_task_family"),
         "source_ids": _source_ids(row.get("source_refs")),
-        "topic_epoch": "learning-loop",
+        "topic_epoch": str(row.get("topic_epoch") or "default"),
+        "workspace_or_environment_profile": str(
+            row.get("workspace_or_environment_profile") or "unknown_environment"
+        ),
         "freshness": str(row.get("freshness") or "current"),
         "authority_level": "navigation_only",
         "claim_permission": "working_contract_allowed_no_fact_claim",
@@ -168,11 +175,23 @@ def project_learning_findings_to_source_shape(
             }
             for clause in clauses
         ],
-        topic_epoch="learning-loop",
+        topic_epoch=str((active_findings[0] if active_findings else {}).get("topic_epoch") or "learning-loop"),
     )
     cache_report = action_hint_cache.build_action_hint_cache_report(
         aippo_learned_clauses=clauses,
         now_unix=now_unix,
+    )
+    salience_decay = microcircuit_router.apply_controlled_salience_decay(
+        [
+            {
+                "candidate_id": row.get("finding_id") or row.get("clause_id"),
+                "status": row.get("status") or row.get("freshness"),
+                "scope": row.get("scope"),
+                "source_refs": row.get("source_refs") or [],
+                "feedback_outcomes": row.get("feedback_outcomes") or [],
+            }
+            for row in [*materialized, *aippo_rows]
+        ]
     )
     encoded = json.dumps(
         {
@@ -181,6 +200,7 @@ def project_learning_findings_to_source_shape(
             "glue": glue_rows,
             "cache": cache_report,
             "nav": nav_projection,
+            "decay": salience_decay,
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -215,6 +235,7 @@ def project_learning_findings_to_source_shape(
         "aippo_clause_seeds": aippo_rows,
         "prepared_action_hint_cache": cache_report,
         "navigation_projection": nav_projection,
+        "controlled_salience_decay": salience_decay,
         "suppressed_finding_count": len(materialized) - len(active_findings),
         "red_lines": red_lines,
         "cannot_claim": [

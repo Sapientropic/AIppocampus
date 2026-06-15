@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.hooks.action_hint_cache import (
-    load_action_hint_records,
+    load_action_hint_records_with_diagnostics,
     read_action_hint_records,
 )
 
@@ -302,14 +302,62 @@ def _read_stdin_json() -> dict[str, Any]:
     return dict(payload) if isinstance(payload, Mapping) else {}
 
 
+def _silent_report(reason: str, *, diagnostics: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    privacy = {
+        "raw_tool_args_emitted": False,
+        "raw_command_text_emitted": False,
+        "raw_source_snippets_emitted": False,
+        "local_paths_emitted": False,
+        "private_prompt_text_emitted": False,
+    }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": REPORT_KIND,
+        "ok": True,
+        "decision": "silent",
+        "reason": reason,
+        "features": {},
+        "hint": None,
+        "diagnostics": {
+            "prepared_record_count": 0,
+            "matched_record_count": 0,
+            "raw_tool_args_serialized": False,
+            "raw_command_text_serialized": False,
+            "command_rewritten": False,
+            "permission_system_behavior": False,
+            **dict(diagnostics or {}),
+        },
+        "privacy_boundary": privacy,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-jsonl", type=Path, help="Prepared action-hint record JSONL.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
-    envelope = _read_stdin_json()
-    records = load_action_hint_records(args.cache_jsonl) if args.cache_jsonl else []
-    report = evaluate_action_hint(envelope, records)
+    try:
+        envelope = _read_stdin_json()
+    except json.JSONDecodeError:
+        report = _silent_report("malformed_input")
+    else:
+        cache_diagnostics: dict[str, Any] = {}
+        if args.cache_jsonl:
+            cache_report = load_action_hint_records_with_diagnostics(args.cache_jsonl)
+            records = list(cache_report.get("records") or [])
+            cache_diagnostics = {
+                "malformed_cache_line_count": int(
+                    cache_report.get("malformed_cache_line_count") or 0
+                ),
+                "cache_line_count": int(cache_report.get("line_count") or 0),
+            }
+        else:
+            records = []
+        report = evaluate_action_hint(envelope, records)
+        if cache_diagnostics:
+            diagnostics = report.setdefault("diagnostics", {})
+            if isinstance(diagnostics, dict):
+                diagnostics.update(cache_diagnostics)
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     elif report.get("hint"):

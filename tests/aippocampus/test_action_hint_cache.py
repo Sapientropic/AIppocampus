@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -141,8 +142,57 @@ class ActionHintCacheTests(unittest.TestCase):
         report = cache.build_action_hint_cache_report(now_unix=1000)
 
         self.assertEqual(report["record_count"], 0)
-        self.assertEqual(report["missing_provider_count"], 5)
+        self.assertEqual(report["missing_provider_count"], 6)
         self.assertFalse(report["privacy_boundary"]["raw_tool_args_serialized"])
+
+    def test_aippo_verification_probe_materializes_tiny_navigation_hint(self) -> None:
+        report = cache.build_action_hint_cache_report(
+            aippo_verification_probes=[
+                {
+                    "probe_id": "probe-preflight",
+                    "probe_kind": "workflow_order_probe",
+                    "guidance": "Reopen the prior preflight source.",
+                    "next_action": "reopen_probe_source_before_action",
+                    "source_refs": [source_ref("probe")],
+                    "source_handles": [{"deepen_route_id": "deepen:probe", "reopen_required": True}],
+                },
+                {
+                    "probe_id": "probe-private",
+                    "privacy": "private",
+                    "source_refs": [source_ref("private")],
+                },
+            ],
+            now_unix=1000,
+        )
+
+        self.assertEqual(report["provider_counts"]["aippo_verification_probe"], 1)
+        record = report["records"][0]
+        self.assertEqual(record["provider_family"], "aippo_verification_probe")
+        self.assertTrue(record["navigation_only"])
+        self.assertFalse(record["can_support_factual_claim"])
+
+    def test_refresh_cache_write_round_trips_through_loader(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "action-hints.jsonl"
+            result = cache.refresh_action_hint_cache(
+                cache_jsonl=path,
+                write=True,
+                learning_guidance=[
+                    {
+                        "guidance_id": "learn-preflight",
+                        "next_action": "run_preflight_before_broad_test",
+                        "source_refs": [source_ref("learn")],
+                    }
+                ],
+                now_unix=1000,
+            )
+            records = cache.load_action_hint_records(path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["wrote"])
+        self.assertEqual(result["cache_status"], "with_cache_records")
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["provider_family"], "learning_loop")
 
 
 if __name__ == "__main__":

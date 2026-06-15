@@ -10,7 +10,7 @@ from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.recall import continuity_usefulness
 
 TASK_FAMILY_TERMS = {
-    "issue_writing": ("issue", "closeout", "triage", "github"),
+    "issue_writing": ("issue", "upstream issue", "write upstream", "closeout", "triage", "github"),
     "benchmark_reporting": ("benchmark", "report", "evidence", "claim"),
     "PR_review": ("pr", "review", "pull request"),
     "coding": ("code", "coding", "patch", "implementation", "test"),
@@ -27,14 +27,35 @@ TASK_FAMILY_TERMS = {
     "host_readiness": (
         "install plugin",
         "plugin install",
+        "plugin packaging",
+        "plugin package",
+        "plugin cache",
         "mcp host",
         "mcp health",
         "host readiness",
         "verify mcp",
         "plugin readiness",
         "tools visible",
+        "hook install",
+        "hook status",
+        "install ux",
+        "cache readiness",
+        "status readiness",
+        "current thread visibility",
     ),
     "product_workflow": (
+        "action-time",
+        "action time",
+        "action hint",
+        "action-hint",
+        "hook cache",
+        "hook readiness",
+        "public safe",
+        "public-safe",
+        "python3",
+        "macos",
+        "provider auth",
+        "semantic auth",
         "semantic gate",
         "attention router",
         "mcp health",
@@ -153,10 +174,7 @@ def usefulness_metrics(
     }
     active_ids = {str(item) for item in activation.get("active_clause_ids") or []}
     info_tokens = sum(len(item.split()) for item in selected_guidance)
-    active_count = max(
-        len(active_ids),
-        int(activation.get("active_clause_count") or 0),
-    )
+    active_count = len(active_ids) if active_ids else int(activation.get("active_clause_count") or 0)
     generic_only = int(
         not selected_guidance
         or activation.get("display_hint") == "Scope slice, verify, reopen before claims."
@@ -179,7 +197,8 @@ def continuity_usefulness_for_activation(
     red_lines: Mapping[str, Any],
 ) -> dict[str, Any]:
     guidance = [str(item) for item in activation.get("use_guidance") or []]
-    active_count = int(activation.get("active_clause_count") or len(guidance) or 0)
+    active_ids = [item for item in activation.get("active_clause_ids") or [] if str(item).strip()]
+    active_count = len(active_ids) if active_ids else int(activation.get("active_clause_count") or 0)
     return continuity_usefulness.continuity_usefulness_metrics(
         {
             "red_line_counts": red_lines,

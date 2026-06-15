@@ -85,6 +85,14 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
     "progressive MCP tools": "SKILL.md missing progressive MCP recall preference",
 }
 
+REQUIRED_SKILL_PORTABLE_COMMAND_TERMS = {
+    "use `python3 -m ...` on macOS/Linux": (
+        "SKILL.md missing macOS/Linux python3 module fallback guidance"
+    ),
+    "on Windows": "SKILL.md missing Windows module fallback guidance",
+    "`py -m ...`": "SKILL.md missing copyable Windows py launcher fallback",
+}
+
 REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
@@ -877,6 +885,15 @@ def python_version_contract_issues(repo_root: Path) -> list[str]:
 def dependency_contract_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
 
+    def has_editable_extra_install(text: str, extra: str) -> bool:
+        return any(
+            command in text
+            for command in [
+                f'python -m pip install -e ".[{extra}]"',
+                f'python3 -m pip install -e ".[{extra}]"',
+            ]
+        )
+
     pyproject_path = repo_root / "pyproject.toml"
     if not pyproject_path.exists():
         return ["missing pyproject.toml for dependency contract"]
@@ -919,7 +936,7 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
         readme_text = readme.read_text(encoding="utf-8")
         if "docs/guides/setup/dependency-contract.md" not in readme_text:
             issues.append("README missing dependency contract pointer")
-        if 'python -m pip install -e ".[dev]"' not in readme_text:
+        if not has_editable_extra_install(readme_text, "dev"):
             issues.append("README missing dev extra contributor install path")
         if re.search(r"pip install --upgrade pip\s+ruff", readme_text):
             issues.append("README must not use floating Ruff/mypy/coverage install")
@@ -929,16 +946,16 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
         install_text = install_guide.read_text(encoding="utf-8")
         if "dependency-contract.md" not in install_text:
             issues.append("install guide missing dependency contract pointer")
-        if 'python -m pip install -e ".[dev]"' not in install_text:
+        if not has_editable_extra_install(install_text, "dev"):
             issues.append("install guide missing dev extra contributor install path")
         if re.search(r"pip install --upgrade pip\s+ruff", install_text):
             issues.append("install guide must not use floating Ruff/mypy install")
 
     release_checklist = repo_root / "docs" / "guides" / "setup" / "release-checklist.md"
-    if release_checklist.exists() and 'python -m pip install -e ".[release]"' not in (
-        release_checklist.read_text(encoding="utf-8")
-    ):
-        issues.append("release checklist missing release extra install path")
+    if release_checklist.exists():
+        release_text = release_checklist.read_text(encoding="utf-8")
+        if not has_editable_extra_install(release_text, "release"):
+            issues.append("release checklist missing release extra install path")
 
     ci_workflow = repo_root / ".github" / "workflows" / "aippocampus-ci.yml"
     if ci_workflow.exists():
@@ -1395,6 +1412,15 @@ def check_docs(root: Path) -> dict[str, Any]:
     for phrase, message in REQUIRED_SKILL_CONTINUITY_TERMS.items():
         if phrase not in text and phrase not in flat_text:
             issues.append(message)
+
+    metrics["required_skill_portable_command_terms"] = len(
+        REQUIRED_SKILL_PORTABLE_COMMAND_TERMS
+    )
+    for phrase, message in REQUIRED_SKILL_PORTABLE_COMMAND_TERMS.items():
+        if phrase not in text and phrase not in flat_text:
+            issues.append(message)
+    if "`python -m aippocampus_runtime." in text:
+        issues.append("SKILL.md module fallback examples should use python3/py, not bare python")
 
     references_dir = root / "references"
     for filename in REQUIRED_REFERENCES:

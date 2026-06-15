@@ -6,52 +6,27 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-The next slice is about better restraint.
+The next slice is about fewer sharp edges.
 
-- Segment search can now opt into source-texture sidecars. Texture may help pick
-  the right shard to reopen, but it stays a read-model hint, not evidence.
-- AIppocampus can now hold a compact macro-field view: posture lanes, timing
-  affordance, local/global obstructions, and Yi-structure diagnostics all stay
-  navigation-only until source is reopened.
-- Macro navigation got a firmer spine: the atlas carries a local/global
-  source-shape descriptor, and the King Wen sequence is audited as movement
-  shape, not a training schedule, ranking weight, or oracle.
-- Recall learning is less spooky. Feedback, retrieval reconsolidation, warm
-  preactivation, and posture calibration produce bounded route hints and review
-  rows instead of quietly rewriting memory.
-- Feedback now reaches an actual route surface: useful signals can lift or
-  demote which route an agent reopens first, while source truth stays exactly
-  where it belongs.
-- Agent learning has a calmer loop: repeated tool/test failures, useful
-  command order, environment workarounds, and context-reopen saves can become
-  source-backed guidance for the next agent without copying raw output or
-  pretending a fixture is proof.
-- Those lessons can now travel farther without getting louder: eligible
-  findings may seed low-authority AIppo clauses, source-shape routes, and
-  prepared action-time hints, while stale, local-only, immature, or
-  source-thin rows stay quiet.
-- Growing AIppo clauses now have a lifecycle: probes, prerequisites,
-  conflicts, freshness decay, and severity-weighted feedback can move a clause
-  toward use, review, or deeper source reopening without rewriting clean
-  source.
-- The new route diagnostics are more honest about misses. Microcircuits report
-  where a candidate fell out of budget, semantic subregions keep foreground
-  work on a leash, and circuit feedback records what changed instead of
-  silently tuning the machinery.
-- Agent recall now starts with a tiny action card: use this route first, deepen
-  this handle, or continue normally. The audit payload is still there, but it
-  no longer has to be the first thing a working agent mentally compiles.
-- The old macro router can now read compact macro-field lanes, so posture and
-  timing guidance show up without dragging the whole atlas into the foreground.
-- Subconscious intake is on the normal scheduler path now, with a bypass flag
-  and a sidecar trail, so expensive background attention has a doorkeeper.
-- Local closeout got less theatrical: release/test plans say which gate owns
-  what, and `update apply --all-local --agent-json` now tells agents the next
-  host-reload/foreground-visibility step after syncing local installs.
-- Local install sync also treats relative Codex marketplace paths as living
-  beside the Codex config, not wherever the agent happens to be standing.
+- Agent recall now opens with a tiny action card: the next route, the next
+  deepen step, and the same old boundary: do not make claims before source is
+  reopened.
+- Learning is more useful without getting louder. Tool failures, good command
+  order, environment workarounds, and context-reopen saves can become small
+  source-backed hints; stale, local-only, or source-thin lessons stay quiet.
+- Action-time hints have a real front door: cache refresh, install/status
+  readiness, malformed-cache fail-open behavior, and public-safe JSON that says
+  what is installed, what is fresh, and what still needs a refresh.
+- AIppo, source-shape routes, macro posture, and subconscious intake now share
+  the same discipline: navigation first, source truth later, no backstage
+  material promoted just because it is interesting.
+- Public and local handoff got less fussy. Public recall output no longer
+  exposes local handles or fake-short MCP tokens; MCP errors are marked as
+  errors; semantic MCP recall sees the provider-key bridge; route limits reject
+  explicit bad values; macOS commands are copy-pasteable; and local install
+  sync points ambiguous plugin caches toward the human-friendly reinstall path.
 
-Still alpha. Still source-backed. A little more patience in the machinery.
+Still alpha. Still source-backed. Quieter in the doorway.
 
 ## 0.3.3 - 2026-06-15
 
