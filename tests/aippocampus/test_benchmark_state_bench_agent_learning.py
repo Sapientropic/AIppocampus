@@ -58,6 +58,7 @@ class StateBenchAgentLearningTests(unittest.TestCase):
             encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
             adapter_exists = (adapter_dir / "aippocampus_state_bench_agent.py").exists()
             learnings_exists = learnings_path.exists()
+            learning_rows = json.loads(learnings_path.read_text(encoding="utf-8"))
 
         self.assertTrue(payload["ok"], payload)
         self.assertEqual(payload["status"], "adapter_dry_run_ready")
@@ -68,10 +69,22 @@ class StateBenchAgentLearningTests(unittest.TestCase):
         self.assertEqual(payload["comparison"]["comparison_kind"], "adapter_retrieval_contract")
         self.assertEqual(payload["comparison"]["no_memory"]["retrieved_learning_count"], 0)
         self.assertGreater(payload["comparison"]["aippocampus"]["retrieved_learning_count"], 0)
+        source_arm = payload["arms"]["aippocampus_source_backed_learning"]
+        self.assertEqual(source_arm["status"], "train_only_runtime_projection")
+        self.assertIn("source_backed_lesson_candidate", source_arm["input_layers"])
+        self.assertGreaterEqual(source_arm["guidance_count"], 1)
+        self.assertGreaterEqual(source_arm["source_ref_preserved_count"], 1)
+        self.assertTrue(
+            source_arm["training_correction_projection"]["learned_guidance_can_affect_projection"]
+        )
+        self.assertEqual(source_arm["claim_boundary"]["agent_learning_track_lift"], "not_measured")
         self.assertTrue(payload["artifacts"]["adapter_file_written"])
         self.assertTrue(payload["artifacts"]["learnings_file_written"])
         self.assertTrue(adapter_exists)
         self.assertTrue(learnings_exists)
+        self.assertIsInstance(learning_rows[0], dict)
+        self.assertTrue(learning_rows[0]["source_refs"])
+        self.assertEqual(learning_rows[0]["claim_permission"], "working_guidance_only_not_fact")
         self.assertEqual(payload["official_requirements"]["state_bench_commit"], "83cb96de5429c43adfdb5cb9b6785439e937a3ca")
         self.assertFalse(payload["privacy_boundary"]["raw_trajectory_text_emitted"])
         self.assertFalse(payload["privacy_boundary"]["absolute_paths_emitted"])

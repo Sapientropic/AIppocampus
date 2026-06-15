@@ -79,6 +79,38 @@ class LongMemEvalV2OfficialPilotTests(unittest.TestCase):
         self.assertTrue(rows)
         self.assertIn("tax module", rows[0]["value"])
 
+    def test_adapter_continuity_arm_can_return_non_lexical_route_guidance(self) -> None:
+        lexical = adapter.AippocampusContextProviderMemory({"max_context_items": 2})
+        continuity = adapter.AippocampusContextProviderMemory(
+            {"max_context_items": 2, "arm_mode": "aippocampus_context"}
+        )
+        trajectory = {
+            "id": "t-continuity",
+            "goal": "Generic task text with no billing keyword.",
+            "aippocampus_continuity": {
+                "route_terms": ["billing_exception", "renewal_policy"],
+                "handles": ["aippo:policy-route"],
+            },
+        }
+        lexical.insert(trajectory)
+        continuity.insert(trajectory)
+
+        lexical_rows = lexical.query("billing_exception renewal_policy")
+        continuity_rows = continuity.query("billing_exception renewal_policy")
+        metadata = continuity.post_query_hook(
+            query="billing_exception renewal_policy",
+            query_image=None,
+            memory_context=continuity_rows,
+        )
+
+        self.assertEqual(lexical_rows, [])
+        self.assertTrue(continuity_rows)
+        self.assertIn("kind=continuity_guidance", continuity_rows[0]["value"])
+        self.assertIn("claim_permission=none", continuity_rows[0]["value"])
+        self.assertEqual(metadata["arm_mode"], "aippocampus_context")
+        self.assertGreaterEqual(metadata["returned_continuity_guidance_items"], 1)
+        self.assertFalse(metadata["activation_packet_is_fact_evidence"])
+
     def test_decision_report_selects_tiny_official_pilot_without_claiming_score(self) -> None:
         config = decision.PilotConfig(
             pilot_questions=5,

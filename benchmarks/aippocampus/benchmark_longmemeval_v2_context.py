@@ -20,7 +20,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping, Sequence
 
 import _paths
 
@@ -471,6 +471,54 @@ def build_cases(
     return cases, aggregate
 
 
+def build_agentic_context_arms(
+    cases: Sequence[Mapping[str, Any]],
+    mapping_aggregate: Mapping[str, int | float],
+) -> dict[str, Any]:
+    candidate_cases = [
+        case for case in cases if int(case.get("candidate_trajectory_count") or 0) > 0
+    ]
+    non_exact_candidate_cases = [
+        case for case in candidate_cases if case.get("mapping_status") != "exact_id_match"
+    ]
+    return {
+        "lexical_baseline": {
+            "arm": "lexical_baseline",
+            "mode": "domain_environment_or_exact_join",
+            "selected_context_pack_count": len(candidate_cases),
+            "exact_id_match_count": int(mapping_aggregate.get("exact_id_match_count") or 0),
+            "ambiguous_candidate_count": int(mapping_aggregate.get("ambiguous_candidate_count") or 0),
+            "claim_permission": "source_reopen_required",
+        },
+        "aippocampus_continuity_context": {
+            "arm": "aippocampus_continuity_context",
+            "mode": "routing_only_continuity_guidance",
+            "input_layers": [
+                "lexical_candidate_pool",
+                "aippo_ficus_activation_packet",
+                "source_backed_learning_guidance",
+                "continuity_route_handle",
+            ],
+            "selected_context_pack_count": len(candidate_cases),
+            "non_lexical_guidance_changed_context_count": len(non_exact_candidate_cases),
+            "latency_measurement": "not_run_in_mapping_pilot",
+            "claim_permission": "none",
+            "source_reopen_required_before_claim": True,
+            "activation_packet_is_fact_evidence": False,
+            "privacy_boundary": {
+                "raw_text_emitted": False,
+                "private_history_used": False,
+                "local_path_emitted": False,
+            },
+            "cannot_claim": [
+                "longmemeval_v2_answer_accuracy",
+                "benchmark_grade_context_gathering_score",
+                "activation_packet_as_fact_evidence",
+            ],
+        },
+    }
+
+
 def rate(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
@@ -547,6 +595,13 @@ def run_longmemeval_v2_context_mapping(
         "trajectory_gold_ref_count": trajectory_gold_ref_count,
         "trajectory_gold_ref_rate": rate(trajectory_gold_ref_count, trajectory_count),
     }
+    arms = build_agentic_context_arms(cases, mapping_aggregate)
+    metrics["aippocampus_continuity_context_pack_count"] = arms[
+        "aippocampus_continuity_context"
+    ]["selected_context_pack_count"]
+    metrics["aippocampus_non_lexical_guidance_changed_context_count"] = arms[
+        "aippocampus_continuity_context"
+    ]["non_lexical_guidance_changed_context_count"]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_longmemeval_v2_context_mapping",
@@ -565,6 +620,7 @@ def run_longmemeval_v2_context_mapping(
             "trajectories": trajectory_summary,
         },
         "metrics": metrics,
+        "arms": arms,
         "decision": decision_payload(
             can_build_context_candidate_packs=can_build_context_candidate_packs,
             can_score_benchmark_grade_context_gathering=can_score_benchmark_grade_context_gathering,

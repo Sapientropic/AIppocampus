@@ -81,6 +81,15 @@ ignored operator-controlled path. Do not commit upstream STATE-Bench datasets,
 raw train trajectories, generated learning files, official outputs, provider
 keys, or local absolute paths.
 
+The report now emits three arms: `no_memory`, `static_token_overlap`, and
+`aippocampus_source_backed_learning`. The AIppocampus arm turns train-only
+trajectory observations into learning-loop findings and source-backed lesson
+candidates before projecting `retrieve_learnings`-compatible guidance. The
+generated local learning file can carry source refs and claim boundaries, while
+the public report keeps raw trajectory and raw learning text out. This is still
+a train-only adapter/readiness path: it does not measure held-out task quality
+or Agent Learning lift until both matched arms run under the official harness.
+
 ## 2026-06-10 Local Feasibility Slice
 
 Command shape:

@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.recall.query_policy import normalize_term, unique_preserve
+from aippocampus_runtime.recall.semantic_bridge_map import (
+    SEMANTIC_BRIDGE_SOURCE,
+    semantic_bridge_expansion_terms,
+)
 
 SOURCE_FACTUAL_ALIAS_SOURCE = "source_factual_alias"
 QUERY_EXPANSION_BOUNDARY = "navigation_only_source_reopen_required"
@@ -97,6 +101,7 @@ def plan_query_expansion(
     query_terms: Iterable[str],
     *,
     source_alias_rows: Iterable[Mapping[str, Any]] | None = None,
+    semantic_bridge_rows: Iterable[Mapping[str, Any]] | None = None,
     seed_terms: Iterable[str] | None = None,
     durable_aliases: Mapping[str, Iterable[str]] | None = None,
     limit: int = 64,
@@ -137,6 +142,16 @@ def plan_query_expansion(
         )
         fingerprints.append(_row_fingerprint(row))
 
+    bridge_terms, bridge_diagnostics = semantic_bridge_expansion_terms(
+        original,
+        semantic_bridge_rows or [],
+        limit=limit,
+    )
+    if bridge_terms:
+        expanded.extend(bridge_terms)
+        expansion_sources[SEMANTIC_BRIDGE_SOURCE] = bridge_diagnostics["semantic_bridge_count"]
+        fingerprints.extend(bridge_diagnostics["semantic_bridge_fingerprints"])
+
     expanded = unique_preserve(expanded, limit=limit)
     added_count = max(0, len(expanded) - len(unique_preserve(original, limit=limit)))
     return {
@@ -150,6 +165,7 @@ def plan_query_expansion(
             "added_term_count": added_count,
             "expansion_sources": expansion_sources,
             "source_fingerprints": unique_preserve(fingerprints, limit=12),
+            "semantic_bridge": bridge_diagnostics,
             "provider_calls": 0,
         },
     }

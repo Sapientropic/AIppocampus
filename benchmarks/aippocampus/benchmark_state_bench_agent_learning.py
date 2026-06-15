@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,11 @@ except ModuleNotFoundError:
     import _paths
 
 _paths.ensure_paths()
+
+from aippocampus_runtime.recall.source_backed_lessons import (  # noqa: E402
+    extract_source_backed_lesson_candidates,
+    promote_lesson_candidate,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_state_bench_agent_learning_feasibility"
@@ -301,10 +307,116 @@ def write_no_memory_adapter(*, output_dir: Path) -> Path:
     return adapter_path
 
 
+def _learning_source_ref(row: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "source_id": str(row.get("learning_id") or "statebench:learning"),
+        "event_id": f"{row.get('domain', 'unknown')}:{row.get('task_id', 'unknown')}",
+    }
+
+
+def source_backed_learning_candidates(learnings: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    findings = [
+        {
+            "kind": "aippocampus_learning_finding",
+            "finding_id": f"statebench:{row.get('learning_id')}",
+            "finding_kind": "workflow_order_finding",
+            "candidate_family": "route_constraint_candidate",
+            "workflow_family": "state_bench_train_only_learning",
+            "status": "open",
+            "occurrence_count": 2,
+            "success_after_count": 1,
+            "scope": f"benchmark:state-bench:{row.get('domain', 'unknown')}",
+            "freshness": "current",
+            "source_refs": [_learning_source_ref(row)],
+            "source_ref_count": 1,
+            "foreground_eligible": True,
+            "navigation_only": True,
+            "claim_permission": "navigation_only_not_fact",
+            "source_reopen_required_before_claim": True,
+        }
+        for row in learnings
+    ]
+    return [
+        promote_lesson_candidate(candidate, independent_trail_count=2)
+        for candidate in extract_source_backed_lesson_candidates(findings)
+    ]
+
+
+def source_backed_learning_rows(learnings: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    by_source = {str(row.get("learning_id")): row for row in learnings}
+    rows: list[dict[str, Any]] = []
+    for candidate in source_backed_learning_candidates(learnings):
+        refs = candidate.get("source_refs") or []
+        source_id = str((refs[0] or {}).get("source_id") or "") if refs else ""
+        learning = by_source.get(source_id)
+        rows.append(
+            {
+                "learning": str((learning or {}).get("learning") or candidate.get("proposed_lesson") or ""),
+                "source_refs": refs,
+                "scope": candidate.get("scope") or [],
+                "claim_permission": candidate.get("claim_permission"),
+                "source_reopen_required_before_claim": True,
+                "candidate_kind": candidate.get("candidate_kind"),
+                "navigation_only": True,
+            }
+        )
+    return rows
+
+
+def build_source_backed_learning_arm(learnings: Sequence[Mapping[str, Any]], *, top_k: int) -> dict[str, Any]:
+    candidates = source_backed_learning_candidates(learnings)
+    guidance_rows = source_backed_learning_rows(learnings)
+    fixture_queries = [
+        " ".join(str(term) for term in row.get("query_terms", [])[:5])
+        for row in learnings[:3]
+    ]
+    retrieved = [rank_learnings(query, guidance_rows, top_k=top_k) for query in fixture_queries]
+    source_refs_preserved = sum(
+        1 for row in guidance_rows if row.get("source_refs") and row.get("source_reopen_required_before_claim")
+    )
+    return {
+        "arm": "aippocampus_source_backed_learning",
+        "status": "train_only_runtime_projection" if learnings else "not_run_no_train_learnings",
+        "input_layers": [
+            "train_trajectory_public_metadata",
+            "learning_loop_finding",
+            "source_backed_lesson_candidate",
+        ],
+        "case_count": len(fixture_queries),
+        "guidance_count": len(guidance_rows),
+        "source_ref_preserved_count": source_refs_preserved,
+        "retrieved_guidance_count": sum(len(items) for items in retrieved),
+        "retrieved_nonempty_case_count": sum(1 for items in retrieved if items),
+        "training_correction_projection": {
+            "heldout_fixture_query_count": len(fixture_queries),
+            "learned_guidance_can_affect_projection": bool(guidance_rows and any(retrieved)),
+            "no_memory_guidance_count": 0,
+        },
+        "candidate_status_counts": dict(
+            sorted(Counter(str(row.get("status") or "") for row in candidates).items())
+        ),
+        "privacy_boundary": {
+            "raw_trajectory_text_emitted": False,
+            "heldout_test_oracle_used": False,
+            "private_registry_text_used": False,
+        },
+        "claim_boundary": {
+            "official_task_run_count": 0,
+            "agent_learning_track_lift": "not_measured",
+            "source_reopen_required_before_claim": True,
+        },
+        "cannot_claim": [
+            "official_state_bench_score",
+            "agent_learning_track_lift",
+            "heldout_test_quality",
+        ],
+    }
+
+
 def write_learnings(path: Path, learnings: Sequence[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps([row["learning"] for row in learnings], ensure_ascii=False, indent=2),
+        json.dumps(source_backed_learning_rows(learnings), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -360,6 +472,7 @@ def build_state_bench_agent_learning_report(
         if prepare_matched_run:
             no_memory_adapter_path = write_no_memory_adapter(output_dir=adapter_dir)
     raw_text_count = sum(int(row.get("raw_text_field_count") or 0) for row in learnings)
+    source_backed_arm = build_source_backed_learning_arm(learnings, top_k=OFFICIAL_TOP_K)
     report = _base_report(
         status="adapter_dry_run_ready",
         decision="no_go_adapter_only_no_official_run",
@@ -379,8 +492,19 @@ def build_state_bench_agent_learning_report(
                 "retrieve_learnings_top_k": OFFICIAL_TOP_K,
                 "official_num_runs_required": OFFICIAL_NUM_RUNS,
                 "official_task_run_count": 0,
+                "source_backed_guidance_count": source_backed_arm["guidance_count"],
+                "source_ref_preserved_count": source_backed_arm["source_ref_preserved_count"],
             },
             "comparison": build_retrieval_comparison(learnings, top_k=OFFICIAL_TOP_K),
+            "arms": {
+                "no_memory": {
+                    "arm": "no_memory",
+                    "guidance_count": 0,
+                    "official_task_run_count": 0,
+                },
+                "static_token_overlap": build_retrieval_comparison(learnings, top_k=OFFICIAL_TOP_K),
+                "aippocampus_source_backed_learning": source_backed_arm,
+            },
             "artifacts": {
                 "adapter_file_written": adapter_path is not None,
                 "adapter_file": safe_path_label(adapter_path) if adapter_path else None,

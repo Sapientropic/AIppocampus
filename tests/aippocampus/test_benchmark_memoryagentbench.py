@@ -247,6 +247,29 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["stale_currentness_pass_count"], 1)
         self.assertTrue(payload["false_forgetting_controls"]["local_apply_checked"])
         self.assertTrue(payload["false_forgetting_controls"]["all_cases_retained_prior_versions"])
+        runtime_arm = payload["arms"]["aippocampus_runtime"]
+        self.assertEqual(runtime_arm["status"], "runtime_projection_fixture")
+        self.assertIn("learning_loop_finding", runtime_arm["projection_layers"])
+        self.assertGreaterEqual(
+            runtime_arm["test_time_learning"]["lesson_candidate_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            runtime_arm["test_time_learning"]["foreground_guidance_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            runtime_arm["conflict_resolution"]["stale_demoted_count"],
+            1,
+        )
+        self.assertEqual(
+            runtime_arm["conflict_resolution"]["claim_permission"],
+            "navigation_only_not_fact",
+        )
+        self.assertEqual(
+            runtime_arm["claim_boundary"]["official_memoryagentbench_score"],
+            "not_claimed",
+        )
 
         cases_by_split = {case["split"]: case for case in payload["cases"]}
         ttl = cases_by_split["Test_Time_Learning"]["apply_instrumentation"]

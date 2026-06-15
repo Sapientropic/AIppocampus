@@ -85,6 +85,7 @@ class SegmentSearchOptions:
     deep_elapsed_budget_ms: int | None = None
     deep_terms_per_hop: int = 8
     source_aliases: str | Path | None = None
+    semantic_bridges: str | Path | None = None
     outcome_feedback_path: str | Path | None = None
     outcome_signal: str | None = None
     outcome_run_id: str | None = None
@@ -352,6 +353,7 @@ def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
         query_terms,
         seed_terms=anchor_expanded_terms,
         source_aliases=options.source_aliases,
+        semantic_bridges=options.semantic_bridges,
         cwd=cwd,
     )
     expanded_terms = expansion_plan["expanded_terms"]
@@ -643,6 +645,7 @@ def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
         deep_elapsed_budget_ms=args.deep_elapsed_budget_ms,
         deep_terms_per_hop=args.deep_terms_per_hop,
         source_aliases=args.source_aliases,
+        semantic_bridges=args.semantic_bridges,
         outcome_feedback_path=args.outcome_feedback_path,
         outcome_signal=args.outcome_signal,
         outcome_run_id=args.outcome_run_id,

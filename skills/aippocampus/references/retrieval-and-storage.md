@@ -533,6 +533,28 @@ support levels instead of adding a separate score layer. If a prompt only looks
 related through broad words such as browser/search/local/permission, the correct
 behavior is `skip`, not personalized query expansion.
 
+### Source-Shaped Semantic Bridge
+
+`aippocampus_runtime.navigation.semantic_candidate_context` is the reducer for
+semantic candidate envelopes. It wraps source refs, source families, freshness,
+task mode, hook stage, feedback outcomes, and AIppo/Dream/learning-loop handles
+with the existing `source_shape` guard. Private, stale, malformed, or
+source-thin rows fail open to `blocked` or `direction_only`; accepted rows are
+still `navigation_only` with `claim_permission=none`.
+
+`aippocampus_runtime.recall.semantic_bridge_map` turns reviewed bridge rows into
+query-expansion material. A bridge may connect near-miss wording such as a
+multilingual paraphrase or a coding workflow phrase to route terms before FTS
+candidate truncation. It must have source/event refs for public expansion, must
+demote on wrong-route feedback, and must retire when stale or invalidated.
+`segment_search --semantic-bridges <path>` is the opt-in runtime path; missing
+sidecars simply fall back to existing anchors and source aliases.
+
+`aippocampus_runtime.recall.semantic_effectiveness` projects existing route
+feedback onto semantic candidate ids and scope buckets. It can recommend
+bounded routing promotion, demotion, archive, or `not_enough_evidence`; it does
+not mutate clean source, runtime weights, scope buckets, or claim permission.
+
 ## Route Note Lane
 
 `route-notes.jsonl` is a generated sidecar beside clean source for Codex-style

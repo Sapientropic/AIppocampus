@@ -117,6 +117,13 @@ class LongMemEvalV2ContextMappingTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["environment_candidate_coverage_count"], 2)
         self.assertEqual(payload["metrics"]["ambiguous_candidate_count"], 1)
         self.assertEqual(payload["metrics"]["missing_mapping_count"], 1)
+        self.assertEqual(payload["metrics"]["aippocampus_continuity_context_pack_count"], 2)
+        self.assertEqual(payload["metrics"]["aippocampus_non_lexical_guidance_changed_context_count"], 1)
+        continuity_arm = payload["arms"]["aippocampus_continuity_context"]
+        self.assertEqual(continuity_arm["mode"], "routing_only_continuity_guidance")
+        self.assertEqual(continuity_arm["claim_permission"], "none")
+        self.assertFalse(continuity_arm["activation_packet_is_fact_evidence"])
+        self.assertIn("aippo_ficus_activation_packet", continuity_arm["input_layers"])
         self.assertEqual(payload["decision"]["source_evidence_scoring"], "not_supported_missing_gold_evidence_refs")
         self.assertEqual(payload["decision"]["answer_generation"], "not_run_requires_official_reader_harness")
         self.assertTrue(payload["decision"]["can_build_context_candidate_packs"])
