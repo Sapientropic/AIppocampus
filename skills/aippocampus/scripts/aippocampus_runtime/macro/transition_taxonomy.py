@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 
-from aippocampus_runtime.macro import hexagram, transform_orbit
+from aippocampus_runtime.macro import hexagram, hexagram_navigation, transform_orbit
 from aippocampus_runtime.macro.perturbation import (
     AUTHORITY_LEVEL,
     CLAIM_PERMISSION,
@@ -33,7 +33,7 @@ def transition_taxonomy(
     changed = hexagram.changed_lines(left, right)
     distance = len(changed)
     band = hexagram.perturbation_band(distance)
-    pair = hexagram.king_wen_pair_relation(left)
+    pair = hexagram_navigation.king_wen_pair_relation(left)
     raw_mate = pair.get("pair_mate")
     mate: Mapping[str, Any] = raw_mate if isinstance(raw_mate, Mapping) else {}
     orbit_relation = transform_orbit.relation_label(left, right)

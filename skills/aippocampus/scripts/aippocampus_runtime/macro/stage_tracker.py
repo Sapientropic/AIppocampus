@@ -7,9 +7,9 @@ from typing import Any, Literal, TypeAlias
 from aippocampus_runtime.macro.hexagram import (
     Hexagram,
     HexagramRef,
-    king_wen_pair_relation,
     resolve_hexagram,
 )
+from aippocampus_runtime.macro.hexagram_navigation import king_wen_pair_relation
 from aippocampus_runtime.macro.perturbation import AUTHORITY_LEVEL, CLAIM_PERMISSION
 from aippocampus_runtime.macro.signal_scales import (
     is_project_level_signal,
