@@ -40,9 +40,9 @@ def _next_action(
     agent_callable_status: Any,
 ) -> str:
     if not ok:
-        return "review plugin install error details with --json"
+        return "review plugin install error details with --operator-json"
     if action_required:
-        return "review aippocampus host warnings with --json"
+        return "review aippocampus host warnings with --operator-json"
     if agent_callable_status == "host_live_probe_ok":
         return "reload host app if tools are not visible"
     return "run aippocampus update status --json"
@@ -93,6 +93,8 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             "warning_summary": warning_counts,
         },
         "rollback_command": result.get("rollback_command"),
+        "rollback_preview_command": result.get("rollback_preview_command")
+        or "aippocampus plugin uninstall --codex --dry-run --json",
         "next_status_command": "aippocampus update status --json",
         "claim_boundary": "host probe success proves host exposure, not recall quality or current-thread tool discovery",
     }

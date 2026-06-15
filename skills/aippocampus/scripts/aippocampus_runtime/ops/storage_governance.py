@@ -45,6 +45,7 @@ from aippocampus_runtime.ops.storage_governance_contract import (
     segment_generation_gc_candidates_from_capacity_thread,
     status,
 )
+from aippocampus_runtime.ops.storage_governance_projection import bounded_cli_projection
 
 
 def load_json_file(path: Path) -> dict[str, Any]:
@@ -679,6 +680,16 @@ def main(argv: list[str] | None = None) -> int:
     gc_parser.add_argument("--planner-query", default=None)
     gc_parser.add_argument("--fanout-budget", type=int, default=64)
     gc_parser.add_argument("--json", action="store_true", dest="json_output")
+    gc_parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help="Emit a bounded foreground summary instead of the full audit payload.",
+    )
+    gc_parser.add_argument(
+        "--full",
+        action="store_true",
+        help="With --json, include the full candidate list instead of the --top bounded sample.",
+    )
     args = parser.parse_args(argv)
 
     if args.command != "gc":
@@ -714,7 +725,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(str(exc), file=sys.stderr)
             return 2
-        if args.json_output:
+        if args.json_output or args.summary_json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print(render_apply_text(result))
@@ -749,8 +760,27 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(str(exc), file=sys.stderr)
         return 2
-    if args.json_output:
-        print(json.dumps(plan, ensure_ascii=False, indent=2))
+    if args.summary_json:
+        print(
+            json.dumps(
+                bounded_cli_projection(
+                    plan,
+                    limit=args.top,
+                    summary_only=True,
+                    schema_version=SCHEMA_VERSION,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    elif args.json_output:
+        payload = plan if args.full else bounded_cli_projection(
+            plan,
+            limit=args.top,
+            summary_only=False,
+            schema_version=SCHEMA_VERSION,
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print(render_text(plan))
     return 0

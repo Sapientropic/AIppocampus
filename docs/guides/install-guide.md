@@ -53,16 +53,17 @@ actionable warnings, benign host-probe warnings, and unrelated host/plugin
 noise. It does not copy private memory data, enable hooks, or configure LLM
 keys.
 
-For user-facing closeout, agents should use the public-safe summary instead of
-pasting full operator JSON:
+For user-facing closeout, agents can use JSON directly. A successful install
+emits the public-safe summary instead of full operator JSON:
 
 ```sh
-aippocampus plugin install --codex --verify --public
+aippocampus plugin install --codex --verify --json
 ```
 
 That summary reports install/probe status, warning counts/classes, and rollback
 without local paths, raw stderr tails, command arrays, or unrelated plugin
-paths.
+paths. `--public`, `--compact-json`, and `--summary` remain explicit aliases;
+use `--operator-json` only for deep install/probe debugging.
 
 After verify, enable prompt/lifecycle hooks only when the user trusts this
 machine and wants ambient continuity:
@@ -79,10 +80,14 @@ recall, and local hooks that do not call an external model.
 Rollback stays one or two explicit commands:
 
 ```sh
+aippocampus plugin uninstall --codex --dry-run
 aippocampus plugin uninstall --codex
 aippocampus hooks prompt uninstall
 aippocampus hooks lifecycle uninstall
 ```
+
+Use the dry run when you want the uninstall plan and ownership boundary before
+anything is removed.
 
 ## First Recall Path
 
@@ -287,15 +292,17 @@ plugin IDs; the user-facing plugin name remains `AIppocampus`. If a host UI
 shows the selector, read `local` as a source/install boundary, not as a product
 rename.
 
-Rollback is one command too:
+Rollback has the same preview/apply shape:
 
 ```sh
+aippocampus plugin uninstall --codex --dry-run
 aippocampus plugin uninstall --codex
 ```
 
-Rollback removes the installed Codex plugin, unregisters the local marketplace,
-deletes the AIppocampus versioned installed cache under Codex's plugin cache,
-and deletes only the AIppocampus-owned marketplace directory.
+The dry run reports what AIppocampus owns and would remove. The apply command
+removes the installed Codex plugin, unregisters the local marketplace, deletes
+the AIppocampus versioned installed cache under Codex's plugin cache, and
+deletes only the AIppocampus-owned marketplace directory.
 
 Apply local package/effect surfaces explicitly:
 

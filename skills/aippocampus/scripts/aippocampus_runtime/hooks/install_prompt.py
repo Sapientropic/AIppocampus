@@ -348,6 +348,7 @@ def status(
     include_last: bool = False,
     log_path: Path | None = None,
     status_path: Path | None = None,
+    include_private_paths: bool = False,
 ) -> dict[str, Any]:
     data = load_hooks(path)
     groups = (data.get("hooks") or {}).get("UserPromptSubmit") or []
@@ -378,12 +379,15 @@ def status(
             "installed_via_provider_bridge": installed and bool(bridge_commands),
         }
     )
-    if include_last:
+    if not include_private_paths:
         result["path"] = path.name
         result["path_redacted"] = True
         if commands:
             result["commands"] = ["<redacted:hook-command>" for _ in commands]
             result["commands_redacted"] = True
+        else:
+            result["commands_redacted"] = False
+    if include_last:
         result["last_prompt_hook"] = prompt_hook_audit_status(
             log_path=log_path,
             status_path=status_path,
@@ -417,6 +421,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--log-path", help="Prompt-hook debug JSONL path for --last status.")
     parser.add_argument("--status-path", help="Prompt-hook last-status JSON path for --last status.")
+    parser.add_argument(
+        "--include-private-paths",
+        action="store_true",
+        help="Local diagnostic: include full hook config path and hook commands in status output.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -443,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
             include_last=args.last,
             log_path=Path(args.log_path).resolve() if args.log_path else None,
             status_path=Path(args.status_path).resolve() if args.status_path else None,
+            include_private_paths=args.include_private_paths,
         )
 
     if args.json_output:

@@ -56,6 +56,29 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
         self.assertEqual(semantic_result["decision"], "scent")
         self.assertIn("semantic gate", " ".join(str(reason) for reason in semantic_result["reasons"]))
 
+    def test_semantic_vague_cue_without_route_still_renders_agent_affordance(self) -> None:
+        context = hook.context_for_hook(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [],
+                "evidence": [],
+                "working_memory": [],
+                "semantic_gate": {
+                    "available": True,
+                    "decision": "scent",
+                    "confidence": 0.85,
+                    "query_aliases": [],
+                    "memory_scope": [],
+                },
+            }
+        )
+
+        self.assertIsNotNone(context)
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call agent_recall", context)
+        self.assertIn("No source route was opened", context)
+
     def test_semantic_positive_can_bridge_to_sqlite_when_registry_metadata_misses(self) -> None:
         registry_path = self._write_single_thread_registry(
             title="Unlabeled external project handoff",
@@ -975,4 +998,3 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             )
         )
         self.assertIn("associative cue", " ".join(result["reasons"]))
-

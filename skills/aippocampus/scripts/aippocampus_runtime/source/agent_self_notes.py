@@ -25,10 +25,6 @@ AGENT_SELF_NOTE_BOUNDARY = "agent_self_note_not_source_fact"
 
 VALID_TRIGGERS = {"thread_end", "explicit_agent_reflection", "closeout"}
 STATE_RECALL_TERMS = {
-    "agent",
-    "activation",
-    "atmosphere",
-    "foreground",
     "margin",
     "posture",
     "self",
@@ -40,9 +36,21 @@ STATE_RECALL_TERMS = {
     "前的状态",
     "上次状态",
     "姿态",
-    "氛围",
     "自注",
     "边注",
+}
+STATE_RECALL_CUE_TERMS = {
+    "remember",
+    "recall",
+    "restore",
+    "what was",
+    "where was",
+    "找回",
+    "还记得",
+    "记得",
+    "之前",
+    "上次",
+    "前的",
 }
 RAW_PAYLOAD_RE = re.compile(
     r"(?i)\b(tool_use|tool_result|stdout|stderr|traceback|raw payload|"
@@ -403,7 +411,9 @@ def public_agent_self_note_surface(row: Mapping[str, Any]) -> dict[str, Any]:
 
 def _state_recall_requested(prompt: str) -> bool:
     low = str(prompt or "").casefold()
-    return any(term.casefold() in low for term in STATE_RECALL_TERMS)
+    return any(term.casefold() in low for term in STATE_RECALL_TERMS) and any(
+        cue.casefold() in low for cue in STATE_RECALL_CUE_TERMS
+    )
 
 
 def search_agent_self_notes(
@@ -424,7 +434,9 @@ def search_agent_self_notes(
             continue
         text = _row_search_text(row).casefold()
         matched = unique_preserve([term for term in terms if term in text], limit=8)
-        if not matched and not state_requested:
+        if not matched and state_requested:
+            matched = ["state_recall_cue"]
+        elif not matched:
             continue
         copy = with_trust_fields(dict(row))
         copy["matched_terms"] = matched
@@ -435,7 +447,7 @@ def search_agent_self_notes(
             "source_refs_are_reopen_routes_not_proof_of_note": True,
             "source_reopen_required_before_claim": True,
         }
-        score = len(matched) * 2 + (1 if state_requested else 0)
+        score = 1 if matched == ["state_recall_cue"] else len(matched) * 2
         scored.append(((score, str(copy.get("created_at") or "")), copy))
     scored.sort(key=lambda item: item[0], reverse=True)
     return [item for _, item in scored[: max(0, int(limit or 0))]]

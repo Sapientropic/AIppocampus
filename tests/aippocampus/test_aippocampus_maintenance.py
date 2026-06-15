@@ -220,6 +220,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(payload["maintenance_status"], "degraded")
+        self.assertEqual(payload["cwd"], "<local-path-redacted>")
         self.assertEqual(payload["action_failures"][0]["id"], "build_index")
         self.assertIn("index writer locked", payload["action_failures"][0]["message"])
         self.assertIn(
@@ -307,6 +308,38 @@ class AippocampusMaintenanceTests(unittest.TestCase):
                 "aippocampus_runtime.health",
             ],
         )
+
+    def test_summary_json_is_bounded_and_omits_full_health_audit(self) -> None:
+        health_calls = [{"ok": True, "recommended_actions": []}, {"ok": True, "recommended_actions": []}]
+
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
+                return 0, health_calls.pop(0), "{}", ""
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(
+                [
+                    "--cwd",
+                    ".",
+                    "--no-refresh-cognitive-map",
+                    "--no-refresh-graphify",
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_maintenance_summary")
+        self.assertEqual(payload["cwd"], "<local-path-redacted>")
+        self.assertEqual(payload["maintenance_status"], "ok")
+        self.assertEqual(payload["failure_count"], 0)
+        self.assertNotIn("health_final", payload)
+        self.assertEqual(payload["full_audit_flag"], "--json")
 
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (

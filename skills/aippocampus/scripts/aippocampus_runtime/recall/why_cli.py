@@ -16,16 +16,22 @@ def render_text(payload: Mapping[str, Any]) -> str:
     return "\n".join(
         [
             f"decision: {payload.get('decision')}",
+            f"diagnostic_class: {payload.get('diagnostic_class')}",
+            f"route_specificity: {payload.get('route_specificity')}",
             f"cue_hash: {payload.get('cue_hash')}",
             f"reasons: {', '.join(payload.get('reasons') or []) or 'none'}",
             f"route_ids: {', '.join(payload.get('route_ids') or []) or 'none'}",
             f"next_safe_action: {payload.get('next_safe_action')}",
+            f"suggested_next: {payload.get('suggested_next')}",
         ]
     )
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Explain recall routing decisions.")
+def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="Explain recall routing decisions.",
+    )
     parser.add_argument("mode", choices=["why-recall", "why-not-recall"])
     parser.add_argument("cue")
     parser.add_argument("--cwd", default=os.getcwd())
@@ -48,7 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args_list = list(argv or [])
+    prog = (
+        f"aippocampus {args_list[0]}"
+        if args_list and args_list[0] in {"why-recall", "why-not-recall"}
+        else "aippocampus why-recall"
+    )
+    args = build_parser(prog=prog).parse_args(args_list)
     payload = recall_diagnostic_report(
         cue=args.cue,
         mode=args.mode,

@@ -26,6 +26,28 @@ def _repo_relative(path: str) -> str:
     return normalized[2:] if normalized.startswith("./") else normalized
 
 
+def python_command() -> str:
+    """Return the interpreter that is running the planner, shell-quoted.
+
+    Release and PR verification often run inside a venv, Windows launcher,
+    pyenv/asdf shim, or a host where only ``python3`` exists. The planner should
+    point agents at the active interpreter instead of asking them to rediscover
+    it by rerunning the same gate after ``python`` fails.
+    """
+
+    executable = str(Path(sys.executable).resolve())
+    return '"' + executable.replace('"', '\\"') + '"'
+
+
+def py_command(args: str) -> str:
+    return f"{python_command()} {args}"
+
+
+def py_script(script: str, args: str = "") -> str:
+    suffix = f" {args}" if args else ""
+    return f"{python_command()} {script}{suffix}"
+
+
 def _run_git_name_only(args: list[str]) -> list[str]:
     completed = subprocess.run(
         ["git", *args],
@@ -127,7 +149,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python tools/aippocampus/run_tests.py --tier quick",
+                command=py_script("tools/aippocampus/run_tests.py", "--tier quick"),
                 reason="No changed files were detected; quick is the lowest-cost sanity check.",
                 scope="sanity",
             ),
@@ -137,7 +159,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=f"python -m unittest {' '.join(changed_test_modules)} -v",
+                command=py_command(f"-m unittest {' '.join(changed_test_modules)} -v"),
                 reason="Run changed test modules first so failures point to the edited surface.",
                 scope="focused",
             ),
@@ -147,7 +169,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python tools/aippocampus/docs/check_docs_health.py --json",
+                command=py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
                 reason="Docs and skill-surface edits need the documentation health guard.",
                 scope="focused",
             ),
@@ -157,8 +179,8 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=(
-                    "python -m unittest "
+                command=py_command(
+                    "-m unittest "
                     "tests.aippocampus.test_run_tests_tiers "
                     "tests.aippocampus.test_test_plan -v"
                 ),
@@ -169,7 +191,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python tools/aippocampus/run_tests.py --report-json",
+                command=py_script("tools/aippocampus/run_tests.py", "--report-json"),
                 reason="Tier membership/count drift should be visible before a broad run.",
                 scope="diagnostic",
             ),
@@ -179,8 +201,8 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=(
-                    "python -m unittest "
+                command=py_command(
+                    "-m unittest "
                     "tests.aippocampus.test_agent_discovery_release_check "
                     "tests.aippocampus.test_public_boundary_check -v"
                 ),
@@ -191,7 +213,10 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python tools/aippocampus/release/check_public_boundary.py --json",
+                command=py_script(
+                    "tools/aippocampus/release/check_public_boundary.py",
+                    "--json",
+                ),
                 reason="Public-boundary tooling changes should prove the source scan still runs cleanly.",
                 scope="public-boundary",
             ),
@@ -201,8 +226,8 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=(
-                    "python -m unittest "
+                command=py_command(
+                    "-m unittest "
                     "tests.aippocampus.test_prompt_hook_hot_path "
                     "tests.aippocampus.test_install_prompt_hook "
                     "tests.aippocampus.test_aippocampus_lifecycle_hook -v"
@@ -216,7 +241,9 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python -m unittest tests.aippocampus.test_aippocampus_mcp_server -v",
+                command=py_command(
+                    "-m unittest tests.aippocampus.test_aippocampus_mcp_server -v"
+                ),
                 reason="MCP edits need the host-facing tool contract test.",
                 scope="focused",
             ),
@@ -226,9 +253,9 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=(
-                    "python tools/aippocampus/run_tests.py --tier benchmark-smoke "
-                    "--benchmark-suite-profile public-fast"
+                command=py_script(
+                    "tools/aippocampus/run_tests.py",
+                    "--tier benchmark-smoke --benchmark-suite-profile public-fast",
                 ),
                 reason="Benchmark-adjacent edits need the public-fast benchmark smoke lane.",
                 scope="surface",
@@ -239,7 +266,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python tools/aippocampus/run_tests.py --tier pr",
+                command=py_script("tools/aippocampus/run_tests.py", "--tier pr"),
                 reason="Runtime, plugin, and skill edits should pass the fast local PR gate.",
                 scope="pre-push",
             ),
@@ -249,7 +276,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command="python tools/aippocampus/run_tests.py --tier quick",
+                command=py_script("tools/aippocampus/run_tests.py", "--tier quick"),
                 reason="No specific surface mapping matched; quick is the safe first check.",
                 scope="sanity",
             ),
@@ -290,7 +317,7 @@ def build_release_preflight_plan() -> dict[str, object]:
         "assumption": "Use after the release PR CI is green and before pushing the tag.",
         "local_required": [
             {
-                "command": "python tools/aippocampus/test_plan.py --json",
+                "command": py_script("tools/aippocampus/test_plan.py", "--json"),
                 "reason": (
                     "Record the changed-surface plan and run only the focused commands it "
                     "names that have not already passed in CI."
@@ -298,19 +325,22 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "scope": "decision",
             },
             {
-                "command": "python tools/aippocampus/docs/check_docs_health.py --json",
+                "command": py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
                 "reason": "Release notes, docs pointers, and public claims must still resolve.",
                 "scope": "release-preflight",
             },
             {
-                "command": "python tools/aippocampus/release/check_public_boundary.py --json",
+                "command": py_script(
+                    "tools/aippocampus/release/check_public_boundary.py",
+                    "--json",
+                ),
                 "reason": "Scan release-facing tracked files for local paths, credentials, and private strings.",
                 "scope": "public-boundary",
             },
             {
-                "command": (
-                    "python tools/aippocampus/release/check_agent_discovery_release.py "
-                    "--offline --json"
+                "command": py_script(
+                    "tools/aippocampus/release/check_agent_discovery_release.py",
+                    "--offline --json",
                 ),
                 "reason": (
                     "Before publication, verify local PyPI/MCP metadata without waiting on "
@@ -334,17 +364,19 @@ def build_release_preflight_plan() -> dict[str, object]:
         ],
         "local_if_ci_unavailable_or_changed_after_ci": [
             {
-                "command": "python -m ruff check skills plugins tests tools benchmarks benchmark_corpus",
+                "command": py_command(
+                    "-m ruff check skills plugins tests tools benchmarks benchmark_corpus"
+                ),
                 "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
                 "scope": "fallback",
             },
             {
-                "command": "python -m mypy",
+                "command": py_command("-m mypy"),
                 "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
                 "scope": "fallback",
             },
             {
-                "command": "python tools/aippocampus/run_tests.py --tier pr",
+                "command": py_script("tools/aippocampus/run_tests.py", "--tier pr"),
                 "reason": (
                     "`pr` includes `quick`; do not run both as a closeout ritual. CI "
                     "already owns this for a green PR."
@@ -353,20 +385,26 @@ def build_release_preflight_plan() -> dict[str, object]:
             },
         ],
         "ci_owned_do_not_repeat_locally_by_default": [
-            "python tools/aippocampus/run_tests.py --tier quick",
-            "python tools/aippocampus/run_tests.py --tier broad-pr",
-            "python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast",
-            "python tools/aippocampus/run_coverage.py --tier pr",
-            "python tools/aippocampus/run_tests.py --tier full",
+            py_script("tools/aippocampus/run_tests.py", "--tier quick"),
+            py_script("tools/aippocampus/run_tests.py", "--tier broad-pr"),
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+            ),
+            py_script("tools/aippocampus/run_coverage.py", "--tier pr"),
+            py_script("tools/aippocampus/run_tests.py", "--tier full"),
             "gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-version=3.12",
         ],
         "publish_workflow_owned": [
-            'python -m pip install -e ".[release]"',
-            "python tools/aippocampus/run_tests.py --tier pr",
+            py_command('-m pip install -e ".[release]"'),
+            py_script("tools/aippocampus/run_tests.py", "--tier pr"),
             "check-jsonschema server.json",
-            "python -m build --sdist --wheel",
-            "python -m twine check dist/*",
-            "python tools/aippocampus/release/check_wheel_contract.py --wheel dist/*.whl --json",
+            py_command("-m build --sdist --wheel"),
+            py_command("-m twine check dist/*"),
+            py_script(
+                "tools/aippocampus/release/check_wheel_contract.py",
+                "--wheel dist/*.whl --json",
+            ),
             "PyPI publish",
             "MCP Registry validate and publish",
         ],
@@ -378,8 +416,8 @@ def build_release_preflight_plan() -> dict[str, object]:
         ],
         "post_publish_required": [
             {
-                "command": (
-                    "python tools/aippocampus/release/check_agent_discovery_release.py "
+                "command": py_script(
+                    "tools/aippocampus/release/check_agent_discovery_release.py",
                     "--wait-ready --wait-seconds 300 --poll-interval 20 "
                     "--fail-on-not-ready --json"
                 ),
@@ -387,12 +425,12 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "scope": "post-publish",
             },
             {
-                "command": "python -m pip index versions aippocampus --no-cache-dir",
+                "command": py_command("-m pip index versions aippocampus --no-cache-dir"),
                 "reason": "Confirm PyPI's public simple/index view has caught up before saying latest is available.",
                 "scope": "post-publish",
             },
             {
-                "command": "python -m pip install aippocampus==<version>",
+                "command": py_command("-m pip install aippocampus==<version>"),
                 "reason": "Install the released wheel in a fresh environment, not the checkout.",
                 "scope": "post-publish",
             },

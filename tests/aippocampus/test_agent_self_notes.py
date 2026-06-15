@@ -176,6 +176,34 @@ class AgentSelfNoteTests(unittest.TestCase):
         serialized = json.dumps(matches, ensure_ascii=False)
         self.assertNotIn("source_open", serialized)
 
+    def test_search_does_not_match_foreground_boilerplate_without_note_content(self) -> None:
+        notes = self._notes_module()
+        relevant = notes.build_agent_self_note_row(
+            note_text="Short agent note: test foreground sidenote UX.",
+            thread_key="session:old",
+            source_refs=[],
+            created_at="2026-06-07T00:01:00Z",
+        )
+        long_irrelevant = notes.build_agent_self_note_row(
+            note_text="L" * 600,
+            thread_key="session:old",
+            source_refs=[],
+            created_at="2026-06-07T00:02:00Z",
+        )
+        stdin_irrelevant = notes.build_agent_self_note_row(
+            note_text="line one line two",
+            thread_key="session:old",
+            source_refs=[],
+            created_at="2026-06-07T00:03:00Z",
+        )
+
+        matches = notes.search_agent_self_notes(
+            "foreground sidenote",
+            [relevant, long_irrelevant, stdin_irrelevant],
+        )
+
+        self.assertEqual([match["note_id"] for match in matches], [relevant["note_id"]])
+
 
 if __name__ == "__main__":
     unittest.main()

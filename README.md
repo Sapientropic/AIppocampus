@@ -65,15 +65,17 @@ aippocampus update apply --surface hooks
 
 The Codex plugin command is a source checkout / editable local package path,
 not the public PyPI `uvx` first-recall path. For a user-facing install closeout,
-agents should report the concise public-safe summary:
+agents can ask for JSON directly; successful installs return the concise
+public-safe summary:
 
 ```sh
-aippocampus plugin install --codex --verify --compact-json
+aippocampus plugin install --codex --verify --json
 ```
 
-`--compact-json`, `--public`, and `--summary` are aliases for the same
-public-safe success summary. That path should end in one source-backed recall
-moment, not a diagnostics maze. Rollback stays explicit:
+`--compact-json`, `--public`, and `--summary` remain aliases for the same
+public-safe summary. Use `--operator-json` only when you need the full
+marketplace/cache/host-probe detail. First run should end in one source-backed
+recall moment, not a diagnostics maze. Rollback stays explicit:
 
 ```sh
 aippocampus plugin uninstall --codex

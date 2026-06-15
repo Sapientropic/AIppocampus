@@ -38,17 +38,29 @@ from aippocampus_runtime.update.codex_plugin_cli import (
 from aippocampus_runtime.update.codex_plugin_cli import (
     default_runner as _default_runner,
 )
+from aippocampus_runtime.update.codex_plugin_cli import (
+    path_is_under as _path_is_under,
+)
 from aippocampus_runtime.update.host_probe_warnings import (
     attach_host_probe_warning_summary,
     summarize_host_probe_warnings,
 )
 from aippocampus_runtime.update.plugin_cache import refresh_plugin_cache_layers
+from aippocampus_runtime.update.plugin_marketplace import (
+    MARKETPLACE_MARKER,
+    MARKETPLACE_NAME,
+    PLUGIN_NAME,
+    default_marketplace_root,
+    marketplace_manifest_path,
+)
+from aippocampus_runtime.update.plugin_marketplace import (
+    owned_marketplace_manifest as _owned_marketplace_manifest,
+)
 from aippocampus_runtime.update.plugin_public_summary import public_install_summary
+from aippocampus_runtime.update.plugin_uninstall_preview import (
+    uninstall_codex_plugin_preview,
+)
 
-PLUGIN_NAME = "aippocampus"
-MARKETPLACE_NAME = "aippocampus-local"
-MARKETPLACE_RELATIVE_MANIFEST = Path(".agents") / "plugins" / "marketplace.json"
-MARKETPLACE_MARKER = ".aippocampus-owned-marketplace.json"
 REQUIRED_HOST_TOOLS = {"memory_health", "search_memory", "sync_status"}
 IGNORED_TREE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs"}
 IGNORED_TREE_SUFFIXES = (".pyc", ".pyo")
@@ -184,22 +196,6 @@ class CodexAppServerClient:
             except subprocess.TimeoutExpired:
                 self._proc.kill()
                 self._proc.wait(timeout=5)
-
-
-def default_marketplace_root(codex_home_path: Path | None = None) -> Path:
-    return Path(codex_home_path or codex_home()).expanduser() / "aippocampus-marketplace"
-
-
-def marketplace_manifest_path(marketplace_root: Path) -> Path:
-    return marketplace_root / MARKETPLACE_RELATIVE_MANIFEST
-
-
-def _path_is_under(child: Path, parent: Path) -> bool:
-    try:
-        child.resolve().relative_to(parent.resolve())
-    except ValueError:
-        return False
-    return True
 
 
 def _json_default(value: Any) -> str:
@@ -634,33 +630,8 @@ def install_codex_plugin(
         "agent_callable_status": agent_status,
         "hooks_auto_enabled": False,
         "rollback_command": "aippocampus plugin uninstall --codex",
+        "rollback_preview_command": "aippocampus plugin uninstall --codex --dry-run --json",
     }
-
-
-def _owned_marketplace_manifest(marketplace_root: Path) -> bool:
-    marker = marketplace_root / MARKETPLACE_MARKER
-    if marker.exists():
-        try:
-            data = json.loads(marker.read_text(encoding="utf-8"))
-        except Exception:
-            return False
-        return data.get("owner") == "aippocampus" and data.get("safe_to_remove") is True
-    manifest = marketplace_manifest_path(marketplace_root)
-    if not manifest.exists():
-        return False
-    try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    plugins = data.get("plugins")
-    return (
-        data.get("name") == MARKETPLACE_NAME
-        and isinstance(plugins, list)
-        and len(plugins) == 1
-        and isinstance(plugins[0], dict)
-        and plugins[0].get("name") == PLUGIN_NAME
-        and (plugins[0].get("source") or {}).get("path") == f"./plugins/{PLUGIN_NAME}"
-    )
 
 
 def _remove_owned_marketplace(marketplace_root: Path, codex_home_path: Path) -> bool:
@@ -736,6 +707,13 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--codex-command")
     install.add_argument("--json", action="store_true", dest="json_output")
     install.add_argument(
+        "--operator-json",
+        "--full-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit full operator install/probe details; default JSON is a compact success summary.",
+    )
+    install.add_argument(
         "--compact-json",
         "--public",
         "--summary",
@@ -754,6 +732,7 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall.add_argument("--marketplace-name", default=MARKETPLACE_NAME)
     uninstall.add_argument("--codex-command")
     uninstall.add_argument("--keep-marketplace", action="store_true")
+    uninstall.add_argument("--dry-run", "--preview", action="store_true", dest="dry_run")
     uninstall.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
@@ -775,6 +754,12 @@ def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
         print(f"agent callable: {result['agent_callable_status']}")
         print(f"rollback: {result['rollback_command']}")
     else:
+        if result["kind"] == "aippocampus_plugin_uninstall_preview":
+            print("plugin uninstall: dry run")
+            print(f"would remove installed cache: {result['would_remove_installed_cache']}")
+            print(f"would remove marketplace: {result['would_remove_marketplace_root']}")
+            print(f"execute: {result['execute_command']}")
+            return
         print("plugin: removed")
         print(f"marketplace removed: {result['removed_marketplace_root']}")
 
@@ -795,16 +780,25 @@ def main(argv: list[str] | None = None) -> int:
                 codex_command=args.codex_command,
                 verify=args.verify,
             )
-            if args.public_summary:
+            if args.public_summary or (args.json_output and not args.operator_json):
                 result = public_install_summary(result)
         else:
-            result = uninstall_codex_plugin(
-                codex_home_path=args.codex_home,
-                marketplace_root=args.marketplace_root,
-                marketplace_name=args.marketplace_name,
-                codex_command=args.codex_command,
-                keep_marketplace=args.keep_marketplace,
-            )
+            if args.dry_run:
+                result = uninstall_codex_plugin_preview(
+                    codex_home_path=args.codex_home,
+                    marketplace_root=args.marketplace_root,
+                    marketplace_name=args.marketplace_name,
+                    codex_command=args.codex_command,
+                    keep_marketplace=args.keep_marketplace,
+                )
+            else:
+                result = uninstall_codex_plugin(
+                    codex_home_path=args.codex_home,
+                    marketplace_root=args.marketplace_root,
+                    marketplace_name=args.marketplace_name,
+                    codex_command=args.codex_command,
+                    keep_marketplace=args.keep_marketplace,
+                )
     except Exception as exc:
         error_message = f"{type(exc).__name__}: {exc}"
         error = {
@@ -819,7 +813,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(error_message)
         return 1
-    _emit_result(result, json_output=args.json_output or bool(getattr(args, "public_summary", False)))
+    _emit_result(
+        result,
+        json_output=(
+            args.json_output
+            or bool(getattr(args, "public_summary", False))
+            or bool(getattr(args, "operator_json", False))
+        ),
+    )
     return 0 if result.get("ok") else 1
 
 

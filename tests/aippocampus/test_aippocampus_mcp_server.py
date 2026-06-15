@@ -23,7 +23,7 @@ for _path in (
 
 from aippocampus_runtime import core  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
-from aippocampus_runtime.ops import telepathy_handoff_store  # noqa: E402
+from aippocampus_runtime.ops import provider_key_bridge, telepathy_handoff_store  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 from conversation_sources import ConversationSourceRef  # noqa: E402
@@ -174,6 +174,64 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(aippo_payload["mode"], "aippo")
         self.assertTrue(aippo_payload["policy_boundary"]["navigation_only_not_fact"])
 
+    def test_recall_diagnostic_applies_provider_bridge_before_live_semantic_gate(self) -> None:
+        env_var = "MCP_PROVIDER_BRIDGE_TEST_KEY"
+        secret_value = "mcp-provider-bridge-secret-value"
+        codex_home = self.cwd / "codex-home"
+        dotenv = self.cwd / "provider.env"
+        dotenv.write_text(f"{env_var}={secret_value}\n", encoding="utf-8")
+        provider_key_bridge.write_bridge_manifest(
+            provider_key_bridge.bridge_manifest_path(codex_home),
+            provider_key_bridge.build_bridge_manifest(
+                target="codex-hooks",
+                source="explicit-dotenv",
+                provider_env_var=env_var,
+                credential_dotenv=dotenv,
+            ),
+        )
+        observed: dict[str, str | None] = {}
+
+        def fake_report(**_kwargs: object) -> dict[str, object]:
+            observed["env_value"] = os.environ.get(env_var)
+            return {
+                "kind": "aippocampus_recall_diagnostic",
+                "ok": True,
+                "surface_reports": [],
+                "reasons": [],
+            }
+
+        old_value = os.environ.pop(env_var, None)
+        try:
+            with (
+                mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False),
+                mock.patch.object(mcp, "recall_diagnostic_report", side_effect=fake_report),
+            ):
+                os.environ.pop(env_var, None)
+                response = mcp.call_recall_diagnostic(
+                    {
+                        "cwd": str(self.cwd),
+                        "cue": "vague continuity cue",
+                        "run_semantic_gate": True,
+                        "semantic_gate_mode": "on",
+                    }
+                )
+        finally:
+            if old_value is None:
+                os.environ.pop(env_var, None)
+            else:
+                os.environ[env_var] = old_value
+
+        payload = json.loads(response["content"][0]["text"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(observed["env_value"], secret_value)
+        self.assertEqual(
+            payload["provider_key_bridge"]["status"],
+            "applied_to_current_mcp_process",
+        )
+        self.assertEqual(payload["provider_key_bridge"]["provider_env_vars"], [env_var])
+        self.assertNotIn(secret_value, encoded)
+        self.assertNotIn(str(dotenv), encoded)
+
     def test_tools_only_server_returns_empty_resource_lists(self) -> None:
         resources = mcp.handle_request(
             {"jsonrpc": "2.0", "id": 21, "method": "resources/list"}
@@ -211,6 +269,52 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "registered")
         provider = register.call_args.kwargs["provider"]
         self.assertEqual(provider.name, "codex")
+
+    def test_register_thread_default_response_is_compact_and_omits_session_meta(self) -> None:
+        with mock.patch.object(
+            mcp.registry,
+            "register_current_thread",
+            return_value={
+                "status": "registered",
+                "entry": {
+                    "thread_key": "session:private-raw-thread-id",
+                    "title": "AIppocampus issue cleanup",
+                    "project_label": "AIppocampus",
+                    "message_count": 4300,
+                    "paths": {"clean_source_messages_jsonl": str(self.clean / "messages.jsonl")},
+                    "session_meta": {
+                        "id": "session-private-id",
+                        "base_instructions": "full host instructions should not be in compact MCP output",
+                        "tools": [{"name": "Read", "schema": {"large": True}}],
+                    },
+                },
+            },
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 311,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "register_thread",
+                        "arguments": {"cwd": str(self.cwd), "provider": "codex", "build_index": False},
+                    },
+                }
+            )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(response["result"].get("isError"), payload)
+        self.assertEqual(payload["status"], "registered")
+        self.assertEqual(payload["thread_handle"], "session:private-raw-thread-id")
+        self.assertEqual(payload["title"], "AIppocampus issue cleanup")
+        self.assertEqual(payload["message_count"], 4300)
+        self.assertTrue(payload["has_clean_source"])
+        self.assertIn("agent_next_action", payload)
+        self.assertNotIn("session_meta", encoded)
+        self.assertNotIn("base_instructions", encoded)
+        self.assertNotIn("full host instructions", encoded)
+        self.assertNotIn(str(self.clean), encoded)
 
     def test_register_thread_reports_retryable_registry_writer_busy(self) -> None:
         with mock.patch.object(
@@ -1205,7 +1309,15 @@ class AippocampusMcpServerTests(unittest.TestCase):
             return {
                 "ok": False,
                 "cwd": str(cwd),
-                "recommended_actions": ["run clean source", "repair registry"],
+                "recommended_actions": [
+                    {
+                        "id": "build_index",
+                        "severity": "warning",
+                        "reason": "index is stale",
+                        "command": f"python {self.cwd / 'tools' / 'build_index.py'}",
+                    },
+                    "repair registry",
+                ],
                 "checks": [{"name": f"large-{index}", "path": str(self.cwd / f"{index}.jsonl")} for index in range(12)],
                 "debug": {
                     "command": f"python {self.cwd / 'tools' / 'health.py'} --cwd {self.cwd}",
@@ -1232,6 +1344,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["ok"], False)
         self.assertIn("agent_next_action", payload)
+        self.assertIsInstance(payload["recommended_actions"][0], dict)
+        self.assertEqual(payload["recommended_actions"][0]["id"], "build_index")
+        self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertEqual(payload["agent_next_action"]["id"], "build_index")
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
         self.assertNotIn("checks", payload)

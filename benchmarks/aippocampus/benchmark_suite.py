@@ -28,6 +28,8 @@ import benchmark_live_semantic_gate as live_semantic_benchmark
 import benchmark_memory_decision_gate as gate_benchmark
 import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
+from shared.benchmark_report_contract import benchmark_report_contract_lint
+from shared.benchmark_suite_quality import suite_quality_summary
 
 SCHEMA_VERSION = 1
 BASELINE_PROFILE = "baseline"
@@ -398,12 +400,6 @@ def track_baseline_captured(name: str, payload: dict[str, Any]) -> bool:
         return bool(fts5.get("ok")) and int(source.get("case_count") or 0) > 0
     if name == "source_evidence_deterministic_labels":
         return int(payload.get("case_count") or 0) > 0
-    return bool(payload.get("ok"))
-
-
-def track_quality_ok(payload: dict[str, Any]) -> bool:
-    if "quality_gate_ok" in payload:
-        return bool(payload.get("quality_gate_ok"))
     return bool(payload.get("ok"))
 
 
@@ -1054,7 +1050,15 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         )
 
     privacy_boundary = aggregate_privacy_boundary(tracks)
-    quality_gate_ok = all(track_quality_ok(payload) for payload in tracks.values())
+    quality_summary = suite_quality_summary(tracks)
+    benchmark_contract_lint = {
+        name: benchmark_report_contract_lint(payload)
+        for name, payload in sorted(tracks.items())
+    }
+    benchmark_contract_linter_ok = all(
+        item["ok"] for item in benchmark_contract_lint.values()
+    )
+    quality_gate_ok = bool(quality_summary["quality_gate_ok"]) and benchmark_contract_linter_ok
     baseline_captured = all(
         track_baseline_captured(name, payload) for name, payload in tracks.items()
     )
@@ -1065,6 +1069,10 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
 
     if quality_gate_ok:
         status = "quality_gate_passed"
+    elif baseline_captured and quality_summary["failed_tracks"]:
+        status = "baseline_captured_with_known_gaps"
+    elif baseline_captured and quality_summary["unknown_tracks"]:
+        status = "contract_passed_with_unmatured_tracks"
     elif baseline_captured:
         status = "baseline_captured_with_known_gaps"
     else:
@@ -1087,6 +1095,16 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
             for claim in claims
         }
         | set(suite_level_cannot_claim)
+        | (
+            {"suite_quality_gate_passed"}
+            if quality_summary["unknown_tracks"]
+            else set()
+        )
+        | (
+            {"benchmark_contract_linter_passed"}
+            if not benchmark_contract_linter_ok
+            else set()
+        )
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1094,7 +1112,12 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "generated_at": now_utc(),
         "status": status,
         "ok": bool(baseline_captured),
+        "contract_gate_ok": bool(baseline_captured),
         "quality_gate_ok": bool(quality_gate_ok),
+        "public_quality_gate_ok": bool(quality_gate_ok),
+        "quality_gate_summary": quality_summary,
+        "benchmark_contract_linter_ok": bool(benchmark_contract_linter_ok),
+        "benchmark_contract_lint": benchmark_contract_lint,
         "config": config.sanitized_payload_config(),
         "profile_metadata": profile_metadata(config),
         "threshold_metadata": threshold_metadata(config),

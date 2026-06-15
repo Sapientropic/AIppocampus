@@ -46,10 +46,14 @@ source, and they must not replace raw-private hashes used for exact evidence.
 ## Sync And Export
 
 Clean-source sync and registry artifacts remain private unless an explicit
-profile says otherwise. `public-export` bundle/index paths must use projected
-text and exclude raw rollout. `--no-raw` and `public-export` serve different
-purposes: `--no-raw` prevents raw transcript inclusion, while the redaction
-profile controls the text stored in generated index/report artifacts.
+profile says otherwise. Clean-source `public-export` projections may contain
+redacted text and local reopen join keys for authorized local review, but
+export bundles are stricter: `aippocampus export --redaction-profile
+public-export --no-raw` is metadata-only and omits searchable SQLite indexes,
+session refs, anchors, graph labels, and host session metadata. `--no-raw` and
+`public-export` serve different purposes: `--no-raw` prevents raw transcript
+inclusion, while the redaction profile controls the text stored in generated
+index/report artifacts.
 Private interpretation sidecars such as `source-texture.jsonl` are omitted from
 `public-export` projections by default; future public projections need their
 own allowlist and must preserve source-ref reopen boundaries.

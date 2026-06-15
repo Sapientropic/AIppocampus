@@ -510,6 +510,42 @@ class WarmAmbientRecallTests(unittest.TestCase):
         job = json.loads(Path(result["job_path"]).read_text(encoding="utf-8"))
         self.assertEqual(job["timeout"], warm_scheduler.DEFAULT_DETACHED_WARM_TIMEOUT)
 
+    def test_scheduler_spawn_uses_packaged_warm_cli_module(self) -> None:
+        job_path = self.root / "warm-jobs" / "warm-public.json"
+        job_path.parent.mkdir()
+        job_path.write_text("{}", encoding="utf-8")
+
+        with patch.object(warm_scheduler.subprocess, "Popen") as popen:
+            result = warm_scheduler.spawn_warm_job(job_path, cwd=self.workspace)
+
+        self.assertTrue(result["spawned"])
+        argv = popen.call_args.args[0]
+        self.assertEqual(
+            argv[:3],
+            [sys.executable, "-m", "aippocampus_runtime.warm_ambient.cli"],
+        )
+        self.assertEqual(argv[3:], ["--job-file", str(job_path), "--json"])
+
+    def test_warm_job_status_distinguishes_queue_from_worker(self) -> None:
+        job_dir = self.root / "warm-jobs"
+        job_dir.mkdir()
+        (job_dir / "warm-public.json").write_text(
+            json.dumps({"created_at": "2026-06-06T09:35:00Z"}),
+            encoding="utf-8",
+        )
+        payload = warm_scheduler.warm_status_payload(
+            job_dir=job_dir,
+            now=warm_scheduler.datetime(2026, 6, 6, 9, 40, 0, tzinfo=warm_scheduler.timezone.utc),
+        )
+
+        activity = payload["job_activity"]
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "pending")
+        self.assertEqual(activity["pending_recent_count"], 1)
+        self.assertFalse(activity["worker_process_active"])
+        self.assertFalse(activity["pending_jobs_are_worker_evidence"])
+        self.assertEqual(payload["next_command"], "aippocampus warm status --json")
+
     def test_scheduler_env_opt_out_still_disables_default_warming(self) -> None:
         with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"}):
             result = warm_scheduler.schedule_warm_ambient_recall(

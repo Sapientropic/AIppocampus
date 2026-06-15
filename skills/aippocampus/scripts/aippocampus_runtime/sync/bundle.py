@@ -794,9 +794,18 @@ def available_requires_sync_dir_status() -> dict[str, Any]:
     }
 
 
+def _parser_command(argv: list[str] | None, base_prog: str) -> tuple[str, list[str] | None, str | None]:
+    commands = {"status", "push", "pull", "repair"}
+    if argv and argv[0] in commands and any(arg in {"-h", "--help"} for arg in argv[1:]):
+        return f"{base_prog} {argv[0]}", list(argv[1:]), argv[0]
+    return base_prog, argv, None
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["status", "push", "pull", "repair"])
+    prog, parse_argv, command_override = _parser_command(argv, "aippocampus sync")
+    parser = argparse.ArgumentParser(prog=prog)
+    if command_override is None:
+        parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     parser.add_argument("--sync-dir")
     parser.add_argument("--registry-dir", default=None)
     parser.add_argument("--include-raw", action="store_true")
@@ -808,7 +817,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--age-bin", default=None)
     parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(parse_argv)
+    if command_override is not None:
+        args.command = command_override
 
     try:
         if args.command == "status":

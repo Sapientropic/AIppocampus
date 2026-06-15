@@ -482,6 +482,23 @@ def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _explicit_architecture_navigation(result: dict[str, Any]) -> bool:
+    intent = result.get("agent_surface_intent")
+    if not isinstance(intent, dict) or not intent.get("explicit"):
+        return False
+    return "architecture_navigation" in [str(item) for item in intent.get("surfaces") or []]
+
+
+def _architecture_navigation_only(result: dict[str, Any]) -> bool:
+    if not _explicit_architecture_navigation(result):
+        return False
+    if result.get("decision") == "evidence":
+        return False
+    if _fresh_packet_source_required(result) or has_direction_with_ref_card(result):
+        return False
+    return not _bounded_evidence_cards(result)
+
+
 def _has_foregroundable_ambient_card(result: dict[str, Any]) -> bool:
     raw_ambient = result.get("ambient_recall")
     if not isinstance(raw_ambient, dict):
@@ -537,7 +554,17 @@ def _evidence_card_line(card: dict[str, Any]) -> str:
 
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
     if result.get("decision") == "skip" and not _has_foregroundable_ambient_card(result):
-        return truncate_preserving_lines("\n".join(affordance_lines), max_chars) if (affordance_lines := prepend_hook_agent_affordance(result, [])) else None
+        affordance_lines = prepend_hook_agent_affordance(result, [])
+        if not affordance_lines:
+            return None
+        if _explicit_architecture_navigation(result):
+            affordance_lines.append(
+                "Architecture navigation available (aippocampus). Use agent_recall or agent_explain for topology, attention-router, macro-orientation, or local/global route diagnostics."
+            )
+            affordance_lines.append(
+                "Ambient memory routes are suppressed here unless they are source-required or candidate-backed; run explicit recall if old conversation context becomes relevant."
+            )
+        return truncate_preserving_lines("\n".join(affordance_lines), max_chars)
     if is_weak_direction_only_scent(result):
         if legacy_candidate_summary_suppressed(result) and not _ambient_cards(result):
             return None
@@ -565,6 +592,14 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 )
         lines.append(_evidence_boundary_line(evidence_cards))
     else:
+        if _architecture_navigation_only(result):
+            lines.append(
+                "Architecture navigation available (aippocampus). Use agent_recall or agent_explain for topology, attention-router, macro-orientation, or local/global route diagnostics."
+            )
+            lines.append(
+                "Ambient memory routes are suppressed here unless they are source-required or candidate-backed; run explicit recall if old conversation context becomes relevant."
+            )
+            return truncate_preserving_lines("\n".join(lines), max_chars)
         has_direction_with_ref = has_direction_with_ref_card(result)
         if _fresh_packet_source_required(result):
             lines.append(
@@ -595,7 +630,15 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 "Use only if it helps; do not mention recalled content as fact unless backed by bounded_evidence, source_open, or reopened source."
             )
         else:
-            lines.clear()
+            # Keep the active-pull affordance when semantic or multilingual
+            # continuity intent exists but the hook has no source-safe route to
+            # print. Clearing the envelope here made the strongest vague-recall
+            # cues silently disappear in foreground hosts; the agent can still
+            # call recall/deepen without receiving any source content as fact.
+            if lines:
+                lines.append(
+                    "No source route was opened in the hook; call agent_recall only if prior context would change the answer."
+                )
     if result.get("working_memory"):
         lines.append("Soft working memory candidates (working continuity; source-backed staging):")
         for item in result.get("working_memory") or []:

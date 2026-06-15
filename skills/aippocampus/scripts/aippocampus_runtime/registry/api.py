@@ -377,8 +377,9 @@ def print_entries(entries: list[dict]) -> None:
                 )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
+def main(argv: list[str] | None = None) -> int:
+    public_import_conversation = bool(argv and argv[0] == "register-source")
+    parser = argparse.ArgumentParser(prog="aippocampus import conversation" if public_import_conversation else None)
     parser.add_argument(
         "--registry-dir",
         help="Defaults to $AIPPOCAMPUS_REGISTRY_DIR or $CODEX_HOME/aippocampus-registry.",
@@ -397,9 +398,7 @@ def main() -> int:
     register_rollout = sub.add_parser("register-rollout")
     register_rollout.add_argument("--rollout", required=True)
     register_rollout.add_argument("--provider", choices=PROVIDER_CHOICES, default="codex")
-    register_rollout.add_argument(
-        "--cwd", help="Override the workspace/project path stored in session_meta."
-    )
+    register_rollout.add_argument("--cwd", help="Override the workspace/project path stored in session_meta.")
     register_rollout.add_argument("--title")
     register_rollout.add_argument(
         "--project", help="Human project label for grouping related threads."
@@ -414,7 +413,7 @@ def main() -> int:
     )
     register_rollout.add_argument("--json", action="store_true", dest="json_output")
 
-    register_source = sub.add_parser("register-source")
+    register_source = sub.add_parser("register-source", prog="aippocampus import conversation")
     register_source.add_argument("--input", "--source", dest="source", required=True)
     register_source.add_argument(
         "--provider",
@@ -423,9 +422,7 @@ def main() -> int:
         choices=PROVIDER_CHOICES,
         required=True,
     )
-    register_source.add_argument(
-        "--cwd", help="Override the workspace/project path stored in session_meta."
-    )
+    register_source.add_argument("--cwd", help="Override the workspace/project path stored in session_meta.")
     register_source.add_argument("--title")
     register_source.add_argument(
         "--project", help="Human project label for grouping related threads."
@@ -519,7 +516,7 @@ def main() -> int:
     show.add_argument("--json", action="store_true", dest="json_output")
     show.add_argument("--redact-paths", action="store_true")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
     json_path, md_path = registry_paths(registry_dir)
 

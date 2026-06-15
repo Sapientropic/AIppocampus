@@ -56,8 +56,27 @@ def compact_thread(item: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in pairs.items() if value not in (None, "", [])}
 
 
+def compact_action(item: Any) -> dict[str, Any]:
+    if isinstance(item, dict):
+        pairs = {
+            "id": item.get("id") or item.get("name") or item.get("action"),
+            "severity": item.get("severity") or item.get("level"),
+            "reason": core.compact_text(str(item.get("reason") or item.get("message") or ""), 220),
+            "command": item.get("command"),
+            "scope": item.get("scope"),
+            "retryable": item.get("retryable"),
+        }
+        return {key: value for key, value in pairs.items() if value not in (None, "", [])}
+    text = core.compact_text(str(item or ""), 220)
+    return {"id": "recommended_action", "reason": text} if text else {}
+
+
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    recommended = [str(item) for item in payload.get("recommended_actions") or [] if str(item).strip()][:3]
+    recommended = [
+        action
+        for item in payload.get("recommended_actions") or []
+        if (action := compact_action(item))
+    ][:3]
     checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
     return {
         "detail": "compact",
@@ -69,6 +88,33 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "agent_next_action": (
             recommended[0]
             if recommended
-            else "Run memory_health with detail=full only when diagnosing setup."
+            else {
+                "id": "no_action",
+                "reason": "Run memory_health with detail=full only when diagnosing setup.",
+            }
         ),
     }
+
+
+def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else {}
+    paths = entry.get("paths") if isinstance(entry.get("paths"), dict) else {}
+    status = payload.get("status") or "registered"
+    result = {
+        "status": status,
+        "thread_handle": entry.get("thread_key") or payload.get("thread_key"),
+        "title": core.compact_text(
+            str(entry.get("title") or entry.get("workspace_name") or entry.get("thread_key") or ""),
+            160,
+        ),
+        "project_label": entry.get("project_label"),
+        "message_count": entry.get("message_count"),
+        "has_clean_source": bool(paths.get("clean_source_messages_jsonl") or paths.get("clean_source_dir")),
+        "index_built": bool(payload.get("index_report") or payload.get("index_built")),
+        "agent_next_action": (
+            "Use recall_context or search_memory for task-specific routes; request diagnostic output only for local audit."
+        ),
+    }
+    if not entry and "status" in payload:
+        result["status"] = payload["status"]
+    return {key: value for key, value in result.items() if value not in (None, "", [])}

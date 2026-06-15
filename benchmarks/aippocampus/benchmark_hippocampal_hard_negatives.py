@@ -906,6 +906,11 @@ def _run_synthetic_benchmark(
     }
     quality_gates = _quality_gates(validation, outcome_counts)
     ok = all(bool(value) for value in quality_gates.values())
+    production_slice_gate_ok = bool(
+        production_slice["metrics"]["major_failure_count"] == 0
+        and production_slice["metrics"]["scored_example_count"]
+        >= int(validation.get("case_count") or 0)
+    )
     cannot_claim = [
         "public production-like synthetic slice only; cannot claim real-history H1/H2 quality",
         "does not run a live model, semantic retriever, or private registry",
@@ -916,6 +921,16 @@ def _run_synthetic_benchmark(
         "kind": "aippocampus_hippocampal_hard_negative_benchmark",
         "status": "production_like_public_synthetic_slice" if ok else "failed_contract_smoke",
         "ok": ok,
+        "benchmark_maturity_level": "diagnostic_proxy",
+        "measurement_origin": "deterministic_fixture",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": ok,
+        "production_slice_gate_ok": production_slice_gate_ok,
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "decision_impact": "diagnostic_only",
+        "decision_impact_not_applicable": True,
+        "case_count": int(validation.get("case_count") or 0),
         "generated_at": now_utc(),
         "config": {
             "fixture": "hippocampal_hard_negatives/fixture.json",
@@ -938,6 +953,20 @@ def _run_synthetic_benchmark(
         "outcome_counts": outcome_counts,
         "metrics": metrics,
         "quality_gates": quality_gates,
+        "contract_taxonomy_slice": {
+            "purpose": (
+                "scorer/outcome taxonomy coverage; intentionally includes bad "
+                "examples so penalties and labels are visible"
+            ),
+            "ok": ok,
+            "failures_expected_for_taxonomy_coverage": True,
+            "outcome_counts": outcome_counts,
+            "metrics": {
+                **contract_slice["metrics"],
+                "case_count": int(validation.get("case_count") or 0),
+                "family_counts": case_family_counts,
+            },
+        },
         "cases": contract_slice["cases"],
         "production_slice": {
             "claim_level": "public_production_like_synthetic_diagnostic",
@@ -956,6 +985,14 @@ def _run_synthetic_benchmark(
             "absolute_paths_emitted": False,
             "source_ref_hashes_only": not include_private_text,
         },
+        "useful_now": [
+            "shows whether the scorer penalizes wrong-source, stale-current, unsupported-fact, and confabulated evidence",
+            "separates intentionally bad taxonomy examples from the production-like synthetic slice",
+        ],
+        "agent_action": "read_production_slice_for_quality_and_taxonomy_slice_for_scorer_coverage",
+        "can_support_after_action": [
+            "human-reviewed scorer-contract confidence for public synthetic hard-negative fixtures"
+        ],
         "cannot_claim": cannot_claim,
     }
 

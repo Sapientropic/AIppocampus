@@ -28,6 +28,10 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["claim_level"], "exploratory_public_safe_deterministic_proxy")
         self.assertEqual(payload["execution"]["mode"], "deterministic_scripted_proxy_v0")
         self.assertEqual(payload["execution"]["live_model_calls"], 0)
+        self.assertEqual(payload["measurement_origin"], "scripted_proxy")
+        self.assertFalse(payload["observed_agent_behavior"])
+        self.assertFalse(payload["eligible_for_runtime_policy_adoption"])
+        self.assertFalse(payload["eligible_for_public_quality_claim"])
         self.assertEqual(payload["coverage"]["case_count"], 12)
         self.assertEqual(payload["coverage"]["arm_count"], 5)
         self.assertEqual(payload["coverage"]["case_arm_count"], 60)
@@ -43,6 +47,16 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         )
         self.assertTrue(payload["metrics"]["bounded_resonance_beats_explicit_instruction_proxy"])
         self.assertTrue(payload["metrics"]["bounded_resonance_beats_neutral_posture_proxy"])
+        self.assertTrue(
+            payload["metrics"][
+                "proxy_bounded_resonance_scores_above_explicit_instruction_under_scripted_proxy"
+            ]
+        )
+        self.assertTrue(
+            payload["metrics"][
+                "proxy_bounded_resonance_scores_above_neutral_posture_under_scripted_proxy"
+            ]
+        )
         self.assertTrue(payload["metrics"]["alias_only_drifts_more_than_bounded_resonance"])
         self.assertEqual(
             payload["red_lines"]["bounded_resonance_off_topic_archetype_expansion_count"],
@@ -126,6 +140,10 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["claim_level"], "exploratory_public_safe_live_model_pilot")
         self.assertEqual(payload["execution"]["mode"], "live_model_public_fixture_v0")
         self.assertEqual(payload["execution"]["live_model_calls"], 60)
+        self.assertEqual(payload["measurement_origin"], "model_judged")
+        self.assertFalse(payload["observed_agent_behavior"])
+        self.assertFalse(payload["eligible_for_runtime_policy_adoption"])
+        self.assertFalse(payload["eligible_for_public_quality_claim"])
         self.assertIsNone(payload["execution"]["settings"]["temperature_requested"])
         self.assertFalse(payload["execution"]["settings"]["temperature_sent"])
         self.assertEqual(payload["usage"]["token_usage"]["total_tokens"], 900)
@@ -138,7 +156,7 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         self.assertIn("live_llm_or_host_behavior_lift", payload["cannot_claim"])
         self.assertNotIn("SHOULD_NOT_BE_COPIED", encoded)
         self.assertNotIn("fake-key", encoded)
-        self.assertNotIn("scenario", encoded)
+        self.assertNotIn('"scenario":', encoded)
         self.assertNotIn("posture_packet", encoded)
         for row in payload["cases"]:
             self.assertIn("model_output_excerpt", row)
@@ -163,6 +181,16 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], "aippocampus_avatar_bounded_resonance_pilot")
         self.assertEqual(payload["status"], "summary_only")
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["contract_gate_ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertFalse(payload["public_quality_gate_ok"])
+        self.assertEqual(payload["benchmark_maturity_level"], "diagnostic_proxy")
+        self.assertEqual(payload["case_count"], 12)
+        self.assertEqual(payload["sample_size"], 12)
+        self.assertGreater(payload["cannot_claim_count"], 0)
+        self.assertTrue(payload["full_report_available"])
+        self.assertEqual(payload["full_report_flag"], "--output")
         self.assertEqual(
             payload["stdout_boundary"],
             "summary_only_use_output_for_sanitized_full_report",

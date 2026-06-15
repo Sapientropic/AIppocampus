@@ -239,7 +239,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Provider key bridge:")
         print("  provider-key  Plan/apply/undo an explicit provider key bridge for Codex hooks.")
         print()
-        print("Run with --provider codex --help for the current Codex onboarding options.")
+        print("Examples:")
+        print("  aippocampus onboard --provider auto --status")
+        print("  aippocampus onboard --provider codex --status --json")
+        print("  aippocampus import conversation --format generic-jsonl --input sessions.jsonl --json")
         return 0
 
     if known.status:

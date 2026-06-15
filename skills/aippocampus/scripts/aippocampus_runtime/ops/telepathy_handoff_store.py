@@ -104,6 +104,21 @@ def _looks_private_or_path_like(value: str) -> bool:
     )
 
 
+def _scope_preview(value: str) -> dict[str, str]:
+    text = _text(value)
+    if text and not _looks_private_or_path_like(text):
+        safe = redact_sensitive_values(redact_private_paths({"scope": text})).get("scope")
+        if isinstance(safe, str) and safe == text and safe:
+            return {
+                "scope_label": safe[:120],
+                "scope_visibility": "operator_supplied_public_safe",
+            }
+    return {
+        "scope_label": "",
+        "scope_visibility": "redacted_hash_only",
+    }
+
+
 def _source_ref_hash(value: Any) -> str:
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     return core.stable_text_fingerprint(
@@ -239,6 +254,8 @@ def _card_summary(card: Mapping[str, Any]) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "card_id": card.get("card_id"),
         "scope": card.get("scope"),
+        "scope_label": card.get("scope_label"),
+        "scope_visibility": card.get("scope_visibility"),
         "scope_hash": card.get("scope_hash"),
         "coordination_mode": card.get("coordination_mode"),
         "owner_ref": card.get("owner_ref"),
@@ -306,9 +323,11 @@ def create_handoff(
         "source_ref_count": len(sanitized_refs),
     }
     packet = packets.normalize_coordination_packet(packet_row)
+    scope_preview = _scope_preview(scope)
     card_id = packet["packet_id"]
     card = {
         **packet,
+        **scope_preview,
         "kind": CARD_KIND,
         "card_id": card_id,
         "created_at": now,
@@ -579,7 +598,7 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="aippocampus telepathy", description=__doc__)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--cwd", default=os.getcwd(), help="Workspace used for default store lookup.")
     common.add_argument("--store-path", help="Explicit Telepathy handoff JSONL store.")

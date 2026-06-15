@@ -13,9 +13,13 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.mcp.provider_key_bridge import (
+    maybe_apply_provider_key_bridge_for_semantic_diagnostic,
+)
 from aippocampus_runtime.mcp.public_projection import (
     compact_health_payload,
     compact_message,
+    compact_register_thread_payload,
     compact_thread,
     detail_arg,
     public_payload,
@@ -27,6 +31,10 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_deepen_packet,
 )
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
+from aippocampus_runtime.mcp.tool_readiness import (
+    tool_names_summary,
+    tool_readiness_summary,
+)
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
@@ -42,8 +50,6 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 SERVER_NAME = "aippocampus"
 SERVER_VERSION = "0.1.0"
 DEFAULT_PROTOCOL_VERSION = "2025-11-25"
-
-
 UNSUPPORTED_MUTATION_TOOLS = {
     "delete_memory",
     "enable_hook",
@@ -260,6 +266,15 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         max_routes=int_range(arguments.get("max"), default=agent.MAX_ROUTES, minimum=1, maximum=25),
         attention_router=arguments.get("attention_router_mode")
         or bool(arguments.get("attention_router")),
+        run_semantic_gate=bool(arguments.get("run_semantic_gate")),
+        semantic_gate_mode=str(
+            arguments.get("semantic")
+            or arguments.get("semantic_gate_mode")
+            or "off"
+        ),
+        semantic_timeout=int_range(
+            arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
+        ),
     )
     return text_result(public_payload(arguments, payload))
 
@@ -316,6 +331,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
             "recall_diagnostic requires a non-empty cue, intent, or query.",
             arguments=arguments,
         )
+    provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = recall_diagnostic_report(
         cue=cue,
         mode=str(arguments.get("mode") or "why-recall"),
@@ -335,6 +351,8 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
         ),
     )
+    if provider_bridge_report is not None:
+        payload["provider_key_bridge"] = provider_bridge_report
     return text_result(public_payload(arguments, payload))
 
 
@@ -529,6 +547,8 @@ def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
             wait_timeout_seconds=exc.wait_timeout_seconds,
             registry=str(exc.registry_path),
         )
+    if not arguments.get("include_private_paths"):
+        result = compact_register_thread_payload(result)
     return text_result(public_payload(arguments, result))
 
 
@@ -773,8 +793,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Compatibility no-op for list-tools; MCP catalog output is JSON.",
+    )
+    parser.add_argument(
+        "--compact",
+        "--summary-json",
+        action="store_true",
+        dest="summary_json",
+        help="For list-tools, emit a compact tool-readiness summary instead of full schemas.",
+    )
+    parser.add_argument(
+        "--names",
+        action="store_true",
+        help="For list-tools, emit only visible tool names as JSON.",
+    )
     args = parser.parse_args(argv)
     if args.list_tools or args.command == "list-tools":
+        if args.summary_json:
+            print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
+            return 0
+        if args.names:
+            print(json.dumps(tool_names_summary(), ensure_ascii=False, indent=2))
+            return 0
         print(json.dumps({"tools": TOOLS}, ensure_ascii=False, indent=2))
         return 0
     return serve_stdio()

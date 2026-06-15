@@ -28,6 +28,7 @@ from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
+    agent_semantic_diagnostics,
     architecture_navigation_affordance,
     attention_router_policy,
     feedback_events,
@@ -36,16 +37,28 @@ from aippocampus_runtime.recall import (
 from aippocampus_runtime.recall import (
     agent_facade_contract as facade,
 )
+from aippocampus_runtime.recall.agent_continuity_cli_support import (
+    DEFAULT_MACRO_STATE_RELATIVE_PATHS,
+    handle_boundary_fields,
+    handle_from_last_recall_cache,
+    macro_schema_help,
+    macro_state_template,
+    policy_boundary,
+    public_recall_projection,
+    render_aippo_human,
+    render_deepen_human,
+    render_macro_human,
+    render_macro_schema_human,
+    render_recall_human,
+    write_last_recall_cache,
+)
 
 SCHEMA_VERSION = "agent-opt-in-continuity-v0"
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 KIND = "aippocampus_agent_continuity_path"
 MAX_ROUTES = 5
 MACRO_HANDLE_PREFIX = "macro:project:"
-DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
-    Path(".aippocampus") / "macro-orientation.jsonl",
-    Path(".aippocampus") / "macro_orientation.jsonl",
-)
+LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
 FOREGROUND_FORBIDDEN_KEYS = {
     "source_refs",
     "source_handles",
@@ -85,18 +98,6 @@ def _count_forbidden_keys(value: Any) -> int:
     if isinstance(value, list):
         return sum(_count_forbidden_keys(item) for item in value)
     return 0
-
-
-def _policy_boundary() -> dict[str, Any]:
-    return {
-        "opt_in_required": True,
-        "default_hook_foreground": False,
-        "navigation_only_not_fact": True,
-        "source_reopen_required_for_strong_claims": True,
-        "low_risk_guidance_allowed_without_reopen": True,
-        "public_sdk_stability_claim": False,
-        "hosted_api_claim": False,
-    }
 
 
 def _route_kind(route: Mapping[str, Any]) -> str:
@@ -573,8 +574,13 @@ def macro_orientation(
     *,
     project: str = "AIppocampus",
     macro_state_path: str | Path | None = None,
+    cwd: str | Path | None = None,
 ) -> dict[str, Any]:
-    projection = _load_macro_projection(project=project, macro_state_path=macro_state_path)
+    projection = _load_macro_projection(
+        project=project,
+        macro_state_path=macro_state_path,
+        cwd=cwd,
+    )
     packet = _macro_memory_packet(projection, project=project)
     diagnostics: list[str] = []
     if projection.get("status") != "current":
@@ -613,7 +619,7 @@ def macro_orientation(
             "macro_claim_ready_without_reopen": 0,
             "source_backed_claim_without_reopen": 0,
         },
-        "policy_boundary": _policy_boundary(),
+        "policy_boundary": policy_boundary(),
         "cannot_claim": [
             "source_required_before_macro_packet",
             "macro_orientation_packet_as_fact",
@@ -655,7 +661,7 @@ def _deepen_macro_orientation(
             "surface": "macro",
             "status": "ok" if entry is not None else "cannot_verify",
             "result": result,
-            "policy_boundary": _policy_boundary(),
+            "policy_boundary": policy_boundary(),
             "cannot_claim": ["facts_outside_opened_source_scope", "macro_packet_as_fact"],
         }
     )
@@ -691,7 +697,7 @@ def _explain_macro_orientation(
                     "macro_packet_as_full_provenance",
                 ],
             },
-            "policy_boundary": _policy_boundary(),
+            "policy_boundary": policy_boundary(),
         }
     )
 
@@ -731,6 +737,9 @@ def recall(
     project: str = "AIppocampus",
     max_routes: int = MAX_ROUTES,
     attention_router: bool | str = False,
+    run_semantic_gate: bool = False,
+    semantic_gate_mode: str = "off",
+    semantic_timeout: int = 12,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
 
@@ -774,7 +783,7 @@ def recall(
                     requested_limit=requested_limit,
                     effective_limit=effective_limit,
                 ),
-                "policy_boundary": _policy_boundary(),
+                "policy_boundary": policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
@@ -828,6 +837,16 @@ def recall(
         attention_navigation=attention_navigation,
         memory_packets=memory_packets,
     )
+    semantic_diagnostics = agent_semantic_diagnostics.agent_semantic_gate_diagnostics(
+        query=str(query or ""),
+        cwd=cwd_path,
+        clean_source_dir=source_dir,
+        registry_dir=registry_path,
+        max_routes=effective_limit,
+        run_semantic_gate=run_semantic_gate,
+        semantic_gate_mode=semantic_gate_mode,
+        semantic_timeout=semantic_timeout,
+    )
     forbidden_count = _count_forbidden_keys(memory_packets)
     triage_metrics = _memory_packet_triage_metrics(memory_packets)
     result = {
@@ -842,11 +861,13 @@ def recall(
         "macro_navigation": macro_navigation,
         "attention_router_navigation": attention_navigation,
         "navigation_signals": navigation_signals,
+        "semantic_gate_diagnostics": semantic_diagnostics,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": (
             deepen_requests[0].get("copy_paste_command") if deepen_requests else None
         ),
-        "policy_boundary": _policy_boundary(),
+        **handle_boundary_fields(),
+        "policy_boundary": policy_boundary(),
         "metrics": {
             "memory_packet_count": len(memory_packets),
             "deepen_request_count": len(deepen_requests),
@@ -881,16 +902,17 @@ def activate_aippo(*, task: str = "") -> dict[str, Any]:
     activation = aippo.activation_packet_from_working_contract(contract, task=task)
     usefulness = aippo.usefulness.usefulness_metrics(contract, activation)
     red_lines = _aippo_red_lines(contract, activation)
+    has_guidance = bool(activation.get("active_clause_count") or activation.get("use_guidance"))
     result = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
         "mode": "aippo",
         "surface": "project_workflow_ai_ppocampus",
-        "status": "ok" if activation.get("active_clause_count") else "no_active_contract",
+        "status": "ok" if has_guidance else "no_active_contract",
         "opt_in_required": True,
         "task_hint_used": bool(str(task or "").strip()),
         "activation_packet": activation,
-        "policy_boundary": _policy_boundary(),
+        "policy_boundary": policy_boundary(),
         "metrics": {
             "active_clause_count": activation.get("active_clause_count", 0),
             **usefulness,
@@ -927,7 +949,7 @@ def deepen(
             "surface": "aippo",
             "status": "ok",
             "result": aippo.deepen_aippo_working_contract(contract),
-            "policy_boundary": _policy_boundary(),
+            "policy_boundary": policy_boundary(),
             "cannot_claim": ["facts_outside_opened_source_scope"],
         }
         return _public_payload(result)
@@ -963,13 +985,15 @@ def deepen(
                 "mode": "deepen",
                 "surface": "recall",
                 "status": "cannot_verify",
+                "ok": False,
+                "cli_exit_recommended": "nonzero",
                 "result": navigation_error_payload(exc),
                 "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                     projection=macro_projection,
                     context=macro_context,
                     requested_limit=MAX_ROUTES,
                 ),
-                "policy_boundary": _policy_boundary(),
+                "policy_boundary": policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
@@ -992,7 +1016,7 @@ def deepen(
                 context=macro_context,
                 requested_limit=MAX_ROUTES,
             ),
-            "policy_boundary": _policy_boundary(),
+            "policy_boundary": policy_boundary(),
             "cannot_claim": ["facts_outside_opened_source_scope"],
         }
     )
@@ -1016,7 +1040,7 @@ def explain(
                 "surface": "aippo",
                 "status": "ok",
                 "explanation": aippo.explain_aippo_working_contract(contract),
-                "policy_boundary": _policy_boundary(),
+                "policy_boundary": policy_boundary(),
             }
         )
     macro_project = _macro_project_from_handle(handle)
@@ -1037,13 +1061,15 @@ def explain(
                 "mode": "explain",
                 "surface": "recall",
                 "status": "cannot_verify",
+                "ok": False,
+                "cli_exit_recommended": "nonzero",
                 "explanation": navigation_error_payload(exc),
                 "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                     projection=macro_projection,
                     context=macro_context,
                     requested_limit=MAX_ROUTES,
                 ),
-                "policy_boundary": _policy_boundary(),
+                "policy_boundary": policy_boundary(),
                 "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
             }
         )
@@ -1091,7 +1117,7 @@ def explain(
                 "cannot_claim": ["source_truth_without_deepen", "foreground_packet_as_full_provenance"],
             },
             "macro_navigation_diagnostics": macro_diagnostics,
-            "policy_boundary": _policy_boundary(),
+            "policy_boundary": policy_boundary(),
         }
     )
 
@@ -1133,7 +1159,7 @@ def capture_feedback(
             "wrote_event": wrote_event,
             "storage": "jsonl" if wrote_event else "receipt_only",
             "policy_boundary": {
-                **_policy_boundary(),
+                **policy_boundary(),
                 "feedback_is_source_truth": False,
                 "feedback_can_ripen_candidate_without_source": False,
                 "source_reopen_required_for_claims": True,
@@ -1238,49 +1264,7 @@ def _json_out(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 
-def _render_recall_human(payload: Mapping[str, Any]) -> str:
-    packets = [packet for packet in payload.get("memory_packets") or [] if isinstance(packet, Mapping)]
-    deepen_requests = [
-        request for request in payload.get("deepen_requests") or [] if isinstance(request, Mapping)
-    ]
-    lines = [f"AIppocampus agent recall: {payload.get('status') or 'unknown'}"]
-    if not packets:
-        lines.append("No compact route surfaced.")
-    for index, packet in enumerate(packets[:3], start=1):
-        label = (
-            packet.get("route_topic")
-            or packet.get("route_label")
-            or packet.get("route_id")
-            or "memory route"
-        )
-        next_action = packet.get("recommended_next") or packet.get("next_action") or "reopen_source"
-        lines.append(f"{index}. {label} -> {next_action}")
-        hint = packet.get("selection_hint")
-        if isinstance(hint, Mapping) and hint.get("source"):
-            lines.append(f"   why: {hint.get('source')}:{hint.get('why') or 'selected'}")
-        reason_codes = packet.get("route_delta_reason_codes") or packet.get("triage_rank_reason_codes")
-        if isinstance(reason_codes, list) and reason_codes:
-            lines.append("   codes: " + ", ".join(str(code) for code in reason_codes[:3]))
-    navigation = payload.get("navigation_signals")
-    if isinstance(navigation, Mapping):
-        signals = [str(signal) for signal in navigation.get("signals") or [] if str(signal)]
-        if signals:
-            action = str(navigation.get("next_safe_action") or "deepen_before_claim")
-            lines.append(f"Navigation: {', '.join(signals[:3])} -> {action}")
-    suggested_command = str(payload.get("suggested_next_command") or "").strip()
-    if deepen_requests:
-        first = deepen_requests[0]
-        next_action = str(first.get("human_next_action") or "").strip()
-        if not next_action:
-            request_index = int(first.get("request_index") or 1)
-            next_action = f"deepen route {request_index}; rerun with --json for callable handle"
-        lines.append(f"Next: {next_action}.")
-    elif suggested_command and "aippo-nav:" not in suggested_command and len(suggested_command) <= 160:
-        lines.append(f"Next: {suggested_command}")
-    else:
-        lines.append(f"Next: {payload.get('suggested_next') or 'continue_normally'}")
-    lines.append("Boundary: route only; reopen source before quoting or making strong claims.")
-    return "\n".join(lines)
+_render_recall_human = render_recall_human
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1301,6 +1285,18 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--max", type=int, default=MAX_ROUTES)
     recall_parser.add_argument("--attention-router", action="store_true", help="Use attention router opt-in route sorting.")
     recall_parser.add_argument("--attention-router-mode", choices=attention_router_policy.VALID_MODES)
+    recall_parser.add_argument("--semantic", choices=["off", "auto", "on"])
+    recall_parser.add_argument("--semantic-gate-mode", choices=["off", "auto", "on"])
+    recall_parser.add_argument("--run-semantic-gate", action="store_true")
+    recall_parser.add_argument("--semantic-timeout", type=int, default=12)
+    recall_parser.add_argument("--last-recall-path")
+    recall_parser.add_argument(
+        "--public",
+        "--compact-json",
+        action="store_true",
+        dest="public_json",
+        help="With --json, omit local-private deepen handles and commands.",
+    )
     recall_parser.add_argument("--json", action="store_true")
 
     aippo_parser = sub.add_parser("aippo")
@@ -1310,11 +1306,17 @@ def _parser() -> argparse.ArgumentParser:
 
     macro_parser = sub.add_parser("macro")
     macro_parser.add_argument("--project", default="AIppocampus")
-    macro_parser.add_argument("--macro-state-jsonl", required=True)
+    macro_parser.add_argument("--cwd")
+    macro_parser.add_argument("--macro-state-jsonl")
+    macro_parser.add_argument("--init-template", action="store_true")
+    macro_parser.add_argument("--explain-schema", action="store_true")
     macro_parser.add_argument("--json", action="store_true")
 
     deepen_parser = sub.add_parser("deepen")
-    deepen_parser.add_argument("handle")
+    deepen_parser.add_argument("handle", nargs="?")
+    deepen_parser.add_argument("--request", type=int)
+    deepen_parser.add_argument("--last-recall", action="store_true")
+    deepen_parser.add_argument("--last-recall-path")
     deepen_parser.add_argument("--cwd")
     deepen_parser.add_argument("--clean-source-dir")
     deepen_parser.add_argument("--registry-dir")
@@ -1331,8 +1333,20 @@ def _parser() -> argparse.ArgumentParser:
 
     feedback_parser = sub.add_parser("feedback")
     feedback_parser.add_argument("route_id")
-    feedback_parser.add_argument("--outcome", default="candidate_delivered")
-    feedback_parser.add_argument("--route-kind", default="active_path")
+    feedback_parser.add_argument(
+        "--outcome",
+        default="candidate_delivered",
+        help=(
+            "Feedback outcome: "
+            + ", ".join(sorted(feedback_events.ACTIVE_FLOW_SIGNALS))
+            + "; alias: wrong_route=wrong_route_drag."
+        ),
+    )
+    feedback_parser.add_argument(
+        "--route-kind",
+        default="active_path",
+        help="Route kind: " + ", ".join(sorted(feedback_events.ROUTE_KINDS)) + ".",
+    )
     feedback_parser.add_argument("--reason", default="")
     feedback_parser.add_argument("--feedback-jsonl")
     feedback_parser.add_argument("--json", action="store_true")
@@ -1340,7 +1354,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
     if args.command == "recall":
         query = args.query_flag or " ".join(args.query)
         payload = recall(
@@ -1352,56 +1367,169 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project,
             max_routes=args.max,
             attention_router=args.attention_router_mode or args.attention_router,
+            run_semantic_gate=args.run_semantic_gate,
+            semantic_gate_mode=args.semantic or args.semantic_gate_mode or "off",
+            semantic_timeout=args.semantic_timeout,
         )
         if args.json:
+            if args.public_json:
+                payload = public_recall_projection(payload)
             _json_out(payload)
         else:
-            print(_render_recall_human(payload))
-        return 0
-    if args.command == "aippo":
-        task = args.task_flag or " ".join(args.task)
-        _json_out(activate_aippo(task=task))
-        return 0
-    if args.command == "macro":
-        _json_out(
-            macro_orientation(
-                project=args.project,
-                macro_state_path=args.macro_state_jsonl,
-            )
-        )
-        return 0
-    if args.command == "deepen":
-        _json_out(
-            deepen(
-                args.handle,
+            cache_written = write_last_recall_cache(
+                payload.get("deepen_requests") or [],
                 cwd=args.cwd,
                 clean_source_dir=args.clean_source_dir,
                 registry_dir=args.registry_dir,
                 macro_state_path=args.macro_state_jsonl,
                 project=args.project,
                 max_matches=args.max,
+                schema_version=SCHEMA_VERSION,
+                path=args.last_recall_path,
             )
-        )
+            payload = {**payload, "last_recall_cache_available": cache_written}
+            print(render_recall_human(payload))
         return 0
+    if args.command == "aippo":
+        task = args.task_flag or " ".join(args.task)
+        payload = activate_aippo(task=task)
+        if args.json:
+            _json_out(payload)
+        else:
+            print(render_aippo_human(payload))
+        return 0
+    if args.command == "macro":
+        if args.init_template:
+            payload = macro_state_template(args.project)
+            if args.json:
+                _json_out(payload)
+            else:
+                print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+            return 0
+        if args.explain_schema:
+            payload = macro_schema_help(
+                args.project,
+                schema_version=MACRO_PACKET_SCHEMA_VERSION,
+            )
+            if args.json:
+                _json_out(payload)
+            else:
+                print(render_macro_schema_human(payload))
+            return 0
+        payload = macro_orientation(
+            project=args.project,
+            macro_state_path=args.macro_state_jsonl,
+            cwd=args.cwd,
+        )
+        if args.json:
+            _json_out(payload)
+        else:
+            print(render_macro_human(payload))
+        return 0
+    if args.command == "deepen":
+        handle = args.handle
+        cached_context: dict[str, Any] = {}
+        if args.last_recall or args.request is not None:
+            try:
+                handle, cached_context = handle_from_last_recall_cache(
+                    request_index=int(args.request or 1),
+                    path=args.last_recall_path,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                payload = {
+                    "kind": KIND,
+                    "schema_version": SCHEMA_VERSION,
+                    "mode": "deepen",
+                    "surface": "recall",
+                    "status": "cannot_verify",
+                    "ok": False,
+                    "cli_exit_recommended": "nonzero",
+                    "result": {
+                        "error": {
+                            "code": "last_recall_unavailable",
+                            "message": str(exc),
+                        }
+                    },
+                    "policy_boundary": policy_boundary(),
+                    "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
+                }
+                if args.json:
+                    _json_out(_public_payload(payload))
+                else:
+                    print(render_deepen_human(_public_payload(payload)))
+                return 2
+        if handle is None:
+            parser.error("agent deepen requires a handle or --request N --last-recall")
+        payload = deepen(
+            handle,
+            cwd=args.cwd or cached_context.get("cwd"),
+            clean_source_dir=args.clean_source_dir or cached_context.get("clean_source_dir"),
+            registry_dir=args.registry_dir or cached_context.get("registry_dir"),
+            macro_state_path=args.macro_state_jsonl or cached_context.get("macro_state_jsonl"),
+            project=args.project or cached_context.get("project") or "AIppocampus",
+            max_matches=args.max,
+        )
+        if args.json:
+            _json_out(payload)
+        else:
+            print(render_deepen_human(payload))
+        return 2 if payload.get("status") == "cannot_verify" else 0
     if args.command == "explain":
-        _json_out(
-            explain(
-                args.handle,
-                macro_state_path=args.macro_state_jsonl,
-                project=args.project,
-            )
+        payload = explain(
+            args.handle,
+            macro_state_path=args.macro_state_jsonl,
+            project=args.project,
         )
-        return 0
+        if args.json:
+            _json_out(payload)
+        else:
+            status = str(payload.get("status") or "unknown")
+            explanation = payload.get("explanation")
+            data = explanation if isinstance(explanation, Mapping) else {}
+            raw_error = data.get("error")
+            error = raw_error if isinstance(raw_error, Mapping) else {}
+            if status == "cannot_verify":
+                print("AIppocampus agent explain: cannot verify handle")
+                print("Reason: " + str(error.get("code") or "malformed recall handle"))
+                print(
+                    "Use: run `aippocampus agent recall --json ...` and pass "
+                    "`deepen_requests[].handle`, or use `agent deepen --request N --last-recall`."
+                )
+            else:
+                print("AIppocampus agent explain: ok")
+                print("next_safe_action: " + str(data.get("next_safe_action") or "reopen_source"))
+        return 2 if payload.get("status") == "cannot_verify" else 0
     if args.command == "feedback":
-        _json_out(
-            capture_feedback(
+        try:
+            payload = capture_feedback(
                 route_id=args.route_id,
                 outcome=args.outcome,
                 route_kind=args.route_kind,
                 reason=args.reason,
                 feedback_path=args.feedback_jsonl,
             )
-        )
+        except feedback_events.InvalidFeedbackValue as exc:
+            payload = _public_payload(
+                {
+                    "kind": KIND,
+                    "schema_version": SCHEMA_VERSION,
+                    "mode": "feedback",
+                    "status": "rejected",
+                    "ok": False,
+                    "error": {
+                        "code": "invalid_feedback_value",
+                        "field": exc.field,
+                        "value": exc.value,
+                        "valid_values": sorted(exc.accepted),
+                        "aliases": dict(
+                            sorted((exc.aliases or feedback_events.OUTCOME_ALIASES).items())
+                        ),
+                    },
+                }
+            )
+            _json_out(payload)
+            return 2
+        _json_out(payload)
         return 0
     return 2
 

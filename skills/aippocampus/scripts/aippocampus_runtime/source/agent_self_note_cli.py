@@ -304,8 +304,42 @@ def _append_success_payload(
     return {key: value for key, value in payload.items() if value is not None}
 
 
+def _print_command_help(command: str) -> None:
+    examples = {
+        "append": 'example: aippocampus self-note append --current-thread "short note"',
+        "search": 'example: aippocampus self-note search "thread atmosphere" --json',
+        "list": "example: aippocampus self-note list --max 4 --json",
+    }
+    parser = argparse.ArgumentParser(
+        prog=f"aippocampus self-note {command}",
+        description="Manage low-authority foreground-agent self-notes.",
+    )
+    parser.add_argument("text", nargs="*", help="Note text for append or query text for search.")
+    parser.add_argument("--stdin", action="store_true")
+    parser.add_argument("--cwd", default=".")
+    parser.add_argument("--registry")
+    parser.add_argument("--registry-dir")
+    parser.add_argument("--notes-path")
+    parser.add_argument("--thread-key", default="unknown-thread")
+    parser.add_argument("--current-thread", action="store_true")
+    parser.add_argument("--rollout")
+    parser.add_argument("--trigger", choices=sorted(VALID_TRIGGERS))
+    parser.add_argument("--source-ref-json", action="append")
+    parser.add_argument("--max", type=int, default=4)
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.epilog = examples[command]
+    parser.print_help()
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if raw_args and raw_args[0] in {"append", "search", "list"} and any(
+        item in {"-h", "--help"} for item in raw_args[1:]
+    ):
+        _print_command_help(raw_args[0])
+        return 0
+
+    parser = argparse.ArgumentParser(prog="aippocampus self-note")
     parser.add_argument("command", choices=["append", "search", "list"])
     parser.add_argument("text", nargs="*", help="Note text for append or query text for search.")
     parser.add_argument("--stdin", action="store_true")
@@ -324,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-ref-json", action="append")
     parser.add_argument("--max", type=int, default=4)
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
 
     registry_path = _registry_path_from_args(args)
     notes_path = _notes_path_from_args(args, registry_path)
@@ -410,7 +444,13 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
             note_text=text,
         )
         if args.current_thread
-        else {"ok": True, "row": row}
+        else {
+            "kind": "aippocampus_agent_self_note_append",
+            "ok": True,
+            "note": _public_append_note(row),
+            "source_ref_attached": bool(row.get("source_ref_count")),
+            "privacy_boundary": _privacy_boundary(),
+        }
     )
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

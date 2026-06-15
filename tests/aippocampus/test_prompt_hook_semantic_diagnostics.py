@@ -134,6 +134,53 @@ class PromptHookSemanticDiagnosticsTests(unittest.TestCase):
         self.assertTrue(affordance["not_enough_for_claim"])
         self.assertNotIn("source_refs", context)
 
+    def test_explicit_architecture_prompt_suppresses_unrelated_warm_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "registry" / "threads.json"
+            registry_path.parent.mkdir()
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "session:old-plugin-debugging",
+                                "title": "Old unrelated plugin debugging",
+                                "project_label": "OtherProject",
+                                "anchor_titles": ["attention router incident"],
+                                "keywords": ["attention router", "macro orientation", "plugin"],
+                                "summary": "An old unrelated project route.",
+                                "paths": {"workspace": str(root / "old")},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = hook.assess_prompt(
+                "验一下 topology、attention router、macro orientation、sheaf/local-global 是否让前台少走弯路",
+                cwd=root,
+                registry_path=registry_path,
+                use_semantic_gate=False,
+                search_budget=0,
+                max_elapsed_ms=1200,
+            )
+
+        context = (hook.hook_stdout_payload(result) or {})["hookSpecificOutput"][
+            "additionalContext"
+        ]
+        public = hook.public_hook_debug_payload(result)
+        affordance = public["agent_recall_affordance"]
+
+        self.assertIn("architecture_navigation", affordance["lead_kinds"])
+        self.assertIn("Architecture navigation available", context)
+        self.assertIn("Ambient memory routes are suppressed", context)
+        self.assertNotIn("Old unrelated plugin debugging", context)
+        self.assertNotIn("session:old-plugin-debugging", context)
+
     def test_public_payload_explains_partial_semantic_success_without_raw_worker_details(
         self,
     ) -> None:

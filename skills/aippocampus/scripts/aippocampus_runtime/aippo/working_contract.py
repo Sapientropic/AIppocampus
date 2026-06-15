@@ -39,6 +39,22 @@ CANDIDATE_INPUTS = [
 TRUTH_SOURCES = ["clean_source", "current_claims", "merged_test", "accepted_issue"]
 NAVIGATION_SOURCES = ["cognitive_map", "concept_graph", "repo_familiarity", "pathlet", "episode_arc"]
 CANDIDATE_ONLY_SOURCES = ["agent_self_note", "dream_subconscious"]
+DIRECT_JOURNEY_GUIDANCE = {
+    "fresh_thread_recall": {
+        "next_action": "run_recall_then_deepen",
+        "guidance": [
+            "Run aippocampus agent recall for vague continuity cues before broad manual search.",
+            "Treat route scent as navigation; deepen or reopen source before exact claims.",
+        ],
+    },
+    "host_readiness": {
+        "next_action": "verify_plugin_mcp_hooks",
+        "guidance": [
+            "Check plugin verify/update status, compact MCP tool visibility, and hook status before judging recall quality.",
+            "Separate package freshness, host-visible tools, and current-thread availability.",
+        ],
+    },
+}
 
 
 def _text(value: Any, limit: int = 240) -> str:
@@ -269,6 +285,13 @@ def activation_packet_from_working_contract(
     active = _active_clauses(clauses)
     guidance = usefulness.guidance_snippets(selected)
     families = usefulness.task_families(task)
+    direct_family = next(
+        (family for family in families if family in DIRECT_JOURNEY_GUIDANCE),
+        None,
+    )
+    direct_guidance = DIRECT_JOURNEY_GUIDANCE.get(direct_family or "", {})
+    if not guidance and direct_guidance:
+        guidance = list(direct_guidance.get("guidance") or [])
     display_hint = (
         f"AIppo {families[0]} guidance."
         if families
@@ -289,7 +312,13 @@ def activation_packet_from_working_contract(
         "suppressed_clause_count": len(clauses) - len(active),
         "active_clause_ids": [clause["clause_id"] for clause in selected],
         "claim_permission": "working_contract_allowed_no_fact_claim",
-        "next_action": "use_hint" if selected else "stay_silent",
+        "next_action": (
+            str(direct_guidance.get("next_action"))
+            if direct_guidance
+            else "use_hint"
+            if selected
+            else "stay_silent"
+        ),
         "deepen_route_id": f"deepen:{contract.get('aippo_id') or AIPPO_ID}",
     }
     if _json_bytes(packet) <= max_packet_bytes:

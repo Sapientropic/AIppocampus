@@ -17,6 +17,9 @@ from typing import Any
 from aippocampus_runtime import core, privacy
 from aippocampus_runtime.recall import index_builder
 
+PUBLIC_NO_RAW_PROFILES = {"public-export", "public-metadata"}
+PUBLIC_METADATA_PROFILES = {"public-export", "public-metadata"}
+
 
 def timestamp_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -69,10 +72,14 @@ def run_build_index(
 
 
 def write_handoff(path: Path, manifest: dict[str, Any], include_raw: bool) -> None:
+    public_boundary = manifest.get("public_sharing_boundary")
+    public_share_safe = isinstance(public_boundary, dict) and bool(
+        public_boundary.get("public_share_safe")
+    )
     lines = [
         "# AIppocampus Bundle",
         "",
-        "Use `$aippocampus` in a Codex thread to import or search this bundle.",
+        "Use `$aippocampus` in a Codex thread to import or inspect this bundle.",
         "",
         f"- Created: {manifest.get('created_at')}",
         f"- Source cwd: {manifest.get('cwd')}",
@@ -81,25 +88,228 @@ def write_handoff(path: Path, manifest: dict[str, Any], include_raw: bool) -> No
         f"- Graph nodes: {manifest.get('graph', {}).get('node_count')}",
         f"- Raw rollout included: {'yes' if include_raw else 'no'}",
         "",
-        "Suggested recovery commands:",
-        "",
-        "```powershell",
-        'aippocampus import "<this zip>"',
-        'python -m aippocampus_runtime.recall.rollout_search "keyword" --index "<extracted>\\index\\source_index.sqlite"',
-        "```",
-        "",
-        "`aippocampus_runtime.recall.rollout_search` resolves the generation pointer when the bundle carries",
-        "`index/source_index.pointer.json` and `index/generations/gen_*/source_index.sqlite`.",
-        "",
     ]
+    if public_share_safe:
+        lines.extend(
+            [
+                "This is a public metadata projection. It omits private source text, "
+                "session refs, host session metadata, anchors, graph labels, and the "
+                "searchable SQLite index.",
+                "",
+                "Use a private `raw-private` or `redacted-local` bundle when you need "
+                "local search or source reopen after import.",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "Suggested recovery commands:",
+                "",
+                "```powershell",
+                'aippocampus import "<this zip>"',
+                'python -m aippocampus_runtime.recall.rollout_search "keyword" --index "<extracted>\\index\\source_index.sqlite"',
+                "```",
+                "",
+                "`aippocampus_runtime.recall.rollout_search` resolves the generation pointer when the bundle carries",
+                "`index/source_index.pointer.json` and `index/generations/gen_*/source_index.sqlite`.",
+                "",
+            ]
+        )
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _public_source_hash(*values: Any) -> str:
+    raw = json.dumps(values, ensure_ascii=False, sort_keys=True, default=str)
+    return "source_hash:" + core.stable_text_fingerprint(
+        raw,
+        namespace="public-export-source-ref",
+        length=20,
+    )
+
+
+def _metadata_projection_row(row: dict[str, Any], *, redaction_profile: str) -> dict[str, Any]:
+    source_hash = _public_source_hash(
+        row.get("source_ref"),
+        row.get("source_id"),
+        row.get("message_id"),
+        row.get("turn_id"),
+        row.get("line"),
+    )
+    projected: dict[str, Any] = {
+        "message_id": _public_source_hash("message", row.get("message_id"), source_hash),
+        "turn_id": _public_source_hash("turn", row.get("turn_id"), source_hash),
+        "line": row.get("line"),
+        "timestamp": row.get("timestamp"),
+        "role": row.get("role"),
+        "kind": row.get("kind"),
+        "phase": row.get("phase"),
+        "turn_index": row.get("turn_index"),
+        "is_final": row.get("is_final"),
+        "text": "",
+        "source_ref": source_hash,
+        "source_ref_hash": source_hash,
+        "source_id": source_hash,
+        "redaction_profile": redaction_profile,
+        "redaction_policy": {
+            "source_text_exported": False,
+            "source_refs_hashed": True,
+            "identifiers_hashed": True,
+            "session_metadata_exported": False,
+        },
+    }
+    for key in ("sha1", "content_sha256", "redacted_text_sha256", "scope_labels"):
+        if row.get(key) not in (None, "", []):
+            projected[key] = row.get(key)
+    return {key: value for key, value in projected.items() if value is not None}
+
+
+def _rewrite_messages_metadata_only(path: Path, *, redaction_profile: str) -> None:
+    if not path.exists():
+        return
+    projected_rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict):
+                projected_rows.append(
+                    _metadata_projection_row(row, redaction_profile=redaction_profile)
+                )
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        for row in projected_rows:
+            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _rewrite_turns_metadata_only(path: Path) -> None:
+    if not path.exists():
+        return
+    projected_rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            turn_hash = _public_source_hash("turn", row.get("turn_id"), row.get("turn_index"))
+            message_hashes = [
+                _public_source_hash("message", item, turn_hash)
+                for item in row.get("message_ids") or []
+            ]
+            projected_rows.append(
+                {
+                    "turn_id": turn_hash,
+                    "turn_index": row.get("turn_index"),
+                    "timestamp": row.get("timestamp"),
+                    "message_ids": message_hashes,
+                    "redaction_policy": {
+                        "identifiers_hashed": True,
+                        "source_text_exported": False,
+                    },
+                }
+            )
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        for row in projected_rows:
+            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _remove_search_index_artifacts(index_dir: Path) -> None:
+    for pattern in ("*.sqlite", "*.sqlite-*", "source_index.pointer.json"):
+        for file in index_dir.rglob(pattern):
+            if file.is_file():
+                file.unlink()
+    generations = index_dir / "generations"
+    if generations.exists():
+        shutil.rmtree(generations)
+    (index_dir / "search_index_omitted.json").write_text(
+        json.dumps(
+            {
+                "kind": "aippocampus_public_metadata_search_index_projection",
+                "search_index_included": False,
+                "reason": "searchable_indexes_can_embed_private_clean_source_text",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _public_bundle_manifest(manifest: dict[str, Any], *, redaction_profile: str) -> dict[str, Any]:
+    projected = privacy.redact_private_paths(manifest)
+    if redaction_profile in PUBLIC_METADATA_PROFILES:
+        projected.pop("session_meta", None)
+        projected["redaction_profile"] = redaction_profile
+        projected["source_thread_key"] = "<source-thread-key-omitted>"
+        projected["source_rollout"] = privacy.LOCAL_PATH_REDACTION
+        projected["source_rollout_sha256"] = None
+        graph = dict(projected.get("graph") or {})
+        projected["graph"] = {
+            "node_count": graph.get("node_count", 0),
+            "edge_count": graph.get("edge_count", 0),
+            "projection": "count_only",
+        }
+        public_boundary = {
+            "public_share_safe": True,
+            "private_clean_source_text_included": False,
+            "raw_rollout_included": False,
+            "session_metadata_included": False,
+            "source_refs_hashed": True,
+            "anchors_and_graph_labels_omitted": True,
+            "search_index_included": False,
+            "legacy_public_export_boundary": (
+                "public-export is metadata-only as of 0.3.2; use raw-private "
+                "or redacted-local for private searchable transfer bundles."
+            )
+            if redaction_profile == "public-export"
+            else None,
+        }
+        projected["public_sharing_boundary"] = {
+            key: value for key, value in public_boundary.items() if value is not None
+        }
+    return projected
+
+
+def _strip_public_metadata_index(
+    index_dir: Path,
+    manifest: dict[str, Any],
+    *,
+    redaction_profile: str,
+) -> None:
+    _rewrite_messages_metadata_only(index_dir / "messages.jsonl", redaction_profile=redaction_profile)
+    _rewrite_turns_metadata_only(index_dir / "turns.jsonl")
+    _remove_search_index_artifacts(index_dir)
+    graph = dict(manifest.get("graph") or {})
+    (index_dir / "graph.json").write_text(
+        json.dumps(
+            {
+                "kind": "aippocampus_public_metadata_graph_projection",
+                "node_count": graph.get("node_count", 0),
+                "edge_count": graph.get("edge_count", 0),
+                "nodes": [],
+                "edges": [],
+                "omitted": "anchor_labels_are_private",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
     cwd = Path(args.cwd).resolve()
     redaction_profile = str(getattr(args, "redaction_profile", "raw-private") or "raw-private")
-    if redaction_profile == "public-export" and not args.no_raw:
-        raise ValueError("public-export redaction profile requires --no-raw")
+    if redaction_profile in PUBLIC_NO_RAW_PROFILES and not args.no_raw:
+        raise ValueError(f"{redaction_profile} redaction profile requires --no-raw")
     rollout = Path(args.rollout) if args.rollout else core.locate_rollout(cwd, core.codex_home())
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
@@ -114,18 +324,29 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
     bundle_root.mkdir(parents=True)
 
     index_dir = bundle_root / "index"
+    index_redaction_profile = (
+        "public-metadata" if redaction_profile in PUBLIC_METADATA_PROFILES else redaction_profile
+    )
     manifest = run_build_index(
         cwd,
         rollout,
         index_dir,
         anchors,
         args.hash_source,
-        redaction_profile=redaction_profile,
+        redaction_profile=index_redaction_profile,
     )
     artifact_manifest = (
-        privacy.redact_private_paths(manifest) if redaction_profile == "public-export" else manifest
+        _public_bundle_manifest(manifest, redaction_profile=redaction_profile)
+        if redaction_profile in PUBLIC_NO_RAW_PROFILES
+        else manifest
     )
-    if redaction_profile == "public-export":
+    if redaction_profile in PUBLIC_METADATA_PROFILES:
+        _strip_public_metadata_index(
+            index_dir,
+            manifest,
+            redaction_profile=redaction_profile,
+        )
+    if redaction_profile in PUBLIC_NO_RAW_PROFILES:
         (index_dir / "manifest.json").write_text(
             json.dumps(artifact_manifest, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -138,7 +359,7 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
     if not output.is_absolute():
         output = cwd / output
 
-    if anchors.exists():
+    if anchors.exists() and redaction_profile not in PUBLIC_METADATA_PROFILES:
         shutil.copy2(anchors, bundle_root / "thread-anchors.md")
     if not args.no_raw:
         shutil.copy2(rollout, bundle_root / "rollout.jsonl")
@@ -155,7 +376,7 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
             "reason": "private_interpretation_sidecar",
             "canonical_source_replaced": False,
         }
-        if redaction_profile == "public-export"
+        if redaction_profile in PUBLIC_NO_RAW_PROFILES
         else {
             "projection": "not_included_in_portable_index_bundle",
             "reason": "clean_source_sidecar_not_index_artifact",
@@ -164,9 +385,12 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
     )
     bundle_manifest["bundle_files"] = {
         "handoff": "handoff.md",
-        "anchors": "thread-anchors.md" if anchors.exists() else None,
+        "anchors": "thread-anchors.md" if anchors.exists() and redaction_profile not in PUBLIC_METADATA_PROFILES else None,
         "raw_rollout": "rollout.jsonl" if not args.no_raw else None,
         "index_dir": "index",
+        "search_index": None
+        if redaction_profile in PUBLIC_METADATA_PROFILES
+        else "index/source_index.sqlite",
     }
     (bundle_root / "bundle_manifest.json").write_text(
         json.dumps(bundle_manifest, ensure_ascii=False, indent=2),
@@ -182,13 +406,14 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
         "bundle": str(output),
         "size": output.stat().st_size,
         "source_rollout": privacy.LOCAL_PATH_REDACTION
-        if redaction_profile == "public-export"
+        if redaction_profile in PUBLIC_NO_RAW_PROFILES
         else str(rollout),
+        "public_sharing_boundary": bundle_manifest.get("public_sharing_boundary"),
     }
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="aippocampus export")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
     parser.add_argument("--anchors", default="thread-anchors.md")
@@ -201,15 +426,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--redaction-profile",
         default="raw-private",
-        choices=["raw-private", "redacted-local", "public-export"],
-        help="Project bundle index text; public-export also requires --no-raw.",
+        choices=["raw-private", "redacted-local", "public-export", "public-metadata"],
+        help=(
+            "Project bundle index text. public-export and public-metadata are "
+            "metadata-only public-share-safe profiles; use raw-private or redacted-local "
+            "for private searchable transfer bundles. Public profiles require --no-raw."
+        ),
     )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    print(json.dumps(export_bundle(args), ensure_ascii=False, indent=2))
+    try:
+        payload = export_bundle(args)
+    except ValueError as exc:
+        message = str(exc)
+        code = "public_export_requires_no_raw" if "--no-raw" in message else "invalid_export_request"
+        payload = {
+            "ok": False,
+            "error": {
+                "code": code,
+                "message": message,
+                "next_command": "aippocampus export --no-raw --redaction-profile <profile> --output <bundle.zip>",
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 

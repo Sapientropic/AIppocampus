@@ -16,6 +16,8 @@ STABLE_CLI_ERROR_CODE_CLASSES = {
     "unsupported_role": "validation_error",
     "unknown_turn_id": "validation_error",
     "orphan_assistant": "validation_error",
+    "input_not_found": "missing_prerequisite",
+    "source_not_file": "validation_error",
     "missing_api_key": "missing_prerequisite",
     "missing_file": "missing_prerequisite",
     "missing_prerequisite": "missing_prerequisite",

@@ -244,7 +244,7 @@ BENCHMARK_PRIVATE_HOST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 BENCHMARK_IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-CLEAN_SOURCE_REDACTION_PROFILES = {"raw-private", "redacted-local", "public-export"}
+CLEAN_SOURCE_REDACTION_PROFILES = {"raw-private", "redacted-local", "public-export", "public-metadata"}
 CLEAN_SOURCE_DATABASE_KV_PATTERN = re.compile(
     r"\b(?:(?:Server|Data Source|Initial Catalog|Database|User ID|Uid|PWD|Password)"
     r"\s*=[^;\s]+;?\s*){2,}",
@@ -405,6 +405,18 @@ def project_clean_source_text(
             "policy": "aippocampus_runtime.safety.project_clean_source_text",
         }
 
+    if profile == "public-metadata":
+        return "", {
+            "profile": profile,
+            "redacted": bool(original),
+            "redaction_count": 1 if original else 0,
+            "redaction_types": ["source_text_omitted"] if original else [],
+            "hard_block": False,
+            "source_fidelity": "metadata_only",
+            "source_text_exported": False,
+            "policy": "aippocampus_runtime.safety.project_clean_source_text",
+        }
+
     projected = original
     redaction_types: list[str] = []
     redaction_count = 0
@@ -467,6 +479,23 @@ def project_clean_source_row(
         projected["redaction_profile"] = profile
         projected["redaction_policy"] = policy
         projected["redacted_text_sha256"] = _text_sha256(projected_text)
+    if profile == "public-metadata":
+        original_source = str(projected.get("source_ref") or projected.get("source_id") or "")
+        source_digest = _text_sha256(original_source)[:16]
+        projected["source_id"] = f"source_hash:{source_digest}"
+        if projected.get("line") is not None:
+            projected["source_ref"] = f"source_hash:{source_digest}#L{projected['line']}"
+        else:
+            projected["source_ref"] = f"source_hash:{source_digest}"
+        if "source_session_id" in projected:
+            source_session = str(projected.get("source_session_id") or "")
+            projected["source_session_id"] = (
+                f"session_hash:{_text_sha256(source_session)[:16]}"
+                if source_session
+                else ""
+            )
+        projected["public_metadata_text_sha256"] = _text_sha256(str(row.get("text") or ""))
+        projected["redacted_text_sha256"] = _text_sha256("")
     return projected
 
 

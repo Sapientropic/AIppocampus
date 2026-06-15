@@ -41,9 +41,11 @@ python tools/aippocampus/test_plan.py --json
 python tools/aippocampus/test_plan.py --release-preflight --json
 ```
 
-Run the focused commands from the changed-surface plan. During development,
-`quick` is useful as a cheap inner loop. For closeout, remember that `pr`
-already includes `quick`; do not run both by reflex.
+Run the focused commands from the changed-surface plan. The planner's JSON
+commands are the executable authority because they use the active interpreter
+path; the examples in this checklist are human-readable short forms. During
+development, `quick` is useful as a cheap inner loop. For closeout, remember
+that `pr` already includes `quick`; do not run both by reflex.
 
 For a normal patch or minor release whose PR CI is green, the local tag
 preflight is:

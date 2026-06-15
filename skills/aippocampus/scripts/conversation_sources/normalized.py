@@ -112,6 +112,8 @@ def turn_summaries(messages: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def load_jsonl_dicts(path: Path) -> Iterable[tuple[int, dict[str, Any]]]:
+    if not path.is_file():
+        return
     with path.open("r", encoding="utf-8") as f:
         for line_no, line in enumerate(f, start=1):
             try:

@@ -169,6 +169,24 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertEqual(packet["next_action"], "stay_silent")
         self.assertEqual(packet["display_hint"], "AIppo no active contract.")
 
+    def test_first_party_recall_and_host_readiness_journeys_have_direct_guidance(self) -> None:
+        contract = aippo.build_project_workflow_public_safe_contract()
+        fresh = aippo.activation_packet_from_working_contract(
+            contract,
+            task="fresh agent should recall old vague context before answering user",
+        )
+        readiness = aippo.activation_packet_from_working_contract(
+            contract,
+            task="install plugin and verify MCP host readiness",
+        )
+
+        self.assertIn("fresh_thread_recall", fresh["task_families"])
+        self.assertEqual(fresh["next_action"], "run_recall_then_deepen")
+        self.assertIn("agent recall", " ".join(fresh["use_guidance"]))
+        self.assertIn("host_readiness", readiness["task_families"])
+        self.assertEqual(readiness["next_action"], "verify_plugin_mcp_hooks")
+        self.assertIn("plugin verify/update status", " ".join(readiness["use_guidance"]))
+
     def test_deepen_and_stability_surfaces_preserve_audit_without_foreground_leakage(self) -> None:
         report = aippo.build_aippo_working_contract_fixture_report()
         deepen = report["deepen_surface"]

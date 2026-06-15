@@ -290,6 +290,42 @@ def _event_from_result(result: dict[str, Any]) -> dict[str, Any]:
     return event
 
 
+def _skip_reason(
+    *,
+    decision: str,
+    memory_surface: str,
+    cache_status: str,
+    elapsed_ms: float | None,
+) -> str | None:
+    if decision != "skip":
+        return None
+    if (elapsed_ms or 0.0) >= 3000 and memory_surface == "no_memory":
+        return "foreground_budget_or_io_timeout_no_memory"
+    if cache_status == "miss" and memory_surface == "no_memory":
+        return "cache_miss_no_relevant_route"
+    if cache_status in {"unavailable", "disabled"} and memory_surface == "no_memory":
+        return "cache_unavailable_no_memory_route"
+    if memory_surface == "no_memory":
+        return "no_relevant_route"
+    return "skip_with_nonforeground_memory_surface"
+
+
+def _next_diagnostic(skip_reason: str | None) -> str | None:
+    if skip_reason is None:
+        return None
+    return "aippocampus why-not-recall <cue> --json"
+
+
+def _next_repair(skip_reason: str | None) -> str | None:
+    if skip_reason in {
+        "cache_miss_no_relevant_route",
+        "cache_unavailable_no_memory_route",
+        "foreground_budget_or_io_timeout_no_memory",
+    }:
+        return "aippocampus health"
+    return None
+
+
 def _project_last_prompt_hook(event: dict[str, Any]) -> dict[str, Any]:
     ambient = _public_ambient_summary(event.get("ambient_recall"))
     cache = _public_cache(ambient.get("cache"))
@@ -320,6 +356,21 @@ def _project_last_prompt_hook(event: dict[str, Any]) -> dict[str, Any]:
     cognitive_map_count = _int_value(event.get("cognitive_map_count")) or cognitive_map_count
     decision = _enum_value(event.get("decision"), PUBLIC_DECISIONS, "skip")
 
+    memory_surface = _memory_surface(
+        decision=decision,
+        support_counts=support_counts,
+        candidate_thread_count=candidate_count,
+        evidence_count=evidence_count,
+        working_memory_count=working_memory_count,
+        cognitive_map_count=cognitive_map_count,
+    )
+    cache_status = cache.get("status")
+    skip_reason = _skip_reason(
+        decision=decision,
+        memory_surface=memory_surface,
+        cache_status=str(cache_status or ""),
+        elapsed_ms=_float_value(event.get("elapsed_ms")),
+    )
     return {
         "event_id": _event_id_value(event.get("audit_event_id")),
         "timestamp": _timestamp_value(event.get("timestamp")),
@@ -327,14 +378,10 @@ def _project_last_prompt_hook(event: dict[str, Any]) -> dict[str, Any]:
         "score": _float_value(event.get("score")),
         "confidence": _enum_value(event.get("confidence"), PUBLIC_CONFIDENCES, "low"),
         "elapsed_ms": _float_value(event.get("elapsed_ms")),
-        "memory_surface": _memory_surface(
-            decision=decision,
-            support_counts=support_counts,
-            candidate_thread_count=candidate_count,
-            evidence_count=evidence_count,
-            working_memory_count=working_memory_count,
-            cognitive_map_count=cognitive_map_count,
-        ),
+        "memory_surface": memory_surface,
+        "skip_reason": skip_reason,
+        "next_diagnostic": _next_diagnostic(skip_reason),
+        "next_repair": _next_repair(skip_reason),
         "card_count": _int_value(ambient.get("card_count")),
         "source_backed_count": _int_value(support_counts.get("evidence") or evidence_count),
         "candidate_count": _int_value(support_counts.get("candidate") or candidate_count),
@@ -380,18 +427,30 @@ def _project_stored_last_prompt_hook(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
     warm_background = _public_warm_background(value.get("warm_background"))
+    decision = _enum_value(value.get("decision"), PUBLIC_DECISIONS, "skip")
+    memory_surface = _enum_value(
+        value.get("memory_surface"),
+        PUBLIC_MEMORY_SURFACES,
+        "no_memory",
+    )
+    cache = _public_cache(value.get("cache"))
+    skip_reason = _skip_reason(
+        decision=decision,
+        memory_surface=memory_surface,
+        cache_status=str(cache.get("status") or ""),
+        elapsed_ms=_float_value(value.get("elapsed_ms")),
+    )
     projected = {
         "event_id": _event_id_value(value.get("event_id")),
         "timestamp": _timestamp_value(value.get("timestamp")),
-        "decision": _enum_value(value.get("decision"), PUBLIC_DECISIONS, "skip"),
+        "decision": decision,
         "score": _float_value(value.get("score")),
         "confidence": _enum_value(value.get("confidence"), PUBLIC_CONFIDENCES, "low"),
         "elapsed_ms": _float_value(value.get("elapsed_ms")),
-        "memory_surface": _enum_value(
-            value.get("memory_surface"),
-            PUBLIC_MEMORY_SURFACES,
-            "no_memory",
-        ),
+        "memory_surface": memory_surface,
+        "skip_reason": skip_reason,
+        "next_diagnostic": _next_diagnostic(skip_reason),
+        "next_repair": _next_repair(skip_reason),
         "card_count": _int_value(value.get("card_count")),
         "source_backed_count": _int_value(value.get("source_backed_count")),
         "candidate_count": _int_value(value.get("candidate_count")),
@@ -404,7 +463,7 @@ def _project_stored_last_prompt_hook(value: Any) -> dict[str, Any] | None:
         "reopen_recommended_for_exact_quote_count": _int_value(
             value.get("reopen_recommended_for_exact_quote_count")
         ),
-        "cache": _public_cache(value.get("cache")),
+        "cache": cache,
         "warm_background": warm_background,
         "visibility_counts": _count_map(
             value.get("visibility_counts"),

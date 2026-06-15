@@ -92,6 +92,43 @@ class PublicBoundaryCheckTests(unittest.TestCase):
         self.assertEqual(report["findings"][0]["source"], "artifact")
         self.assertEqual(report["findings"][0]["check_id"], "authorization_bearer")
 
+    def test_build_report_scans_extracted_artifact_directories_without_local_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            extracted = repo / "inspect"
+            nested = extracted / "index"
+            nested.mkdir(parents=True)
+            (nested / "messages.jsonl").write_text(
+                "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456\n",
+                encoding="utf-8",
+            )
+
+            report = boundary.build_report(repo, paths=[], dist_paths=[extracted])
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["scanned_artifact_files"], 1)
+        self.assertEqual(report["findings"][0]["path"], "messages.jsonl")
+        self.assertNotIn(str(repo), json.dumps(report, ensure_ascii=False))
+
+    def test_build_report_caps_finding_samples_but_keeps_total_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            readme = repo / "README.md"
+            readme.write_text(
+                "\n".join(
+                    f"token=sk-proj-abcdefghijklmnopqrstuvwxyz0123456789{i:02d}"
+                    for i in range(5)
+                ),
+                encoding="utf-8",
+            )
+
+            report = boundary.build_report(repo, paths=[readme], max_findings=2)
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["finding_count"], 5)
+        self.assertEqual(report["findings_returned"], 2)
+        self.assertTrue(report["findings_truncated"])
+
     def test_cli_json_returns_nonzero_for_findings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

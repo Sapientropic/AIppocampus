@@ -55,10 +55,11 @@ class DreamDeliveryQualityBenchmarkTests(unittest.TestCase):
         self.assertEqual(controls["dream_only_foreground_leak_count"], 0)
         self.assertEqual(controls["source_truth_overclaim_count"], 0)
         self.assertEqual(controls["source_reopen_required_count"], 6)
-        self.assertTrue(
-            report["issue_readouts"]["github_1438"]["closeout_eligible"],
-            report["issue_readouts"]["github_1438"],
-        )
+        readout = report["issue_readouts"]["github_1438"]
+        self.assertTrue(readout["closeout_candidate"], readout)
+        self.assertFalse(readout["closeout_eligible"], readout)
+        self.assertFalse(readout["decision_impact_gate_ok"], readout)
+        self.assertTrue(readout["requires_human_review_before_closeout"], readout)
 
     def test_report_is_public_safe_and_not_a_live_private_quality_claim(self) -> None:
         report = benchmark.build_dream_delivery_quality_report()
@@ -78,6 +79,12 @@ class DreamDeliveryQualityBenchmarkTests(unittest.TestCase):
             self.assertNotIn(forbidden, encoded)
         self.assertIn("live_default_dream_delivery_quality", report["cannot_claim"])
         self.assertIn("broad_private_history_dream_quality", report["cannot_claim"])
+        self.assertEqual(report["measurement_origin"], "synthetic_fixture")
+        self.assertFalse(report["observed_agent_behavior"])
+        self.assertEqual(report["decision_impact"], "issue_closeout_candidate")
+        self.assertFalse(report["decision_impact_gate_ok"])
+        self.assertTrue(report["requires_human_review_before_closeout"])
+        self.assertIn("useful_now", report)
 
     def test_cli_writes_public_json_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -106,7 +113,8 @@ class DreamDeliveryQualityBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(payload["kind"], benchmark.REPORT_KIND)
         self.assertEqual(written["kind"], benchmark.REPORT_KIND)
-        self.assertTrue(written["issue_readouts"]["github_1438"]["closeout_eligible"])
+        self.assertTrue(written["issue_readouts"]["github_1438"]["closeout_candidate"])
+        self.assertFalse(written["issue_readouts"]["github_1438"]["closeout_eligible"])
 
 
 if __name__ == "__main__":

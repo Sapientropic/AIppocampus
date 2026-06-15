@@ -354,6 +354,19 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
         "ok": ok,
+        "benchmark_maturity_level": "diagnostic_proxy",
+        "measurement_origin": "synthetic_fixture",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": ok,
+        "public_quality_gate_ok": False,
+        "case_count": metrics["case_count"],
+        "decision_impact": "issue_closeout_candidate",
+        "decision_impact_gate_ok": False,
+        "requires_human_review_before_closeout": True,
+        "decision_impact_reason": (
+            "public synthetic three-arm fixture only; useful for issue review, "
+            "not an authoritative closeout or live delivery-quality claim"
+        ),
         "claim_level": "public_synthetic_delivery_quality_eval",
         "scoring_contract": {
             "arms": list(ARMS),
@@ -373,7 +386,10 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
                 "negative_controls_covered": True,
                 "sanitized_aggregate_only": True,
                 "live_private_delivery_quality_measured": False,
-                "closeout_eligible": ok,
+                "closeout_candidate": ok,
+                "closeout_eligible": False,
+                "decision_impact_gate_ok": False,
+                "requires_human_review_before_closeout": True,
             }
         },
         "can_claim": [
@@ -381,6 +397,14 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
             "bounded_hint_arm_improves_selected_route_and_action_cases",
             "stale_noisy_over_personalized_and_unsourced_controls_stay_quiet",
             "source_reopen_required_before_dream_material_can_support_claims",
+        ],
+        "useful_now": [
+            "compares bounded hint behavior against baseline and backstage-only arms",
+            "keeps stale, noisy, over-personalized, and unsourced controls quiet",
+        ],
+        "agent_action": "use_as_issue_review_input_not_owner_status",
+        "can_support_after_action": [
+            "human-reviewed closeout note for bounded synthetic delivery-quality fixture"
         ],
         "cannot_claim": [
             "live_default_dream_delivery_quality",

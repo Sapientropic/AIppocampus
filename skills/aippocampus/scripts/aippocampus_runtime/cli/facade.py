@@ -5,14 +5,84 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib
+import importlib.metadata
 import inspect
+import json
 import sys
+import tomllib
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+PLUGIN_MANIFEST_RELATIVE = Path("plugins") / "aippocampus" / ".codex-plugin" / "plugin.json"
+
+
+def _find_project_root(start: Path = SCRIPT_DIR) -> Path | None:
+    for candidate in (start, *start.parents):
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+    return None
+
+
+def _json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _pyproject_version(root: Path | None) -> str | None:
+    if root is None:
+        return None
+    try:
+        data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    project = data.get("project") if isinstance(data, dict) else None
+    return str(project.get("version") or "") if isinstance(project, dict) else None
+
+
+def _distribution_version() -> str | None:
+    try:
+        return importlib.metadata.version("aippocampus")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def version_payload() -> dict[str, Any]:
+    root = _find_project_root()
+    pyproject = _pyproject_version(root)
+    plugin = _json_file(root / PLUGIN_MANIFEST_RELATIVE) if root else None
+    plugin_version = str((plugin or {}).get("version") or "") or None
+    active_version = pyproject or _distribution_version() or plugin_version or "unknown"
+    versions = {
+        "active": active_version,
+        "pyproject": pyproject,
+        "installed_distribution": _distribution_version(),
+        "plugin_manifest": plugin_version,
+    }
+    known = {value for value in versions.values() if value}
+    return {
+        "kind": "aippocampus_version",
+        "ok": bool(active_version and active_version != "unknown"),
+        "version": active_version,
+        "versions": versions,
+        "metadata_consistent": len(known) <= 1,
+        "source_checkout_available": root is not None,
+        "runtime": {
+            "facade": "aippocampus_runtime.cli.facade",
+            "python": Path(sys.executable).name,
+        },
+    }
+
+
+def render_version_text(payload: dict[str, Any]) -> str:
+    version = payload.get("version") or "unknown"
+    suffix = "" if payload.get("metadata_consistent") else " (metadata mismatch)"
+    return f"AIppocampus {version}{suffix}"
 
 @dataclass(frozen=True)
 class CommandSpec:
@@ -55,6 +125,7 @@ COMMANDS = {
     "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
     "logs": CommandSpec("log_retention.py", "aippocampus_runtime.ops.log_retention"),
     "maintenance": CommandSpec("maintenance.py", "aippocampus_runtime.ops.maintenance"),
+    "warm": CommandSpec("warm_ambient_cli.py", "aippocampus_runtime.warm_ambient.cli"),
     "storage": CommandSpec(
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",
@@ -111,6 +182,7 @@ SCRIPT_MODULES = {
     "plugin.py": "aippocampus_runtime.update.plugin_installer",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "maintenance.py": "aippocampus_runtime.ops.maintenance",
+    "warm_ambient_cli.py": "aippocampus_runtime.warm_ambient.cli",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
     "issue_work_guard.py": "aippocampus_runtime.ops.issue_work_guard",
     "telepathy_handoff_store.py": "aippocampus_runtime.ops.telepathy_handoff_store",
@@ -295,6 +367,13 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if not args or args[0] in {"-h", "--help"}:
         print_help()
         return None, 0
+    if args[0] in {"--version", "-V", "version"}:
+        payload = version_payload()
+        if "--json" in args:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(render_version_text(payload))
+        return None, 0
 
     invocation = resolve_command(args)
     if invocation is not None:
@@ -342,6 +421,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("", file=target)
     print("Personal path:", file=target)
     print("  health              Run runtime health checks", file=target)
+    print("  version             Show active runtime and release metadata version", file=target)
     print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
     print("  agent recall        Opt-in agent recall/AIppo/deepen/explain path", file=target)
@@ -364,6 +444,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  telepathy           Opt-in local handoff card lifecycle", file=target)
     print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
     print("  maintenance         Run bounded local maintenance", file=target)
+    print("  warm status         Inspect warm ambient queue without model calls", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
     print("  why-not-recall      Explain why a recall route stayed silent", file=target)

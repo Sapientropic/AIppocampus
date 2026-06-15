@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -213,6 +214,31 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("aippo-nav:", human)
         self.assertLess(max(len(line) for line in human.splitlines()), 180)
 
+    def test_public_recall_json_marks_and_omits_local_private_handles(self) -> None:
+        report = agent_continuity.recall(
+            "agent-native recall opt-in",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=1,
+        )
+        public = agent_continuity.public_recall_projection(report)
+
+        self.assertEqual(public["handle_boundary"], "local_private_reopen_token")
+        self.assertIn("deepen_requests[].handle", public["local_private_fields"])
+        self.assertEqual(
+            public["output_boundary"],
+            "public_safe_no_local_private_handles",
+        )
+        self.assertEqual(
+            public["suggested_next_command"],
+            "aippocampus agent deepen <local-private-handle>",
+        )
+        request = public["deepen_requests"][0]
+        self.assertTrue(request["handle_redacted"])
+        self.assertNotIn("handle", request)
+        self.assertNotIn("copy_paste_command", request)
+        self.assertIn("handle_preview", request)
+
     def test_topic_labels_distinguish_routes_that_share_broad_scope_bucket(self) -> None:
         rows = [
             {
@@ -407,8 +433,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         human = agent_continuity._render_recall_human(routed_report)
         self.assertIn("why: attention_router:top_route_changed", human)
         self.assertIn("Navigation:", human)
-        self.assertIn("deepen route 1", human)
-        self.assertNotIn("handle:attention", human)
+        self.assertIn("aippocampus agent deepen handle:attention", human)
         self.assertTrue(routed_report["metrics"]["attention_router_applied"])
         self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
         self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
@@ -613,6 +638,47 @@ class AgentOptInContinuityTests(unittest.TestCase):
             route_id_misuse["result"]["error"]["details"]["callable_handle_field"],
             "deepen_requests[].handle",
         )
+
+    def test_cli_malformed_deepen_and_explain_are_nonzero_and_actionable(self) -> None:
+        deepen_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "deepen",
+                "not-a-valid-handle",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        explain_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "explain",
+                "not-a-valid-handle",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(deepen_proc.returncode, 2)
+        self.assertIn("AIppocampus agent deepen: cannot_verify", deepen_proc.stdout)
+        self.assertIn("Next: rerun agent recall", deepen_proc.stdout)
+        self.assertEqual(explain_proc.returncode, 2)
+        self.assertIn("AIppocampus agent explain: cannot verify handle", explain_proc.stdout)
+        self.assertIn("deepen_requests[].handle", explain_proc.stdout)
 
     def test_macro_orientation_changes_live_recall_fanout_and_ordering(self) -> None:
         self._append_clean_rows(
@@ -891,7 +957,70 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
+    def test_cli_agent_feedback_rejects_unknown_route_kind_as_structured_json(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "feedback",
+                "route_test",
+                "--outcome",
+                "wrong_route",
+                "--route-kind",
+                "recall_context",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "rejected")
+        self.assertEqual(payload["error"]["field"], "route_kind")
+        self.assertIn("continuity_domain", payload["error"]["valid_values"])
+        self.assertEqual(payload["error"]["aliases"]["wrong_route"], "wrong_route_drag")
+
+    def test_cli_agent_feedback_rejects_unknown_outcome_as_structured_json(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "feedback",
+                "route_test",
+                "--outcome",
+                "maybe_bad",
+                "--route-kind",
+                "active_path",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "rejected")
+        self.assertEqual(payload["error"]["field"], "outcome")
+        self.assertIn("wrong_route_drag", payload["error"]["valid_values"])
+
     def test_cli_agent_recall_default_output_is_compact_human_frontstage(self) -> None:
+        env = {
+            **os.environ,
+            agent_continuity.LAST_RECALL_CACHE_ENV: str(self.cwd / "last-recall.json"),
+        }
         proc = subprocess.run(
             [
                 sys.executable,
@@ -911,15 +1040,134 @@ class AgentOptInContinuityTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            env=env,
+        )
+        deepen_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "deepen",
+                "--request",
+                "1",
+                "--last-recall",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            env=env,
         )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
         self.assertIn("AIppocampus agent recall: ok", proc.stdout)
-        self.assertIn("Next: deepen route 1; rerun with --json for callable handle.", proc.stdout)
+        self.assertIn("Next: aippocampus agent deepen --request 1 --last-recall.", proc.stdout)
+        self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
         self.assertIn("Boundary: route only", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
         self.assertNotIn("source_refs", proc.stdout)
         self.assertNotIn(str(self.cwd), proc.stdout)
+        cache_text = Path(env[agent_continuity.LAST_RECALL_CACHE_ENV]).read_text()
+        cache = json.loads(cache_text)
+        cache_context = cache["context"]
+        self.assertEqual(cache_context["path_scope"], "cwd_only_explicit_overrides_required")
+        self.assertNotIn("clean_source_dir", cache_context)
+        self.assertNotIn("registry_dir", cache_context)
+        self.assertNotIn("macro_state_jsonl", cache_context)
+        self.assertFalse(cache["privacy_boundary"]["derived_local_source_paths_persisted"])
+        self.assertFalse(cache["privacy_boundary"]["opaque_handles_cleartext_persisted"])
+        self.assertFalse(cache["privacy_boundary"]["local_reopen_token_encoding_is_encryption"])
+        self.assertNotIn("aippo-nav:", cache_text)
+        self.assertNotIn('"handle"', json.dumps(cache["requests"], ensure_ascii=False))
+        self.assertIn("local_reopen_token", cache["requests"][0])
+
+    def test_cli_agent_deepen_default_output_is_compact_human_frontstage(self) -> None:
+        recall_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        handle = json.loads(recall_proc.stdout)["deepen_requests"][0]["handle"]
+
+        deepen_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "deepen",
+                handle,
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
+        self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
+        self.assertIn("source windows opened:", deepen_proc.stdout)
+        self.assertIn("rerun with --json", deepen_proc.stdout)
+        self.assertNotIn('"source_window"', deepen_proc.stdout)
+        self.assertNotIn("Opt-in continuity should return", deepen_proc.stdout)
+
+    def test_agent_recall_accepts_semantic_controls_as_diagnostic_sidecar(self) -> None:
+        with patch(
+            "aippocampus_runtime.recall.why_diagnostics.recall_diagnostic_report",
+            return_value={
+                "decision": "degraded",
+                "reasons": ["semantic_provider_timeout"],
+                "next_safe_action": "continue_with_lexical_routes",
+                "surface_reports": [
+                    {
+                        "surface": "semantic_gate",
+                        "status": "degraded",
+                        "reason_codes": ["semantic_provider_timeout"],
+                    }
+                ],
+            },
+        ) as diagnostic:
+            report = agent_continuity.recall(
+                "我之前说那个字符打错导致 python 出问题的事是什么",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                semantic_gate_mode="on",
+                semantic_timeout=8,
+            )
+
+        diagnostic.assert_called_once()
+        semantic = report["semantic_gate_diagnostics"]
+        self.assertEqual(semantic["mode"], "on")
+        self.assertEqual(semantic["timeout_seconds"], 8)
+        self.assertEqual(semantic["reasons"], ["semantic_provider_timeout"])
+        self.assertEqual(semantic["semantic_surface"]["status"], "degraded")
 
     def test_cli_agent_recall_auto_attention_reports_promotion_blockers(self) -> None:
         proc = subprocess.run(
@@ -984,6 +1232,124 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(payload["metrics"]["usefulness_gate_ok"])
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
+
+    def test_cli_agent_aippo_core_product_journeys_are_not_empty_contracts(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+                "install plugin and verify MCP host readiness",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        packet = payload["activation_packet"]
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("host_readiness", packet["task_families"])
+        self.assertEqual(packet["next_action"], "verify_plugin_mcp_hooks")
+
+    def test_cli_agent_aippo_default_output_is_human_guidance(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--task",
+                "benchmark reporting issue closeout",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("AIppo:", proc.stdout)
+        self.assertIn("Boundary: working guidance only", proc.stdout)
+        self.assertNotIn("activation_packet", proc.stdout)
+        self.assertNotIn("policy_boundary", proc.stdout)
+
+    def test_cli_agent_macro_missing_state_explains_schema_repair(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "macro",
+                "--cwd",
+                str(self.cwd),
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("AIppocampus agent macro: missing_macro_state_path", proc.stdout)
+        self.assertIn(".aippocampus/macro-orientation.jsonl", proc.stdout)
+        self.assertIn("aippocampus agent macro --explain-schema", proc.stdout)
+        self.assertNotIn('"memory_packets"', proc.stdout)
+
+    def test_cli_agent_macro_schema_and_template_are_available(self) -> None:
+        schema_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "macro",
+                "--explain-schema",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        template_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "macro",
+                "--init-template",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        template = json.loads(template_proc.stdout)
+
+        self.assertEqual(schema_proc.returncode, 0, schema_proc.stderr)
+        self.assertEqual(template_proc.returncode, 0, template_proc.stderr)
+        self.assertIn("AIppocampus agent macro schema", schema_proc.stdout)
+        self.assertEqual(template["kind"], "macro_orientation_state")
+        self.assertTrue(template["source_refs"])
 
     def test_cli_agent_macro_outputs_compact_packet(self) -> None:
         macro_path = self.cwd / "macro-orientation.jsonl"

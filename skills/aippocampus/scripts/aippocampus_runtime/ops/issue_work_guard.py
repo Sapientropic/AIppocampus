@@ -199,7 +199,7 @@ def build_issue_work_guard_fixture_report() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="aippocampus work-guard")
     parser.add_argument("--title", required=True)
     parser.add_argument("--body", default="")
     parser.add_argument("--changed-file", action="append", default=[])

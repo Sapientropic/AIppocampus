@@ -134,6 +134,33 @@ def _cached_plugin_roots(codex_home_path: Path, *, plugin_name: str = PLUGIN_NAM
     return roots
 
 
+def installed_cache_auto_resolution(
+    codex_home_path: Path, *, plugin_name: str = PLUGIN_NAME
+) -> dict[str, Any]:
+    roots = _cached_plugin_roots(codex_home_path, plugin_name=plugin_name)
+    if len(roots) == 1:
+        return {
+            "status": "unique",
+            "count": 1,
+            "root_path": str(roots[0]),
+        }
+    if roots:
+        return {
+            "status": "multiple_candidates",
+            "count": len(roots),
+            "root_paths": [str(path) for path in roots],
+        }
+    return {"status": "none", "count": 0}
+
+
+def unique_installed_cache_root(
+    codex_home_path: Path, *, plugin_name: str = PLUGIN_NAME
+) -> Path | None:
+    resolution = installed_cache_auto_resolution(codex_home_path, plugin_name=plugin_name)
+    root = resolution.get("root_path") if resolution.get("status") == "unique" else None
+    return Path(str(root)) if root else None
+
+
 def _layer_status(
     *,
     root: Path | None,
@@ -176,6 +203,10 @@ def build_plugin_cache_status(
     )
     local_marketplace_root = _resolve_plugin_root(marketplace_dir, plugin_name=plugin_name)
     cached_roots = _cached_plugin_roots(codex_home_path, plugin_name=plugin_name)
+    auto_resolution = installed_cache_auto_resolution(
+        codex_home_path,
+        plugin_name=plugin_name,
+    )
     installed_root = _resolve_plugin_root(installed_dir, plugin_name=plugin_name)
     if installed_root is None and cached_roots:
         installed_root = cached_roots[-1]
@@ -197,9 +228,14 @@ def build_plugin_cache_status(
             "run `aippocampus update apply --surface plugin --plugin-marketplace-dir <path>` to refresh the local marketplace copy"
         )
     if installed_cache.get("status") in {"missing", "missing_manifest", "stale_version", "stale_hash"}:
-        recommended_actions.append(
-            "run `aippocampus update apply --surface plugin --plugin-installed-dir <path>` or reinstall the Codex plugin cache"
-        )
+        if auto_resolution.get("status") == "unique":
+            recommended_actions.append(
+                "run `aippocampus update apply --surface plugin --plugin-installed-dir auto` to refresh the detected Codex plugin cache"
+            )
+        else:
+            recommended_actions.append(
+                "run `aippocampus update apply --surface plugin --plugin-installed-dir <path>` or reinstall the Codex plugin cache"
+            )
     if installed_cache.get("status") == "not_configured":
         recommended_actions.append(
             "pass --plugin-installed-dir, or reinstall the plugin in Codex after refreshing the local marketplace"
@@ -212,6 +248,7 @@ def build_plugin_cache_status(
         "local_marketplace": local_marketplace,
         "installed_cache": installed_cache,
         "auto_detected_installed_cache_count": len(cached_roots),
+        "installed_cache_auto_resolution": auto_resolution,
         "recommended_actions": recommended_actions,
         "boundary": {
             "package_artifact_is_not_installed_cache": True,
@@ -305,5 +342,7 @@ def refresh_plugin_cache_layers(
 __all__ = [
     "PLUGIN_NAME",
     "build_plugin_cache_status",
+    "installed_cache_auto_resolution",
     "refresh_plugin_cache_layers",
+    "unique_installed_cache_root",
 ]

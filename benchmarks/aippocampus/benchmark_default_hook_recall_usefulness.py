@@ -14,6 +14,13 @@ import _paths
 
 _paths.ensure_paths()
 
+from shared.benchmark_report_contract import (  # noqa: E402
+    MEASUREMENT_DERIVED_FROM_ARM,
+    MEASUREMENT_DETERMINISTIC_CONTRACT,
+    measurement_origin_metadata,
+    proxy_aliases,
+)
+
 REPORT_KIND = "aippocampus_default_hook_recall_usefulness_benchmark"
 SCHEMA_VERSION = 2
 ARM_BASELINE = "default_no_packet_baseline"
@@ -23,6 +30,20 @@ ARM_TINY_AFFORDANCE = "default_hook_tiny_agent_recall_affordance"
 ARMS = (ARM_BASELINE, ARM_EXPLICIT, ARM_DEFAULT_HOOK, ARM_TINY_AFFORDANCE)
 PACKET_BUDGET = 2
 SOURCE_REOPEN_BUDGET = 1
+TINY_PROXY_ALIASES = {
+    "agent_followed_suggested_action_count": (
+        "proxy_assumed_agent_followed_suggested_action_count"
+    ),
+    "agent_followed_suggested_action_rate": (
+        "proxy_assumed_agent_followed_suggested_action_rate"
+    ),
+    "recall_after_hint_success_count": (
+        "proxy_recall_success_if_agent_follows_hint_count"
+    ),
+    "recall_after_hint_success_rate": (
+        "proxy_recall_success_if_agent_follows_hint_rate"
+    ),
+}
 
 
 def _ratio(numerator: int | float, denominator: int | float) -> float:
@@ -530,7 +551,7 @@ def _arm_metrics(cases: Sequence[Mapping[str, Any]], arm: str) -> dict[str, Any]
     affordance_not_evidence_count = sum(
         1 for row in selected if row.get("affordance_not_evidence")
     )
-    return {
+    metrics = {
         "activation_count": activation_count,
         "activation_rate": _ratio(activation_count, total),
         "helpful_next_action_count": helpful_count,
@@ -563,6 +584,31 @@ def _arm_metrics(cases: Sequence[Mapping[str, Any]], arm: str) -> dict[str, Any]
         ),
         "affordance_not_evidence_count": affordance_not_evidence_count,
     }
+    if arm == ARM_TINY_AFFORDANCE:
+        metrics.update(proxy_aliases(metrics, TINY_PROXY_ALIASES))
+        metrics.update(
+            measurement_origin_metadata(
+                measurement_origin=MEASUREMENT_DERIVED_FROM_ARM,
+                observed_agent_behavior=False,
+                eligible_for_runtime_policy_adoption=False,
+                eligible_for_public_quality_claim=False,
+                evidence_note=(
+                    "Tiny affordance metrics are derived from the explicit "
+                    "recall arm and assume an agent follows the action hint."
+                ),
+            )
+        )
+    else:
+        metrics.update(
+            measurement_origin_metadata(
+                measurement_origin=MEASUREMENT_DETERMINISTIC_CONTRACT,
+                observed_agent_behavior=False,
+                eligible_for_runtime_policy_adoption=False,
+                eligible_for_public_quality_claim=False,
+                evidence_note="Deterministic public fixture, not live agent observation.",
+            )
+        )
+    return metrics
 
 
 def _cohort_coverage(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -659,6 +705,18 @@ def _tiny_agent_recall_affordance_readout(
         "recall_after_hint_success_rate": tiny_metrics[
             "recall_after_hint_success_rate"
         ],
+        "proxy_assumed_agent_followed_suggested_action_count": tiny_metrics[
+            "proxy_assumed_agent_followed_suggested_action_count"
+        ],
+        "proxy_assumed_agent_followed_suggested_action_rate": tiny_metrics[
+            "proxy_assumed_agent_followed_suggested_action_rate"
+        ],
+        "proxy_recall_success_if_agent_follows_hint_count": tiny_metrics[
+            "proxy_recall_success_if_agent_follows_hint_count"
+        ],
+        "proxy_recall_success_if_agent_follows_hint_rate": tiny_metrics[
+            "proxy_recall_success_if_agent_follows_hint_rate"
+        ],
         "manual_search_reduction_vs_baseline": tiny_metrics[
             "manual_search_reduction_vs_baseline"
         ],
@@ -674,6 +732,14 @@ def _tiny_agent_recall_affordance_readout(
             "affordance_not_evidence_count"
         ],
         "fixture_gate_passed": gate_passed,
+        "measurement_origin": tiny_metrics["measurement_origin"],
+        "observed_agent_behavior": tiny_metrics["observed_agent_behavior"],
+        "eligible_for_runtime_policy_adoption": tiny_metrics[
+            "eligible_for_runtime_policy_adoption"
+        ],
+        "eligible_for_public_quality_claim": tiny_metrics[
+            "eligible_for_public_quality_claim"
+        ],
     }
 
 
@@ -717,6 +783,10 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
         "ok": bool(closeout_eligible and tiny_affordance_gate_passed),
+        "contract_gate_ok": bool(closeout_eligible and tiny_affordance_gate_passed),
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "benchmark_maturity_level": "diagnostic_proxy",
         "comparison_contract": {
             "arms": list(ARMS),
             "same_packet_budget": True,
@@ -725,6 +795,8 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
             "source_reopen_budget": SOURCE_REOPEN_BUDGET,
             "tiny_affordance_suggested_agent_action": "agent_recall",
             "tiny_affordance_not_evidence": True,
+            "tiny_affordance_measurement_origin": MEASUREMENT_DERIVED_FROM_ARM,
+            "observed_agent_behavior": False,
             "private_history_used": False,
             "provider_call_count": 0,
         },
@@ -748,6 +820,9 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
                 else "review_opt_in_affordance_only_not_default_foreground"
             ),
             "eligible_tiny_agent_recall_affordance_surfaces": (
+                []
+            ),
+            "diagnostic_tiny_agent_recall_affordance_surfaces": (
                 [ARM_TINY_AFFORDANCE] if tiny_affordance_gate_passed else []
             ),
             "opt_in_or_diagnostic_surfaces": [
@@ -776,8 +851,10 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
                 "default_hook_tiny_agent_recall_affordance_arm": True,
                 "not_foreground_context": True,
                 "affordance_emitted_vs_silent_measured": True,
-                "agent_recall_follow_through_measured": True,
-                "manual_search_reduction_measured": True,
+                "agent_recall_follow_through_measured": False,
+                "proxy_agent_recall_follow_through_assumed": True,
+                "manual_search_reduction_measured": False,
+                "proxy_manual_search_reduction_derived": True,
                 "wrong_route_drag_measured": True,
                 "irrelevant_memory_drag_measured": True,
                 "source_truth_overclaim_measured": True,

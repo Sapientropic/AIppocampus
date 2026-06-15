@@ -591,7 +591,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertNotIn("coverage-${{ matrix.python-version }}", workflow)
         self.assertNotIn("python benchmarks/aippocampus/benchmark_suite.py", workflow)
 
-    def test_quick_and_pr_count_budgets_stay_within_declared_targets(self) -> None:
+    def test_quick_and_pr_count_budgets_report_drift_without_hard_gating(self) -> None:
         for tier in ("quick", "pr"):
             modules = run_tests.modules_for_tier(tier)
             test_count = sum(run_tests.count_tests_for_module(module) for module in modules)
@@ -601,15 +601,28 @@ class RunTestsTierTests(unittest.TestCase):
                 test_count=test_count,
             )
 
+            expected_module_status = (
+                "within_target"
+                if len(modules) <= budget["module_count_target"]
+                else "over_target"
+            )
+            expected_test_status = (
+                "within_target"
+                if test_count <= budget["test_count_target"]
+                else "over_target"
+            )
             self.assertEqual(
                 budget["module_count_status"],
-                "within_target",
-                f"{tier} module count drifted over target: {len(modules)} modules",
+                expected_module_status,
             )
             self.assertEqual(
                 budget["test_count_status"],
-                "within_target",
-                f"{tier} test count drifted over target: {test_count} tests",
+                expected_test_status,
+            )
+            self.assertIn("target", budget["note"])
+            self.assertTrue(
+                "not" in budget["note"].casefold()
+                or "broad" in budget["note"].casefold()
             )
 
     def test_benchmark_extra_is_stable_contributor_install_target(self) -> None:

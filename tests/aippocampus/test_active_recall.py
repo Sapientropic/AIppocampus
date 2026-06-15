@@ -120,6 +120,132 @@ class ActiveRecallTests(unittest.TestCase):
         output = "".join(call.args[0] for call in stdout.write.call_args_list if call.args)
         self.assertTrue(json.loads(output)["searched"])
 
+    def test_json_output_redacts_local_paths_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp).resolve()
+            with (
+                mock.patch.object(
+                    packaged_active_recall,
+                    "health_report",
+                    return_value={
+                        "status": "ok",
+                        "index": {"stale": False},
+                        "segments": {
+                            "exists": False,
+                            "needed": False,
+                            "dir": str(cwd / ".aippocampus" / "index" / "segments"),
+                        },
+                        "checkpoint": {"due": False},
+                        "graphify": {"stale": False},
+                        "recommended_actions": [
+                            {
+                                "id": "build_index",
+                                "command": f"python -m tool --cwd {cwd}",
+                            }
+                        ],
+                    },
+                ),
+                mock.patch.object(
+                    packaged_active_recall,
+                    "search_rollout_payload",
+                    return_value={"source": str(cwd / "source_index.sqlite"), "matches": []},
+                ),
+                io.StringIO() as stdout,
+                redirect_stdout(stdout),
+            ):
+                code = packaged_active_recall.main(
+                    ["path cue", "--cwd", str(cwd), "--search", "always", "--json"]
+                )
+                payload = json.loads(stdout.getvalue())
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["raw_source_path_hidden"])
+        self.assertNotIn(str(cwd), encoded)
+        self.assertIn("<local-path-redacted>", encoded)
+
+    def test_json_output_can_include_private_paths_for_local_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp).resolve()
+            with (
+                mock.patch.object(
+                    packaged_active_recall,
+                    "health_report",
+                    return_value={
+                        "status": "ok",
+                        "index": {"stale": False},
+                        "segments": {"exists": False, "needed": False},
+                        "checkpoint": {"due": False},
+                        "graphify": {"stale": False},
+                        "recommended_actions": [],
+                    },
+                ),
+                mock.patch.object(
+                    packaged_active_recall,
+                    "search_rollout_payload",
+                    return_value={"source": str(cwd / "source_index.sqlite"), "matches": []},
+                ),
+                io.StringIO() as stdout,
+                redirect_stdout(stdout),
+            ):
+                code = packaged_active_recall.main(
+                    [
+                        "path cue",
+                        "--cwd",
+                        str(cwd),
+                        "--search",
+                        "always",
+                        "--json",
+                        "--include-private-paths",
+                    ]
+                )
+                payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertFalse(payload["raw_source_path_hidden"])
+        self.assertEqual(payload["search"]["source"], str(cwd / "source_index.sqlite"))
+
+    def test_json_output_reports_index_lease_busy_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp).resolve()
+            with (
+                mock.patch.object(
+                    packaged_active_recall,
+                    "health_report",
+                    return_value={
+                        "status": "ok",
+                        "index": {"stale": False},
+                        "segments": {"exists": False, "needed": False},
+                        "checkpoint": {"due": False},
+                        "graphify": {"stale": False},
+                        "recommended_actions": [],
+                    },
+                ),
+                mock.patch.object(
+                    packaged_active_recall,
+                    "search_rollout_payload",
+                    side_effect=packaged_active_recall.ArtifactLeaseBusyError(
+                        cwd / ".aippocampus" / "source_index.lock",
+                        wait_timeout_seconds=0.0,
+                    ),
+                ),
+                io.StringIO() as stdout,
+                redirect_stdout(stdout),
+            ):
+                code = packaged_active_recall.main(
+                    ["busy cue", "--cwd", str(cwd), "--search", "always", "--json"]
+                )
+                payload = json.loads(stdout.getvalue())
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 2)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "index_lease_busy")
+        self.assertTrue(payload["error"]["retryable"])
+        self.assertEqual(payload["fallback_used"], "none")
+        self.assertNotIn(str(cwd), encoded)
+        self.assertNotIn("Traceback", encoded)
+
     def test_segment_search_needed_does_not_trigger_foreground_segment_build(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cwd = Path(tmp).resolve()

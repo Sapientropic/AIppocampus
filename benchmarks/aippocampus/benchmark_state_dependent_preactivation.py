@@ -34,6 +34,20 @@ CLI_FAILURE_PAYLOAD: dict[str, object] = {
     "ok": False,
     "status": "failed",
 }
+PREACTIVATION_BUILTIN_CASE_COUNT = 4
+PREACTIVATION_CAN_CLAIM = [
+    "state_dependent_preactivation_fixture_exists",
+    "state_dependent_arm_compared_with_simple_warm_baseline",
+    "stale_privacy_conflicted_routes_are_suppressed_in_fixture",
+    "preactivation_metrics_are_reported_separately",
+]
+PREACTIVATION_CANNOT_CLAIM = [
+    "preactivation_route_is_memory_truth",
+    "live_foreground_preactivation_is_enabled",
+    "adhd_productivity_lift_is_proven",
+    "live_latency_savings_are_proven",
+    "general_proactive_agent_behavior_is_validated",
+]
 
 PREACTIVATION_PHASES = {"debugging_loop", "implementation", "review", "handoff"}
 UNSAFE_FRESHNESS = {"stale", "expired", "superseded", "unknown", "conflicted", "refuted", "uncertain"}
@@ -467,8 +481,14 @@ def run_state_dependent_preactivation_benchmark(
         "kind": PREACTIVATION_BENCHMARK_KIND,
         "schema_version": PREACTIVATION_BENCHMARK_SCHEMA_VERSION,
         "ok": bool(selected_cases) and bool(quality_gates["passed"]),
+        "contract_gate_ok": bool(selected_cases) and bool(quality_gates["passed"]),
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "benchmark_maturity_level": "contract_smoke",
+        "quality_gate_kind": "fixture_contract_not_public_quality",
         "status": "sufficient" if selected_cases and quality_gates["passed"] else "insufficient",
         "case_count": len(selected_cases),
+        "sample_size": len(selected_cases),
         "metrics": {
             "simple_warm_baseline": baseline_metrics,
             "state_dependent": stateful_metrics,
@@ -491,31 +511,68 @@ def run_state_dependent_preactivation_benchmark(
             "source_reopen_required_before_claim": True,
             "source_open_action_grammar_allowed_without_reopen": False,
         },
-        "can_claim": [
-            "state_dependent_preactivation_fixture_exists",
-            "state_dependent_arm_compared_with_simple_warm_baseline",
-            "stale_privacy_conflicted_routes_are_suppressed_in_fixture",
-            "preactivation_metrics_are_reported_separately",
-        ],
-        "cannot_claim": [
-            "preactivation_route_is_memory_truth",
-            "live_foreground_preactivation_is_enabled",
-            "adhd_productivity_lift_is_proven",
-            "live_latency_savings_are_proven",
-            "general_proactive_agent_behavior_is_validated",
-        ],
+        "can_claim": list(PREACTIVATION_CAN_CLAIM),
+        "cannot_claim": list(PREACTIVATION_CANNOT_CLAIM),
+    }
+
+
+def public_cli_summary(*, passed: bool, full_report_written: bool) -> dict[str, Any]:
+    """Return the default CLI JSON without projecting from the full report.
+
+    The full benchmark payload intentionally contains fixture routes and
+    source-ref handles so a maintainer can audit the contract with `--output`.
+    Default stdout is a public release gate summary; keep it built from stable
+    scalars so future "helpful" additions to the report cannot leak route
+    material into logs.
+    """
+
+    return {
+        "kind": PREACTIVATION_BENCHMARK_KIND,
+        "schema_version": PREACTIVATION_BENCHMARK_SCHEMA_VERSION,
+        "ok": passed,
+        "status": "sufficient" if passed else "insufficient",
+        "contract_gate_ok": passed,
+        "quality_gate_ok": False,
+        "public_quality_gate_ok": False,
+        "benchmark_maturity_level": "contract_smoke",
+        "quality_gate_kind": "fixture_contract_not_public_quality",
+        "case_count": PREACTIVATION_BUILTIN_CASE_COUNT,
+        "sample_size": PREACTIVATION_BUILTIN_CASE_COUNT,
+        "stdout_boundary": "public_summary_no_cases_or_source_refs",
+        "full_report_written": full_report_written,
+        "full_report_flag": "--output <path>",
+        "can_claim": list(PREACTIVATION_CAN_CLAIM),
+        "cannot_claim": list(PREACTIVATION_CANNOT_CLAIM),
+        "privacy_boundary": {
+            "input_text_leak_emitted": False,
+            "source_text_leak_emitted": False,
+            "local_paths_emitted": False,
+            "unredacted_literal_emitted": False,
+            "fixture_cases_emitted_to_stdout": False,
+            "source_refs_emitted_to_stdout": False,
+        },
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--output", help="Optional sanitized full-report JSON path.")
     args = parser.parse_args()
     payload = run_state_dependent_preactivation_benchmark()
     passed = payload.get("ok") is True
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
     if args.json_output:
-        cli_payload = CLI_SUCCESS_PAYLOAD if passed else CLI_FAILURE_PAYLOAD
-        sys.stdout.write(json.dumps(cli_payload, ensure_ascii=False, indent=2) + "\n")
+        stdout_payload = public_cli_summary(
+            passed=passed,
+            full_report_written=bool(args.output),
+        )
+        sys.stdout.write(
+            json.dumps(stdout_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
     else:
         sys.stdout.write(
             "state-dependent preactivation benchmark: "

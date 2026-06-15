@@ -229,6 +229,18 @@ def build_report() -> dict[str, Any]:
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
         "ok": True,
+        "benchmark_maturity_level": "diagnostic_proxy",
+        "measurement_origin": "synthetic_fixture",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": True,
+        "public_quality_gate_ok": False,
+        "decision_impact": "issue_closeout_candidate",
+        "decision_impact_gate_ok": False,
+        "requires_human_review_before_closeout": True,
+        "decision_impact_reason": (
+            "bounded synthetic cohort only; useful for issue review, not an "
+            "authoritative owner-status or live default-session decision"
+        ),
         "issue_scope": ["#1185", "#1384"],
         "validation_scope": "bounded_public_synthetic_default_session_and_handoff_cohort",
         "case_count": len(rows),
@@ -261,7 +273,12 @@ def build_report() -> dict[str, Any]:
             ),
             "regressions_block_promotion": observed_counts["regression"] > 0,
             "claim_level": "bounded_synthetic_validation_not_live_product_lift",
-            "recommended_owner_status": "#1384 closeable; #1185 remains open until broader default-path evidence is recorded",
+            "owner_status_note_non_authoritative": (
+                "#1384 appears closeout-ready from this bounded fixture; #1185 "
+                "still needs broader default-path evidence."
+            ),
+            "decision_impact_gate_ok": False,
+            "requires_human_review_before_closeout": True,
         },
         "privacy_boundary": {
             "public_safe_synthetic_only": True,
@@ -274,6 +291,14 @@ def build_report() -> dict[str, Any]:
             "bounded_public_synthetic_cohort_records_wins_no_help_and_regressions",
             "continuity_usefulness_gate_blocks_safe_but_noisy_or_demoted_route_packets",
             "multilingual_light_cue_and_natural_handoff_shapes_have_replayable_contract_cases",
+        ],
+        "useful_now": [
+            "fixture identifies natural-handoff shapes worth preserving",
+            "regression cases show where foreground output loses useful actionability",
+        ],
+        "agent_action": "use_as_issue_review_input_not_owner_status",
+        "can_support_after_action": [
+            "human-reviewed issue closeout note for bounded synthetic behavior"
         ],
         "cannot_claim": [
             "broad_default_session_product_lift",

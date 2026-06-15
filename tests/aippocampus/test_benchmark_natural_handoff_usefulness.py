@@ -31,6 +31,13 @@ class NaturalHandoffUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertTrue(report["privacy_boundary"]["public_safe_synthetic_only"])
         self.assertFalse(report["privacy_boundary"]["raw_private_history_used"])
         self.assertIn("broad_default_session_product_lift", report["cannot_claim"])
+        self.assertEqual(report["measurement_origin"], "synthetic_fixture")
+        self.assertFalse(report["observed_agent_behavior"])
+        self.assertEqual(report["decision_impact"], "issue_closeout_candidate")
+        self.assertFalse(report["decision_impact_gate_ok"])
+        self.assertTrue(report["requires_human_review_before_closeout"])
+        self.assertIn("useful_now", report)
+        self.assertNotIn("recommended_owner_status", report["promotion_readout"])
 
     def test_winning_cases_pass_usefulness_and_attention_cost_gates(self) -> None:
         report = benchmark.build_report()
@@ -68,6 +75,7 @@ class NaturalHandoffUsefulnessBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(payload["metrics"]["regression_count"], 3)
         self.assertFalse(payload["privacy_boundary"]["raw_source_text_emitted"])
+        self.assertFalse(payload["promotion_readout"]["decision_impact_gate_ok"])
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("/Users/", serialized)
 
