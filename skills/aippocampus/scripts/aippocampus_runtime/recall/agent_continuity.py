@@ -1486,7 +1486,8 @@ def main(argv: list[str] | None = None) -> int:
             status = str(payload.get("status") or "unknown")
             explanation = payload.get("explanation")
             data = explanation if isinstance(explanation, Mapping) else {}
-            error = data.get("error") if isinstance(data.get("error"), Mapping) else {}
+            raw_error = data.get("error")
+            error = raw_error if isinstance(raw_error, Mapping) else {}
             if status == "cannot_verify":
                 print("AIppocampus agent explain: cannot verify handle")
                 print("Reason: " + str(error.get("code") or "malformed recall handle"))

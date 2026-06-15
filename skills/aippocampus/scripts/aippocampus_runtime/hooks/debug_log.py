@@ -295,11 +295,11 @@ def _skip_reason(
     decision: str,
     memory_surface: str,
     cache_status: str,
-    elapsed_ms: float,
+    elapsed_ms: float | None,
 ) -> str | None:
     if decision != "skip":
         return None
-    if elapsed_ms >= 3000 and memory_surface == "no_memory":
+    if (elapsed_ms or 0.0) >= 3000 and memory_surface == "no_memory":
         return "foreground_budget_or_io_timeout_no_memory"
     if cache_status == "miss" and memory_surface == "no_memory":
         return "cache_miss_no_relevant_route"

@@ -312,11 +312,12 @@ def enrich_plugin_cache_status(
         if plugin_installed_dir is not None
         else False
     )
-    resolved_installed_dir = (
-        unique_installed_cache_root(codex_home_path)
-        if installed_arg_auto
-        else plugin_installed_dir
-    )
+    if installed_arg_auto:
+        resolved_installed_dir = unique_installed_cache_root(codex_home_path)
+    elif plugin_installed_dir is not None:
+        resolved_installed_dir = Path(plugin_installed_dir)
+    else:
+        resolved_installed_dir = None
     cache_status = build_plugin_cache_status(
         source_root=repo_root / "plugins" / "aippocampus",
         package_root=output,
