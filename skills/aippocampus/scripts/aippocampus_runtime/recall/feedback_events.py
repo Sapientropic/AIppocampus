@@ -24,6 +24,7 @@ RECALL_FEEDBACK_KIND = "aippocampus_recall_feedback_event"
 RECALL_FEEDBACK_REPORT_KIND = "aippocampus_recall_feedback_report"
 ACTIVE_FLOW_EVENT_KIND = "aippocampus_active_flow_event"
 ACTIVE_FLOW_REPORT_KIND = "aippocampus_active_flow_activation_report"
+FEEDBACK_CALIBRATION_REPORT_KIND = "aippocampus_feedback_calibration_report"
 PUBLIC_FIXTURE_KIND = "public_route_feedback_fixture"
 
 RECALL_OUTCOMES = {
@@ -172,10 +173,11 @@ def _empty_signal_group() -> dict[str, Any]:
 
 
 def recall_feedback_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    event_rows = [event for event in events if isinstance(event, Mapping)]
     by_context: dict[str, dict[str, Any]] = {}
     outcome_counts: Counter[str] = Counter()
     event_count = 0
-    for event in events:
+    for event in event_rows:
         if event.get("kind") not in {RECALL_FEEDBACK_KIND, ACTIVE_FLOW_EVENT_KIND}:
             continue
         event_count += 1
@@ -196,6 +198,7 @@ def recall_feedback_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any
         family_row["route_kinds"] = dict(sorted(routes.items()))
         outcome_counts[outcome] += 1
 
+    calibration = recall_feedback_calibration_report(event_rows)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": RECALL_FEEDBACK_REPORT_KIND,
@@ -210,9 +213,11 @@ def recall_feedback_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any
         },
         "policy_boundary": {
             "telemetry_is_calibration_evidence": True,
-            "automatic_calibration_enabled": False,
+            "automatic_calibration_enabled": True,
+            "calibration_report_is_no_write": True,
             "score_fusion_weights_changed": False,
         },
+        "calibration": calibration,
     }
 
 
@@ -279,9 +284,10 @@ def _route_reason_codes(signals: Counter[str], score: float) -> list[str]:
 
 
 def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    event_rows = [event for event in events if isinstance(event, Mapping)]
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     metrics: Counter[str] = Counter()
-    for event in events:
+    for event in event_rows:
         if event.get("kind") != ACTIVE_FLOW_EVENT_KIND:
             continue
         route_id = _safe_token(event.get("route_id"), fallback_prefix="route")
@@ -338,6 +344,7 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
         "decay_applied_count",
     ):
         metrics.setdefault(key, 0)
+    calibration = recall_feedback_calibration_report(event_rows)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ACTIVE_FLOW_REPORT_KIND,
@@ -346,14 +353,107 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
         "metrics": dict(sorted(metrics.items())),
         "policy_boundary": {
             "activation_weights_are_not_source_truth": True,
-            "default_route_weighting_unchanged": True,
+            "default_route_weighting_unchanged": False,
+            "default_route_weighting_consumer": "bounded_route_activation_metadata",
             "blocked_routes_do_not_shape_foreground_content": True,
         },
+        "calibration": calibration,
         "privacy_boundary": {
             "stores_raw_prompt_text": False,
             "stores_private_source_excerpt": False,
             "stores_local_path": False,
         },
+    }
+
+
+def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """Aggregate feedback into reversible route calibration deltas.
+
+    The deltas are navigation metadata only. They can lift or demote route
+    handles for future reopening, but they cannot emit facts, mutate source
+    truth, or bypass source reopen.
+    """
+
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    totals: Counter[str] = Counter()
+    for event in events:
+        kind = event.get("kind")
+        if kind == ACTIVE_FLOW_EVENT_KIND:
+            route_id = _safe_token(event.get("route_id"), fallback_prefix="route")
+            route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
+            outcome = _safe_kind(event.get("signal"), ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+        elif kind == RECALL_FEEDBACK_KIND:
+            route_id = _safe_token(event.get("candidate_id"), fallback_prefix="candidate")
+            route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
+            outcome = _safe_kind(event.get("outcome"), RECALL_OUTCOMES, "candidate_delivered")
+        else:
+            continue
+        key = (route_id, route_kind)
+        row = grouped.setdefault(
+            key,
+            {
+                "route_id": route_id,
+                "route_kind": route_kind,
+                "event_count": 0,
+                "delta": 0.0,
+                "signals": Counter(),
+            },
+        )
+        delta = DEFAULT_SIGNAL_DELTAS.get(outcome, 0.0)
+        row["event_count"] += 1
+        row["delta"] += delta
+        row["signals"][outcome] += 1
+        totals[outcome] += 1
+
+    deltas: list[dict[str, Any]] = []
+    for row in grouped.values():
+        signals: Counter[str] = row["signals"]
+        sparse = row["event_count"] < 2
+        conflicting = bool(signals.get("source_reopen_success")) and bool(
+            signals.get("wrong_route_drag") or signals.get("blocked") or signals.get("superseded")
+        )
+        bounded_delta = max(-1.0, min(1.0, float(row["delta"]) / max(1, row["event_count"])))
+        if sparse or conflicting:
+            bounded_delta = 0.0
+        deltas.append(
+            {
+                "route_id": row["route_id"],
+                "route_kind": row["route_kind"],
+                "event_count": row["event_count"],
+                "signal_counts": dict(sorted(signals.items())),
+                "route_weight_delta": round(bounded_delta, 6),
+                "foreground_eligible": bounded_delta > 0 and not sparse and not conflicting,
+                "sparse_feedback_fallback": sparse,
+                "conflicting_feedback_fallback": conflicting,
+                "reason_codes": [
+                    *(["source_reopen_success_lift"] if signals.get("source_reopen_success") else []),
+                    *(["wrong_route_drag_demote"] if signals.get("wrong_route_drag") else []),
+                    *(["blocked_or_superseded_demote"] if signals.get("blocked") or signals.get("superseded") else []),
+                    *(["sparse_feedback_no_delta"] if sparse else []),
+                    *(["conflicting_feedback_no_delta"] if conflicting else []),
+                ],
+            }
+        )
+    deltas.sort(key=lambda item: (-float(item["route_weight_delta"]), str(item["route_id"])))
+    return {
+        "kind": FEEDBACK_CALIBRATION_REPORT_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "no_write": True,
+        "delta_count": len(deltas),
+        "deltas": deltas,
+        "outcome_counts": dict(sorted(totals.items())),
+        "consumer": "bounded_route_activation_metadata",
+        "policy_boundary": {
+            "calibration_evidence_not_source_truth": True,
+            "clean_source_mutation_allowed": False,
+            "source_open_claim_allowed": False,
+            "reversible_and_inspectable": True,
+        },
+        "cannot_claim": [
+            "feedback_event_is_source_truth",
+            "feedback_calibration_can_emit_source_open",
+            "feedback_calibration_mutates_clean_source",
+        ],
     }
 
 

@@ -407,6 +407,7 @@ def run_project(
             str(root),
             "--job",
             "all",
+            "--event-salience-gate",
             "--project",
             stats.label,
             "--objective",

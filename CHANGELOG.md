@@ -6,7 +6,21 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-Nothing yet.
+The next slice is about better restraint.
+
+- AIppocampus can now hold a compact macro-field view: posture lanes, timing
+  affordance, local/global obstructions, and Yi-structure diagnostics all stay
+  navigation-only until source is reopened.
+- Recall learning is less spooky. Feedback, retrieval reconsolidation, warm
+  preactivation, and posture calibration produce bounded route hints and review
+  rows instead of quietly rewriting memory.
+- Subconscious intake is on the normal scheduler path now, with a bypass flag
+  and a sidecar trail, so expensive background attention has a doorkeeper.
+- Local closeout got less theatrical: release/test plans say which gate owns
+  what, and `update apply --all-local --agent-json` now tells agents the next
+  host-reload/foreground-visibility step after syncing local installs.
+
+Still alpha. Still source-backed. A little more patience in the machinery.
 
 ## 0.3.3 - 2026-06-15
 

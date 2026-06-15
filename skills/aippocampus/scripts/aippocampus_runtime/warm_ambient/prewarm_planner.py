@@ -10,7 +10,8 @@ foreground action may pull and reopen from source.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Mapping
+import json
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
@@ -195,10 +196,94 @@ def _metrics(
     }
 
 
+def cognitive_state_vector(
+    *,
+    phase: str = "unknown",
+    frontier_state: str = "unknown",
+    salience_band: str = "unknown",
+    warm_cache_state: str = "unknown",
+    active_recall_lock: str = "compatible",
+) -> dict[str, Any]:
+    phase_text = _safe_text(phase, 80).casefold() or "unknown"
+    frontier = _safe_text(frontier_state, 80).casefold() or "unknown"
+    salience = _safe_text(salience_band, 80).casefold() or "unknown"
+    cache = _safe_text(warm_cache_state, 80).casefold() or "unknown"
+    lock = _safe_text(active_recall_lock, 80).casefold() or "compatible"
+    compatible = (
+        phase_text not in {"off", "stopped", "private", "blocked"}
+        and lock not in {"incompatible", "locked_elsewhere", "privacy_blocked"}
+        and salience not in {"noise", "blocked"}
+    )
+    return {
+        "phase": phase_text,
+        "frontier_state": frontier,
+        "salience_band": salience,
+        "warm_cache_state": cache,
+        "active_recall_lock": lock,
+        "preactivation_compatible": compatible,
+        "reason_codes": [
+            *(["off_state_suppresses_preactivation"] if phase_text in {"off", "stopped"} else []),
+            *(["active_recall_lock_incompatible"] if lock in {"incompatible", "locked_elsewhere"} else []),
+            *(["salience_noise_suppresses_preactivation"] if salience == "noise" else []),
+            *(["warm_state_route_handles_only"] if compatible else []),
+        ],
+    }
+
+
+def _coerce_state_vector(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return cognitive_state_vector()
+    return cognitive_state_vector(
+        phase=str(value.get("phase") or "unknown"),
+        frontier_state=str(value.get("frontier_state") or value.get("frontier") or "unknown"),
+        salience_band=str(value.get("salience_band") or value.get("salience") or "unknown"),
+        warm_cache_state=str(value.get("warm_cache_state") or value.get("cache_state") or "unknown"),
+        active_recall_lock=str(value.get("active_recall_lock") or value.get("lock") or "compatible"),
+    )
+
+
+def _suppress_for_state(row: dict[str, Any], vector: Mapping[str, Any]) -> dict[str, Any]:
+    if vector.get("preactivation_compatible"):
+        return row
+    suppressed = dict(row)
+    suppressed["status"] = "suppressed"
+    suppressed["readiness_class"] = "silent"
+    suppressed["action_grammar"] = "direction_only"
+    suppressed["next_action"] = "stay_silent"
+    suppressed["reason_codes"] = [
+        *[str(item) for item in row.get("reason_codes") or []],
+        *[str(item) for item in vector.get("reason_codes") or []],
+    ]
+    suppressed["source_boundary"] = {
+        **dict(row.get("source_boundary") or {}),
+        "state_dependent_preactivation_suppressed": True,
+    }
+    suppressed.pop("source_reopen_path", None)
+    return suppressed
+
+
+def _state_adjusted_metrics(
+    metrics: Mapping[str, Any],
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    adjusted = dict(metrics)
+    ready = sum(1 for row in rows if row.get("status") == "ready")
+    adjusted["prewarm_ready_count"] = ready
+    adjusted["prewarm_suppressed_count"] = len(rows) - ready
+    adjusted["false_preactivation_cost_proxy"] = sum(
+        1 for row in rows if "state_dependent_preactivation_suppressed" in json.dumps(row)
+    )
+    adjusted["noise_suppression_count"] = sum(
+        1 for row in rows for reason in row.get("reason_codes") or [] if reason == "salience_noise_suppresses_preactivation"
+    )
+    return adjusted
+
+
 def prewarm_planner_report(
     candidates: Iterable[Mapping[str, Any]],
     *,
     active_lock_roi: Mapping[str, Any] | None = None,
+    cognitive_state: Mapping[str, Any] | None = None,
     now_unix: float | None = None,
     min_roi_score: float = 1.0,
 ) -> dict[str, Any]:
@@ -212,19 +297,29 @@ def prewarm_planner_report(
         min_roi_score=min_roi_score,
     )
     readiness_rows = [row for row in readiness.get("rows") or [] if isinstance(row, Mapping)]
-    predicted_domains = [
+    state_vector = _coerce_state_vector(cognitive_state)
+    raw_predicted_domains = [
         _domain_row(candidate, row)
         for candidate, row in zip(clean_candidates, readiness_rows, strict=False)
     ]
+    predicted_domains = [
+        _suppress_for_state(row, state_vector)
+        for row in raw_predicted_domains
+    ]
+    metrics = _state_adjusted_metrics(
+        _metrics(candidates=clean_candidates, readiness=readiness),
+        predicted_domains,
+    )
     return {
         "kind": PREWARM_PLANNER_KIND,
         "schema_version": PREWARM_PLANNER_SCHEMA_VERSION,
         "ok": True,
         "no_write": True,
         "navigation_only": True,
+        "cognitive_state_vector": state_vector,
         "predicted_domains": predicted_domains,
         "route_readiness": readiness,
-        "metrics": _metrics(candidates=clean_candidates, readiness=readiness),
+        "metrics": metrics,
         "contract": {
             "no_write_report_only": True,
             "reuses_route_readiness": True,
@@ -233,6 +328,7 @@ def prewarm_planner_report(
             "foreground_hook_mutation_allowed": False,
             "prewarm_output_authority": "navigation_only",
             "source_reopen_required_before_claim": True,
+            "state_dependent_preactivation_is_route_handle_planning": True,
         },
         "privacy_boundary": {
             "raw_prompt_serialized": False,
@@ -252,6 +348,7 @@ def prewarm_planner_report(
             "full_sleep_cycle_planner_is_live",
             "foreground_hooks_consume_prewarm_by_default",
             "live_latency_savings_are_proven",
+            "prepared_route_is_source_open_evidence",
         ],
     }
 

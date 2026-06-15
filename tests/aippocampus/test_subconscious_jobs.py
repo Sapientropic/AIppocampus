@@ -202,7 +202,48 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(config.edges_output_path, (root / "subconscious_edges.jsonl").resolve())
         self.assertEqual(config.jobs, ["concept_edges"])
         self.assertEqual(config.api_key, None)
+        self.assertTrue(config.event_salience_gate)
         self.assertTrue(config.dry_run)
+
+    def test_jobs_run_config_can_opt_out_of_default_salience_intake(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            class Args:
+                registry = None
+                registry_dir = str(root)
+                timeline = None
+                concept_graph = None
+                jobs_output = None
+                edges_output = None
+                event_salience_output = None
+                job = "concept_edges"
+                project = "AIppocampus"
+                objective = "test"
+                max_turns = 4
+                max_steps = 2
+                min_tool_steps = 1
+                model_route = None
+                model = "deepseek-v4-flash"
+                base_url = "https://example.invalid"
+                api_key_env = "MISSING_TEST_KEY"
+                max_tokens = None
+                timeout = 9
+                temperature = 0.2
+                concurrency = 3
+                samples_per_job = 2
+                event_salience_gate = False
+                continuity_domain_salience_mode = "off"
+                continuity_domain_events_output = None
+                continuity_domain_snapshot_dir = None
+                continuity_domain_clean_source_dir = None
+                continuity_domain_publish = False
+                dry_run = True
+                no_write = False
+
+            config = jobs.jobs_run_config_from_args(Args())
+
+        self.assertFalse(config.event_salience_gate)
 
     def test_job_validation_is_separate_from_runner(self) -> None:
         from aippocampus_runtime.subconscious import job_validation as validation

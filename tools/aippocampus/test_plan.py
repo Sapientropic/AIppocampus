@@ -315,6 +315,20 @@ def build_release_preflight_plan() -> dict[str, object]:
         "kind": "aippocampus_release_preflight_plan",
         "schema_version": 1,
         "assumption": "Use after the release PR CI is green and before pushing the tag.",
+        "gate_policy": {
+            "default_local_closeout": "focused_plan_then_pr_once",
+            "do_not_stack_quick_before_pr": True,
+            "do_not_repeat_ci_owned_gates_after_green_pr": True,
+            "broad_pr_benchmark_full_are_escalations": True,
+            "publish_workflow_owns_wheel_and_registry_checks": True,
+        },
+        "local_closeout_sequence": [
+            py_script("tools/aippocampus/test_plan.py", "--json"),
+            "run focused commands named by the plan that have not already passed",
+            py_script("tools/aippocampus/run_tests.py", "--tier pr"),
+            py_script("tools/aippocampus/release/check_public_boundary.py", "--json"),
+            py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
+        ],
         "local_required": [
             {
                 "command": py_script("tools/aippocampus/test_plan.py", "--json"),

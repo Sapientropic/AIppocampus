@@ -82,6 +82,20 @@ def compact_agent_status_report(
                 command=str(plugin_action) if plugin_action else None,
             )
         )
+    if bool(report.get("ok", True)):
+        for action in report.get("next_actions") or []:
+            if not isinstance(action, dict):
+                continue
+            surface = str(action.get("surface") or "next")
+            reason = str(action.get("reason") or "recommended next action")
+            command = action.get("command")
+            actions.append(
+                _compact_update_action(
+                    surface=surface,
+                    reason=reason,
+                    command=str(command) if command else None,
+                )
+            )
     agent_ready = (
         bool(summary.get("agent_callable_ready"))
         if "agent_callable_ready" in summary

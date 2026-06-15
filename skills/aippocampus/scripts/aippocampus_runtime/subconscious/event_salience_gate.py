@@ -295,6 +295,7 @@ def classify_event_salience(turn: Mapping[str, Any]) -> dict[str, Any]:
 def public_event_salience_summary(report: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "enabled": bool(report.get("enabled")),
+        "default_scheduler_intake_gate": True,
         "input_turn_count": int(report.get("input_turn_count") or 0),
         "selected_turn_count": int(report.get("selected_turn_count") or 0),
         "candidate_reduction_count": int(report.get("candidate_reduction_count") or 0),
@@ -303,6 +304,7 @@ def public_event_salience_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         "selected_by_bucket": dict(report.get("selected_by_bucket") or {}),
         "selected_event_kind_counts": dict(report.get("selected_event_kind_counts") or {}),
         "skipped_by_reason": dict(report.get("skipped_by_reason") or {}),
+        "intake_contract": "stable_jsonl_sidecar_with_source_refs_and_reason_codes",
         "output_boundary": "event_salience_is_navigation_intake_metadata_not_source_truth",
     }
 

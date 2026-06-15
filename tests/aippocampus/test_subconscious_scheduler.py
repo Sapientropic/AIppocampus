@@ -575,6 +575,8 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             if name == "aippocampus_runtime.navigation.project_timeline"
         ]
         self.assertLess(scripts.index("aippocampus_runtime.subconscious.jobs"), semantic_index)
+        jobs_command = commands[scripts.index("aippocampus_runtime.subconscious.jobs")]
+        self.assertIn("--event-salience-gate", jobs_command)
         self.assertTrue(any(index > semantic_index for index in timeline_indexes))
         self.assertGreater(
             dream_index,

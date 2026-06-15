@@ -1686,6 +1686,44 @@ class UpdateSyncTests(unittest.TestCase):
         )
         self.assertEqual(installed_manifest["version"], "0.2.0")
 
+    def test_all_local_agent_json_reports_host_reload_followup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            output = repo / "dist" / "aippocampus-plugin"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            plugin = repo / "plugins" / "aippocampus"
+            plugin.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
+            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "apply",
+                        "--all-local",
+                        "--repo-root",
+                        str(repo),
+                        "--plugin-output",
+                        str(output),
+                        "--codex-home",
+                        str(codex_home),
+                        "--no-child-check",
+                        "--agent-json",
+                    ]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["kind"], "aippocampus_update_apply_agent_json")
+        action = next(
+            item for item in payload["next_actions"] if item["surface"] == "agent_callable"
+        )
+        self.assertIn("reload Codex Desktop", action["command"])
+        self.assertIn("--foreground-tools-visible --agent-json", action["command"])
+
 
 if __name__ == "__main__":
     unittest.main()

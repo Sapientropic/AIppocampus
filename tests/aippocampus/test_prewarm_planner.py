@@ -11,6 +11,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.warm_ambient.prewarm_planner import (  # noqa: E402
+    cognitive_state_vector,
     fixture_prewarm_planner_report,
     prewarm_planner_report,
 )
@@ -149,6 +150,40 @@ class PrewarmPlannerTests(unittest.TestCase):
         self.assertFalse(report["privacy_boundary"]["local_paths_serialized"])
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("private\\thread", encoded)
+
+    def test_state_dependent_preactivation_suppresses_off_state(self) -> None:
+        vector = cognitive_state_vector(
+            phase="off",
+            frontier_state="quiet",
+            salience_band="noise",
+            warm_cache_state="warm",
+            active_recall_lock="incompatible",
+        )
+        report = prewarm_planner_report(
+            [
+                {
+                    "domain_id": "ready-route",
+                    "title": "Ready route",
+                    "owner_surface": "warm_ambient",
+                    "freshness": "current",
+                    "created_unix": 1_000,
+                    "ttl_seconds": 600,
+                    "expected_value": 5,
+                    "estimated_cost": 1,
+                    "source_refs": [{"source_id": "clean:ready"}],
+                }
+            ],
+            cognitive_state=vector,
+            now_unix=1_010,
+        )
+        row = report["predicted_domains"][0]
+
+        self.assertFalse(report["cognitive_state_vector"]["preactivation_compatible"])
+        self.assertEqual(row["status"], "suppressed")
+        self.assertEqual(row["action_grammar"], "direction_only")
+        self.assertNotIn("source_reopen_path", row)
+        self.assertGreaterEqual(report["metrics"]["false_preactivation_cost_proxy"], 1)
+        self.assertIn("prepared_route_is_source_open_evidence", report["cannot_claim"])
 
 
 if __name__ == "__main__":

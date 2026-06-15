@@ -11,16 +11,18 @@ from aippocampus_runtime.navigation.parallel_derivation_bundle import (
 )
 
 Layer: TypeAlias = Literal["earth", "human", "heaven"]
+LayerOrUnknown: TypeAlias = Literal["earth", "human", "heaven", "unknown"]
 
 AUTHORITY_LEVEL = "navigation_only"
 CLAIM_PERMISSION = "no_claim_before_reopen"
 SCHEMA_VERSION = 1
 
 _LAYERS: tuple[Layer, ...] = ("earth", "human", "heaven")
-_LAYER_LABELS: dict[Layer, str] = {
+_LAYER_LABELS: dict[LayerOrUnknown, str] = {
     "earth": "地",
     "human": "人",
     "heaven": "天",
+    "unknown": "未知",
 }
 _LAYER_ALIASES: dict[str, Layer] = {
     "earth": "earth",
@@ -131,22 +133,77 @@ def normalize_layer(value: object) -> Layer:
     raise ValueError(f"unknown Three Powers layer: {value!r}")
 
 
+def _semantic_profile_scores(profile: Mapping[str, Any] | None) -> dict[Layer, float] | None:
+    if not isinstance(profile, Mapping):
+        return None
+    raw_scores = profile.get("scores") or profile.get("weights") or profile
+    if not isinstance(raw_scores, Mapping):
+        return None
+    scores: dict[Layer, float] = {layer: 0.0 for layer in _LAYERS}
+    saw_signal = False
+    for layer in _LAYERS:
+        value = raw_scores.get(layer)
+        score = 0.0
+        if value is not None:
+            try:
+                score = float(value)
+            except (TypeError, ValueError):
+                score = 0.0
+        if score > 0:
+            saw_signal = True
+        scores[layer] = max(0.0, score)
+    return scores if saw_signal else None
+
+
+def _profile_margin(scores: Mapping[Layer, float], winners: Sequence[Layer]) -> float | None:
+    if not winners:
+        return None
+    second = max((score for layer, score in scores.items() if layer not in winners), default=0.0)
+    return round(float(scores[winners[0]]) - float(second), 6)
+
+
 def infer_active_layer(
     query: str,
     *,
     explicit_layer: object | None = None,
+    three_powers_layer_profile: Mapping[str, Any] | None = None,
 ) -> dict[str, object]:
     if explicit_layer is not None:
-        layer = normalize_layer(explicit_layer)
+        explicit_normalized = normalize_layer(explicit_layer)
         return {
-            "active_layer": layer,
-            "label": _LAYER_LABELS[layer],
+            "active_layer": explicit_normalized,
+            "label": _LAYER_LABELS[explicit_normalized],
             "source": "explicit",
             "scores": {item: 0 for item in _LAYERS},
-            "candidate_layers": [layer],
+            "candidate_layers": [explicit_normalized],
             "score_margin": None,
             "ambiguity_status": "explicit_override",
-            "reason_codes": [f"explicit_layer_{layer}"],
+            "reason_codes": [f"explicit_layer_{explicit_normalized}"],
+            "semantic_profile_absent": False,
+            "keyword_fallback_used": False,
+            "confidence": 1.0,
+        }
+
+    semantic_scores = _semantic_profile_scores(three_powers_layer_profile)
+    if semantic_scores is not None:
+        best_score = max(semantic_scores.values())
+        winners = [layer for layer in _LAYERS if semantic_scores[layer] == best_score]
+        semantic_layer: LayerOrUnknown = winners[0] if len(winners) == 1 else "unknown"
+        return {
+            "active_layer": semantic_layer,
+            "label": _LAYER_LABELS[semantic_layer],
+            "source": "semantic_profile",
+            "scores": semantic_scores,
+            "candidate_layers": winners,
+            "score_margin": _profile_margin(semantic_scores, winners),
+            "ambiguity_status": "clear" if len(winners) == 1 else "ambiguous_tie",
+            "reason_codes": [
+                *(["semantic_profile_ambiguous_tie"] if len(winners) > 1 else []),
+                *(f"semantic_profile_{item}" for item in winners),
+            ],
+            "semantic_profile_absent": False,
+            "keyword_fallback_used": False,
+            "confidence": round(float(best_score), 6),
         }
 
     query_text = str(query or "").casefold()
@@ -157,31 +214,43 @@ def infer_active_layer(
     best_score = max(scores.values())
     if best_score == 0:
         return {
-            "active_layer": "human",
-            "label": _LAYER_LABELS["human"],
-            "source": "default",
+            "active_layer": "unknown",
+            "label": _LAYER_LABELS["unknown"],
+            "source": "semantic_profile_absent",
             "scores": scores,
-            "candidate_layers": ["human"],
+            "candidate_layers": [],
             "score_margin": None,
-            "ambiguity_status": "default",
-            "reason_codes": ["default_human_current_task_route"],
+            "ambiguity_status": "unknown_no_semantic_profile",
+            "reason_codes": [
+                "semantic_profile_absent",
+                "keyword_fallback_absent",
+                "unknown_layer_no_default_human",
+            ],
+            "semantic_profile_absent": True,
+            "keyword_fallback_used": False,
+            "confidence": 0.0,
         }
     winners = [layer for layer in _LAYERS if scores[layer] == best_score]
     second_score = max((score for layer, score in scores.items() if layer not in winners), default=0)
-    layer = "human" if "human" in winners and len(winners) > 1 else winners[0]
+    fallback_layer: LayerOrUnknown = winners[0] if len(winners) == 1 else "unknown"
     ambiguous = len(winners) > 1
     return {
-        "active_layer": layer,
-        "label": _LAYER_LABELS[layer],
-        "source": "inferred",
+        "active_layer": fallback_layer,
+        "label": _LAYER_LABELS[fallback_layer],
+        "source": "keyword_fallback",
         "scores": scores,
         "candidate_layers": winners,
         "score_margin": best_score - second_score,
         "ambiguity_status": "ambiguous_tie" if ambiguous else "clear",
         "reason_codes": [
+            "semantic_profile_absent",
+            "keyword_fallback_used",
             *(["ambiguous_layer_tie"] if ambiguous else []),
             *(f"query_cue_{item}" for item in winners),
         ],
+        "semantic_profile_absent": True,
+        "keyword_fallback_used": True,
+        "confidence": 0.25 if ambiguous else 0.35,
     }
 
 
@@ -195,11 +264,11 @@ def _candidate_source_family(candidate: Mapping[str, Any]) -> str:
 
 def route_facet_metadata(candidate: Mapping[str, Any]) -> dict[str, object]:
     source_family = _candidate_source_family(candidate)
-    layer = _SOURCE_FAMILY_TO_LAYER.get(source_family, "human")
+    layer: LayerOrUnknown = _SOURCE_FAMILY_TO_LAYER.get(source_family, "unknown")
     reason_code = (
         f"source_family_{source_family}_maps_to_{layer}"
         if source_family in _SOURCE_FAMILY_TO_LAYER
-        else "unknown_source_family_defaults_to_human_review"
+        else "unknown_source_family_ambiguous_review"
     )
     return {
         "facet": "three_powers_route_facet",
@@ -230,13 +299,17 @@ def _project_candidate(
     candidate: Mapping[str, Any],
     *,
     index: int,
-    active_layer: Layer,
+    active_layer: LayerOrUnknown,
+    layer_match_bonus: int,
 ) -> dict[str, object]:
     route_id = str(candidate.get("route_id") or candidate.get("id") or f"route_{index}")
     facet = route_facet_metadata(candidate)
     facet_layer = str(facet["layer"])
     source_handle_count = _source_handle_count(candidate)
-    score = (100 if facet_layer == active_layer else 0) + min(source_handle_count, 5)
+    score = (layer_match_bonus if facet_layer == active_layer else 0) + min(
+        source_handle_count,
+        5,
+    )
     return {
         "route_id": route_id,
         "route_label": _safe_label(candidate.get("route_label") or candidate.get("title"), route_id),
@@ -291,7 +364,7 @@ def _fanout_policy(
 
 
 def _facet_counts(projected: Sequence[Mapping[str, object]]) -> dict[str, int]:
-    counts: dict[str, int] = {layer: 0 for layer in _LAYERS}
+    counts: dict[str, int] = {layer: 0 for layer in (*_LAYERS, "unknown")}
     for candidate in projected:
         facet = candidate.get("three_powers_facet")
         if isinstance(facet, Mapping):
@@ -308,16 +381,23 @@ def _mapping_int(mapping: Mapping[str, object], key: str) -> int:
 
 def _diagnostics(
     *,
-    active_layer: Layer,
+    active_layer: LayerOrUnknown,
+    layer_profile: Mapping[str, object],
     facet_counts: Mapping[str, int],
     fanout_policy: Mapping[str, object],
 ) -> list[str]:
     diagnostics: list[str] = []
+    if layer_profile.get("keyword_fallback_used"):
+        diagnostics.append("keyword_fallback_used")
+    if layer_profile.get("semantic_profile_absent"):
+        diagnostics.append("semantic_profile_absent")
+    if active_layer == "unknown":
+        diagnostics.append("active_layer_unknown_requires_source_reopen")
     if facet_counts.get("earth", 0) > 0 and facet_counts.get("heaven", 0) == 0:
         diagnostics.append("earth_supports_but_heaven_not_ready")
     if facet_counts.get("heaven", 0) > 0 and facet_counts.get("earth", 0) == 0:
         diagnostics.append("heaven_direction_clear_but_earth_evidence_missing")
-    if facet_counts.get(active_layer, 0) == 0:
+    if active_layer != "unknown" and facet_counts.get(active_layer, 0) == 0:
         diagnostics.append(f"active_layer_{active_layer}_has_no_direct_route")
     if fanout_policy.get("stale_conflict_checks_required"):
         diagnostics.append("stale_conflict_checks_required")
@@ -334,15 +414,34 @@ def apply_three_powers_fanout(
     perturbation_packet: Mapping[str, Any] | None = None,
     topology_hexagram: HexagramRef | None = None,
     parallel_derivation_bundle: Mapping[str, Any] | None = None,
+    three_powers_layer_profile: Mapping[str, Any] | None = None,
     base_candidate_limit: int = 1,
 ) -> dict[str, object]:
-    layer_profile = infer_active_layer(query, explicit_layer=active_layer)
-    layer = str(layer_profile["active_layer"])
-    if layer not in _LAYERS:
-        raise ValueError(f"unknown Three Powers layer profile: {layer!r}")
-    normalized_layer = normalize_layer(layer)
+    layer_profile = infer_active_layer(
+        query,
+        explicit_layer=active_layer,
+        three_powers_layer_profile=three_powers_layer_profile,
+    )
+    layer_value = str(layer_profile["active_layer"])
+    if layer_value not in (*_LAYERS, "unknown"):
+        raise ValueError(f"unknown Three Powers layer profile: {layer_value!r}")
+    if layer_value == "unknown":
+        normalized_layer: LayerOrUnknown = "unknown"
+    else:
+        normalized_layer = normalize_layer(layer_value)
+    profile_source = str(layer_profile.get("source") or "")
+    layer_match_bonus = 100 if profile_source == "explicit" else 40
+    if profile_source == "keyword_fallback":
+        layer_match_bonus = 2
+    if normalized_layer == "unknown":
+        layer_match_bonus = 0
     projected = [
-        _project_candidate(candidate, index=index, active_layer=normalized_layer)
+        _project_candidate(
+            candidate,
+            index=index,
+            active_layer=normalized_layer,
+            layer_match_bonus=layer_match_bonus,
+        )
         for index, candidate in enumerate(route_candidates)
     ]
     ranked = sorted(
@@ -377,6 +476,7 @@ def apply_three_powers_fanout(
     counts = _facet_counts(projected)
     diagnostics = _diagnostics(
         active_layer=normalized_layer,
+        layer_profile=layer_profile,
         facet_counts=counts,
         fanout_policy=policy,
     )
@@ -399,6 +499,10 @@ def apply_three_powers_fanout(
         "schema_version": SCHEMA_VERSION,
         "active_layer": normalized_layer,
         "active_layer_label": _LAYER_LABELS[normalized_layer],
+        "three_powers_layer_profile_source": layer_profile.get("source"),
+        "keyword_fallback_used": bool(layer_profile.get("keyword_fallback_used")),
+        "semantic_profile_absent": bool(layer_profile.get("semantic_profile_absent")),
+        "layer_match_bonus": layer_match_bonus,
         "layer_profile": layer_profile,
         "ranked_candidates": ranked,
         "selected_route_ids": [str(candidate["route_id"]) for candidate in selected],
@@ -422,6 +526,7 @@ __all__ = [
     "AUTHORITY_LEVEL",
     "CLAIM_PERMISSION",
     "Layer",
+    "LayerOrUnknown",
     "apply_three_powers_fanout",
     "infer_active_layer",
     "normalize_layer",
