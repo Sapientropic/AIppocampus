@@ -70,6 +70,14 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["cache_status"], "without_cache_path")
         self.assertEqual(result["cache_record_count"], 0)
         self.assertEqual(result["support_status"], "supported_by_codex_hooks_json")
+        card = result["frontstage_card"]
+        self.assertEqual(card["authority"], "navigation_only")
+        self.assertTrue(card["fail_open"])
+        self.assertTrue(card["optional"])
+        self.assertEqual(card["cache_status"], "without_cache_path")
+        commands = [step["command"] for step in card["next_steps"]]
+        self.assertTrue(any("refresh-cache" in command for command in commands))
+        self.assertTrue(any("uninstall" in command for command in commands))
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
 
@@ -103,6 +111,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["provider_counts"], {"learning_loop": 1})
         self.assertEqual(result["cache_path"], "<redacted:cache-jsonl>")
         self.assertTrue(result["cache_path_redacted"])
+        self.assertEqual(result["frontstage_card"]["status"], "ready")
+        self.assertTrue(result["frontstage_card"]["ready"])
         self.assertNotIn(str(cache_path), encoded)
 
     def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
@@ -181,6 +191,24 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(cache_path), encoded)
         self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
+
+    def test_cli_status_human_frontstage_card_names_action_time_hints(self) -> None:
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "status",
+                    "--codex-home",
+                    str(self.codex_home),
+                ]
+            )
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("Action-time hints:", output)
+        self.assertIn("fail-open: true", output)
+        self.assertIn("authority: navigation_only", output)
+        self.assertIn("aippocampus hooks action install", output)
 
     def test_cli_rejects_zero_or_negative_timeout_before_writing(self) -> None:
         for value in ("0", "-1"):

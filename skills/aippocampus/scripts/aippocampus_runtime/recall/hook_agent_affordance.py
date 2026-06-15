@@ -23,6 +23,7 @@ _STRONG_CLAIM_INTENTS = {
     "high_risk_claim",
     "numeric_claim",
 }
+_TOOL_VISIBILITY_VALUES = {"visible", "unknown", "cli_fallback_only"}
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -238,6 +239,20 @@ def _budget_hint(action: str) -> str:
     }.get(action, "none")
 
 
+def _tool_visibility(result: Mapping[str, Any]) -> str:
+    raw = str(
+        result.get("tool_visibility")
+        or result.get("agent_tool_visibility")
+        or (_as_dict(result.get("agent_callable")).get("tool_visibility"))
+        or ""
+    ).strip().casefold()
+    if raw in _TOOL_VISIBILITY_VALUES:
+        return raw
+    if result.get("foreground_tools_visible") is True:
+        return "visible"
+    return "unknown"
+
+
 def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any]) -> list[str]:
     codes: list[str] = []
     surface_intent = _as_dict(result.get("agent_surface_intent"))
@@ -298,6 +313,7 @@ def build_hook_agent_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
         "suggested_agent_action": action,
         "suggested_query_seed": _query_seed(action, lead_kinds),
         "budget_hint": _budget_hint(action),
+        "tool_visibility": _tool_visibility(result),
         "reason_codes": _reason_codes(action, lead_kinds, result),
         "not_enough_for_claim": True,
         "privacy_boundary": PRIVACY_BOUNDARY,
@@ -317,10 +333,17 @@ def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
         next_line = "Next: call agent_recall; use agent_explain or deepen before claims."
     else:
         next_line = "Next: call agent_recall with this cue before broad search."
+    fallback_line = ""
+    if str(affordance.get("tool_visibility") or "unknown") != "visible":
+        fallback_line = (
+            " If the tool is not visible, refresh plugin tools or use the CLI: "
+            f"{_AGENT_TOOL_BY_ACTION.get(action, 'aippocampus agent recall')}."
+        )
     return (
         "AIppocampus: prior context may matter.\n"
         f"{next_line}\n"
         "Use as route only; reopen source before quoting or making strong claims."
+        f"{fallback_line}"
     )
 
 

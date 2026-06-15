@@ -70,6 +70,36 @@ class HookAgentAffordanceTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["useful_continuity_ignored_count"], 0)
         self.assertGreaterEqual(report["metrics"]["aippo_first_activation_count"], 1)
 
+    def test_format_includes_host_fallback_when_tool_visibility_unknown(self) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"candidate_type": "memory_route"}],
+            }
+        )
+        text = affordance.format_hook_agent_affordance(packet)
+
+        self.assertIsNotNone(text)
+        self.assertEqual(packet["tool_visibility"], "unknown")
+        self.assertIn("If the tool is not visible", text or "")
+        self.assertIn("aippocampus agent recall", text or "")
+        self.assertIn("Use as route only", text or "")
+
+    def test_format_omits_host_fallback_when_tool_visibility_is_visible(self) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"candidate_type": "memory_route"}],
+                "tool_visibility": "visible",
+            }
+        )
+        text = affordance.format_hook_agent_affordance(packet)
+
+        self.assertEqual(packet["tool_visibility"], "visible")
+        self.assertNotIn("If the tool is not visible", text or "")
+
     def test_low_risk_aippo_posture_and_strong_claim_boundaries_are_separate(self) -> None:
         report = affordance.build_hook_agent_affordance_fixture_report()
         by_id = {case["case_id"]: case for case in report["agent_policy_cases"]}

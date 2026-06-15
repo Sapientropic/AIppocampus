@@ -9,9 +9,11 @@ Goal: install or probe AIppocampus and see one source-backed recall moment.
 
 1. If you are in Codex and an agent can run local setup commands, start with
    the [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path).
-   Use the [10-minute public path](guides/public-api.md#ten-minute-public-path)
-   or [first recall path](guides/install-guide.md#first-recall-path) when you
-   need a no-clone probe, a non-Codex host, or a CLI-only fallback.
+   Use the [first recall decision card](guides/first-recall-decision-card.md)
+   when you want one useful source-backed moment before broader setup. Use the
+   [10-minute public path](guides/public-api.md#ten-minute-public-path) or
+   [first recall path](guides/install-guide.md#first-recall-path) when you need
+   a no-clone probe, a non-Codex host, or a CLI-only fallback.
 2. Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) if you want
    a short product-feel example before the machinery.
 3. Use [Product Profiles](architecture/host/product-profiles.md) before promoting

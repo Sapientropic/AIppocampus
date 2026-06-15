@@ -10,6 +10,8 @@ license-files = ["LICENSE", "NOTICE"]
 keywords = [
     "ai-agents",
     "agent-memory",
+    "conversation-continuity",
+    "local-first",
     "mcp",
     "source-backed-memory",
     "codex",
@@ -27,7 +29,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Sapientropic/AIppocampus"
+Homepage = "https://www.aippocampus.com"
 Repository = "https://github.com/Sapientropic/AIppocampus"
 Issues = "https://github.com/Sapientropic/AIppocampus/issues"
 Discussions = "https://github.com/Sapientropic/AIppocampus/discussions"

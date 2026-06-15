@@ -57,7 +57,10 @@ from aippocampus_runtime.update.plugin_marketplace import (
 from aippocampus_runtime.update.plugin_marketplace import (
     owned_marketplace_manifest as _owned_marketplace_manifest,
 )
-from aippocampus_runtime.update.plugin_public_summary import public_install_summary
+from aippocampus_runtime.update.plugin_public_summary import (
+    public_install_summary,
+    public_uninstall_summary,
+)
 from aippocampus_runtime.update.plugin_uninstall_preview import (
     uninstall_codex_plugin_preview,
 )
@@ -702,11 +705,22 @@ def uninstall_codex_plugin(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus plugin",
-        description="Install, verify, or remove the AIppocampus Codex plugin.",
+        description="Install, verify, or remove the AIppocampus Codex plugin with explicit rollback paths.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    install = subparsers.add_parser("install", help="Install the Codex plugin")
+    install = subparsers.add_parser(
+        "install",
+        help="Install or refresh the Codex plugin",
+        description=(
+            "Copies the packaged AIppocampus plugin into the local Codex marketplace/cache, "
+            "then optionally verifies the host tools. This writes local plugin files only."
+        ),
+        epilog=(
+            "Rollback: aippocampus plugin uninstall --codex --dry-run --json, then "
+            "aippocampus plugin uninstall --codex."
+        ),
+    )
     install.add_argument("--codex", action="store_true", help="Use the Codex plugin manager")
     install.add_argument("--verify", "--verify-host", action="store_true", dest="verify")
     install.add_argument("--repo-root")
@@ -735,6 +749,14 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall = subparsers.add_parser(
         "uninstall",
         help="Remove the Codex plugin and owned marketplace",
+        description=(
+            "Removes the local AIppocampus Codex plugin cache and owned marketplace entry. "
+            "Use --dry-run first to see what would be removed."
+        ),
+        epilog=(
+            "Safe preview: aippocampus plugin uninstall --codex --dry-run --json. "
+            "Reinstall later with: aippocampus plugin install --codex --verify."
+        ),
     )
     uninstall.add_argument("--codex", action="store_true", help="Use the Codex plugin manager")
     uninstall.add_argument("--codex-home")
@@ -744,6 +766,13 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall.add_argument("--keep-marketplace", action="store_true")
     uninstall.add_argument("--dry-run", "--preview", action="store_true", dest="dry_run")
     uninstall.add_argument("--json", action="store_true", dest="json_output")
+    uninstall.add_argument(
+        "--operator-json",
+        "--full-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit raw local Codex/plugin paths for operator diagnostics.",
+    )
     return parser
 
 
@@ -809,6 +838,8 @@ def main(argv: list[str] | None = None) -> int:
                     codex_command=args.codex_command,
                     keep_marketplace=args.keep_marketplace,
                 )
+            if args.json_output and not args.operator_json:
+                result = public_uninstall_summary(result)
     except Exception as exc:
         error_message = f"{type(exc).__name__}: {exc}"
         error = {

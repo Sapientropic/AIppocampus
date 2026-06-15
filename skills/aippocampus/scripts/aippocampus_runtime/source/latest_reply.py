@@ -7,9 +7,13 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any, Sequence
 
 from aippocampus_runtime import core
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.rollout import normalize_rollout
+
+LOCAL_PATH_REDACTION = "<local-path-redacted>"
 
 
 def latest_reply(rollout: Path) -> dict:
@@ -48,33 +52,134 @@ def latest_reply(rollout: Path) -> dict:
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
+def _message_card(
+    message: dict[str, Any] | None,
+    *,
+    include_text: bool,
+    include_preview: bool = True,
+) -> dict[str, Any] | None:
+    if not message:
+        return None
+    card: dict[str, Any] = {
+        "line": message.get("line"),
+        "timestamp": message.get("timestamp"),
+        "turn_index": message.get("turn_index"),
+        "phase": message.get("phase") or "",
+        "is_final": bool(message.get("is_final")),
+    }
+    if include_text:
+        card["text"] = message.get("text") or ""
+    else:
+        card["text_omitted"] = True
+        if include_preview:
+            card["preview"] = core.compact_text(str(message.get("text") or ""), 120)
+    return redact_sensitive_values(redact_private_paths(card))
+
+
+def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact") -> dict[str, Any]:
+    status = str(result.get("status") or "unknown")
+    full = detail == "full"
+    message = result.get("message") if isinstance(result.get("message"), dict) else None
+    closeout_available = status == "final_answer"
+    payload: dict[str, Any] = {
+        "kind": "aippocampus_latest_reply",
+        "ok": closeout_available,
+        "status": status,
+        "detail": detail,
+        "closeout_available": closeout_available,
+        "message": _message_card(message, include_text=full and closeout_available),
+        "message_count": result.get("message_count", 0),
+        "turn_count": result.get("turn_count", 0),
+        "rollout": LOCAL_PATH_REDACTION,
+        "local_private_fields": ["rollout", "message.text"],
+        "privacy_boundary": {
+            "local_path_serialized": False,
+            "commentary_text_serialized": bool(full and not closeout_available),
+            "final_answer_text_serialized": bool(full and closeout_available),
+        },
+    }
+    if closeout_available:
+        payload["agent_next_action"] = (
+            "Use this final-answer card for orientation; reopen clean source before quoting or "
+            "depending on exact wording."
+        )
+        if full:
+            payload["message"] = _message_card(message, include_text=True)
+    elif status == "only_commentary_found":
+        payload["diagnostic_only"] = True
+        payload["not_final_closeout"] = True
+        payload["agent_next_action"] = (
+            "No final answer was found. Continue cautiously, run `aippocampus agent recall`, "
+            "or inspect the rollout with --detail full only if the user needs in-progress commentary."
+        )
+        payload["message"] = _message_card(
+            message,
+            include_text=full,
+            include_preview=False,
+        )
+    else:
+        payload["diagnostic_only"] = True
+        payload["not_final_closeout"] = True
+        payload["agent_next_action"] = (
+            "No assistant closeout was found. Use source search/recall or ask the user for the "
+            "missing conclusion."
+        )
+    return payload
+
+
+def render_latest_reply_text(payload: dict[str, Any]) -> str:
+    lines = [f"status: {payload.get('status')}"]
+    if payload.get("not_final_closeout"):
+        lines.append("boundary: not a final assistant closeout")
+    message = payload.get("message") if isinstance(payload.get("message"), dict) else None
+    if message and payload.get("closeout_available"):
+        lines.append(
+            f"line {message.get('line')} | {message.get('timestamp')} | "
+            f"turn={message.get('turn_index')} | phase={message.get('phase') or '(none)'}"
+        )
+        if message.get("text"):
+            lines.append(str(message.get("text") or ""))
+        else:
+            lines.append(f"preview: {message.get('preview')}")
+    elif message:
+        lines.append(
+            f"commentary line {message.get('line')} | turn={message.get('turn_index')} "
+            "(text omitted)"
+        )
+    lines.append("next: " + str(payload.get("agent_next_action") or "use recall/search"))
+    return "\n".join(lines)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="aippocampus latest-reply")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
+    parser.add_argument("--detail", choices=["compact", "full"], default="compact")
+    parser.add_argument(
+        "--operator-json",
+        "--full-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit full diagnostic text and local operator fields.",
+    )
+    args = parser.parse_args(list(argv) if argv is not None else None)
 
     cwd = Path(args.cwd).resolve()
     rollout = Path(args.rollout) if args.rollout else core.locate_rollout(cwd, core.codex_home())
     result = latest_reply(rollout)
+    detail = "full" if args.operator_json else args.detail
+    public = public_latest_reply_result(result, detail=detail)
 
-    if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.operator_json:
+        diagnostic = dict(result)
+        diagnostic["public_projection"] = public
+        print(json.dumps(diagnostic, ensure_ascii=False, indent=2))
+    elif args.json_output:
+        print(json.dumps(public, ensure_ascii=False, indent=2))
     else:
-        message = result.get("message")
-        print(f"status: {result['status']}")
-        if result.get("warning"):
-            print(result["warning"])
-        print(f"rollout: {result['rollout']}")
-        if not message:
-            return 1
-        print(
-            f"line {message['line']} | {message.get('timestamp')} | "
-            f"turn={message.get('turn_index')} | phase={message.get('phase') or '(none)'}"
-        )
-        print(message.get("text") or "")
-    return 0 if result.get("message") else 1
+        print(render_latest_reply_text(public))
+    return 0 if public.get("closeout_available") else 1
 
 
 if __name__ == "__main__":

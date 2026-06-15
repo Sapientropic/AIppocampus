@@ -350,7 +350,12 @@ def scan_session_rollouts(
     }
 
 
-def print_entries(entries: list[dict]) -> None:
+def _search_receipt_snippet(text: object, *, limit: int = 120) -> str:
+    snippet = " ".join(str(text or "").split())
+    return compact_text(snippet, limit)
+
+
+def print_entries(entries: list[dict], *, receipt_mode: bool = False) -> None:
     if not entries:
         print("no registered thread memories")
         return
@@ -370,11 +375,19 @@ def print_entries(entries: list[dict]) -> None:
         if entry.get("keywords"):
             print(f"  keywords: {', '.join(entry.get('keywords', [])[:12])}")
         if entry.get("index_hits"):
-            print("  index hits:")
+            print("  source receipts:" if receipt_mode else "  index hits:")
             for hit in entry.get("index_hits", [])[:3]:
-                print(
-                    f"    - line {hit.get('line')} | {hit.get('role')} | score {hit.get('score')}: {hit.get('snippet')}"
-                )
+                if receipt_mode:
+                    snippet = _search_receipt_snippet(hit.get("snippet"))
+                    print(
+                        f"    - line {hit.get('line')} | {hit.get('role')}: {snippet}"
+                    )
+                else:
+                    print(
+                        f"    - line {hit.get('line')} | {hit.get('role')} | score {hit.get('score')}: {hit.get('snippet')}"
+                    )
+            if receipt_mode:
+                print("  next: reopen/deepen source before quoting or making claims.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -712,7 +725,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(f"registry: {json_path}")
-            print_entries(scored)
+            print_entries(scored, receipt_mode=True)
             if warnings:
                 print("search warnings:")
                 for warning in warnings[:8]:

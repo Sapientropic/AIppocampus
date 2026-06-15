@@ -19,8 +19,32 @@ def _semantic_decision(surface: Mapping[str, Any]) -> str:
     return "not_reported"
 
 
-def _semantic_contribution(*, semantic_decision: str, status: str) -> str:
+DEGRADED_REASON_CODES = {
+    "semantic_provider_timeout",
+    "semantic_unavailable_missing_auth",
+    "semantic_unavailable",
+    "semantic_disabled_by_operator",
+}
+
+
+def _degraded_reason(reason_codes: list[str]) -> str | None:
+    for code in reason_codes:
+        if code in DEGRADED_REASON_CODES:
+            return code
+    return None
+
+
+def _semantic_contribution(
+    *,
+    semantic_decision: str,
+    status: str,
+    degraded_reason: str | None = None,
+) -> str:
     decision = semantic_decision.casefold()
+    if degraded_reason == "semantic_provider_timeout":
+        return "none_semantic_timeout"
+    if degraded_reason:
+        return "none_semantic_unavailable_or_skipped"
     if status in {"degraded", "unavailable"} or decision in {"skip", "skipped", "degraded"}:
         return "none_semantic_unavailable_or_skipped"
     if decision in {"background_only", "not_reported"}:
@@ -66,8 +90,13 @@ def agent_semantic_gate_diagnostics(
         if isinstance(surface, Mapping) and surface.get("surface") == "semantic_gate"
     ]
     surface = surfaces[0] if surfaces else {}
+    reason_codes = list(surface.get("reason_codes") or [])[:6]
+    degraded_reason = _degraded_reason([str(code) for code in reason_codes])
     status = str(surface.get("status") or "not_run")
     semantic_decision = _semantic_decision(surface)
+    if degraded_reason:
+        status = "degraded"
+        semantic_decision = "degraded"
     return {
         "requested": True,
         "mode": mode,
@@ -80,10 +109,11 @@ def agent_semantic_gate_diagnostics(
         "semantic_sidecar": {
             "status": status,
             "decision": semantic_decision,
-            "reason_codes": list(surface.get("reason_codes") or [])[:6],
+            "reason_codes": reason_codes,
             "contribution": _semantic_contribution(
                 semantic_decision=semantic_decision,
                 status=status,
+                degraded_reason=degraded_reason,
             ),
         },
         "agent_next_action": report.get("next_safe_action"),

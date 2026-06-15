@@ -91,6 +91,10 @@ ordinary agent-facing route when available.
 
 ## 3-5 Minute Demo Path
 
+For the canonical first-recall decision card, see
+[`first-recall-decision-card.md`](first-recall-decision-card.md). This section is
+the coding-agent flavored demo path, not a second contract owner.
+
 Start with the public package path. These commands work without a clone when
 `uvx` can install the current PyPI package:
 
@@ -111,6 +115,7 @@ first real source-backed recall:
 uvx aippocampus onboard --provider codex --all
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus search "a distinctive old phrase"
 ```

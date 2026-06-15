@@ -87,7 +87,7 @@ def compact_action(item: Any) -> dict[str, Any]:
             "id": item.get("id") or item.get("name") or item.get("action"),
             "severity": item.get("severity") or item.get("level"),
             "reason": core.compact_text(str(item.get("reason") or item.get("message") or ""), 220),
-            "command": item.get("command"),
+            "command": item.get("facade_command") or item.get("command"),
             "scope": item.get("scope"),
             "retryable": item.get("retryable"),
         }

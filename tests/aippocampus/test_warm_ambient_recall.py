@@ -17,6 +17,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall import prompt_recall_ambient  # noqa: E402
+from aippocampus_runtime.warm_ambient import cli as warm_cli  # noqa: E402
 from aippocampus_runtime.warm_ambient import recall as warm  # noqa: E402
 from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler  # noqa: E402
 from aippocampus_runtime.warm_ambient import source_validation  # noqa: E402
@@ -544,7 +545,51 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(activity["pending_recent_count"], 1)
         self.assertFalse(activity["worker_process_active"])
         self.assertFalse(activity["pending_jobs_are_worker_evidence"])
+        self.assertEqual(payload["action_code"], "wait_or_run_worker_when_ready")
+        self.assertTrue(payload["ordinary_recall_usable"])
         self.assertEqual(payload["next_command"], "aippocampus warm status --json")
+
+    def test_warm_status_accepts_cwd_as_machine_wide_noop(self) -> None:
+        job_dir = self.root / "warm-jobs"
+        job_dir.mkdir()
+        stdout = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout):
+            code = warm_cli.main(
+                [
+                    "status",
+                    "--cwd",
+                    str(self.workspace),
+                    "--job-dir",
+                    str(job_dir),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "idle")
+        self.assertNotIn(str(self.workspace), stdout.getvalue())
+
+    def test_stale_warm_queue_is_optional_not_first_recall_failure(self) -> None:
+        job_dir = self.root / "warm-jobs"
+        job_dir.mkdir()
+        stale_job = job_dir / "warm-stale.json"
+        stale_job.write_text(
+            json.dumps({"created_at": "2026-06-06T09:35:00Z"}),
+            encoding="utf-8",
+        )
+        os.utime(stale_job, (1780738500, 1780738500))
+        payload = warm_scheduler.warm_status_payload(
+            job_dir=job_dir,
+            now=warm_scheduler.datetime(2026, 6, 8, 9, 40, 0, tzinfo=warm_scheduler.timezone.utc),
+        )
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
+        self.assertTrue(payload["ordinary_recall_usable"])
+        self.assertIn("ordinary source search still works", payload["next_command"])
 
     def test_scheduler_env_opt_out_still_disables_default_warming(self) -> None:
         with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"}):

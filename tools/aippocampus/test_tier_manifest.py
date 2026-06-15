@@ -11,6 +11,7 @@ class TestModuleClassification(NamedTuple):
 PR_STEMS = frozenset(
     {
         "test_agent_native_recall_facade",
+        "test_agent_feedback_macro_cli",
         "test_agent_opt_in_continuity",
         "test_agent_pull_gesture",
         "test_agent_self_notes",
@@ -43,6 +44,7 @@ PR_STEMS = frozenset(
         "test_learning_loop_second_user_dogfood",
         "test_local_global_compatibility",
         "test_microcircuit_router",
+        "test_mcp_latest_reply",
         "test_navigation_potential",
         "test_narrative_packet",
         "test_parallel_derivation_bundle",
@@ -73,6 +75,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_agent_fallback_executor",
         "test_agent_fallback_materializer",
         "test_agent_discovery_release_check",
+        "test_agent_feedback_macro_cli",
         "test_agent_native_recall_facade",
         "test_agent_opt_in_continuity",
         "test_agent_pull_gesture",
@@ -283,6 +286,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_memory_candidate_router",
         "test_microcircuit_router",
         "test_memory_pain_prompt_hook_smoke",
+        "test_mcp_latest_reply",
         "test_model_client",
         "test_multilingual_prompt_hook_smoke",
         "test_multimodal_answer_gate",

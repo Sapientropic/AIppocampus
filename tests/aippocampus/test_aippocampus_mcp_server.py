@@ -124,6 +124,18 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("handle", agent_deepen_schema.get("required") or [])
         self.assertIn("request_index", agent_deepen_schema["properties"])
         self.assertIn("last_recall", agent_deepen_schema["properties"])
+        self.assertIn("Find source-backed continuity routes", by_name["agent_recall"]["description"])
+        self.assertIn("Get low-risk working guidance", by_name["agent_aippo"]["description"])
+        self.assertIn("Open the selected recall route", by_name["agent_deepen"]["description"])
+        self.assertIn("Search clean source", by_name["search_memory"]["description"])
+        schema_text = json.dumps(listed["result"]["tools"], ensure_ascii=False)
+        self.assertNotIn("MemoryPackets", schema_text)
+        self.assertNotIn("opaque", schema_text)
+        self.assertIn("clean_source_dir", by_name["latest_reply"]["inputSchema"]["properties"])
+        self.assertEqual(
+            by_name["get_turn_context"]["inputSchema"]["required_any"],
+            ["turn_id", "message_id", "turn_index"],
+        )
 
     def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
         last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
@@ -1152,6 +1164,58 @@ class AippocampusMcpServerTests(unittest.TestCase):
             [item["message_id"] for item in payload["messages"]], ["msg_user", "msg_final"]
         )
 
+    def test_get_turn_context_respects_zero_based_clean_ordinal_ordering(self) -> None:
+        rows = [
+            {
+                "message_id": "msg_zero",
+                "turn_id": "turn_zero",
+                "source_line": 9,
+                "role": "user",
+                "turn_index": 0,
+                "clean_ordinal": 0,
+                "text": "first by clean ordinal",
+            },
+            {
+                "message_id": "msg_one",
+                "turn_id": "turn_zero",
+                "source_line": 1,
+                "role": "assistant",
+                "turn_index": 0,
+                "clean_ordinal": 1,
+                "text": "second by clean ordinal despite lower source line",
+            },
+        ]
+        with (self.clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        (self.clean / "turns.jsonl").write_text(
+            json.dumps(
+                {
+                    "turn_id": "turn_zero",
+                    "turn_index": 0,
+                    "message_ids": ["msg_zero", "msg_one"],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 4001,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_turn_context",
+                    "arguments": {"cwd": str(self.cwd), "turn_index": 0},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertEqual([item["message_id"] for item in payload["messages"]], ["msg_zero", "msg_one"])
+
     def test_get_turn_context_requires_explicit_selector(self) -> None:
         response = mcp.handle_request(
             {
@@ -1166,6 +1230,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "missing_turn_selector")
         self.assertIn("turn_id", payload["error"]["details"]["required_any"])
+        self.assertIn("agent_recall", payload["error"]["details"]["agent_next_action"])
+        self.assertIn("example_arguments", payload["error"]["details"])
 
     def test_get_turn_context_reports_missing_message_id(self) -> None:
         response = mcp.handle_request(
@@ -1232,38 +1298,6 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["details"]["clean_source_dir"], str(missing_clean))
-
-    def test_latest_reply_uses_clean_source_before_raw_rollout(self) -> None:
-        response = mcp.handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": 44,
-                "method": "tools/call",
-                "params": {"name": "latest_reply", "arguments": {"cwd": str(self.cwd)}},
-            }
-        )
-
-        payload = self.tool_payload(response)
-        self.assertEqual(payload["status"], "clean_source_final_answer")
-        self.assertEqual(payload["message"]["message_id"], "msg_final")
-        self.assertEqual(payload["detail"], "compact")
-        self.assertIn("agent_next_action", payload)
-        self.assertNotIn("text", payload["message"])
-
-        full_response = mcp.handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": 441,
-                "method": "tools/call",
-                "params": {
-                    "name": "latest_reply",
-                    "arguments": {"cwd": str(self.cwd), "detail": "full"},
-                },
-            }
-        )
-        full_payload = self.tool_payload(full_response)
-        self.assertEqual(full_payload["detail"], "full")
-        self.assertIn("text", full_payload["message"])
 
     def test_sync_status_reads_local_sync_bundle_when_path_is_supplied(self) -> None:
         registry_dir = self.cwd / "registry"

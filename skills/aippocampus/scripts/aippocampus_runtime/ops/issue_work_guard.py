@@ -198,6 +198,25 @@ def build_issue_work_guard_fixture_report() -> dict[str, Any]:
     }
 
 
+def render_issue_work_guard_text(packet: dict[str, Any]) -> str:
+    should_pull = bool(packet.get("should_pull"))
+    if should_pull:
+        reason = ", ".join(packet.get("lead_kinds") or []) or "old design context may matter"
+        next_line = 'aippocampus agent recall "<issue title and key terms>" --public'
+    else:
+        reason = "no benchmark, architecture, or memory-design trigger detected"
+        next_line = "continue without an AIppocampus recall pull"
+    return "\n".join(
+        [
+            "AIppocampus work guard",
+            f"decision: {'pull continuity first' if should_pull else 'continue'}",
+            f"reason: {reason}",
+            f"next: {next_line}",
+            "boundary: this is route guidance, not evidence or a task decision.",
+        ]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus work-guard")
     parser.add_argument("--title", required=True)
@@ -219,7 +238,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print(json.dumps(payload, ensure_ascii=False))
+        if args.fixture_report:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(render_issue_work_guard_text(payload))
     return 0
 
 

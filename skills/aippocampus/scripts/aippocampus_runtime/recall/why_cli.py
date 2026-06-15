@@ -13,18 +13,34 @@ from aippocampus_runtime.recall.why_reason_codes import DEFAULT_MAX_ROUTES
 
 
 def render_text(payload: Mapping[str, Any]) -> str:
-    return "\n".join(
-        [
-            f"decision: {payload.get('decision')}",
-            f"diagnostic_class: {payload.get('diagnostic_class')}",
-            f"route_specificity: {payload.get('route_specificity')}",
-            f"cue_hash: {payload.get('cue_hash')}",
-            f"reasons: {', '.join(payload.get('reasons') or []) or 'none'}",
-            f"route_ids: {', '.join(payload.get('route_ids') or []) or 'none'}",
-            f"next_safe_action: {payload.get('next_safe_action')}",
-            f"suggested_next: {payload.get('suggested_next')}",
-        ]
-    )
+    mode = str(payload.get("mode") or "why-recall")
+    decision = str(payload.get("decision") or "unknown")
+    diagnostic = str(payload.get("diagnostic_class") or "unknown")
+    reasons = [str(item) for item in payload.get("reasons") or []][:3]
+    specificity = payload.get("route_specificity") or "unknown"
+    if mode == "why-not-recall" and diagnostic == "surfaced_but_low_specificity":
+        happened = "A route did surface, but it was too broad to treat as a good recall answer."
+        next_command = "aippocampus why-recall \"<more specific cue>\""
+    elif decision == "surfaced":
+        happened = "Recall surfaced a source route."
+        next_command = "aippocampus agent recall \"<cue>\" --public"
+    elif decision in {"suppressed", "silent"}:
+        happened = "Recall stayed quiet or suppressed the route."
+        next_command = "tighten the cue, then run aippocampus why-recall \"<cue>\""
+    else:
+        happened = f"Recall diagnostic returned {decision}."
+        next_command = "aippocampus health --json"
+    if payload.get("next_safe_action") == "reopen_source":
+        next_command = "aippocampus agent recall \"<cue>\" --public; then deepen before claims"
+    lines = [
+        f"AIppocampus {mode}",
+        f"what happened: {happened}",
+        f"specificity: {specificity}",
+        f"why: {', '.join(reasons) or 'no blocking reason recorded'}",
+        f"next: {next_command}",
+        "boundary: this diagnostic is route guidance, not source evidence.",
+    ]
+    return "\n".join(lines)
 
 
 def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParser:
@@ -32,7 +48,6 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
         prog=prog,
         description="Explain recall routing decisions.",
     )
-    parser.add_argument("mode", choices=["why-recall", "why-not-recall"])
     parser.add_argument("cue")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--clean-source-dir")
@@ -55,15 +70,14 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
 
 def main(argv: list[str] | None = None) -> int:
     args_list = list(argv or [])
-    prog = (
-        f"aippocampus {args_list[0]}"
-        if args_list and args_list[0] in {"why-recall", "why-not-recall"}
-        else "aippocampus why-recall"
-    )
+    mode = "why-recall"
+    if args_list and args_list[0] in {"why-recall", "why-not-recall"}:
+        mode = args_list.pop(0)
+    prog = f"aippocampus {mode}"
     args = build_parser(prog=prog).parse_args(args_list)
     payload = recall_diagnostic_report(
         cue=args.cue,
-        mode=args.mode,
+        mode=mode,
         cwd=args.cwd,
         clean_source_dir=args.clean_source_dir,
         registry_dir=args.registry_dir,

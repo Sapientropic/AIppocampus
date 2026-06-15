@@ -133,6 +133,61 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(matching_report["decision"], "hint")
         self.assertEqual(matching_report["hint"]["recommended_action"], "run_preflight_before_broad_test")
 
+    def test_directory_aware_path_feature_matches_relative_path_without_private_path_leak(self) -> None:
+        cache_report = action_hint_cache.build_action_hint_cache_report(
+            learning_guidance=[
+                {
+                    "guidance_id": "preflight-payments",
+                    "next_action": "run_preflight_before_broad_test",
+                    "guidance_text": "Run payments preflight before the broad test.",
+                    "scope": "project:OtherRepo",
+                    "path_category_fingerprint": "other-repo:tests/payments",
+                    "source_refs": [source_ref("learn")],
+                }
+            ],
+            now_unix=1000,
+        )
+        matching = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "pytest tests/payments/test_checkout.py",
+                "command_family": "pytest",
+                "file_path": "tests/payments/test_checkout.py",
+            },
+        }
+        unrelated = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "pytest tests/docs/test_docs.py",
+                "command_family": "pytest",
+                "file_path": "tests/docs/test_docs.py",
+            },
+        }
+        absolute_private = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "pytest E:/Users/private/project/tests/payments/test_checkout.py",
+                "command_family": "pytest",
+                "file_path": "E:/Users/private/project/tests/payments/test_checkout.py",
+            },
+        }
+
+        matching_report = action_hint.evaluate_action_hint(matching, cache_report, now_unix=1001)
+        unrelated_report = action_hint.evaluate_action_hint(unrelated, cache_report, now_unix=1001)
+        private_report = action_hint.evaluate_action_hint(absolute_private, cache_report, now_unix=1001)
+        private_serialized = json.dumps(private_report, ensure_ascii=False)
+
+        self.assertEqual(matching_report["decision"], "hint")
+        self.assertIn("tests/payments", matching_report["features"]["path_category_fingerprints"])
+        self.assertEqual(unrelated_report["decision"], "silent")
+        self.assertEqual(private_report["decision"], "silent")
+        self.assertEqual(private_report["features"]["path_category_fingerprints"], [])
+        self.assertNotIn("E:/Users/private", private_serialized)
+        self.assertNotIn("project/tests/payments", private_serialized)
+
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(
             {"hook_event_name": "UserPromptSubmit", "prompt": "hello"},

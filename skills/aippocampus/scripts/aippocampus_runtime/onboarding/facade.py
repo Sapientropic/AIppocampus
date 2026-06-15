@@ -149,16 +149,18 @@ def provider_status_report(
 ) -> dict:
     provider_scope, provider_names = _status_provider_scope(provider)
     providers = [_provider_capability(name, cwd=cwd, detailed=detailed) for name in provider_names]
+    providers = [_with_provider_next_action(item) for item in providers]
     storage = aippocampus_registry_resolution()
     return {
         "ok": True,
         "data": {
             "provider_scope": provider_scope,
             "providers": providers,
+            "next_actions": _provider_status_next_actions(providers),
             "state_legend": {
                 "discovery_only": "Provider can list local transcripts but cannot safely build clean source yet.",
                 "dry_run": "Provider can preview planned registration without writing.",
-                "write_enabled": "Provider has a clean-source parser and can write registry artifacts when explicitly run.",
+                "write_enabled": "Machine state: registration is available only when an explicit onboarding command is run.",
                 "blocked": "Provider is missing, not configured, or has no discoverable transcripts.",
             },
             "auto": {
@@ -173,6 +175,93 @@ def provider_status_report(
     }
 
 
+def _with_provider_next_action(item: dict) -> dict:
+    provider = str(item.get("provider") or "auto")
+    state = str(item.get("state") or "")
+    detected = bool(item.get("detected"))
+    current_match = bool(item.get("current_cwd_match"))
+    dry_run = bool(item.get("dry_run_available"))
+    public = dict(item)
+    if detected and current_match:
+        public["next_action_code"] = "try_search_existing_registry"
+        public["agent_next_action"] = (
+            "Use `aippocampus search` or `aippocampus agent recall` for old/source-backed "
+            "memory before previewing new registration."
+        )
+        public["search_command"] = 'aippocampus search "distinctive old phrase" --json'
+        return public
+    if detected and not current_match and dry_run and state != "blocked":
+        public["next_action_code"] = "preview_current_project_registration"
+        public["agent_next_action"] = (
+            "History exists, but it does not appear to match the current project. Search old "
+            "registered memory if the cue is global; otherwise preview current-project "
+            "registration before writing."
+        )
+        public["search_command"] = 'aippocampus search "distinctive old phrase" --json'
+        public["preview_command"] = (
+            f"aippocampus onboard --provider {provider} --dry-run --json"
+        )
+        public["broad_scan_boundary"] = (
+            "dry-run may inspect local provider transcripts; preview before any registration write"
+        )
+        return public
+    if not detected:
+        public["next_action_code"] = "provider_not_detected"
+        public["agent_next_action"] = (
+            "Use existing registered memory if available, configure this provider, or skip "
+            "onboarding for this surface."
+        )
+        return public
+    public["next_action_code"] = "preview_before_write"
+    public["agent_next_action"] = (
+        "Preview registration with --dry-run before writing local clean-source history."
+    )
+    public["preview_command"] = f"aippocampus onboard --provider {provider} --dry-run --json"
+    return public
+
+
+def _provider_status_next_actions(providers: list[dict]) -> list[dict]:
+    actions: list[dict] = []
+    for item in providers:
+        code = item.get("next_action_code")
+        if not code:
+            continue
+        action = {
+            "provider": item.get("provider"),
+            "code": code,
+            "agent_next_action": item.get("agent_next_action"),
+        }
+        for key in ("search_command", "preview_command", "broad_scan_boundary"):
+            if item.get(key):
+                action[key] = item[key]
+        actions.append(action)
+    return actions
+
+
+def public_provider_status_report(report: dict, *, include_private_paths: bool = False) -> dict:
+    if include_private_paths:
+        return report
+    public = dict(report)
+    data = dict(public.get("data") or {})
+    storage = dict(data.get("storage") or {})
+    if storage.get("path"):
+        storage["path"] = "<local-path-redacted>"
+        storage["path_redacted"] = True
+    storage["paths_included"] = False
+    data["storage"] = storage
+    public["data"] = data
+    return public
+
+
+def _frontstage_state_label(item: dict) -> str:
+    state = str(item.get("state") or "")
+    if state == "write_enabled":
+        return "registration_available_after_consent"
+    if state == "dry_run":
+        return "preview_available"
+    return state or "unknown"
+
+
 def render_status_text(report: dict) -> str:
     lines = ["AIppocampus provider status"]
     provider_scope = report.get("data", {}).get("provider_scope")
@@ -185,7 +274,7 @@ def render_status_text(report: dict) -> str:
             "- {provider}: {state} | detected={detected} | transcripts={count} | "
             "current_cwd_match={match}{suffix}".format(
                 provider=item.get("provider"),
-                state=item.get("state"),
+                state=_frontstage_state_label(item),
                 detected=str(bool(item.get("detected"))).lower(),
                 count=item.get("transcript_count_label", item.get("transcript_count", 0)),
                 match=str(bool(item.get("current_cwd_match"))).lower(),
@@ -194,6 +283,10 @@ def render_status_text(report: dict) -> str:
         )
         if item.get("scan_status") == "partial_frontstage_sample":
             lines.append("  scan: partial frontstage sample; use --json for operator inventory")
+        if item.get("agent_next_action"):
+            lines.append(f"  next: {item.get('agent_next_action')}")
+        if item.get("preview_command"):
+            lines.append(f"  preview: {item.get('preview_command')}")
     auto = report.get("data", {}).get("auto", {})
     if provider_scope in {None, "auto"}:
         lines.append(f"auto: {auto.get('default_provider')} - {auto.get('why')}")
@@ -224,14 +317,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--format", choices=["auto", "json", "text"], default="auto")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--details", action="store_true", help="Use the full operator inventory path for status.")
+    parser.add_argument(
+        "--operator-json",
+        "--full-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit the full operator provider inventory instead of the bounded frontstage status.",
+    )
+    parser.add_argument("--include-private-paths", action="store_true")
     parser.add_argument("-h", "--help", action="store_true")
     known, remaining = parser.parse_known_args(raw_args)
+
+    if remaining and remaining[0] == "provider-key":
+        provider_key_args = remaining[1:]
+        if known.help and "--help" not in provider_key_args and "-h" not in provider_key_args:
+            provider_key_args.append("--help")
+        if (known.json_output or known.operator_json) and "--json" not in provider_key_args:
+            provider_key_args.append("--json")
+        return provider_key_bridge.main(provider_key_args)
 
     if known.help:
         print("usage: aippocampus onboard [--status] [--provider auto|codex|claude-code|generic-jsonl] [onboard options]")
         print()
         print("Providers:")
-        print("  auto         Use the default implemented provider for this install.")
+        print("  auto         Show the provider matrix; default registration path stays Codex.")
         print("  codex        Onboard local Codex rollout JSONL sessions.")
         print("  claude-code  Onboard local Claude Code JSONL transcripts.")
         print("  generic-jsonl Onboard validated AIppocampus generic JSONL imports.")
@@ -242,31 +351,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Examples:")
         print("  aippocampus onboard --provider auto --status")
         print("  aippocampus onboard --provider codex --status --json")
-        print("  aippocampus import conversation --format generic-jsonl --input sessions.jsonl --json")
+        print("  aippocampus onboard --status --operator-json")
+        print("  aippocampus import conversation --format generic-jsonl --input sessions.jsonl --dry-run --json")
         return 0
 
     if known.status:
-        detailed = bool(known.details or known.json_output or known.format == "json")
+        detailed = bool(known.details or known.operator_json)
         report = provider_status_report(
             provider=known.provider,
             cwd=_arg_value(raw_args, "--cwd"),
             detailed=detailed,
         )
+        public_report = public_provider_status_report(
+            report,
+            include_private_paths=known.include_private_paths,
+        )
         wants_json = (
             known.json_output
+            or known.operator_json
             or known.format == "json"
         )
         if wants_json:
-            print(json.dumps(report, ensure_ascii=False, indent=2))
+            print(json.dumps(public_report, ensure_ascii=False, indent=2))
         else:
-            print(render_status_text(report))
+            print(render_status_text(public_report))
         return 0
-
-    if remaining and remaining[0] == "provider-key":
-        provider_key_args = remaining[1:]
-        if known.json_output and "--json" not in provider_key_args:
-            provider_key_args.append("--json")
-        return provider_key_bridge.main(provider_key_args)
 
     provider = str(known.provider or "auto").strip().replace("_", "-").casefold()
     resolved = normalize_provider_name(provider)

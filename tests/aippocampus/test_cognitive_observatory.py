@@ -514,6 +514,22 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertTrue(payload["contract"]["read_only_report"])
         self.assertTrue(payload["route_readiness"]["navigation_only"])
 
+    def test_cli_facade_exposes_observatory_summary_json(self) -> None:
+        result = facade.run_command(
+            ["observatory", "--fixture", "--summary-json"],
+            capture_output=True,
+        )
+
+        self.assertTrue(result.ok, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_cognitive_observatory_summary")
+        self.assertTrue(payload["read_only"])
+        self.assertTrue(payload["not_control_plane"])
+        self.assertGreater(payload["useful_now_count"], 0)
+        self.assertEqual(payload["full_audit_flag"], "--json")
+        self.assertNotIn("route_readiness", payload)
+        self.assertNotIn("activation_authority", payload)
+
     def test_cli_facade_exposes_observatory_fixture_html(self) -> None:
         result = facade.run_command(["observatory", "--fixture", "--html"], capture_output=True)
 

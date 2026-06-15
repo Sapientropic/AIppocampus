@@ -12,10 +12,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.continuity_domain_producer import (
     propose_continuity_domain_events_from_registry,
@@ -37,6 +39,15 @@ def _json_error(code: str, message: str) -> dict[str, Any]:
             "code": code,
             "message": message,
         },
+        "agent_next_action": (
+            "Use `aippocampus agent recall` for ordinary continuity, run "
+            "`aippocampus continuity-domain produce --preview --json`, or provide "
+            "--clean-source-dir when manually appending source-trailed events."
+        ),
+        "recovery_actions": [
+            "aippocampus agent recall <cue> --json",
+            "aippocampus continuity-domain produce --preview --json",
+        ],
     }
 
 
@@ -50,6 +61,20 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
         print(f"event: {payload['event_id']}")
     if payload.get("snapshot_id"):
         print(f"snapshot: {payload['snapshot_id']}")
+    if payload.get("summary"):
+        summary = payload["summary"]
+        if isinstance(summary, dict):
+            print(
+                "domains: "
+                f"{summary.get('domain_count', 0)} | "
+                f"source refs: {summary.get('source_ref_count', 0)}"
+            )
+    if payload.get("agent_next_action"):
+        next_action = payload["agent_next_action"]
+        if isinstance(next_action, dict):
+            print(f"next: {next_action.get('label') or next_action.get('command')}")
+        else:
+            print(f"next: {next_action}")
 
 
 MappingPayload = dict[str, Any]
@@ -100,10 +125,37 @@ def _clean_source_dir(args: argparse.Namespace, events_path: Path) -> Path | Non
     return parent if (parent / "messages.jsonl").exists() else None
 
 
+def _event_source_refs(event: MappingPayload) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for key in (
+        "source_refs",
+        "support_refs",
+        "counter_refs",
+        "correction_refs",
+        "boundary_refs",
+        "representative_refs",
+        "ordered_source_refs",
+    ):
+        refs.extend(safe_source_refs(event.get(key)))
+    return refs
+
+
+def _require_resolvable_append_refs(event: MappingPayload, clean_source_dir: Path | None) -> None:
+    refs = _event_source_refs(event)
+    if not refs:
+        return
+    if clean_source_dir is None or not (clean_source_dir / "messages.jsonl").exists():
+        raise ValueError(
+            "continuity-domain append needs resolvable clean-source refs; provide "
+            "--clean-source-dir or use produce --preview before appending"
+        )
+
+
 def append_command(args: argparse.Namespace) -> MappingPayload:
     events_path = _events_path(args)
     clean_source_dir = _clean_source_dir(args, events_path)
     event = _read_event(args)
+    _require_resolvable_append_refs(event, clean_source_dir)
     normalized = append_continuity_domain_event(
         events_path,
         event,
@@ -138,11 +190,139 @@ def publish_command(args: argparse.Namespace) -> MappingPayload:
     return {"ok": True, **report}
 
 
-def report_command(args: argparse.Namespace) -> MappingPayload:
-    snapshot = load_continuity_domains_snapshot(Path(args.snapshot).resolve())
+def _snapshot_summary(snapshot: MappingPayload) -> MappingPayload:
+    report = continuity_domain_public_safety_report(snapshot)
+    raw_metrics = report.get("metrics")
+    metrics: Mapping[str, Any] = raw_metrics if isinstance(raw_metrics, Mapping) else {}
+    return {
+        "snapshot_id": snapshot.get("snapshot_id"),
+        "generated_at": snapshot.get("generated_at"),
+        "domain_count": len(snapshot.get("domains") or []),
+        "event_count": metrics.get("event_count", 0),
+        "source_ref_count": metrics.get("source_ref_count", 0),
+        "source_reopen_required_before_claim": True,
+    }
+
+
+def _domain_cards(snapshot: MappingPayload, *, limit: int = 8) -> list[MappingPayload]:
+    cards: list[MappingPayload] = []
+    for domain in snapshot.get("domains") or []:
+        if not isinstance(domain, dict):
+            continue
+        raw_trail = domain.get("evidence_trail")
+        trail: Mapping[str, Any] = raw_trail if isinstance(raw_trail, Mapping) else {}
+        source_ref_count = 0
+        for refs in trail.values():
+            if isinstance(refs, list):
+                source_ref_count += len(refs)
+        raw_lifecycle = domain.get("lifecycle")
+        lifecycle: Mapping[str, Any] = (
+            raw_lifecycle if isinstance(raw_lifecycle, Mapping) else {}
+        )
+        cards.append(
+            {
+                "domain_id": domain.get("domain_id"),
+                "title": compact_text(str(domain.get("title") or domain.get("domain_id") or "untitled domain"), 96),
+                "status": lifecycle.get("status") or "active",
+                "source_ref_count": source_ref_count,
+                "action_grammar": "reopenable_route",
+                "source_reopen_required_before_claim": True,
+            }
+        )
+        if len(cards) >= limit:
+            break
+    return redact_sensitive_values(redact_private_paths(cards))
+
+
+def _no_snapshot_payload() -> MappingPayload:
+    return {
+        "ok": True,
+        "status": "empty",
+        "snapshot_count": 0,
+        "source_boundary": {
+            "absence_is_not_absence_of_source_history": True,
+            "source_reopen_required_before_claim": True,
+            "local_paths_serialized": False,
+        },
+        "agent_next_action": {
+            "id": "no_continuity_domain_snapshot",
+            "label": "No continuity-domain snapshot is published for this scope; use recall or preview producer candidates.",
+            "command": "aippocampus continuity-domain produce --preview --json",
+        },
+        "recovery_actions": [
+            "aippocampus agent recall <cue> --json",
+            "aippocampus continuity-domain produce --preview --json",
+        ],
+    }
+
+
+def latest_command(args: argparse.Namespace) -> MappingPayload:
+    latest_path = _snapshot_dir(args) / "latest.json"
+    snapshot = load_continuity_domains_snapshot(latest_path)
     if snapshot is None:
-        raise ValueError("snapshot is missing or is not a continuity-domain snapshot")
-    return {"ok": True, "report": continuity_domain_public_safety_report(snapshot)}
+        return _no_snapshot_payload()
+    report = continuity_domain_public_safety_report(snapshot)
+    return {
+        "ok": True,
+        "status": "ok",
+        "mode": "latest",
+        "snapshot_id": snapshot.get("snapshot_id"),
+        "summary": _snapshot_summary(snapshot),
+        "domains": _domain_cards(snapshot),
+        "report": report,
+        "source_boundary": report.get("contract"),
+        "privacy_boundary": report.get("privacy_boundary"),
+        "agent_next_action": {
+            "id": "use_continuity_domain_as_route",
+            "label": "Use these domains as reopenable routes only; deepen or reopen clean source before claims.",
+        },
+    }
+
+
+def list_command(args: argparse.Namespace) -> MappingPayload:
+    snapshot_dir = _snapshot_dir(args)
+    summaries: list[MappingPayload] = []
+    if snapshot_dir.exists():
+        for path in sorted(snapshot_dir.glob("*.json"), key=lambda item: item.name):
+            if path.name == "latest.json":
+                continue
+            snapshot = load_continuity_domains_snapshot(path)
+            if snapshot is not None:
+                summaries.append(_snapshot_summary(snapshot))
+    if not summaries:
+        return _no_snapshot_payload()
+    return {
+        "ok": True,
+        "status": "ok",
+        "mode": "list",
+        "snapshot_count": len(summaries),
+        "snapshots": summaries,
+        "source_boundary": {
+            "snapshots_are_routes_not_source_truth": True,
+            "source_reopen_required_before_claim": True,
+            "local_paths_serialized": False,
+        },
+        "agent_next_action": {
+            "id": "read_latest_continuity_domain_snapshot",
+            "label": "Run `aippocampus continuity-domain latest --json` for the current published route card.",
+            "command": "aippocampus continuity-domain latest --json",
+        },
+    }
+
+
+def report_command(args: argparse.Namespace) -> MappingPayload:
+    snapshot_path = Path(args.snapshot).resolve() if args.snapshot else _snapshot_dir(args) / "latest.json"
+    snapshot = load_continuity_domains_snapshot(snapshot_path)
+    if snapshot is None:
+        return _no_snapshot_payload()
+    return {
+        "ok": True,
+        "status": "ok",
+        "mode": "report",
+        "snapshot_id": snapshot.get("snapshot_id"),
+        "summary": _snapshot_summary(snapshot),
+        "report": continuity_domain_public_safety_report(snapshot),
+    }
 
 
 def _strip_producer_local_detail(payload: MappingPayload) -> MappingPayload:
@@ -278,13 +458,22 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus continuity-domain",
-        description="Append and publish explicit continuity-domain events.",
+        description=(
+            "Inspect or backfill source-trailed continuity domains. Ordinary "
+            "foreground use goes through agent recall/deepen; manual append and "
+            "publish are operator/debug/backfill paths."
+        ),
+        epilog=(
+            "Ordinary path: use `aippocampus agent recall` and deepen source "
+            "routes before claims. Use `produce --dry-run` to preview deterministic "
+            "domain candidates; use append/publish only for explicit backfill."
+        ),
     )
     parser.add_argument("--cwd", default=".")
     parser.add_argument("--registry-dir")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    append = sub.add_parser("append")
+    append = sub.add_parser("append", help="operator/debug manual event append")
     append.add_argument("--events-path")
     append.add_argument("--clean-source-dir")
     append.add_argument("--snapshot-dir")
@@ -294,17 +483,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
     append.add_argument("--publish", action="store_true")
     append.add_argument("--json", action="store_true", dest="json_output")
 
-    publish = sub.add_parser("publish")
+    publish = sub.add_parser("publish", help="operator/debug snapshot rebuild")
     publish.add_argument("--events-path")
     publish.add_argument("--clean-source-dir")
     publish.add_argument("--snapshot-dir")
     publish.add_argument("--json", action="store_true", dest="json_output")
 
-    report = sub.add_parser("report")
-    report.add_argument("--snapshot", required=True)
+    latest = sub.add_parser("latest", help="read the latest public-safe snapshot card")
+    latest.add_argument("--snapshot-dir")
+    latest.add_argument("--json", action="store_true", dest="json_output")
+
+    list_parser = sub.add_parser("list", help="list public-safe continuity-domain snapshots")
+    list_parser.add_argument("--snapshot-dir")
+    list_parser.add_argument("--json", action="store_true", dest="json_output")
+
+    report = sub.add_parser("report", help="read an existing public-safe snapshot report")
+    report.add_argument("--snapshot")
+    report.add_argument("--snapshot-dir")
     report.add_argument("--json", action="store_true", dest="json_output")
 
-    produce = sub.add_parser("produce")
+    produce = sub.add_parser("produce", help="preview/backfill deterministic producer candidates")
     produce.add_argument("--registry")
     produce.add_argument("--registry-dir")
     produce.add_argument("--events-path")
@@ -331,6 +529,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = append_command(args)
         elif args.command == "publish":
             payload = publish_command(args)
+        elif args.command == "latest":
+            payload = latest_command(args)
+        elif args.command == "list":
+            payload = list_command(args)
         elif args.command == "report":
             payload = report_command(args)
         elif args.command == "produce":

@@ -50,6 +50,7 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = (
 DEFAULT_DETACHED_WARM_TIMEOUT = DEFAULT_WARM_DETACHED_JOB_CONFIG.timeout
 DEFAULT_WARM_JOB_STALE_SECONDS = 24 * 60 * 60
 WARM_STATUS_COMMAND = "aippocampus warm status --json"
+WARM_REPAIR_COMMAND = "set the provider key or leave warm ambient off; ordinary source search still works"
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -269,13 +270,25 @@ def warm_status_payload(
         status = "complete"
     else:
         status = "idle"
+    if status == "blocked":
+        action_code = "provider_or_worker_unavailable_optional"
+        next_command = WARM_REPAIR_COMMAND
+    elif status == "pending":
+        action_code = "wait_or_run_worker_when_ready"
+        next_command = WARM_STATUS_COMMAND
+    else:
+        action_code = "no_action"
+        next_command = WARM_STATUS_COMMAND
     return {
         "kind": "aippocampus_warm_ambient_status",
         "ok": status != "blocked",
         "enabled": warm_background_enabled(enabled),
         "status": status,
         "job_activity": activity,
-        "next_command": WARM_STATUS_COMMAND,
+        "action_code": action_code,
+        "next_command": next_command,
+        "ordinary_recall_usable": True,
+        "ordinary_recall_note": "Warm ambient is optional; aippocampus search and agent recall can still use source-backed routes.",
         "privacy_boundary": {
             "raw_prompt_emitted": False,
             "raw_job_payload_emitted": False,

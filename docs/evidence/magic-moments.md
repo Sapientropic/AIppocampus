@@ -126,6 +126,9 @@ Source:
 
 ## Try A Public-Safe Path
 
+For the canonical first-recall flow, use
+[`docs/guides/first-recall-decision-card.md`](../guides/first-recall-decision-card.md).
+
 The current honest install probe uses the PyPI package:
 
 ```sh

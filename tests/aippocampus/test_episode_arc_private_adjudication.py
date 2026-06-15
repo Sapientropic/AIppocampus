@@ -209,12 +209,21 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
                 ["episode-arcs", "--registry", str(registry_path), "--json"],
                 capture_output=True,
             )
+            human = facade.run_command(
+                ["episode-arcs", "--registry", str(registry_path)],
+                capture_output=True,
+            )
 
         self.assertTrue(result.ok, result.stderr)
+        self.assertTrue(human.ok, human.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], private_arcs.REPORT_KIND)
         self.assertEqual(payload["metrics"]["complete_rejected_route_arc_count"], 1)
         self.assertNotIn("session:cli-private-arc", result.stdout)
+        self.assertIn("AIppocampus episode-arcs", human.stdout)
+        self.assertIn("episode arcs: 1", human.stdout)
+        self.assertNotIn('"metrics"', human.stdout)
+        self.assertNotIn("session:cli-private-arc", human.stdout)
 
 
 if __name__ == "__main__":

@@ -179,6 +179,10 @@ def _public_append_note(row: Mapping[str, Any]) -> dict[str, Any]:
         "source_refs_are_reopen_routes_not_proof_of_note": True,
         "source_reopen_required_before_claim": True,
     }
+    public["agent_next_action"] = (
+        "Treat this as direction-only atmosphere; reopen attached source before any "
+        "user, world, or source factual claim."
+    )
     return public
 
 
@@ -250,11 +254,36 @@ def _agent_self_note_round_trip_preview(
 
 
 def _append_error_payload(code: str, details: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    error: dict[str, Any] = {"code": code}
+    messages = {
+        "agent_self_note_empty": "self-note append needs a short note, --stdin input, or a source-backed cue.",
+        "agent_self_note_raw_payload_rejected": "self-note append refused raw tool/log payload text.",
+    }
+    next_actions = {
+        "agent_self_note_empty": (
+            'Add text, pipe a short note with --stdin, or run `aippocampus search "exact phrase"` '
+            "when you need source-backed evidence instead of a direction-only note."
+        ),
+        "agent_self_note_raw_payload_rejected": (
+            "Summarize the decision breadcrumb in your own words; do not store raw tool output "
+            "or source text as a self-note."
+        ),
+    }
+    error: dict[str, Any] = {
+        "code": code,
+        "message": messages.get(code, code),
+    }
     payload = {
         "kind": "aippocampus_agent_self_note_append",
         "ok": False,
         "error": error,
+        "agent_next_action": next_actions.get(
+            code,
+            "Use self-notes only for low-authority direction; reopen source for factual claims.",
+        ),
+        "recovery_actions": [
+            'aippocampus self-note append --current-thread "short direction-only note"',
+            'aippocampus search "exact phrase" --json',
+        ],
         "privacy_boundary": _privacy_boundary(),
     }
     if details:
@@ -264,6 +293,29 @@ def _append_error_payload(code: str, details: Mapping[str, Any] | None = None) -
             if isinstance(value, (str, int, float, bool))
         }
     return payload
+
+
+def _empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
+    if command == "search":
+        return {
+            "decision": "empty",
+            "message": "No agent self-note matched this cue.",
+            "query": query,
+            "agent_next_action": (
+                "Try a broader cue, append a short direction-only note if this is a posture "
+                "handoff, or use `aippocampus search` / `agent recall` for source-backed memory."
+            ),
+            "authority": "direction_only_empty_state",
+        }
+    return {
+        "decision": "empty",
+        "message": "No agent self-notes have been recorded yet.",
+        "agent_next_action": (
+            "Append a short direction-only note after a decision, or skip self-notes and use "
+            "`aippocampus agent recall` when you need source-backed continuity."
+        ),
+        "authority": "direction_only_empty_state",
+    }
 
 
 def _append_success_payload(
@@ -312,7 +364,12 @@ def _print_command_help(command: str) -> None:
     }
     parser = argparse.ArgumentParser(
         prog=f"aippocampus self-note {command}",
-        description="Manage low-authority foreground-agent self-notes.",
+        description=(
+            "Manage low-authority foreground-agent self-notes. Use them for "
+            "agent posture, handoff atmosphere, or decision breadcrumbs; do not "
+            "use them as source-backed facts, user profile claims, or a shortcut "
+            "around reopening source."
+        ),
     )
     parser.add_argument("text", nargs="*", help="Note text for append or query text for search.")
     parser.add_argument("--stdin", action="store_true")
@@ -378,12 +435,16 @@ def main(argv: list[str] | None = None) -> int:
             "count": len(rows),
             "rows": [public_agent_self_note_surface(row) for row in rows],
         }
+        if not rows:
+            payload["empty_state"] = _empty_notes_state("search", text)
     else:
         rows = load_agent_self_notes(notes_path)[: max(0, int(args.max or 0))]
         payload = {
             "kind": "aippocampus_agent_self_notes",
             "rows": [public_agent_self_note_surface(row) for row in rows],
         }
+        if not rows:
+            payload["empty_state"] = _empty_notes_state("list")
 
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -393,6 +454,10 @@ def main(argv: list[str] | None = None) -> int:
             for payload_row in payload_rows:
                 if isinstance(payload_row, dict):
                     print(f"- {payload_row.get('created_at')} {payload_row.get('note_text')}")
+        empty_state = payload.get("empty_state")
+        if not payload_rows and isinstance(empty_state, dict):
+            print(str(empty_state.get("message") or ""))
+            print("Next: " + str(empty_state.get("agent_next_action") or ""))
     return 0
 
 
@@ -402,7 +467,8 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
         if args.json_output:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            print("agent_self_note_empty", file=sys.stderr)
+            print("self-note append needs a short note.", file=sys.stderr)
+            print("Next: " + payload["agent_next_action"], file=sys.stderr)
         return 1
     cwd_path = Path(args.cwd).resolve()
     current_thread = (
@@ -458,6 +524,7 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
         payload_row = payload.get("row") or payload.get("note")
         note_id = payload_row.get("note_id") if isinstance(payload_row, dict) else ""
         print(f"agent self-note: {note_id}")
+        print("authority: direction_only; reopen source before factual claims")
     return 0
 
 

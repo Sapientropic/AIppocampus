@@ -45,8 +45,12 @@ class AippocampusCliTests(unittest.TestCase):
         proc = self.run_cli("--help")
 
         self.assertEqual(proc.returncode, 0)
+        self.assertIn("Start here:", proc.stdout)
+        self.assertIn('aippocampus agent recall "old cue"', proc.stdout)
+        self.assertIn('aippocampus search "exact phrase"', proc.stdout)
         self.assertIn("Personal path", proc.stdout)
         self.assertIn("Advanced/operator diagnostics", proc.stdout)
+        self.assertLess(proc.stdout.index("Start here:"), proc.stdout.index("Personal path"))
         self.assertLess(proc.stdout.index("Personal path"), proc.stdout.index("Advanced/operator"))
         self.assertLess(proc.stdout.index("search"), proc.stdout.index("doctor provider"))
         self.assertIn("health", proc.stdout)
@@ -67,12 +71,91 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("plugin install", proc.stdout)
         self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
 
+    def test_hooks_help_shows_family_not_raw_installer_parser(self) -> None:
+        family = self.run_cli("hooks", "--help")
+        prompt = self.run_cli("hooks", "prompt", "--help")
+        lifecycle = self.run_cli("hooks", "lifecycle", "--help")
+        action = self.run_cli("hooks", "action", "--help")
+        refresh_cache = self.run_cli("hooks", "action", "refresh-cache", "--help")
+
+        self.assertEqual(family.returncode, 0, family.stderr)
+        self.assertIn("usage: aippocampus hooks [prompt|lifecycle|action|claude-code]", family.stdout)
+        self.assertIn("Hook families:", family.stdout)
+        self.assertIn("prompt", family.stdout)
+        self.assertIn("lifecycle", family.stdout)
+        self.assertIn("action", family.stdout)
+        self.assertNotIn("usage: facade.py", family.stdout)
+
+        self.assertIn("usage: aippocampus hooks prompt", prompt.stdout)
+        self.assertIn("Prompt hook", prompt.stdout)
+        self.assertIn("usage: aippocampus hooks lifecycle", lifecycle.stdout)
+        self.assertIn("Lifecycle hooks", lifecycle.stdout)
+        self.assertIn("usage: aippocampus hooks action", action.stdout)
+        self.assertIn("refresh-cache", action.stdout)
+        self.assertNotIn("usage: facade.py", action.stdout)
+        self.assertIn("usage: aippocampus hooks action refresh-cache", refresh_cache.stdout)
+        self.assertNotIn("[{report,refresh-cache}]", refresh_cache.stdout)
+
+    def test_lifecycle_hook_status_json_redacts_host_wiring_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            private_command = f"{sys.executable} -m aippocampus_runtime.hooks.lifecycle"
+            hooks = {
+                "hooks": {
+                    event: [{"hooks": [{"type": "command", "command": private_command}]}]
+                    for event in ("SessionStart", "Stop", "PreCompact", "PostCompact")
+                }
+            }
+            (root / "hooks.json").write_text(
+                json.dumps(hooks), encoding="utf-8", newline="\n"
+            )
+            public = self.run_cli(
+                "hooks",
+                "lifecycle",
+                "status",
+                "--codex-home",
+                str(root),
+                "--json",
+            )
+            operator = self.run_cli(
+                "hooks",
+                "lifecycle",
+                "status",
+                "--codex-home",
+                str(root),
+                "--json",
+                "--operator-json",
+            )
+
+        self.assertEqual(public.returncode, 0, public.stderr)
+        payload = json.loads(public.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["path"], "<local-path-redacted>")
+        self.assertTrue(payload["path_redacted"])
+        self.assertEqual(
+            payload["events"]["SessionStart"]["commands"],
+            ["<hook-command-redacted>"],
+        )
+        self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
+        self.assertNotIn(private_command, encoded)
+        self.assertNotIn(str(root), encoded)
+        self.assertEqual(operator.returncode, 0, operator.stderr)
+        operator_payload = json.loads(operator.stdout)
+        self.assertEqual(
+            operator_payload["events"]["SessionStart"][0],
+            private_command,
+        )
+
     def test_version_command_is_available_without_local_paths(self) -> None:
         text = self.run_cli("--version")
         json_proc = self.run_cli("version", "--json")
+        help_proc = self.run_cli("version", "--help")
 
         self.assertEqual(text.returncode, 0)
         self.assertIn("AIppocampus", text.stdout)
+        self.assertEqual(help_proc.returncode, 0)
+        self.assertIn("usage: aippocampus version", help_proc.stdout)
+        self.assertNotIn("AIppocampus 0.", help_proc.stdout)
         self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
         payload = json.loads(json_proc.stdout)
         raw = json_proc.stdout + json_proc.stderr
@@ -82,6 +165,101 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("plugin_manifest", payload["versions"])
         self.assertNotIn(str(REPO_ROOT), raw)
         self.assertNotIn(str(SCRIPTS), raw)
+
+    def test_status_alias_routes_to_health_instead_of_unknown_command(self) -> None:
+        help_proc = self.run_cli("status", "--help")
+
+        self.assertEqual(help_proc.returncode, 0, help_proc.stderr)
+        self.assertIn("usage: aippocampus health", help_proc.stdout)
+        self.assertNotIn("unknown command", help_proc.stderr)
+
+    def test_latest_reply_facade_marks_commentary_as_not_closeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            final_rollout = root / "final.jsonl"
+            commentary_rollout = root / "commentary.jsonl"
+            final_rollout.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "timestamp": "2026-06-16T00:00:00Z",
+                                "type": "event_msg",
+                                "payload": {"type": "user_message", "message": "hi"},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "timestamp": "2026-06-16T00:00:01Z",
+                                "type": "event_msg",
+                                "payload": {
+                                    "type": "agent_message",
+                                    "phase": "final_answer",
+                                    "message": "settled final closeout",
+                                },
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            commentary_text = "I am still checking things; not final."
+            commentary_rollout.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "timestamp": "2026-06-16T00:00:00Z",
+                                "type": "event_msg",
+                                "payload": {"type": "user_message", "message": "hi"},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "timestamp": "2026-06-16T00:00:01Z",
+                                "type": "event_msg",
+                                "payload": {
+                                    "type": "agent_message",
+                                    "phase": "commentary",
+                                    "message": commentary_text,
+                                },
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            final_proc = self.run_cli("latest-reply", "--rollout", str(final_rollout), "--json")
+            commentary_proc = self.run_cli(
+                "latest-reply",
+                "--rollout",
+                str(commentary_rollout),
+                "--json",
+            )
+            operator_proc = self.run_cli(
+                "latest-reply",
+                "--rollout",
+                str(commentary_rollout),
+                "--operator-json",
+            )
+
+        self.assertEqual(final_proc.returncode, 0, final_proc.stderr)
+        final_payload = json.loads(final_proc.stdout)
+        self.assertTrue(final_payload["closeout_available"])
+        self.assertNotIn("text", final_payload["message"])
+        self.assertIn("settled final closeout", final_payload["message"]["preview"])
+        self.assertNotEqual(commentary_proc.returncode, 0)
+        commentary_payload = json.loads(commentary_proc.stdout)
+        encoded_commentary = json.dumps(commentary_payload, ensure_ascii=False)
+        self.assertTrue(commentary_payload["not_final_closeout"])
+        self.assertTrue(commentary_payload["diagnostic_only"])
+        self.assertNotIn(commentary_text, encoded_commentary)
+        self.assertNotIn("preview", commentary_payload["message"])
+        self.assertIn("agent recall", commentary_payload["agent_next_action"])
+        self.assertEqual(operator_proc.returncode, 1)
+        self.assertIn(commentary_text, operator_proc.stdout)
 
     def test_doctor_config_compact_json_is_foreground_agent_sized(self) -> None:
         proc = self.run_cli("doctor", "config", "--compact-json")
@@ -109,7 +287,10 @@ class AippocampusCliTests(unittest.TestCase):
         continuity = self.run_cli("continuity-domain", "report", "--help")
         work_guard = self.run_cli("work-guard", "--help")
         telepathy = self.run_cli("telepathy", "create", "--help")
+        observatory = self.run_cli("observatory", "--help")
+        episode_arcs = self.run_cli("episode-arcs", "--help")
         onboard = self.run_cli("onboard", "--help")
+        provider_key = self.run_cli("onboard", "provider-key", "--help")
 
         self.assertEqual(mcp.returncode, 0)
         self.assertIn("usage: aippocampus mcp", mcp.stdout)
@@ -127,11 +308,29 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("usage: aippocampus health", health.stdout)
         self.assertIn("usage: aippocampus self-note append", self_note.stdout)
         self.assertIn("example: aippocampus self-note append", self_note.stdout)
+        self.assertIn("do not use them as source-backed", self_note.stdout)
         self.assertIn("usage: aippocampus continuity-domain report", continuity.stdout)
         self.assertIn("usage: aippocampus work-guard", work_guard.stdout)
         self.assertIn("usage: aippocampus telepathy create", telepathy.stdout)
+        self.assertIn("usage: aippocampus observatory", observatory.stdout)
+        self.assertIn("usage: aippocampus episode-arcs", episode_arcs.stdout)
         self.assertIn("aippocampus onboard --provider codex --status --json", onboard.stdout)
+        self.assertIn("aippocampus onboard --status --operator-json", onboard.stdout)
+        self.assertIn("--dry-run --json", onboard.stdout)
         self.assertNotIn("--provider codex --help", onboard.stdout)
+        self.assertEqual(provider_key.returncode, 0)
+        self.assertIn("usage: aippocampus onboard provider-key", provider_key.stdout)
+        self.assertIn("--apply", provider_key.stdout)
+
+    def test_continuity_domain_top_help_points_to_ordinary_recall_path(self) -> None:
+        proc = self.run_cli("continuity-domain", "--help")
+
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("usage: aippocampus continuity-domain", proc.stdout)
+        self.assertIn("Ordinary path", proc.stdout)
+        self.assertIn("aippocampus agent recall", proc.stdout)
+        self.assertIn("manual append", proc.stdout)
+        self.assertIn("operator/debug", proc.stdout)
 
     def test_mcp_list_tools_accepts_json_alias(self) -> None:
         proc = self.run_cli("mcp", "list-tools", "--json")
@@ -150,6 +349,15 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(payload["agent_native_tools_present"])
         self.assertIn("agent_recall", payload["key_tools_present"])
         self.assertEqual(payload["full_schema_command"], "aippocampus mcp list-tools --json")
+
+    def test_mcp_status_is_compact_readiness_alias(self) -> None:
+        proc = self.run_cli("mcp", "status")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertIn("agent_recall", payload["key_tools_present"])
+        self.assertNotIn("tools", payload)
 
     def test_package_facade_is_the_public_python_entrypoint(self) -> None:
         from aippocampus_runtime.cli import facade
@@ -552,8 +760,37 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_agent_self_note_append")
         self.assertLessEqual(len(payload["note"]["note_text"]), 280)
         self.assertTrue(payload["note"]["note_body_private_available"])
+        self.assertEqual(payload["note"]["action_grammar"], "direction_only")
+        self.assertIn("reopen attached source", payload["note"]["agent_next_action"])
         self.assertNotIn("note_body_private\":", raw)
         self.assertNotIn("hidden plain append tail should stay private", raw)
+
+    def test_self_note_plain_text_append_names_direction_only_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "self-note",
+                    "append",
+                    "--notes-path",
+                    str(notes_path),
+                    "keep this as a navigation breadcrumb",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("agent self-note:", proc.stdout)
+        self.assertIn("authority: direction_only", proc.stdout)
 
     def test_self_note_current_thread_append_rejects_raw_payload_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -589,6 +826,147 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "agent_self_note_raw_payload_rejected")
         self.assertNotIn(str(root), raw)
 
+    def test_self_note_empty_and_search_empty_return_recovery_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+            empty_append = self.run_cli(
+                "self-note",
+                "append",
+                "--notes-path",
+                str(notes_path),
+                "--json",
+            )
+            empty_search = self.run_cli(
+                "self-note",
+                "search",
+                "no matching posture",
+                "--notes-path",
+                str(notes_path),
+                "--json",
+            )
+
+        self.assertNotEqual(empty_append.returncode, 0)
+        append_payload = json.loads(empty_append.stdout)
+        self.assertEqual(append_payload["error"]["code"], "agent_self_note_empty")
+        self.assertIn("Add text", append_payload["agent_next_action"])
+        self.assertIn("recovery_actions", append_payload)
+        self.assertEqual(empty_search.returncode, 0, empty_search.stderr)
+        search_payload = json.loads(empty_search.stdout)
+        self.assertEqual(search_payload["count"], 0)
+        self.assertEqual(search_payload["empty_state"]["decision"], "empty")
+        self.assertIn("agent recall", search_payload["empty_state"]["agent_next_action"])
+
+    def test_continuity_domain_latest_list_and_append_require_resolvable_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = root / "clean-source"
+            clean.mkdir()
+            (clean / "messages.jsonl").write_text(
+                json.dumps(
+                    {
+                        "message_id": "msg_domain",
+                        "source_id": "source_domain",
+                        "text": "continuity domain source anchor",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            events = clean / "continuity-domain-events.jsonl"
+            snapshots = root / "snapshots"
+            event = json.dumps(
+                {
+                    "event_kind": "domain_created",
+                    "title": "Durable route for domain read",
+                    "domain_type": "recurring_question",
+                    "source_refs": [{"message_id": "msg_domain"}],
+                }
+            )
+            append = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "append",
+                "--events-path",
+                str(events),
+                "--clean-source-dir",
+                str(clean),
+                "--snapshot-dir",
+                str(snapshots),
+                "--event-json",
+                event,
+                "--publish",
+                "--json",
+            )
+            latest = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "latest",
+                "--snapshot-dir",
+                str(snapshots),
+                "--json",
+            )
+            listed = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "list",
+                "--snapshot-dir",
+                str(snapshots),
+                "--json",
+            )
+            missing = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "latest",
+                "--snapshot-dir",
+                str(root / "missing-snapshots"),
+                "--json",
+            )
+            unresolved_events = root / "unresolved-events.jsonl"
+            unresolved = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "append",
+                "--events-path",
+                str(unresolved_events),
+                "--event-json",
+                json.dumps(
+                    {
+                        "event_kind": "domain_created",
+                        "title": "Fake unresolved refs",
+                        "domain_type": "recurring_question",
+                        "source_refs": [{"message_id": "fake-missing-message"}],
+                    }
+                ),
+                "--json",
+            )
+
+        self.assertEqual(append.returncode, 0, append.stderr)
+        self.assertEqual(latest.returncode, 0, latest.stderr)
+        latest_payload = json.loads(latest.stdout)
+        encoded_latest = json.dumps(latest_payload, ensure_ascii=False)
+        self.assertEqual(latest_payload["status"], "ok")
+        self.assertEqual(latest_payload["summary"]["domain_count"], 1)
+        self.assertTrue(
+            latest_payload["domains"][0]["source_reopen_required_before_claim"]
+        )
+        self.assertNotIn(str(root), encoded_latest)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual(json.loads(listed.stdout)["snapshot_count"], 1)
+        self.assertEqual(missing.returncode, 0, missing.stderr)
+        missing_payload = json.loads(missing.stdout)
+        self.assertEqual(missing_payload["status"], "empty")
+        self.assertIn("agent recall", " ".join(missing_payload["recovery_actions"]))
+        self.assertNotEqual(unresolved.returncode, 0)
+        unresolved_payload = json.loads(unresolved.stdout)
+        self.assertIn("--clean-source-dir", unresolved_payload["agent_next_action"])
+        self.assertFalse(unresolved_events.exists())
+
     def test_onboard_status_text_points_to_first_recall_modes(self) -> None:
         from aippocampus_runtime.onboarding import facade as onboard_facade
 
@@ -618,6 +996,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("time cue", output)
         self.assertIn("aippocampus search", output)
         self.assertIn("registry configured", output)
+        self.assertIn("registration_available_after_consent", output)
+        self.assertNotIn("write_enabled", output)
         self.assertNotIn("C:/private/aippocampus/registry", output)
 
     def test_onboard_status_default_is_frontstage_text_not_json_inventory(self) -> None:
@@ -654,6 +1034,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("AIppocampus provider status", output)
         self.assertIn("partial frontstage sample", output)
+        self.assertIn("registration_available_after_consent", output)
+        self.assertNotIn("write_enabled", output)
         self.assertNotIn('"providers"', output)
         self.assertNotIn("C:/private/aippocampus/registry", output)
 
@@ -881,6 +1263,54 @@ class AippocampusCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["error"]["code"], "object_store_config_required")
 
+    def test_sync_plan_outputs_direction_cards_without_private_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "registry"
+            sync_dir = root / "sync"
+            registry.mkdir()
+            (registry / "threads.json").write_text(
+                json.dumps({"threads": []}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            local = self.run_cli(
+                "sync",
+                "push",
+                "--sync-dir",
+                str(sync_dir),
+                "--registry-dir",
+                str(registry),
+                "--plan",
+                "--json",
+            )
+            object_plan = self.run_cli(
+                "object-sync",
+                "pull",
+                "--object-store-url",
+                "https://example.invalid/private-prefix",
+                "--object-prefix",
+                "private/user",
+                "--plan",
+                "--json",
+            )
+            help_proc = self.run_cli("sync", "push", "--help")
+
+        raw = local.stdout + object_plan.stdout + help_proc.stdout
+        self.assertEqual(local.returncode, 0, local.stderr)
+        self.assertEqual(object_plan.returncode, 0, object_plan.stderr)
+        local_payload = json.loads(local.stdout)
+        object_payload = json.loads(object_plan.stdout)
+        self.assertEqual(local_payload["kind"], "aippocampus_sync_direction_plan")
+        self.assertEqual(local_payload["source_side"], "local_registry")
+        self.assertEqual(local_payload["destination_side"], "sync_dir")
+        self.assertEqual(local_payload["mutates"], ["sync_dir"])
+        self.assertEqual(object_payload["kind"], "aippocampus_object_sync_direction_plan")
+        self.assertEqual(object_payload["source_side"], "object_store_prefix")
+        self.assertEqual(object_payload["destination_side"], "local_registry")
+        self.assertIn("Plan first", help_proc.stdout)
+        self.assertNotIn(str(root), raw)
+        self.assertNotIn("private/user", raw)
+
     def test_search_limits_and_public_metadata_mode_do_not_expand_private_snippets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -937,6 +1367,15 @@ class AippocampusCliTests(unittest.TestCase):
                 "--public",
             )
             negative = self.run_cli("search", "aippocampus", "--max", "-1", "--json")
+            no_match = self.run_cli(
+                "search",
+                "zzzz-no-such-phrase",
+                "--cwd",
+                str(root),
+                "--clean-source-dir",
+                str(clean),
+                "--json",
+            )
 
         self.assertEqual(zero.returncode, 0, zero.stderr)
         zero_payload = json.loads(zero.stdout)
@@ -957,6 +1396,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn(private_marker, encoded_public)
         self.assertNotEqual(negative.returncode, 0)
         self.assertIn("must be >= 1", negative.stderr)
+        self.assertNotEqual(no_match.returncode, 0)
+        no_match_payload = json.loads(no_match.stdout)
+        self.assertEqual(no_match_payload["match_count"], 0)
+        self.assertEqual(no_match_payload["decision"], "no_source_backed_snippet_found")
+        self.assertIn("agent recall", " ".join(no_match_payload["recovery_actions"]))
+        self.assertFalse(
+            no_match_payload["source_boundary"]["source_backed_claim_allowed"]
+        )
 
     def test_warm_status_json_is_bounded_and_path_redacted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -979,6 +1426,35 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertFalse(activity["worker_process_active"])
         self.assertFalse(activity["pending_jobs_are_worker_evidence"])
         self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
+        self.assertNotIn(str(root), raw)
+
+    def test_warm_status_human_keeps_optional_queue_from_blocking_recall(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_dir = root / "private-warm-jobs"
+            job_dir.mkdir()
+            stale_job = job_dir / "warm-stale.json"
+            stale_job.write_text(
+                json.dumps({"created_at": "2020-01-01T00:00:00Z"}),
+                encoding="utf-8",
+            )
+            os.utime(stale_job, (1577836800, 1577836800))
+            human = self.run_cli("warm", "status", "--job-dir", str(job_dir))
+            strict = self.run_cli(
+                "warm",
+                "status",
+                "--job-dir",
+                str(job_dir),
+                "--strict-exit-code",
+            )
+
+        raw = human.stdout + human.stderr + strict.stdout + strict.stderr
+        self.assertEqual(human.returncode, 0, raw)
+        self.assertEqual(strict.returncode, 2, raw)
+        self.assertIn("AIppocampus warm ambient", human.stdout)
+        self.assertIn("ordinary recall: usable", human.stdout)
+        self.assertIn("next: provider_or_worker_unavailable_optional", human.stdout)
+        self.assertIn("optional background warming", human.stdout)
         self.assertNotIn(str(root), raw)
 
 

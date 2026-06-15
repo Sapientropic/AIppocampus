@@ -195,7 +195,9 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus continuity-domain produce|append|publish|report` as the
   explicit local producer, authoring, and snapshot-publish path for Contract v1
   continuity domains
-- `aippocampus import conversation --format generic-jsonl --input <path>`
+- `aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json`
+  as the preview-first explicit file import path; omit `--dry-run` only after
+  the selected local history is safe to register
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables
 - `aippocampus smoke recall-funnel "<cue>"` as a no-write progressive recall
@@ -328,10 +330,12 @@ For these commands:
   tracked in GitHub issue #576 may use this packet as a read-only "why this
   route" drilldown, but the packet is not a control plane and cannot establish
   source truth without source reopen.
-- `aippocampus agent recall --json --public` / `--compact-json` is the
-  public-safe recall projection for logs, issue reports, and agent handoffs. It
-  labels local-private deepen handles, omits full handles and copy-paste
-  commands, and keeps only preview/hash fields suitable for later local reopen.
+- `aippocampus agent recall --json` is the default bounded foreground
+  projection for logs, issue reports, and agent handoffs. It omits
+  local-private handles and offers request-index deepen commands when local
+  reopen is available. `--public` and `--compact-json` remain compatibility
+  aliases for this default. Use `--detail full` only for explicit local
+  diagnostics where private handles are acceptable.
 - `observatory --json` emits a public-safe, no-write Cognitive Observatory
   readout; `observatory --html --output <path>` renders the same sanitized
   readout as a static, no-script operator view. The first stable slice
@@ -613,6 +617,8 @@ aippocampus agent recall "continue the old decision" --json
 aippocampus agent recall "continue the old decision" --attention-router --json
 aippocampus agent recall "continue the old decision" --attention-router-mode auto --json
 aippocampus agent aippo --task "coding issue closeout" --json
+aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent recall "continue the old decision" --json --detail full
 aippocampus agent deepen "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
@@ -750,7 +756,10 @@ operator consent path, a repair/rollback story, and a machine-readable error
 contract that does not require callers to parse human prose.
 
 Explicit file or directory import is a separate provider-neutral CLI operation:
-use `aippocampus import conversation --format generic-jsonl --input <path>` or
+preview first with
+`aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json`,
+then register only after consent with
+`aippocampus import conversation --format generic-jsonl --input <path>` or
 `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
 for an exported transcript. `register_thread` is for attaching/building the
 selected current provider session through the MCP control plane; it is not a
@@ -828,11 +837,13 @@ To register an explicit file without relying on provider discovery environment
 variables:
 
 ```sh
-aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --project "Project name" --json
+aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --project "Project name" --dry-run --json
+aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --project "Project name"
 ```
 
-Use `--dry-run` to validate and preview the target thread key without writing
-clean-source artifacts or registry rows.
+The first command validates and previews the target thread key without writing
+clean-source artifacts or registry rows. The second command performs the local
+registration.
 
 ## JSON And Schema Contracts
 

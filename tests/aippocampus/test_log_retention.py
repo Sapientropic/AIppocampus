@@ -48,9 +48,40 @@ class LogRetentionTests(unittest.TestCase):
 
             self.assertTrue(report["oversized"])
             self.assertEqual(report["items"][0]["artifact_name"], log.name)
+            self.assertEqual(report["remediation_command"], "aippocampus logs rotate --dry-run")
             self.assertIn("subconscious_scheduler_hook.log", rendered)
             self.assertNotIn("private prompt text", rendered)
             self.assertNotIn("source snippet", rendered)
+
+    def test_rotate_dry_run_reports_plan_without_touching_logs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "logs" / "build_associations_hook.log"
+            log.parent.mkdir()
+            log.write_bytes(b"oversized diagnostic bytes" * 8)
+
+            code = log_retention.main(
+                [
+                    "rotate",
+                    "--registry-dir",
+                    str(root),
+                    "--max-bytes",
+                    "20",
+                    "--dry-run",
+                    "--json",
+                ]
+            )
+
+            # Re-run the pure function for explicit shape assertions; the CLI
+            # path above is what protects the no-write surface.
+            plan = log_retention.rotation_plan(root, max_bytes=20)
+
+            self.assertEqual(code, 0)
+            self.assertTrue(log.exists())
+            self.assertEqual(plan["kind"], "aippocampus_logs_rotation_plan")
+            self.assertTrue(plan["read_only"])
+            self.assertEqual(plan["would_rotate_count"], 1)
+            self.assertEqual(plan["apply_command"], "aippocampus logs rotate --apply")
 
     def test_streaming_append_keeps_current_file_under_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

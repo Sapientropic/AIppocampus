@@ -10,6 +10,7 @@ sys.path.insert(0, str(SCRIPTS))
 from aippocampus_runtime.ops.issue_work_guard import (  # noqa: E402
     build_issue_active_pull_packet,
     build_issue_work_guard_fixture_report,
+    render_issue_work_guard_text,
 )
 
 
@@ -45,6 +46,24 @@ class IssueWorkGuardTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["active_pull_required_count"], 2)
         self.assertEqual(report["metrics"]["trivial_silence_count"], 1)
         self.assertEqual(report["red_lines"]["broad_manual_search_before_route_count"], 0)
+
+    def test_human_card_renders_pull_and_continue_decisions_without_raw_json(self) -> None:
+        pull = build_issue_active_pull_packet(
+            title="Fix LongMemEval source-side semantic cache benchmark",
+            body="Use existing warm ambient owners.",
+        )
+        quiet = build_issue_active_pull_packet(title="Fix typo in README")
+
+        pull_text = render_issue_work_guard_text(pull)
+        quiet_text = render_issue_work_guard_text(quiet)
+
+        self.assertIn("AIppocampus work guard", pull_text)
+        self.assertIn("decision: pull continuity first", pull_text)
+        self.assertIn("aippocampus agent recall", pull_text)
+        self.assertIn("boundary:", pull_text)
+        self.assertFalse(pull_text.strip().startswith("{"))
+        self.assertIn("decision: continue", quiet_text)
+        self.assertIn("continue without an AIppocampus recall pull", quiet_text)
 
 
 if __name__ == "__main__":

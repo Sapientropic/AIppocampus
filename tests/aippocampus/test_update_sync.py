@@ -800,6 +800,16 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_update_status_agent_json")
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertIn(
+            "current_thread_tool_discovery",
+            payload["summary"]["foreground_actions"],
+        )
+        self.assertTrue(
+            any(
+                card["id"] == "current_thread_tool_discovery"
+                for card in payload["foreground_status_cards"]
+            )
+        )
         self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
         self.assertEqual(
             payload["agent_callable"]["status"],
@@ -973,6 +983,7 @@ class UpdateSyncTests(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
+        self.assertIn("Frontstage next:", output)
         self.assertIn("Core ready: true", output)
         self.assertIn("Magic ready: false", output)
         self.assertIn("Magic blockers: llm", output)
@@ -986,6 +997,7 @@ class UpdateSyncTests(unittest.TestCase):
             "agent_fallback_ready: deterministic_only_missing_provider_and_agent",
             output,
         )
+        self.assertLess(output.index("Frontstage next:"), output.index("- skill:"))
         self.assertNotIn("Still needs action: plugin, llm", output)
 
     def test_skill_apply_updates_stale_copy_and_excludes_distribution_noise(self) -> None:

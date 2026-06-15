@@ -132,7 +132,7 @@ def log_health_report(
         "oversized_count": oversized_count,
         "total_bytes": sum(int(item["size_bytes"]) for item in items),
         "items": items,
-        "remediation_command": "aippocampus logs rotate",
+        "remediation_command": "aippocampus logs rotate --dry-run",
         "privacy_boundary": {
             "log_contents_emitted": False,
             "local_paths_emitted": False,
@@ -154,7 +154,7 @@ def add_health_action(
                 "id": "rotate_logs",
                 "severity": "warning",
                 "reason": f"{logs['oversized_count']} AIppocampus log artifact(s) exceed the retention threshold",
-                "command": "aippocampus logs rotate",
+                "command": "aippocampus logs rotate --dry-run",
             }
         )
     return logs
@@ -358,6 +358,32 @@ def rotate_known_logs(
     }
 
 
+def rotation_plan(
+    root: str | Path | None = None,
+    *,
+    max_bytes: int | None = None,
+    backups: int | None = None,
+) -> dict[str, Any]:
+    health = log_health_report(root, max_bytes=max_bytes, backups=backups)
+    return {
+        "kind": "aippocampus_logs_rotation_plan",
+        "ok": True,
+        "read_only": True,
+        "oversized_count": health["oversized_count"],
+        "would_rotate_count": health["oversized_count"],
+        "max_bytes": health["max_bytes"],
+        "backups": health["backups"],
+        "items": [item for item in health["items"] if item["oversized"]],
+        "apply_command": "aippocampus logs rotate --apply",
+        "privacy_boundary": health["privacy_boundary"]
+        | {"writes_performed": False, "local_paths_emitted": False},
+        "agent_next_action": (
+            "If these log artifacts are the intended cleanup target, apply once with "
+            "`aippocampus logs rotate --apply`; status remains read-only."
+        ),
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aippocampus logs")
     subparsers = parser.add_subparsers(dest="command")
@@ -366,6 +392,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         sub.add_argument("--registry-dir", default=None)
         sub.add_argument("--max-bytes", type=int, default=None)
         sub.add_argument("--backups", type=int, default=None)
+        if name == "rotate":
+            sub.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
+            sub.add_argument("--apply", action="store_true")
         sub.add_argument("--json", action="store_true", dest="json_output")
     run = subparsers.add_parser("run")
     run.add_argument("--log", required=True)
@@ -410,6 +439,14 @@ def main(argv: list[str] | None = None) -> int:
 
     root = _registry_root(args.registry_dir)
     if command == "rotate":
+        if args.plan:
+            result = rotation_plan(root, max_bytes=args.max_bytes, backups=args.backups)
+            if args.json_output:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(f"logs rotation plan: {result['would_rotate_count']} would rotate")
+                print(f"next: {result['apply_command']}")
+            return 0
         result = rotate_known_logs(root, max_bytes=args.max_bytes, backups=args.backups)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))

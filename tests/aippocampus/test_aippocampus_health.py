@@ -75,18 +75,25 @@ class AippocampusHealthTests(unittest.TestCase):
             "background_cognition": {},
             "logs": {},
             "health_trajectory": {},
+            "product_readiness": {
+                "status": "needs_maintenance",
+                "ready": False,
+                "blocking_action_count": 2,
+            },
             "recommended_actions": [
                 {
                     "id": "build_clean_source",
                     "severity": "warning",
                     "reason": "latest visible clean-source messages are missing",
                     "command": "python -m aippocampus_runtime.source.clean_source --cwd .",
+                    "facade_command": "aippocampus maintenance --cwd .",
                 },
                 {
                     "id": "build_index",
                     "severity": "warning",
                     "reason": "latest visible messages are newer than the index",
                     "command": "python -m aippocampus_runtime.recall.index_builder --cwd .",
+                    "facade_command": "aippocampus maintenance --cwd .",
                 },
             ],
         }
@@ -95,10 +102,14 @@ class AippocampusHealthTests(unittest.TestCase):
             health.render_health_text(payload)
 
         text = stdout.getvalue()
+        self.assertIn("AIppocampus health", text)
+        self.assertIn("readiness: partial (needs_maintenance)", text)
+        self.assertIn("best next action: build_clean_source", text)
         self.assertIn("recommended actions:", text)
         self.assertIn("Next:", text)
-        self.assertIn("1. build_clean_source: python -m", text)
-        self.assertIn("2. build_index: python -m", text)
+        self.assertIn("1. build_clean_source: aippocampus maintenance --cwd .", text)
+        self.assertIn("2. build_index: aippocampus maintenance --cwd .", text)
+        self.assertNotIn("python -m aippocampus_runtime", text)
 
     def write_rollout(
         self,
@@ -422,15 +433,23 @@ class AippocampusHealthTests(unittest.TestCase):
                 mock.patch.object(health, "locate_rollout", return_value=rollout),
                 mock.patch("sys.stdout", new=StringIO()) as stdout,
             ):
-                include_code = health.main([*args, "--include-paths"])
+                include_code = health.main(
+                    [
+                        *[arg for arg in args if arg != "--json"],
+                        "--operator-json",
+                        "--json",
+                        "--include-paths",
+                    ]
+                )
             private_payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
         self.assertEqual(include_code, 0)
         public_encoded = json.dumps(public_payload, ensure_ascii=False)
+        self.assertEqual(public_payload["detail"], "compact")
         self.assertNotIn(str(workspace), public_encoded)
         self.assertEqual(public_payload["cwd"], health.LOCAL_PATH_REDACTION)
-        self.assertFalse(public_payload["privacy"]["paths_included"])
+        self.assertNotIn("privacy", public_payload)
         self.assertEqual(private_payload["cwd"], str(workspace.resolve()))
         self.assertTrue(private_payload["privacy"]["paths_included"])
 
@@ -647,6 +666,23 @@ class AippocampusHealthTests(unittest.TestCase):
             '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
             f'& "{health.PureWindowsPath(sys.executable)}" '
             f'-m aippocampus_runtime.recall.index_builder --cwd "{expected_cwd}"',
+        )
+
+    def test_health_action_keeps_operator_command_and_adds_facade_command(self) -> None:
+        with mock.patch.object(health.os, "name", "posix"):
+            item = health.health_action(
+                "build_index",
+                "warning",
+                "index stale",
+                "build_index.py",
+                Path("/tmp/work space"),
+            )
+
+        self.assertIn("python", item["command"])
+        self.assertIn("-m aippocampus_runtime.recall.index_builder", item["command"])
+        self.assertEqual(
+            item["facade_command"],
+            'aippocampus maintenance --cwd "/tmp/work space"',
         )
 
     def test_question_stats_are_fail_open_diagnostics(self) -> None:

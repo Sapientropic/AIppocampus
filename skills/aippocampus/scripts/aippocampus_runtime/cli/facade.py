@@ -84,6 +84,15 @@ def render_version_text(payload: dict[str, Any]) -> str:
     suffix = "" if payload.get("metadata_consistent") else " (metadata mismatch)"
     return f"AIppocampus {version}{suffix}"
 
+
+def print_version_help(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("usage: aippocampus version [--json]", file=target)
+    print("", file=target)
+    print("Show the active AIppocampus runtime and release metadata version.", file=target)
+    print("Use --json for a bounded machine-readable version/source summary.", file=target)
+
+
 @dataclass(frozen=True)
 class CommandSpec:
     script_name: str
@@ -114,6 +123,7 @@ class CommandResult:
 
 COMMANDS = {
     "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
+    "status": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
     "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
     "agent": CommandSpec("agent_continuity.py", "aippocampus_runtime.recall.agent_continuity"),
@@ -152,6 +162,14 @@ COMMANDS = {
         "agent_self_note_cli.py",
         "aippocampus_runtime.source.agent_self_note_cli",
     ),
+    "latest-reply": CommandSpec(
+        "latest_reply.py",
+        "aippocampus_runtime.source.latest_reply",
+    ),
+    "last-reply": CommandSpec(
+        "latest_reply.py",
+        "aippocampus_runtime.source.latest_reply",
+    ),
     "continuity-domain": CommandSpec(
         "continuity_domain.py",
         "aippocampus_runtime.recall.continuity_domain_cli",
@@ -184,6 +202,7 @@ SCRIPT_MODULES = {
     "maintenance.py": "aippocampus_runtime.ops.maintenance",
     "warm_ambient_cli.py": "aippocampus_runtime.warm_ambient.cli",
     "continuity_domain.py": "aippocampus_runtime.recall.continuity_domain_cli",
+    "latest_reply.py": "aippocampus_runtime.source.latest_reply",
     "issue_work_guard.py": "aippocampus_runtime.ops.issue_work_guard",
     "telepathy_handoff_store.py": "aippocampus_runtime.ops.telepathy_handoff_store",
     "agent_continuity.py": "aippocampus_runtime.recall.agent_continuity",
@@ -377,12 +396,18 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if not args or args[0] in {"-h", "--help"}:
         print_help()
         return None, 0
+    if args[0] == "version" and any(arg in {"-h", "--help"} for arg in args[1:]):
+        print_version_help()
+        return None, 0
     if args[0] in {"--version", "-V", "version"}:
         payload = version_payload()
         if "--json" in args:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(render_version_text(payload))
+        return None, 0
+    if args[0] == "hooks" and hooks_help_request(args[1:]):
+        print_hooks_help(hooks_help_kind(args[1:]))
         return None, 0
 
     invocation = resolve_command(args)
@@ -418,6 +443,96 @@ def run_hooks(args: list[str]) -> int:
     return run_invocation(invocation)
 
 
+def hooks_help_request(args: list[str]) -> bool:
+    if args in (["--help"], ["-h"]):
+        return True
+    return (
+        bool(args)
+        and args[0] in {"prompt", "lifecycle", "action", "claude-code"}
+        and any(arg in {"--help", "-h"} for arg in args[1:])
+    )
+
+
+def hooks_help_kind(args: list[str]) -> str | None:
+    if len(args) >= 3 and args[0] == "action" and args[1] == "refresh-cache":
+        return "action-refresh-cache"
+    if len(args) >= 2 and args[0] in {"prompt", "lifecycle", "action", "claude-code"}:
+        return args[0]
+    return None
+
+
+def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    if kind == "prompt":
+        print("usage: aippocampus hooks prompt [status|install|uninstall] [options]", file=target)
+        print("", file=target)
+        print("Prompt hook: Codex UserPromptSubmit ambient recall affordances.", file=target)
+        print("Common:", file=target)
+        print("  aippocampus hooks prompt status --last", file=target)
+        print("  aippocampus hooks prompt install --json", file=target)
+        print("  aippocampus hooks prompt uninstall --json", file=target)
+        return
+    if kind == "lifecycle":
+        print("usage: aippocampus hooks lifecycle [status|install|uninstall] [options]", file=target)
+        print("", file=target)
+        print("Lifecycle hooks: Codex session maintenance on start/stop/compact events.", file=target)
+        print("Common:", file=target)
+        print("  aippocampus hooks lifecycle status --json", file=target)
+        print("  aippocampus hooks lifecycle install --json", file=target)
+        print("  aippocampus hooks lifecycle uninstall --json", file=target)
+        return
+    if kind == "action":
+        print("usage: aippocampus hooks action [status|install|uninstall|refresh-cache] [options]", file=target)
+        print("", file=target)
+        print("Action-time hints: optional PreToolUse nudges backed by a prepared cache.", file=target)
+        print("Common:", file=target)
+        print("  aippocampus hooks action status --json", file=target)
+        print("  aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json", file=target)
+        print(
+            "  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json",
+            file=target,
+        )
+        print("  aippocampus hooks action uninstall --json", file=target)
+        return
+    if kind == "action-refresh-cache":
+        print(
+            "usage: aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> [--write] [--json]",
+            file=target,
+        )
+        print("", file=target)
+        print("Refresh the optional action-time hint cache from public-safe learning findings.", file=target)
+        print("Default is a dry run; add --write to update the local cache.", file=target)
+        print("", file=target)
+        print("Common:", file=target)
+        print("  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --json", file=target)
+        print(
+            "  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json",
+            file=target,
+        )
+        return
+    if kind == "claude-code":
+        print("usage: aippocampus hooks claude-code [status|dry-run] [options]", file=target)
+        print("", file=target)
+        print("Claude Code hook helper: host-specific status/dry-run, not Codex hook install.", file=target)
+        print("Common:", file=target)
+        print("  aippocampus hooks claude-code status --json", file=target)
+        print("  aippocampus hooks claude-code dry-run --json", file=target)
+        return
+    print("usage: aippocampus hooks [prompt|lifecycle|action|claude-code] ...", file=target)
+    print("", file=target)
+    print("Hook families:", file=target)
+    print("  prompt       Codex UserPromptSubmit recall affordance hook", file=target)
+    print("  lifecycle    Codex session maintenance hooks", file=target)
+    print("  action       Optional PreToolUse action-time hints and cache refresh", file=target)
+    print("  claude-code  Host-specific Claude Code hook status/dry-run helper", file=target)
+    print("", file=target)
+    print("Examples:", file=target)
+    print("  aippocampus hooks prompt status --last", file=target)
+    print("  aippocampus hooks lifecycle status --json", file=target)
+    print("  aippocampus hooks action status --json", file=target)
+    print("  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json", file=target)
+
+
 def print_help(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
     parser = argparse.ArgumentParser(
@@ -427,6 +542,13 @@ def print_help(*, file: TextIO | None = None) -> None:
     )
     parser.print_usage(target)
     print("", file=target)
+    print("Start here:", file=target)
+    print("  aippocampus health                    One-screen readiness and next action", file=target)
+    print("  aippocampus agent recall \"old cue\"     Continue old work from source routes", file=target)
+    print("  aippocampus search \"exact phrase\"      Find a remembered source snippet", file=target)
+    print("  aippocampus plugin install --codex --verify", file=target)
+    print("                                        Local Codex plugin install/refresh", file=target)
+    print("", file=target)
     print("Commands:", file=target)
     print("", file=target)
     print("Personal path:", file=target)
@@ -435,6 +557,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
     print("  agent recall        Opt-in agent recall/AIppo/deepen/explain path", file=target)
+    print("  latest-reply        Latest final assistant closeout, not commentary", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
     print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
     print("  work-guard          Agent issue-work active-pull orientation packet", file=target)
@@ -447,7 +570,8 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  doctor provider     Check live-provider env visibility", file=target)
     print("  doctor config       Report registered env config without values", file=target)
     print("  doctor spend        Report local model spend/yield diagnostics", file=target)
-    print("  mcp list-tools      List MCP tool schemas", file=target)
+    print("  mcp status          Compact MCP tool readiness", file=target)
+    print("  mcp list-tools      List full MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  observatory         Read-only route-readiness observatory report", file=target)
     print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)

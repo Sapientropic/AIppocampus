@@ -45,6 +45,13 @@ For the narrow coding-agent product lane, use
 [`docs/guides/coding-agent-memory.md`](guides/coding-agent-memory.md). It is the
 front door for local, source-backed continuity in Codex/Claude-style long-running
 work.
+For the first useful recall move, use
+[`docs/guides/first-recall-decision-card.md`](guides/first-recall-decision-card.md)
+instead of starting with operator diagnostics.
+For write-like memory decisions, use
+[`docs/guides/write-like-memory-decision-card.md`](guides/write-like-memory-decision-card.md):
+feedback, self-notes, action-hint caches, continuity-domain backfill, and setup
+writes have different durability and authority.
 For neuroscience-adjacent metaphor boundaries, use
 [`docs/architecture/architecture-overview.md#metaphor-discipline`](architecture/architecture-overview.md#metaphor-discipline).
 
@@ -159,6 +166,7 @@ provider path:
 uvx aippocampus onboard --provider codex --all
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus search "a distinctive old phrase"
 ```

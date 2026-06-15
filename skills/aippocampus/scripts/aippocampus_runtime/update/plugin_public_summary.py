@@ -1,4 +1,4 @@
-"""Public-safe projection for Codex plugin install results."""
+"""Public-safe projection for Codex plugin install/uninstall results."""
 
 from __future__ import annotations
 
@@ -97,4 +97,63 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
         or "aippocampus plugin uninstall --codex --dry-run --json",
         "next_status_command": "aippocampus update status --json",
         "claim_boundary": "host probe success proves host exposure, not recall quality or current-thread tool discovery",
+    }
+
+
+def public_uninstall_summary(result: dict[str, Any]) -> dict[str, Any]:
+    """Project plugin uninstall results without local host paths.
+
+    Rollback previews are meant to be agent-readable. The raw Codex home,
+    marketplace root, and installed-cache root are operator coordinates; expose
+    only booleans/countable decisions unless --operator-json is requested.
+    """
+
+    if result.get("kind") == "aippocampus_plugin_uninstall_preview":
+        will_remove = []
+        if result.get("would_remove_installed_cache"):
+            will_remove.append("installed_plugin_cache")
+        if result.get("would_remove_marketplace_root"):
+            will_remove.append("owned_marketplace_copy")
+        return {
+            "kind": "aippocampus_plugin_uninstall_preview_public_summary",
+            "ok": bool(result.get("ok")),
+            "dry_run": True,
+            "will_remove": will_remove,
+            "would_remove_installed_cache": bool(result.get("would_remove_installed_cache")),
+            "would_remove_marketplace_root": bool(result.get("would_remove_marketplace_root")),
+            "marketplace_owned_by_aippocampus": bool(
+                result.get("marketplace_owned_by_aippocampus")
+            ),
+            "keep_marketplace": bool(result.get("keep_marketplace")),
+            "codex_plugin_manager_can_see_plugin": result.get(
+                "codex_plugin_manager_can_see_plugin"
+            ),
+            "codex_plugin_manager_check_error": result.get(
+                "codex_plugin_manager_check_error"
+            ),
+            "execute_command": result.get("execute_command"),
+            "agent_next_action": (
+                "Review the dry-run booleans, then run the execute_command to remove the "
+                "plugin; reinstall with `aippocampus plugin install --codex --verify`."
+            ),
+            "operator_json_available": True,
+            "local_private_fields": result.get("local_private_fields")
+            or ["codex_home", "marketplace_root", "installed_cache_root"],
+            "privacy_boundary": {
+                "local_paths_serialized": False,
+                "operator_json_required_for_raw_paths": True,
+            },
+        }
+    return {
+        "kind": "aippocampus_plugin_uninstall_public_summary",
+        "ok": bool(result.get("ok")),
+        "removed_installed_cache": bool(result.get("removed_installed_cache")),
+        "removed_marketplace_root": bool(result.get("removed_marketplace_root")),
+        "agent_next_action": "Plugin removed. Reinstall with `aippocampus plugin install --codex --verify` if needed.",
+        "operator_json_available": True,
+        "local_private_fields": ["codex_home", "marketplace_root"],
+        "privacy_boundary": {
+            "local_paths_serialized": False,
+            "operator_json_required_for_raw_paths": True,
+        },
     }

@@ -196,6 +196,31 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
+    def test_cli_help_and_human_output_are_frontstage_cards(self) -> None:
+        help_result = facade.run_command(["why-recall", "--help"], capture_output=True)
+        human = facade.run_command(
+            [
+                "why-recall",
+                "clean source continuity",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+            ],
+            capture_output=True,
+        )
+
+        self.assertTrue(help_result.ok, help_result.stderr)
+        self.assertIn("usage: aippocampus why-recall", help_result.stdout)
+        self.assertNotIn("{why-recall,why-not-recall}", help_result.stdout)
+        self.assertTrue(human.ok, human.stderr)
+        self.assertIn("AIppocampus why-recall", human.stdout)
+        self.assertIn("what happened:", human.stdout)
+        self.assertIn("next:", human.stdout)
+        self.assertIn("boundary:", human.stdout)
+        self.assertNotIn("cue_hash", human.stdout)
+        self.assertNotIn("route_ids", human.stdout)
+
     def test_why_not_recall_distinguishes_low_specificity_surface_from_silence(self) -> None:
         payload = why.recall_diagnostic_report(
             cue="vague context",
