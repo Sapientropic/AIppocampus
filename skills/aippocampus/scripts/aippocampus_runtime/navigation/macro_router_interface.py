@@ -60,6 +60,18 @@ def _int_value(value: object, default: int = 0) -> int:
     return value if type(value) is int else default
 
 
+def _safe_codes(value: Any, *, limit: int = 8) -> list[str]:
+    raw = value if isinstance(value, list | tuple | set) else []
+    result: list[str] = []
+    for item in raw:
+        text = str(item or "").strip()
+        if text and text not in result:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
 def _fanout_bias(perturbation: Mapping[str, Any]) -> str:
     route_policy = str(perturbation.get("route_policy") or "")
     movement = str(perturbation.get("movement") or "")
@@ -74,7 +86,87 @@ def _fanout_bias(perturbation: Mapping[str, Any]) -> str:
     return "normal"
 
 
-def build_macro_router_context(value: Mapping[str, Any]) -> dict[str, Any]:
+def _macro_field_projection_lanes(projection: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    lanes: list[Mapping[str, Any]] = []
+    primary = projection.get("primary_lane")
+    if isinstance(primary, Mapping):
+        lanes.append(primary)
+    secondary = projection.get("secondary_lanes")
+    if isinstance(secondary, Sequence) and not isinstance(secondary, (str, bytes)):
+        lanes.extend(row for row in secondary if isinstance(row, Mapping))
+    return lanes[:3]
+
+
+def macro_field_projection_attention_guidance(
+    projection: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Reduce a macro-field foreground projection into legacy router guidance.
+
+    The adapter intentionally consumes only the compact foreground projection,
+    not the atlas graph. Lanes may change attention order or reopen posture; they
+    cannot satisfy a source claim or mutate macro state.
+    """
+
+    if not isinstance(projection, Mapping):
+        return None
+    if projection.get("kind") != "macro_field_foreground_projection":
+        return None
+    compact_lanes: list[dict[str, Any]] = []
+    for lane in _macro_field_projection_lanes(projection):
+        reason_codes = _safe_codes(lane.get("reason_codes"))
+        agent_instruction = str(lane.get("agent_instruction") or "").strip()
+        if agent_instruction:
+            reason_codes.append(f"macro_field_instruction:{agent_instruction}")
+        compact_lanes.append(
+            {
+                "lane_id": str(lane.get("lane_id") or ""),
+                "role": str(lane.get("role") or ""),
+                "section_id": str(lane.get("section_id") or ""),
+                "title": str(lane.get("title") or "")[:160],
+                "posture_id": str(lane.get("posture_id") or ""),
+                "attention_bandwidth": str(lane.get("attention_bandwidth") or "narrow"),
+                "source_reopen_required": True,
+                "reason_codes": _safe_codes(reason_codes, limit=8),
+            }
+        )
+    if not compact_lanes:
+        return None
+    warnings = _safe_codes(projection.get("warnings"), limit=8)
+    cannot_claim = [
+        "macro_field_projection_is_source_truth",
+        "macro_field_lane_satisfies_fact_claim",
+        "macro_field_projection_bypasses_source_reopen",
+        "macro_field_projection_mutates_macro_state",
+    ]
+    return {
+        "kind": "macro_field_legacy_attention_guidance",
+        "schema_version": SCHEMA_VERSION,
+        "posture": str(projection.get("posture") or "unknown"),
+        "lane_count": int(projection.get("lane_count") or len(compact_lanes)),
+        "lanes": compact_lanes,
+        "warnings": warnings,
+        "authority_level": AUTHORITY_LEVEL,
+        "claim_permission": CLAIM_PERMISSION,
+        "source_reopen_required": True,
+        "reason_codes": [
+            "macro_field_projection_consumed",
+            *(["macro_field_projection_warned"] if warnings else []),
+        ],
+        "source_boundary": {
+            "macro_field_projection_is_navigation_prior": True,
+            "atlas_graph_not_embedded": True,
+            "selected_sections_not_embedded": True,
+            "source_reopen_required_for_claims": True,
+        },
+        "cannot_claim": cannot_claim,
+    }
+
+
+def build_macro_router_context(
+    value: Mapping[str, Any],
+    *,
+    macro_field_projection: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     entry = _macro_entry(value)
     relation = _relation_position(entry)
     movement = _mapping(entry, "movement")
@@ -100,7 +192,7 @@ def build_macro_router_context(value: Mapping[str, Any]) -> dict[str, Any]:
         recheck_triggers.extend(
             f"parallel_derivation:{code}" for code in parallel_gate.get("reason_codes") or []
         )
-    return {
+    context: dict[str, Any] = {
         "kind": "macro_router_context",
         "schema_version": SCHEMA_VERSION,
         "scope": _project_scope(entry),
@@ -139,6 +231,21 @@ def build_macro_router_context(value: Mapping[str, Any]) -> dict[str, Any]:
             "hot_router_must_not_mutate_macro_state": True,
         },
     }
+    guidance = macro_field_projection_attention_guidance(macro_field_projection)
+    if guidance is not None:
+        effects = context["router_effects"]
+        effects["foreground_attention_guidance"] = guidance
+        effects["recheck_triggers"] = [
+            *effects["recheck_triggers"],
+            *[f"macro_field:{warning}" for warning in guidance["warnings"]],
+        ]
+        context["source_boundary"] = {
+            **context["source_boundary"],
+            "macro_field_projection_is_navigation_prior": True,
+            "macro_field_projection_source_reopen_required": True,
+        }
+        context["cannot_claim"] = guidance["cannot_claim"]
+    return context
 
 
 def _packet_layer(packet: Mapping[str, Any]) -> str:
@@ -360,4 +467,5 @@ __all__ = [
     "build_macro_router_context",
     "build_macro_router_interface_fixture_report",
     "build_router_macro_observation",
+    "macro_field_projection_attention_guidance",
 ]

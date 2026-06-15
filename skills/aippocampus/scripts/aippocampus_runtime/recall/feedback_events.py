@@ -14,6 +14,7 @@ import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
@@ -455,6 +456,38 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
             "feedback_calibration_mutates_clean_source",
         ],
     }
+
+
+def load_feedback_calibration_report(feedback_path: str | Path | None) -> dict[str, Any] | None:
+    if not feedback_path:
+        return None
+    path = Path(feedback_path).expanduser().resolve()
+    if not path.exists():
+        report = recall_feedback_calibration_report([])
+        report["load_status"] = "missing"
+        report["event_count_loaded"] = 0
+        return report
+    events: list[Mapping[str, Any]] = []
+    invalid_line_count = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                row = json.loads(text)
+            except json.JSONDecodeError:
+                invalid_line_count += 1
+                continue
+            if isinstance(row, Mapping):
+                events.append(row)
+            else:
+                invalid_line_count += 1
+    report = recall_feedback_calibration_report(events)
+    report["load_status"] = "loaded"
+    report["event_count_loaded"] = len(events)
+    report["invalid_line_count"] = invalid_line_count
+    return report
 
 
 def public_route_feedback_fixture_report() -> dict[str, Any]:

@@ -707,6 +707,7 @@ def recall(
     run_semantic_gate: bool = False,
     semantic_gate_mode: str = "off",
     semantic_timeout: int = 12,
+    feedback_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
 
@@ -778,7 +779,15 @@ def recall(
             effective_limit=effective_limit,
         )
     router_policy = attention_router_policy.resolve_policy(attention_router)
-    routes, attention_navigation = attention_route_projection.maybe_rerank_routes_with_attention_router(enabled=bool(router_policy["enabled"]), query=str(query or ""), routes=routes, max_routes=effective_limit, project=project)
+    feedback_calibration = feedback_events.load_feedback_calibration_report(feedback_path)
+    routes, attention_navigation = attention_route_projection.maybe_rerank_routes_with_attention_router(
+        enabled=bool(router_policy["enabled"]),
+        query=str(query or ""),
+        routes=routes,
+        max_routes=effective_limit,
+        project=project,
+        feedback_calibration=feedback_calibration,
+    )
     attention_navigation["policy"] = router_policy
     routes = _annotate_route_selection_hints(
         routes,
@@ -1252,6 +1261,10 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--max", type=int, default=MAX_ROUTES)
     recall_parser.add_argument("--attention-router", action="store_true", help="Use attention router opt-in route sorting.")
     recall_parser.add_argument("--attention-router-mode", choices=attention_router_policy.VALID_MODES)
+    recall_parser.add_argument(
+        "--feedback-jsonl",
+        help="Optional low-authority route feedback JSONL used only for bounded route ordering metadata.",
+    )
     recall_parser.add_argument("--semantic", choices=["off", "auto", "on"])
     recall_parser.add_argument("--semantic-gate-mode", choices=["off", "auto", "on"])
     recall_parser.add_argument("--run-semantic-gate", action="store_true")
@@ -1342,6 +1355,7 @@ def main(argv: list[str] | None = None) -> int:
             run_semantic_gate=args.run_semantic_gate,
             semantic_gate_mode=args.semantic or args.semantic_gate_mode or "off",
             semantic_timeout=args.semantic_timeout,
+            feedback_path=args.feedback_jsonl,
         )
         if args.json:
             if args.public_json:

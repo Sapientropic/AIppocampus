@@ -14,6 +14,7 @@ from aippocampus_runtime.navigation import (  # noqa: E402
     attention_route_projection,
     route_compatibility_diagnostics,
 )
+from aippocampus_runtime.recall import feedback_events  # noqa: E402
 
 
 def _route(route_id: str, *, semantic_score: float, source_id: str) -> dict[str, object]:
@@ -104,6 +105,98 @@ class AttentionRouteCompatibilityTests(unittest.TestCase):
         self.assertEqual(
             packet["route_hints"]["local_global_compatibility"]["claim_permission"],
             "no_claim_before_reopen",
+        )
+
+    def test_feedback_calibration_reranks_existing_routes_without_claim_upgrade(self) -> None:
+        routes = [
+            _route("stale_drag_route", semantic_score=0.72, source_id="issue:#1544-a"),
+            _route("helpful_reopen_route", semantic_score=0.72, source_id="issue:#1544-b"),
+        ]
+        calibration = feedback_events.recall_feedback_calibration_report(
+            [
+                feedback_events.active_flow_event(
+                    route_id="helpful_reopen_route",
+                    route_kind="active_path",
+                    signal="source_reopen_success",
+                ),
+                feedback_events.active_flow_event(
+                    route_id="helpful_reopen_route",
+                    route_kind="active_path",
+                    signal="user_confirmed",
+                ),
+                feedback_events.active_flow_event(
+                    route_id="stale_drag_route",
+                    route_kind="active_path",
+                    signal="wrong_route_drag",
+                ),
+                feedback_events.active_flow_event(
+                    route_id="stale_drag_route",
+                    route_kind="active_path",
+                    signal="blocked",
+                ),
+            ]
+        )
+
+        reordered, diagnostics = attention_route_projection.rerank_routes_with_attention_router(
+            query="issue 1544 compatibility routing",
+            routes=routes,
+            max_routes=2,
+            feedback_calibration=calibration,
+        )
+        encoded = json.dumps(diagnostics, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(reordered[0]["route_id"], "helpful_reopen_route")
+        self.assertEqual(diagnostics["feedback_calibration"]["matched_route_count"], 2)
+        self.assertEqual(diagnostics["feedback_calibration"]["positive_delta_count"], 1)
+        self.assertEqual(diagnostics["feedback_calibration"]["negative_delta_count"], 1)
+        self.assertIn("feedback_calibration_lift", reordered[0]["_route_delta_reason_codes"])
+        self.assertTrue(
+            diagnostics["feedback_calibration"]["policy_boundary"][
+                "source_reopen_required_for_claims"
+            ]
+        )
+        self.assertIn("feedback_calibration_can_emit_source_open", encoded)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("source_open_token_ids", encoded)
+        self.assertNotIn('"claim_permission": "source_open"', encoded)
+
+    def test_feedback_calibration_cannot_override_hard_masked_route(self) -> None:
+        routes = [
+            {
+                **_route("masked_feedback_route", semantic_score=0.99, source_id="issue:#1544-d"),
+                "hard_masks": ["privacy_domain"],
+            }
+        ]
+        calibration = feedback_events.recall_feedback_calibration_report(
+            [
+                feedback_events.active_flow_event(
+                    route_id="masked_feedback_route",
+                    route_kind="active_path",
+                    signal="source_reopen_success",
+                ),
+                feedback_events.active_flow_event(
+                    route_id="masked_feedback_route",
+                    route_kind="active_path",
+                    signal="user_confirmed",
+                ),
+            ]
+        )
+
+        reordered, diagnostics = attention_route_projection.rerank_routes_with_attention_router(
+            query="issue 1544 compatibility routing",
+            routes=routes,
+            max_routes=1,
+            feedback_calibration=calibration,
+        )
+
+        self.assertEqual(reordered[0]["route_id"], "masked_feedback_route")
+        self.assertFalse(diagnostics["applied"])
+        self.assertEqual(diagnostics["feedback_calibration"]["matched_route_count"], 0)
+        self.assertTrue(
+            diagnostics["feedback_calibration"]["policy_boundary"][
+                "clean_source_mutation_allowed"
+            ]
+            is False
         )
 
 

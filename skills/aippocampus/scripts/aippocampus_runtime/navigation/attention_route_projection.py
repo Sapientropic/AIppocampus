@@ -17,6 +17,9 @@ from aippocampus_runtime.navigation import (
     attention_route_tokens,
     route_compatibility_diagnostics,
 )
+from aippocampus_runtime.navigation import (
+    feedback_calibration as route_feedback_calibration,
+)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -324,6 +327,7 @@ def rerank_routes_with_attention_router(
     max_routes: int,
     project: str = "AIppocampus",
     compatibility_diagnostics: Sequence[Mapping[str, Any]] | None = None,
+    feedback_calibration: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Return routes reordered by attention-router packet score.
 
@@ -342,6 +346,7 @@ def rerank_routes_with_attention_router(
         original_routes,
         compatibility_diagnostics,
     )
+    feedback_by_route = route_feedback_calibration.by_route(feedback_calibration)
     tokens = [
         attention_token_for_route(
             route,
@@ -367,13 +372,17 @@ def rerank_routes_with_attention_router(
             token_terms = _token_terms(tokens[index]) if index < len(tokens) else set()
             query_overlap = len(query_terms & token_terms)
             route_id = str(original_routes[index].get("route_id") or "")
+            route_kind = route_feedback_calibration.route_kind_for_route(original_routes[index])
+            feedback_row = feedback_by_route.get((route_id, route_kind))
             compatibility_penalty = _compatibility_score_penalty(
                 compatibility_by_route.get(route_id)
             )
             raw_score = float(_as_dict(packet.get("router_diagnostics")).get("score") or 0.0)
             ranked.append(
                 (
-                    raw_score - compatibility_penalty,
+                    raw_score
+                    - compatibility_penalty
+                    + route_feedback_calibration.score_adjustment(feedback_row),
                     query_overlap,
                     len(token_terms),
                     index,
@@ -388,10 +397,20 @@ def rerank_routes_with_attention_router(
     ranked_indexes = [index for _score, _overlap, _specificity, index, _packet in ranked]
     seen: set[int] = set()
     reordered: list[dict[str, Any]] = []
+    matched_feedback_rows: list[Mapping[str, Any]] = []
     for index in ranked_indexes:
         if index in seen or index >= len(original_routes):
             continue
         route = dict(original_routes[index])
+        feedback_row = feedback_by_route.get(
+            (
+                str(route.get("route_id") or ""),
+                route_feedback_calibration.route_kind_for_route(route),
+            )
+        )
+        if feedback_row is not None:
+            matched_feedback_rows.append(feedback_row)
+        route_feedback_calibration.annotate_route(route, feedback_row)
         route["attention_router_rank"] = len(reordered) + 1
         reordered.append(route)
         seen.add(index)
@@ -453,6 +472,11 @@ def rerank_routes_with_attention_router(
             packet=selected_packet,
         )
     selected_public = public_attention_packet(selected_packet)
+    feedback_diagnostics = route_feedback_calibration.diagnostics(
+        calibration=feedback_calibration,
+        matched=matched_feedback_rows,
+        ignored_delta_count=max(0, len(feedback_by_route) - len(matched_feedback_rows)),
+    )
     selected_route_id = str(selected_public.get("route_id") or "")
     applied_but_no_help = bool(
         ranked_indexes
@@ -480,6 +504,7 @@ def rerank_routes_with_attention_router(
         "compatibility_diagnostic_count": compatibility_report["diagnostic_count"],
         "compatibility_affected_route_count": compatibility_report["affected_route_count"],
         "compatibility_boundary": compatibility_report["boundary"],
+        "feedback_calibration": feedback_diagnostics,
         **helpfulness,
         "foreground_packet_bytes": packet_bytes(selected_public) if selected_public else 0,
         "selected_packet": selected_public,
@@ -501,6 +526,7 @@ def maybe_rerank_routes_with_attention_router(
     max_routes: int,
     project: str = "AIppocampus",
     compatibility_diagnostics: Sequence[Mapping[str, Any]] | None = None,
+    feedback_calibration: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not enabled:
         return [dict(route) for route in routes], disabled_attention_router_diagnostics()
@@ -510,6 +536,7 @@ def maybe_rerank_routes_with_attention_router(
         max_routes=max_routes,
         project=project,
         compatibility_diagnostics=compatibility_diagnostics,
+        feedback_calibration=feedback_calibration,
     )
 
 
@@ -532,6 +559,9 @@ def metrics_for_attention_navigation(diagnostics: Mapping[str, Any]) -> dict[str
         ),
         "attention_router_compatibility_diagnostic_count": int(
             diagnostics.get("compatibility_diagnostic_count") or 0
+        ),
+        "attention_router_feedback_calibration_matched_count": int(
+            _as_dict(diagnostics.get("feedback_calibration")).get("matched_route_count") or 0
         ),
     }
 

@@ -23,11 +23,26 @@ def state_from_projection(projection: Mapping[str, Any]) -> Mapping[str, Any] | 
     return state if isinstance(state, Mapping) else None
 
 
+def macro_field_projection_from_projection(projection: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    for key in (
+        "macro_field_projection",
+        "macro_field_foreground_projection",
+        "foreground_projection",
+    ):
+        candidate = projection.get(key)
+        if isinstance(candidate, Mapping) and candidate.get("kind") == "macro_field_foreground_projection":
+            return candidate
+    return None
+
+
 def context_from_projection(projection: Mapping[str, Any]) -> dict[str, Any] | None:
     entry = state_from_projection(projection)
     if projection.get("status") != "current" or entry is None:
         return None
-    return macro_router_interface.build_macro_router_context(entry)
+    return macro_router_interface.build_macro_router_context(
+        entry,
+        macro_field_projection=macro_field_projection_from_projection(projection),
+    )
 
 
 def recheck_triggers(context: Mapping[str, Any] | None) -> list[str]:
@@ -361,4 +376,3 @@ def apply_recall_bias(
         "macro_reason_code_count": len(diagnostics["reason_codes"]),
     }
     return enriched, diagnostics, metrics
-
