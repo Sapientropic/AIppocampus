@@ -142,11 +142,69 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(readiness, dict) and readiness.get("status")
         else payload.get("status")
     )
-    no_action_reason = (
-        "Ordinary source-backed recall/search can continue; latest current-thread context may need maintenance before exact latest claims."
-        if isinstance(readiness, dict) and readiness.get("latest_current_thread_may_be_missing")
-        else "Memory health is ready; advisory actions can wait unless you are doing local diagnostics."
+    exact_latest_action = next(
+        (
+            item
+            for item in all_recommended
+            if item.get("id") in {"build_clean_source", "build_index", "build_segments"}
+            and item.get("command")
+        ),
+        None,
     )
+    storage_cleanup_action = next(
+        (
+            item
+            for item in all_recommended
+            if item.get("id") == "storage_gc_rebuildable_cache" and item.get("command")
+        ),
+        None,
+    )
+    if ordinary_usable and all_recommended:
+        agent_next_action: dict[str, Any] = {
+            "id": "continue_with_nonblocking_maintenance",
+            "primary": {
+                "kind": "recall_policy",
+                "ordinary_first_recall_usable": True,
+                "message": "ordinary source-backed recall/search can continue",
+            },
+            "recommended_action_ids": [
+                str(item.get("id") or "")
+                for item in all_recommended
+                if str(item.get("id") or "")
+            ][:5],
+        }
+        if (
+            isinstance(readiness, dict)
+            and (
+                readiness.get("freshness_degraded")
+                or readiness.get("latest_current_thread_may_be_missing")
+            )
+            and exact_latest_action
+        ):
+            agent_next_action["before_exact_latest_claims"] = {
+                "kind": "shell_command",
+                "command": exact_latest_action["command"],
+                "reason": "refresh source/index artifacts before exact latest current-thread claims",
+            }
+        if storage_cleanup_action:
+            agent_next_action["when_idle"] = {
+                "kind": "shell_command",
+                "command": storage_cleanup_action["command"],
+                "reason": "bounded storage cleanup audit; non-blocking for ordinary recall",
+            }
+    else:
+        agent_next_action = (
+            promotable_blocking[0]
+            if not ordinary_usable and promotable_blocking
+            else recommended[0]
+            if recommended and not ordinary_usable
+            else {
+                "id": "no_action",
+                "reason": (
+                    "Memory health is ready; advisory actions can wait unless you are doing local diagnostics."
+                ),
+            }
+        )
     return {
         "detail": "compact",
         "ok": ordinary_usable,
@@ -158,16 +216,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "storage_pressure": payload.get("storage_pressure"),
         "host_state_confounds": payload.get("host_state_confounds"),
         "check_count": len(checks),
-        "agent_next_action": (
-            promotable_blocking[0]
-            if not ordinary_usable and promotable_blocking
-            else recommended[0]
-            if recommended and not ordinary_usable
-            else {
-                "id": "no_action",
-                "reason": no_action_reason,
-            }
-        ),
+        "agent_next_action": agent_next_action,
     }
 
 

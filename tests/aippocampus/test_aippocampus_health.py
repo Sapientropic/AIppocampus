@@ -93,15 +93,40 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action")
+        self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(
+            payload["agent_next_action"]["primary"]["message"],
+            "ordinary source-backed recall/search can continue",
+        )
         self.assertEqual(payload["recommended_actions"][0]["id"], "prepare_graphify_corpus")
+
+    def test_agent_json_health_uses_no_action_only_when_clean_ready(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "recommended_actions": [],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action")
 
     def test_agent_json_preserves_high_severity_storage_pressure_action(self) -> None:
         pressure_action = {
             "id": "storage_gc_rebuildable_cache",
             "severity": "warning",
             "reason": "Generated rebuildable cache pressure is high",
-            "facade_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+            "facade_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         }
         with (
             mock.patch(
@@ -148,8 +173,62 @@ class AippocampusHealthTests(unittest.TestCase):
                             "id": "storage_gc_rebuildable_cache",
                             "severity": "warning",
                             "reason": "Generated rebuildable cache pressure is high",
-                            "facade_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+                            "facade_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
                         }
+                    ],
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": True,
+                        "storage_pressure_cleanup_recommended": True,
+                        "status": "ready_with_storage_pressure",
+                    },
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(
+            payload["agent_next_action"]["when_idle"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(payload["recommended_actions"][0]["id"], "storage_gc_rebuildable_cache")
+
+    def test_agent_json_freshness_degraded_keeps_executable_latest_guidance(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "freshness_degraded": True,
+                        "latest_current_thread_may_be_missing": True,
+                        "maintenance_recommended": True,
+                        "status": "ready_with_freshness_degraded",
+                    },
+                    "recommended_actions": [
+                        {
+                            "id": "build_clean_source",
+                            "severity": "warning",
+                            "reason": "latest clean source missing",
+                            "facade_command": "aippocampus maintenance",
+                        },
+                        {
+                            "id": "build_index",
+                            "severity": "warning",
+                            "reason": "latest index missing",
+                            "facade_command": "aippocampus maintenance",
+                        },
                     ],
                     "privacy": {},
                 },
@@ -161,8 +240,12 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action")
-        self.assertEqual(payload["recommended_actions"][0]["id"], "storage_gc_rebuildable_cache")
+        self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(
+            payload["agent_next_action"]["before_exact_latest_claims"]["command"],
+            "aippocampus maintenance",
+        )
+        self.assertTrue(payload["agent_next_action"]["primary"]["ordinary_first_recall_usable"])
 
     def test_human_health_prints_copy_pasteable_next_commands(self) -> None:
         payload = {
@@ -503,6 +586,10 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertIn("reclaimable_rebuildable_cache_bytes_high", report["reasons"])
         self.assertEqual(
             report["dry_run_command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(
+            report["summary_command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
         self.assertEqual(
@@ -533,7 +620,8 @@ class AippocampusHealthTests(unittest.TestCase):
                     "reclaimable_rebuildable_human": "2.0 GB",
                     "generated_index_amplification_ratio": 16.0,
                 },
-                "dry_run_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+                "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+                "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
                 "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
                 "source_history_protected": True,
                 "foreground_blocking": False,
@@ -564,7 +652,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(action["severity"], "warning")
         self.assertEqual(
             action["command"],
-            "aippocampus storage gc --dry-run --summary-json --cwd .",
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
         self.assertEqual(payload["storage_pressure"], pressure)
         self.assertTrue(payload["ok"])

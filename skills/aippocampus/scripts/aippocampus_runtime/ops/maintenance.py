@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
@@ -21,6 +22,7 @@ READ_ONLY_OPERATIONS = {"status", "summary", "plan"}
 APPLY_OPERATIONS = {"apply", "run"}
 APPLY_SUMMARY_COMMAND = "aippocampus maintenance apply --summary-json"
 STATUS_COMMAND = "aippocampus maintenance status --json"
+STORAGE_GC_BOUNDED_AUDIT_COMMAND = "aippocampus storage gc --dry-run --json --top 1 --cwd ."
 
 
 def run_json(cmd: list[str]) -> dict:
@@ -231,6 +233,8 @@ def health_maintenance_ok(health: dict | None) -> bool:
 def public_action_command(action_id: str) -> str | None:
     if action_id == "checkpoint":
         return "aippocampus maintenance apply --append-checkpoint --summary-json"
+    if action_id == "storage_gc_rebuildable_cache":
+        return STORAGE_GC_BOUNDED_AUDIT_COMMAND
     if action_id in {
         "build_clean_source",
         "build_index",
@@ -255,6 +259,36 @@ def public_recommended_action(item: dict) -> dict:
     else:
         result["operator_boundary"] = "inspect the full audit before acting on this item"
     return {key: value for key, value in result.items() if value not in (None, "", [])}
+
+
+def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, Any]:
+    action_id = str(best.get("id") or "")
+    command = best.get("command")
+    if action_id == "storage_gc_rebuildable_cache" and command:
+        return {
+            "id": "review_storage_gc_bounded_audit",
+            "kind": "shell_command",
+            "command": command,
+            "mutates": False,
+            "reason": "storage pressure needs a bounded audit before apply/no-apply",
+        }
+    if read_only:
+        return {
+            "id": "inspect_or_apply_maintenance",
+            "kind": "shell_command",
+            "command": APPLY_SUMMARY_COMMAND,
+            "mutates": True,
+            "reason": (
+                "apply only when this plan matches the intended local generated-artifact refresh"
+            ),
+        }
+    return {
+        "id": "inspect_maintenance_status",
+        "kind": "shell_command",
+        "command": STATUS_COMMAND,
+        "mutates": False,
+        "reason": "use maintenance status/summary for a no-write card",
+    }
 
 
 def best_next_action(recommended: list[dict]) -> dict:
@@ -364,6 +398,7 @@ def summary_payload(result: dict) -> dict:
         for item in (result.get("remaining_recommended_actions") or [])[:8]
         if isinstance(item, dict)
     ]
+    best = best_next_action(result.get("remaining_recommended_actions") or [])
     return {
         "kind": "aippocampus_maintenance_summary",
         "ok": result.get("maintenance_status") in {"ok", "degraded"},
@@ -386,7 +421,7 @@ def summary_payload(result: dict) -> dict:
             for item in (result.get("action_failures") or [])[:5]
         ],
         "remaining_recommended_actions": remaining,
-        "best_next_action": best_next_action(result.get("remaining_recommended_actions") or []),
+        "best_next_action": best,
         "user_impact": user_impact(
             result.get("health_final"),
             result.get("remaining_recommended_actions") or [],
@@ -394,10 +429,7 @@ def summary_payload(result: dict) -> dict:
         "full_audit_available": True,
         "full_audit_flag": "--json",
         "plan_first_command": STATUS_COMMAND,
-        "agent_next_action": (
-            "Use maintenance status/summary for a no-write card; use maintenance apply when "
-            "the user intentionally wants local generated artifacts refreshed."
-        ),
+        "agent_next_action": maintenance_agent_next_action(best, read_only=False),
     }
 
 
@@ -419,6 +451,7 @@ def plan_payload(
         would_run_ids.append("prepare_graphify_corpus")
     command_ok = health_returncode == 0 and health is not None
     maintenance_ok = command_ok and health_maintenance_ok(health)
+    best = best_next_action(recommended)
     payload = {
         "kind": (
             "aippocampus_maintenance_summary"
@@ -441,7 +474,7 @@ def plan_payload(
             for item in recommended[:8]
             if isinstance(item, dict)
         ],
-        "best_next_action": best_next_action(recommended),
+        "best_next_action": best,
         "user_impact": user_impact(health, recommended),
         "apply_command": APPLY_SUMMARY_COMMAND,
         "full_audit_available": True,
@@ -452,10 +485,7 @@ def plan_payload(
             "writes_performed": False,
             "source_text_included": False,
         },
-        "agent_next_action": (
-            "If this plan matches the intended release gate, apply once with "
-            "`aippocampus maintenance apply --summary-json`; do not repeat broad tests just to inspect status."
-        ),
+        "agent_next_action": maintenance_agent_next_action(best, read_only=True),
     }
     if not command_ok and health_error:
         payload["health_probe"] = {

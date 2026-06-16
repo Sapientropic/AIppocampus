@@ -374,7 +374,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["status"], "cannot_verify")
-        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("agent recall", " ".join(payload["recovery_actions"]))
         self.assertNotIn(str(missing_path), encoded)
 
@@ -1849,7 +1849,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
                         "id": "storage_gc_rebuildable_cache",
                         "severity": "warning",
                         "reason": "generated cache pressure",
-                        "facade_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+                        "facade_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
                     },
                 ],
                 "checks": [{"name": f"large-{index}", "path": str(self.cwd / f"{index}.jsonl")} for index in range(12)],

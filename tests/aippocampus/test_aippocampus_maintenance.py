@@ -614,6 +614,49 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
 
+    def test_storage_pressure_best_action_routes_to_bounded_audit(self) -> None:
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
+                return (
+                    0,
+                    {
+                        "ok": True,
+                        "product_readiness": {
+                            "ready": True,
+                            "ordinary_first_recall_usable": True,
+                            "maintenance_recommended": True,
+                            "storage_pressure_cleanup_recommended": True,
+                            "status": "ready_with_storage_pressure",
+                        },
+                        "recommended_actions": [
+                            {
+                                "id": "storage_gc_rebuildable_cache",
+                                "severity": "warning",
+                                "reason": "generated cache pressure",
+                            }
+                        ],
+                    },
+                    "{}",
+                    "",
+                )
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(["status", "--cwd", ".", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            payload["best_next_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(payload["agent_next_action"]["id"], "review_storage_gc_bounded_audit")
+        self.assertFalse(payload["agent_next_action"]["mutates"])
+
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (
             mock.patch.object(

@@ -325,7 +325,8 @@ def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, A
             "generated_index_amplification_ratio": amplification,
             "eviction_candidate_count": candidate_count,
         },
-        "dry_run_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+        "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
         "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
         "source_history_protected": True,
         "foreground_blocking": False,
@@ -692,7 +693,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
                     "Generated rebuildable cache pressure is high "
                     f"({metrics.get('reclaimable_rebuildable_human')}, "
                     f"{metrics.get('generated_index_amplification_ratio')}x clean-source ratio). "
-                    "Run the dry-run summary before applying cleanup."
+                    "Run the bounded dry-run audit before applying cleanup."
                 ),
                 storage_pressure["dry_run_command"],
             )

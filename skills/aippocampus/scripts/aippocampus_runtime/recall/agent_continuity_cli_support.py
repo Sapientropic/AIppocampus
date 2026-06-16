@@ -120,8 +120,8 @@ def last_recall_cache_recovery_fields(mode: str) -> dict[str, Any]:
             command,
         ],
         "recovery_actions": [
-            "rerun compact recall to rebuild the same-machine request cache",
-            "use --detail full locally and pass the selected deepen_requests[].handle",
+            'aippocampus agent recall "<cue>" --json',
+            command,
         ],
     }
 
