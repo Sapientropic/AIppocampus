@@ -66,6 +66,109 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _search_command(title: Any) -> str:
+    query = str(title or "question route").strip() or "question route"
+    query = query.replace("\\", "\\\\").replace('"', '\\"')
+    return f'aippocampus search "{query}" --json'
+
+
+def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
+    title = item.get("title")
+    state = str(item.get("state") or "unknown")
+    source_ref_count = _safe_int(item.get("source_ref_count"))
+    source_thread_count = _safe_int(item.get("source_thread_count"))
+    command = _search_command(title)
+    row: dict[str, Any] = {
+        "unit_id": item.get("unit_id"),
+        "title": title,
+        "state": state,
+        "first_seen": item.get("first_seen"),
+        "last_seen": item.get("last_seen"),
+        "source_ref_count": source_ref_count,
+        "source_thread_count": source_thread_count,
+        "source_reopen_required_before_claim": True,
+    }
+    if source_ref_count <= 0:
+        row.update(
+            {
+                "action_grammar": "ignore_or_blocked",
+                "route_state": "blocked_missing_source_refs",
+                "blocked_reason": "source refs are missing or no longer resolve",
+                "agent_next_action": (
+                    "Do not use this question row yet; refresh question tracking from "
+                    "source or inspect operator diagnostics first."
+                ),
+                "source_route": None,
+            }
+        )
+        return row
+
+    route = {
+        "kind": "clean_source_question_refs",
+        "source_ref_count": source_ref_count,
+        "source_thread_count": source_thread_count,
+        "reopen_command": command,
+        "claim_boundary": "reopen source before treating this question state as evidence",
+    }
+    if state == "resolved":
+        row.update(
+            {
+                "action_grammar": "bounded_evidence",
+                "route_state": "resolved_recheck_before_use",
+                "agent_next_action": (
+                    "Treat this as resolved only after reopening the source route: "
+                    f"{command}"
+                ),
+                "source_route": route,
+            }
+        )
+    elif state == "dormant":
+        row.update(
+            {
+                "action_grammar": "reopenable_route",
+                "route_state": "dormant_recheck_before_reviving",
+                "agent_next_action": f"Recheck before reviving this question: {command}",
+                "source_route": route,
+            }
+        )
+    else:
+        row.update(
+            {
+                "action_grammar": "reopenable_route",
+                "route_state": "ready_to_reopen",
+                "agent_next_action": f"Reopen source before using this question: {command}",
+                "source_route": route,
+            }
+        )
+    return row
+
+
+def _blocked_ref_card(count: int) -> dict[str, Any]:
+    return {
+        "unit_id": "question_rows_with_missing_source_refs",
+        "title": f"{count} question rows need source-ref repair",
+        "state": "blocked",
+        "source_ref_count": 0,
+        "source_thread_count": 0,
+        "source_reopen_required_before_claim": True,
+        "action_grammar": "ignore_or_blocked",
+        "route_state": "blocked_missing_source_refs",
+        "blocked_reason": "some question rows had missing or unresolved source refs",
+        "agent_next_action": (
+            "Use `aippocampus questions status --json` to confirm the count, then "
+            "refresh or repair question tracking before using those rows."
+        ),
+        "source_route": None,
+    }
+
+
 def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
     payload = question_health_stats(
         _default_jobs_path(args),
@@ -73,20 +176,14 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
         dormant_after_days=args.dormant_after_days,
     )
     rows = []
-    for item in list(payload.get("lifecycle") or [])[: max(0, int(args.max or 0))]:
+    max_rows = max(0, int(args.max or 0))
+    for item in list(payload.get("lifecycle") or [])[:max_rows]:
         if not isinstance(item, Mapping):
             continue
-        rows.append(
-            {
-                "unit_id": item.get("unit_id"),
-                "title": item.get("title"),
-                "state": item.get("state"),
-                "first_seen": item.get("first_seen"),
-                "last_seen": item.get("last_seen"),
-                "source_ref_count": item.get("source_ref_count"),
-                "source_reopen_required_before_claim": True,
-            }
-        )
+        rows.append(_question_action_card(item))
+    unresolved_count = _safe_int(payload.get("stale_or_unresolved_ref_row_count"))
+    if unresolved_count and len(rows) < max_rows:
+        rows.append(_blocked_ref_card(unresolved_count))
     return {
         "kind": "aippocampus_question_tracking_list",
         "ok": True,
@@ -133,7 +230,12 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
         print(f"rows: {payload.get('count', 0)}")
         for row in payload.get("rows") or []:
             if isinstance(row, Mapping):
-                print(f"- {row.get('state')}: {row.get('title')}")
+                grammar = row.get("action_grammar") or "direction_only"
+                print(f"- {row.get('state')} [{grammar}]: {row.get('title')}")
+                if row.get("blocked_reason"):
+                    print(f"  blocked: {row.get('blocked_reason')}")
+                if row.get("agent_next_action"):
+                    print(f"  next: {row.get('agent_next_action')}")
     print("boundary: navigation only; reopen source before claims")
     if payload.get("agent_next_action"):
         print(f"next: {payload.get('agent_next_action')}")
