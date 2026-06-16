@@ -69,6 +69,43 @@ def object_sync_direction(command: str) -> dict[str, Any]:
     }
 
 
+def object_sync_help_card(command: str | None = None) -> str:
+    """Return a task-first help card without exposing object-store plumbing first."""
+
+    if not command:
+        return (
+            "Action card:\n"
+            "  status        Check configured object sync readiness; never writes.\n"
+            "  push --plan   Preview local registry -> object prefix.\n"
+            "  pull --plan   Preview object prefix -> local registry.\n"
+            "  repair --plan Preview object manifest repair.\n"
+            "  push/pull/repair without --plan can write; choose the side intentionally.\n\n"
+            "Operator configuration lives in flags/env below. Raw rollout sync is explicit "
+            "and should be encrypted; clean-source sync remains the ordinary path."
+        )
+    direction = object_sync_direction(command)
+    source = direction["source_side"]
+    destination = direction["destination_side"]
+    mutates = ", ".join(direction["mutates"]) or "nothing"
+    if command == "status":
+        return (
+            "Action card:\n"
+            "  Read side: object-store configuration.\n"
+            "  Write side: none; status never mutates.\n"
+            "  Use: aippocampus object-sync status --json\n\n"
+            "Operator configuration lives in flags/env below."
+        )
+    return (
+        "Action card:\n"
+        f"  Read side: {source}.\n"
+        f"  Write side: {destination}.\n"
+        f"  Plan boundary: aippocampus object-sync {command} --plan --json previews without writing.\n"
+        f"  Apply boundary: aippocampus object-sync {command} --json may mutate {mutates}.\n\n"
+        "Operator configuration lives in flags/env below. Raw rollout sync is explicit "
+        "and should be encrypted; clean-source sync remains the ordinary path."
+    )
+
+
 def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
     command = str(args.command)
     command_preview = f"aippocampus object-sync {command} --object-store-url <url>"

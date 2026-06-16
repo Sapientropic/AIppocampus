@@ -29,9 +29,11 @@ The first opt-in callable path lives in
 aippocampus agent recall "<cue>" --json
 aippocampus agent recall "<cue>" --attention-router-mode auto --json
 aippocampus agent aippo --task "<work>" --json
+aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent explain --request 1 --last-recall --json
 aippocampus agent deepen "<opaque handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque handle or deepen:aippo...>" --json
-aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
+aippocampus agent feedback "<route id>" --outcome source_reopen_success --feedback-jsonl <local-feedback.jsonl> --json
 ```
 
 When a current project macro state is available, `agent recall` can consume an

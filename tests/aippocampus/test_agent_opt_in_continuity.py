@@ -1692,6 +1692,122 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn('"handle"', json.dumps(json.loads(cache_text)["requests"]))
         self.assertIn("local_reopen_token", cache_text)
 
+    def test_cli_agent_deepen_can_use_public_stdout_cache_card(self) -> None:
+        local_last_recall_path = self.cwd / "local-last-recall.json"
+        public_cache_path = self.cwd / "public-cache.json"
+        env = {
+            **os.environ,
+            agent_continuity.LAST_RECALL_CACHE_ENV: str(local_last_recall_path),
+        }
+        base = [sys.executable, "-m", "aippocampus_runtime.cli.facade", "agent"]
+        run_kwargs = {
+            "cwd": SCRIPTS,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "capture_output": True,
+            "check": False,
+            "env": env,
+        }
+        recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+                "--public",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        public_cache_path.write_text(recall_proc.stdout, encoding="utf-8", newline="\n")
+
+        deepen_proc = subprocess.run(
+            [
+                *base,
+                "deepen",
+                "--request",
+                "1",
+                "--last-recall",
+                "--last-recall-path",
+                str(public_cache_path),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+
+        self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
+        payload = json.loads(deepen_proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["mode"], "deepen")
+        self.assertEqual(payload["status"], "ok")
+        self.assertNotIn("local_reopen_token", encoded)
+        self.assertNotIn(str(local_last_recall_path), encoded)
+        self.assertNotIn(str(public_cache_path), encoded)
+
+    def test_cli_agent_explain_can_use_public_last_recall_request_index(self) -> None:
+        last_recall_path = self.cwd / "last-recall.json"
+        recall_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--last-recall-path",
+                str(last_recall_path),
+                "--json",
+                "--public",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        explain_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "explain",
+                "--request",
+                "1",
+                "--last-recall",
+                "--last-recall-path",
+                str(last_recall_path),
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        self.assertEqual(explain_proc.returncode, 0, explain_proc.stderr)
+        payload = json.loads(explain_proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["mode"], "explain")
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["explanation"]["next_safe_action"], "reopen_source")
+        self.assertIn("handle_is_navigation_not_fact", payload["explanation"]["reason_codes"])
+        self.assertNotIn(str(last_recall_path), encoded)
+        self.assertNotIn("local_reopen_token", encoded)
+
     def test_cli_agent_recall_help_marks_full_json_as_local_diagnostic(self) -> None:
         proc = subprocess.run(
             [

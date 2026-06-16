@@ -27,6 +27,13 @@ room.
 - Benchmark doors now start with the question you are trying to prove.
   `--cite-summary` gives a small "can I cite this?" readout while the full JSON
   report stays available.
+- Personal controls are less imaginary without pretending to be total power.
+  `why-not`, `learning`, and durable `do-not-use-here` feedback now have
+  foreground doors; `pause` and `forget` answer with safe control-plan cards
+  instead of pretending to delete the past.
+- Object sync starts with the thing you are trying to do. Status, plan, push,
+  pull, repair, raw files, and encryption now introduce themselves before the
+  credential wall.
 - Health redacts paths without turning the next command into a dead end.
 - Health no longer chases its own tail while a live thread is still talking:
   small fresh-message gaps stay a fresh window, and advisory upkeep is labeled

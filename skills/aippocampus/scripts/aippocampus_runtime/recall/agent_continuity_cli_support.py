@@ -88,6 +88,78 @@ def policy_boundary() -> dict[str, Any]:
     }
 
 
+def handle_recovery_fields(mode: str) -> dict[str, Any]:
+    command = f"aippocampus agent {mode} --request 1 --last-recall --json"
+    return {
+        "foreground_action": {
+            "tool_name": f"agent_{mode}",
+            "arguments": {"request_index": 1, "last_recall": True},
+            "cli_command": command,
+            "claim_boundary": "no_claim_before_reopen",
+        },
+        "agent_next_action": command,
+        "next_safe_action": "rerun_agent_recall_then_request_index",
+        "examples": ['aippocampus agent recall "<cue>" --json', command],
+    }
+
+
+def missing_handle_payload(
+    *,
+    mode: str,
+    schema_version: str,
+    kind: str,
+) -> dict[str, Any]:
+    body = {
+        "error": {
+            "code": "missing_recall_handle",
+            "message": f"agent {mode} requires a local handle or --request N --last-recall",
+        },
+        "next_safe_action": "rerun_agent_recall_then_request_index",
+    }
+    return _public_payload(
+        {
+            "kind": kind,
+            "schema_version": schema_version,
+            "mode": mode,
+            "surface": "recall",
+            "status": "cannot_verify",
+            "ok": False,
+            "result" if mode == "deepen" else "explanation": body,
+            **handle_recovery_fields(mode),
+            "policy_boundary": policy_boundary(),
+            "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
+        }
+    )
+
+
+def last_recall_unavailable_payload(
+    *,
+    mode: str,
+    exc: Exception,
+    schema_version: str,
+    kind: str,
+) -> dict[str, Any]:
+    return _public_payload(
+        {
+            "kind": kind,
+            "schema_version": schema_version,
+            "mode": mode,
+            "surface": "recall",
+            "status": "cannot_verify",
+            "ok": False,
+            "result": {
+                "error": {
+                    "code": "last_recall_unavailable",
+                    "message": str(exc),
+                }
+            },
+            **handle_recovery_fields(mode),
+            "policy_boundary": policy_boundary(),
+            "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
+        }
+    )
+
+
 def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
 
@@ -285,6 +357,21 @@ def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _public_projection_route_ids(data: Mapping[str, Any]) -> dict[int, str]:
+    route_ids: dict[int, str] = {}
+    for route in data.get("routes") or []:
+        if not isinstance(route, Mapping):
+            continue
+        try:
+            index = int(route.get("route_index") or 0)
+        except (TypeError, ValueError):
+            index = 0
+        route_id = str(route.get("route_id") or "").strip()
+        if index > 0 and route_id:
+            route_ids[index] = route_id
+    return route_ids
+
+
 def write_last_recall_cache(
     deepen_requests: Iterable[Any],
     *,
@@ -349,9 +436,25 @@ def write_last_recall_cache(
 def read_last_recall_cache(path: str | Path | None = None) -> dict[str, Any]:
     target = last_recall_cache_path(path)
     data = json.loads(target.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("kind") != "aippocampus_agent_last_recall":
+    if not isinstance(data, dict):
         raise ValueError("last recall cache has an unsupported shape")
-    return data
+    if data.get("kind") == "aippocampus_agent_last_recall":
+        return data
+    if (
+        path is not None
+        and data.get("kind") == "aippocampus_agent_continuity_path"
+        and data.get("surface") == "agent_cli_public_compact"
+    ):
+        default_target = last_recall_cache_path(None)
+        if target != default_target and default_target.exists():
+            fallback = read_last_recall_cache(None)
+            fallback["public_projection_request_path"] = True
+            fallback["public_projection_route_ids"] = _public_projection_route_ids(data)
+            return fallback
+        raise ValueError(
+            "public compact recall projection needs the same-machine last recall cache; rerun agent recall"
+        )
+    raise ValueError("last recall cache has an unsupported shape")
 
 
 def handle_from_last_recall_cache(
@@ -367,6 +470,17 @@ def handle_from_last_recall_cache(
         except (TypeError, ValueError):
             index = 0
         if index == request_index:
+            public_route_ids = cache.get("public_projection_route_ids")
+            expected_route_id = (
+                str(public_route_ids.get(request_index) or "").strip()
+                if isinstance(public_route_ids, Mapping)
+                else ""
+            )
+            actual_route_id = str(request.get("route_id") or "").strip()
+            if expected_route_id and actual_route_id != expected_route_id:
+                raise ValueError(
+                    "same-machine last recall cache does not match the public recall projection"
+                )
             handle = _decode_local_reopen_token(request.get("local_reopen_token"))
             if not handle and request.get("handle"):
                 # Backward compatibility for caches written before the

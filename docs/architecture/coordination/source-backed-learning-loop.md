@@ -69,14 +69,23 @@ causal behavior lift.
 
 ## Replay Evidence
 
-- Private dogfood harness:
-  `python3 -m aippocampus_runtime.learning_loop.private_replay --events <sanitized-events.jsonl> --json`.
+- Foreground status/guidance:
+  `aippocampus learning status --json` and
+  `aippocampus learning guidance --json`. These read prepared findings and
+  point to the action-hint cache without scanning raw private history. The
+  first card separates three lanes: `prepared_guidance` when local
+  action-time hints are already available, `sanitized_replay` when the next
+  useful step is to provide behavior-event rows, and `operator_diagnostics`
+  for benchmark/internal checks that should not be mistaken for default
+  foreground guidance.
+- Private dogfood harness through the stable facade:
+  `aippocampus learning replay --events <sanitized-events.jsonl> --json`.
   The input is a local/private behavior-event export, not raw rollout text. The
   report emits aggregate metrics such as
   `repeated_failure_detection_recall`, `workflow_order_detection_count`,
   `context_reopen_before_action_rate`, `false_positive_nudge_rate`, and
   `raw_private_text_leak_count`.
-- Opt-in export+replay:
+- Trusted operator/internal fallback for opt-in export+replay:
   `python3 -m aippocampus_runtime.learning_loop.private_replay --rollout <local-rollout.jsonl> --export-output <tmp-events.jsonl> --json`.
   The export output is local-private and should not be committed.
 - Public companion eval:

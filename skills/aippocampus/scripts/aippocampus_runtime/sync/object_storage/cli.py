@@ -25,6 +25,7 @@ from aippocampus_runtime.sync.object_storage.cli_support import (
     object_provider_kwargs,
     object_sync_direction,
     object_sync_direction_plan,
+    object_sync_help_card,
     parser_command,
     print_object_sync_human_result,
     public_object_sync_status,
@@ -546,59 +547,71 @@ def token_from_env(env_name: str | None) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     prog, parse_argv, command_override = parser_command(argv, "aippocampus object-sync")
     command_label = command_override or "COMMAND"
+    description = (
+        object_sync_direction(command_label)["description"]
+        if command_override
+        else "Object-storage sync status/push/pull/repair for AIppocampus."
+    )
     parser = argparse.ArgumentParser(
         prog=prog,
-        description=object_sync_direction(command_label)["description"]
+        usage=f"{prog} [options]"
         if command_override
-        else "Object-storage sync status/push/pull/repair for AIppocampus.",
-        epilog=(
-            "Plan first: add --plan (or --dry-run) to show read/write sides without mutating. "
-            "Status is always non-mutating."
-        ),
+        else "aippocampus object-sync {status,push,pull,repair} [options]",
+        description=f"{description}\n\n{object_sync_help_card(command_override)}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     if command_override is None:
         parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     explicit_object_store_url = explicit_object_store_url_arg(parse_argv)
     explicit_object_prefix = explicit_object_prefix_arg(parse_argv)
-    parser.add_argument(
+    action_group = parser.add_argument_group("action options")
+    raw_group = parser.add_argument_group("raw and encryption options")
+    operator_group = parser.add_argument_group("operator object-store configuration")
+    output_group = parser.add_argument_group("output and diagnostics")
+    operator_group.add_argument(
         "--object-store-url", default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL")
     )
-    parser.add_argument(
+    operator_group.add_argument(
         "--object-prefix", default=os.environ.get("AIPPOCAMPUS_OBJECT_PREFIX", DEFAULT_PREFIX)
     )
-    parser.add_argument("--object-provider", default=None)
-    parser.add_argument("--object-bucket", default=None)
-    parser.add_argument("--object-region", default=None)
-    parser.add_argument("--object-account-id", default=None)
-    parser.add_argument("--token-env", default="AIPPOCAMPUS_OBJECT_STORE_TOKEN")
-    parser.add_argument("--access-key-env", default="AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID")
-    parser.add_argument("--secret-key-env", default="AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY")
-    parser.add_argument("--session-token-env", default="AIPPOCAMPUS_OBJECT_SESSION_TOKEN")
-    parser.add_argument("--registry-dir", default=None)
-    parser.add_argument(
+    for flag, default in (
+        ("--object-provider", None),
+        ("--object-bucket", None),
+        ("--object-region", None),
+        ("--object-account-id", None),
+        ("--token-env", "AIPPOCAMPUS_OBJECT_STORE_TOKEN"),
+        ("--access-key-env", "AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID"),
+        ("--secret-key-env", "AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY"),
+        ("--session-token-env", "AIPPOCAMPUS_OBJECT_SESSION_TOKEN"),
+    ):
+        operator_group.add_argument(flag, default=default)
+    action_group.add_argument("--registry-dir", default=None)
+    raw_group.add_argument(
         "--include-raw",
         action="store_true",
-        help="include raw rollout audit files; clean-source sync remains the default",
+        help=(
+            "explicitly include raw rollout audit files; this requires an encrypted sync "
+            "decision and is not ordinary clean-source sync"
+        ),
     )
-    parser.add_argument(
+    raw_group.add_argument(
         "--encrypt",
         action="store_true",
-        help="encrypt a push using the encrypted object-sync adapter",
+        help="encrypt a push using the encrypted object-sync adapter before writing object storage",
     )
-    parser.add_argument(
+    raw_group.add_argument(
         "--require-encrypted",
         action="store_true",
-        help="refuse plaintext pull/status/repair and use the encrypted adapter",
+        help="refuse plaintext pull/status/repair and read only the encrypted object-sync adapter",
     )
-    parser.add_argument("--recipient", action="append", default=[])
-    parser.add_argument("--recipient-file", action="append", default=[])
-    parser.add_argument("--identity-file", action="append", default=[])
-    parser.add_argument("--age-bin", default=None)
-    parser.add_argument("--no-decrypt", action="store_true")
-    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
-    parser.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
-    parser.add_argument("--json", action="store_true", dest="json_output")
-    parser.add_argument(
+    for flag in ("--recipient", "--recipient-file", "--identity-file"):
+        raw_group.add_argument(flag, action="append", default=[])
+    raw_group.add_argument("--age-bin", default=None)
+    raw_group.add_argument("--no-decrypt", action="store_true")
+    operator_group.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    action_group.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
+    output_group.add_argument("--json", action="store_true", dest="json_output")
+    output_group.add_argument(
         "--operator-json",
         action="store_true",
         help="With status, emit full local endpoint/prefix diagnostics.",

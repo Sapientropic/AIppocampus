@@ -1153,6 +1153,14 @@ def public_doc_command_issues(rel_path: str, text: str) -> list[str]:
                 issues.append(
                     f"{rel_path}:{fence_start} has Windows path/env command syntax outside a Windows section"
                 )
+            if (
+                rel_path == "docs/guides/install-guide.md"
+                and "aippocampus_runtime.sync.object_storage.cli" in block
+            ):
+                issues.append(
+                    f"{rel_path}:{fence_start} uses internal object-storage sync CLI; "
+                    "lead with `aippocampus object-sync ...` facade commands"
+                )
             in_fence = False
             fence_lang = ""
             fence_lines = []

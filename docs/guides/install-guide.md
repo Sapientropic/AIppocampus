@@ -906,10 +906,11 @@ cleanup:
 export AIPPOCAMPUS_OBJECT_STORE_URL="https://object-store.example/bucket"
 export AIPPOCAMPUS_OBJECT_PREFIX="aippocampus/sync"
 export AIPPOCAMPUS_OBJECT_STORE_TOKEN="<optional bearer token>"
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli status --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli pull --registry-dir <target-registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli repair --json
+aippocampus object-sync status --json
+aippocampus object-sync push --plan --json
+aippocampus object-sync push --json
+aippocampus object-sync pull --registry-dir <target-registry> --plan --json
+aippocampus object-sync repair --plan --json
 ```
 
 For S3-compatible providers, use provider-aware signing instead of bearer
@@ -921,7 +922,8 @@ export AIPPOCAMPUS_OBJECT_BUCKET="aippocampus-memory"
 export AIPPOCAMPUS_OBJECT_REGION="us-east-1"
 export AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID="<access key id>"
 export AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY="<secret access key>"
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --encrypt --recipient <age-recipient> --json
+aippocampus object-sync push --encrypt --recipient <age-recipient> --plan --json
+aippocampus object-sync push --encrypt --recipient <age-recipient> --json
 ```
 
 For Cloudflare R2, set `AIPPOCAMPUS_OBJECT_PROVIDER=r2` and
@@ -935,20 +937,24 @@ Raw rollouts are still excluded from plaintext object-storage sync. Use
 encrypted:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --encrypt --recipient <age-recipient> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli status --require-encrypted --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli repair --require-encrypted --identity-file <age-identity> --json
+aippocampus object-sync push --encrypt --include-raw --recipient <age-recipient> --plan --json
+aippocampus object-sync push --encrypt --include-raw --recipient <age-recipient> --json
+aippocampus object-sync status --require-encrypted --json
+aippocampus object-sync pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --plan --json
+aippocampus object-sync repair --require-encrypted --identity-file <age-identity> --plan --json
 ```
 
-Object-storage plaintext migration uses the same admin CLI. The target prefix
-must be fresh; dry-run reads the plaintext manifest and reports managed objects
-without uploading or deleting:
+Object-storage plaintext migration still uses a trusted operator/internal
+fallback CLI because it changes prefix ownership rather than ordinary sync
+status/push/pull/repair. Start with the stable facade above; use this fallback
+only when migrating an old plaintext object prefix. The target prefix must be
+fresh; dry-run reads the plaintext manifest and reports managed objects without
+uploading or deleting:
 
 ```sh
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --dry-run --json
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --json
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli repair --require-encrypted --object-prefix <new-encrypted-prefix> --identity-file <age-identity> --json
+aippocampus object-sync repair --require-encrypted --object-prefix <new-encrypted-prefix> --identity-file <age-identity> --plan --json
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --dry-run --json
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.encrypted.admin cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --confirm --verified-encrypted-target --json
 ```

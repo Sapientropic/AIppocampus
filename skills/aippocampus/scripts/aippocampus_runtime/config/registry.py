@@ -106,6 +106,7 @@ CONFIG_KNOBS = (
     _knob("AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY", "hooks", "stable_public", "prompt hook telemetry", "enabled"),
     _knob("AIPPOCAMPUS_CURRENT_THREAD_KEY", "source/agent_self_note_cli", "experimental", "current-thread self-note", "unset"),
     _knob("AIPPOCAMPUS_AGENT_LAST_RECALL_PATH", "recall/agent_continuity", "experimental", "agent recall", "registry cache"),
+    _knob("AIPPOCAMPUS_FEEDBACK_JSONL", "controls", "experimental", "durable feedback rows", "unset"),
     _knob("AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS", "hooks", "stable_public", "lifecycle hook", "host-safe default"),
     _knob("AIPPOCAMPUS_WARM_RECALL_BACKGROUND", "warm_ambient", "experimental", "warm recall", "auto"),
     _knob("AIPPOCAMPUS_WARM_RECALL_TIMEOUT", "warm_ambient", "experimental", "warm recall", "route default"),

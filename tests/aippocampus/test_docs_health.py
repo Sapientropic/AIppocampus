@@ -1580,6 +1580,32 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(issues, [])
 
+    def test_install_guide_rejects_internal_object_sync_cli_as_primary_example(self) -> None:
+        issues = docs_health.public_doc_command_issues(
+            "docs/guides/install-guide.md",
+            "\n".join(
+                [
+                    "## Object-Storage Sync",
+                    "",
+                    "```sh",
+                    "PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.sync.object_storage.cli push --json",
+                    "```",
+                ]
+            ),
+        )
+
+        self.assertTrue(any("internal object-storage sync CLI" in issue for issue in issues), issues)
+
+    def test_write_like_memory_card_examples_stay_executable(self) -> None:
+        card = (REPO_ROOT / "docs" / "guides" / "write-like-memory-decision-card.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("--feedback-jsonl <local-feedback.jsonl>", card)
+        self.assertIn("--cache-jsonl <local-cache.jsonl> --write --json", card)
+        self.assertNotIn("agent feedback <route_id> --outcome helped --json` | receipt only", card)
+        self.assertNotIn("hooks action refresh-cache --write --json", card)
+
     def test_repo_markdown_scan_ignores_tmp_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

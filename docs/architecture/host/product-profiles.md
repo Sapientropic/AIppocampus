@@ -46,10 +46,11 @@ The `personal_default` path is for getting to the first useful recall moment:
 The simple control language for this profile is:
 pause / forget / do-not-use-here / export / why-not.
 
-Today, `export` and `why-not` have concrete public command surfaces. Pause,
-forget, and do-not-use-here are the product vocabulary future surfaces should
-prefer over enterprise-style policy forms. Do not claim those controls are fully
-implemented everywhere until the specific surface exists and is tested.
+Today, `export`, `why-not`, and `do-not-use-here` have concrete public command
+surfaces. Pause and forget are safe foreground control cards first: they explain
+how to inspect or quiet the relevant surface without claiming global pause or
+destructive deletion. Do not claim a control is implemented everywhere until the
+specific surface exists and is tested.
 
 ## Power User Optional
 

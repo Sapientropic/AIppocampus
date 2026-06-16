@@ -1,9 +1,8 @@
 """Opt-in agent continuity path over existing recall and AIppo contracts.
 
-This module is deliberately a thin adapter. It gives coding agents one
-callable path for the #1130 pull gesture without creating a new memory store,
-new ranking layer, or claim authority. Foreground packets stay compact; source
-refs and support ledgers only appear after an explicit deepen call.
+This module is deliberately a thin adapter: one callable path for the #1130 pull
+gesture without a new memory store, ranking layer, or claim authority. Foreground
+packets stay compact; refs/support ledgers appear only after explicit deepen.
 """
 
 from __future__ import annotations
@@ -46,9 +45,12 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     compact_feedback_receipt,
     handle_boundary_fields,
     handle_from_last_recall_cache,
+    handle_recovery_fields,
+    last_recall_unavailable_payload,
     macro_schema_help,
     macro_state_template,
     missing_feedback_route_payload,
+    missing_handle_payload,
     normalize_route_limit,
     policy_boundary,
     public_recall_projection,
@@ -958,6 +960,8 @@ def deepen(
 ) -> dict[str, Any]:
     """Deepen a recall navigation handle or project AIppo activation id."""
 
+    if handle is None:
+        return missing_handle_payload(mode="deepen", schema_version=SCHEMA_VERSION, kind=KIND)
     if _is_aippo_deepen_id(handle):
         contract = _project_workflow_contract()
         result = {
@@ -1007,6 +1011,7 @@ def deepen(
                 "ok": False,
                 "cli_exit_recommended": "nonzero",
                 "result": navigation_error_payload(exc),
+                **handle_recovery_fields("deepen"),
                 "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                     projection=macro_projection,
                     context=macro_context,
@@ -1049,6 +1054,8 @@ def explain(
 ) -> dict[str, Any]:
     """Return public-safe reason codes for a recall handle or AIppo id."""
 
+    if handle is None:
+        return missing_handle_payload(mode="explain", schema_version=SCHEMA_VERSION, kind=KIND)
     if _is_aippo_deepen_id(handle):
         contract = _project_workflow_contract()
         return _public_payload(
@@ -1083,6 +1090,7 @@ def explain(
                 "ok": False,
                 "cli_exit_recommended": "nonzero",
                 "explanation": navigation_error_payload(exc),
+                **handle_recovery_fields("explain"),
                 "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                     projection=macro_projection,
                     context=macro_context,
@@ -1362,8 +1370,22 @@ def _parser() -> argparse.ArgumentParser:
     deepen_parser.add_argument("--max", type=_route_limit_arg, default=MAX_ROUTES)
     deepen_parser.add_argument("--json", action="store_true")
 
-    explain_parser = sub.add_parser("explain")
-    explain_parser.add_argument("handle")
+    explain_parser = sub.add_parser(
+        "explain",
+        usage="aippocampus agent explain --request 1 --last-recall --json [options]",
+        description=(
+            "Agent explain task card:\n"
+            "  Ordinary path: explain a numbered route from the last-recall cache.\n"
+            "  Copy-paste: aippocampus agent explain --request 1 --last-recall --json\n"
+            "  Raw handles remain local/private diagnostics; prefer request numbers in foreground output.\n"
+            "  Explanation is routing context, not source evidence."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    explain_parser.add_argument("handle", nargs="?")
+    explain_parser.add_argument("--request", type=int)
+    explain_parser.add_argument("--last-recall", action="store_true")
+    explain_parser.add_argument("--last-recall-path")
     explain_parser.add_argument("--macro-state-jsonl")
     explain_parser.add_argument("--project", default="AIppocampus")
     explain_parser.add_argument("--json", action="store_true")
@@ -1371,15 +1393,18 @@ def _parser() -> argparse.ArgumentParser:
     feedback_parser = sub.add_parser(
         "feedback",
         description=(
-            "Record whether a recall/deepen route helped. Feedback is a low-authority "
-            "calibration signal, never source truth."
+            "Record whether a recall/deepen route helped. With --feedback-jsonl it becomes "
+            "durable low-authority route calibration; without it, the command returns a receipt only. "
+            "Feedback is never source truth."
         ),
         epilog=(
-            "Examples:\n"
-            "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n"
-            "  aippocampus agent feedback <route_id> --outcome wrong_route --reason \"wrong project\" --json\n\n"
-            "Add --feedback-jsonl <path> to persist the signal for future route ordering; "
-            "without it, the command returns a receipt only."
+            "Durable examples:\n"
+            "  aippocampus agent feedback <route_id> --outcome helped --feedback-jsonl <local-feedback.jsonl> --json\n"
+            "  aippocampus agent feedback <route_id> --outcome wrong --reason wrong-project --feedback-jsonl <local-feedback.jsonl> --json\n\n"
+            "Receipt-only example:\n"
+            "  aippocampus agent feedback <route_id> --outcome helped --json\n\n"
+            "Use `aippocampus do-not-use-here <route_id> --feedback-jsonl <local-feedback.jsonl> --json` "
+            "when the user wants an explicit quieting control."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1505,30 +1530,12 @@ def main(argv: list[str] | None = None) -> int:
                     path=args.last_recall_path,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                payload = {
-                    "kind": KIND,
-                    "schema_version": SCHEMA_VERSION,
-                    "mode": "deepen",
-                    "surface": "recall",
-                    "status": "cannot_verify",
-                    "ok": False,
-                    "cli_exit_recommended": "nonzero",
-                    "result": {
-                        "error": {
-                            "code": "last_recall_unavailable",
-                            "message": str(exc),
-                        }
-                    },
-                    "policy_boundary": policy_boundary(),
-                    "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
-                }
+                payload = last_recall_unavailable_payload(mode="deepen", exc=exc, schema_version=SCHEMA_VERSION, kind=KIND)
                 if args.json:
-                    _json_out(_public_payload(payload))
+                    _json_out(payload)
                 else:
-                    print(render_deepen_human(_public_payload(payload)))
+                    print(render_deepen_human(payload))
                 return 2
-        if handle is None:
-            parser.error("agent deepen requires a handle or --request N --last-recall")
         payload = deepen(
             handle,
             cwd=args.cwd or cached_context.get("cwd"),
@@ -1544,10 +1551,27 @@ def main(argv: list[str] | None = None) -> int:
             print(render_deepen_human(payload))
         return 2 if payload.get("status") == "cannot_verify" else 0
     if args.command == "explain":
+        handle = args.handle
+        explain_cached_context: dict[str, Any] = {}
+        if args.last_recall or args.request is not None:
+            try:
+                handle, explain_cached_context = handle_from_last_recall_cache(
+                    request_index=int(args.request or 1),
+                    path=args.last_recall_path,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                payload = last_recall_unavailable_payload(mode="explain", exc=exc, schema_version=SCHEMA_VERSION, kind=KIND)
+                if args.json:
+                    _json_out(payload)
+                else:
+                    print("AIppocampus agent explain: cannot verify last recall cache")
+                    print("Reason: " + str(exc))
+                    print("Use: rerun `aippocampus agent recall \"<cue>\" --json`, then explain a request number.")
+                return 2
         payload = explain(
-            args.handle,
-            macro_state_path=args.macro_state_jsonl,
-            project=args.project,
+            handle,
+            macro_state_path=args.macro_state_jsonl or explain_cached_context.get("macro_state_jsonl"),
+            project=args.project or explain_cached_context.get("project") or "AIppocampus",
         )
         if args.json:
             _json_out(payload)
