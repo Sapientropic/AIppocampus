@@ -261,6 +261,18 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertFalse(payload["error"]["written"])
         self.assertIn("--dry-run --json", payload["error"]["next_action"])
 
+    def test_import_conversation_help_is_preview_first(self) -> None:
+        proc = self.run_cli("import", "conversation", "--help")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Preview an explicit conversation transcript", proc.stdout)
+        self.assertIn("Start with --dry-run --json", proc.stdout)
+        self.assertIn("no registry write happens", proc.stdout)
+        self.assertIn("Safe first step:", proc.stdout)
+        self.assertIn("--format generic-jsonl --input <path> --dry-run --json", proc.stdout)
+        self.assertIn("The input file stays local operator material", proc.stdout)
+        self.assertIn("local paths are redacted by default", proc.stdout)
+
     def test_import_conversation_missing_file_human_output_is_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             missing = Path(tmp) / "private-missing-input.jsonl"
