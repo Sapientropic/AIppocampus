@@ -35,6 +35,17 @@ def render_text(payload: Mapping[str, Any]) -> str:
         next_command = str(action_card["next_command"])
     elif payload.get("next_safe_action") == "reopen_source":
         next_command = "aippocampus agent recall \"<cue>\" --public; then deepen before claims"
+    display_cue = str(payload.get("_display_cue") or "").strip()
+    if display_cue:
+        quoted = json.dumps(display_cue, ensure_ascii=False)
+        next_command = next_command.replace('"<cue>"', quoted)
+        next_command = next_command.replace('"<distinctive exact phrase>"', quoted)
+        next_command = next_command.replace('" <cue> "', f" {quoted} ")
+        if "then deepen route 1" in next_command:
+            next_command = next_command.replace(
+                "then deepen route 1",
+                "then aippocampus agent deepen --request 1 --last-recall --json",
+            )
     lines = [
         f"AIppocampus {mode}",
         f"what happened: {happened}",
@@ -69,7 +80,7 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=_description_for_prog(prog),
     )
-    parser.add_argument("cue")
+    parser.add_argument("cue", nargs="?")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--clean-source-dir")
     parser.add_argument("--registry-dir")
@@ -89,6 +100,52 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
     return parser
 
 
+def _recovery_payload(mode: str) -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_recall_diagnostic_recovery",
+        "mode": mode,
+        "ok": False,
+        "error": {
+            "code": "cue_required",
+            "message": "Provide a cue so the diagnostic can explain a recall route or silence.",
+        },
+        "example_cue": "old decision about setup",
+        "when_to_use": {
+            "why-recall": "Use when recall surfaced a route that is surprising, stale-looking, broad, or needs explanation.",
+            "why-not-recall": "Use when recall stayed silent or did not help for a cue you expected to work.",
+        },
+        "next_actions": [
+            {
+                "label": "try recall first",
+                "command": 'aippocampus agent recall "old decision about setup" --json',
+            },
+            {
+                "label": "deepen selected route",
+                "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            },
+        ],
+        "claim_boundary": "Diagnostic output is route guidance, not source evidence; reopen source before claims.",
+    }
+
+
+def render_recovery_text(payload: Mapping[str, Any]) -> str:
+    mode = str(payload.get("mode") or "why-recall")
+    actions = [row for row in payload.get("next_actions") or [] if isinstance(row, Mapping)]
+    lines = [
+        f"AIppocampus {mode}",
+        "what happened: no cue was provided, so no diagnostic ran.",
+        "example cue: old decision about setup",
+        "when to use why-recall: explain a surprising or broad surfaced route.",
+        "when to use why-not-recall: explain silence or no-help recall.",
+    ]
+    if actions:
+        lines.append("next: " + str(actions[0].get("command")))
+        if len(actions) > 1:
+            lines.append("then: " + str(actions[1].get("command")))
+    lines.append("boundary: diagnostic route guidance is not source evidence.")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     args_list = list(argv or [])
     mode = "why-recall"
@@ -97,6 +154,10 @@ def main(argv: list[str] | None = None) -> int:
         mode = "why-not-recall" if raw_mode == "why-not" else raw_mode
     prog = f"aippocampus {mode}"
     args = build_parser(prog=prog).parse_args(args_list)
+    if not args.cue:
+        payload = _recovery_payload(mode)
+        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else render_recovery_text(payload))
+        return 2
     payload = recall_diagnostic_report(
         cue=args.cue,
         mode=mode,
@@ -116,7 +177,12 @@ def main(argv: list[str] | None = None) -> int:
         semantic_gate_mode=args.semantic_gate_mode,
         semantic_timeout=args.semantic_timeout,
     )
-    print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else render_text(payload))
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        text_payload = dict(payload)
+        text_payload["_display_cue"] = args.cue
+        print(render_text(text_payload))
     return 0
 
 

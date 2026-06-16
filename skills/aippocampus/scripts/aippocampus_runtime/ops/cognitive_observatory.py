@@ -789,21 +789,67 @@ def render_text(report: Mapping[str, Any]) -> str:
     metrics = report.get("metrics") or {}
     contract = report.get("contract") or {}
     next_action = "Use ready routes only as navigation; reopen source before claims."
-    return "\n".join(
+    previews = _panel_previews(report)
+    lines = [
+        "Cognitive Observatory readout",
+        f"  route ready: {metrics.get('route_ready_count', 0)}",
+        f"  route suppressed: {metrics.get('route_suppressed_count', 0)}",
+        f"  activation surfaces: {metrics.get('activation_surface_count', 0)}",
+        f"  useful now: {metrics.get('campus_useful_now_count', 0)}",
+        f"  wasted motion: {metrics.get('campus_wasted_motion_count', 0)}",
+        f"  quiet for a reason: {metrics.get('campus_quiet_for_a_reason_count', 0)}",
+    ]
+    if not any(previews.values()):
+        lines.extend(
+            [
+                "  no diagnostic inputs loaded: this is an empty readout, not evidence that no routes exist.",
+                "  try: aippocampus observatory --fixture",
+                "  try: aippocampus observatory --summary-json",
+            ]
+        )
+    else:
+        for panel in ("useful_now", "wasted_motion", "quiet_for_a_reason", "needs_ripening"):
+            rows = previews.get(panel) or []
+            lines.append(f"  {panel}:")
+            for row in rows:
+                reason = ",".join(row.get("reason_codes") or [])
+                lines.append(
+                    "    - "
+                    + f"{row.get('surface')} / {row.get('label')}: "
+                    + f"{row.get('next_action')} ({reason})"
+                )
+    lines.extend(
         [
-            "Cognitive Observatory readout",
-            f"  route ready: {metrics.get('route_ready_count', 0)}",
-            f"  route suppressed: {metrics.get('route_suppressed_count', 0)}",
-            f"  activation surfaces: {metrics.get('activation_surface_count', 0)}",
-            f"  useful now: {metrics.get('campus_useful_now_count', 0)}",
-            f"  wasted motion: {metrics.get('campus_wasted_motion_count', 0)}",
-            f"  quiet for a reason: {metrics.get('campus_quiet_for_a_reason_count', 0)}",
             f"  next: {next_action}",
             f"  no write: {str(report.get('no_write')).lower()}",
             f"  control plane: {str(not contract.get('not_control_plane')).lower()}",
             "",
         ]
     )
+    return "\n".join(lines)
+
+
+def _panel_previews(report: Mapping[str, Any], *, limit: int = 3) -> dict[str, list[dict[str, Any]]]:
+    raw_panels = report.get("campus_usefulness_panels")
+    panel_container = raw_panels if isinstance(raw_panels, Mapping) else {}
+    panels = panel_container.get("panels")
+    panel_map = panels if isinstance(panels, Mapping) else {}
+    previews: dict[str, list[dict[str, Any]]] = {}
+    for name in ("useful_now", "wasted_motion", "quiet_for_a_reason", "needs_ripening"):
+        rows: list[dict[str, Any]] = []
+        for item in list(panel_map.get(name) or [])[:limit]:
+            if not isinstance(item, Mapping):
+                continue
+            rows.append(
+                {
+                    "surface": str(item.get("surface") or "unknown"),
+                    "label": str(item.get("label") or "row"),
+                    "next_action": str(item.get("next_action") or "reopen_source_before_claim"),
+                    "reason_codes": [str(code) for code in item.get("reason_codes") or []][:4],
+                }
+            )
+        previews[name] = rows
+    return previews
 
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -820,6 +866,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "wasted_motion_count": metrics.get("campus_wasted_motion_count", 0),
         "quiet_for_a_reason_count": metrics.get("campus_quiet_for_a_reason_count", 0),
         "needs_ripening_count": metrics.get("campus_needs_ripening_count", 0),
+        "panel_previews": _panel_previews(report),
         "surfaces": list(report.get("surfaces") or [])[:12],
         "full_audit_flag": "--json",
         "html_flag": "--html",

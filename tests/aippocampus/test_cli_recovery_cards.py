@@ -469,6 +469,56 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("usage:", raw)
         self.assertNotIn(str(missing), raw)
 
+    def test_import_generic_jsonl_recovers_to_transcript_import(self) -> None:
+        for format_guess in ("generic-jsonl", "jsonl"):
+            with self.subTest(format_guess=format_guess):
+                proc = self.run_cli("import", format_guess)
+
+                self.assertEqual(proc.returncode, 2)
+                self.assertNotIn("Traceback", proc.stdout + proc.stderr)
+                payload = json.loads(proc.stdout)
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["error"]["code"], "transcript_import_intent_detected")
+                self.assertTrue(payload["safety"]["no_write_happened"])
+                self.assertIn(
+                    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json",
+                    payload["error"]["next_command"],
+                )
+                self.assertIn("private", payload["privacy_boundary"]["operator_input"])
+
+    def test_update_natural_guesses_recover_to_plan_first_cards(self) -> None:
+        cases = [
+            ((), "update_command_required", "aippocampus update status --agent-json"),
+            (("check",), "update_status_alias", "aippocampus update status --agent-json"),
+            (("dry-run",), "update_plan_alias", "aippocampus update plan --agent-json"),
+        ]
+        for argv, code, command in cases:
+            with self.subTest(argv=argv):
+                proc = self.run_cli("update", *argv)
+
+                self.assertEqual(proc.returncode, 2)
+                self.assertNotIn("Traceback", proc.stdout + proc.stderr)
+                self.assertIn("no write happened", proc.stdout.casefold())
+                self.assertIn(code, proc.stdout)
+                self.assertIn(command, proc.stdout)
+
+    def test_update_apply_without_surface_returns_no_write_recovery_json(self) -> None:
+        human = self.run_cli("update", "apply")
+        agent = self.run_cli("update", "apply", "--agent-json")
+
+        self.assertEqual(human.returncode, 2)
+        self.assertIn("No write happened", human.stdout)
+        self.assertIn("valid surfaces", human.stdout)
+        self.assertIn("aippocampus update plan --agent-json", human.stdout)
+        self.assertNotIn("update_failed", human.stdout + human.stderr)
+
+        self.assertEqual(agent.returncode, 2)
+        payload = json.loads(agent.stdout)
+        self.assertEqual(payload["error"]["code"], "update_apply_surface_required")
+        self.assertTrue(payload["safety"]["no_write_happened"])
+        self.assertIn("skill", payload["valid_surfaces"])
+        self.assertIn("aippocampus update plan --agent-json", payload["next_actions"][0]["command"])
+
     def test_object_sync_json_missing_config_returns_structured_error(self) -> None:
         env = {
             key: value

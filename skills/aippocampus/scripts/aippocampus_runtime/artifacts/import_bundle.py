@@ -179,8 +179,40 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _transcript_intent_payload(format_guess: str) -> dict[str, Any]:
+    canonical_format = "generic-jsonl"
+    return {
+        "ok": False,
+        "kind": "aippocampus_import_recovery",
+        "error": {
+            "code": "transcript_import_intent_detected",
+            "message": (
+                f"`{format_guess}` looks like a transcript format, not a portable bundle zip. "
+                "No write happened."
+            ),
+            "next_command": (
+                "aippocampus import conversation --format "
+                f"{canonical_format} --input <path> --dry-run --json"
+            ),
+        },
+        "safety": {
+            "no_write_happened": True,
+            "bundle_import_not_attempted": True,
+        },
+        "privacy_boundary": {
+            "local_paths_included": False,
+            "path_redaction": LOCAL_PATH_REDACTION,
+            "operator_input": "private transcript path supplied explicitly with --input <path>",
+        },
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    format_guess = str(args.bundle).strip().casefold()
+    if format_guess in {"generic-jsonl", "jsonl"}:
+        print(json.dumps(_transcript_intent_payload(format_guess), ensure_ascii=False, indent=2))
+        return 2
     try:
         payload = import_bundle(args)
     except FileNotFoundError as exc:

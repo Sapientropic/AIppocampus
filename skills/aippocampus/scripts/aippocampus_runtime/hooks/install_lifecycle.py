@@ -485,6 +485,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"hooks: {LOCAL_PATH_REDACTION}")
         for line in host_integration_text_lines():
             print(line)
+        bridge_installed = bool(result.get("provider_key_bridge_installed"))
+        print(f"provider-key bridge: {'installed' if bridge_installed else 'not installed'}")
+        print("already-running hook process: not proven by this status card")
+        if bridge_installed:
+            print("next: restart Codex/hook host if needed, then run aippocampus doctor provider --json")
+        else:
+            print("next: aippocampus onboard provider-key --plan --json")
         if result.get("changed") is not None:
             print(f"changed: {result.get('changed')}")
     return 0

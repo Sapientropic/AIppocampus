@@ -220,6 +220,39 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("boundary:", human.stdout)
         self.assertNotIn("cue_hash", human.stdout)
         self.assertNotIn("route_ids", human.stdout)
+        self.assertNotIn('"<cue>"', human.stdout)
+        self.assertIn('aippocampus agent recall "clean source continuity" --json', human.stdout)
+
+    def test_human_missing_source_card_uses_the_provided_cue(self) -> None:
+        human = facade.run_command(
+            [
+                "why-recall",
+                "old correction",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.cwd / "missing-clean-source"),
+            ],
+            capture_output=True,
+        )
+
+        self.assertTrue(human.ok, human.stderr)
+        self.assertIn('aippocampus search "old correction" --json', human.stdout)
+        self.assertNotIn('"<distinctive exact phrase>"', human.stdout)
+        self.assertNotIn('"<cue>"', human.stdout)
+
+    def test_bare_why_commands_return_recovery_cards(self) -> None:
+        for command in ("why-recall", "why-not-recall"):
+            with self.subTest(command=command):
+                result = facade.run_command([command], capture_output=True)
+
+                self.assertFalse(result.ok)
+                self.assertEqual(result.exit_code, 2)
+                self.assertNotIn("usage:", result.stdout + result.stderr)
+                self.assertIn("AIppocampus " + command, result.stdout)
+                self.assertIn("example cue:", result.stdout)
+                self.assertIn("aippocampus agent recall", result.stdout)
+                self.assertIn("source evidence", result.stdout)
 
     def test_cli_help_leads_with_use_case_before_diagnostic_flags(self) -> None:
         why_help = facade.run_command(["why-recall", "--help"], capture_output=True)

@@ -203,8 +203,14 @@ public answer API, public SDK schema, or source of factual authority.
 The CLI contract applies to documented operator commands, especially:
 
 - Personal/default path commands: `aippocampus health|search|onboard|export|import|update`.
-- Advanced/operator commands remain public and discoverable, but they are not
-  first-recall prerequisites: `aippocampus doctor|mcp|smoke|logs|storage|telepathy|why-recall|why-not-recall|sync|object-sync|hooks|plugin`
+- Advanced/operator commands remain public and discoverable, but do not need to
+  run before first recall: `aippocampus doctor|mcp|smoke|logs|storage|telepathy|sync|object-sync|hooks|plugin`
+- Diagnostic commands such as `aippocampus why-recall`, `aippocampus
+  why-not-recall`, and `aippocampus observatory` are recovery/explanation
+  tools, not first-recall setup steps. Use them when recall stayed silent,
+  recall surfaced too much, a route was surprising, stale/private/conflict
+  boundaries need explanation, or an operator wants route-readiness audit
+  detail.
 - `aippocampus continuity-domain produce|append|publish|report` as the
   explicit local producer, authoring, and snapshot-publish path for Contract v1
   continuity domains
@@ -216,8 +222,8 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus smoke recall-funnel "<cue>"` as a no-write progressive recall
   diagnostic over `recall_context` / first reopenable `recall_deepen` route
 - `aippocampus why-recall "<cue>" --json` and `aippocampus why-not-recall
-  "<cue>" --json` as public-safe route diagnostics over `recall_context`,
-  active locks, ambient cache, and semantic-gate state
+  "<cue>" --json` as public-safe recovery/explanation diagnostics over
+  `recall_context`, active locks, ambient cache, and semantic-gate state
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
 - `aippocampus search "<cue>" --public` / `--metadata-only` as the

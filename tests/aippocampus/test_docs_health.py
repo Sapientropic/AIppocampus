@@ -147,6 +147,26 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("## Agent Runtime Posture", coding_lane)
         self.assertIn("before broad manual search", coding_lane_flat)
 
+    def test_diagnostics_are_not_first_recall_prerequisites(self) -> None:
+        public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
+            encoding="utf-8"
+        )
+        first_recall = (
+            REPO_ROOT / "docs" / "guides" / "first-recall-decision-card.md"
+        ).read_text(encoding="utf-8")
+        product_profiles = (
+            REPO_ROOT / "docs" / "architecture" / "host" / "product-profiles.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("first-recall prerequisites: `", public_api)
+        self.assertIn("recovery/explanation", public_api)
+        self.assertIn("recall stayed silent", public_api)
+        self.assertIn("route was surprising", public_api)
+        self.assertIn("operator wants route-readiness", public_api)
+        self.assertIn("agent recall", first_recall)
+        self.assertIn("agent deepen", first_recall)
+        self.assertIn("power_user_optional", product_profiles)
+
     def test_public_docs_keep_facade_first_success_before_diagnostics(self) -> None:
         public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
             encoding="utf-8"

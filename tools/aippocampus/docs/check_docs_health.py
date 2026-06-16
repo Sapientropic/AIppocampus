@@ -833,6 +833,24 @@ def public_api_contract_issues(repo_root: Path) -> list[str]:
     for term, issue in REQUIRED_PUBLIC_API_CONTRACT_TERMS.items():
         if term not in text:
             issues.append(issue)
+    if "first-recall prerequisites: `" in text:
+        issues.append(
+            "public-api.md must not frame diagnostic commands as first-recall prerequisites"
+        )
+    diagnostic_section = text[text.find("## CLI Contract") : text.find("## Stability Model")]
+    if any(term in diagnostic_section for term in ("why-recall|why-not-recall", "why-recall|why-not-recall|observatory")):
+        issues.append(
+            "public-api.md should document why-recall/why-not-recall/observatory as recovery diagnostics, not CLI prerequisite bundles"
+        )
+    required_diagnostic_terms = [
+        "recovery/explanation",
+        "recall stayed silent",
+        "route was surprising",
+        "operator wants route-readiness",
+    ]
+    for term in required_diagnostic_terms:
+        if term not in text:
+            issues.append(f"public-api.md missing diagnostic trigger term: {term}")
     return issues
 
 

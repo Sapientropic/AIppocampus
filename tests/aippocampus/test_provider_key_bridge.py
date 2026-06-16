@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -76,6 +77,24 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         )
         self.assertIn("--credential-dotenv <path>", report["agent_next_action"])
         self.assertIn("aippocampus search", report["recommended_actions"][1]["command"])
+
+    def test_cli_plan_without_source_is_successful_chooser(self) -> None:
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = provider_key_bridge.main(["--plan", "--json"])
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["action"], "plan")
+        self.assertFalse(payload["applied"])
+        self.assertEqual(payload["candidate"]["status"], "source_choice_required")
+        self.assertTrue(payload["chooser"]["no_write_happened"])
+        commands = [item["command"] for item in payload["recommended_actions"]]
+        self.assertIn(
+            "aippocampus onboard provider-key --plan --source explicit-dotenv --credential-dotenv <path> --json",
+            commands,
+        )
+        self.assertIn('aippocampus search "a distinctive old phrase"', commands)
 
     def test_bridge_apply_installs_redacted_codex_hook_wrapper_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -411,13 +411,25 @@ def render_text(report: dict[str, Any]) -> str:
     )
     raw_privacy = report.get("privacy_boundary")
     privacy: Mapping[str, Any] = raw_privacy if isinstance(raw_privacy, Mapping) else {}
+    current_validity = _as_mapping(report.get("current_validity_counts"))
+    safe_use = _as_mapping(report.get("safe_use_counts"))
     lines = [
         "AIppocampus episode-arcs",
         f"status: {'ok' if report.get('ok') else 'attention_needed'}",
         f"threads scanned: {input_surface.get('thread_count_scanned', 0)}",
         f"message rows scanned: {input_surface.get('message_rows_scanned', 0)}",
         f"episode arcs: {metrics.get('episode_arc_count', 0)}",
-        "next: use --json only for local private-history audit details",
+        "action card:",
+        f"  complete: {metrics.get('complete_arc_count', 0)}",
+        f"  gappy: {metrics.get('gappy_arc_count', 0)}",
+        f"  needs_reopen: {current_validity.get('needs_reopen', 0)}",
+        "  safe use: "
+        + ", ".join(f"{key}={value}" for key, value in sorted(safe_use.items()))
+        if safe_use
+        else "  safe use: none",
+        "next: use arcs as sequence-route hints; ask/refresh sources before acting.",
+        "machine summary: aippocampus episode-arcs --summary-json",
+        "audit details: aippocampus episode-arcs --json",
         "boundary: source text, thread ids, local paths, and source refs stay out of default output",
     ]
     if privacy:
@@ -427,12 +439,31 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
+    metrics = _as_mapping(report.get("metrics"))
+    return {
+        "kind": "aippocampus_episode_arcs_summary",
+        "ok": bool(report.get("ok")),
+        "status": report.get("status"),
+        "episode_arc_count": metrics.get("episode_arc_count", 0),
+        "complete_arc_count": metrics.get("complete_arc_count", 0),
+        "gappy_arc_count": metrics.get("gappy_arc_count", 0),
+        "current_validity_counts": dict(_as_mapping(report.get("current_validity_counts"))),
+        "safe_use_counts": dict(_as_mapping(report.get("safe_use_counts"))),
+        "next_action": "Use arcs as navigation-only sequence hints; reopen/refresh source before action.",
+        "full_audit_flag": "--json",
+        "privacy_boundary": report.get("privacy_boundary"),
+        "cannot_claim": list(report.get("cannot_claim") or [])[:8],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus episode-arcs", description=__doc__)
     parser.add_argument("--registry", help="Registry file or directory. Defaults to AIppocampus registry.")
     parser.add_argument("--max-threads", type=int, default=DEFAULT_MAX_THREADS)
     parser.add_argument("--max-line-gap", type=int, default=DEFAULT_MAX_LINE_GAP)
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--summary-json", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
@@ -446,7 +477,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output + "\n", encoding="utf-8")
-    if args.json_output:
+    if args.summary_json:
+        print(json.dumps(summary_projection(report), ensure_ascii=False, indent=2))
+    elif args.json_output:
         print(output)
     elif not args.output:
         print(render_text(report))

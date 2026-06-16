@@ -124,6 +124,32 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertEqual(payload["repro_package"]["surface"], "benchmark")
         self.assertNotIn("E:/SDY/private", encoded)
 
+    def test_learning_repro_package_missing_input_json_returns_recovery_card(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "learning",
+                "repro-package",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertNotIn("usage:", proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["mode"], "repro_package_recovery")
+        self.assertEqual(payload["error"]["code"], "learning_repro_input_required")
+        self.assertIn("--input-json <command-output.json>", payload["error"]["next_command"])
+        self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_stdout_serialized"])
+
 
 if __name__ == "__main__":
     unittest.main()

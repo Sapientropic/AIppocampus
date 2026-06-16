@@ -121,6 +121,18 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertNotIn(fixture_value, encoded)
 
+    def test_provider_doctor_human_output_names_hook_process_caveat(self) -> None:
+        fixture_value = fake_provider_doctor_value("HUMAN")
+        with provider_env({"DEEPSEEK_API_KEY": fixture_value}):
+            report = provider_doctor.build_provider_doctor_report(model_route="default")
+        text = provider_doctor.render_text(report)
+
+        self.assertIn("already-running hook process", text)
+        self.assertIn("provider-key bridge", text)
+        self.assertIn("restart", text.casefold())
+        self.assertIn("aippocampus hooks prompt status", text)
+        self.assertNotIn(fixture_value, text)
+
     def test_provider_doctor_reports_agent_fallback_mode_without_key_value(self) -> None:
         with provider_env({"AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1"}):
             report = provider_doctor.build_provider_doctor_report(
