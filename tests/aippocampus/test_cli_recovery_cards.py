@@ -188,6 +188,148 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             navigation_payload["foreground_next_action"]["command"],
         )
 
+    def test_navigate_default_hides_internal_module_commands(self) -> None:
+        human = self.run_cli("navigate")
+        compact = self.run_cli("navigate", "--json")
+        operator = self.run_cli("navigate", "--operator-json")
+
+        self.assertEqual(human.returncode, 0, human.stderr)
+        self.assertIn("operator details: aippocampus navigate --operator-json", human.stdout)
+        self.assertNotIn("python -m aippocampus_runtime", human.stdout)
+
+        self.assertEqual(compact.returncode, 0, compact.stderr)
+        compact_payload = json.loads(compact.stdout)
+        self.assertEqual(compact_payload["detail"], "compact")
+        self.assertIn("operator_detail_command", compact_payload["lanes"][0])
+        self.assertNotIn("diagnostic_command", json.dumps(compact_payload))
+
+        self.assertEqual(operator.returncode, 0, operator.stderr)
+        operator_payload = json.loads(operator.stdout)
+        self.assertEqual(operator_payload["detail"], "operator")
+        self.assertIn("diagnostic_command", operator_payload["lanes"][0])
+        self.assertIn("python -m aippocampus_runtime", operator.stdout)
+
+    def test_questions_list_rows_are_actionable_cards(self) -> None:
+        def question_row(
+            fingerprint: str,
+            title: str,
+            created_at: str,
+            *,
+            source_refs: list[dict[str, object]] | None = None,
+            extra: dict[str, object] | None = None,
+        ) -> dict[str, object]:
+            row: dict[str, object] = {
+                "schema_version": 1,
+                "kind": "aippocampus_subconscious_job_finding",
+                "created_at": created_at,
+                "job": "question_extraction",
+                "finding_kind": "question_candidate",
+                "fingerprint": fingerprint,
+                "title": title,
+                "summary": f"The user asked about {title}.",
+                "confidence": 0.9,
+                "source_refs": source_refs
+                if source_refs is not None
+                else [
+                    {
+                        "thread_key": f"thread:{fingerprint}",
+                        "message_id": f"msg_{fingerprint}",
+                        "source_line": 10,
+                        "timestamp": created_at,
+                    }
+                ],
+                "question_text": f"How should we handle {title}?",
+                "question_short": title,
+            }
+            row.update(extra or {})
+            return row
+
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = Path(tmp) / "subconscious_jobs.jsonl"
+            synthetic_registry = Path(tmp) / "synthetic-registry.json"
+            rows = [
+                question_row("open", "open route", "2026-06-16T00:00:00Z"),
+                question_row("dormant", "dormant route", "2000-01-01T00:00:00Z"),
+                question_row(
+                    "resolved",
+                    "resolved route",
+                    "2026-06-14T00:00:00Z",
+                    extra={
+                        "lifecycle_state": "resolved",
+                        "resolved_at": "2026-06-15T00:00:00Z",
+                        "resolution_source_refs": [
+                            {
+                                "thread_key": "thread:resolution",
+                                "message_id": "msg_resolution",
+                                "source_line": 20,
+                                "timestamp": "2026-06-15T00:00:00Z",
+                            }
+                        ],
+                    },
+                ),
+                question_row(
+                    "missing",
+                    "missing source route",
+                    "2026-06-16T00:00:00Z",
+                    source_refs=[],
+                ),
+            ]
+            jobs.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+            human = self.run_cli(
+                "questions",
+                "list",
+                "--jobs",
+                str(jobs),
+                "--registry",
+                str(synthetic_registry),
+                "--dormant-after-days",
+                "1",
+                "--max",
+                "10",
+            )
+            json_proc = self.run_cli(
+                "questions",
+                "list",
+                "--jobs",
+                str(jobs),
+                "--registry",
+                str(synthetic_registry),
+                "--dormant-after-days",
+                "1",
+                "--max",
+                "10",
+                "--json",
+            )
+
+        self.assertEqual(human.returncode, 0, human.stderr)
+        self.assertIn("open [reopenable_route]: open route", human.stdout)
+        self.assertIn("dormant [reopenable_route]: dormant route", human.stdout)
+        self.assertIn("resolved [bounded_evidence]: resolved route", human.stdout)
+        self.assertIn("blocked [ignore_or_blocked]: 1 question rows need source-ref repair", human.stdout)
+        self.assertNotIn(str(jobs), human.stdout)
+
+        self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
+        payload = json.loads(json_proc.stdout)
+        by_title = {row["title"]: row for row in payload["rows"]}
+        self.assertEqual(by_title["open route"]["action_grammar"], "reopenable_route")
+        self.assertEqual(by_title["open route"]["route_state"], "ready_to_reopen")
+        self.assertIn("aippocampus search", by_title["open route"]["agent_next_action"])
+        self.assertEqual(by_title["dormant route"]["route_state"], "dormant_recheck_before_reviving")
+        self.assertEqual(by_title["resolved route"]["action_grammar"], "bounded_evidence")
+        self.assertEqual(
+            by_title["resolved route"]["route_state"],
+            "resolved_recheck_before_use",
+        )
+        blocked = by_title["1 question rows need source-ref repair"]
+        self.assertEqual(blocked["action_grammar"], "ignore_or_blocked")
+        self.assertEqual(blocked["route_state"], "blocked_missing_source_refs")
+        self.assertIsNone(blocked["source_route"])
+        self.assertFalse(payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertNotIn(str(jobs), json_proc.stdout)
+
     def test_continuity_domain_preview_alias_is_foreground_safe(self) -> None:
         proc = self.run_cli("continuity-domain", "preview", "--max-threads", "1", "--json")
 
