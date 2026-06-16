@@ -55,7 +55,7 @@ specifically host/MCP verification:
 
 ```sh
 aippocampus health --cwd "$PWD"
-aippocampus onboard --provider auto --status --cwd "$PWD"
+aippocampus onboard --status --provider auto --cwd "$PWD"
 aippocampus mcp status
 aippocampus mcp list-tools --json
 python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json

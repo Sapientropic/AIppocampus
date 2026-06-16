@@ -725,14 +725,15 @@ def build_parser() -> argparse.ArgumentParser:
             "  aippocampus plugin install --codex --verify\n\n"
             "This copies local AIppocampus plugin files into the Codex plugin "
             "marketplace/cache and, with --verify, checks that host-visible tools "
-            "can be called. It does not install hooks, copy private memory data, "
-            "or configure provider keys.\n\n"
+            "can be called. It writes local plugin files only; it does not install "
+            "hooks, copy private memory data, or configure provider keys.\n\n"
             "After success:\n"
             "  aippocampus update status --agent-json\n"
             "  aippocampus agent recall \"old decision or handoff cue\" --json"
         ),
         epilog=(
-            "Rollback stays explicit and preview-first:\n"
+            "Rollback:\n"
+            "  stays explicit and preview-first\n"
             "  aippocampus plugin uninstall --codex --dry-run --json\n"
             "  aippocampus plugin uninstall --codex\n\n"
             "Advanced overrides such as --repo-root, --codex-home, marketplace "
