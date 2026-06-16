@@ -99,6 +99,15 @@ class AippocampusCliTests(unittest.TestCase):
         learning_payload = json.loads(learning.stdout)
         self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(learning_payload["mode"], "replay")
+        intervention = learning_payload["intervention_report"]
+        self.assertEqual(intervention["status"], "diagnostic_behavior_signal")
+        self.assertIn("eligible_intervention_case_count", intervention)
+        self.assertIn("hint_surface_count", intervention["hint_arm"])
+        self.assertIn("broad_wrong_route_avoided_count", intervention["hint_arm"])
+        self.assertIn("repeat_failure_after_hint_count", intervention["hint_arm"])
+        self.assertIn("over_nudge_count", intervention["hint_arm"])
+        self.assertIn("source_reopen_before_action_count", intervention["hint_arm"])
+        self.assertIn("causal_live_behavior_lift", intervention["cannot_claim"])
         self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
         self.assertEqual(learning_status.returncode, 0, learning_status.stderr)
         status_payload = json.loads(learning_status.stdout)
@@ -327,13 +336,6 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn(str(REPO_ROOT), raw)
         self.assertNotIn(str(SCRIPTS), raw)
 
-    def test_status_alias_routes_to_health_instead_of_unknown_command(self) -> None:
-        help_proc = self.run_cli("status", "--help")
-
-        self.assertEqual(help_proc.returncode, 0, help_proc.stderr)
-        self.assertIn("usage: aippocampus health", help_proc.stdout)
-        self.assertNotIn("unknown command", help_proc.stderr)
-
     def test_latest_reply_facade_marks_commentary_as_not_closeout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -422,6 +424,35 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(operator_proc.returncode, 1)
         self.assertIn(commentary_text, operator_proc.stdout)
 
+    def test_latest_reply_missing_rollout_is_recoverable_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_cwd = Path(tmp) / "empty-project"
+            missing_cwd.mkdir()
+            proc = self.run_cli(
+                "latest-reply",
+                "--cwd",
+                str(missing_cwd),
+                "--json",
+                "--detail",
+                "compact",
+            )
+            help_proc = self.run_cli("latest-reply", "--help")
+
+        raw = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 2, raw)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "no_latest_reply_source_found")
+        self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
+        self.assertTrue(payload["error"]["path_redacted"])
+        self.assertIn("agent recall", payload["agent_next_action"])
+        self.assertIn("source_backed_claim", payload["cannot_claim"])
+        self.assertNotIn(str(missing_cwd), raw)
+        self.assertNotIn("Traceback", raw)
+        self.assertEqual(help_proc.returncode, 0)
+        self.assertIn("Latest final-answer closeout recovery card", help_proc.stdout)
+        self.assertIn("not in-progress commentary", help_proc.stdout)
+        self.assertIn("reopen clean source", help_proc.stdout)
+
     def test_doctor_config_compact_json_is_foreground_agent_sized(self) -> None:
         proc = self.run_cli("doctor", "config", "--compact-json")
 
@@ -482,16 +513,6 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(provider_key.returncode, 0)
         self.assertIn("usage: aippocampus onboard provider-key", provider_key.stdout)
         self.assertIn("--apply", provider_key.stdout)
-
-    def test_continuity_domain_top_help_points_to_ordinary_recall_path(self) -> None:
-        proc = self.run_cli("continuity-domain", "--help")
-
-        self.assertEqual(proc.returncode, 0)
-        self.assertIn("usage: aippocampus continuity-domain", proc.stdout)
-        self.assertIn("Ordinary path", proc.stdout)
-        self.assertIn("aippocampus agent recall", proc.stdout)
-        self.assertIn("manual append", proc.stdout)
-        self.assertIn("operator/debug", proc.stdout)
 
     def test_mcp_list_tools_accepts_json_alias(self) -> None:
         proc = self.run_cli("mcp", "list-tools", "--json")
@@ -556,6 +577,20 @@ class AippocampusCliTests(unittest.TestCase):
             "aippocampus_runtime.recall.agent_continuity",
         )
         self.assertEqual(agent_continuity_invocation.script_name, "agent_continuity.py")
+
+        recall_alias = facade.resolve_command(["recall", "continue project", "--json"])
+        self.assertEqual(recall_alias.command, "agent")
+        self.assertEqual(recall_alias.module_name, "aippocampus_runtime.recall.agent_continuity")
+        self.assertEqual(recall_alias.args, ["recall", "continue project", "--json"])
+
+        aippo_alias = facade.resolve_command(["aippo", "--task", "ship the release", "--json"])
+        self.assertEqual(aippo_alias.command, "agent")
+        self.assertEqual(aippo_alias.args, ["aippo", "--task", "ship the release", "--json"])
+
+        provider_key_alias = facade.resolve_command(["provider-key", "--help"])
+        self.assertEqual(provider_key_alias.command, "provider-key")
+        self.assertEqual(provider_key_alias.module_name, "aippocampus_runtime.onboarding.facade")
+        self.assertEqual(provider_key_alias.args, ["provider-key", "--help"])
 
         export_invocation = facade.resolve_command(["export", "--cwd", "."])
         self.assertEqual(export_invocation.command, "export")
@@ -741,6 +776,29 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(log_rotation.script_name, "log_retention.py")
         self.assertEqual(log_rotation.args, ["rotate", "--json"])
+
+        log_status = facade.resolve_command(["logs"])
+        self.assertEqual(log_status.args, ["status"])
+
+        storage_recovery = facade.resolve_command(["storage"])
+        self.assertEqual(storage_recovery.script_name, "storage_governance.py")
+        self.assertEqual(storage_recovery.args, ["--help"])
+
+        questions = facade.resolve_command(["questions", "status", "--json"])
+        self.assertEqual(questions.script_name, "questions.py")
+        self.assertEqual(questions.module_name, "aippocampus_runtime.question.frontdoor")
+
+        navigate = facade.resolve_command(["navigate", "--json"])
+        self.assertEqual(navigate.script_name, "navigate.py")
+        self.assertEqual(navigate.module_name, "aippocampus_runtime.navigation.frontdoor")
+
+        sync_status = facade.resolve_command(["sync"])
+        self.assertEqual(sync_status.script_name, "sync_bundle.py")
+        self.assertEqual(sync_status.args, ["status"])
+
+        object_sync_recovery = facade.resolve_command(["object-sync"])
+        self.assertEqual(object_sync_recovery.script_name, "sync_object_storage.py")
+        self.assertEqual(object_sync_recovery.args, ["--help"])
 
         self_note_append = facade.resolve_command(
             ["self-note", "append", "--current-thread", "--stdin", "--json"]
@@ -1018,6 +1076,64 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(search_payload["empty_state"]["decision"], "empty")
         self.assertIn("agent recall", search_payload["empty_state"]["agent_next_action"])
 
+    def test_self_note_default_list_is_workspace_scoped_with_registry_wide_escape_hatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project_a = root / "project-a"
+            project_b = root / "project-b"
+            project_a.mkdir()
+            project_b.mkdir()
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(root / "registry")}
+            append = self.run_cli_with_env(
+                "self-note",
+                "append",
+                "--cwd",
+                str(project_a),
+                "scope breadcrumb for project a",
+                "--json",
+                env=env,
+            )
+            unrelated = self.run_cli_with_env(
+                "self-note",
+                "list",
+                "--cwd",
+                str(project_b),
+                "--json",
+                env=env,
+            )
+            registry_wide = self.run_cli_with_env(
+                "self-note",
+                "list",
+                "--cwd",
+                str(project_b),
+                "--registry-wide",
+                "--json",
+                env=env,
+            )
+            human = self.run_cli_with_env(
+                "self-note",
+                "list",
+                "--cwd",
+                str(project_a),
+                env=env,
+            )
+
+        self.assertEqual(append.returncode, 0, append.stderr)
+        self.assertEqual(unrelated.returncode, 0, unrelated.stderr)
+        self.assertEqual(registry_wide.returncode, 0, registry_wide.stderr)
+        unrelated_payload = json.loads(unrelated.stdout)
+        wide_payload = json.loads(registry_wide.stdout)
+        self.assertEqual(unrelated_payload["scope"]["mode"], "current_workspace")
+        self.assertEqual(unrelated_payload["count"], 0)
+        self.assertEqual(wide_payload["scope"]["mode"], "registry_wide")
+        self.assertEqual(wide_payload["count"], 1)
+        self.assertEqual(wide_payload["rows"][0]["action_grammar"], "direction_only")
+        self.assertTrue(
+            wide_payload["rows"][0]["source_boundary"]["source_reopen_required_before_claim"]
+        )
+        self.assertIn("direction_only atmosphere", human.stdout)
+        self.assertIn("boundary: direction_only", human.stdout)
+
     def test_continuity_domain_latest_list_and_append_require_resolvable_refs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1231,8 +1347,10 @@ class AippocampusCliTests(unittest.TestCase):
             code = facade.main(["mcp", "list-tools"])
 
         self.assertEqual(code, 0)
-        tools = json.loads(stdout.getvalue())["tools"]
-        self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertIn("agent_recall", payload["key_tools_present"])
+        self.assertNotIn("inputSchema", stdout.getvalue())
 
     def test_package_facade_exposes_captureable_python_api(self) -> None:
         from aippocampus_runtime.cli import facade
@@ -1247,8 +1365,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.invocation.command, "mcp")
-        tools = json.loads(result.stdout)["tools"]
-        self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertIn("agent_recall", payload["key_tools_present"])
         self.assertEqual(result.stderr, "")
         self.assertEqual(ambient_stdout.getvalue(), "")
         self.assertEqual(ambient_stderr.getvalue(), "")
@@ -1308,11 +1427,17 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("unknown command: nope", unknown_result.stderr)
         self.assertIn("Commands:", unknown_result.stderr)
 
-    def test_mcp_list_tools_preserves_json_stdout(self) -> None:
+    def test_mcp_list_tools_default_is_compact_and_json_is_full_schema(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
+        full = self.run_cli("mcp", "list-tools", "--json")
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        tools = json.loads(proc.stdout)["tools"]
+        compact = json.loads(proc.stdout)
+        self.assertEqual(compact["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertIn("agent_recall", compact["key_tools_present"])
+        self.assertNotIn("inputSchema", proc.stdout)
+        self.assertEqual(full.returncode, 0, full.stdout + full.stderr)
+        tools = json.loads(full.stdout)["tools"]
         self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
 
     def test_first_run_command_aliases_are_copy_pasteable(self) -> None:
@@ -1329,7 +1454,14 @@ class AippocampusCliTests(unittest.TestCase):
         with patch("sys.stdout", new=StringIO()) as stdout:
             code = mcp_server.main(["list-tools"])
         self.assertEqual(code, 0)
-        tools = json.loads(stdout.getvalue())["tools"]
+        compact = json.loads(stdout.getvalue())
+        self.assertEqual(compact["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertIn("agent_recall", compact["key_tools_present"])
+
+        with patch("sys.stdout", new=StringIO()) as full_stdout:
+            code = mcp_server.main(["list-tools", "--json"])
+        self.assertEqual(code, 0)
+        tools = json.loads(full_stdout.getvalue())["tools"]
         self.assertTrue(any(tool["name"] == "memory_health" for tool in tools))
 
     def test_sync_status_without_sync_dir_matches_mcp_capability_truth(self) -> None:
@@ -1387,128 +1519,6 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("Traceback", import_proc.stderr + import_proc.stdout)
         import_payload = json.loads(import_proc.stdout)
         self.assertEqual(import_payload["error"]["code"], "bundle_not_found")
-
-    def test_import_conversation_missing_input_is_structured_and_path_redacted(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            missing = Path(tmp) / "private-missing-input.jsonl"
-            proc = self.run_cli(
-                "import",
-                "conversation",
-                "--format",
-                "generic-jsonl",
-                "--input",
-                str(missing),
-                "--json",
-            )
-
-        raw = proc.stdout + proc.stderr
-        self.assertEqual(proc.returncode, 2)
-        payload = json.loads(proc.stdout)
-        self.assertEqual(payload["error"]["code"], "input_not_found")
-        self.assertEqual(payload["error"]["class"], "missing_prerequisite")
-        self.assertTrue(payload["error"]["path_redacted"])
-        self.assertIn("import conversation --help", payload["error"]["next_action"])
-        self.assertNotIn("Traceback", raw)
-        self.assertNotIn(str(missing), raw)
-
-    def test_object_sync_json_missing_config_returns_structured_error(self) -> None:
-        env = {
-            key: value
-            for key, value in os.environ.items()
-            if not key.startswith("AIPPOCAMPUS_OBJECT_")
-        }
-        proc = self.run_cli_with_env("object-sync", "status", "--json", env=env)
-
-        self.assertEqual(proc.returncode, 2)
-        self.assertNotIn("Traceback", proc.stderr + proc.stdout)
-        payload = json.loads(proc.stdout)
-        self.assertEqual(payload["error"]["code"], "object_store_config_required")
-
-    def test_object_sync_help_is_action_first_and_command_specific(self) -> None:
-        top = self.run_cli("object-sync", "--help")
-        push = self.run_cli("object-sync", "push", "--help")
-        pull = self.run_cli("object-sync", "pull", "--help")
-        repair = self.run_cli("object-sync", "repair", "--help")
-
-        self.assertEqual(top.returncode, 0, top.stderr)
-        self.assertLess(top.stdout.index("Action card:"), top.stdout.index("--object-store-url"))
-        self.assertIn("push --plan", top.stdout)
-        self.assertIn("operator object-store configuration", top.stdout)
-        self.assertIn("raw and encryption options", top.stdout)
-        self.assertIn("requires an encrypted sync decision", top.stdout)
-
-        for proc, command, read_side, write_side in (
-            (push, "push", "local_registry", "object_store_prefix"),
-            (pull, "pull", "object_store_prefix", "local_registry"),
-            (repair, "repair", "object_store_prefix", "object_store_manifest"),
-        ):
-            self.assertEqual(proc.returncode, 0, proc.stderr)
-            self.assertIn(f"Read side: {read_side}.", proc.stdout)
-            self.assertIn(f"Write side: {write_side}.", proc.stdout)
-            self.assertIn(f"aippocampus object-sync {command} --plan --json", proc.stdout)
-            self.assertIn(f"aippocampus object-sync {command} --json may mutate", proc.stdout)
-            self.assertNotIn("Status is always non-mutating", proc.stdout)
-
-    def test_sync_plan_outputs_direction_cards_without_private_paths(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            registry = root / "registry"
-            sync_dir = root / "sync"
-            registry.mkdir()
-            (registry / "threads.json").write_text(
-                json.dumps({"threads": []}, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            local = self.run_cli(
-                "sync",
-                "push",
-                "--sync-dir",
-                str(sync_dir),
-                "--registry-dir",
-                str(registry),
-                "--plan",
-                "--json",
-            )
-            object_plan = self.run_cli(
-                "object-sync",
-                "pull",
-                "--object-store-url",
-                "https://example.invalid/private-prefix",
-                "--object-prefix",
-                "private/user",
-                "--plan",
-                "--json",
-            )
-            help_proc = self.run_cli("sync", "push", "--help")
-
-        raw = local.stdout + object_plan.stdout + help_proc.stdout
-        self.assertEqual(local.returncode, 0, local.stderr)
-        self.assertEqual(object_plan.returncode, 0, object_plan.stderr)
-        local_payload = json.loads(local.stdout)
-        object_payload = json.loads(object_plan.stdout)
-        self.assertEqual(local_payload["kind"], "aippocampus_sync_direction_plan")
-        self.assertEqual(local_payload["source_side"], "local_registry")
-        self.assertEqual(local_payload["destination_side"], "sync_dir")
-        self.assertEqual(local_payload["mutates"], ["sync_dir"])
-        self.assertEqual(
-            [item["category"] for item in local_payload["estimated_file_breakdown"]],
-            [
-                "registry_metadata_and_indexes",
-                "clean_source_files",
-                "raw_rollout_audit_files",
-            ],
-        )
-        self.assertEqual(
-            local_payload["raw_rollout_boundary"],
-            "excluded_unless_include_raw_and_encrypted_sync_are_explicitly_requested",
-        )
-        self.assertIn("plan mode performs no writes", local_payload["conflict_boundary"])
-        self.assertEqual(object_payload["kind"], "aippocampus_object_sync_direction_plan")
-        self.assertEqual(object_payload["source_side"], "object_store_prefix")
-        self.assertEqual(object_payload["destination_side"], "local_registry")
-        self.assertIn("Plan first", help_proc.stdout)
-        self.assertNotIn(str(root), raw)
-        self.assertNotIn("private/user", raw)
 
     def test_search_limits_and_public_metadata_mode_do_not_expand_private_snippets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

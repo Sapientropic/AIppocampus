@@ -84,8 +84,11 @@ PUBLIC_SELF_NOTE_SURFACE_FIELDS = (
     "note_id",
     "created_at",
     "thread_key",
+    "project_scope_id",
+    "project_scope_label",
     "note_text",
     "trigger",
+    "authority",
     "support_level",
     "trust_level",
     "action_grammar",
@@ -130,6 +133,12 @@ def _stable_id(prefix: str, *parts: Any) -> str:
     raw = "\n".join(str(part or "") for part in parts)
     digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:20]
     return f"{prefix}_{digest}"
+
+
+def project_scope_id(project_root: str | Path | None) -> str:
+    if project_root is None or str(project_root).strip() == "":
+        return ""
+    return _stable_id("project", Path(project_root).resolve())
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -276,6 +285,10 @@ def build_agent_self_note_row(
         "note_id": note_id,
         "created_at": timestamp,
         "thread_key": compact_text(str(thread_key or "unknown-thread"), 160),
+        "project_scope_id": project_scope_id(project_root),
+        "project_scope_label": compact_text(Path(project_root).resolve().name, 80)
+        if project_root is not None
+        else "",
         "source_refs": cleaned_refs,
         "source_ref_count": len(cleaned_refs),
         "note_text": sanitized_text,
@@ -406,6 +419,14 @@ def public_agent_self_note_surface(row: Mapping[str, Any]) -> dict[str, Any]:
     if "thread_key" in public:
         public["thread_key"] = _public_text(public["thread_key"], chars=180)
     public["source_refs"] = public_agent_self_note_route_refs(row, limit=4)
+    public["source_boundary"] = {
+        "self_note_is_not_source_fact": True,
+        "source_refs_are_reopen_routes_not_proof_of_note": True,
+        "source_reopen_required_before_claim": True,
+    }
+    public["agent_next_action"] = (
+        "Use this as direction-only atmosphere; reopen source before factual claims."
+    )
     return public
 
 
@@ -479,6 +500,7 @@ __all__ = [
     "public_agent_self_note_route_ref",
     "public_agent_self_note_route_refs",
     "public_agent_self_note_surface",
+    "project_scope_id",
     "sanitize_agent_self_note_payload",
     "sanitize_agent_self_note_text",
     "search_agent_self_notes",

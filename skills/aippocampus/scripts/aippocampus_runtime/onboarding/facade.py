@@ -60,6 +60,10 @@ def _provider_registration_error(provider: str) -> dict:
 
 FRONTSTAGE_PROVIDER_SAMPLE_LIMIT = 3
 FRONTSTAGE_PROVIDER_SCAN_BUDGET_SECONDS = 0.75
+SEARCH_EXISTING_MEMORY_COMMAND = 'aippocampus search "distinctive old phrase" --json'
+GENERIC_JSONL_IMPORT_PREVIEW_COMMAND = (
+    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json"
+)
 
 
 def _sample_sessions(instance: ConversationProvider, *, detailed: bool) -> tuple[list[object], bool]:
@@ -150,12 +154,16 @@ def provider_status_report(
     provider_scope, provider_names = _status_provider_scope(provider)
     providers = [_provider_capability(name, cwd=cwd, detailed=detailed) for name in provider_names]
     providers = [_with_provider_next_action(item) for item in providers]
+    primary_next_action = _provider_status_primary_decision(providers, provider_scope)
     storage = aippocampus_registry_resolution()
     return {
         "ok": True,
+        "agent_next_action": primary_next_action["agent_next_action"],
+        "primary_next_action": primary_next_action,
         "data": {
             "provider_scope": provider_scope,
             "providers": providers,
+            "primary_next_action": primary_next_action,
             "next_actions": _provider_status_next_actions(providers),
             "state_legend": {
                 "discovery_only": "Provider can list local transcripts but cannot safely build clean source yet.",
@@ -182,13 +190,28 @@ def _with_provider_next_action(item: dict) -> dict:
     current_match = bool(item.get("current_cwd_match"))
     dry_run = bool(item.get("dry_run_available"))
     public = dict(item)
+    if provider == "generic-jsonl":
+        public["next_action_code"] = (
+            "import_conversation_preview"
+            if detected and state != "blocked"
+            else "generic_import_needs_input"
+        )
+        public["agent_next_action"] = (
+            "Generic JSONL is explicit file import. Use it when the user has an export "
+            "file, preview the import path, and avoid no-input provider scans."
+        )
+        public["preview_command"] = GENERIC_JSONL_IMPORT_PREVIEW_COMMAND
+        public["broad_scan_boundary"] = (
+            "file/input-shaped import only; not an ordinary no-input provider scan"
+        )
+        return public
     if detected and current_match:
         public["next_action_code"] = "try_search_existing_registry"
         public["agent_next_action"] = (
             "Use `aippocampus search` or `aippocampus agent recall` for old/source-backed "
             "memory before previewing new registration."
         )
-        public["search_command"] = 'aippocampus search "distinctive old phrase" --json'
+        public["search_command"] = SEARCH_EXISTING_MEMORY_COMMAND
         return public
     if detected and not current_match and dry_run and state != "blocked":
         public["next_action_code"] = "preview_current_project_registration"
@@ -197,10 +220,8 @@ def _with_provider_next_action(item: dict) -> dict:
             "registered memory if the cue is global; otherwise preview current-project "
             "registration before writing."
         )
-        public["search_command"] = 'aippocampus search "distinctive old phrase" --json'
-        public["preview_command"] = (
-            f"aippocampus onboard --provider {provider} --dry-run --json"
-        )
+        public["search_command"] = SEARCH_EXISTING_MEMORY_COMMAND
+        public["preview_command"] = f"aippocampus onboard --provider {provider} --dry-run --json"
         public["broad_scan_boundary"] = (
             "dry-run may inspect local provider transcripts; preview before any registration write"
         )
@@ -218,6 +239,63 @@ def _with_provider_next_action(item: dict) -> dict:
     )
     public["preview_command"] = f"aippocampus onboard --provider {provider} --dry-run --json"
     return public
+
+
+def _provider_status_primary_decision(providers: list[dict], provider_scope: str) -> dict:
+    if provider_scope == "generic-jsonl":
+        return {
+            "provider": "generic-jsonl",
+            "code": "import_conversation_preview",
+            "decision": "preview explicit generic JSONL import",
+            "agent_next_action": (
+                "Use generic JSONL only when the user has an export file; preview "
+                "that file import before writing."
+            ),
+            "command": GENERIC_JSONL_IMPORT_PREVIEW_COMMAND,
+            "broad_scan_boundary": (
+                "generic JSONL is file/input-shaped, not a no-input foreground scan"
+            ),
+        }
+
+    for item in providers:
+        if item.get("current_cwd_match") and item.get("detected"):
+            return {
+                "provider": item.get("provider"),
+                "code": "search_existing_registered_memory",
+                "decision": "search existing registered memory first",
+                "agent_next_action": (
+                    "Search existing source-backed memory for the cue before previewing "
+                    "another registration write."
+                ),
+                "command": SEARCH_EXISTING_MEMORY_COMMAND,
+            }
+
+    for item in providers:
+        provider = str(item.get("provider") or "")
+        if provider == "generic-jsonl" or item.get("state") == "blocked":
+            continue
+        if item.get("dry_run_available"):
+            return {
+                "provider": provider,
+                "code": "preview_current_project_registration",
+                "decision": f"preview current-project registration with {provider}",
+                "agent_next_action": (
+                    "Preview the best-fit local provider registration before writing "
+                    "clean-source history."
+                ),
+                "command": f"aippocampus onboard --provider {provider} --dry-run --json",
+            }
+
+    return {
+        "provider": "registry",
+        "code": "search_existing_registered_memory",
+        "decision": "search existing registered memory first",
+        "agent_next_action": (
+            "Search existing registered memory first; configure or import a provider only "
+            "if no source-backed result appears."
+        ),
+        "command": SEARCH_EXISTING_MEMORY_COMMAND,
+    }
 
 
 def _provider_status_next_actions(providers: list[dict]) -> list[dict]:
@@ -264,10 +342,16 @@ def _frontstage_state_label(item: dict) -> str:
 
 def render_status_text(report: dict) -> str:
     lines = ["AIppocampus provider status"]
-    provider_scope = report.get("data", {}).get("provider_scope")
+    data = report.get("data", {})
+    provider_scope = data.get("provider_scope")
     if provider_scope and provider_scope != "auto":
         lines.append(f"provider scope: {provider_scope}")
-    for item in report.get("data", {}).get("providers", []):
+    primary = data.get("primary_next_action") or report.get("primary_next_action")
+    if primary:
+        lines.append(f"primary: {primary.get('decision')}")
+        if primary.get("command"):
+            lines.append(f"next command: {primary.get('command')}")
+    for item in data.get("providers", []):
         blockers = item.get("blockers") or []
         suffix = f" | blocker: {blockers[0]}" if blockers else ""
         lines.append(
@@ -287,10 +371,10 @@ def render_status_text(report: dict) -> str:
             lines.append(f"  next: {item.get('agent_next_action')}")
         if item.get("preview_command"):
             lines.append(f"  preview: {item.get('preview_command')}")
-    auto = report.get("data", {}).get("auto", {})
+    auto = data.get("auto", {})
     if provider_scope in {None, "auto"}:
         lines.append(f"auto: {auto.get('default_provider')} - {auto.get('why')}")
-    storage = report.get("data", {}).get("storage") or {}
+    storage = data.get("storage") or {}
     if storage:
         legacy = " legacy fallback" if storage.get("legacy_fallback") else ""
         lines.append(f"registry configured ({storage.get('source')}{legacy})")

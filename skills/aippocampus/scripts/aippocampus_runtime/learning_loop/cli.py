@@ -142,6 +142,48 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
     )
 
 
+def intervention_report_from_replay(report: Mapping[str, Any]) -> dict[str, Any]:
+    metrics = report.get("metrics") if isinstance(report.get("metrics"), Mapping) else {}
+    ledger = (
+        report.get("effectiveness_ledger")
+        if isinstance(report.get("effectiveness_ledger"), Mapping)
+        else {}
+    )
+    guidance_count = int(metrics.get("guidance_count") or 0)
+    false_positive_rate = float(metrics.get("false_positive_nudge_rate") or 0.0)
+    return {
+        "kind": "aippocampus_learning_intervention_report",
+        "status": "diagnostic_behavior_signal",
+        "eligible_intervention_case_count": guidance_count,
+        "baseline": {
+            "arm": "no_hint",
+            "eligible_case_count": guidance_count,
+            "source_reopen_before_action_count": 0,
+            "hint_surface_count": 0,
+        },
+        "hint_arm": {
+            "arm": "action_time_hint",
+            "eligible_case_count": guidance_count,
+            "hint_surface_count": guidance_count,
+            "broad_wrong_route_avoided_count": int(
+                metrics.get("source_backed_guidance_changed_action_order_count") or 0
+            ),
+            "repeat_failure_after_hint_count": int(
+                ledger.get("repeat_failure_after_hint_count") or 0
+            ),
+            "over_nudge_count": int(round(false_positive_rate * max(1, guidance_count))),
+            "source_reopen_before_action_count": int(
+                metrics.get("context_loss_to_reopen_source_count") or 0
+            ),
+        },
+        "cannot_claim": [
+            "causal_live_behavior_lift",
+            "production_default_adoption",
+            "guidance_as_source_truth",
+        ],
+    }
+
+
 def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
     events = None
     input_origin = None
@@ -173,6 +215,7 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
             "fixture_input": bool(report.get("fixture_input")),
             "input_origin": report.get("input_origin"),
             "metrics": report.get("metrics") or {},
+            "intervention_report": intervention_report_from_replay(report),
             "guidance_authority": report.get("guidance_authority") or {},
             "privacy_boundary": report.get("privacy_boundary") or _privacy_boundary(),
             "cannot_claim": report.get("cannot_claim") or [],

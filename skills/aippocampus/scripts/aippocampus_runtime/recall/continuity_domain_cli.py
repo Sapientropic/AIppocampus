@@ -518,6 +518,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
     produce.add_argument("--max-threads", type=int)
     produce.add_argument("--max-candidates", type=int, default=24)
     produce.add_argument("--json", action="store_true", dest="json_output")
+
+    preview = sub.add_parser(
+        "preview",
+        help="foreground preview alias for deterministic producer candidates",
+    )
+    preview.add_argument("--registry")
+    preview.add_argument("--registry-dir")
+    preview.add_argument("--min-support", type=int, default=2)
+    preview.add_argument("--max-threads", type=int)
+    preview.add_argument("--max-candidates", type=int, default=24)
+    preview.add_argument("--json", action="store_true", dest="json_output")
+    preview.set_defaults(
+        preview=True,
+        dry_run=True,
+        append=False,
+        publish=False,
+        include_local_detail=False,
+        refresh_query_pattern_routes=False,
+        no_refresh_query_pattern_routes=False,
+        events_path=None,
+        snapshot_dir=None,
+    )
     return parser
 
 
@@ -535,7 +557,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = list_command(args)
         elif args.command == "report":
             payload = report_command(args)
-        elif args.command == "produce":
+        elif args.command in {"produce", "preview"}:
             payload = produce_command(args)
         else:
             parser.error("unknown command")

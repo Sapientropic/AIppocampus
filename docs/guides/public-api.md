@@ -29,19 +29,31 @@ this section remains the no-clone/API-stability path.
    uvx aippocampus --help
    ```
 
-2. Check whether the local provider has usable source without registering new
-   history. Human-readable output is the default; add `--format json` only for
-   automation:
+2. If local source is already registered, try the useful source-backed moment:
 
    ```sh
-   uvx aippocampus onboard --provider codex --status
+   uvx aippocampus search "a distinctive old phrase"
+   uvx aippocampus agent recall "old decision or handoff cue" --json
+   uvx aippocampus agent deepen --request 1 --last-recall --json
    ```
 
-3. After explicit user consent, register local history and search for the first
+3. If source is missing or blocked, check whether a local provider has usable
+   source without registering new history. Human-readable output is the
+   default; add `--format json` only for automation:
+
+   ```sh
+   uvx aippocampus onboard --provider auto --status
+   ```
+
+4. After explicit user consent, register selected local history and search for the first
    source-backed snippet:
 
    ```sh
    uvx aippocampus onboard --provider codex --all
+   uvx aippocampus onboard --provider claude-code --dry-run
+   uvx aippocampus onboard --provider claude-code
+   uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
+   uvx aippocampus import conversation --format generic-jsonl --input <path>
    uvx aippocampus search "a distinctive old phrase"
    ```
 
@@ -49,16 +61,16 @@ this section remains the no-clone/API-stability path.
    search a project cue or time cue, but treat that as candidate navigation
    until a source-backed snippet appears.
 
-4. Only when an agent host, plugin, or operator check needs those surfaces,
+5. Only when an agent host, plugin, or operator check needs those surfaces,
    inspect the MCP catalog or run health checks:
 
    ```sh
    aippocampus health --cwd "$PWD" --json
-   aippocampus mcp list-tools --compact
-   aippocampus mcp list-tools
+   aippocampus mcp status
+   aippocampus mcp list-tools --json
    ```
 
-5. Know where data lives before enabling writes. Generated memory artifacts use
+6. Know where data lives before enabling writes. Generated memory artifacts use
    the configured AIppocampus registry: `AIPPOCAMPUS_REGISTRY_DIR`, then
    `AIPPOCAMPUS_HOME/registry`, then legacy Codex registry fallback. Project
    repositories should not receive raw rollouts, registry exports, generated
@@ -83,7 +95,7 @@ nearest explicit route without claiming global pause or destructive deletion.
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Opt-in agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, feedback as source truth, or destructive forgetting |
 | Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
-| Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
+| Provider-neutral import | `aippocampus import conversation --format generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, host-private metadata as public identity, or internal registry modules as public CLI contracts |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
 | Agent-native fixture proposals | Linked architecture contracts such as `aippocampus_runtime.recall.agent_facade_contract`, `aippocampus_runtime.recall.agent_pull_gesture`, and `aippocampus_runtime.aippo.working_contract` | Current fixture-backed behavior and public-safe schema direction for trusted host experiments | Public SDK stability, hosted network endpoints, broad package internals, or claim-ready memory facts |
 | Cross-device transfer | Documented local-folder, object-storage, and encrypted sync commands | Documented command names, flags, sync manifests, privacy refusal rules, and `AIPPOCAMPUS_*` configuration names | Raw plaintext rollout sync, provider credentials in logs, or managed hosted-service behavior |
@@ -152,7 +164,7 @@ The supported public surfaces are:
 - The CLI entrypoints documented in `README.md`,
   [install-guide.md](install-guide.md), and `skills/aippocampus/SKILL.md`.
 - The MCP server tool names and input schemas exposed by
-  `aippocampus mcp list-tools`.
+  `aippocampus mcp list-tools --json`.
 - The source-event, clean-source chunk, source-ref, and import-manifest schemas
   documented in [public-core-boundary.md](public-core-boundary.md).
 - The knowledge-source manifest and knowledge-claim record schemas documented
@@ -236,9 +248,7 @@ The CLI contract applies to documented operator commands, especially:
   generation directories whose reader-pin/TTL, current/LKG pointer, source,
   lease, and active-thread checks pass; capacity aggregates and source/review
   artifacts remain outside apply v1.
-- `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
-- `python -m aippocampus_runtime.mcp.server --list-tools`
-- `python -m aippocampus_runtime.sync.encrypted.admin key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
+- `aippocampus mcp status|list-tools --json`
 - `aippocampus hooks prompt status|install|uninstall`
 - `aippocampus hooks lifecycle status|install|uninstall`
 - `aippocampus plugin install --codex --verify` as the local Codex plugin
@@ -760,20 +770,22 @@ Explicit file or directory import is a separate provider-neutral CLI operation:
 preview first with
 `aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json`,
 then register only after consent with
-`aippocampus import conversation --format generic-jsonl --input <path>` or
-`python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
-for an exported transcript. `register_thread` is for attaching/building the
-selected current provider session through the MCP control plane; it is not a
-generic arbitrary-file ingest endpoint.
-This is not a generic arbitrary-file ingest endpoint.
+`aippocampus import conversation --format generic-jsonl --input <path>` for an
+exported transcript. Internal registry modules may be used by trusted operators
+for repair, but they are not the public generic ingest contract.
+`register_thread` is for attaching/building the selected current provider
+session through the MCP control plane; it is not a generic arbitrary-file
+ingest endpoint.
 
 For Codex hook dogfood, registry-wide health may report
 `pending_repair`, `stale_ledger_row`, or `blocked_or_unsupported` when the
 prompt hook saw a thread but the registry has no durable clean-source entry for
-it, or when the row must fail closed. The lightweight reconciliation path is:
+it, or when the row must fail closed. The lightweight reconciliation path is a
+trusted-operator fallback, not a public first-run or provider-neutral import
+command:
 
 ```text
-python -m aippocampus_runtime.registry.api reconcile-hook-seen --dry-run --json
+python3 -m aippocampus_runtime.registry.api reconcile-hook-seen --dry-run --json
 ```
 
 Then rerun without `--dry-run` after reviewing the plan. The command reuses
@@ -995,7 +1007,7 @@ are insufficient.
 | Layer | What is stable | Use when | Not a promise |
 | --- | --- | --- | --- |
 | Stable automation surfaces | Documented CLI commands, MCP tool names/input schemas, documented `--json` fields, and public schemas in [public-core-boundary.md](public-core-boundary.md) | Downstream callers, agent hosts, CI, and user scripts need integration that survives releases | A general Python SDK or stability for helper-module internals |
-| Trusted-process runtime helpers | Documented package owners such as `aippocampus_runtime.hooks.*`, `aippocampus_runtime.onboarding.*`, `aippocampus_runtime.artifacts.*`, `aippocampus_runtime.sync.encrypted.admin`, and `aippocampus_runtime.cli.facade.run_command` | Repo-owned tools, plugin packaging, local diagnostics, and trusted operators need in-process execution without subprocess output pollution | Compatibility outside the documented owner module, raw private diagnostics as public schemas, or use across an untrusted process boundary |
+| Trusted-process runtime helpers | Documented package owners such as `aippocampus_runtime.hooks.*`, `aippocampus_runtime.onboarding.*`, `aippocampus_runtime.artifacts.*`, `aippocampus_runtime.registry.api`, `aippocampus_runtime.sync.encrypted.admin`, and `aippocampus_runtime.cli.facade.run_command` | Repo-owned tools, plugin packaging, local diagnostics, and trusted operators need in-process execution without subprocess output pollution | Compatibility outside the documented owner module, raw private diagnostics as public schemas, or use across an untrusted process boundary |
 | Internal helper imports | No compatibility promise; imports may move as the runtime package replaces flat scripts | Maintainers are refactoring inside this repository with tests in the same change | Downstream API stability |
 
 The current in-process composability helper is

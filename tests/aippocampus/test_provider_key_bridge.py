@@ -56,6 +56,27 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertNotIn(fixture_value, encoded)
         self.assertNotIn(str(dotenv), encoded)
 
+    def test_bridge_plan_missing_credential_source_has_recovery_actions(self) -> None:
+        report = provider_key_bridge.build_provider_key_bridge_plan(
+            target="codex-hooks",
+            source="explicit-dotenv",
+            provider_env_var=BRIDGE_PROVIDER_ENV_VAR,
+            credential_dotenv=None,
+        )
+
+        self.assertFalse(report["ok"])
+        self.assertIn(
+            "credential_candidate_missing",
+            {item["code"] for item in report["issues"]},
+        )
+        self.assertIn("recommended_actions", report)
+        self.assertEqual(
+            report["recommended_actions"][0]["id"],
+            "plan_with_private_credential_source",
+        )
+        self.assertIn("--credential-dotenv <path>", report["agent_next_action"])
+        self.assertIn("aippocampus search", report["recommended_actions"][1]["command"])
+
     def test_bridge_apply_installs_redacted_codex_hook_wrapper_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

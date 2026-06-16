@@ -103,7 +103,17 @@ compliance policy setup before this first-recall path. Heavier profile
 boundaries are defined in
 [public-core-boundary.md](public-core-boundary.md#product-profile-boundary).
 
-Check local provider status without writing memory artifacts:
+If local source is already registered, try the useful moment before deeper
+setup:
+
+```sh
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
+```
+
+If no source is registered or the route is blocked, check local provider status
+without writing memory artifacts:
 
 ```sh
 uvx aippocampus onboard --provider auto --status
@@ -244,8 +254,10 @@ key are current. Human output leads with profile-aware readiness:
 The distinction matters: `mcp` or `plugin` can be `current` as package
 artifacts while `agent_callable` is still `artifact_current_host_not_exposed`.
 That state means a foreground agent may need `aippocampus agent ...` or
-`python -m aippocampus_runtime...` fallbacks until the host plugin/MCP surface
-is actually enabled.
+the human-friendly `aippocampus plugin install --codex --verify` recovery path
+until the host plugin/MCP surface is actually enabled. Direct
+`python3 -m aippocampus_runtime...` commands are operator diagnostics, not the
+foreground fallback.
 
 When a real host smoke has already reloaded/listed tools and called an
 AIppocampus MCP tool, feed that sanitized report back into status:
@@ -263,7 +275,8 @@ not a recall quality, benchmark, or source-answer correctness claim. If the
 packaged MCP artifact is current but its command does not resolve, status reports
 `mcp_command_repair_options` such as `aippocampus mcp`,
 `python3 -m aippocampus_runtime.cli.facade mcp`, or `uvx aippocampus mcp`
-instead of treating the artifact as foreground-ready.
+instead of treating the artifact as foreground-ready; prefer the facade command
+unless you are repairing an environment where the console script is unavailable.
 
 For Codex plugin readiness, status separates the repo-local package artifact
 from real local plugin layers. The plugin surface may include
@@ -516,7 +529,9 @@ ready.
 
 ## First Onboarding
 
-Preview provider readiness before writing:
+If source is already registered, start with search or `agent recall` rather than
+onboarding. Preview provider readiness before writing only when the first recall
+path is blocked:
 
 ```sh
 aippocampus onboard --provider auto --status --cwd "$PWD"
@@ -559,13 +574,15 @@ Project/time cues are candidate navigation until a source-backed snippet appears
 Inspect the local MCP tool catalog:
 
 ```sh
-aippocampus mcp list-tools
+aippocampus mcp status
+aippocampus mcp list-tools --json
 ```
 
 Or through the packaged `uvx` path:
 
 ```sh
-uvx aippocampus mcp list-tools
+uvx aippocampus mcp status
+uvx aippocampus mcp list-tools --json
 ```
 
 The MCP layer is read-mostly. It exposes clean-source and registry tools,
@@ -652,7 +669,8 @@ paths. Unsupported platforms or missing OS store tools return an explicit
 `skipped` report. Dated evidence and the claim boundary live in
 [`public-readiness-verification.md`](../evidence/readiness/public-readiness-verification.md#2026-06-07-issue-784-provider-key-bridge-os-store-smoke).
 
-Package modules remain available when the facade is not installed:
+Package modules remain available as operator fallbacks when the facade is not
+installed or you are repairing a packaging failure:
 
 ```sh
 PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.mcp.server --list-tools

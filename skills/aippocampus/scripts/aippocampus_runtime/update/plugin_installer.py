@@ -705,21 +705,42 @@ def uninstall_codex_plugin(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus plugin",
-        description="Install, verify, or remove the AIppocampus Codex plugin with explicit rollback paths.",
+        description=(
+            "AIppocampus Codex plugin helper.\n\n"
+            "Start with:\n"
+            "  aippocampus plugin install --codex --verify\n"
+            "Then check:\n"
+            "  aippocampus plugin status --agent-json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     install = subparsers.add_parser(
         "install",
+        usage="aippocampus plugin install --codex [--verify] [advanced paths]",
         help="Install or refresh the Codex plugin",
         description=(
-            "Copies the packaged AIppocampus plugin into the local Codex marketplace/cache, "
-            "then optionally verifies the host tools. This writes local plugin files only."
+            "Ordinary Codex setup path:\n"
+            "  aippocampus plugin install --codex --verify\n\n"
+            "This copies local AIppocampus plugin files into the Codex plugin "
+            "marketplace/cache and, with --verify, checks that host-visible tools "
+            "can be called. It does not install hooks, copy private memory data, "
+            "or configure provider keys.\n\n"
+            "After success:\n"
+            "  aippocampus update status --agent-json\n"
+            "  aippocampus agent recall \"old decision or handoff cue\" --json"
         ),
         epilog=(
-            "Rollback: aippocampus plugin uninstall --codex --dry-run --json, then "
-            "aippocampus plugin uninstall --codex."
+            "Rollback stays explicit and preview-first:\n"
+            "  aippocampus plugin uninstall --codex --dry-run --json\n"
+            "  aippocampus plugin uninstall --codex\n\n"
+            "Advanced overrides such as --repo-root, --codex-home, marketplace "
+            "paths, and --codex-command are for maintainer/nonstandard setups. "
+            "Use --json/--compact-json for the public-safe summary and "
+            "--operator-json for full local install/probe diagnostics."
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     install.add_argument("--codex", action="store_true", help="Use the Codex plugin manager")
     install.add_argument("--verify", "--verify-host", action="store_true", dest="verify")
@@ -773,6 +794,18 @@ def build_parser() -> argparse.ArgumentParser:
         dest="operator_json",
         help="Emit raw local Codex/plugin paths for operator diagnostics.",
     )
+    status = subparsers.add_parser(
+        "status",
+        help="Show plugin/install readiness through update status",
+        description=(
+            "Plugin status is the install/readiness card for the local Codex plugin.\n\n"
+            "Examples:\n"
+            "  aippocampus plugin status\n"
+            "  aippocampus plugin status --agent-json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    status.add_argument("status_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -806,6 +839,10 @@ def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "status":
+        from aippocampus_runtime.update import cli as update_cli  # noqa: PLC0415
+
+        return update_cli.main(["status", *args.status_args])
     if not args.codex:
         parser.error("this command currently requires --codex")
     try:

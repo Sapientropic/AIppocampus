@@ -788,11 +788,72 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     return result
 
 
+def missing_rollout_health_report(cwd: str | Path, exc: FileNotFoundError) -> dict[str, Any]:
+    resolved_cwd = Path(cwd).resolve()
+    return {
+        "ok": False,
+        "status": "no_rollout_for_cwd",
+        "cwd": str(resolved_cwd),
+        "error": {
+            "code": "no_rollout_for_cwd",
+            "class": "missing_prerequisite",
+            "message": "No current Codex rollout was found for this cwd.",
+            "detail": str(exc),
+        },
+        "product_readiness": {
+            "status": "no_current_thread",
+            "ready": False,
+            "blocking_action_count": 1,
+            "next_best_action": "open_or_register_thread",
+        },
+        "recommended_actions": [
+            {
+                "kind": "open_current_thread_or_run_registry_wide_health",
+                "severity": "warning",
+                "message": (
+                    "Run health inside an active Codex thread, or use registry-wide "
+                    "health when you only need aggregate local readiness."
+                ),
+                "command": "aippocampus health --registry-wide --agent-json",
+                "facade_command": "aippocampus health --registry-wide --agent-json",
+            },
+            {
+                "kind": "first_recall_without_health",
+                "severity": "info",
+                "message": "Health is diagnostic; source-backed search/recall can still be tried directly.",
+                "command": 'aippocampus agent recall "old cue" --json',
+                "facade_command": 'aippocampus agent recall "old cue" --json',
+            },
+        ],
+        "cannot_claim": [
+            "current_thread_readiness",
+            "current_rollout_index_freshness",
+        ],
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     # Python 3.14 changed argparse's default prog to reflect how __main__ was
     # executed. Keep the public compatibility-shim identity stable for direct
     # installed-script help, facade dispatch, and cross-platform smoke tests.
-    parser = argparse.ArgumentParser(prog="aippocampus health")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus health",
+        description=(
+            "Task-first health card:\n"
+            "  aippocampus health              # one-screen readiness and next action\n"
+            "  aippocampus health --agent-json # compact foreground JSON\n"
+            "  aippocampus health --json       # compact automation JSON\n"
+            "  aippocampus health --operator-json  # full local diagnostic JSON\n\n"
+            "Use path and threshold flags only when repairing local artifacts or "
+            "investigating a maintainer diagnostic."
+        ),
+        epilog=(
+            "Boundary: health is read-only. Compact JSON hides local paths by default; "
+            "--operator-json/--full emit full JSON diagnostics but still redact paths "
+            "unless --include-paths is explicit."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
         "--registry-wide",
@@ -881,12 +942,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--operator-json",
         action="store_true",
-        help="Emit the full local operator audit JSON. Without this, --json is compact.",
+        help="Emit the full local operator audit JSON; implies JSON output.",
     )
     parser.add_argument(
         "--full",
         action="store_true",
-        help="Alias for --operator-json on the thread health surface.",
+        help="Alias for --operator-json on the thread health surface; implies JSON output.",
     )
     parser.add_argument(
         "--exit-code", action="store_true", help="Exit 2 when maintenance is recommended."
@@ -922,6 +983,7 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    json_requested = bool(args.json_output or args.agent_json or args.operator_json or args.full)
     if args.registry_wide:
         registry_wide_dir = (
             Path(args.registry).resolve().parent
@@ -933,7 +995,7 @@ def main(argv: list[str] | None = None) -> int:
             top=args.registry_wide_top,
             include_paths=args.include_paths,
         )
-        if args.json_output:
+        if json_requested:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             render_registry_health_text(result)
@@ -941,12 +1003,15 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return 0
 
-    result = build_health_report(options_from_args(args))
+    try:
+        result = build_health_report(options_from_args(args))
+    except FileNotFoundError as exc:
+        result = missing_rollout_health_report(args.cwd, exc)
     public_result = public_health_report(result, include_paths=bool(args.include_paths))
     compact_json = bool(args.agent_json or (args.json_output and not (args.operator_json or args.full)))
     if compact_json:
         print(json.dumps(compact_health_payload(public_result), ensure_ascii=False, indent=2))
-    elif args.json_output:
+    elif json_requested:
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:
         render_health_text(public_result)

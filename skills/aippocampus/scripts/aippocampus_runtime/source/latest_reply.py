@@ -127,10 +127,51 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
     return payload
 
 
+def latest_reply_unavailable_payload(exc: Exception, *, detail: str = "compact") -> dict[str, Any]:
+    return redact_sensitive_values(
+        redact_private_paths(
+            {
+                "kind": "aippocampus_latest_reply",
+                "ok": False,
+                "status": "no_latest_reply_source_found",
+                "detail": detail,
+                "closeout_available": False,
+                "diagnostic_only": True,
+                "error": {
+                    "code": "no_rollout_for_cwd",
+                    "message": str(exc),
+                    "path_redacted": True,
+                },
+                "agent_next_action": (
+                    "Pass the correct project --cwd or an explicit --rollout, or run "
+                    "`aippocampus agent recall \"<cue>\" --json` when you need source-backed continuity."
+                ),
+                "examples": [
+                    "aippocampus latest-reply --cwd <project> --json",
+                    "aippocampus latest-reply --rollout <rollout.jsonl> --json",
+                    "aippocampus agent recall \"<cue>\" --json",
+                ],
+                "cannot_claim": [
+                    "latest_final_answer_available",
+                    "source_backed_claim",
+                    "exact_prior_wording",
+                ],
+                "privacy_boundary": {
+                    "local_path_serialized": False,
+                    "rollout_text_serialized": False,
+                    "source_reopen_required_for_claims": True,
+                },
+            }
+        )
+    )
+
+
 def render_latest_reply_text(payload: dict[str, Any]) -> str:
     lines = [f"status: {payload.get('status')}"]
     if payload.get("not_final_closeout"):
         lines.append("boundary: not a final assistant closeout")
+    if payload.get("status") == "no_latest_reply_source_found":
+        lines.append("boundary: no rollout/current-thread source was found")
     message = payload.get("message") if isinstance(payload.get("message"), dict) else None
     if message and payload.get("closeout_available"):
         lines.append(
@@ -151,7 +192,20 @@ def render_latest_reply_text(payload: dict[str, Any]) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aippocampus latest-reply")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus latest-reply",
+        description=(
+            "Latest final-answer closeout recovery card.\n\n"
+            "Use this after context loss when you need the latest final assistant closeout, "
+            "not in-progress commentary. Compact output is orientation only: reopen clean "
+            "source before quoting exact wording or making high-risk claims.\n\n"
+            "Common:\n"
+            "  aippocampus latest-reply --json\n"
+            "  aippocampus latest-reply --cwd <project> --json\n"
+            "  aippocampus latest-reply --rollout <rollout.jsonl> --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -166,9 +220,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     cwd = Path(args.cwd).resolve()
-    rollout = Path(args.rollout) if args.rollout else core.locate_rollout(cwd, core.codex_home())
-    result = latest_reply(rollout)
     detail = "full" if args.operator_json else args.detail
+    try:
+        rollout = Path(args.rollout) if args.rollout else core.locate_rollout(cwd, core.codex_home())
+        result = latest_reply(rollout)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        public = latest_reply_unavailable_payload(exc, detail=detail)
+        if args.operator_json:
+            diagnostic = {
+                "ok": False,
+                "status": "no_latest_reply_source_found",
+                "public_projection": public,
+            }
+            print(json.dumps(diagnostic, ensure_ascii=False, indent=2))
+        elif args.json_output:
+            print(json.dumps(public, ensure_ascii=False, indent=2))
+        else:
+            print(render_latest_reply_text(public))
+        return 2
     public = public_latest_reply_result(result, detail=detail)
 
     if args.operator_json:

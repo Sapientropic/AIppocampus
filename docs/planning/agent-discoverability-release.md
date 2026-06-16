@@ -39,8 +39,9 @@ Registry.
 
    ```sh
    uvx aippocampus --help
-   uvx aippocampus onboard --provider codex --status --format json
-   uvx aippocampus mcp list-tools
+   uvx aippocampus onboard --provider auto --status --format json
+   uvx aippocampus mcp status
+   uvx aippocampus mcp list-tools --json
    ```
 
 5. Publish with the official MCP Registry publisher and record:

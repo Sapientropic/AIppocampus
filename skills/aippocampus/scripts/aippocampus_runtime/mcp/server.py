@@ -43,7 +43,9 @@ from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     RouteLimitError,
+    compact_aippo_guidance_card,
     handle_from_last_recall_cache,
+    last_recall_unavailable_payload,
     normalize_route_limit,
     write_last_recall_cache,
 )
@@ -336,7 +338,12 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def call_agent_aippo(arguments: dict[str, Any]) -> dict[str, Any]:
     agent = agent_continuity_module()
-    payload = agent.activate_aippo(task=str(arguments.get("task") or ""))
+    task = str(arguments.get("task") or "")
+    payload = agent.activate_aippo(task=task)
+    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload = compact_aippo_guidance_card(payload, task=task)
+    else:
+        payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
     return text_result(public_payload(arguments, payload))
 
 
@@ -351,13 +358,13 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                 path=arguments.get("last_recall_path"),
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
-            return tool_error(
-                "last_recall_unavailable",
-                str(exc),
-                arguments=arguments,
-                retryable=False,
-                required=["handle", "request_index + last_recall"],
+            payload = last_recall_unavailable_payload(
+                mode="deepen",
+                exc=exc,
+                schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-opt-in-continuity-v0")),
+                kind="aippocampus_agent_continuity_path",
             )
+            return text_result(public_payload(arguments, payload), is_error=True)
     if handle is None:
         return tool_error(
             "missing_agent_handle",
@@ -464,8 +471,12 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
                 },
             )
         )
-    rollout = Path(str(arguments["rollout"])) if arguments.get("rollout") else core.locate_rollout(cwd)
-    payload = latest_reply_module.latest_reply(rollout)
+    try:
+        rollout = Path(str(arguments["rollout"])) if arguments.get("rollout") else core.locate_rollout(cwd)
+        payload = latest_reply_module.latest_reply(rollout)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        payload = latest_reply_module.latest_reply_unavailable_payload(exc, detail=detail)
+        return text_result(public_payload(arguments, payload), is_error=True)
     if isinstance(payload, dict):
         payload = latest_reply_module.public_latest_reply_result(payload, detail=detail)
     return text_result(public_payload(arguments, payload))
@@ -883,7 +894,20 @@ def serve_stdio() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aippocampus mcp")
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    parser = argparse.ArgumentParser(
+        prog="aippocampus mcp",
+        description=(
+            "MCP foreground/server entry.\n\n"
+            "Action card:\n"
+            "  mcp status              Compact readiness card for foreground agents.\n"
+            "  mcp list-tools          Compact readiness card; no schema wall by default.\n"
+            "  mcp list-tools --json   Full MCP schema catalog for host wiring.\n"
+            "  mcp --names             Tool names only.\n\n"
+            "Bare `aippocampus mcp` remains the stdio server when launched by an MCP host."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("command", nargs="?", choices=["list-tools", "status"])
     parser.add_argument(
         "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
@@ -905,15 +929,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="For list-tools, emit only visible tool names as JSON.",
     )
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
     if args.list_tools or args.command in {"list-tools", "status"}:
-        if args.summary_json or args.command == "status":
+        compact_default = (args.list_tools or args.command == "list-tools") and not (
+            args.json or args.names
+        )
+        if args.summary_json or args.command == "status" or compact_default:
             print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
             return 0
         if args.names:
             print(json.dumps(tool_names_summary(), ensure_ascii=False, indent=2))
             return 0
         print(json.dumps({"tools": TOOLS}, ensure_ascii=False, indent=2))
+        return 0
+    if not raw_argv and sys.stdin.isatty():
+        print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
         return 0
     return serve_stdio()
 

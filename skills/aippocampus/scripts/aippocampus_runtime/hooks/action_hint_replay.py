@@ -103,6 +103,26 @@ def public_replay_cases() -> list[dict[str, Any]]:
         ],
         now_unix=1000,
     )
+    broad_search_cache = build_action_hint_cache_report(
+        attention_route_tokens=[
+            {
+                "token_id": "prepared-route-before-broad-search",
+                "action_hint_kind": "reopen_route_before_broad_search",
+                "next_action": "reopen_prepared_route_before_broad_search",
+                "source_handles": [
+                    {
+                        "source_id": "clean:broad-search",
+                        "segment_id": "msg-broad-search",
+                        "reopen_required": True,
+                    }
+                ],
+                "route_features": {"terms": ["issue1844", "prepared", "route"]},
+                "route_metadata": {"privacy": "public", "currentness": "current"},
+                "command_terms": ["broad_search", "search"],
+            }
+        ],
+        now_unix=1000,
+    )
     private_cache = build_action_hint_cache_report(
         attention_route_tokens=[
             {
@@ -178,6 +198,19 @@ def public_replay_cases() -> list[dict[str, Any]]:
                 "tool_name": "Bash",
                 "tool_input": {"command": "git show issue435", "command_family": "git"},
                 "intent": "reuse stale route for issue435",
+            },
+        },
+        {
+            "case_id": "positive_prepared_route_before_broad_search",
+            "group": "positive",
+            "expected_hint": True,
+            "expected_signal": "prepared_route_before_broad_search",
+            "records": broad_search_cache["records"],
+            "envelope": {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "rg issue1844 PRIVATE_REPO_SENTINEL"},
+                "intent": "broad search for issue1844",
             },
         },
         {

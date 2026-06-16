@@ -179,6 +179,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(payload["opt_in_required"])
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
+        self.assertEqual(payload["action_boundary"]["primary_action_field"], "foreground_action")
         action = payload["foreground_action"]
         self.assertEqual(action["action_id"], "agent_deepen_selected_route")
         self.assertEqual(action["tool_name"], "agent_deepen")
@@ -252,7 +253,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         aippo_payload = self.tool_payload(aippo_response)
         self.assertFalse(aippo_response["result"].get("isError", False), aippo_payload)
         self.assertEqual(aippo_payload["mode"], "aippo")
-        self.assertTrue(aippo_payload["policy_boundary"]["navigation_only_not_fact"])
+        self.assertEqual(aippo_payload["surface"], "agent_aippo_guidance_card")
+        self.assertEqual(aippo_payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
+        self.assertNotIn("activation_packet", aippo_payload)
 
     def test_agent_recall_rejects_explicit_invalid_max_values(self) -> None:
         valid = mcp.handle_request(
@@ -318,6 +322,32 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["status"], "cannot_verify")
         self.assertFalse(payload["ok"])
+
+    def test_agent_deepen_missing_last_recall_is_recoverable_mcp_card(self) -> None:
+        missing_path = self.cwd / "missing-last-recall.json"
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2036,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_deepen",
+                    "arguments": {
+                        "request_index": 1,
+                        "last_recall": True,
+                        "last_recall_path": str(missing_path),
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertIn("agent recall", " ".join(payload["recovery_actions"]))
+        self.assertNotIn(str(missing_path), encoded)
 
     def test_recall_diagnostic_applies_provider_bridge_before_live_semantic_gate(self) -> None:
         env_var = "MCP_PROVIDER_BRIDGE_TEST_KEY"

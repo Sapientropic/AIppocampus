@@ -128,6 +128,82 @@ def report_registry_writer_busy(exc: RegistryWriteBusyError, *, json_output: boo
     return cli_exit_code_for_error_code(exc.code)
 
 
+def _arg_present(args: list[str], names: set[str]) -> bool:
+    return any(item in names or any(item.startswith(name + "=") for name in names) for item in args)
+
+
+def _subcommand_index(args: list[str], command: str) -> int | None:
+    try:
+        return args.index(command)
+    except ValueError:
+        return None
+
+
+def import_conversation_usage_payload(missing: list[str]) -> dict:
+    return {
+        "ok": False,
+        "error": {
+            "code": "usage_error",
+            "class": "usage_error",
+            "message": "import conversation needs an input file and a provider/format.",
+            "missing": missing,
+            "written": False,
+            "path_redacted": True,
+            "next_action": (
+                "Preview the import first: aippocampus import conversation "
+                "--format generic-jsonl --input <path> --dry-run --json"
+            ),
+        },
+        "source_boundary": {
+            "explicit_input_required": True,
+            "preview_before_write": True,
+            "local_paths_redacted_by_default": True,
+        },
+        "recovery_actions": [
+            "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json",
+            "aippocampus import conversation --help",
+        ],
+        "data": None,
+    }
+
+
+def render_import_conversation_error(payload: dict) -> str:
+    error = payload.get("error") or {}
+    lines = [
+        "AIppocampus import conversation",
+        f"error: {error.get('message')}",
+    ]
+    missing = error.get("missing") or []
+    if missing:
+        lines.append("missing: " + ", ".join(str(item) for item in missing))
+    if error.get("next_action"):
+        lines.append(f"next: {error.get('next_action')}")
+    lines.append("written: false")
+    lines.append("privacy: local input paths are redacted by default")
+    lines.append("boundary: preview/dry-run first; register only after the input is explicit.")
+    return "\n".join(lines)
+
+
+def maybe_handle_import_conversation_usage(raw_args: list[str]) -> int | None:
+    index = _subcommand_index(raw_args, "register-source")
+    if index is None or any(item in {"-h", "--help"} for item in raw_args):
+        return None
+    register_args = raw_args[index + 1 :]
+    missing: list[str] = []
+    if not _arg_present(register_args, {"--input", "--source"}):
+        missing.append("--input/--source")
+    if not _arg_present(register_args, {"--provider", "--format"}):
+        missing.append("--provider/--format")
+    if not missing:
+        return None
+    payload = import_conversation_usage_payload(missing)
+    if "--json" in register_args:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(render_import_conversation_error(payload), file=sys.stderr)
+    return cli_exit_code_for_error_code("usage_error")
+
+
 def register_current_thread(
     cwd: Path,
     *,
@@ -391,8 +467,14 @@ def print_entries(entries: list[dict], *, receipt_mode: bool = False) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    public_import_conversation = bool(argv and argv[0] == "register-source")
-    parser = argparse.ArgumentParser(prog="aippocampus import conversation" if public_import_conversation else None)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    public_import_conversation = _subcommand_index(raw_args, "register-source") is not None
+    usage_exit = maybe_handle_import_conversation_usage(raw_args)
+    if usage_exit is not None:
+        return usage_exit
+    parser = argparse.ArgumentParser(
+        prog="aippocampus import conversation" if public_import_conversation else None
+    )
     parser.add_argument(
         "--registry-dir",
         help="Defaults to $AIPPOCAMPUS_REGISTRY_DIR or $CODEX_HOME/aippocampus-registry.",
@@ -529,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
     show.add_argument("--json", action="store_true", dest="json_output")
     show.add_argument("--redact-paths", action="store_true")
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
     json_path, md_path = registry_paths(registry_dir)
 
@@ -598,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.json_output:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
-                print(payload["error"]["message"], file=sys.stderr)
+                print(render_import_conversation_error(payload), file=sys.stderr)
             return cli_exit_code_for_error_code(exc.code)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))

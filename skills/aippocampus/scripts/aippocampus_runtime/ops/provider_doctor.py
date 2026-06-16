@@ -291,14 +291,28 @@ def render_text(report: dict[str, Any]) -> str:
 
 def render_config_text(report: dict[str, Any]) -> str:
     data = _as_dict(report.get("data"))
+    knobs = list(data.get("knobs") or [])
+    configured = [
+        item for item in knobs if isinstance(item, dict) and item.get("configured")
+    ]
+    configured_sensitive = [item for item in configured if item.get("sensitive")]
+    cannot_claim = list(report.get("cannot_claim") or [])
     lines = [
         "AIppocampus config doctor",
         f"- Status: {report.get('status')}",
-        f"- Registered knobs: {len(data.get('knobs') or [])}",
+        f"- Registered knobs: {len(knobs)}",
+        f"- Configured env vars: {len(configured)}",
+        f"- Sensitive env vars present: {len(configured_sensitive)}",
         f"- Unknown AIPPOCAMPUS_* env vars: {data.get('unknown_count', 0)}",
+        f"- Warnings: {len(report.get('warnings') or [])}",
+        "- Cannot claim: config presence does not validate secret values or provider connectivity",
         "- Privacy: values are not printed; configured values are presence-only",
+        "- Next: use `aippocampus doctor provider` when you need provider/key connectivity readiness.",
         "",
     ]
+    if cannot_claim:
+        lines.append("- Detail: " + ", ".join(str(item) for item in cannot_claim[:3]))
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -315,11 +329,38 @@ def public_json_text(report: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aippocampus doctor")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus doctor",
+        description=(
+            "Task-first diagnostics:\n"
+            "  provider  Check whether optional LLM/provider keys are visible to this launcher.\n"
+            "  spend     Review local model-spend/yield aggregates without prompts or keys.\n"
+            "  config    Audit registered AIPPOCAMPUS_* knobs without printing values."
+        ),
+        epilog=(
+            "Doctor commands are local diagnostics, not recall results. Basic "
+            "source-backed search and recall still work without provider keys."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     provider_parser = subparsers.add_parser(
         "provider",
+        usage="aippocampus doctor provider [--json] [advanced diagnostics]",
         help="Check whether the selected model route key is visible to this process.",
+        description=(
+            "Provider doctor answers: can optional LLM-backed semantic/background "
+            "routes see the configured key from this launcher or a child process?\n\n"
+            "Normal examples:\n"
+            "  aippocampus doctor provider\n"
+            "  aippocampus doctor provider --json\n"
+            "  aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json"
+        ),
+        epilog=(
+            "Privacy boundary: key values and base URLs are never printed. "
+            "No-key source-backed recall/search remains usable."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     provider_parser.add_argument("--model-route", default="default")
     provider_parser.add_argument("--provider-env-var", dest="provider_env_var")
@@ -332,7 +373,17 @@ def main(argv: list[str] | None = None) -> int:
     provider_parser.add_argument("--json", action="store_true", dest="json_output")
     spend_parser = subparsers.add_parser(
         "spend",
+        usage="aippocampus doctor spend [--json] [threshold options]",
         help="Report private-safe local model spend and foreground yield.",
+        description=(
+            "Spend doctor answers: are optional model-backed routes spending tokens "
+            "and producing foreground value?\n\n"
+            "Normal examples:\n"
+            "  aippocampus doctor spend\n"
+            "  aippocampus doctor spend --json"
+        ),
+        epilog="Privacy boundary: aggregate counts only; no prompts, keys, or source text.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     spend_parser.add_argument("--registry-dir")
     spend_parser.add_argument("--days", type=int, default=7)
@@ -341,7 +392,17 @@ def main(argv: list[str] | None = None) -> int:
     spend_parser.add_argument("--json", action="store_true", dest="json_output")
     config_parser = subparsers.add_parser(
         "config",
+        usage="aippocampus doctor config [--compact-json|--json]",
         help="Report registered AIPPOCAMPUS_* configuration without printing values.",
+        description=(
+            "Config doctor answers: which AIppocampus configuration knobs are "
+            "known/configured without revealing their values?\n\n"
+            "Normal examples:\n"
+            "  aippocampus doctor config --compact-json\n"
+            "  aippocampus doctor config --json"
+        ),
+        epilog="Privacy boundary: values are never printed; configured means presence only.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     config_parser.add_argument("--json", action="store_true", dest="json_output")
     config_parser.add_argument(

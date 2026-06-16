@@ -121,36 +121,36 @@ Start route-first:
 
 Useful portable commands:
 
+- First recall for a vague handoff or old decision:
+  `aippocampus agent recall "query" --json`. This default is a bounded
+  foreground projection. Use `--detail full` only for local diagnostics that may
+  show private handles.
+- Search clean source: `aippocampus search "query" --cwd "$PWD"`.
+- Recover the latest assistant closeout:
+  `aippocampus latest-reply --cwd "$PWD"`. Commentary-only output is a
+  diagnostic card, not a final closeout.
 - Install or sync the local Codex plugin, then verify the front door:
   `aippocampus plugin install --codex --verify`, then
   `aippocampus update status`.
 - Check state before or after long work: `aippocampus health --cwd "$PWD"`.
 - Check the local provider matrix without writing artifacts:
   `aippocampus onboard --provider auto --status`.
-- First recall for a vague handoff or old decision:
-  `aippocampus agent recall "query" --json`. This default is a bounded
-  foreground projection. Use `--detail full` only for local diagnostics that may
-  show private handles.
-- Search clean source: `aippocampus search "query" --cwd "$PWD"`.
 - If a foreground agent is about to write feedback, a self-note, an action-hint
   cache, or continuity-domain data, use
   `docs/guides/write-like-memory-decision-card.md` to choose the right surface
   and durability before writing.
-- For module fallbacks, use `python3 -m ...` on macOS/Linux, `py -m ...`
-  on Windows, or `python -m ...` only inside an activated virtualenv.
-- Run deterministic active recall for vague continuity prompts:
-  `python3 -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
-- Locate the current rollout when exact source location matters:
-  `python3 -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
-- Recover the latest assistant closeout:
-  `aippocampus latest-reply --cwd "$PWD"`. Commentary-only output is a
-  diagnostic card, not a final closeout.
 
 Repair and setup are explicit operator actions, not ambient prompt behavior:
 
-- Build the daily source layer:
+- Prefer facade repair cards before direct modules:
+  `aippocampus health --cwd "$PWD"`, `aippocampus doctor`, `aippocampus storage`,
+  `aippocampus import`, or `aippocampus mcp status`.
+- Diagnostic/operator fallbacks use `python3 -m ...` on macOS/Linux, `py -m ...`
+  on Windows, or `python -m ...` only inside an activated virtualenv. Keep them
+  behind this boundary; do not make them the first user path.
+- Build the daily source layer only when a repair card asks for it:
   `python3 -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
-- Build or refresh the index:
+- Build or refresh the index only for explicit repair:
   `python3 -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
 - First-install or full-machine onboarding after explicit user consent:
   `aippocampus onboard --provider codex --all --format json`.
@@ -168,7 +168,8 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
 - Register an old rollout:
   `python3 -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
 - Inspect MCP only when a plugin or agent host needs it:
-  `aippocampus mcp list-tools`.
+  `aippocampus mcp status`; use `aippocampus mcp list-tools --json` for the full
+  schema catalog.
 
 ## Workflow
 

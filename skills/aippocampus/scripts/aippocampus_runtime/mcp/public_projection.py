@@ -268,7 +268,11 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "policy_boundary": payload.get("policy_boundary"),
         "output_boundary": "compact_foreground_no_local_private_handles",
-        "agent_next_action": "Use foreground_action first; request detail=full only for local diagnostics.",
+        "action_boundary": {
+            "primary_action_field": "foreground_action",
+            "diagnostics_available_with_detail_full": True,
+            "source_reopen_required_for_claims": True,
+        },
     }
     return _without_empty(result)
 

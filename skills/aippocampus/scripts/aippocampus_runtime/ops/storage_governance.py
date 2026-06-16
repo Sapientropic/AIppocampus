@@ -662,11 +662,39 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     gc_parser = subparsers.add_parser(
         "gc",
+        usage="aippocampus storage gc --dry-run --summary-json --cwd .",
         help="Plan storage cleanup from capacity and retention evidence.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""Plan or apply AIppocampus storage cleanup.
+
+Safe first step:
+  aippocampus storage gc --dry-run --summary-json --cwd .
+
+`--dry-run` performs no writes. It reports candidate classes and why cleanup is
+or is not allowed.
+
+`--apply` may delete only candidates that pass deterministic source, manifest,
+lease, active-thread, and rebuildability checks. Prefer the narrow supported
+path:
+  aippocampus storage gc --apply --class rebuildable --summary-json --cwd .
+
+High-risk/private flags:
+  --include-active asks apply-time checks to consider paths near active work;
+     it is still blocked unless live-writer and source checks pass.
+  --include-paths prints local filesystem paths and is for private operator
+     diagnostics only.""",
     )
     mode_group = gc_parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument("--dry-run", action="store_true")
-    mode_group.add_argument("--apply", action="store_true")
+    mode_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="No-write planning mode. Use this before any cleanup apply.",
+    )
+    mode_group.add_argument(
+        "--apply",
+        action="store_true",
+        help="Attempt cleanup after deterministic checks; prefer --class rebuildable.",
+    )
     gc_parser.add_argument("--cwd", default=os.getcwd())
     gc_parser.add_argument("--registry-dir", default=None)
     gc_parser.add_argument("--capacity-report", default=None)
@@ -676,9 +704,18 @@ def main(argv: list[str] | None = None) -> int:
         dest="class_filter",
         default=CLASS_ALL,
         choices=sorted(SUPPORTED_CLASSES),
+        help="Candidate class to plan/apply. Apply is safest and best-supported for rebuildable.",
     )
-    gc_parser.add_argument("--include-active", action="store_true")
-    gc_parser.add_argument("--include-paths", action="store_true")
+    gc_parser.add_argument(
+        "--include-active",
+        action="store_true",
+        help="Private/high-risk: include active-thread-adjacent paths for apply-time checks.",
+    )
+    gc_parser.add_argument(
+        "--include-paths",
+        action="store_true",
+        help="Private diagnostic: print local paths that are redacted by default.",
+    )
     gc_parser.add_argument("--top", type=int, default=12)
     gc_parser.add_argument("--planner-query", default=None)
     gc_parser.add_argument("--fanout-budget", type=int, default=64)

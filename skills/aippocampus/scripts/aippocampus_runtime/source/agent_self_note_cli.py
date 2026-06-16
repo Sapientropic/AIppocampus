@@ -19,6 +19,7 @@ from aippocampus_runtime.source.agent_self_notes import (
     append_agent_self_note,
     default_agent_self_notes_path,
     load_agent_self_notes,
+    project_scope_id,
     public_agent_self_note_route_refs,
     public_agent_self_note_surface,
     search_agent_self_notes,
@@ -194,6 +195,35 @@ def _privacy_boundary() -> dict[str, Any]:
         "clean_source_mutation_allowed": False,
         "output_shape": "public_agent_self_note_append",
     }
+
+
+def _scope_card(args: argparse.Namespace) -> dict[str, Any]:
+    if args.registry_wide:
+        return {
+            "mode": "registry_wide",
+            "why": "Explicit operator read across all agent self-notes.",
+            "project_scope_id": None,
+        }
+    if args.notes_path:
+        return {
+            "mode": "explicit_notes_path",
+            "why": "The caller supplied a notes file, so the file itself is the read scope.",
+            "project_scope_id": None,
+        }
+    scope_id = project_scope_id(args.cwd)
+    return {
+        "mode": "current_workspace",
+        "why": "Default list/search stays scoped so an unrelated cwd does not dump registry-wide notes.",
+        "project_scope_id": scope_id,
+    }
+
+
+def _apply_read_scope(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[dict[str, Any]]:
+    scope = _scope_card(args)
+    if scope["mode"] in {"registry_wide", "explicit_notes_path"}:
+        return rows
+    scope_id = str(scope.get("project_scope_id") or "")
+    return [row for row in rows if str(row.get("project_scope_id") or "") == scope_id]
 
 
 def _source_reopen_routes(rows: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
@@ -383,6 +413,13 @@ def _print_command_help(command: str) -> None:
     parser.add_argument("--trigger", choices=sorted(VALID_TRIGGERS))
     parser.add_argument("--source-ref-json", action="append")
     parser.add_argument("--max", type=int, default=4)
+    parser.add_argument(
+        "--registry-wide",
+        "--all-threads",
+        action="store_true",
+        dest="registry_wide",
+        help="Operator read across all self-notes; default list/search is current-workspace scoped.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.epilog = examples[command]
     parser.print_help()
@@ -396,7 +433,26 @@ def main(argv: list[str] | None = None) -> int:
         _print_command_help(raw_args[0])
         return 0
 
-    parser = argparse.ArgumentParser(prog="aippocampus self-note")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus self-note",
+        usage="aippocampus self-note {append,search,list} [text] [--json]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""Weak-memory decision card.
+
+Self-notes are `direction_only` foreground-agent margin notes: useful for a
+short posture handoff, a decision breadcrumb, or a reminder to reopen a source.
+They are weak scent, not clean source, user-profile memory, source-backed
+lessons, AIppo clauses, or continuity-domain events.
+
+Use:
+  append  write a short low-authority note after an explicit decision
+  search  find note atmosphere for the current workspace/thread scope
+  list    review recent scoped notes without treating them as evidence
+
+Do not use self-notes for factual claims. For source-backed continuity, run
+`aippocampus search`, `aippocampus agent recall`, or reopen the cited source
+before quoting or deciding from memory.""",
+    )
     parser.add_argument("command", choices=["append", "search", "list"])
     parser.add_argument("text", nargs="*", help="Note text for append or query text for search.")
     parser.add_argument("--stdin", action="store_true")
@@ -414,6 +470,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source-ref-json", action="append")
     parser.add_argument("--max", type=int, default=4)
+    parser.add_argument(
+        "--registry-wide",
+        "--all-threads",
+        action="store_true",
+        dest="registry_wide",
+        help="Operator read across all self-notes; default list/search is current-workspace scoped.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(raw_args)
 
@@ -427,20 +490,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "append":
         return _run_append(args, text=text, notes_path=notes_path)
+    scope = _scope_card(args)
+    all_rows = load_agent_self_notes(notes_path)
+    scoped_rows = _apply_read_scope(all_rows, args)
     if args.command == "search":
-        rows = search_agent_self_notes(text, load_agent_self_notes(notes_path), limit=args.max)
+        rows = search_agent_self_notes(text, scoped_rows, limit=args.max)
         payload = {
             "kind": "aippocampus_agent_self_note_search",
             "query": text,
             "count": len(rows),
+            "scope": scope,
             "rows": [public_agent_self_note_surface(row) for row in rows],
         }
         if not rows:
             payload["empty_state"] = _empty_notes_state("search", text)
     else:
-        rows = load_agent_self_notes(notes_path)[: max(0, int(args.max or 0))]
+        rows = scoped_rows[: max(0, int(args.max or 0))]
         payload = {
             "kind": "aippocampus_agent_self_notes",
+            "scope": scope,
+            "count": len(rows),
             "rows": [public_agent_self_note_surface(row) for row in rows],
         }
         if not rows:
@@ -451,9 +520,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         payload_rows = payload.get("rows")
         if isinstance(payload_rows, list):
+            print("agent self-notes: direction_only atmosphere; reopen source before factual claims")
+            print("scope: " + str((payload.get("scope") or {}).get("mode") or "unknown"))
             for payload_row in payload_rows:
                 if isinstance(payload_row, dict):
+                    route_count = len(payload_row.get("source_refs") or [])
                     print(f"- {payload_row.get('created_at')} {payload_row.get('note_text')}")
+                    print(
+                        "  boundary: direction_only; "
+                        f"{route_count} reopen route(s) available"
+                    )
         empty_state = payload.get("empty_state")
         if not payload_rows and isinstance(empty_state, dict):
             print(str(empty_state.get("message") or ""))

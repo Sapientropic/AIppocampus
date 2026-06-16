@@ -375,7 +375,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     if raw_args and raw_args[0] == "status":
         return _status_main(raw_args[1:])
 
-    parser = argparse.ArgumentParser(prog="aippocampus warm")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus warm",
+        usage="aippocampus warm status [--json] | aippocampus warm --prompt <cue> [operator options]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""Warm ambient recall is optional background warming.
+
+Safe foreground check:
+  aippocampus warm status
+  aippocampus warm status --json
+
+`warm status` does not make model calls. It tells you whether optional warm
+workers are usable, blocked, or unconfigured. Ordinary source-backed
+`aippocampus search` and `aippocampus agent recall` remain usable when warm
+ambient is off.
+
+If blocked or unconfigured: leave warm ambient off, or configure the provider
+key only if you intentionally want optional background warming. Worker/scout
+flags below are operator controls for explicit warm jobs, not prerequisites for
+first recall.""",
+    )
     parser.add_argument("--prompt")
     parser.add_argument("--job-file")
     parser.add_argument("--cwd", default=os.getcwd())

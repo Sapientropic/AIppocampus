@@ -188,6 +188,48 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertNotIn("E:/Users/private", private_serialized)
         self.assertNotIn("project/tests/payments", private_serialized)
 
+    def test_prepared_reopenable_route_hints_before_broad_search(self) -> None:
+        cache_report = action_hint_cache.build_action_hint_cache_report(
+            attention_route_tokens=[
+                {
+                    "token_id": "prepared-route-before-broad-search",
+                    "action_hint_kind": "reopen_route_before_broad_search",
+                    "next_action": "reopen_prepared_route_before_broad_search",
+                    "source_handles": [
+                        {
+                            "source_id": "clean:issue1844",
+                            "segment_id": "msg-issue1844",
+                            "reopen_required": True,
+                        }
+                    ],
+                    "route_features": {"terms": ["issue1844", "prepared", "route"]},
+                    "route_metadata": {"privacy": "public", "currentness": "current"},
+                    "command_terms": ["broad_search", "search"],
+                }
+            ],
+            now_unix=1000,
+        )
+        envelope = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "rg issue1844 PRIVATE_REPO_SENTINEL",
+            },
+            "intent": "broad search for issue1844",
+        }
+
+        report = action_hint.evaluate_action_hint(envelope, cache_report, now_unix=1001)
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["decision"], "hint")
+        self.assertIn("broad_search", report["features"]["command_terms"])
+        self.assertEqual(
+            report["hint"]["recommended_action"],
+            "reopen_prepared_route_before_broad_search",
+        )
+        self.assertTrue(report["hint"]["navigation_only"])
+        self.assertNotIn("PRIVATE_REPO_SENTINEL", serialized)
+
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(
             {"hook_event_name": "UserPromptSubmit", "prompt": "hello"},

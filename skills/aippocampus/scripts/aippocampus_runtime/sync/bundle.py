@@ -18,6 +18,7 @@ from aippocampus_runtime.sync.cli_support import (
     print_sync_human_result,
     sync_direction,
     sync_direction_plan,
+    sync_help_card,
 )
 from aippocampus_runtime.sync.contract import (
     LOCAL_FOLDER_BACKEND,
@@ -901,42 +902,50 @@ def _estimate_plan_file_count(
 def main(argv: list[str] | None = None) -> int:
     prog, parse_argv, command_override = parser_command(argv, "aippocampus sync")
     command_label = command_override or "COMMAND"
+    description = (
+        sync_direction(command_label)["description"]
+        if command_override
+        else "Local-folder sync status/push/pull/repair for AIppocampus."
+    )
     parser = argparse.ArgumentParser(
         prog=prog,
-        description=sync_direction(command_label)["description"]
+        usage=f"{prog} [options]"
         if command_override
-        else "Local-folder sync status/push/pull/repair for AIppocampus.",
-        epilog=(
-            "Plan first: add --plan (or --dry-run) to show read/write sides without mutating. "
-            "Status is always non-mutating."
-        ),
+        else "aippocampus sync {status,push,pull,repair} [options]",
+        description=f"{description}\n\n{sync_help_card(command_override)}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     if command_override is None:
         parser.add_argument("command", choices=["status", "push", "pull", "repair"])
-    parser.add_argument("--sync-dir")
-    parser.add_argument("--registry-dir", default=None)
-    parser.add_argument(
+    action_group = parser.add_argument_group("action options")
+    raw_group = parser.add_argument_group("raw and encryption options")
+    output_group = parser.add_argument_group("output")
+    action_group.add_argument("--sync-dir")
+    action_group.add_argument("--registry-dir", default=None)
+    raw_group.add_argument(
         "--include-raw",
         action="store_true",
-        help="include raw rollout audit files; clean-source sync remains the default",
+        help=(
+            "explicitly include raw rollout audit files; this requires an encrypted sync "
+            "decision and is not ordinary clean-source sync"
+        ),
     )
-    parser.add_argument(
+    raw_group.add_argument(
         "--encrypt",
         action="store_true",
-        help="encrypt a push using the encrypted local-folder sync adapter",
+        help="encrypt a push using the encrypted local-folder sync adapter before writing the sync folder",
     )
-    parser.add_argument(
+    raw_group.add_argument(
         "--require-encrypted",
         action="store_true",
-        help="refuse plaintext pull/status/repair and use the encrypted adapter",
+        help="refuse plaintext pull/status/repair and read only the encrypted local-folder adapter",
     )
-    parser.add_argument("--recipient", action="append", default=[])
-    parser.add_argument("--recipient-file", action="append", default=[])
-    parser.add_argument("--identity-file", action="append", default=[])
-    parser.add_argument("--age-bin", default=None)
-    parser.add_argument("--no-decrypt", action="store_true")
-    parser.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
-    parser.add_argument("--json", action="store_true", dest="json_output")
+    for flag in ("--recipient", "--recipient-file", "--identity-file"):
+        raw_group.add_argument(flag, action="append", default=[])
+    raw_group.add_argument("--age-bin", default=None)
+    raw_group.add_argument("--no-decrypt", action="store_true")
+    action_group.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
+    output_group.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(parse_argv)
     if command_override is not None:
         args.command = command_override

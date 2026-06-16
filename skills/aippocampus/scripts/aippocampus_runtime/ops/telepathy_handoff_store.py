@@ -634,9 +634,42 @@ def _load_source_ref_json(value: str | None) -> list[Any]:
     return [parsed]
 
 
+def _render_diagnose_text(payload: Mapping[str, Any]) -> str:
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), Mapping) else {}
+    active = int(metrics.get("active_card_count") or 0)
+    candidate_only = int(metrics.get("candidate_only_handoff_count") or 0)
+    if active:
+        next_action = (
+            "run `aippocampus telepathy list --status active`, then deepen or continue "
+            "from the selected handoff card"
+        )
+    else:
+        next_action = (
+            "no active handoff found; create an explicit handoff or keep working normally"
+        )
+    lines = [
+        "AIppocampus Telepathy handoff status",
+        f"status: {'ok' if payload.get('ok') else 'blocked'}",
+        f"active: {active}",
+        f"released: {metrics.get('released_card_count', 0)}",
+        f"source-backed: {metrics.get('source_backed_handoff_count', 0)}",
+        f"candidate-only: {candidate_only}",
+        f"write mode: {payload.get('write_mode')}",
+        f"authority: {payload.get('authority_level')}",
+        f"next: {next_action}",
+    ]
+    if candidate_only:
+        lines.append("boundary: candidate-only handoffs require source reopen before reliance.")
+    lines.append("diagnostic: no write performed")
+    return "\n".join(lines)
+
+
 def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        return
+    if payload.get("kind") == DIAGNOSE_KIND:
+        print(_render_diagnose_text(payload))
         return
     status = "ok" if payload.get("ok") else "blocked"
     print(f"{payload.get('kind', 'telepathy_handoff')}: {status}")

@@ -21,16 +21,29 @@ REPORT_KIND = "aippocampus_pre_tool_action_hint_report"
 HINT_KIND = "aippocampus_pre_tool_action_hint"
 SUPPORTED_EVENT = "PreToolUse"
 COMMAND_FAMILY_TERMS = {
+    "broad_search",
     "cargo",
     "git",
+    "grep",
     "mypy",
     "npm",
     "pnpm",
     "pytest",
+    "rg",
+    "ripgrep",
     "ruff",
+    "search",
+    "search_clean_source",
     "test",
     "tsc",
     "uv",
+}
+BROAD_SEARCH_COMMAND_TERMS = {
+    "grep",
+    "rg",
+    "ripgrep",
+    "search",
+    "search_clean_source",
 }
 
 
@@ -180,6 +193,8 @@ def _command_terms(raw_args: Mapping[str, Any]) -> list[str]:
         raw_args.get("command"),
     ]
     terms = set(_terms(values)) & COMMAND_FAMILY_TERMS
+    if terms & BROAD_SEARCH_COMMAND_TERMS:
+        terms.update({"broad_search", "search"})
     if {"pytest", "ruff", "mypy", "tsc", "cargo"} & terms:
         terms.add("test")
     return sorted(terms)

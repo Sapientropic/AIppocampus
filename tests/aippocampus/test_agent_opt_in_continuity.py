@@ -245,10 +245,11 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertEqual(action["arguments"]["request_index"], 1)
         self.assertTrue(action["arguments"]["last_recall"])
-        self.assertEqual(
-            public["suggested_next_command"],
-            "aippocampus agent deepen --request 1 --last-recall",
-        )
+        self.assertEqual(public["action_boundary"]["primary_action_field"], "foreground_action")
+        self.assertNotIn("suggested_next_command", public)
+        self.assertNotIn("agent_next_action", public)
+        self.assertNotIn("public_safe_command_preview", public)
+        self.assertNotIn("public_safe_recall_command", public)
         self.assertNotIn("foreground_action_card", public)
         self.assertNotIn("deepen_requests", public)
         self.assertNotIn("memory_packets", public)
@@ -1525,13 +1526,17 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        packet = payload["activation_packet"]
-        encoded = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
         self.assertEqual(payload["mode"], "aippo")
-        self.assertIn("benchmark_reporting", packet["task_families"])
-        self.assertIn("measured results", " ".join(packet["use_guidance"]))
-        self.assertTrue(payload["metrics"]["usefulness_gate_ok"])
+        self.assertEqual(payload["surface"], "agent_aippo_guidance_card")
+        self.assertIn("benchmark_reporting", payload["task_families"])
+        self.assertIn("measured results", " ".join(payload["use_guidance"]))
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertIn("operator_json_command", payload)
+        self.assertNotIn("activation_packet", payload)
+        self.assertNotIn("metrics", payload)
+        self.assertNotIn("red_lines", payload)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
 
@@ -1556,10 +1561,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        packet = payload["activation_packet"]
         self.assertEqual(payload["status"], "ok")
-        self.assertIn("host_readiness", packet["task_families"])
-        self.assertEqual(packet["next_action"], "verify_plugin_mcp_hooks")
+        self.assertIn("host_readiness", payload["task_families"])
+        self.assertEqual(payload["foreground_action"]["action_id"], "verify_plugin_mcp_hooks")
 
     def test_cli_agent_aippo_product_workflow_terms_are_not_empty_contracts(self) -> None:
         proc = subprocess.run(
@@ -1583,11 +1587,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        packet = payload["activation_packet"]
-        guidance = " ".join(packet["use_guidance"])
+        guidance = " ".join(payload["use_guidance"])
         self.assertEqual(payload["status"], "ok")
-        self.assertIn("product_workflow", packet["task_families"])
-        self.assertNotEqual(packet["next_action"], "stay_silent")
+        self.assertIn("product_workflow", payload["task_families"])
+        self.assertNotEqual(payload["foreground_action"]["action_id"], "stay_silent")
         self.assertIn("semantic gate", guidance)
 
     def test_cli_agent_aippo_default_output_is_human_guidance(self) -> None:
@@ -1683,10 +1686,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("attention_router_navigation", payload)
         self.assertNotIn("aippo-nav:", encoded)
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
-        self.assertEqual(
-            payload["suggested_next_command"],
-            "aippocampus agent deepen --request 1 --last-recall",
-        )
+        self.assertEqual(payload["action_boundary"]["primary_action_field"], "foreground_action")
+        self.assertNotIn("suggested_next_command", payload)
+        self.assertNotIn("agent_next_action", payload)
         self.assertLess(len(encoded.encode("utf-8")), 4096)
         self.assertNotIn(str(last_recall_path), encoded)
         self.assertNotIn('"handle"', json.dumps(json.loads(cache_text)["requests"]))

@@ -46,6 +46,42 @@ def sync_direction(command: str) -> dict[str, Any]:
     }
 
 
+def sync_help_card(command: str | None = None) -> str:
+    """Return a task-first local-folder sync card before path/crypto flags."""
+
+    if not command:
+        return (
+            "Action card:\n"
+            "  status        Check local-folder sync readiness; never writes.\n"
+            "  push --plan   Preview local registry -> sync folder.\n"
+            "  pull --plan   Preview sync folder -> local registry.\n"
+            "  repair --plan Preview sync manifest repair.\n"
+            "  push/pull/repair without --plan can write; choose the side intentionally.\n\n"
+            "Local-folder sync is for portable registry artifacts. Raw rollout audit files "
+            "are explicit and should use encrypted sync; clean-source sync remains the ordinary path."
+        )
+    direction = sync_direction(command)
+    source = direction["source_side"]
+    destination = direction["destination_side"]
+    mutates = ", ".join(direction["mutates"]) or "nothing"
+    if command == "status":
+        return (
+            "Action card:\n"
+            "  Read side: sync folder configuration.\n"
+            "  Write side: none; status never mutates.\n"
+            "  Use: aippocampus sync status --sync-dir <folder> --json\n\n"
+            "Use --sync-dir to choose the folder; local paths stay local."
+        )
+    return (
+        "Action card:\n"
+        f"  Read side: {source}.\n"
+        f"  Write side: {destination}.\n"
+        f"  Plan boundary: aippocampus sync {command} --sync-dir <folder> --plan --json previews without writing.\n"
+        f"  Apply boundary: aippocampus sync {command} --sync-dir <folder> --json may mutate {mutates}.\n\n"
+        "Raw rollout sync is explicit and should be encrypted; clean-source sync remains the ordinary path."
+    )
+
+
 HUGE_PLAN_FILE_COUNT = 1000
 
 

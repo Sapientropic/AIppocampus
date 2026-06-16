@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -243,6 +244,54 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(summary["cite_status"], "do_not_cite_as_quality_proof")
         self.assertEqual(summary["cannot_claim_count"], 1)
         self.assertIn("release-evidence", summary["best_next_benchmark"])
+
+    def test_summary_json_with_output_does_not_duplicate_full_report_stdout(self) -> None:
+        payload = {
+            "kind": "aippocampus_benchmark_suite",
+            "schema_version": 1,
+            "ok": False,
+            "status": "needs-review",
+            "quality_gate_ok": False,
+            "benchmark_maturity_level": "diagnostic",
+            "contract_gate_ok": True,
+            "public_quality_gate_ok": False,
+            "observed_agent_behavior": False,
+            "measurement_origin": "deterministic_contract",
+            "privacy_boundary": "public_safe",
+            "case_count": 1,
+            "track_statuses": {"gate_decision": "sufficient"},
+            "profile_metadata": {"selected_profile": {"name": "public-fast"}},
+            "cannot_claim": ["public_fast_profile_track_b_quality"],
+            "tracks": {"large_track": {"cases": ["x" * 10_000]}},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "full-report.json"
+            argv = [
+                "benchmark_suite.py",
+                "--profile",
+                "public-fast",
+                "--output",
+                str(output),
+                "--summary-json",
+            ]
+            with patch.object(sys, "argv", argv):
+                with patch.object(
+                    suite,
+                    "run_benchmark_suite_with_config",
+                    return_value=payload,
+                ):
+                    with patch("sys.stdout", new_callable=StringIO) as stdout:
+                        code = suite.main()
+
+            summary = json.loads(stdout.getvalue())
+            full_report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(code, 0)
+        self.assertEqual(summary["kind"], "aippocampus_benchmark_suite_cli_summary")
+        self.assertEqual(summary["full_report_route"], str(output))
+        self.assertEqual(summary["cannot_claim_count"], 1)
+        self.assertNotIn("tracks", summary)
+        self.assertIn("tracks", full_report)
 
     def test_track_b_case_controls_reject_zero_values(self) -> None:
         parsers = (

@@ -7,25 +7,26 @@ goal is one useful source-backed recall moment, not a tour of every subsystem.
 
 ## Decide The First Move
 
-1. Check whether ordinary local recall can work now:
-
-   ```sh
-   aippocampus health
-   aippocampus onboard --provider auto --status
-   ```
-
-2. If the user remembers exact wording, search clean source first:
+1. If the user remembers exact wording, search clean source first:
 
    ```sh
    aippocampus search "distinctive old phrase"
    ```
 
-3. If the user remembers a vague decision, handoff, correction, or project cue,
+2. If the user remembers a vague decision, handoff, correction, or project cue,
    ask the agent facade for a bounded foreground packet:
 
    ```sh
    aippocampus agent recall "old decision or handoff cue" --json
    aippocampus agent deepen --request 1 --last-recall --json
+   ```
+
+3. If no source is registered, or the first route is stale or blocked, use
+   read-only recovery cards:
+
+   ```sh
+   aippocampus health
+   aippocampus onboard --provider auto --status
    ```
 
 4. If no local source is registered yet, preview before writing:
@@ -50,4 +51,3 @@ goal is one useful source-backed recall moment, not a tour of every subsystem.
   operator task.
 - Do not treat a scent, summary, AIppo clause, self-note, or route id as a fact.
 - Do not import broad private history without a preview and explicit consent.
-

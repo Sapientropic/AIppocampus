@@ -328,7 +328,31 @@ def public_search_result(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aippocampus search")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus search",
+        usage='aippocampus search "cue or exact phrase" [--json|--public]',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""Search local clean source.
+
+Use search when you have a remembered phrase, a project/object cue, or a time
+cue and want source-backed snippets/routes. Use `agent recall` when the cue is
+vague and you need route help before choosing search terms.
+
+Workflows:
+  exact phrase: aippocampus search "distinctive old wording"
+  fuzzy cue:    aippocampus search "repo feature last month"
+  agent JSON:   aippocampus search "project cue" --json
+  vague route:  aippocampus agent recall "old decision about setup" --json
+
+No match: refine the cue, try exact wording, or run
+`aippocampus onboard --provider auto --status` if local history may not be
+registered. Search snippets are source-backed receipts, not permission to quote
+or make strong claims beyond the reopened source boundary.""",
+        epilog=(
+            "Advanced output controls: --public omits snippets and local reopen refs; "
+            "--include-paths is local diagnostic only."
+        ),
+    )
     parser.add_argument("patterns", nargs="+")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(

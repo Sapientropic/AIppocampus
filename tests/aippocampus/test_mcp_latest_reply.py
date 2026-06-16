@@ -129,6 +129,26 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertNotIn("preview", payload["message"])
         self.assertIn("agent recall", payload["agent_next_action"])
 
+    def test_latest_reply_mcp_no_rollout_returns_recovery_card(self) -> None:
+        missing = self.cwd / "missing-project"
+        missing.mkdir()
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 45,
+                "method": "tools/call",
+                "params": {"name": "latest_reply", "arguments": {"cwd": str(missing)}},
+            }
+        )
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(payload["status"], "no_latest_reply_source_found")
+        self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
+        self.assertIn("agent recall", payload["agent_next_action"])
+        self.assertNotIn(str(missing), encoded)
+
 
 if __name__ == "__main__":
     unittest.main()
