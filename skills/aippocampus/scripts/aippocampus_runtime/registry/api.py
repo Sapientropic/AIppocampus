@@ -508,7 +508,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     register_rollout.add_argument("--json", action="store_true", dest="json_output")
 
-    register_source = sub.add_parser("register-source", prog="aippocampus import conversation")
+    register_source = sub.add_parser(
+        "register-source",
+        prog="aippocampus import conversation",
+        description=(
+            "Preview an explicit conversation transcript before registering it as "
+            "source-backed memory. Start with --dry-run --json; no registry write "
+            "happens until you rerun without --dry-run."
+        ),
+        epilog=(
+            "Safe first step:\n"
+            "  aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json\n\n"
+            "Boundary:\n"
+            "  The input file stays local operator material. AIppocampus stores a "
+            "source-backed clean-source import only after the explicit non-dry-run "
+            "command, and local paths are redacted by default in foreground output."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     register_source.add_argument("--input", "--source", dest="source", required=True)
     register_source.add_argument(
         "--provider",
