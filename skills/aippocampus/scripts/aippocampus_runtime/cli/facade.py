@@ -172,6 +172,19 @@ COMMANDS = {
         "aippocampus_runtime.recall.why_cli",
         prefix=("why-not-recall",),
     ),
+    "why-not": CommandSpec(
+        "why_recall.py",
+        "aippocampus_runtime.recall.why_cli",
+        prefix=("why-not",),
+    ),
+    "learning": CommandSpec("learning.py", "aippocampus_runtime.learning_loop.cli"),
+    "pause": CommandSpec("controls.py", "aippocampus_runtime.controls", prefix=("pause",)),
+    "forget": CommandSpec("controls.py", "aippocampus_runtime.controls", prefix=("forget",)),
+    "do-not-use-here": CommandSpec(
+        "controls.py",
+        "aippocampus_runtime.controls",
+        prefix=("do-not-use-here",),
+    ),
     "self-note": CommandSpec(
         "agent_self_note_cli.py",
         "aippocampus_runtime.source.agent_self_note_cli",
@@ -661,6 +674,9 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
     print("  agent recall        Opt-in agent recall/AIppo/deepen/explain path", file=target)
+    print("  learning            Source-backed learning loop status/replay/guidance", file=target)
+    print("  do-not-use-here     Quiet a route or ticket through low-authority feedback", file=target)
+    print("  pause / forget      Safe personal-control cards, no destructive defaults", file=target)
     print("  latest-reply        Latest final assistant closeout, not commentary", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
     print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
@@ -685,6 +701,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  warm status         Inspect warm ambient queue without model calls", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
+    print("  why-not             Alias for why-not-recall", file=target)
     print("  why-not-recall      Explain why a recall route stayed silent", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)

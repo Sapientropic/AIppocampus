@@ -68,8 +68,32 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["status"], "needs_route_id")
         self.assertIn("agent recall", missing_payload["agent_next_action"])
-        self.assertIn("Feedback is a low-authority", help_proc.stdout)
+        self.assertIn("durable low-authority route calibration", help_proc.stdout)
+        self.assertIn("Durable examples:", help_proc.stdout)
+        self.assertIn("--feedback-jsonl <local-feedback.jsonl>", help_proc.stdout)
+        self.assertIn("Receipt-only example:", help_proc.stdout)
         self.assertIn("helped/useful", help_proc.stdout)
+
+    def test_cli_agent_explain_json_errors_return_foreground_recovery_cards(self) -> None:
+        missing = self.run_agent("explain", "--json")
+        malformed = self.run_agent("explain", "not-a-valid-handle", "--json")
+
+        self.assertEqual(missing.returncode, 2)
+        self.assertEqual(malformed.returncode, 2)
+        missing_payload = json.loads(missing.stdout)
+        malformed_payload = json.loads(malformed.stdout)
+        self.assertEqual(missing_payload["explanation"]["error"]["code"], "missing_recall_handle")
+        self.assertEqual(
+            malformed_payload["explanation"]["error"]["code"],
+            "malformed_recall_handle",
+        )
+        for payload in (missing_payload, malformed_payload):
+            self.assertEqual(payload["foreground_action"]["tool_name"], "agent_explain")
+            self.assertIn("--request 1 --last-recall", payload["agent_next_action"])
+            self.assertEqual(
+                payload["next_safe_action"],
+                "rerun_agent_recall_then_request_index",
+            )
 
     def test_cli_agent_macro_help_is_task_first(self) -> None:
         proc = self.run_agent("macro", "--help")

@@ -57,6 +57,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("onboard", proc.stdout)
         self.assertIn("search", proc.stdout)
         self.assertIn("agent recall", proc.stdout)
+        self.assertIn("learning", proc.stdout)
+        self.assertIn("do-not-use-here", proc.stdout)
+        self.assertIn("pause / forget", proc.stdout)
         self.assertIn("continuity-domain", proc.stdout)
         self.assertIn("work-guard", proc.stdout)
         self.assertIn("update status", proc.stdout)
@@ -68,8 +71,126 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("warm status", proc.stdout)
         self.assertIn("telepathy", proc.stdout)
         self.assertIn("why-recall", proc.stdout)
+        self.assertIn("why-not", proc.stdout)
         self.assertIn("plugin install", proc.stdout)
         self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
+
+    def test_personal_control_and_learning_frontdoors_are_executable(self) -> None:
+        pause_help = self.run_cli("pause", "--help")
+        forget = self.run_cli("forget", "route:test", "--json")
+        why_not = self.run_cli("why-not", "old cue", "--json")
+        learning = self.run_cli("learning", "replay", "--json")
+        learning_status = self.run_cli("learning", "status", "--json")
+
+        self.assertEqual(pause_help.returncode, 0, pause_help.stderr)
+        self.assertIn("usage: aippocampus pause [target] [options]", pause_help.stdout)
+        self.assertIn("Boundary: feedback and quieting", pause_help.stdout)
+        self.assertNotIn("{pause,forget,do-not-use-here}", pause_help.stdout)
+
+        self.assertEqual(forget.returncode, 0, forget.stderr)
+        forget_payload = json.loads(forget.stdout)
+        self.assertEqual(forget_payload["mode"], "forget")
+        self.assertIn("raw audit history was physically deleted", forget_payload["cannot_claim"])
+
+        self.assertEqual(why_not.returncode, 0, why_not.stderr)
+        self.assertEqual(json.loads(why_not.stdout)["mode"], "why-not-recall")
+
+        self.assertEqual(learning.returncode, 0, learning.stderr)
+        learning_payload = json.loads(learning.stdout)
+        self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
+        self.assertEqual(learning_payload["mode"], "replay")
+        self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
+        self.assertEqual(learning_status.returncode, 0, learning_status.stderr)
+        status_payload = json.loads(learning_status.stdout)
+        self.assertEqual(status_payload["lanes"]["prepared_guidance"]["status"], "not_found")
+        self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
+        self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
+        self.assertIn("learning replay --events", status_payload["agent_next_action"])
+
+    def test_do_not_use_here_writes_public_safe_feedback_rows_when_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            feedback_path = Path(tmp) / "feedback.jsonl"
+            ticket_path = Path(tmp) / "ticket.json"
+            ticket_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_coding_continuity_ticket",
+                        "ticket_id": "ticket_test",
+                        "trigger": "user_correction",
+                        "intervention_level": "warning",
+                        "relevant_decisions": ["avoid noisy repeated route"],
+                        "proposed_use": "warn",
+                        "evidence_refs": [{"source_id": "src_test", "message_id": "msg_test"}],
+                        "source_thickness": "usable",
+                        "derived_assessment": {
+                            "basis_refs": [{"source_id": "src_test", "message_id": "msg_test"}]
+                        },
+                        "expires_at": "task_or_topic_epoch_end",
+                        "annoyance_risk": "medium",
+                        "preconditions": [],
+                        "outcome_feedback_expected": ["dismissed", "ignored", "corrected"],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            recall = self.run_cli(
+                "do-not-use-here",
+                "route_test",
+                "--feedback-jsonl",
+                str(feedback_path),
+                "--json",
+            )
+            receipt_only = self.run_cli("do-not-use-here", "route_receipt", "--json")
+            ticket = self.run_cli(
+                "do-not-use-here",
+                "ticket_test",
+                "--surface",
+                "coding-ticket",
+                "--feedback-jsonl",
+                str(feedback_path),
+                "--ticket-json",
+                str(ticket_path),
+                "--json",
+            )
+            rows = [
+                json.loads(line)
+                for line in feedback_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(recall.returncode, 0, recall.stderr)
+        self.assertEqual(receipt_only.returncode, 0, receipt_only.stderr)
+        self.assertEqual(ticket.returncode, 0, ticket.stderr)
+        recall_payload = json.loads(recall.stdout)
+        receipt_payload = json.loads(receipt_only.stdout)
+        ticket_payload = json.loads(ticket.stdout)
+        self.assertEqual(receipt_payload["status"], "not_durable")
+        self.assertFalse(receipt_payload["quieted_future_routes"])
+        self.assertEqual(receipt_payload["write_boundary"]["storage"], "receipt_only")
+        self.assertEqual(receipt_payload["why_not_card"]["status"], "not_quieted_yet")
+        self.assertIn("--feedback-jsonl", receipt_payload["next_safe_action"])
+        self.assertEqual(recall_payload["status"], "captured")
+        self.assertTrue(recall_payload["quieted_future_routes"])
+        self.assertEqual(recall_payload["feedback"]["write_boundary"]["storage"], "jsonl")
+        self.assertEqual(recall_payload["write_boundary"]["storage"], "jsonl")
+        self.assertEqual(recall_payload["why_not_card"]["status"], "durable_feedback_available")
+        self.assertEqual(ticket_payload["status"], "quieted")
+        self.assertEqual(ticket_payload["write_boundary"]["storage"], "jsonl")
+        self.assertTrue(ticket_payload["action_time_consumed"])
+        self.assertEqual(ticket_payload["action_time_decision"]["visibility"], "stay_silent")
+        self.assertIn(
+            "recent_feedback_suppressed",
+            ticket_payload["action_time_decision"]["suppression_reasons"],
+        )
+        self.assertEqual(
+            ticket_payload["activation_tuning"]["adjustments"][0]["activation_tuning"],
+            "quieter",
+        )
+        self.assertEqual(rows[0]["signal"], "wrong_route_drag")
+        self.assertEqual(rows[1]["kind"], "aippocampus_agency_ticket_feedback")
+        self.assertEqual(rows[1]["outcome"], "dismissed")
+        self.assertFalse(rows[1]["feedback_changes_source_truth"])
 
     def test_hooks_help_shows_family_not_raw_installer_parser(self) -> None:
         family = self.run_cli("hooks", "--help")
@@ -1302,6 +1423,31 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("Traceback", proc.stderr + proc.stdout)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["error"]["code"], "object_store_config_required")
+
+    def test_object_sync_help_is_action_first_and_command_specific(self) -> None:
+        top = self.run_cli("object-sync", "--help")
+        push = self.run_cli("object-sync", "push", "--help")
+        pull = self.run_cli("object-sync", "pull", "--help")
+        repair = self.run_cli("object-sync", "repair", "--help")
+
+        self.assertEqual(top.returncode, 0, top.stderr)
+        self.assertLess(top.stdout.index("Action card:"), top.stdout.index("--object-store-url"))
+        self.assertIn("push --plan", top.stdout)
+        self.assertIn("operator object-store configuration", top.stdout)
+        self.assertIn("raw and encryption options", top.stdout)
+        self.assertIn("requires an encrypted sync decision", top.stdout)
+
+        for proc, command, read_side, write_side in (
+            (push, "push", "local_registry", "object_store_prefix"),
+            (pull, "pull", "object_store_prefix", "local_registry"),
+            (repair, "repair", "object_store_prefix", "object_store_manifest"),
+        ):
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn(f"Read side: {read_side}.", proc.stdout)
+            self.assertIn(f"Write side: {write_side}.", proc.stdout)
+            self.assertIn(f"aippocampus object-sync {command} --plan --json", proc.stdout)
+            self.assertIn(f"aippocampus object-sync {command} --json may mutate", proc.stdout)
+            self.assertNotIn("Status is always non-mutating", proc.stdout)
 
     def test_sync_plan_outputs_direction_cards_without_private_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

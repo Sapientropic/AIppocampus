@@ -71,8 +71,9 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
 def main(argv: list[str] | None = None) -> int:
     args_list = list(argv or [])
     mode = "why-recall"
-    if args_list and args_list[0] in {"why-recall", "why-not-recall"}:
-        mode = args_list.pop(0)
+    if args_list and args_list[0] in {"why-recall", "why-not-recall", "why-not"}:
+        raw_mode = args_list.pop(0)
+        mode = "why-not-recall" if raw_mode == "why-not" else raw_mode
     prog = f"aippocampus {mode}"
     args = build_parser(prog=prog).parse_args(args_list)
     payload = recall_diagnostic_report(
