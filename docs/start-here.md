@@ -7,17 +7,33 @@ through architecture, benchmarks, planning notes, and research memos.
 
 Goal: install or probe AIppocampus and see one source-backed recall moment.
 
-1. If you are in Codex and an agent can run local setup commands, start with
-   the [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path).
-   Use the [first recall decision card](guides/first-recall-decision-card.md)
-   when you want one useful source-backed moment before broader setup. Use the
-   [10-minute public path](guides/public-api.md#ten-minute-public-path) or
-   [first recall path](guides/install-guide.md#first-recall-path) when you need
-   a no-clone probe, a non-Codex host, or a CLI-only fallback.
-2. Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) if you want
-   a short product-feel example before the machinery.
-3. Use [Product Profiles](architecture/host/product-profiles.md) before promoting
-   hooks, sync, Dream, or governed/high-risk behavior into the ordinary path.
+Tiny executable decision card:
+
+```sh
+aippocampus health
+aippocampus agent recall "the old decision or handoff you are trying to continue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Use the recall output as a route. Deepen/reopen source before exact wording,
+public claims, sensitive facts, stale disputes, or high-risk action.
+
+Choose one ordinary branch:
+
+- Codex agent/local setup:
+  start with the [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path),
+  then run the card above.
+- No-clone or read-only probe:
+  use the [10-minute public path](guides/public-api.md#ten-minute-public-path),
+  then try one public-safe recall/status command.
+- Existing source memory:
+  use the [first recall path](guides/install-guide.md#first-recall-path) and
+  [first recall decision card](guides/first-recall-decision-card.md).
+
+Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) for why the
+first source-backed moment should feel worth the setup. Use
+[Product Profiles](architecture/host/product-profiles.md) before promoting
+hooks, sync, Dream, or governed/high-risk behavior into the ordinary path.
 
 You do not need benchmark ledgers, Dream design, cognitive maps, or release
 evidence before the first recall moment.

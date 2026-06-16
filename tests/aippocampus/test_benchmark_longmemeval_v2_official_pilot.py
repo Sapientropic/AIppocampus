@@ -20,6 +20,15 @@ import benchmark_longmemeval_v2_official_pilot as decision  # noqa: E402
 
 
 class LongMemEvalV2OfficialPilotTests(unittest.TestCase):
+    def test_help_names_decision_report_not_score_boundary(self) -> None:
+        help_text = decision.build_arg_parser().format_help()
+
+        self.assertIn("Question answered", help_text)
+        self.assertIn("Can claim", help_text)
+        self.assertIn("Important limits", help_text)
+        self.assertIn("not a V2 score", help_text)
+        self.assertIn("tiny official-harness pilot", help_text)
+
     def test_adapter_returns_official_memory_context_items_without_metadata_text(self) -> None:
         memory = adapter.AippocampusContextProviderMemory(
             {

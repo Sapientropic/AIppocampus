@@ -241,6 +241,22 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     recall_parser = subparsers.add_parser(
         "recall-funnel",
+        usage="aippocampus smoke recall-funnel \"cue\" [--json] [options]",
+        description=(
+            "Recall funnel smoke task card:\n"
+            "  No-write diagnostic for progressive recall wiring.\n"
+            "  Calls recall_context, then the first reopenable recall_deepen route when one exists.\n"
+            "  Cue text, source text, and local/private paths are redacted by default.\n"
+            "  Counts and statuses are diagnostics, not source-backed evidence for an answer.\n"
+            "  For ordinary continuity work, use agent recall -> agent deepen."
+        ),
+        epilog=(
+            "Try:\n"
+            "  aippocampus smoke recall-funnel \"old cue\" --json\n"
+            "  aippocampus agent recall \"old cue\" --json\n"
+            "  aippocampus agent deepen --request 1 --last-recall --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         help="Run recall_context -> first reopenable recall_deepen route as a diagnostic.",
     )
     recall_parser.add_argument("cue")

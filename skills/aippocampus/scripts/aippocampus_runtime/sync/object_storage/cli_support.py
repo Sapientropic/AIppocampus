@@ -31,6 +31,14 @@ def explicit_object_store_url_arg(parse_argv: list[str] | None) -> bool:
     )
 
 
+def explicit_object_prefix_arg(parse_argv: list[str] | None) -> bool:
+    effective_parse_argv = parse_argv if parse_argv is not None else sys.argv[1:]
+    return any(
+        arg == "--object-prefix" or arg.startswith("--object-prefix=")
+        for arg in effective_parse_argv
+    )
+
+
 def object_sync_direction(command: str) -> dict[str, Any]:
     if command == "push":
         return {
@@ -131,6 +139,8 @@ def public_object_sync_status(result: dict[str, Any]) -> dict[str, Any]:
         "status": "ready" if result.get("ok") else "needs_attention",
         "object_store": "<object-store-redacted>" if result.get("object_store") else None,
         "object_prefix": "<object-prefix-redacted>" if result.get("object_prefix") else None,
+        "object_config_source": result.get("object_config_source"),
+        "object_prefix_source": result.get("object_prefix_source"),
         "manifest_exists": result.get("manifest_exists"),
         "schema_version": result.get("schema_version"),
         "file_count": result.get("file_count", 0),
@@ -159,9 +169,28 @@ def print_object_sync_human_result(command: str, result: dict[str, Any]) -> None
         print(f"read: {result.get('source_side')}")
         print(f"write: {', '.join(result.get('mutates') or []) or 'none'}")
         print(f"next: {result.get('next_command')}")
+    elif command == "status":
+        public = public_object_sync_status(result)
+        print(f"object sync status: {public.get('status')}")
+        print("object store: <object-store-redacted>")
+        print("object prefix: <object-prefix-redacted>")
+        if public.get("object_config_source"):
+            print(f"config source: {public.get('object_config_source')}")
+        if public.get("object_prefix_source"):
+            print(f"prefix source: {public.get('object_prefix_source')}")
+        print(f"manifest: {'present' if public.get('manifest_exists') else 'missing'}")
+        print(f"raw rollout: {str(public.get('raw_rollout_included')).lower()}")
+        for issue in public.get("issues") or []:
+            print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")
+        print(f"next: {public.get('agent_next_action')}")
+        print(
+            "boundary: endpoint/prefix/path hidden by default; rerun status with "
+            "--operator-json only for local endpoint diagnostics."
+        )
     else:
         print(f"object sync {command}: {'ok' if result.get('ok') else 'needs attention'}")
-    if result.get("manifest_key"):
+    if command != "status" and result.get("manifest_key"):
         print(f"manifest object: {result['manifest_key']}")
-    for issue in result.get("issues") or []:
-        print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")
+    if command != "status":
+        for issue in result.get("issues") or []:
+            print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")

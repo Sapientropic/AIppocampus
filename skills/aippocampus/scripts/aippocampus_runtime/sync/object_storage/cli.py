@@ -20,6 +20,7 @@ from typing import Any
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync import contract as sync_contract
 from aippocampus_runtime.sync.object_storage.cli_support import (
+    explicit_object_prefix_arg,
     explicit_object_store_url_arg,
     object_provider_kwargs,
     object_sync_direction,
@@ -558,6 +559,7 @@ def main(argv: list[str] | None = None) -> int:
     if command_override is None:
         parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     explicit_object_store_url = explicit_object_store_url_arg(parse_argv)
+    explicit_object_prefix = explicit_object_prefix_arg(parse_argv)
     parser.add_argument(
         "--object-store-url", default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL")
     )
@@ -721,6 +723,21 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=args.timeout,
                 **provider_kwargs,
             )
+
+    if args.command == "status":
+        result = {
+            **result,
+            "object_config_source": (
+                "explicit_object_store_url"
+                if explicit_object_store_url
+                else "provider_or_environment_configuration"
+            ),
+            "object_prefix_source": (
+                "explicit_object_prefix"
+                if explicit_object_prefix
+                else "environment_or_default_prefix"
+            ),
+        }
 
     if args.json_output or args.operator_json:
         output = (

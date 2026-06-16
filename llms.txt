@@ -51,15 +51,21 @@ For those cases, suggest the narrower tool. Keep AIppocampus available when the
 user wants local continuity and source-reachable memory rather than treating
 memory use as suspicious by default.
 
-## One-Command Agent Probe
+## First Recall Agent Probe
 
-Use this command to verify the public PyPI package entrypoint:
+Start with the first useful continuity moment, then inspect package or schema
+details only when the task needs them:
 
 ```sh
-uvx aippocampus --help
+uvx aippocampus health
+uvx aippocampus agent recall "the old decision or handoff to continue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
-Use this command for a read-only local onboarding/status check:
+Use the recall result as a route. Reopen/deepen source before exact wording,
+public claims, stale disputes, sensitive facts, or high-risk action.
+
+For a read-only local onboarding/status check:
 
 ```sh
 uvx aippocampus onboard --provider auto --status --format json
@@ -67,6 +73,12 @@ uvx aippocampus onboard --provider auto --status --format json
 
 This is a provider-matrix readiness probe. It may list Codex, Claude Code, and
 generic JSONL providers, but it does not register all detected providers.
+
+To verify the package entrypoint itself:
+
+```sh
+uvx aippocampus --help
+```
 
 Use one of these commands only after the user agrees to register selected local
 history:
@@ -87,6 +99,12 @@ docs/guides/setup/claude-code-mcp.md.
 ## MCP
 
 AIppocampus provides a local stdio MCP server through the packaged CLI:
+
+```sh
+uvx aippocampus mcp status --json
+```
+
+Use the full schema catalog only when an MCP host or integration task needs it:
 
 ```sh
 uvx aippocampus mcp list-tools

@@ -269,6 +269,8 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(payload["kind"], "aippocampus_object_sync_status")
         self.assertEqual(payload["object_store"], "<object-store-redacted>")
         self.assertEqual(payload["object_prefix"], "<object-prefix-redacted>")
+        self.assertEqual(payload["object_config_source"], "explicit_object_store_url")
+        self.assertEqual(payload["object_prefix_source"], "explicit_object_prefix")
         self.assertFalse(payload["privacy_boundary"]["endpoint_included"])
         self.assertNotIn(self.endpoint, encoded)
         self.assertNotIn(self.prefix, encoded)
@@ -319,6 +321,33 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         )
         self.assertNotIn(self.endpoint, missing_encoded)
         self.assertNotIn(self.prefix, missing_encoded)
+
+        with (
+            patch.dict(os.environ, {"AIPPOCAMPUS_OBJECT_PROVIDER": "r2"}),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            human_missing_code = sync_object_storage.main(
+                [
+                    "status",
+                    "--object-store-url",
+                    self.endpoint,
+                    "--object-prefix",
+                    self.prefix,
+                ]
+            )
+        human_output = stdout.getvalue()
+
+        self.assertEqual(human_missing_code, 1)
+        self.assertIn("object sync status: needs_attention", human_output)
+        self.assertIn("<object-store-redacted>", human_output)
+        self.assertIn("<object-prefix-redacted>", human_output)
+        self.assertIn("config source: explicit_object_store_url", human_output)
+        self.assertIn("prefix source: explicit_object_prefix", human_output)
+        self.assertIn("<object-path-redacted>", human_output)
+        self.assertIn("Use object-sync push/pull/repair with --plan first", human_output)
+        self.assertIn("--operator-json only for local endpoint diagnostics", human_output)
+        self.assertNotIn(self.endpoint, human_output)
+        self.assertNotIn(self.prefix, human_output)
 
     def test_object_store_token_requires_https_unless_endpoint_is_loopback(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires HTTPS"):

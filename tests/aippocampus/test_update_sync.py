@@ -1000,6 +1000,20 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertLess(output.index("Frontstage next:"), output.index("- skill:"))
         self.assertNotIn("Still needs action: plugin, llm", output)
 
+    def test_apply_help_leads_with_mutating_surface_card(self) -> None:
+        stdout = StringIO()
+        with redirect_stdout(stdout), self.assertRaises(SystemExit) as raised:
+            update_cli.build_parser().parse_args(["apply", "--help"])
+
+        output = stdout.getvalue()
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("usage: aippocampus update apply [--surface SURFACE]", output)
+        self.assertIn("Mutating surface decision card", output)
+        self.assertIn("skill   replaces only the installable skill package", output)
+        self.assertIn("hooks   writes/merges Codex hook entries", output)
+        self.assertIn("rollback with matching hooks", output)
+        self.assertIn("--all-local is a broad bootstrap/repair shortcut", output)
+
     def test_skill_apply_updates_stale_copy_and_excludes_distribution_noise(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)

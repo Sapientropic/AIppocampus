@@ -93,6 +93,20 @@ def print_version_help(*, file: TextIO | None = None) -> None:
     print("Use --json for a bounded machine-readable version/source summary.", file=target)
 
 
+def print_config_help(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("usage: aippocampus config [--json|--compact-json]", file=target)
+    print("", file=target)
+    print("Config recovery card:", file=target)
+    print("  Values are never printed; configured values are reported as presence only.", file=target)
+    print("  This is the natural shortcut to the safe config doctor, not a second config source.", file=target)
+    print("", file=target)
+    print("Try:", file=target)
+    print("  aippocampus config", file=target)
+    print("  aippocampus config --compact-json", file=target)
+    print("  aippocampus doctor config --json", file=target)
+
+
 @dataclass(frozen=True)
 class CommandSpec:
     script_name: str
@@ -334,6 +348,13 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             module_name_for_script("update.py"),
             ["status", *rest[1:]],
         )
+    if command == "config":
+        return CommandInvocation(
+            command,
+            "provider_doctor.py",
+            module_name_for_script("provider_doctor.py"),
+            ["config", *rest],
+        )
     if command in COMMANDS:
         return invocation_from_spec(command, COMMANDS[command], rest)
     if command == "mcp":
@@ -399,6 +420,10 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if args[0] == "version" and any(arg in {"-h", "--help"} for arg in args[1:]):
         print_version_help()
         return None, 0
+    if args[0] == "config" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
+        if any(arg in {"-h", "--help"} for arg in args[1:]):
+            print_config_help()
+            return None, 0
     if args[0] in {"--version", "-V", "version"}:
         payload = version_payload()
         if "--json" in args:
@@ -456,6 +481,11 @@ def hooks_help_request(args: list[str]) -> bool:
 def hooks_help_kind(args: list[str]) -> str | None:
     if len(args) >= 3 and args[0] == "action" and args[1] == "refresh-cache":
         return "action-refresh-cache"
+    if len(args) >= 3 and args[0] in {"prompt", "lifecycle", "action"} and args[1] in {
+        "install",
+        "uninstall",
+    }:
+        return f"{args[0]}-{args[1]}"
     if len(args) >= 2 and args[0] in {"prompt", "lifecycle", "action", "claude-code"}:
         return args[0]
     return None
@@ -463,6 +493,80 @@ def hooks_help_kind(args: list[str]) -> str | None:
 
 def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
+    if kind == "prompt-install":
+        print("usage: aippocampus hooks prompt install [options]", file=target)
+        print("", file=target)
+        print("Prompt hook install boundary:", file=target)
+        print("  Writes/merges the Codex UserPromptSubmit hook entry for ambient recall.", file=target)
+        print("  Does not install provider keys, rewrite transcripts, or enable heavy maintenance.", file=target)
+        print("  The hook reads the current prompt and emits only a small route/action hint when useful.", file=target)
+        print("", file=target)
+        print("Before/after:", file=target)
+        print("  aippocampus hooks prompt status --last", file=target)
+        print("  aippocampus hooks prompt install --json", file=target)
+        print("  aippocampus hooks prompt uninstall --json", file=target)
+        print("  Ordinary recall still works without this hook: aippocampus agent recall \"old cue\" --json", file=target)
+        return
+    if kind == "prompt-uninstall":
+        print("usage: aippocampus hooks prompt uninstall [options]", file=target)
+        print("", file=target)
+        print("Prompt hook rollback boundary:", file=target)
+        print("  Removes the AIppocampus UserPromptSubmit hook entry from Codex hook config.", file=target)
+        print("  Does not delete clean source, indexes, registry data, or provider configuration.", file=target)
+        print("", file=target)
+        print("Check:", file=target)
+        print("  aippocampus hooks prompt status --last", file=target)
+        print("  aippocampus hooks prompt uninstall --json", file=target)
+        return
+    if kind == "lifecycle-install":
+        print("usage: aippocampus hooks lifecycle install [options]", file=target)
+        print("", file=target)
+        print("Lifecycle hook install boundary:", file=target)
+        print("  Writes/merges Codex session lifecycle hooks for bounded local maintenance.", file=target)
+        print("  Does not cold-archive, delete, run full Graphify, or install provider keys.", file=target)
+        print("  Runtime work is limited to start/stop/compact upkeep such as clean source and indexes.", file=target)
+        print("", file=target)
+        print("Before/after:", file=target)
+        print("  aippocampus hooks lifecycle status --json", file=target)
+        print("  aippocampus hooks lifecycle install --json", file=target)
+        print("  aippocampus hooks lifecycle uninstall --json", file=target)
+        return
+    if kind == "lifecycle-uninstall":
+        print("usage: aippocampus hooks lifecycle uninstall [options]", file=target)
+        print("", file=target)
+        print("Lifecycle hook rollback boundary:", file=target)
+        print("  Removes AIppocampus lifecycle hook entries from Codex hook config.", file=target)
+        print("  Does not delete generated memory artifacts or source registries.", file=target)
+        print("", file=target)
+        print("Check:", file=target)
+        print("  aippocampus hooks lifecycle status --json", file=target)
+        print("  aippocampus hooks lifecycle uninstall --json", file=target)
+        return
+    if kind == "action-install":
+        print("usage: aippocampus hooks action install --cache-jsonl <local-cache.jsonl> [options]", file=target)
+        print("", file=target)
+        print("Action-time hook install boundary:", file=target)
+        print("  Writes/merges the optional Codex PreToolUse action-hint hook entry.", file=target)
+        print("  Reads a prepared public-safe hint cache; it does not mine private history at tool time.", file=target)
+        print("  Prepare or refresh the cache first when status says it is missing/stale.", file=target)
+        print("", file=target)
+        print("Before/after:", file=target)
+        print("  aippocampus hooks action status --json", file=target)
+        print("  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json", file=target)
+        print("  aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json", file=target)
+        print("  aippocampus hooks action uninstall --json", file=target)
+        return
+    if kind == "action-uninstall":
+        print("usage: aippocampus hooks action uninstall [options]", file=target)
+        print("", file=target)
+        print("Action-time hook rollback boundary:", file=target)
+        print("  Removes the AIppocampus PreToolUse action-hint hook entry.", file=target)
+        print("  Does not delete the prepared hint cache or recall registry.", file=target)
+        print("", file=target)
+        print("Check:", file=target)
+        print("  aippocampus hooks action status --json", file=target)
+        print("  aippocampus hooks action uninstall --json", file=target)
+        return
     if kind == "prompt":
         print("usage: aippocampus hooks prompt [status|install|uninstall] [options]", file=target)
         print("", file=target)

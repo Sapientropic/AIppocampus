@@ -204,6 +204,13 @@ class BenchmarkSuiteTests(unittest.TestCase):
     def test_profile_ladder_is_exposed_in_cli_help(self) -> None:
         help_text = suite.build_arg_parser().format_help()
 
+        self.assertIn("Task-first benchmark suite", help_text)
+        self.assertIn("Ordinary PR confidence", help_text)
+        self.assertIn("--tier benchmark-smoke --benchmark-suite-profile public-fast", help_text)
+        self.assertIn("Public evidence update", help_text)
+        self.assertIn("--profile release-evidence --output", help_text)
+        self.assertIn("--cite-summary", help_text)
+        self.assertIn("Profile cards:", help_text)
         self.assertIn("ci-deterministic", help_text)
         self.assertIn("local-calibration", help_text)
         self.assertIn("live-semantic", help_text)
@@ -215,6 +222,27 @@ class BenchmarkSuiteTests(unittest.TestCase):
         )
         self.assertIn("BenchmarkSuiteConfig", help_text)
         self.assertIn("run_benchmark_suite_with_config", help_text)
+
+    def test_claimability_summary_is_compact_and_claim_bounded(self) -> None:
+        payload = {
+            "ok": False,
+            "status": "needs-review",
+            "quality_gate_ok": False,
+            "track_statuses": {"gate_decision": "pass"},
+            "profile_metadata": {"selected_profile": {"name": "public-fast"}},
+            "cannot_claim": ["public_fast_profile_track_b_quality"],
+        }
+
+        summary = suite.claimability_summary(payload)
+
+        self.assertEqual(
+            summary["kind"],
+            "aippocampus_benchmark_suite_claimability_summary",
+        )
+        self.assertFalse(summary["can_cite"])
+        self.assertEqual(summary["cite_status"], "do_not_cite_as_quality_proof")
+        self.assertEqual(summary["cannot_claim_count"], 1)
+        self.assertIn("release-evidence", summary["best_next_benchmark"])
 
     def test_track_b_case_controls_reject_zero_values(self) -> None:
         parsers = (

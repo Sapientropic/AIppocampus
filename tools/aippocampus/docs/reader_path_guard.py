@@ -21,6 +21,10 @@ REQUIRED_READER_PATH_TERMS = {
         ),
     },
     "docs/start-here.md": {
+        "aippocampus agent recall": "start-here missing executable first-recall command",
+        "aippocampus agent deepen --request 1 --last-recall --json": (
+            "start-here missing executable deepen command"
+        ),
         "guides/public-api.md#ten-minute-public-path": (
             "start-here missing 10-minute public API path"
         ),
@@ -31,6 +35,11 @@ REQUIRED_READER_PATH_TERMS = {
         "architecture/README.md": "start-here missing maintainer architecture path",
         "evidence/current-claims.md": "start-here missing current-claims path",
         "research/README.md": "start-here missing research path",
+    },
+    "llms.txt": {
+        "uvx aippocampus agent recall": "llms.txt missing executable first-recall command",
+        "uvx aippocampus mcp status --json": "llms.txt missing compact MCP readiness command",
+        "uvx aippocampus mcp list-tools": "llms.txt missing full MCP schema fallback",
     },
 }
 
