@@ -57,12 +57,23 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
     prepared_count = int(intake.get("prepared_record_count") or 0)
     cache_command = "aippocampus hooks action refresh-cache --write --json"
     replay_command = "aippocampus learning replay --events <sanitized-events.jsonl> --json"
+    current_history_command = (
+        "aippocampus learning replay --clean-source-events <events.jsonl> "
+        "--export-output <sanitized-events.jsonl> --json"
+    )
     benchmark_command = "python benchmarks/aippocampus/benchmark_learning_loop_public_companion.py --json"
     lanes = {
         "prepared_guidance": {
             "status": "available" if prepared_count else "not_found",
             "prepared_action_hint_count": prepared_count,
             "next_action": cache_command if prepared_count else "skip_until_guidance_exists",
+        },
+        "current_history_extraction": {
+            "status": "available_after_explicit_source_choice",
+            "command": current_history_command,
+            "requires_explicit_source": True,
+            "raw_private_rollouts_scanned_by_default": False,
+            "input_boundary": "operator-selected clean-source behavior events or rollout exported to sanitized events first",
         },
         "sanitized_replay": {
             "status": "available_on_request",
@@ -93,16 +104,10 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
     else:
         next_actions.append(
             {
-                "label": "run fixture or sanitized replay",
-                "command": replay_command,
+                "label": "export and replay current eligible history",
+                "command": current_history_command,
             }
         )
-    next_actions.append(
-        {
-            "label": "inspect public companion benchmark",
-            "command": benchmark_command,
-        }
-    )
     return _public_payload(
         {
             "kind": KIND,
@@ -118,7 +123,7 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                 "cache_write_requested": False,
             },
             "lanes": lanes,
-            "agent_next_action": cache_command if prepared_count else replay_command,
+            "agent_next_action": cache_command if prepared_count else current_history_command,
             "next_actions": next_actions,
             "cannot_claim": [
                 "causal_live_behavior_lift",
@@ -290,6 +295,39 @@ def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def repro_package_recovery_payload() -> dict[str, Any]:
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "repro_package_recovery",
+            "ok": False,
+            "error": {
+                "code": "learning_repro_input_required",
+                "message": (
+                    "repro-package needs a saved JSON object with command/output/expected/actual "
+                    "fields; no private stdout or prompt text was read."
+                ),
+                "next_command": (
+                    "aippocampus learning repro-package --input-json <command-output.json> --json"
+                ),
+            },
+            "next_actions": [
+                {
+                    "label": "inspect learning guidance first",
+                    "command": "aippocampus learning guidance --json",
+                    "mutates": False,
+                }
+            ],
+            "privacy_boundary": _privacy_boundary(),
+            "cannot_claim": [
+                "source_truth_from_repro_package",
+                "private_history_quality",
+            ],
+        }
+    )
+
+
 def render_human(payload: Mapping[str, Any]) -> str:
     mode = str(payload.get("mode") or "status")
     lines = [f"AIppocampus learning {mode}: {'ok' if payload.get('ok') else 'needs-review'}"]
@@ -368,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
         "repro-package",
         help="Create a public-safe dogfood repro package from a saved command/output JSON object.",
     )
-    repro.add_argument("--input-json", type=Path, required=True)
+    repro.add_argument("--input-json", type=Path)
     repro.add_argument("--version")
     repro.add_argument("--commit")
     repro.add_argument("--plugin-manifest-version")
@@ -388,10 +426,13 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
     elif args.command == "repro-package":
-        try:
-            payload = repro_package_payload(args)
-        except ValueError as exc:
-            parser.error(str(exc))
+        if not args.input_json:
+            payload = repro_package_recovery_payload()
+        else:
+            try:
+                payload = repro_package_payload(args)
+            except ValueError as exc:
+                parser.error(str(exc))
     elif args.command == "guidance":
         payload = guidance_payload(cwd=_cwd(args.cwd), no_default_learning=args.no_default_learning)
     else:
@@ -400,7 +441,7 @@ def main(argv: list[str] | None = None) -> int:
         _json_out(payload)
     else:
         print(render_human(payload))
-    return 0
+    return 0 if payload.get("ok", True) else 2
 
 
 if __name__ == "__main__":

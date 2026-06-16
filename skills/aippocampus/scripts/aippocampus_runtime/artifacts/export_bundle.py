@@ -19,6 +19,10 @@ from aippocampus_runtime.recall import index_builder
 
 PUBLIC_NO_RAW_PROFILES = {"public-export", "public-metadata"}
 PUBLIC_METADATA_PROFILES = {"public-export", "public-metadata"}
+PRIVATE_EXPORT_COMMAND = "aippocampus export --redaction-profile raw-private --output <bundle.zip>"
+PUBLIC_EXPORT_COMMAND = (
+    "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>"
+)
 
 
 def timestamp_slug() -> str:
@@ -431,6 +435,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "requires an explicit public profile plus --no-raw."
         ),
     )
+    parser.add_argument(
+        "intent",
+        nargs="?",
+        help=(
+            "Optional intent hint. `public` is accepted as a recovery hint and "
+            "prints the public metadata command instead of writing."
+        ),
+    )
     parser.add_argument("--cwd", default=os.getcwd(), help="Workspace whose current thread should be exported.")
     parser.add_argument("--rollout", help="Operator-private raw rollout path override.")
     parser.add_argument(
@@ -458,24 +470,100 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "for private searchable transfer bundles. Public profiles require --no-raw."
         ),
     )
+    parser.add_argument("--public", action="store_true", help="Recovery hint for public metadata export.")
+    parser.add_argument("--json", action="store_true", dest="json_output", help="Accepted for chooser/error cards.")
     return parser
+
+
+def _chooser_payload(*, reason: str, public_hint: bool = False) -> dict[str, Any]:
+    recommended = PUBLIC_EXPORT_COMMAND if public_hint else PRIVATE_EXPORT_COMMAND
+    return {
+        "ok": False,
+        "kind": "aippocampus_export_chooser",
+        "error": {
+            "code": "export_intent_required",
+            "message": (
+                "Choose private local transfer or public/shareable metadata and provide "
+                "an explicit --output path. No write happened."
+            ),
+            "reason": reason,
+            "next_command": recommended,
+        },
+        "choices": [
+            {
+                "intent": "private_local_transfer",
+                "command": PRIVATE_EXPORT_COMMAND,
+                "boundary": "private local handoff only; may include searchable local memory artifacts",
+            },
+            {
+                "intent": "public_shareable_metadata",
+                "command": PUBLIC_EXPORT_COMMAND,
+                "boundary": "metadata-only public export; omits raw rollout and source text",
+            },
+        ],
+        "recommended_public_command": PUBLIC_EXPORT_COMMAND,
+        "safety": {
+            "no_write_happened": True,
+            "requires_explicit_output": True,
+            "raw_private_is_never_selected_by_bare_command": True,
+        },
+    }
+
+
+def _recovery_payload(*, code: str, message: str, next_command: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "kind": "aippocampus_export_recovery",
+        "error": {
+            "code": code,
+            "message": message,
+            "next_command": next_command,
+        },
+        "safety": {
+            "no_traceback": True,
+            "no_secret_values_printed": True,
+        },
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    intent = str(getattr(args, "intent", "") or "").strip().casefold()
+    public_hint = bool(args.public) or intent in {"public", "public-export", "public-metadata"}
+    if intent and intent not in {"public", "public-export", "public-metadata", "private", "raw-private"}:
+        print(json.dumps(_chooser_payload(reason="unknown_intent", public_hint=False), ensure_ascii=False, indent=2))
+        return 2
+    # Export touches private local history and temporary bundle staging. A natural
+    # bare/guessed command must stop here instead of falling through to the legacy
+    # raw-private default or cleanup paths that can hit locked SQLite files.
+    if public_hint or not args.output:
+        reason = "public_metadata_hint" if public_hint else "missing_output"
+        print(json.dumps(_chooser_payload(reason=reason, public_hint=public_hint), ensure_ascii=False, indent=2))
+        return 2
     try:
         payload = export_bundle(args)
     except ValueError as exc:
         message = str(exc)
         code = "public_export_requires_no_raw" if "--no-raw" in message else "invalid_export_request"
-        payload = {
-            "ok": False,
-            "error": {
-                "code": code,
-                "message": message,
-                "next_command": "aippocampus export --no-raw --redaction-profile <profile> --output <bundle.zip>",
-            },
-        }
+        payload = _recovery_payload(
+            code=code,
+            message=message,
+            next_command="aippocampus export --no-raw --redaction-profile <profile> --output <bundle.zip>",
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 2
+    except OSError:
+        payload = _recovery_payload(
+            code="export_filesystem_recovery",
+            message=(
+                "Export could not complete because a local bundle/index file was locked or unavailable. "
+                "No traceback is shown; rerun after closing the writer or choose a fresh --work-dir."
+            ),
+            next_command=(
+                "aippocampus export --redaction-profile raw-private --output <bundle.zip> "
+                "--work-dir <fresh-folder>"
+            ),
+        )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 2
     print(json.dumps(payload, ensure_ascii=False, indent=2))

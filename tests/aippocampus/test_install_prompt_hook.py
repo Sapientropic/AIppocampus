@@ -146,6 +146,15 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["commands_redacted"])
         self.assertNotIn(fixture_value, encoded)
 
+        with patch("sys.stdout", new=io.StringIO()) as stdout:
+            code = installer.main(["status", "--codex-home", str(self.codex_home)])
+        text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("provider-key bridge: installed", text)
+        self.assertIn("already-running hook process: not proven", text)
+        self.assertIn("aippocampus doctor provider --json", text)
+        self.assertNotIn(fixture_value, text)
+
     def test_status_json_redacts_paths_and_commands_by_default_without_last(self) -> None:
         installer.install(self.hooks_json, timeout=5)
 

@@ -213,15 +213,29 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
                 ["episode-arcs", "--registry", str(registry_path)],
                 capture_output=True,
             )
+            summary = facade.run_command(
+                ["episode-arcs", "--registry", str(registry_path), "--summary-json"],
+                capture_output=True,
+            )
 
         self.assertTrue(result.ok, result.stderr)
         self.assertTrue(human.ok, human.stderr)
+        self.assertTrue(summary.ok, summary.stderr)
         payload = json.loads(result.stdout)
+        summary_payload = json.loads(summary.stdout)
         self.assertEqual(payload["kind"], private_arcs.REPORT_KIND)
         self.assertEqual(payload["metrics"]["complete_rejected_route_arc_count"], 1)
+        self.assertEqual(summary_payload["kind"], "aippocampus_episode_arcs_summary")
+        self.assertEqual(summary_payload["complete_arc_count"], 1)
+        self.assertEqual(summary_payload["current_validity_counts"]["needs_reopen"], 1)
+        self.assertIn("refresh_sources", summary_payload["safe_use_counts"])
         self.assertNotIn("session:cli-private-arc", result.stdout)
+        self.assertNotIn("session:cli-private-arc", summary.stdout)
         self.assertIn("AIppocampus episode-arcs", human.stdout)
         self.assertIn("episode arcs: 1", human.stdout)
+        self.assertIn("action card:", human.stdout)
+        self.assertIn("needs_reopen: 1", human.stdout)
+        self.assertIn("safe use:", human.stdout)
         self.assertNotIn('"metrics"', human.stdout)
         self.assertNotIn("session:cli-private-arc", human.stdout)
 

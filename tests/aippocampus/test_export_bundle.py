@@ -19,6 +19,11 @@ from aippocampus_runtime.artifacts import export_bundle as packaged_export_bundl
 
 
 class ExportBundleTests(unittest.TestCase):
+    def _run_export_main(self, argv: list[str]) -> tuple[int, str, str]:
+        with patch("sys.stdout", new=StringIO()) as stdout, patch("sys.stderr", new=StringIO()) as stderr:
+            code = packaged_export_bundle.main(argv)
+        return code, stdout.getvalue(), stderr.getvalue()
+
     def test_top_level_script_is_compatibility_shim_for_package_owner(self) -> None:
         self.assertIs(export_bundle.write_handoff, packaged_export_bundle.write_handoff)
         self.assertIs(export_bundle.run_build_index, packaged_export_bundle.run_build_index)
@@ -55,6 +60,49 @@ class ExportBundleTests(unittest.TestCase):
         self.assertIn("Private local transfer", output)
         self.assertIn("Public/shareable metadata", output)
         self.assertIn("--redaction-profile public-export --no-raw", output)
+
+    def test_bare_export_is_non_mutating_chooser_card(self) -> None:
+        with patch.object(
+            packaged_export_bundle,
+            "export_bundle",
+            side_effect=AssertionError("bare export must not write a bundle"),
+        ):
+            code, stdout, stderr = self._run_export_main([])
+
+        self.assertEqual(code, 2)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "export_intent_required")
+        self.assertTrue(payload["safety"]["no_write_happened"])
+        commands = [item["command"] for item in payload["choices"]]
+        self.assertIn(
+            "aippocampus export --redaction-profile raw-private --output <bundle.zip>",
+            commands,
+        )
+        self.assertIn(
+            "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>",
+            commands,
+        )
+
+    def test_export_public_guesses_recover_without_writing(self) -> None:
+        for argv in (["--json"], ["public"], ["--public"]):
+            with self.subTest(argv=argv):
+                with patch.object(
+                    packaged_export_bundle,
+                    "export_bundle",
+                    side_effect=AssertionError("export chooser guesses must not write"),
+                ):
+                    code, stdout, stderr = self._run_export_main(list(argv))
+
+                self.assertEqual(code, 2)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                self.assertTrue(payload["safety"]["no_write_happened"])
+                self.assertEqual(
+                    payload["recommended_public_command"],
+                    "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>",
+                )
 
     def test_run_build_index_uses_package_api_without_subprocess(self) -> None:
         seen: dict[str, list[str]] = {}

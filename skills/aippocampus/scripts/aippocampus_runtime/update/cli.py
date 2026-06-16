@@ -53,6 +53,7 @@ SCHEMA_VERSION = 1
 PLUGIN_BUILD_SCRIPT = "build_plugin_package.py"
 DEFAULT_PLUGIN_OUTPUT = Path("dist") / "aippocampus-plugin"
 HOOK_EVENTS = ("SessionStart", "Stop", "PreCompact", "PostCompact")
+APPLY_SURFACES = ("skill", "cli", "mcp", "plugin", "hooks", "llm")
 IGNORED_DIR_NAMES = {
     "__pycache__",
     ".pytest_cache",
@@ -91,6 +92,56 @@ def _json_default(value: Any) -> str:
     if isinstance(value, Path):
         return str(value)
     return str(value)
+
+
+def _update_recovery_payload(*, code: str, message: str, next_command: str) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_update_recovery",
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": message,
+            "next_command": next_command,
+        },
+        "next_actions": [
+            {
+                "label": "read update status",
+                "command": "aippocampus update status --agent-json",
+                "mutates": False,
+            },
+            {
+                "label": "preview update plan",
+                "command": "aippocampus update plan --agent-json",
+                "mutates": False,
+            },
+        ],
+        "safety": {
+            "no_write_happened": True,
+            "apply_requires_surface": True,
+            "all_local_is_repair_shortcut_not_default": True,
+        },
+    }
+
+
+def _render_update_recovery(payload: dict[str, Any]) -> str:
+    error = payload.get("error") or {}
+    lines = [
+        "AIppocampus update recovery card",
+        f"reason: {error.get('code')}",
+        "No write happened.",
+        f"next: {error.get('next_command')}",
+        "choose a surface before apply; --all-local is a broad repair/bootstrap shortcut",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _emit_update_recovery(payload: dict[str, Any], *, json_output: bool) -> int:
+    if json_output:
+        emit_public_text(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))
+    else:
+        emit_public_text(_render_update_recovery(payload), end="")
+    return 2
 
 
 def _plugin_manifest_version(root: Path) -> str | None:
@@ -992,7 +1043,31 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
             if surface not in surfaces:
                 surfaces.append(surface)
     if not surfaces:
-        raise ValueError("apply requires --surface <name> or --all-local")
+        report = _update_recovery_payload(
+            code="update_apply_surface_required",
+            message=(
+                "update apply is mutating and needs an explicit --surface or --all-local. "
+                "No write happened."
+            ),
+            next_command="aippocampus update plan --agent-json",
+        )
+        report["next_actions"] = [
+            {
+                "label": "preview update plan",
+                "command": "aippocampus update plan --agent-json",
+                "mutates": False,
+            },
+            {
+                "label": "read update status",
+                "command": "aippocampus update status --agent-json",
+                "mutates": False,
+            },
+        ]
+        return {
+            **report,
+            "mode": "apply_recovery",
+            "valid_surfaces": list(APPLY_SURFACES),
+        }
     results: list[dict[str, Any]] = []
     for surface in surfaces:
         if surface == "skill":
@@ -1028,6 +1103,14 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
 
 def render_text(report: dict[str, Any]) -> str:
     mode = report.get("mode")
+    if report.get("kind") == "aippocampus_update_recovery":
+        if mode == "apply_recovery":
+            text = _render_update_recovery(report)
+            return text.replace(
+                "choose a surface before apply",
+                "valid surfaces: skill, cli, mcp, plugin, hooks, llm; choose a surface before apply",
+            )
+        return _render_update_recovery(report)
     if mode == "apply":
         lines = ["AIppocampus update apply"]
         for item in report.get("applied_surfaces") or []:
@@ -1176,7 +1259,7 @@ def build_parser() -> argparse.ArgumentParser:
     apply_parser.add_argument(
         "--surface",
         action="append",
-        choices=("skill", "cli", "mcp", "plugin", "hooks", "llm"),
+        choices=APPLY_SURFACES,
         help="Local surface to apply. Repeat for multiple surfaces.",
     )
     apply_parser.add_argument(
@@ -1188,8 +1271,35 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    wants_recovery_json = "--agent-json" in raw_argv or "--json" in raw_argv
+    filtered = [item for item in raw_argv if item not in {"--agent-json", "--json"}]
+    if not filtered:
+        return _emit_update_recovery(
+            _update_recovery_payload(
+                code="update_command_required",
+                message="Choose status, plan, or apply. No write happened.",
+                next_command="aippocampus update status --agent-json",
+            ),
+            json_output=wants_recovery_json,
+        )
+    if filtered[0] in {"check", "dry-run"}:
+        code = "update_status_alias" if filtered[0] == "check" else "update_plan_alias"
+        command = (
+            "aippocampus update status --agent-json"
+            if filtered[0] == "check"
+            else "aippocampus update plan --agent-json"
+        )
+        return _emit_update_recovery(
+            _update_recovery_payload(
+                code=code,
+                message=f"`update {filtered[0]}` is a natural guess; use the named command instead. No write happened.",
+                next_command=command,
+            ),
+            json_output=wants_recovery_json,
+        )
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
     try:
         if args.action == "apply":
             report = apply_update(args)
@@ -1219,7 +1329,11 @@ def main(argv: list[str] | None = None) -> int:
             emit_public_text("AIppocampus update failed: update_failed", stream=sys.stderr)
         return 1
 
-    if args.agent_json:
+    if report.get("kind") == "aippocampus_update_recovery" and (
+        getattr(args, "agent_json", False) or getattr(args, "json_output", False)
+    ):
+        emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
+    elif args.agent_json:
         emit_public_text(
             json.dumps(
                 compact_agent_status_report(report, schema_version=SCHEMA_VERSION),
@@ -1232,6 +1346,8 @@ def main(argv: list[str] | None = None) -> int:
         emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
     else:
         emit_public_text(render_text(report), end="")
+    if report.get("kind") == "aippocampus_update_recovery":
+        return 2
     return 0 if report.get("ok", True) else 1
 
 

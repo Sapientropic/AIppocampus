@@ -140,6 +140,15 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
             self.assertIn("aippocampus_provider_bridge_hook.py", commands[0])
         self.assertNotIn(fixture_value, encoded)
 
+        with contextlib.redirect_stdout(io.StringIO()) as stdout:
+            code = installer.main(["status", "--hooks-json", str(self.hooks_json)])
+        text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("provider-key bridge: installed", text)
+        self.assertIn("already-running hook process: not proven", text)
+        self.assertIn("aippocampus doctor provider --json", text)
+        self.assertNotIn(fixture_value, text)
+
     def test_uninstall_removes_only_maintenance_hooks(self) -> None:
         installer.install(self.hooks_json, timeout=12)
 

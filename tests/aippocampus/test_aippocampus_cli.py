@@ -176,7 +176,15 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
         self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
-        self.assertIn("learning replay --events", status_payload["agent_next_action"])
+        self.assertIn("learning replay --clean-source-events", status_payload["agent_next_action"])
+        self.assertNotIn("benchmark", status_payload["agent_next_action"])
+        self.assertTrue(
+            status_payload["lanes"]["current_history_extraction"]["requires_explicit_source"]
+        )
+        foreground_commands = " ".join(
+            str(action.get("command", "")) for action in status_payload["next_actions"]
+        )
+        self.assertNotIn("benchmark_learning_loop_public_companion", foreground_commands)
 
     def test_do_not_use_here_writes_public_safe_feedback_rows_when_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

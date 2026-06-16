@@ -514,6 +514,22 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertTrue(payload["contract"]["read_only_report"])
         self.assertTrue(payload["route_readiness"]["navigation_only"])
 
+    def test_default_text_explains_no_input_and_fixture_panels(self) -> None:
+        empty = facade.run_command(["observatory"], capture_output=True)
+        fixture = facade.run_command(["observatory", "--fixture"], capture_output=True)
+
+        self.assertTrue(empty.ok, empty.stderr)
+        self.assertIn("no diagnostic inputs loaded", empty.stdout.casefold())
+        self.assertIn("aippocampus observatory --fixture", empty.stdout)
+        self.assertIn("--summary-json", empty.stdout)
+
+        self.assertTrue(fixture.ok, fixture.stderr)
+        self.assertIn("useful_now:", fixture.stdout)
+        self.assertIn("wasted_motion:", fixture.stdout)
+        self.assertIn("quiet_for_a_reason:", fixture.stdout)
+        self.assertIn("needs_ripening:", fixture.stdout)
+        self.assertNotIn("PRIVATE_OBSERVATORY", fixture.stdout)
+
     def test_cli_facade_exposes_observatory_summary_json(self) -> None:
         result = facade.run_command(
             ["observatory", "--fixture", "--summary-json"],
@@ -526,6 +542,9 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertTrue(payload["read_only"])
         self.assertTrue(payload["not_control_plane"])
         self.assertGreater(payload["useful_now_count"], 0)
+        self.assertIn("panel_previews", payload)
+        self.assertTrue(payload["panel_previews"]["useful_now"])
+        self.assertLessEqual(len(payload["panel_previews"]["useful_now"]), 3)
         self.assertEqual(payload["full_audit_flag"], "--json")
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)

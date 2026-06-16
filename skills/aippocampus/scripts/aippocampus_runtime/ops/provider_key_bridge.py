@@ -408,6 +408,52 @@ def _blocked_plan_recommended_actions() -> list[dict[str, str]]:
     ]
 
 
+def build_provider_key_bridge_chooser(
+    *,
+    target: str = DEFAULT_TARGET,
+    provider_env_var: str = DEFAULT_PROVIDER_ENV_VAR,
+    include_local_paths: bool = False,
+) -> dict[str, Any]:
+    env_name = public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
+    recommended_actions = _blocked_plan_recommended_actions()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_provider_key_bridge",
+        "action": "plan",
+        "ok": True,
+        "applied": False,
+        "target": target,
+        "source": {"kind": "choice_required", "path_included": False},
+        "provider_env": {
+            "env_var": env_name,
+            "value_printed": False,
+            "value_stored_in_manifest": False,
+            "value_stored_in_hooks_json": False,
+        },
+        "candidate": {
+            "status": "source_choice_required",
+            "value_printed": False,
+            "path_included": False,
+        },
+        "chooser": {
+            "no_write_happened": True,
+            "choose_private_credential_source": True,
+            "apply_requires_consent": True,
+            "no_key_source_backed_recall_still_works": True,
+            "source_options": ["explicit-dotenv"],
+        },
+        "writes": [],
+        "issues": [],
+        "privacy": _privacy(include_local_paths),
+        "recommended_actions": recommended_actions,
+        "agent_next_action": recommended_actions[0]["command"],
+        "claim_boundary": (
+            "A provider-key bridge is optional. It can help future/restarted hooks use LLM-backed "
+            "semantic routes, but source-backed recall/search remains usable without it."
+        ),
+    }
+
+
 def _wrapper_script_text(*, manifest_path: Path, package_scripts_dir: Path) -> str:
     manifest_json = json.dumps(str(manifest_path))
     scripts_json = json.dumps(str(package_scripts_dir))
@@ -620,6 +666,9 @@ def render_text(report: dict[str, Any]) -> str:
     lines.append(f"- Action: {report.get('action')}")
     lines.append(f"- Target: {report.get('target', DEFAULT_TARGET)}")
     lines.append(f"- Status: {'ok' if report.get('ok') else 'blocked'}")
+    if report.get("chooser"):
+        lines.append("- Choose a private credential source before apply; no write happened.")
+        lines.append("- Continue without LLM if you only need source-backed recall/search.")
     if report.get("applied"):
         lines.append("- Bridge applied for future/restarted Codex hooks")
     if report.get("undone"):
@@ -658,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--apply", action="store_true", help="Write the bridge after explicit user choice.")
     action.add_argument("--undo", action="store_true", help="Remove the bridge and restore direct hooks.")
     parser.add_argument("--target", default=DEFAULT_TARGET, choices=SUPPORTED_TARGETS)
-    parser.add_argument("--source", default="explicit-dotenv", choices=SUPPORTED_SOURCES)
+    parser.add_argument("--source", choices=SUPPORTED_SOURCES)
     parser.add_argument("--provider-env-var", "--api-key-env", default=DEFAULT_PROVIDER_ENV_VAR)
     parser.add_argument("--credential-dotenv")
     parser.add_argument("--keychain-service")
@@ -680,10 +729,16 @@ def main(argv: list[str] | None = None) -> int:
         }
         if args.undo:
             report = undo_provider_key_bridge(**common)
+        elif not args.apply and not args.source and not args.credential_dotenv:
+            report = build_provider_key_bridge_chooser(
+                target=args.target,
+                provider_env_var=args.provider_env_var,
+                include_local_paths=bool(args.include_local_paths),
+            )
         else:
             params = {
                 **common,
-                "source": args.source,
+                "source": args.source or "explicit-dotenv",
                 "provider_env_var": args.provider_env_var,
                 "credential_dotenv": args.credential_dotenv,
                 "keychain_service": args.keychain_service,

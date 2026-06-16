@@ -298,6 +298,15 @@ def render_text(report: dict[str, Any]) -> str:
     cognitive_worker = _as_dict(report.get("cognitive_worker"))
     if cognitive_worker:
         lines.append(f"- Cognitive worker mode: {cognitive_worker.get('status', 'unknown')}")
+    hook_relevance = _as_dict(report.get("hook_relevance"))
+    if hook_relevance and not hook_relevance.get("actual_installed_hook_process_checked"):
+        lines.extend(
+            [
+                "- Hook process caveat: current/child-process visibility does not prove an already-running hook process can see the key.",
+                "- Hook bridge next: use `aippocampus onboard provider-key --plan --json`, apply only after choosing a private source, restart Codex/hook host, then run `aippocampus hooks prompt status --last` and `aippocampus doctor provider --json`.",
+                "- No-key path: source-backed recall/search remains usable without the provider-key bridge.",
+            ]
+        )
     for action in report.get("recommended_actions") or []:
         if isinstance(action, dict) and action.get("message"):
             lines.append(f"- Next: {action['message']}")
