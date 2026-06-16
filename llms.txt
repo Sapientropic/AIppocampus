@@ -113,8 +113,12 @@ uvx aippocampus mcp list-tools --json
 ```
 
 The MCP surface is read-mostly by default and exposes tools such as
-`search_memory`, `latest_reply`, `get_turn_context`, `list_threads`,
-`register_thread`, `sync_status`, and `memory_health`.
+`agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`,
+`search_memory`, `recall_context`, `recall_deepen`, `recall_diagnostic`,
+`latest_reply`, `get_turn_context`, `list_threads`, `register_thread`,
+`sync_status`, `memory_health`, `list_telepathy_handoffs`, and
+`deepen_telepathy_handoff`. Outcome feedback stays on the explicit CLI/local
+JSONL lane today; do not infer an MCP feedback-write tool.
 
 ## Important Boundaries
 

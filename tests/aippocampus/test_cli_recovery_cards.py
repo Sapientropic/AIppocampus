@@ -105,6 +105,38 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             install.stdout.index("--repo-root"),
         )
 
+    def test_natural_setup_memory_privacy_controls_commands_recover_to_cards(self) -> None:
+        setup = self.run_cli("setup", "--help")
+        install = self.run_cli("install", "--help")
+        memory = self.run_cli("memory", "--help")
+        privacy = self.run_cli("privacy", "--help")
+        controls = self.run_cli("controls", "--help")
+
+        for proc in (setup, install, memory, privacy, controls):
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertNotIn("unknown command", proc.stderr)
+
+        self.assertIn("First-run setup card", setup.stdout)
+        self.assertIn("aippocampus plugin install --codex --verify", setup.stdout)
+        self.assertIn("aippocampus update status --agent-json", setup.stdout)
+        self.assertIn("First-run install card", install.stdout)
+        self.assertIn("aippocampus agent recall", install.stdout)
+        self.assertIn("Memory action card", memory.stdout)
+        self.assertIn("source-backed", memory.stdout)
+        self.assertIn("aippocampus search", memory.stdout)
+        self.assertIn("Privacy and control card", privacy.stdout)
+        self.assertIn("pause", privacy.stdout)
+        self.assertIn("provider-key", privacy.stdout)
+        self.assertIn("Personal controls card", controls.stdout)
+        self.assertIn("do-not-use-here", controls.stdout)
+
+    def test_plugin_install_status_recovers_to_plugin_status(self) -> None:
+        proc = self.run_cli("plugin", "install", "--status")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Plugin status readiness card", proc.stdout)
+        self.assertIn("aippocampus plugin status --agent-json", proc.stdout)
+
     def test_status_alias_routes_to_health_instead_of_unknown_command(self) -> None:
         help_proc = self.run_cli("status", "--help")
 

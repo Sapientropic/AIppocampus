@@ -311,7 +311,16 @@ class OnboardCodexTests(unittest.TestCase):
         data = json.loads(proc.stdout)
         providers = {item["provider"]: item for item in data["data"]["providers"]}
         self.assertEqual(data["data"]["detail_level"], "frontstage")
+        self.assertEqual(providers["codex"]["state"], "write_enabled")
+        self.assertEqual(
+            providers["codex"]["frontstage_state"],
+            "registration_available_after_consent",
+        )
         self.assertFalse(providers["claude-code"]["current_cwd_match"])
+        self.assertEqual(
+            providers["claude-code"]["frontstage_state"],
+            "registration_available_after_consent",
+        )
         self.assertIn("scan_status", providers["claude-code"])
         self.assertEqual(
             providers["claude-code"]["next_action_code"],

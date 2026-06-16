@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,10 +15,15 @@ from aippocampus_runtime.navigation.semantic_candidate_context import (  # noqa:
 )
 from aippocampus_runtime.recall.query_expansion import plan_query_expansion  # noqa: E402
 from aippocampus_runtime.recall.semantic_bridge_map import (  # noqa: E402
+    materialize_semantic_bridge_rows,
     reduce_semantic_bridge_candidates,
 )
 from aippocampus_runtime.recall.semantic_effectiveness import (  # noqa: E402
+    append_semantic_effectiveness_rows,
+    apply_semantic_effectiveness_to_candidates,
+    load_semantic_effectiveness_rows,
     semantic_candidate_effectiveness_report,
+    semantic_effectiveness_rows_from_candidates_and_feedback,
 )
 
 
@@ -191,6 +197,127 @@ class SemanticCandidateContextBridgeEffectivenessTests(unittest.TestCase):
         self.assertTrue(rows["candidate:private"]["scope_bucket_preserved"])
         self.assertFalse(report["policy_boundary"]["runtime_weights_changed"])
         self.assertIn("source_truth_from_semantic_feedback", report["cannot_claim"])
+
+    def test_semantic_effectiveness_ledger_demotes_bridge_before_query_expansion(self) -> None:
+        bridge_rows = [
+            {
+                "candidate_id": "bridge:race-condition",
+                "kind": "semantic_bridge",
+                "from_terms": ["并发 bug"],
+                "to_terms": ["race condition"],
+                "source_refs": [source_ref("race")],
+                "scope_bucket": "project",
+                "freshness": "current",
+            }
+        ]
+        feedback_events = [
+            {
+                "candidate_id": "bridge:race-condition",
+                "outcome": "candidate_delivered",
+                "event_refs": [{"event_id": "surface-1"}],
+            },
+            {
+                "candidate_id": "bridge:race-condition",
+                "outcome": "wrong_route_drag",
+                "event_refs": [{"event_id": "wrong-1"}],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "semantic-effectiveness.jsonl"
+            rows = semantic_effectiveness_rows_from_candidates_and_feedback(bridge_rows, feedback_events)
+            append_semantic_effectiveness_rows(path, rows)
+            loaded_rows = load_semantic_effectiveness_rows(path)
+
+        plan = plan_query_expansion(
+            ["并发 bug"],
+            semantic_bridge_rows=bridge_rows,
+            semantic_effectiveness_rows=loaded_rows,
+        )
+
+        self.assertNotIn("race condition", plan["expanded_terms"])
+        self.assertEqual(plan["diagnostics"]["semantic_effectiveness"]["applied_count"], 1)
+        self.assertEqual(plan["diagnostics"]["semantic_effectiveness"]["demoted_count"], 1)
+        self.assertEqual(loaded_rows[0]["recommendation"], "demote")
+        self.assertTrue(loaded_rows[0]["source_reopen_required_before_claim"])
+
+    def test_semantic_bridge_materializer_feeds_query_expansion_without_private_truth_claim(self) -> None:
+        rows = materialize_semantic_bridge_rows(
+            feedback_rows=[
+                {
+                    "kind": "aippocampus_recall_feedback_event",
+                    "candidate_id": "bridge:route-feedback",
+                    "query_terms": ["并发 bug"],
+                    "reopened_terms": ["race condition"],
+                    "outcome": "source_reopen_success",
+                    "source_refs": [source_ref("route-feedback")],
+                    "event_refs": [{"event_id": "feedback-1"}],
+                    "scope_bucket": "project",
+                },
+                {
+                    "kind": "aippocampus_recall_feedback_event",
+                    "candidate_id": "bridge:blocked",
+                    "query_terms": ["旧路线"],
+                    "reopened_terms": ["stale route"],
+                    "outcome": "wrong_route_drag",
+                    "source_refs": [source_ref("blocked")],
+                    "event_refs": [{"event_id": "feedback-2"}],
+                    "scope_bucket": "project",
+                },
+            ],
+            learning_rows=[
+                {
+                    "kind": "aippocampus_learning_finding",
+                    "finding_id": "learn-preflight",
+                    "finding_kind": "workflow_order_finding",
+                    "workflow_family": "cheap_preflight_before_broad_test",
+                    "activation_terms": ["先整理"],
+                    "route_terms": ["run cheap preflight before broad tests"],
+                    "source_refs": [source_ref("learning")],
+                    "event_refs": [{"event_id": "learning-1"}],
+                    "scope_bucket": "project",
+                }
+            ],
+        )
+        plan = plan_query_expansion(["并发 bug"], semantic_bridge_rows=rows)
+        stale_plan = plan_query_expansion(["旧路线"], semantic_bridge_rows=rows)
+        encoded = json.dumps(rows, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("race condition", plan["expanded_terms"])
+        self.assertNotIn("stale route", stale_plan["expanded_terms"])
+        self.assertTrue(all(row["claim_permission"] == "none" for row in rows))
+        self.assertTrue(all(row["source_reopen_required_before_claim"] for row in rows))
+        self.assertNotIn("C:/", encoded)
+        self.assertNotIn("raw_private", encoded)
+
+    def test_semantic_effectiveness_scope_isolated_for_non_recall_candidates(self) -> None:
+        candidates = [
+            {
+                "candidate_id": "dream:candidate",
+                "kind": "dream_topology_candidate",
+                "source_refs": [source_ref("dream")],
+                "scope_bucket": "project",
+            },
+            {
+                "candidate_id": "dream:candidate",
+                "kind": "dream_topology_candidate",
+                "source_refs": [source_ref("private-dream")],
+                "scope_bucket": "user_private",
+            },
+        ]
+        rows = semantic_effectiveness_rows_from_candidates_and_feedback(
+            [candidates[0]],
+            [
+                {"candidate_id": "dream:candidate", "outcome": "candidate_delivered"},
+                {"candidate_id": "dream:candidate", "outcome": "blocked"},
+            ],
+        )
+
+        projected = apply_semantic_effectiveness_to_candidates(candidates, rows)
+
+        self.assertEqual(projected[0]["effectiveness_recommendation"], "demote")
+        self.assertEqual(projected[0]["status"], "demoted")
+        self.assertNotIn("effectiveness_recommendation", projected[1])
+        self.assertEqual(rows[0]["producer_kind"], "dream_probe")
 
 
 if __name__ == "__main__":

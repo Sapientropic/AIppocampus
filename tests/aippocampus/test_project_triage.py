@@ -309,6 +309,23 @@ def test_project_planning_automation_gets_distribution_milestone() -> None:
     assert result.milestone == "Public Readiness & Distribution"
 
 
+def test_github_live_category_check_routes_as_public_readiness_smoke() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            384,
+            "GitHub live category check",
+            "Verify live category routing for current GitHub issue and Project metadata.",
+            labels=("documentation",),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Public readiness"
+    assert result.kind == "Smoke"
+    assert result.stage == "Stage 1"
+    assert result.milestone == "Public Readiness & Distribution"
+
+
 def test_public_schema_privacy_issue_stays_in_distribution_milestone() -> None:
     result = project_triage.infer_triage(
         issue(

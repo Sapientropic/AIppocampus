@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
-from aippocampus_runtime.hooks.action_hint_cache import load_action_hint_records_with_diagnostics
+from aippocampus_runtime.hooks.action_hint_cache import (
+    DEFAULT_ACTION_HINT_CACHE_LABEL,
+    default_action_hint_cache_path,
+    load_action_hint_records_with_diagnostics,
+)
 from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
 from aippocampus_runtime.hooks.host_boundary import add_host_integration
 from aippocampus_runtime.hooks.install_prompt import (
@@ -104,7 +108,7 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
     valid_paths = [path for path in paths if path is not None]
     if not valid_paths:
         return {
-            "cache_status": "without_cache_path",
+            "cache_status": "with_missing_cache_file",
             "cache_path_configured": False,
             "cache_exists": False,
             "cache_record_count": 0,
@@ -113,10 +117,8 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
             "malformed_cache_line_count": 0,
             "provider_counts": {},
             "cache_path": "",
-            "next_command": (
-                "aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json; "
-                "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json"
-            ),
+            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            "next_command": "aippocampus hooks action refresh-cache --write --json",
         }
     path = valid_paths[0]
     if not path.exists():
@@ -130,7 +132,8 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
             "malformed_cache_line_count": 0,
             "provider_counts": {},
             "cache_path": str(path),
-            "next_command": f"aippocampus hooks action refresh-cache --cache-jsonl {path} --write --json",
+            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            "next_command": "aippocampus hooks action refresh-cache --write --json",
         }
     cache = load_action_hint_records_with_diagnostics(path)
     records = [row for row in cache.get("records") or [] if isinstance(row, Mapping)]
@@ -167,7 +170,8 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
         "malformed_cache_line_count": int(cache.get("malformed_cache_line_count") or 0),
         "provider_counts": provider_counts,
         "cache_path": str(path),
-        "next_command": f"aippocampus hooks action refresh-cache --cache-jsonl {path} --write --json",
+        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+        "next_command": "aippocampus hooks action refresh-cache --write --json",
     }
 
 
@@ -207,17 +211,15 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
     installed = bool(status_result.get("installed"))
     ready = installed and cache_status == "with_fresh_records"
     if not installed:
-        first_command = "aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json"
+        first_command = "aippocampus hooks action refresh-cache --write --json"
     elif not ready:
-        first_command = (
-            "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> "
-            "--write --json"
-        )
+        first_command = "aippocampus hooks action refresh-cache --write --json"
     else:
         first_command = "aippocampus hooks action status --json"
     next_steps = [{"label": "check", "command": "aippocampus hooks action status --json"}]
     if not installed:
-        next_steps.append({"label": "install", "command": first_command})
+        next_steps.append({"label": "prepare_cache", "command": first_command})
+        next_steps.append({"label": "install", "command": "aippocampus hooks action install --json"})
     elif not ready:
         next_steps.append({"label": "refresh_cache", "command": first_command})
     next_steps.append(
@@ -237,6 +239,7 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
         "authority": "navigation_only",
         "event": ACTION_HINT_EVENT,
         "cache_status": cache_status,
+        "cache_path_label": str(status_result.get("cache_path_label") or DEFAULT_ACTION_HINT_CACHE_LABEL),
         "cache_record_count": int(status_result.get("cache_record_count") or 0),
         "fresh_record_count": int(status_result.get("fresh_record_count") or 0),
         "purpose": "Small PreToolUse nudges for learned source routes; never source evidence.",
@@ -261,6 +264,8 @@ def install(
 ) -> dict[str, Any]:
     if host != SUPPORTED_HOST:
         return _unsupported(path, host=host)
+    if cache_jsonl is None:
+        cache_jsonl = default_action_hint_cache_path(Path.cwd())
     data = load_hooks(path)
     groups = event_groups(data)
     target = action_hint_hook(module=module, cache_jsonl=cache_jsonl, timeout=timeout)
@@ -285,6 +290,7 @@ def install(
                         "event_supported": True,
                         "support_status": "supported_by_codex_hooks_json",
                         "command": target["command"],
+                        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
                     }
                 )
             group["hooks"] = [
@@ -321,6 +327,7 @@ def install(
             "event_supported": True,
             "support_status": "supported_by_codex_hooks_json",
             "command": target["command"],
+            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
         }
     )
 
@@ -420,9 +427,10 @@ def status(
                     "fresh_record_count": 0,
                     "expired_record_count": 0,
                     "malformed_cache_line_count": 0,
-                    "provider_counts": {},
-                    "cache_path": "",
-                    "next_command": "aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json",
+                "provider_counts": {},
+                "cache_path": "",
+                    "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                    "next_command": "aippocampus hooks action refresh-cache --write --json",
                 }),
             }
         )
@@ -448,7 +456,7 @@ def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, 
         public["cache_path_redacted"] = False
     next_command = public.get("next_command")
     if raw_cache_path and isinstance(next_command, str):
-        public["next_command"] = next_command.replace(raw_cache_path, "<local-cache.jsonl>")
+        public["next_command"] = "aippocampus hooks action refresh-cache --write --json"
     public.pop("command", None)
     return public
 
@@ -457,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         epilog=(
             "Refresh prepared cache through the facade with: "
-            "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json"
+            "aippocampus hooks action refresh-cache --write --json"
         )
     )
     parser.add_argument(
@@ -507,7 +515,7 @@ def main(argv: list[str] | None = None) -> int:
                 (
                     step
                     for step in steps
-                    if step.get("label") in {"install", "refresh_cache"}
+                    if step.get("label") in {"prepare_cache", "refresh_cache", "install"}
                 ),
                 next((step for step in steps if step.get("label") == "check"), steps[0]),
             )

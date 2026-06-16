@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 1
@@ -39,6 +40,37 @@ def _bucket(value: Any) -> str:
 
 def _refs(value: Any) -> list[Mapping[str, Any]]:
     return [item for item in (value or []) if isinstance(item, Mapping)]
+
+
+def _public_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    raw: Sequence[Any]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        raw = value
+    else:
+        raw = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            continue
+        clean = {
+            str(key): item.get(key)
+            for key in (
+                "source_id",
+                "source_ref",
+                "thread_key",
+                "message_id",
+                "turn_id",
+                "turn_index",
+                "event_id",
+                "line",
+            )
+            if item.get(key) not in (None, "", [])
+        }
+        if clean and clean not in refs:
+            refs.append(clean)
+        if len(refs) >= limit:
+            break
+    return refs
 
 
 def _candidate_id(row: Mapping[str, Any]) -> str:
@@ -141,10 +173,28 @@ def semantic_candidate_effectiveness_report(
             "schema_version": SCHEMA_VERSION,
             "candidate_id": candidate_id,
             "candidate_kind": _candidate_kind(candidate),
+            "producer_kind": _candidate_kind(candidate),
             "scope_bucket": bucket,
             "source_ref_count": len(_refs(candidate.get("source_refs"))),
+            "source_refs": _public_refs(candidate.get("source_refs")),
             "surface_count": surface_count,
             "last_surfaced_at": _text(candidate.get("last_surfaced_at") or candidate.get("created_at")),
+            "surface_event_refs": _public_refs(
+                [
+                    ref
+                    for event in events
+                    for ref in _refs(event.get("event_refs") or event.get("surface_event_refs"))
+                    if _event_outcome(event) in SURFACE_OUTCOMES
+                ]
+            ),
+            "outcome_event_refs": _public_refs(
+                [
+                    ref
+                    for event in events
+                    for ref in _refs(event.get("event_refs") or event.get("outcome_event_refs"))
+                    if _event_outcome(event) not in SURFACE_OUTCOMES
+                ]
+            ),
             "outcome_counts": dict(sorted(counts.items())),
             "bounded_route_delta": delta,
             "recommendation": recommendation,
@@ -183,3 +233,95 @@ def semantic_candidate_effectiveness_report(
             "automatic_foreground_injection",
         ],
     }
+
+
+def semantic_effectiveness_rows_from_candidates_and_feedback(
+    candidates: Iterable[Mapping[str, Any]],
+    feedback_events: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return durable append-only semantic effectiveness rows.
+
+    The rows are the same bounded reducer output used by diagnostics, but this
+    helper names the durable ledger path explicitly so callers do not have to
+    treat a report object as storage.
+    """
+
+    return list(semantic_candidate_effectiveness_report(candidates, feedback_events)["rows"])
+
+
+def append_semantic_effectiveness_rows(
+    path: Path,
+    rows: Iterable[Mapping[str, Any]],
+) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        for row in rows:
+            if row.get("kind") != ROW_KIND:
+                raise ValueError(f"unsupported semantic effectiveness row kind: {row.get('kind')}")
+            handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
+            count += 1
+    return count
+
+
+def load_semantic_effectiveness_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, Mapping) and item.get("kind") == ROW_KIND:
+            rows.append(dict(item))
+    return rows
+
+
+def apply_semantic_effectiveness_to_candidates(
+    candidates: Iterable[Mapping[str, Any]],
+    ledger_rows: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Apply same-scope semantic feedback before a candidate is surfaced.
+
+    This changes only navigation pressure/status. It deliberately does not
+    mutate source refs, clean source, or claim permission; cross-scope rows are
+    ignored so a private/project correction cannot become a global mask.
+    """
+
+    latest: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for row in ledger_rows:
+        if not isinstance(row, Mapping) or row.get("kind") != ROW_KIND:
+            continue
+        candidate_id = _event_candidate_id(row)
+        bucket = _bucket(row.get("scope_bucket") or row.get("privacy_partition"))
+        if candidate_id:
+            latest[(bucket, candidate_id)] = row
+
+    projected: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            continue
+        copy = dict(candidate)
+        candidate_id = _candidate_id(copy)
+        bucket = _bucket(copy.get("scope_bucket") or copy.get("privacy_partition"))
+        row = latest.get((bucket, candidate_id))
+        if not row:
+            projected.append(copy)
+            continue
+        recommendation = str(row.get("recommendation") or "")
+        copy["effectiveness_recommendation"] = recommendation
+        copy["effectiveness_bounded_route_delta"] = row.get("bounded_route_delta")
+        copy["effectiveness_scope_bucket"] = bucket
+        copy["navigation_priority_delta"] = row.get("bounded_route_delta")
+        copy["semantic_effectiveness_applied"] = True
+        if recommendation in {"demote", "archive", "scope_local_only_no_public_promotion"}:
+            copy["status"] = "demoted" if recommendation == "demote" else "blocked"
+            copy["freshness"] = "stale" if recommendation in {"demote", "archive"} else copy.get("freshness")
+        elif recommendation == "promote_for_routing":
+            copy["status"] = copy.get("status") or "accepted"
+            copy["routing_promotion"] = "same_scope_effectiveness"
+        projected.append(copy)
+    return projected

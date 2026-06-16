@@ -150,6 +150,23 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["provider_env"]["value_checked"])
         self.assertFalse(report["privacy"]["env_var_value_checked"])
 
+    def test_validate_credentials_without_explicit_discovery_is_honest_not_run(self) -> None:
+        with provider_env({"DEEPSEEK_API_KEY": fake_provider_doctor_value("PRESENCE_ONLY")}):
+            report = provider_doctor.build_provider_doctor_report(
+                model_route="default",
+                check_child_process=False,
+                validate_credentials=True,
+            )
+
+        validation = report["credential_validation"]
+        self.assertEqual(validation["status"], "not_run")
+        self.assertEqual(
+            validation["reason"],
+            "validate_credentials_requires_explicit_discovery_source",
+        )
+        self.assertFalse(validation["actual_provider_probe_performed"])
+        self.assertFalse(validation["privacy_boundary"]["dotenv_files_read"])
+
     def test_custom_route_config_error_is_public_and_does_not_probe_secret_values(self) -> None:
         with provider_env(
             {

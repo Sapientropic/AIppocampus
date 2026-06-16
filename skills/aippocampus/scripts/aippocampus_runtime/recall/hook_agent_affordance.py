@@ -334,7 +334,13 @@ def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     else:
         next_line = "Next: call agent_recall with this cue before broad search."
     fallback_line = ""
-    if str(affordance.get("tool_visibility") or "unknown") != "visible":
+    visibility = str(affordance.get("tool_visibility") or "unknown")
+    if visibility == "cli_fallback_only":
+        fallback_line = (
+            " CLI fallback: "
+            f"{_AGENT_TOOL_BY_ACTION.get(action, 'aippocampus agent recall')}."
+        )
+    elif visibility != "visible":
         fallback_line = (
             " If the tool is not visible, refresh plugin tools or use the CLI: "
             f"{_AGENT_TOOL_BY_ACTION.get(action, 'aippocampus agent recall')}."

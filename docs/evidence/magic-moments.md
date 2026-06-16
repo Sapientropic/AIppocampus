@@ -16,6 +16,25 @@ and the reader-facing field report in
 They are product-shaped evidence, not benchmark scores, release claims, or
 proof that the base model remembered anything by itself.
 
+## First Useful Shape
+
+```text
+old cue -> source-backed snippet or reopenable route -> source boundary -> next action
+```
+
+Example public-safe receipt:
+
+- **Cue:** "without pretending it has innate memory"
+- **Source-backed hit:** `examples/public-memory-bundle/clean-source`, message
+  `msg_public_001`.
+- **Snippet:** the old user text asks whether an agent can catch up without
+  pretending it has innate memory.
+- **Boundary:** this supports the source trail and exact quote only after
+  source is reopened; it does not prove broad recall quality or innate model
+  memory.
+- **Next action:** deepen/open the source turn before using exact wording or
+  turning the route into a public claim.
+
 ## How To Read These
 
 - A memory scent or hook result is navigation, not evidence.

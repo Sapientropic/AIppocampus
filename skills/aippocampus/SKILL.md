@@ -1,6 +1,6 @@
 ---
 name: aippocampus
-description: Use early when nontrivial, fresh-thread, handoff, old-decision, correction, preference, life-wide, risky, repeated, high-cost, or continuity-sensitive work could change after source-backed continuity orientation. Also use for recovering old wording, clean source, ambient recall hooks, indexes, registry, sync, MCP access, and long Desktop session audits.
+description: Find source-backed continuity before important agent work: recover old wording, reopen routes, check handoffs/corrections/preferences, and keep fresh-thread or high-risk work grounded in local source. Also covers clean source, hooks, registry, sync, MCP access, and long-session audits.
 ---
 
 # AIppocampus

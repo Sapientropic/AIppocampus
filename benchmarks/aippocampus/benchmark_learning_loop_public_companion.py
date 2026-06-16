@@ -106,6 +106,73 @@ def rollout_cases_to_behavior_events(cases: Iterable[Mapping[str, Any]]) -> list
     return rows
 
 
+def public_workflow_order_fixture_events() -> list[dict[str, Any]]:
+    """Public-safe eligible workflow-order sequence for the companion denominator.
+
+    The fixture is expressed as normal behavior events so it goes through the
+    same source-shape reducers as sanitized history instead of bypassing them.
+    """
+
+    base = {
+        "command_family": "python_pytest",
+        "target_class": "public_companion_fixture",
+        "target_fingerprint": "public:workflow:context-reopen-contract",
+        "path_category_fingerprint": "public:workflow",
+        "workspace_or_environment_profile": "public_source_shape_fixture",
+        "scope": "public:benchmark",
+        "freshness_window": "recent",
+    }
+    return [
+        {
+            **base,
+            "kind": "behavior_event",
+            "event_id": "public-workflow-x-failed",
+            "status": "failed",
+            "failure_family": "context_missing",
+            "source_refs": [
+                {"source_id": "public-workflow-x-failed", "segment_id": "fixture-a"}
+            ],
+            "sequence_index": 10_001,
+        },
+        {
+            **base,
+            "kind": "behavior_event",
+            "event_id": "public-workflow-source-reopened",
+            "status": "succeeded",
+            "command_family": "source_reopen",
+            "failure_family": "none",
+            "reason_codes": ["same_target_window"],
+            "source_refs": [
+                {"source_id": "public-workflow-source-reopened", "segment_id": "fixture-b"}
+            ],
+            "sequence_index": 10_002,
+        },
+        {
+            **base,
+            "kind": "behavior_event",
+            "event_id": "public-workflow-x-succeeded",
+            "status": "succeeded",
+            "failure_family": "none",
+            "source_refs": [
+                {"source_id": "public-workflow-x-succeeded", "segment_id": "fixture-c"}
+            ],
+            "sequence_index": 10_003,
+        },
+        {
+            **base,
+            "kind": "behavior_event",
+            "event_id": "public-workflow-negative-failed",
+            "status": "failed",
+            "failure_family": "unrelated_public_failure",
+            "target_fingerprint": "public:workflow:negative-no-recovery",
+            "source_refs": [
+                {"source_id": "public-workflow-negative-failed", "segment_id": "fixture-d"}
+            ],
+            "sequence_index": 10_004,
+        },
+    ]
+
+
 def _future_surfaces(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     positive = 0
     surfaced = 0
@@ -211,10 +278,13 @@ def run_public_companion_eval(
     *,
     rollout_path: Path = DEFAULT_ROLLOUT,
     vcs_path: Path = DEFAULT_VCS,
+    include_public_workflow_fixture: bool = True,
 ) -> dict[str, Any]:
     rollout_cases = _load_rollout(rollout_path)
     vcs_cases = _load_vcs(vcs_path)
     behavior_events = rollout_cases_to_behavior_events(rollout_cases)
+    if include_public_workflow_fixture:
+        behavior_events.extend(public_workflow_order_fixture_events())
     signals = adapt_behavior_events_to_review_signals(behavior_events)
     duplicated = [*signals, *signals]
     recurring = detect_recurring_failure_findings(duplicated)
@@ -267,6 +337,9 @@ def run_public_companion_eval(
             "workflow_source_shape_eligible_count"
         ],
         "workflow_guidance_status": workflow_shape["status"],
+        "workflow_guidance_detected_count": workflow_shape[
+            "workflow_guidance_detected_count"
+        ],
         "rollout_future_event_surface_before_later_event_count": rollout_future[
             "future_event_surface_before_later_event_count"
         ],
@@ -294,7 +367,11 @@ def run_public_companion_eval(
         "case_count": len(rollout_cases) + len(vcs_cases),
         "supports": [
             "public_future_event_route_surface_reachability",
-            "workflow_guidance_zero_denominator_reported_explicitly",
+            (
+                "public_workflow_guidance_eligible_denominator_measured"
+                if workflow_shape["workflow_source_shape_eligible_count"] > 0
+                else "workflow_guidance_zero_denominator_reported_explicitly"
+            ),
         ],
         "agent_action": (
             "Use future_event_route_surface_companion as route/source-shape evidence; "
@@ -326,6 +403,11 @@ def run_public_companion_eval(
             "benchmarks/aippocampus/benchmark_state_bench_agent_learning.py",
             "benchmark_corpus/public_longitudinal_users/vcs_future_events_v1.jsonl",
             "benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v2.json",
+            *(
+                ["public_workflow_order_fixture_events"]
+                if include_public_workflow_fixture
+                else []
+            ),
         ],
         "example_public_event_ids": {
             "rollout_positive": rollout_future["example_positive_event_ids"],
@@ -359,6 +441,9 @@ def main(argv: list[str] | None = None) -> int:
             "Can claim: fixture wiring and public future-event companion metrics.\n"
             "Important limits: this runner currently needs eligible workflow-order public "
             "cases and cannot prove workflow guidance lift by itself.\n"
+            "Eligible workflow-guidance shape: X_failed -> Y_preflight_or_reopen -> "
+            "X_succeeded. Zero eligible cases is an honest no-denominator result, "
+            "not evidence that guidance failed or succeeded.\n"
             "Best next benchmark: use the owning workflow-guidance benchmark once public "
             "eligible cases exist."
         ),

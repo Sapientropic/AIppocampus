@@ -52,6 +52,7 @@ TOOLS: list[dict[str, Any]] = [
             "detail": {"type": "string", "enum": ["compact", "full", "diagnostic", "debug"]},
             "include_private_paths": {"type": "boolean"},
         },
+        required_any=["query", "intent"],
     ),
     tool_schema(
         "agent_aippo",
@@ -77,6 +78,7 @@ TOOLS: list[dict[str, Any]] = [
             "max": {"type": "integer", "minimum": 1, "maximum": 25},
             "include_private_paths": {"type": "boolean"},
         },
+        required_any=["handle", "request_index"],
     ),
     tool_schema(
         "agent_explain",
@@ -118,6 +120,7 @@ TOOLS: list[dict[str, Any]] = [
             "detail": {"type": "string", "enum": ["compact", "full", "diagnostic", "debug"]},
             "include_private_paths": {"type": "boolean"},
         },
+        required_any=["intent", "query"],
     ),
     tool_schema(
         "recall_deepen",

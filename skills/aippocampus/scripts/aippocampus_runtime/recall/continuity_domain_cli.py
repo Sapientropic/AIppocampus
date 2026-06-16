@@ -20,6 +20,8 @@ from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.continuity_domain_producer import (
+    DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET,
+    DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET,
     propose_continuity_domain_events_from_registry,
 )
 from aippocampus_runtime.recall.continuity_domains import (
@@ -69,10 +71,41 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
                 f"{summary.get('domain_count', 0)} | "
                 f"source refs: {summary.get('source_ref_count', 0)}"
             )
+    raw_metrics = payload.get("metrics")
+    if isinstance(raw_metrics, dict):
+        partial = bool(raw_metrics.get("scan_partial") or raw_metrics.get("scan_truncated_by_budget"))
+        scanned = raw_metrics.get("scanned_thread_count", 0)
+        registered = raw_metrics.get("registered_thread_count", 0)
+        considered = raw_metrics.get("considered_thread_count", scanned)
+        suffix = " partial" if partial else " complete"
+        print(f"scan: {scanned}/{registered} threads ({considered} considered,{suffix})")
+        print(
+            "candidates: "
+            f"{raw_metrics.get('candidate_domain_count', 0)} | "
+            f"low-info suppressed: {raw_metrics.get('low_information_label_suppressed_count', 0)}"
+        )
+    previews = payload.get("candidate_previews")
+    if isinstance(previews, list) and previews:
+        print("preview:")
+        for preview in previews[:5]:
+            if not isinstance(preview, dict):
+                continue
+            title = preview.get("title") or preview.get("domain_handle") or "untitled"
+            refs = preview.get("source_ref_count", 0)
+            print(f"- {title} ({refs} source refs)")
+        if len(previews) > 5:
+            print(f"- ... {len(previews) - 5} more candidates hidden")
+    raw_boundary = payload.get("preview_boundary")
+    if isinstance(raw_boundary, dict) and raw_boundary.get("preview_is_not_source_truth"):
+        print("boundary: preview is a route card; reopen source before claims")
     if payload.get("agent_next_action"):
         next_action = payload["agent_next_action"]
         if isinstance(next_action, dict):
-            print(f"next: {next_action.get('label') or next_action.get('command')}")
+            label = next_action.get("label") or next_action.get("command")
+            command = next_action.get("command")
+            print(f"next: {label}")
+            if command and command != label:
+                print(f"command: {command}")
         else:
             print(f"next: {next_action}")
 
@@ -105,7 +138,7 @@ def _events_path(args: argparse.Namespace) -> Path:
         return Path(args.events_path).resolve()
     return default_continuity_domain_events_path(
         Path(args.cwd).resolve(),
-        registry_dir=Path(args.registry_dir).resolve() if args.registry_dir else None,
+        registry_dir=_registry_dir_path(args),
     )
 
 
@@ -114,8 +147,13 @@ def _snapshot_dir(args: argparse.Namespace) -> Path:
         return Path(args.snapshot_dir).resolve()
     return default_continuity_domain_snapshot_dir(
         Path(args.cwd).resolve(),
-        registry_dir=Path(args.registry_dir).resolve() if args.registry_dir else None,
+        registry_dir=_registry_dir_path(args),
     )
+
+
+def _registry_dir_path(args: argparse.Namespace) -> Path | None:
+    raw = getattr(args, "subcommand_registry_dir", None) or getattr(args, "registry_dir", None)
+    return Path(raw).resolve() if raw else None
 
 
 def _clean_source_dir(args: argparse.Namespace, events_path: Path) -> Path | None:
@@ -379,8 +417,14 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
     }
     if previews:
         clean["agent_next_action"] = {
-            "id": "review_then_append_continuity_domains",
-            "label": "Review candidate_previews, then append/publish if they match the intended continuity domains.",
+            "id": "use_candidate_preview_as_reopenable_route",
+            "label": "Use candidate_previews as navigation only; run recall/deepen on the cue before any factual claim.",
+            "command": "aippocampus agent recall <cue> --json",
+            "requires_operator_review": False,
+        }
+        clean["operator_next_action"] = {
+            "id": "append_after_reviewed_backfill",
+            "label": "Only after operator review, append/publish durable continuity domains.",
             "command": "aippocampus continuity-domain produce --append --publish --json",
             "requires_operator_review": True,
         }
@@ -400,12 +444,38 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
         raise ValueError("produce --preview is dry-run only; use --append after review")
     if args.preview and args.include_local_detail:
         raise ValueError("produce accepts --preview or --include-local-detail, not both")
+    preview_scan_policy: MappingPayload | None = None
+    broad_scan = bool(getattr(args, "broad_scan", False))
+    max_threads = args.max_threads
+    max_candidates = args.max_candidates
+    if args.preview:
+        if not broad_scan and max_threads is None:
+            max_threads = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET
+            preview_scan_policy = {
+                "mode": "foreground_bounded_default",
+                "max_threads": max_threads,
+                "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
+            }
+        elif broad_scan:
+            preview_scan_policy = {
+                "mode": "explicit_broad_scan",
+                "max_threads": max_threads,
+            }
+        else:
+            preview_scan_policy = {
+                "mode": "explicit_bounded",
+                "max_threads": max_threads,
+            }
+        if max_candidates is None:
+            max_candidates = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET
+    elif max_candidates is None:
+        max_candidates = 24
     proposal = propose_continuity_domain_events_from_registry(
         registry_path=Path(args.registry).resolve() if args.registry else None,
-        registry_dir=Path(args.registry_dir).resolve() if args.registry_dir else None,
+        registry_dir=_registry_dir_path(args),
         min_support=args.min_support,
-        max_threads=args.max_threads,
-        max_candidates=args.max_candidates,
+        max_threads=max_threads,
+        max_candidates=max_candidates,
         include_local_detail=True,
         refresh_query_pattern_routes=(
             bool(args.refresh_query_pattern_routes)
@@ -419,6 +489,8 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
         payload = proposal
     else:
         payload = _strip_producer_local_detail(proposal)
+    if preview_scan_policy is not None:
+        payload["preview_scan_policy"] = preview_scan_policy
     payload["mode"] = "append" if args.append else "dry_run"
     if not args.append:
         return payload
@@ -465,8 +537,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Ordinary path: use `aippocampus agent recall` and deepen source "
-            "routes before claims. Use `produce --dry-run` to preview deterministic "
-            "domain candidates; use append/publish only for explicit backfill."
+            "routes before claims. Use `continuity-domain preview --json` for a "
+            "foreground-bounded route card; `produce --dry-run` and append/publish "
+            "are heavier operator/backfill paths."
         ),
     )
     parser.add_argument("--cwd", default=".")
@@ -489,22 +562,59 @@ def build_arg_parser() -> argparse.ArgumentParser:
     publish.add_argument("--snapshot-dir")
     publish.add_argument("--json", action="store_true", dest="json_output")
 
-    latest = sub.add_parser("latest", help="read the latest public-safe snapshot card")
+    read_path_description = (
+        "Read-path action card:\n"
+        "  Continuity-domain snapshots are reopenable routes, not source truth.\n"
+        "  Use them to choose what to reopen; deepen clean source before factual claims.\n"
+        "  Empty output means no published snapshot for this scope, not no memory exists."
+    )
+
+    latest = sub.add_parser(
+        "latest",
+        help="read the latest public-safe snapshot card",
+        description=read_path_description,
+        epilog=(
+            "Try:\n"
+            "  aippocampus continuity-domain latest --json\n"
+            "  aippocampus agent recall <cue> --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     latest.add_argument("--snapshot-dir")
     latest.add_argument("--json", action="store_true", dest="json_output")
 
-    list_parser = sub.add_parser("list", help="list public-safe continuity-domain snapshots")
+    list_parser = sub.add_parser(
+        "list",
+        help="list public-safe continuity-domain snapshots",
+        description=read_path_description,
+        epilog=(
+            "Try:\n"
+            "  aippocampus continuity-domain list --json\n"
+            "  aippocampus continuity-domain latest --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     list_parser.add_argument("--snapshot-dir")
     list_parser.add_argument("--json", action="store_true", dest="json_output")
 
-    report = sub.add_parser("report", help="read an existing public-safe snapshot report")
+    report = sub.add_parser(
+        "report",
+        help="read an existing public-safe snapshot report",
+        description=read_path_description,
+        epilog=(
+            "Try:\n"
+            "  aippocampus continuity-domain report --json\n"
+            "  aippocampus continuity-domain preview --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     report.add_argument("--snapshot")
     report.add_argument("--snapshot-dir")
     report.add_argument("--json", action="store_true", dest="json_output")
 
     produce = sub.add_parser("produce", help="preview/backfill deterministic producer candidates")
     produce.add_argument("--registry")
-    produce.add_argument("--registry-dir")
+    produce.add_argument("--registry-dir", dest="subcommand_registry_dir")
     produce.add_argument("--events-path")
     produce.add_argument("--snapshot-dir")
     produce.add_argument("--dry-run", action="store_true")
@@ -514,9 +624,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     produce.add_argument("--no-refresh-query-pattern-routes", action="store_true")
     produce.add_argument("--include-local-detail", action="store_true")
     produce.add_argument("--preview", action="store_true")
+    produce.add_argument("--broad-scan", action="store_true")
     produce.add_argument("--min-support", type=int, default=2)
     produce.add_argument("--max-threads", type=int)
-    produce.add_argument("--max-candidates", type=int, default=24)
+    produce.add_argument("--max-candidates", type=int)
     produce.add_argument("--json", action="store_true", dest="json_output")
 
     preview = sub.add_parser(
@@ -524,10 +635,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="foreground preview alias for deterministic producer candidates",
     )
     preview.add_argument("--registry")
-    preview.add_argument("--registry-dir")
+    preview.add_argument("--registry-dir", dest="subcommand_registry_dir")
+    preview.add_argument("--broad-scan", action="store_true")
     preview.add_argument("--min-support", type=int, default=2)
     preview.add_argument("--max-threads", type=int)
-    preview.add_argument("--max-candidates", type=int, default=24)
+    preview.add_argument("--max-candidates", type=int)
     preview.add_argument("--json", action="store_true", dest="json_output")
     preview.set_defaults(
         preview=True,

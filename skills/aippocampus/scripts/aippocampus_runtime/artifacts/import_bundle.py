@@ -14,6 +14,11 @@ from aippocampus_runtime.artifacts.publish import (
     index_pointer_path,
     resolve_sqlite_index_path,
 )
+from aippocampus_runtime.privacy import (
+    LOCAL_PATH_REDACTION,
+    redact_private_paths,
+    redact_sensitive_values,
+)
 
 
 def timestamp_slug() -> str:
@@ -90,6 +95,8 @@ def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
     sqlite_pointer = index_pointer_path(sqlite_index)
 
     return {
+        "ok": True,
+        "kind": "aippocampus_bundle_import",
         "extracted_to": str(extract_dir),
         "manifest": str(manifest_path) if manifest_path.exists() else None,
         "sqlite_index": str(sqlite_index),
@@ -97,15 +104,78 @@ def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
         "sqlite_pointer": str(sqlite_pointer) if sqlite_pointer.is_file() else None,
         "messages_jsonl": str(extract_dir / "index" / "messages.jsonl"),
         "graph_json": str(extract_dir / "index" / "graph.json"),
+        "anchor_written": not bool(args.no_anchor),
+        "anchor_path": str(dest / "thread-anchors.md") if not bool(args.no_anchor) else None,
+        "message_count": manifest.get("message_count"),
+        "raw_rollout_included": manifest.get("raw_rollout_included"),
+        "redaction_profile": manifest.get("redaction_profile"),
     }
 
 
+def _public_import_projection(payload: dict[str, Any], *, include_private_paths: bool) -> dict[str, Any]:
+    anchor_written = bool(payload.get("anchor_written"))
+    diagnostics = {
+        "extracted_to": payload.get("extracted_to"),
+        "manifest": payload.get("manifest"),
+        "sqlite_current": payload.get("sqlite_current"),
+        "sqlite_pointer": payload.get("sqlite_pointer"),
+        "messages_jsonl": payload.get("messages_jsonl"),
+        "graph_json": payload.get("graph_json"),
+        "anchor_path": payload.get("anchor_path"),
+    }
+    if not include_private_paths:
+        diagnostics = redact_private_paths(diagnostics)
+    return redact_sensitive_values(
+        {
+            "ok": bool(payload.get("ok", True)),
+            "kind": "aippocampus_bundle_import_summary",
+            "summary": {
+                "imported": bool(payload.get("ok", True)),
+                "message_count": payload.get("message_count"),
+                "anchor_written": anchor_written,
+                "redaction_profile": payload.get("redaction_profile"),
+                "raw_rollout_included": bool(payload.get("raw_rollout_included")),
+                "next_command": 'aippocampus search "keyword" --clean-source-dir <imported-index-folder> --json',
+                "no_anchor_command": "aippocampus import <bundle.zip> --dest <folder> --no-anchor",
+            },
+            "diagnostics": diagnostics,
+            "privacy_boundary": {
+                "local_paths_included": include_private_paths,
+                "path_redaction": "none" if include_private_paths else LOCAL_PATH_REDACTION,
+                "operator_private_details_flag": "--include-private-paths",
+            },
+        }
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aippocampus import")
-    parser.add_argument("bundle")
-    parser.add_argument("--dest", default=os.getcwd())
-    parser.add_argument("--name")
-    parser.add_argument("--no-anchor", action="store_true")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus import",
+        usage="aippocampus import <bundle.zip> [--dest <folder>] [--name <label>] [--no-anchor]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Import a portable AIppocampus bundle into a local folder.\n\n"
+            "Default output is a compact action card with local paths redacted. "
+            "Use --include-private-paths only for local operator diagnostics.\n\n"
+            "Anchor behavior:\n"
+            "  default      append a short local thread-anchors.md pointer under --dest\n"
+            "  --no-anchor  extract only; do not write the anchor note"
+        ),
+    )
+    parser.add_argument("bundle", help="Portable bundle zip to import.")
+    parser.add_argument(
+        "--dest",
+        default=os.getcwd(),
+        help="Local folder that receives the extracted bundle and optional thread-anchors.md.",
+    )
+    parser.add_argument("--name", help="Folder name under --dest. Defaults to timestamped import.")
+    parser.add_argument("--no-anchor", action="store_true", help="Do not append thread-anchors.md.")
+    parser.add_argument("--json", action="store_true", dest="json_output", help="Emit JSON; accepted for facade consistency.")
+    parser.add_argument(
+        "--include-private-paths",
+        action="store_true",
+        help="Operator diagnostic opt-in: include local extracted paths in JSON output.",
+    )
     return parser
 
 
@@ -114,17 +184,33 @@ def main(argv: list[str] | None = None) -> int:
     try:
         payload = import_bundle(args)
     except FileNotFoundError as exc:
+        message = str(redact_private_paths(str(exc)))
         payload = {
             "ok": False,
+            "kind": "aippocampus_bundle_import_summary",
             "error": {
                 "code": "bundle_not_found",
-                "message": str(exc),
+                "message": message,
+                "bundle_label": Path(str(args.bundle)).name,
                 "next_command": "aippocampus import <existing-bundle.zip> --dest <folder>",
+            },
+            "privacy_boundary": {
+                "local_paths_included": False,
+                "path_redaction": LOCAL_PATH_REDACTION,
             },
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 2
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            _public_import_projection(
+                payload,
+                include_private_paths=bool(args.include_private_paths),
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

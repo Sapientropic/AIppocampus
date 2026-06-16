@@ -530,6 +530,22 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)
 
+    def test_cli_help_leads_with_summary_card_before_operator_inputs(self) -> None:
+        result = facade.run_command(["observatory", "--help"], capture_output=True)
+
+        self.assertTrue(result.ok, result.stderr)
+        self.assertIn("Foreground summary", result.stdout)
+        self.assertIn("aippocampus observatory --summary-json", result.stdout)
+        self.assertIn("Operator/audit inputs", result.stdout)
+        self.assertLess(
+            result.stdout.index("Foreground summary"),
+            result.stdout.index("--route-candidates"),
+        )
+        self.assertLess(
+            result.stdout.index("Operator/audit inputs"),
+            result.stdout.index("--route-candidates"),
+        )
+
     def test_cli_facade_exposes_observatory_fixture_html(self) -> None:
         result = facade.run_command(["observatory", "--fixture", "--html"], capture_output=True)
 

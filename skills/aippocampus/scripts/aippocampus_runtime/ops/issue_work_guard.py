@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from typing import Any, Iterable
 
 SCHEMA_VERSION = "issue-work-active-pull-v0"
@@ -26,6 +27,8 @@ ARCHITECTURE_RE = re.compile(
     re.I,
 )
 TRIVIAL_RE = re.compile(r"\b(typo|spelling|formatting|link fix|rename only)\b", re.I)
+ISSUE_NUMBER_RE = re.compile(r"^\d+$")
+ISSUE_URL_RE = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+/issues/\d+(?:\b|$)")
 
 OWNER_REFS: dict[str, dict[str, str]] = {
     "semantic_scope_labeling": {
@@ -64,6 +67,59 @@ def _unique(values: Iterable[str]) -> list[str]:
 
 def _text(title: str, body: str = "") -> str:
     return f"{title}\n{body}".strip()
+
+
+def issue_reference_from_text(value: str) -> str | None:
+    raw = str(value or "").strip()
+    if ISSUE_NUMBER_RE.fullmatch(raw):
+        return raw
+    if ISSUE_URL_RE.match(raw):
+        return raw
+    return None
+
+
+def fetch_issue_context(reference: str) -> dict[str, Any]:
+    """Fetch public issue context for the natural foreground input shape.
+
+    The guard is often called from a GitHub issue audit where the agent only
+    has `1802` or a copied issue URL. Keeping this fetch here prevents the
+    caller from leaving the front door, manually reconstructing title/body, and
+    losing comment context before the active-pull decision is made. The fetched
+    material is still only used for route guidance; it is not source evidence.
+    """
+
+    proc = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "view",
+            reference,
+            "--comments",
+            "--json",
+            "number,title,body,url,comments",
+        ],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError("could not fetch GitHub issue context with `gh issue view`")
+    data = json.loads(proc.stdout or "{}")
+    if not isinstance(data, dict):
+        raise RuntimeError("GitHub issue context was not a JSON object")
+    comments = []
+    for item in data.get("comments") or []:
+        if isinstance(item, dict) and str(item.get("body") or "").strip():
+            comments.append(str(item.get("body") or ""))
+    return {
+        "number": data.get("number"),
+        "title": str(data.get("title") or ""),
+        "body": str(data.get("body") or ""),
+        "url": str(data.get("url") or ""),
+        "comments": comments,
+    }
 
 
 def classify_issue_work(title: str, body: str = "") -> list[str]:
@@ -159,7 +215,7 @@ def build_issue_active_pull_packet(
 
 
 def build_issue_work_guard_fixture_report() -> dict[str, Any]:
-    cases = [
+    cases: list[dict[str, Any]] = [
         {
             "case_id": "ignored_ambient_scent_benchmark_agent",
             "packet": build_issue_active_pull_packet(
@@ -214,11 +270,47 @@ def render_issue_work_guard_text(packet: dict[str, Any]) -> str:
         [
             "AIppocampus work guard",
             f"decision: {'pull continuity first' if should_pull else 'continue'}",
+            (
+                "meaning: pull = run recall/deepen or inspect listed owners before implementation; "
+                "continue = no active continuity pull is required yet"
+            ),
             f"reason: {reason}",
             f"next: {next_line}",
             "boundary: this is route guidance, not evidence or a task decision.",
         ]
     )
+
+
+def _issue_body_with_comments(context: dict[str, Any], body_override: str = "") -> str:
+    parts = [body_override or str(context.get("body") or "")]
+    comments = [
+        str(item).strip()
+        for item in context.get("comments") or []
+        if str(item).strip()
+    ]
+    if comments:
+        parts.append("\n\nIssue comments:\n" + "\n\n".join(comments))
+    return "\n".join(part for part in parts if part).strip()
+
+
+def _issue_error_payload(message: str) -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_issue_work_orientation_packet",
+        "schema_version": SCHEMA_VERSION,
+        "ok": False,
+        "error": {
+            "code": "issue_context_unavailable",
+            "message": message,
+        },
+        "agent_next_action": (
+            "Retry from a GitHub checkout with `gh auth status`, pass --title/--body "
+            "directly, or inspect the issue/comments manually before continuing."
+        ),
+        "recovery_actions": [
+            "gh auth status",
+            "aippocampus work-guard --title <issue title> --body <issue body> --json",
+        ],
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -228,31 +320,67 @@ def main(argv: list[str] | None = None) -> int:
             "Issue-work orientation card:\n"
             "  Use before benchmark, architecture, recall, AIppo, source-side, or memory-design work.\n"
             "  It decides whether to pull continuity/source owners before broad manual search.\n"
+            "  `pull` means follow recall/deepen or listed owner refs before implementation.\n"
+            "  `continue` means no active continuity pull is required for this issue yet.\n"
             "  Output is route guidance only; it is not evidence and does not decide the issue for you."
         ),
         epilog=(
             "Examples:\n"
+            "  aippocampus work-guard 1802 --json\n"
+            "  aippocampus work-guard https://github.com/Sapientropic/AIppocampus/issues/1802 --json\n"
             "  aippocampus work-guard --title \"Fix LongMemEval source-side cache\" --json\n"
             "  aippocampus work-guard --title \"Fix typo in README\" --json"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--title", required=True)
+    parser.add_argument("issue_ref", nargs="?", help="GitHub issue number or issue URL.")
+    parser.add_argument("--issue", help="GitHub issue number or issue URL.")
+    parser.add_argument("--title")
     parser.add_argument("--body", default="")
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--fixture-report", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
+    issue_ref = args.issue or issue_reference_from_text(args.issue_ref or "")
+    issue_context: dict[str, Any] = {}
+    if issue_ref:
+        try:
+            issue_context = fetch_issue_context(issue_ref)
+        except Exception as exc:
+            payload = _issue_error_payload(str(exc))
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print("AIppocampus work guard")
+                print("decision: issue context unavailable")
+                print("next: " + payload["agent_next_action"])
+            return 2
+    elif args.issue_ref:
+        parser.error("positional input must be a GitHub issue number or issue URL")
+
+    title = args.title or str(issue_context.get("title") or "")
+    if not args.fixture_report and not title:
+        parser.error("work-guard requires --title or a GitHub issue number/URL")
+    body = _issue_body_with_comments(issue_context, args.body)
+
     payload = (
         build_issue_work_guard_fixture_report()
         if args.fixture_report
         else build_issue_active_pull_packet(
-            title=args.title,
-            body=args.body,
+            title=title,
+            body=body,
             changed_files=args.changed_file,
         )
     )
+    if issue_context and not args.fixture_report:
+        payload["issue_number"] = issue_context.get("number")
+        payload["issue_url"] = issue_context.get("url")
+        payload["issue_context"] = {
+            "title_included": bool(issue_context.get("title")),
+            "body_included": bool(issue_context.get("body") or args.body),
+            "comments_included": len(issue_context.get("comments") or []),
+        }
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:

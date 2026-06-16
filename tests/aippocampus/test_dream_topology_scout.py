@@ -177,6 +177,77 @@ class DreamTopologyScoutTests(unittest.TestCase):
         self.assertIn("profile_claim", rejected["profile_claim"]["reasons"])
         self.assertIn("missing_source_anchor", rejected["source_free_symbolic_claim"]["reasons"])
 
+    def test_learning_topology_candidate_materializes_review_task_and_bounded_finding(self) -> None:
+        candidate = topology_scout.candidate_or_rejection(
+            {
+                "case_id": "learning-cycle",
+                "shape": "cycle",
+                "source_anchors": ["issue:#1654", "report:learning-loop"],
+                "learning_finding_id": "learn_find_1654",
+                "scope": "project:AIppocampus",
+                "topic_epoch": "learning-loop-topology",
+            }
+        )
+
+        report = topology_scout.materialize_pattern_completion_review_tasks(
+            [candidate],
+            now="2026-06-16T00:00:00Z",
+        )
+        review = topology_scout.consume_pattern_completion_review_tasks(report["tasks"])
+
+        self.assertEqual(report["kind"], "aippocampus_dream_topology_review_task_report")
+        self.assertEqual(report["metrics"]["materialized_task_count"], 1)
+        self.assertEqual(report["metrics"]["suppressed_task_count"], 0)
+        task = report["tasks"][0]
+        self.assertEqual(task["task_type"], "pattern_completion_learning_loop_review")
+        self.assertEqual(task["source_anchor_count"], 2)
+        self.assertFalse(task["foreground_eligible"])
+        self.assertTrue(task["source_reopen_required_before_claim"])
+        self.assertEqual(task["claim_permission"], "none")
+        self.assertTrue(task["navigation_only"])
+        self.assertEqual(review["metrics"]["bounded_finding_count"], 1)
+        self.assertFalse(review["findings"][0]["supports_factual_claim"])
+
+    def test_learning_topology_review_task_suppresses_stale_private_or_source_free_candidates(self) -> None:
+        stale = {
+            "kind": "dream_topology_candidate",
+            "candidate_id": "dream_topology_stale",
+            "case_id": "stale",
+            "shape": "cycle",
+            "source_anchors": ["issue:#old"],
+            "freshness": "stale",
+            "cross_layer_projection": {
+                "learning_finding_id": "learn-old",
+                "trigger_job": "pattern_completion_learning_loop_review",
+            },
+        }
+        private = {
+            **stale,
+            "candidate_id": "dream_topology_private",
+            "case_id": "private",
+            "freshness": "current",
+            "scope_bucket": "user_private",
+        }
+        source_free = {
+            **stale,
+            "candidate_id": "dream_topology_source_free",
+            "case_id": "source-free",
+            "freshness": "current",
+            "source_anchors": [],
+        }
+
+        report = topology_scout.materialize_pattern_completion_review_tasks(
+            [stale, private, source_free],
+            now="2026-06-16T00:00:00Z",
+        )
+
+        self.assertEqual(report["metrics"]["materialized_task_count"], 0)
+        self.assertEqual(report["metrics"]["suppressed_task_count"], 3)
+        reasons = {item["reason"] for item in report["suppressed"]}
+        self.assertIn("stale_or_local_only", reasons)
+        self.assertIn("private_scope_blocked", reasons)
+        self.assertIn("missing_source_anchor", reasons)
+
     def test_cli_sanitizes_private_material(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

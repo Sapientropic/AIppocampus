@@ -406,6 +406,29 @@ def _error_payload(code: str, message: str, **details: Any) -> dict[str, Any]:
     }
 
 
+def _handoff_not_found_payload(*, card_id: str, path: Path) -> dict[str, Any]:
+    payload = _error_payload(
+        "handoff_not_found",
+        "No Telepathy handoff card matched the requested card_id.",
+        card_id=card_id,
+        store_path=str(path),
+    )
+    payload.update(
+        {
+            "agent_next_action": (
+                "Run `aippocampus telepathy list --status all` to choose an existing "
+                "card, or continue with normal recall/search if no handoff is expected."
+            ),
+            "follow_up_commands": [
+                "aippocampus telepathy list --status all",
+                'aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex',
+            ],
+            "privacy_boundary": "Telepathy card ids are local coordination selectors, not source truth.",
+        }
+    )
+    return payload
+
+
 def list_handoffs_payload(
     *,
     cwd: str | Path | None = None,
@@ -464,12 +487,7 @@ def deepen_handoff_payload(
     path = resolve_store_path(store_path, cwd=cwd)
     card = current_handoff_cards(load_events(path)).get(card_id)
     if card is None:
-        return _error_payload(
-            "handoff_not_found",
-            "No Telepathy handoff card matched the requested card_id.",
-            card_id=card_id,
-            store_path=str(path),
-        )
+        return _handoff_not_found_payload(card_id=card_id, path=path)
     return {
         "ok": True,
         "kind": DEEPEN_KIND,
@@ -502,12 +520,7 @@ def release_handoff(
     events = load_events(path)
     card = current_handoff_cards(events).get(card_id)
     if card is None:
-        return _error_payload(
-            "handoff_not_found",
-            "No Telepathy handoff card matched the requested card_id.",
-            card_id=card_id,
-            store_path=str(path),
-        )
+        return _handoff_not_found_payload(card_id=card_id, path=path)
     now = core.now_utc()
     released_card = _card_with_lifecycle(card, status="released", event_time=now)
     event = {
@@ -674,6 +687,8 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
         return
     status = "ok" if payload.get("ok") else "blocked"
     print(f"{payload.get('kind', 'telepathy_handoff')}: {status}")
+    if not payload.get("ok") and payload.get("agent_next_action"):
+        print(f"next: {payload.get('agent_next_action')}")
     if "count" in payload:
         print(f"count: {payload['count']}")
     empty_state = payload.get("empty_state")
@@ -689,12 +704,16 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
 
 
 def _preset_help() -> str:
-    lines = ["presets:"]
+    lines = ["Preset examples:"]
     for name, preset in HANDOFF_PRESETS.items():
         lines.append(f"  {name}: {preset['label']}")
     lines.append(
         'example: aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex'
     )
+    lines.append("")
+    lines.append("Advanced/operator schema flags:")
+    lines.append("  --coordination-mode / --source-support / --status / --handoff-readiness")
+    lines.append("  Use these for tests or explicit schema control; ordinary handoffs should use --preset.")
     return "\n".join(lines)
 
 
@@ -707,7 +726,16 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument("--json", action="store_true", help="Emit JSON.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    create = subparsers.add_parser("create", parents=[common], epilog=_preset_help())
+    create = subparsers.add_parser(
+        "create",
+        parents=[common],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        usage=(
+            'aippocampus telepathy create [--preset PRESET] --scope SCOPE --owner OWNER '
+            "[advanced/operator flags]"
+        ),
+        description=_preset_help(),
+    )
     create.add_argument("--preset", choices=sorted(HANDOFF_PRESETS), default="handoff")
     create.add_argument("--scope", required=True)
     create.add_argument("--owner", required=True)
@@ -734,6 +762,13 @@ def _parser() -> argparse.ArgumentParser:
 
     deepen = subparsers.add_parser("deepen", parents=[common])
     deepen.add_argument("card_id")
+
+    read = subparsers.add_parser(
+        "read",
+        parents=[common],
+        help="Alias for deepen; reads one handoff card without writing state.",
+    )
+    read.add_argument("card_id")
 
     release = subparsers.add_parser("release", parents=[common])
     release.add_argument("card_id")
@@ -769,7 +804,7 @@ def main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 limit=args.max,
             )
-        elif args.command == "deepen":
+        elif args.command in {"deepen", "read"}:
             payload = deepen_handoff_payload(
                 card_id=args.card_id,
                 cwd=args.cwd,

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">AIppocampus first recall receipt</title>
+  <desc id="desc">A compact public-safe receipt showing an old cue, a source-backed hit, the source boundary, and the next action.</desc>
+  <rect width="1280" height="720" fill="#f7f1e8"/>
+  <rect x="72" y="64" width="1136" height="592" rx="28" fill="#ffffff" stroke="#163447" stroke-width="4"/>
+  <text x="112" y="128" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#12334a">AIppocampus first recall</text>
+  <text x="112" y="178" font-family="Arial, sans-serif" font-size="24" fill="#46606b">source-backed continuity without pretending the model has innate memory</text>
+  <g font-family="Arial, sans-serif" font-size="30" fill="#12334a">
+    <text x="112" y="260" font-weight="700">cue</text>
+    <text x="112" y="342" font-weight="700">source hit</text>
+    <text x="112" y="424" font-weight="700">boundary</text>
+    <text x="112" y="506" font-weight="700">next</text>
+  </g>
+  <g font-family="Arial, sans-serif" font-size="28" fill="#203c48">
+    <text x="300" y="260">"without pretending it has innate memory"</text>
+    <text x="300" y="342">msg_public_001 from clean-source</text>
+    <text x="300" y="424">snippet supports the source trail; route ids are navigation</text>
+    <text x="300" y="506">deepen or reopen source before exact claims</text>
+  </g>
+  <rect x="300" y="548" width="732" height="58" rx="12" fill="#e5f2f0"/>
+  <text x="326" y="586" font-family="Arial, sans-serif" font-size="24" fill="#12334a">aippocampus search "without pretending it has innate memory"</text>
+</svg>

@@ -221,6 +221,25 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("cue_hash", human.stdout)
         self.assertNotIn("route_ids", human.stdout)
 
+    def test_cli_help_leads_with_use_case_before_diagnostic_flags(self) -> None:
+        why_help = facade.run_command(["why-recall", "--help"], capture_output=True)
+        why_not_help = facade.run_command(["why-not-recall", "--help"], capture_output=True)
+
+        self.assertTrue(why_help.ok, why_help.stderr)
+        self.assertTrue(why_not_help.ok, why_not_help.stderr)
+        self.assertIn("What this command is for", why_help.stdout)
+        self.assertIn("What this command is for", why_not_help.stdout)
+        self.assertIn("deepen selected route", why_help.stdout)
+        self.assertIn("refine cue", why_not_help.stdout)
+        self.assertLess(
+            why_help.stdout.index("What this command is for"),
+            why_help.stdout.index("--semantic-result-json"),
+        )
+        self.assertLess(
+            why_not_help.stdout.index("What this command is for"),
+            why_not_help.stdout.index("--semantic-result-json"),
+        )
+
     def test_why_not_recall_distinguishes_low_specificity_surface_from_silence(self) -> None:
         payload = why.recall_diagnostic_report(
             cue="vague context",
@@ -246,6 +265,33 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertFalse(payload["why_not_applicable"])
         self.assertEqual(payload["route_specificity"], "low")
         self.assertIn("tighten_cue", payload["suggested_next"])
+
+    def test_why_not_low_specificity_json_has_one_primary_action_card(self) -> None:
+        payload = why.recall_diagnostic_report(
+            cue="vague context",
+            mode="why-not-recall",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            recall_context_payload={
+                "status": "ok",
+                "query_terms": ["vague"],
+                "routes": [
+                    {
+                        "route_id": f"route-{index}",
+                        "source_refs": [{"source_id": f"src-{index}"}],
+                        "source_reopen_required": True,
+                    }
+                    for index in range(5)
+                ],
+            },
+        )
+
+        card = payload["action_card"]
+        self.assertEqual(card["primary_action"], "refine_cue_first")
+        self.assertIn("tighten", card["next_command"])
+        self.assertIn("deepen only if continuity matters", card["do_not"])
+        self.assertNotIn("route_ids", card)
+        self.assertEqual(payload["foreground_next_action"], card["primary_action"])
 
     def test_mcp_recall_diagnostic_returns_public_safe_payload(self) -> None:
         response = mcp.handle_request(

@@ -66,6 +66,14 @@ GENERIC_JSONL_IMPORT_PREVIEW_COMMAND = (
 )
 
 
+def _frontstage_state_from_machine_state(state: str) -> str:
+    if state == "write_enabled":
+        return "registration_available_after_consent"
+    if state == "dry_run":
+        return "preview_available"
+    return state or "unknown"
+
+
 def _sample_sessions(instance: ConversationProvider, *, detailed: bool) -> tuple[list[object], bool]:
     if detailed:
         return list(instance.discover_sessions()), True
@@ -116,12 +124,14 @@ def _provider_capability(provider: str, *, cwd: str | None = None, detailed: boo
             current_match = False
     write_enabled = resolved in {"codex", "claude-code", "generic-jsonl"}
     state = "write_enabled" if write_enabled else "dry_run"
+    machine_state = state if sessions or resolved == "codex" else "blocked"
     blockers: list[str] = []
     if resolved == "generic-jsonl" and not sessions:
         blockers.append("Set AIPPOCAMPUS_GENERIC_IMPORT_DIR to a generic JSONL file or directory.")
     return {
         "provider": resolved,
-        "state": state if sessions or resolved == "codex" else "blocked",
+        "state": machine_state,
+        "frontstage_state": _frontstage_state_from_machine_state(machine_state),
         "detected": bool(sessions),
         "transcript_count": len(sessions),
         "transcript_count_exact": bool(detailed and scan_complete),
@@ -169,6 +179,7 @@ def provider_status_report(
                 "discovery_only": "Provider can list local transcripts but cannot safely build clean source yet.",
                 "dry_run": "Provider can preview planned registration without writing.",
                 "write_enabled": "Machine state: registration is available only when an explicit onboarding command is run.",
+                "registration_available_after_consent": "Frontstage state: registration can be previewed and written only after explicit consent.",
                 "blocked": "Provider is missing, not configured, or has no discoverable transcripts.",
             },
             "auto": {
@@ -321,6 +332,15 @@ def public_provider_status_report(report: dict, *, include_private_paths: bool =
         return report
     public = dict(report)
     data = dict(public.get("data") or {})
+    providers = []
+    for item in data.get("providers") or []:
+        provider = dict(item)
+        provider.setdefault(
+            "frontstage_state",
+            _frontstage_state_from_machine_state(str(provider.get("state") or "")),
+        )
+        providers.append(provider)
+    data["providers"] = providers
     storage = dict(data.get("storage") or {})
     if storage.get("path"):
         storage["path"] = "<local-path-redacted>"
@@ -332,12 +352,9 @@ def public_provider_status_report(report: dict, *, include_private_paths: bool =
 
 
 def _frontstage_state_label(item: dict) -> str:
-    state = str(item.get("state") or "")
-    if state == "write_enabled":
-        return "registration_available_after_consent"
-    if state == "dry_run":
-        return "preview_available"
-    return state or "unknown"
+    return _frontstage_state_from_machine_state(
+        str(item.get("frontstage_state") or item.get("state") or "")
+    )
 
 
 def render_status_text(report: dict) -> str:
@@ -366,7 +383,7 @@ def render_status_text(report: dict) -> str:
             )
         )
         if item.get("scan_status") == "partial_frontstage_sample":
-            lines.append("  scan: partial frontstage sample; use --json for operator inventory")
+            lines.append("  scan: partial frontstage sample; use --operator-json for operator inventory")
         if item.get("agent_next_action"):
             lines.append(f"  next: {item.get('agent_next_action')}")
         if item.get("preview_command"):

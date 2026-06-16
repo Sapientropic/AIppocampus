@@ -100,6 +100,22 @@ class HookAgentAffordanceTests(unittest.TestCase):
         self.assertEqual(packet["tool_visibility"], "visible")
         self.assertNotIn("If the tool is not visible", text or "")
 
+    def test_format_distinguishes_cli_fallback_only_from_unknown_visibility(self) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"candidate_type": "memory_route"}],
+                "tool_visibility": "cli_fallback_only",
+            }
+        )
+        text = affordance.format_hook_agent_affordance(packet)
+
+        self.assertEqual(packet["tool_visibility"], "cli_fallback_only")
+        self.assertIn("CLI fallback:", text or "")
+        self.assertIn("aippocampus agent recall", text or "")
+        self.assertNotIn("refresh plugin tools", text or "")
+
     def test_low_risk_aippo_posture_and_strong_claim_boundaries_are_separate(self) -> None:
         report = affordance.build_hook_agent_affordance_fixture_report()
         by_id = {case["case_id"]: case for case in report["agent_policy_cases"]}

@@ -66,7 +66,14 @@ source of truth.
 
 ## Reproducible First Path
 
-The smallest public-safe path is read-only first:
+The first useful proof is a source-backed receipt. In a source checkout, use
+the bundled public example before any package/status tour:
+
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
+
+The no-clone package path is read-only first:
 
 ```sh
 uvx aippocampus --help
@@ -125,14 +132,14 @@ evidence correctly.
 
 | Gate | Status | Blocks |
 | --- | --- | --- |
-| [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) opt-in agent continuity path | Closing with `aippocampus agent ...` runtime wiring | Claiming one practical foreground agent path beyond fixtures. |
-| [#1153](https://github.com/Sapientropic/AIppocampus/issues/1153) context-loss continuous-memory slice | Closing with `github_1153_context_loss_public_continuity_v1`; contract gate passes, quality gate remains false | Stronger missing-context diagnostic behavior claim without superseding the old complete-spec expected-null row or claiming LoCoMo / private / live continuity quality. |
-| [#1154](https://github.com/Sapientropic/AIppocampus/issues/1154) E2E50 public behavior-pack pivot | Closing with public-safe behavior pack as primary path; private 7/20 retained count remains dogfood only | Shareable E2E50 behavior-pack contract without private-history case-count blocking. |
+| [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) opt-in agent continuity path | Closed; current route is `aippocampus agent ...` runtime wiring plus public API docs | Claiming one practical foreground agent path beyond fixtures now cites the landed facade and its boundaries. |
+| [#1153](https://github.com/Sapientropic/AIppocampus/issues/1153) context-loss continuous-memory slice | Closed with `github_1153_context_loss_public_continuity_v1`; contract gate passes, quality gate remains false | Stronger missing-context diagnostic behavior claim without superseding the old complete-spec expected-null row or claiming LoCoMo / private / live continuity quality. |
+| [#1154](https://github.com/Sapientropic/AIppocampus/issues/1154) E2E50 public behavior-pack pivot | Closed with public-safe behavior pack as primary path; private 7/20 retained count remains dogfood only | Shareable E2E50 behavior-pack contract without private-history case-count blocking. |
 | [#1157](https://github.com/Sapientropic/AIppocampus/issues/1157) LongMemEval-S answer/latency harness | Closed with fixed-reader harness; no promoted provider score yet | End-to-end answer/latency claim on top of verified retrieval. |
 | [#1158](https://github.com/Sapientropic/AIppocampus/issues/1158) LoCoMo text-QA harness | Closed with fixed-reader harness; no promoted provider score yet | Mainstream long-conversation QA comparison. |
-| [#1155](https://github.com/Sapientropic/AIppocampus/issues/1155) LongMemEval-V2 official pilot | Closing with tiny official-harness pilot decision and adapter; no V2 score yet | Any V2 answer/latency quality claim. |
+| [#1155](https://github.com/Sapientropic/AIppocampus/issues/1155) LongMemEval-V2 official pilot | Closed with tiny official-harness pilot decision and adapter; no V2 score yet | Any V2 answer/latency quality claim still needs a promoted official V2 run. |
 | [#1165](https://github.com/Sapientropic/AIppocampus/issues/1165) maturity gates | Closed | Use the landed gate before citing small deterministic fixtures as quality evidence. |
-| [#1166](https://github.com/Sapientropic/AIppocampus/issues/1166) this ledger | In progress until merged | A single public origin/current-value thread before broader launch. |
+| [#1166](https://github.com/Sapientropic/AIppocampus/issues/1166) this ledger | Closed; this page is now the current-value route map | Keep launch-gate wording current and route stronger claims through current-claims/readiness evidence. |
 
 ## Agent Recommendation Boundary
 

@@ -4,6 +4,11 @@ Role: detail index for public-readiness evidence ledgers.
 Status: current detail layer; the canonical entrypoint remains
 [`../public-readiness-verification.md`](../public-readiness-verification.md).
 
+Read this folder as audit detail. For a current positive claim, start with
+[`../../current-claims.md`](../../current-claims.md) or
+[`../stage-0-5-readiness.md`](../stage-0-5-readiness.md), then reopen only the
+dated entry that supports the row.
+
 | File | Owns |
 | --- | --- |
 | [`dated-ledger.md`](dated-ledger.md) | Date-range index for public-readiness evidence entries. |

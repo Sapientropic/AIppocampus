@@ -37,16 +37,21 @@ class PluginDistributionTests(unittest.TestCase):
         interface = manifest["interface"]
         self.assertIn("privacy", interface["longDescription"].casefold())
         self.assertIn("explicit", interface["longDescription"].casefold())
-        self.assertIn("install wrapper", interface["longDescription"].casefold())
+        self.assertIn("first source-backed recall", interface["longDescription"].casefold())
         self.assertLessEqual(len(interface["defaultPrompt"]), 3)
         self.assertTrue(all(len(item) <= 128 for item in interface["defaultPrompt"]))
+        self.assertIn("source-backed", interface["shortDescription"].casefold())
+        self.assertTrue(any("recall" in item.casefold() for item in interface["defaultPrompt"]))
         self.assertEqual(interface["websiteURL"], "https://www.aippocampus.com")
         self.assertEqual(interface["privacyPolicyURL"], "https://www.aippocampus.com/privacy/")
         self.assertEqual(
             interface["termsOfServiceURL"],
             "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/community/plugin-terms-boundary.md",
         )
-        self.assertEqual(interface["screenshots"], [])
+        self.assertTrue(interface["screenshots"])
+        for screenshot in interface["screenshots"]:
+            self.assertTrue(screenshot.startswith("./assets/"))
+            self.assertTrue((PLUGIN_ROOT / screenshot.removeprefix("./")).exists())
         for key in ("composerIcon", "logo"):
             asset = interface[key]
             self.assertTrue(asset.startswith("./assets/"))

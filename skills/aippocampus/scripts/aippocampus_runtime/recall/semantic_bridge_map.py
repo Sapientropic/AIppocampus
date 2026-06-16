@@ -20,6 +20,9 @@ from aippocampus_runtime.navigation.semantic_candidate_context import (
     build_semantic_candidate_context,
 )
 from aippocampus_runtime.recall.query_policy import normalize_term, unique_preserve
+from aippocampus_runtime.recall.semantic_effectiveness import (
+    apply_semantic_effectiveness_to_candidates,
+)
 
 SCHEMA_VERSION = 1
 BRIDGE_KIND = "aippocampus_semantic_bridge_candidate"
@@ -232,6 +235,130 @@ def reduce_semantic_bridge_candidates(
     ]
 
 
+def _negative_outcome(value: Any) -> bool:
+    return str(value or "").strip() in NEGATIVE_OUTCOMES
+
+
+def _materialized_bridge_row(
+    *,
+    candidate_id: str,
+    from_terms: Any,
+    to_terms: Any,
+    producer: str,
+    source_refs: Any,
+    event_refs: Any = None,
+    scope: Any = None,
+    scope_bucket: Any = None,
+    topic_epoch: Any = None,
+    freshness: Any = None,
+    outcome: Any = None,
+) -> dict[str, Any] | None:
+    safe_from = _terms(from_terms, limit=16)
+    safe_to = _terms(to_terms, limit=24)
+    refs = _refs(source_refs)
+    events = _refs(event_refs)
+    if not safe_from or not safe_to:
+        return None
+    row: dict[str, Any] = {
+        "kind": BRIDGE_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "candidate_id": candidate_id
+        or "sbridge_" + _sha1_json({"from": safe_from, "to": safe_to, "refs": refs or events}, length=20),
+        "from_terms": safe_from,
+        "to_terms": safe_to,
+        "route_aliases": [],
+        "producer": producer,
+        "source_refs": refs,
+        "event_refs": events,
+        "scope": str(scope or "public_default")[:120],
+        "scope_bucket": _bucket(scope_bucket or scope),
+        "topic_epoch": str(topic_epoch or "topic-v1")[:80],
+        "freshness": _bucket(freshness or "current"),
+        "authority": AUTHORITY,
+        "action_grammar": "direction_with_ref" if refs else "direction_only",
+        "claim_permission": CLAIM_PERMISSION,
+        "source_reopen_required_before_claim": True,
+        "cannot_claim": ["semantic_bridge_is_source_truth"],
+        "reason_codes": ["materialized_from_public_safe_signal", f"producer:{producer}"],
+    }
+    if _negative_outcome(outcome):
+        row["status"] = "demoted"
+        row["reason_codes"].append("negative_route_feedback")
+    return row
+
+
+def materialize_semantic_bridge_rows(
+    *,
+    feedback_rows: Iterable[Mapping[str, Any]] | None = None,
+    learning_rows: Iterable[Mapping[str, Any]] | None = None,
+    dream_rows: Iterable[Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Materialize public-safe semantic bridge rows from existing signals.
+
+    The rows are an automatic sidecar for routing. They are intentionally weak:
+    source/event refs preserve reopenability, while negative/private/stale rows
+    are still demoted by the normal bridge reducer before expansion.
+    """
+
+    materialized: list[dict[str, Any]] = []
+    for row in feedback_rows or []:
+        if not isinstance(row, Mapping):
+            continue
+        bridge = _materialized_bridge_row(
+            candidate_id=str(row.get("candidate_id") or row.get("route_id") or ""),
+            from_terms=row.get("from_terms") or row.get("query_terms") or row.get("prompt_terms"),
+            to_terms=row.get("to_terms") or row.get("reopened_terms") or row.get("corrected_terms") or row.get("route_terms"),
+            producer="route_feedback",
+            source_refs=row.get("source_refs") or ([{"source_id": row.get("source_id")}] if row.get("source_id") else []),
+            event_refs=row.get("event_refs") or ([{"event_id": row.get("event_id")}] if row.get("event_id") else []),
+            scope=row.get("scope"),
+            scope_bucket=row.get("scope_bucket") or row.get("privacy_partition"),
+            topic_epoch=row.get("topic_epoch"),
+            freshness=row.get("freshness"),
+            outcome=row.get("outcome") or row.get("signal"),
+        )
+        if bridge:
+            materialized.append(bridge)
+    for row in learning_rows or []:
+        if not isinstance(row, Mapping):
+            continue
+        workflow = str(row.get("workflow_family") or row.get("finding_kind") or "").strip()
+        bridge = _materialized_bridge_row(
+            candidate_id=str(row.get("candidate_id") or row.get("finding_id") or ""),
+            from_terms=row.get("from_terms") or row.get("activation_terms") or row.get("query_terms") or [workflow],
+            to_terms=row.get("to_terms") or row.get("route_terms") or row.get("action_terms") or [workflow],
+            producer="learning_loop",
+            source_refs=row.get("source_refs"),
+            event_refs=row.get("event_refs"),
+            scope=row.get("scope"),
+            scope_bucket=row.get("scope_bucket") or row.get("privacy_partition"),
+            topic_epoch=row.get("topic_epoch"),
+            freshness=row.get("freshness") or row.get("status"),
+            outcome=row.get("outcome") or row.get("quality_gate"),
+        )
+        if bridge:
+            materialized.append(bridge)
+    for row in dream_rows or []:
+        if not isinstance(row, Mapping):
+            continue
+        bridge = _materialized_bridge_row(
+            candidate_id=str(row.get("candidate_id") or ""),
+            from_terms=row.get("from_terms") or row.get("trigger_terms") or row.get("source_anchors"),
+            to_terms=row.get("to_terms") or row.get("route_terms") or row.get("shared_topic_tokens"),
+            producer="dream_topology",
+            source_refs=row.get("source_refs") or [{"source_id": anchor} for anchor in _terms(row.get("source_anchors"), limit=6)],
+            event_refs=row.get("event_refs"),
+            scope=row.get("scope"),
+            scope_bucket=row.get("scope_bucket") or row.get("privacy_partition"),
+            topic_epoch=row.get("topic_epoch"),
+            freshness=row.get("freshness"),
+            outcome=row.get("outcome") or row.get("status"),
+        )
+        if bridge:
+            materialized.append(bridge)
+    return materialized
+
+
 def load_semantic_bridge_rows(path: str | Path | None) -> list[dict[str, Any]]:
     if not path:
         return []
@@ -284,11 +411,23 @@ def semantic_bridge_expansion_terms(
     query_terms: Sequence[str],
     bridge_rows: Iterable[Mapping[str, Any]],
     *,
+    semantic_effectiveness_rows: Iterable[Mapping[str, Any]] | None = None,
     limit: int = 64,
 ) -> tuple[list[str], dict[str, Any]]:
+    raw_rows = [row for row in bridge_rows if isinstance(row, Mapping)]
+    effective_rows = apply_semantic_effectiveness_to_candidates(
+        raw_rows,
+        semantic_effectiveness_rows or [],
+    )
+    applied = [row for row in effective_rows if row.get("semantic_effectiveness_applied")]
+    demoted = [
+        row
+        for row in applied
+        if row.get("effectiveness_recommendation") in {"demote", "archive", "scope_local_only_no_public_promotion"}
+    ]
     reduced = [
         row
-        for row in reduce_semantic_bridge_candidates(bridge_rows)
+        for row in reduce_semantic_bridge_candidates(effective_rows)
         if row["status"] == "accepted" and bridge_overlaps_query(query_terms, row)
     ]
     terms = unique_preserve(
@@ -305,4 +444,10 @@ def semantic_bridge_expansion_terms(
             [reason for row in reduced for reason in row["reason_codes"]],
             limit=8,
         ),
+        "semantic_effectiveness": {
+            "applied_count": len(applied),
+            "demoted_count": len(demoted),
+            "source_reopen_required_before_claim": True,
+            "feedback_is_not_source_truth": True,
+        },
     }

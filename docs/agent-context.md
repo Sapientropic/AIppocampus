@@ -249,18 +249,27 @@ uvx aippocampus mcp list-tools --json
 
 Typical MCP tools include:
 
+- `agent_recall`
+- `agent_aippo`
+- `agent_deepen`
+- `agent_explain`
 - `search_memory`
 - `recall_context`
 - `recall_deepen`
+- `recall_diagnostic`
 - `latest_reply`
 - `get_turn_context`
 - `list_threads`
 - `register_thread`
 - `sync_status`
 - `memory_health`
+- `list_telepathy_handoffs`
+- `deepen_telepathy_handoff`
 
 The MCP server is local stdio and read-mostly by default. Treat it as a way for
 agents to inspect local clean-source memory, not as a hosted memory backend.
+Outcome feedback is currently the explicit CLI/local JSONL lane, not an MCP
+write tool.
 
 ## Agent Decision Snippet
 

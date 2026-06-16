@@ -18,6 +18,7 @@ def render_text(payload: Mapping[str, Any]) -> str:
     diagnostic = str(payload.get("diagnostic_class") or "unknown")
     reasons = [str(item) for item in payload.get("reasons") or []][:3]
     specificity = payload.get("route_specificity") or "unknown"
+    action_card = payload.get("action_card") if isinstance(payload.get("action_card"), Mapping) else {}
     if mode == "why-not-recall" and diagnostic == "surfaced_but_low_specificity":
         happened = "A route did surface, but it was too broad to treat as a good recall answer."
         next_command = "aippocampus why-recall \"<more specific cue>\""
@@ -30,7 +31,9 @@ def render_text(payload: Mapping[str, Any]) -> str:
     else:
         happened = f"Recall diagnostic returned {decision}."
         next_command = "aippocampus health --json"
-    if payload.get("next_safe_action") == "reopen_source":
+    if action_card.get("next_command"):
+        next_command = str(action_card["next_command"])
+    elif payload.get("next_safe_action") == "reopen_source":
         next_command = "aippocampus agent recall \"<cue>\" --public; then deepen before claims"
     lines = [
         f"AIppocampus {mode}",
@@ -43,10 +46,28 @@ def render_text(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _description_for_prog(prog: str) -> str:
+    if "why-not" in prog:
+        return """What this command is for:
+  Explain why memory did not help, or why a surfaced route is too broad to trust.
+  Primary next action: refine cue first; deepen only if continuity genuinely matters.
+
+Advanced/operator detail:
+  Semantic, lock, cache, and handle flags are diagnostics for local investigation."""
+    return """What this command is for:
+  Explain why recall surfaced, stayed silent, or degraded before you rely on memory.
+  Primary next action: deepen selected route before claims, or refine cue if no route surfaced.
+
+Advanced/operator detail:
+  Semantic, lock, cache, and handle flags are diagnostics for local investigation."""
+
+
 def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog,
-        description="Explain recall routing decisions.",
+        usage=f"{prog} cue [--json] [advanced/operator flags]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=_description_for_prog(prog),
     )
     parser.add_argument("cue")
     parser.add_argument("--cwd", default=os.getcwd())

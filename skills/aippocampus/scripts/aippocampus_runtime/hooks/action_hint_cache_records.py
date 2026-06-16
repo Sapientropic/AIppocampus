@@ -188,6 +188,8 @@ def _base_record(
         "expires_at_unix": _expires_at(row, now_unix=now_unix, ttl_seconds=ttl_seconds),
         "confidence": str(row.get("confidence") or "medium").casefold(),
         "occurrence_count": int(row.get("occurrence_count") or 1),
+        "effectiveness_status": str(row.get("effectiveness_status") or ""),
+        "navigation_priority_delta": float(row.get("navigation_priority_delta") or 0.0),
         "source_refs": [dict(ref) for ref in source_refs][:6],
         "source_handles": [dict(handle) for handle in source_handles][:4],
         "anti_nag_ids": _strings(row.get("anti_nag_ids") or [record_id]),

@@ -8,6 +8,10 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
+sys.path.insert(0, str(BENCHMARKS))
+
+from shared.benchmark_entrypoints import benchmark_entrypoint_manifest  # noqa: E402
 
 
 def run_repo_python(*args: str) -> subprocess.CompletedProcess[str]:
@@ -137,6 +141,33 @@ class BenchmarkEntrypointTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertTrue(payload["report_generation_ok"])
+
+    def test_entrypoint_manifest_classifies_known_slow_json_runners_without_running_them(self) -> None:
+        manifest = benchmark_entrypoint_manifest(BENCHMARKS)
+        by_name = {row["script"]: row for row in manifest["entrypoints"]}
+
+        self.assertEqual(manifest["kind"], "aippocampus_benchmark_entrypoint_manifest")
+        self.assertGreater(manifest["scanned_count"], 50)
+        for script in (
+            "benchmark_longmemeval_answer.py",
+            "benchmark_source_evidence_retrieval.py",
+            "benchmark_suite.py",
+        ):
+            self.assertEqual(by_name[script]["entrypoint_class"], "heavy_local_eval")
+            self.assertFalse(by_name[script]["public_fast_json_default"])
+            self.assertIn("json_contract", by_name[script]["safe_sweep_modes"])
+
+    def test_benchmark_suite_can_emit_entrypoint_manifest_json_quickly(self) -> None:
+        result = run_repo_python(
+            "benchmarks/aippocampus/benchmark_suite.py",
+            "--entrypoint-manifest-json",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        by_name = {row["script"]: row for row in payload["entrypoints"]}
+        self.assertEqual(payload["kind"], "aippocampus_benchmark_entrypoint_manifest")
+        self.assertEqual(by_name["benchmark_suite.py"]["entrypoint_class"], "heavy_local_eval")
 
 
 if __name__ == "__main__":

@@ -289,6 +289,12 @@ class RecallScoringPolicyTests(unittest.TestCase):
         self.assertEqual(report["by_route_family"]["fts_first"]["source_reopen_success"], 1)
         self.assertEqual(report["by_currentness"]["stale"]["wrong_route_drag"], 1)
         self.assertIn("query_shape", report["repeated_query_shapes"][0])
+        self.assertEqual(report["surface_vs_help"]["route_surfaced_count"], 2)
+        self.assertEqual(report["surface_vs_help"]["route_helped_user_count"], 1)
+        self.assertEqual(report["surface_vs_help"]["route_hurt_or_noisy_count"], 1)
+        self.assertEqual(report["surface_vs_help"]["help_rate"], 0.5)
+        self.assertTrue(report["contract"]["surfaced_is_not_helped"])
+        self.assertTrue(report["contract"]["feedback_does_not_mutate_source_truth"])
 
     def test_before_commitment_map_reuses_route_material_for_pull_and_nudge(self) -> None:
         surface_map = before_commitment_surface_map()

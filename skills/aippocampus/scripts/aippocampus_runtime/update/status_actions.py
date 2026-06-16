@@ -131,7 +131,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "why": "Action-time hints are optional PreToolUse nudges; refresh the prepared cache when you want them.",
                 "command": str(
                     action_hints.get("next_command")
-                    or "aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json"
+                    or "aippocampus hooks action refresh-cache --write --json"
                 ),
             }
         )

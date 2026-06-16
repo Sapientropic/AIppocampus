@@ -227,11 +227,25 @@ def append_ledger_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> int:
     return count
 
 
+def load_ledger_rows(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not path.exists():
+        return rows
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        if isinstance(payload, Mapping) and payload.get("kind") == LEDGER_ROW_KIND:
+            rows.append(dict(payload))
+    return rows
+
+
 __all__ = [
     "LEDGER_ROW_KIND",
     "REPORT_KIND",
     "append_ledger_rows",
     "apply_effectiveness_to_guidance",
     "ledger_rows_from_guidance_outcomes",
+    "load_ledger_rows",
     "summarize_effectiveness_ledger",
 ]

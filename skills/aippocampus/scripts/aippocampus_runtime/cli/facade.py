@@ -155,6 +155,88 @@ def print_status_help(*, file: TextIO | None = None) -> None:
     print("  aippocampus update status --agent-json", file=target)
 
 
+def print_plugin_status_help(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("usage: aippocampus plugin status [--agent-json|--json]", file=target)
+    print("", file=target)
+    print("Plugin status readiness card:", file=target)
+    print("  Checks whether the local Codex plugin package/cache and host-visible tools look fresh.", file=target)
+    print("  It is a plugin-shaped shortcut to update status, not a plugin install or hook enablement command.", file=target)
+    print("", file=target)
+    print("Try:", file=target)
+    print("  aippocampus plugin status --agent-json", file=target)
+    print("  aippocampus plugin install --codex --verify", file=target)
+    print("  aippocampus update status --agent-json", file=target)
+
+
+def print_first_run_setup_card(kind: str, *, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    title = "First-run install card" if kind == "install" else "First-run setup card"
+    print(f"AIppocampus {kind}", file=target)
+    print(title + ":", file=target)
+    print("  Goal: make the local Codex/CLI surface callable, then see one source-backed recall/search result.", file=target)
+    print("", file=target)
+    print("Ordinary Codex path:", file=target)
+    print("  aippocampus plugin install --codex --verify", file=target)
+    print("  aippocampus update status --agent-json", file=target)
+    print('  aippocampus agent recall "old decision or handoff cue" --json', file=target)
+    print("", file=target)
+    print("No installed command yet:", file=target)
+    print("  uvx aippocampus --help", file=target)
+    print("  uvx aippocampus onboard --provider auto --status", file=target)
+    print("", file=target)
+    print("Boundary: setup does not copy private memory, enable hooks, or configure provider keys unless you run those explicit commands.", file=target)
+
+
+def print_memory_card(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("AIppocampus memory", file=target)
+    print("Memory action card:", file=target)
+    print("  Use source-backed recall/search for facts; use self-notes only as weak direction.", file=target)
+    print("", file=target)
+    print("Recall/search:", file=target)
+    print('  aippocampus agent recall "old decision or handoff cue" --json', file=target)
+    print('  aippocampus search "exact phrase" --json', file=target)
+    print("  aippocampus latest-reply --cwd .", file=target)
+    print("", file=target)
+    print("Weak or route-only lanes:", file=target)
+    print("  aippocampus self-note list --json", file=target)
+    print("  aippocampus continuity-domain latest --json", file=target)
+    print("Boundary: reopen/deepen clean source before quoting or making source-backed claims.", file=target)
+
+
+def print_privacy_card(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("AIppocampus privacy", file=target)
+    print("Privacy and control card:", file=target)
+    print("  Defaults are read-only and redacted; destructive or private-path output is explicit operator work.", file=target)
+    print("", file=target)
+    print("Controls:", file=target)
+    print("  aippocampus pause --help", file=target)
+    print("  aippocampus forget --help", file=target)
+    print("  aippocampus do-not-use-here --help", file=target)
+    print("", file=target)
+    print("Portability and credentials:", file=target)
+    print("  aippocampus export --help", file=target)
+    print("  aippocampus import --help", file=target)
+    print("  aippocampus provider-key --help", file=target)
+    print("Boundary: provider keys are optional; AIppocampus should still have a no-key source-backed path.", file=target)
+
+
+def print_controls_card(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("AIppocampus controls", file=target)
+    print("Personal controls card:", file=target)
+    print("  Use these when you want less memory influence, narrower scope, or a route disabled here.", file=target)
+    print("", file=target)
+    print("Commands:", file=target)
+    print("  aippocampus pause --help", file=target)
+    print("  aippocampus forget --help", file=target)
+    print("  aippocampus do-not-use-here --help", file=target)
+    print("", file=target)
+    print("Boundary: control commands do not delete private history by surprise; deletion/cleanup stays explicit.", file=target)
+
+
 @dataclass(frozen=True)
 class CommandSpec:
     script_name: str
@@ -511,6 +593,31 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
         if any(arg in {"-h", "--help"} for arg in args[1:]):
             print_config_help()
             return None, 0
+    if (
+        len(args) >= 2
+        and args[0] == "plugin"
+        and args[1] == "status"
+        and any(arg in {"-h", "--help"} for arg in args[2:])
+    ):
+        print_plugin_status_help()
+        return None, 0
+    if args[0] in {"setup", "install"} and (
+        len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])
+    ):
+        print_first_run_setup_card(args[0])
+        return None, 0
+    if args[0] == "memory" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
+        print_memory_card()
+        return None, 0
+    if args[0] == "privacy" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
+        print_privacy_card()
+        return None, 0
+    if args[0] == "controls" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
+        print_controls_card()
+        return None, 0
+    if len(args) >= 3 and args[:2] == ["plugin", "install"] and "--status" in args[2:]:
+        print_plugin_status_help()
+        return None, 0
     if args == ["storage"]:
         print_storage_recovery_card()
         return None, 0
@@ -639,17 +746,18 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("  aippocampus hooks lifecycle uninstall --json", file=target)
         return
     if kind == "action-install":
-        print("usage: aippocampus hooks action install --cache-jsonl <local-cache.jsonl> [options]", file=target)
+        print("usage: aippocampus hooks action install [--cache-jsonl PATH] [options]", file=target)
         print("", file=target)
         print("Action-time hook install boundary:", file=target)
         print("  Writes/merges the optional Codex PreToolUse action-hint hook entry.", file=target)
         print("  Reads a prepared public-safe hint cache; it does not mine private history at tool time.", file=target)
+        print("  Default cache: .aippocampus/action-hints/pretooluse-cache.jsonl", file=target)
         print("  Prepare or refresh the cache first when status says it is missing/stale.", file=target)
         print("", file=target)
         print("Before/after:", file=target)
         print("  aippocampus hooks action status --json", file=target)
-        print("  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json", file=target)
-        print("  aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json", file=target)
+        print("  aippocampus hooks action refresh-cache --write --json", file=target)
+        print("  aippocampus hooks action install --json", file=target)
         print("  aippocampus hooks action uninstall --json", file=target)
         return
     if kind == "action-uninstall":
@@ -685,30 +793,26 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("usage: aippocampus hooks action [status|install|uninstall|refresh-cache] [options]", file=target)
         print("", file=target)
         print("Action-time hints: optional PreToolUse nudges backed by a prepared cache.", file=target)
+        print("Default cache: .aippocampus/action-hints/pretooluse-cache.jsonl", file=target)
         print("Common:", file=target)
         print("  aippocampus hooks action status --json", file=target)
-        print("  aippocampus hooks action install --cache-jsonl <local-cache.jsonl> --json", file=target)
-        print(
-            "  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json",
-            file=target,
-        )
+        print("  aippocampus hooks action refresh-cache --write --json", file=target)
+        print("  aippocampus hooks action install --json", file=target)
         print("  aippocampus hooks action uninstall --json", file=target)
         return
     if kind == "action-refresh-cache":
         print(
-            "usage: aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> [--write] [--json]",
+            "usage: aippocampus hooks action refresh-cache [--cache-jsonl PATH] [--write] [--json]",
             file=target,
         )
         print("", file=target)
         print("Refresh the optional action-time hint cache from public-safe learning findings.", file=target)
+        print("Default cache: .aippocampus/action-hints/pretooluse-cache.jsonl", file=target)
         print("Default is a dry run; add --write to update the local cache.", file=target)
         print("", file=target)
         print("Common:", file=target)
-        print("  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --json", file=target)
-        print(
-            "  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json",
-            file=target,
-        )
+        print("  aippocampus hooks action refresh-cache --json", file=target)
+        print("  aippocampus hooks action refresh-cache --write --json", file=target)
         return
     if kind == "claude-code":
         print("usage: aippocampus hooks claude-code [status|dry-run] [options]", file=target)
@@ -730,7 +834,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
     print("  aippocampus hooks prompt status --last", file=target)
     print("  aippocampus hooks lifecycle status --json", file=target)
     print("  aippocampus hooks action status --json", file=target)
-    print("  aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json", file=target)
+    print("  aippocampus hooks action refresh-cache --write --json", file=target)
 
 
 def print_help(*, file: TextIO | None = None) -> None:

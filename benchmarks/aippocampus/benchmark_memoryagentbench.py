@@ -947,6 +947,47 @@ def build_stage3_aippocampus_runtime_arm(cases: Sequence[Mapping[str, Any]]) -> 
     }
 
 
+def build_stage3_local_replay_result(
+    cases: Sequence[Mapping[str, Any]],
+    runtime_arm: Mapping[str, Any],
+) -> dict[str, Any]:
+    ttl = runtime_arm.get("test_time_learning") if isinstance(runtime_arm, Mapping) else {}
+    conflict = runtime_arm.get("conflict_resolution") if isinstance(runtime_arm, Mapping) else {}
+    ttl_hit = int((ttl or {}).get("foreground_guidance_count") or 0)
+    conflict_hit = int((conflict or {}).get("stale_demoted_count") or 0)
+    runtime_hit_count = min(len(cases), ttl_hit + conflict_hit)
+    return {
+        "status": (
+            "bounded_local_source_backed_replay_completed"
+            if cases
+            else "skipped_missing_stage3_cases"
+        ),
+        "case_shape": "sanitized_stage3_ttl_conflict_hashes_counts_only",
+        "official_score_claimable": False,
+        "matched_baseline": {
+            "arm": "static_or_hash_contract",
+            "case_count": len(cases),
+            "retrieval_probe_hit_count": 0,
+            "answer_generation_mode": "not_executed",
+            "judging_mode": "not_executed",
+        },
+        "aippocampus_runtime": {
+            "arm": "aippocampus_runtime",
+            "case_count": len(cases),
+            "retrieval_probe_hit_count": runtime_hit_count,
+            "test_time_learning_guidance_count": ttl_hit,
+            "conflict_currentness_pass_count": conflict_hit,
+            "answer_generation_mode": "not_executed",
+            "judging_mode": "not_executed",
+        },
+        "claim_boundary": {
+            "local_replay_supports": "write_update_retrieve_projection_over_sanitized_case_shape",
+            "official_memoryagentbench_score": "not_claimed",
+            "answer_quality": "not_measured",
+        },
+    }
+
+
 def build_stage3_incremental_dry_run(
     *,
     dataset_dir: Path | str = DEFAULT_DATASET_DIR,
@@ -979,6 +1020,7 @@ def build_stage3_incremental_dry_run(
                 "downloads_dataset": False,
             },
             "mode_fields": mode_fields,
+            "official_score_claimable": False,
             "unsupported_reasons": ["write_update_instrumentation_missing"],
             "metrics": {
                 "stage3_case_count": 0,
@@ -1033,6 +1075,7 @@ def build_stage3_incremental_dry_run(
         if (case.get("apply_instrumentation") or {}).get("status") == "applied"
     ]
     runtime_arm = build_stage3_aippocampus_runtime_arm(cases)
+    local_replay_result = build_stage3_local_replay_result(cases, runtime_arm)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
@@ -1053,6 +1096,7 @@ def build_stage3_incremental_dry_run(
             "downloads_dataset": False,
         },
         "mode_fields": mode_fields,
+        "official_score_claimable": False,
         "unsupported_reasons": [],
         "metrics": {
             "stage3_case_count": len(cases),
@@ -1106,6 +1150,7 @@ def build_stage3_incremental_dry_run(
             },
             "aippocampus_runtime": runtime_arm,
         },
+        "local_replay_result": local_replay_result,
         "claim_boundary": stage3_claim_boundary(write_update_mode),
         "claim_boundary_ref": claim_boundary_ref(
             "docs/evidence/benchmarks/design/benchmark-priority-map.md"

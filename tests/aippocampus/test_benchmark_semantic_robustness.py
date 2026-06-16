@@ -13,6 +13,7 @@ for _path in (BENCHMARKS, SCRIPTS):
         sys.path.insert(0, str(_path))
 
 import benchmark_semantic_robustness as benchmark  # noqa: E402
+from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
 
 
 class SemanticRobustnessBenchmarkTests(unittest.TestCase):
@@ -25,6 +26,16 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_semantic_robustness_benchmark")
         self.assertEqual(payload["track"], "Track S")
         self.assertEqual(payload["status"], "diagnostic_only")
+        self.assertEqual(payload["benchmark_maturity_level"], "diagnostic_contract")
+        self.assertEqual(payload["measurement_origin"], "deterministic_contract")
+        self.assertFalse(payload["observed_agent_behavior"])
+        self.assertTrue(payload["contract_gate_ok"])
+        self.assertEqual(payload["quality_gate_kind"], "diagnostic_track_s_not_public_quality")
+        self.assertFalse(payload["public_quality_gate_ok"])
+        self.assertEqual(payload["decision_impact"], "diagnostic_only")
+        self.assertGreater(payload["case_count"], 0)
+        self.assertIn("supports", payload)
+        self.assertTrue(benchmark_report_contract_lint(payload)["ok"])
         self.assertFalse(payload["config"]["uses_live_llm_judge"])
         self.assertFalse(payload["config"]["requires_provider_keys"])
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_query_text_emitted"])

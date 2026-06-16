@@ -833,7 +833,18 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="aippocampus observatory",
-        description="Emit a public-safe, no-write Cognitive Observatory readout."
+        usage=(
+            "aippocampus observatory [--summary-json|--json|--html] "
+            "[--fixture] [operator/audit inputs]"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""Foreground summary:
+  aippocampus observatory --summary-json
+  One-screen read-only card: useful now / quiet for a reason / needs ripening / wasted motion.
+
+Operator/audit inputs:
+  Pass route-readiness, activation, recall, sleep, query-pattern, or cognitive-load JSON
+  only when inspecting the Observatory pipeline. Full audit remains behind --json.""",
     )
     parser.add_argument("--fixture", action="store_true", help="Use deterministic fixture rows.")
     parser.add_argument("--route-candidates", help="JSON file/list with route candidates.")

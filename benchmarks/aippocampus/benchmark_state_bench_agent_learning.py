@@ -413,6 +413,71 @@ def build_source_backed_learning_arm(learnings: Sequence[Mapping[str, Any]], *, 
     }
 
 
+def build_matched_fixture_task_run(
+    learnings: Sequence[Mapping[str, Any]],
+    *,
+    task_ids: Sequence[str] | None,
+    top_k: int,
+) -> dict[str, Any]:
+    tasks = list(task_ids or [str(row.get("task_id") or "") for row in learnings[:3]])
+    tasks = [task for task in tasks if task][: max(1, len(tasks))]
+    queries = [
+        " ".join(str(part) for part in task.replace("-", " ").split() if part)
+        for task in tasks
+    ]
+    if learnings:
+        for index, query in enumerate(queries):
+            if not query.strip():
+                queries[index] = " ".join(str(term) for term in learnings[0].get("query_terms", [])[:5])
+            elif not rank_learnings(query, learnings, top_k=top_k):
+                seed = learnings[min(index, len(learnings) - 1)]
+                terms = " ".join(str(term) for term in seed.get("query_terms", [])[:5])
+                queries[index] = f"{query} {terms}".strip()
+    retrieved = [rank_learnings(query, learnings, top_k=top_k) for query in queries]
+    return {
+        "status": (
+            "fixture_matched_task_run_completed"
+            if learnings and queries
+            else "skipped_no_fixture_tasks_or_learnings"
+        ),
+        "fixture_not_official_harness": True,
+        "official_score_claimable": False,
+        "matched_task_count": len(queries),
+        "retrieve_learnings_top_k": top_k,
+        "arms": {
+            "no_memory": {
+                "arm": "no_memory",
+                "task_run_count": len(queries),
+                "retrieved_learning_count": 0,
+                "official_task_run_count": 0,
+            },
+            "aippocampus": {
+                "arm": "aippocampus",
+                "task_run_count": len(queries),
+                "retrieved_learning_count": sum(len(items) for items in retrieved),
+                "retrieved_nonempty_task_count": sum(1 for items in retrieved if items),
+                "official_task_run_count": 0,
+            },
+        },
+        "claim_boundary": {
+            "matched_task_run_completed": "fixture_only",
+            "official_state_bench_score": "not_claimed",
+            "agent_learning_track_lift": "not_measured",
+        },
+        "privacy_boundary": {
+            "raw_task_text_emitted": False,
+            "raw_trajectory_text_emitted": False,
+            "absolute_paths_emitted": False,
+        },
+        "cannot_claim": [
+            "official_state_bench_score",
+            "agent_learning_track_lift",
+            "heldout_test_quality",
+            "leaderboard_submission_ready",
+        ],
+    }
+
+
 def write_learnings(path: Path, learnings: Sequence[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -437,6 +502,7 @@ def build_state_bench_agent_learning_report(
     num_runs: int = OFFICIAL_NUM_RUNS,
     num_workers: int = 1,
     env: Mapping[str, str] | None = None,
+    run_matched_fixture: bool = False,
 ) -> dict[str, Any]:
     if domain not in DOMAINS:
         raise ValueError(f"domain must be one of {', '.join(DOMAINS)}")
@@ -494,6 +560,7 @@ def build_state_bench_agent_learning_report(
                 "official_task_run_count": 0,
                 "source_backed_guidance_count": source_backed_arm["guidance_count"],
                 "source_ref_preserved_count": source_backed_arm["source_ref_preserved_count"],
+                "matched_fixture_task_run_count": 0,
             },
             "comparison": build_retrieval_comparison(learnings, top_k=OFFICIAL_TOP_K),
             "arms": {
@@ -541,6 +608,22 @@ def build_state_bench_agent_learning_report(
             report["claim_boundary"][
                 "matched_no_memory_baseline"
             ] = "blocked_by_locked_eval_client_until_official_tasks_run"
+    if run_matched_fixture:
+        matched_fixture = build_matched_fixture_task_run(
+            learnings,
+            task_ids=matched_task_ids,
+            top_k=OFFICIAL_TOP_K,
+        )
+        report["matched_task_run"] = matched_fixture
+        report["metrics"]["matched_fixture_task_run_count"] = matched_fixture[
+            "matched_task_count"
+        ]
+        report["official_submission_decision"] = (
+            "adapter_fixture_matched_run_no_go_official_score"
+        )
+        report["claim_boundary"][
+            "matched_no_memory_baseline"
+        ] = "fixture_only_not_official_task_score"
     return report
 
 
@@ -721,6 +804,7 @@ def _base_report(
         "created_at": now_utc(),
         "ok": True,
         "status": status,
+        "official_score_claimable": False,
         "official_submission_decision": decision,
         "domain": domain,
         "official_requirements": {
@@ -795,6 +879,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--matched-run-output-dir", type=Path)
     parser.add_argument("--matched-task-ids", help="Comma-separated public STATE-Bench task ids for a bounded subset.")
+    parser.add_argument(
+        "--run-matched-fixture",
+        action="store_true",
+        help="Run the deterministic local matched no-memory vs AIppocampus fixture arm; not an official score.",
+    )
     parser.add_argument("--agent-model-name", default=DEFAULT_AGENT_MODEL_NAME)
     parser.add_argument("--num-runs", type=int, default=OFFICIAL_NUM_RUNS)
     parser.add_argument("--num-workers", type=int, default=1)
@@ -819,6 +908,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         agent_model_name=args.agent_model_name,
         num_runs=args.num_runs,
         num_workers=args.num_workers,
+        run_matched_fixture=args.run_matched_fixture,
     )
     output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
     if args.output:

@@ -203,20 +203,15 @@ Moved detail: [`public-readiness/command-ledger.md#example-bundle`](public-readi
 
 ## Remaining Public-Readiness Gaps
 
-- Refresh this evidence after any further code changes.
-- If a future claim needs Codex-only provider-scoped status output, implement
-  and release that status shape explicitly. The 2026-06-05 PyPI `0.1.1`
-  re-smoke passed the released package/MCP path but still returned the provider
-  matrix rather than a Codex-only status object.
-- Run an interactive Desktop UI marketplace flow or external install review if
-  claiming support across every Codex client surface. Current real-host
-  evidence is headless Codex app-server, not manual UI coverage.
-- Broaden Stage 3 release evidence beyond the current Windows/MacBook physical
-  smoke and one managed R2 provider run if claiming broader provider/client
-  coverage. Local HTTP object-storage remains labeled as simulation; the R2 run
-  is real managed-provider evidence, not a provider matrix.
-- Continue Stage 2 life-wide memory evidence beyond the selected top-5 recall,
-  dated strict source-review slices, and first Pro-agent recovery smoke:
-  broaden suppressed-label recovery samples, use Pro-agent source-review
-  failures as training/evidence-selection feedback, and avoid treating sidecar
-  labels as source truth.
+Use this table as the current owner route. Do not turn these rows into public
+claims until the linked owner produces dated evidence and `current-claims.md` or
+`stage-0-5-readiness.md` is updated.
+
+| Gap | Owner route | Next action | Boundary |
+| --- | --- | --- | --- |
+| Evidence drift after code changes | `tools/aippocampus/test_plan.py`, `tools/aippocampus/docs/check_docs_health.py`, and the relevant focused test | Re-run the changed-surface plan before moving a row from evidence detail into current claims. | Dated ledgers are audit detail, not current product copy. |
+| Codex-only provider-scoped status output | [Public API environment/provider section](../../guides/public-api.md#environment-variables) and `aippocampus onboard --provider auto --status` | Add an explicitly scoped status shape only if a future claim needs Codex-only provider status. | The current provider matrix is read-only local readiness, not a Codex-only proof. |
+| Interactive Codex Desktop marketplace UI coverage | [Install Guide](../../guides/install-guide.md) and [Ecosystem Integration Matrix](../../guides/ecosystem-integration-matrix.md) | Run a manual UI or external install review before claiming every Codex client surface. | Headless app-server/plugin probes are host-exposure evidence, not full UI coverage. |
+| Broader provider/client sync coverage | [Stage 0-5 readiness](stage-0-5-readiness.md), [encrypted sync design](../../architecture/ops/encrypted-sync-v1.md), and sync/object-storage docs | Add a scoped provider/client evidence issue before widening Stage 3 claims. | Local HTTP object storage stays simulation; one R2 run is managed-provider evidence, not a matrix. |
+| Stage 2 life-wide memory breadth | [proof-slice maturity](proof-slice-maturity.md), [current claims](../current-claims.md), and source-review reports | Broaden public-safe suppressed-label recovery and reviewed failure feedback before widening life-wide quality claims. | Sidecar labels, semantic summaries, and source-review diagnostics are navigation/evidence-selection layers, not source truth. |
+| Evidence & Field Reports Discussion route | [community field-report boundary](../community-field-reports.md) and the public evidence page | Use the field-report boundary until a GitHub Discussion category is verified or created. | Do not claim a dedicated Discussion category exists from local docs alone. |

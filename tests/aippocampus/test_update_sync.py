@@ -266,6 +266,64 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn("plugin", summary["magic_blockers"])
         self.assertNotIn("llm", summary["optional_surfaces"])
 
+    def test_windows_lifecycle_hooks_install_hidden_launcher_without_changing_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            hooks_json = Path(tmp) / "hooks.json"
+            with (
+                patch.object(update_cli.install_lifecycle.os, "name", "nt"),
+                patch.object(
+                    update_cli.install_lifecycle,
+                    "windows_pythonw_executable",
+                    return_value=Path("C:/Python/pythonw.exe"),
+                ),
+            ):
+                update_cli.install_lifecycle.install(hooks_json)
+                status = update_cli.install_lifecycle.status(hooks_json)
+                commands = aippocampus_hook_commands_by_event(hooks_json)
+            prompt_command = update_cli.install_prompt.command_for()
+
+        lifecycle_commands = [
+            command
+            for event, event_commands in commands.items()
+            if event in update_cli.HOOK_EVENTS
+            for command in event_commands
+        ]
+        self.assertTrue(lifecycle_commands)
+        self.assertTrue(all("pythonw.exe" in command for command in lifecycle_commands))
+        self.assertEqual(status["windows_hidden_launch"]["status"], "ready")
+        self.assertNotIn("pythonw.exe", prompt_command.casefold())
+        self.assertIn("aippocampus_runtime.hooks.prompt", prompt_command)
+
+    def test_lifecycle_status_warns_about_visible_windows_launcher(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            hooks_json = Path(tmp) / "hooks.json"
+            visible_command = (
+                '$env:PYTHONPATH="C:\\repo\\skills\\aippocampus\\scripts"; '
+                '& "C:\\Python\\python.exe" -m aippocampus_runtime.hooks.lifecycle'
+            )
+            hooks_json.write_text(
+                json.dumps(
+                    {
+                        "hooks": {
+                            event: [{"hooks": [{"type": "command", "command": visible_command}]}]
+                            for event in update_cli.HOOK_EVENTS
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status = update_cli.install_lifecycle.status(hooks_json)
+
+        hidden = status["windows_hidden_launch"]
+        self.assertEqual(hidden["status"], "needs_reinstall")
+        self.assertFalse(hidden["ready"])
+        self.assertEqual(
+            hidden["warning_code"],
+            "windows_lifecycle_hook_may_show_console_window",
+        )
+        self.assertEqual(hidden["repair_command"], "aippocampus hooks lifecycle install")
+
     def test_status_reports_first_run_capability_ladder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
@@ -717,6 +775,120 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(payload["summary"]["agent_callable_ready"])
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "cli:--foreground-tools-visible")
+
+    def test_status_detects_stale_live_host_when_key_tool_smoke_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": False,
+                        "mcp_status": {
+                            "tool_names": [
+                                "memory_health",
+                                "search_memory",
+                                "sync_status",
+                                "agent_recall",
+                                "agent_aippo",
+                            ]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {
+                            "status": "available_requires_sync_dir",
+                            "backend": "local_folder",
+                        },
+                        "key_tool_smokes": [
+                            {
+                                "tool": "agent_recall",
+                                "ok": False,
+                                "is_error": True,
+                                "error_code": "tool_failed",
+                                "error_message": (
+                                    "ImportError: cannot import name 'compact_aippo_guidance_card' "
+                                    "from E:\\private\\plugin\\server.py"
+                                ),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--host-probe-report",
+                str(probe),
+                "--foreground-tools-visible",
+                "--no-child-check",
+            )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertEqual(code, 0)
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertFalse(payload["summary"]["agent_callable_host_ready"])
+        self.assertEqual(agent["status"], "host_live_probe_key_tools_failed")
+        self.assertTrue(agent["tools_visible"])
+        self.assertFalse(agent["key_tools_callable"])
+        self.assertTrue(agent["live_host_schema_stale"])
+        self.assertEqual(agent["current_thread_tool_discovery"], "tools_visible_but_key_tools_failed")
+        self.assertIn("reload Codex Desktop", agent["next_command"])
+        self.assertEqual(payload["summary"]["host_conformance_label"], "cli_only")
+        self.assertFalse(payload["surfaces"]["host_conformance"]["dimensions"]["live_schema_fresh"])
+        self.assertNotIn("E:\\private", encoded)
+
+    def test_status_reports_host_conformance_label_for_recall_deepen_host(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1"}):
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {
+                            "tool_names": [
+                                "memory_health",
+                                "search_memory",
+                                "sync_status",
+                                "agent_recall",
+                                "agent_deepen",
+                            ]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {
+                            "status": "available_requires_sync_dir",
+                            "backend": "local_folder",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--host-probe-report",
+                str(probe),
+                "--no-child-check",
+            )
+
+        conformance = payload["surfaces"]["host_conformance"]
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["summary"]["host_conformance_label"], "recall_deepen")
+        self.assertEqual(conformance["label"], "recall_deepen")
+        self.assertTrue(conformance["dimensions"]["recall_callable"])
+        self.assertTrue(conformance["dimensions"]["deepen_callable"])
+        self.assertTrue(conformance["dimensions"]["first_magic_moment_path"])
 
     def test_status_uses_default_host_probe_cache_from_plugin_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

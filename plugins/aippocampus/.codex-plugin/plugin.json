@@ -1,7 +1,7 @@
 {
   "name": "aippocampus",
   "version": "0.3.3",
-  "description": "Source-backed continuity memory for Codex agents across threads, projects, devices, and life-wide conversations.",
+  "description": "Source-backed continuity for Codex agents: find old cues, reopen local source, and continue honestly.",
   "author": {
     "name": "AIppocampus contributors",
     "url": "https://www.aippocampus.com"
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "AIppocampus",
-    "shortDescription": "Recover source-backed conversation memory without pretending the model has innate memory.",
-    "longDescription": "AIppocampus is the friendly install wrapper for the skill and local MCP tools that provide source-backed continuity across agent threads. It helps agents reopen local source trails without pretending the base model has innate memory. Hook installers and optional DeepSeek-compatible routes are included, but hooks and external-model paths require explicit user action after reviewing the privacy boundary.",
+    "shortDescription": "Recover source-backed conversation continuity from old cues.",
+    "longDescription": "AIppocampus helps a Codex agent reach one first source-backed recall: old cue -> local source hit or reopenable route -> boundary -> next action. It keeps privacy explicit, treats summaries and scents as navigation, and does not pretend the base model has innate memory. Plugin install, hooks, and optional external-model routes are separate explicit steps after the first receipt works.",
     "developerName": "AIppocampus contributors",
     "category": "Productivity",
     "capabilities": [
@@ -30,16 +30,18 @@
       "Read"
     ],
     "defaultPrompt": [
-      "Search my AIppocampus memory for this topic.",
-      "Show the latest reply from this Codex thread.",
-      "Check AIppocampus memory health before continuing."
+      "Find one source-backed AIppocampus recall for this old cue.",
+      "Reopen the source trail behind this AIppocampus route.",
+      "Check AIppocampus readiness before continuing this thread."
     ],
     "websiteURL": "https://www.aippocampus.com",
     "privacyPolicyURL": "https://www.aippocampus.com/privacy/",
     "termsOfServiceURL": "https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/community/plugin-terms-boundary.md",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png",
-    "screenshots": [],
+    "screenshots": [
+      "./assets/first-recall-receipt.svg"
+    ],
     "brandColor": "#12334A"
   }
 }

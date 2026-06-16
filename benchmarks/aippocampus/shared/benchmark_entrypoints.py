@@ -10,7 +10,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import Sequence
+
+HEAVY_JSON_ENTRYPOINTS = {
+    "benchmark_longmemeval_answer.py": "fixed_reader_answer_latency_harness_can_use_provider_or_large_retrieval",
+    "benchmark_source_evidence_retrieval.py": "track_b_aggregate_can_build_indexes_and_optional_public_corpora",
+    "benchmark_suite.py": "aggregate_suite_runner_not_a_zero_arg_json_smoke",
+}
 
 
 def library_only_payload(
@@ -98,4 +105,37 @@ def missing_required_input_payload(
         "exit_code_policy": (
             "json_report_generation_success_returns_zero; benchmark status lives in JSON"
         ),
+    }
+
+
+def benchmark_entrypoint_manifest(benchmark_dir: Path | str) -> dict[str, object]:
+    root = Path(benchmark_dir)
+    scripts = sorted(path.name for path in root.glob("benchmark_*.py") if path.is_file())
+    entrypoints: list[dict[str, object]] = []
+    for script in scripts:
+        heavy_reason = HEAVY_JSON_ENTRYPOINTS.get(script)
+        heavy = heavy_reason is not None
+        entrypoints.append(
+            {
+                "script": script,
+                "entrypoint_class": "heavy_local_eval" if heavy else "public_fast_json_candidate",
+                "public_fast_json_default": not heavy,
+                "safe_sweep_modes": ["json_contract"] if heavy else ["json"],
+                "classification_reason": heavy_reason or "default_json_expected_to_return_quickly",
+            }
+        )
+    return {
+        "kind": "aippocampus_benchmark_entrypoint_manifest",
+        "schema_version": 1,
+        "ok": True,
+        "scanned_count": len(entrypoints),
+        "heavy_local_eval_count": sum(
+            1 for row in entrypoints if row["entrypoint_class"] == "heavy_local_eval"
+        ),
+        "entrypoints": entrypoints,
+        "contract": {
+            "manifest_classification_does_not_run_benchmarks": True,
+            "heavy_local_eval_is_not_broken_json": True,
+            "real_benchmark_runs_keep_their_existing_quality_behavior": True,
+        },
     }

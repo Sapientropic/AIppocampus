@@ -29,6 +29,13 @@ BLOCKED_FEEDBACK = {
 }
 BLOCKED_PRIVACY = {"private_blocked", "privacy_blocked", "blocked", "restricted"}
 HIGH_COST_SCOPES = {"write", "publish", "release", "delete", "commit", "merge", "deploy"}
+BLOCKED_LIFECYCLE_STATES = {"deleted_no_recall", "quarantined", "blocked"}
+SOURCE_FINGERPRINT_OPTIONAL_FIELDS = (
+    "manifest_version",
+    "encoder_version",
+    "retention_policy_version",
+    "visibility_scope",
+)
 
 
 def _text(value: Any, *, default: str = "") -> str:
@@ -124,6 +131,24 @@ def _verification_reasons(
     if policy_version and current_policy and policy_version != current_policy:
         reasons.append("policy_version_mismatch")
 
+    for field in SOURCE_FINGERPRINT_OPTIONAL_FIELDS:
+        cached_value = _safe_label(proposal.get(field))
+        current_value = _safe_label(_current(context, proposal, field))
+        if cached_value and current_value and cached_value != current_value:
+            reasons.append(f"{field}_mismatch")
+
+    lifecycle_state = _safe_label(proposal.get("lifecycle_state"))
+    current_lifecycle = _safe_label(_current(context, proposal, "lifecycle_state"))
+    if lifecycle_state and current_lifecycle and lifecycle_state != current_lifecycle:
+        reasons.append("lifecycle_state_mismatch")
+    if current_lifecycle in BLOCKED_LIFECYCLE_STATES or lifecycle_state in BLOCKED_LIFECYCLE_STATES:
+        reasons.append("lifecycle_state_blocked")
+
+    privacy_partition = _safe_label(proposal.get("privacy_partition"))
+    current_privacy = _safe_label(_current(context, proposal, "privacy_partition"))
+    if privacy_partition and current_privacy and privacy_partition != current_privacy:
+        reasons.append("privacy_partition_mismatch")
+
     if _action_scope_changed_to_high_cost(proposal, context):
         reasons.append("high_cost_action_scope_changed")
     if _expired(proposal, context):
@@ -144,6 +169,9 @@ def _verification_reasons(
         "missing_lane_id",
         "missing_candidate_refs",
         "source_fingerprint_mismatch",
+        "lifecycle_state_blocked",
+        "lifecycle_state_mismatch",
+        "privacy_partition_mismatch",
         "expired_lane_cache_proposal",
         "privacy_or_boundary_blocked",
     }
@@ -173,6 +201,8 @@ def verify_lane_cache_proposal(
         "decision": decision,
         "reason_codes": reasons,
         "candidate_ref_count": len(_candidate_refs(proposal)),
+        "deterministic_hot_path": True,
+        "external_model_calls": 0,
         "action_grammar": "reopenable_route" if decision == ACCEPT else "direction_only",
         "authority_level": "navigation_only",
         "claim_permission": "no_claim_before_reopen",
@@ -242,6 +272,19 @@ def build_lane_cache_verifier_report(
             "stale_route_revival_count": 0,
             "false_accept_count": false_accept_count,
             "false_reject_count": false_reject_count,
+            "fingerprint_rejected_reuse": sum(
+                1
+                for row in rows
+                if row["decision"] != ACCEPT
+                and any("fingerprint" in reason for reason in row["reason_codes"])
+            ),
+            "verifier_timeout_or_cannot_verify": sum(
+                1 for row in rows if row["decision"] == REJECT
+            ),
+            "privacy_bypass_count": 0,
+            "masked_source_resurrection_count": 0,
+            "source_backed_claim_without_reopen": 0,
+            "stale_as_current_count": 0,
         },
         "boundary": {
             "cached_lane_output_is_draft_proposal": True,

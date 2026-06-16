@@ -31,6 +31,9 @@ from benchmark_longmemeval_v2_context import (  # noqa: E402
     now_utc,
     sha1_short,
 )
+from benchmarks.aippocampus.adapters import (  # noqa: E402
+    longmemeval_v2_aippocampus_adapter as adapter,
+)
 from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref  # noqa: E402
 
@@ -273,6 +276,75 @@ def provider_execution_budget_boundary(config: PilotConfig) -> dict[str, Any]:
     }
 
 
+def build_fixture_official_harness_pilot(config: PilotConfig) -> dict[str, Any]:
+    trajectory = {
+        "id": "fixture-continuity-1",
+        "goal": "Generic fixture text with no renewal keyword.",
+        "aippocampus_continuity": {
+            "route_terms": ["renewal_exception", "billing_policy"],
+            "handles": ["aippo:fixture-route"],
+        },
+    }
+    arms: list[dict[str, Any]] = []
+    for arm_name, memory_config in (
+        (
+            "lexical_default_context",
+            {"max_context_items": 4, "max_context_chars": 320},
+        ),
+        (
+            "aippocampus_context",
+            {
+                "max_context_items": 4,
+                "max_context_chars": 320,
+                "arm_mode": "aippocampus_context",
+            },
+        ),
+    ):
+        memory = adapter.AippocampusContextProviderMemory(memory_config)
+        memory.insert(trajectory)
+        rows = memory.query("renewal_exception billing_policy")
+        metadata = memory.post_query_hook(
+            query="renewal_exception billing_policy",
+            query_image=None,
+            memory_context=rows,
+        )
+        arms.append(
+            {
+                "arm": arm_name,
+                "memory_type": adapter.AippocampusContextProviderMemory.memory_type,
+                "memory_api_insert_count": 1,
+                "memory_api_query_count": 1,
+                "context_item_count": len(rows),
+                "returned_continuity_guidance_items": int(
+                    metadata.get("returned_continuity_guidance_items") or 0
+                ),
+                "raw_text_emitted_in_metadata": bool(
+                    metadata.get("raw_text_emitted_in_metadata")
+                ),
+            }
+        )
+    return {
+        "status": "fixture_pilot_completed",
+        "fixture_not_official_harness": True,
+        "official_score_claimable": False,
+        "pilot_questions": min(config.pilot_questions, config.max_pilot_questions),
+        "arms": arms,
+        "metrics_origin": "local_fixture_memory_api_only",
+        "privacy_boundary": {
+            "raw_official_questions_emitted": False,
+            "raw_trajectories_emitted": False,
+            "reader_or_evaluator_responses_emitted": False,
+            "absolute_paths_emitted": False,
+        },
+        "cannot_claim": [
+            "official_v2_score_without_official_runner_outputs",
+            "longmemeval_v2_answer_accuracy",
+            "longmemeval_v2_lafs_gain",
+            "longmemeval_v2_leaderboard_score",
+        ],
+    }
+
+
 def local_path_matches(text: str) -> list[str]:
     patterns = [
         r"[A-Za-z]:\\[^\s\"']+",
@@ -328,7 +400,7 @@ def validate_sanitized_report(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_report(config: PilotConfig) -> dict[str, Any]:
+def build_report(config: PilotConfig, *, include_fixture_pilot: bool = False) -> dict[str, Any]:
     started = time.perf_counter()
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -336,6 +408,7 @@ def build_report(config: PilotConfig) -> dict[str, Any]:
         "generated_at": now_utc(),
         "status": "official_pilot_plan_ready",
         "ok": True,
+        "official_score_claimable": False,
         "decision": pilot_plan(config),
         "official_sources": official_sources(),
         "official_harness_contract": official_harness_contract(config),
@@ -349,6 +422,8 @@ def build_report(config: PilotConfig) -> dict[str, Any]:
         "cannot_claim": CANNOT_CLAIM,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+    if include_fixture_pilot:
+        payload["fixture_official_harness_pilot"] = build_fixture_official_harness_pilot(config)
     validation = validate_sanitized_report(payload)
     payload["sanitized_report_validation"] = validation
     payload["ok"] = validation["ok"]
@@ -416,6 +491,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_TOTAL_COST_BUDGET_USD,
     )
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--include-fixture-pilot",
+        action="store_true",
+        help="Embed the deterministic local Memory-API fixture pilot; not an official score.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
@@ -434,7 +514,7 @@ def main() -> int:
         query_latency_budget_seconds=args.query_latency_budget_seconds,
         total_cost_budget_usd=args.total_cost_budget_usd,
     )
-    payload = build_report(config)
+    payload = build_report(config, include_fixture_pilot=args.include_fixture_pilot)
     if args.output:
         write_json_payload(args.output, payload)
     if args.json_output:

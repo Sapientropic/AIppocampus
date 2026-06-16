@@ -250,6 +250,20 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         runtime_arm = payload["arms"]["aippocampus_runtime"]
         self.assertEqual(runtime_arm["status"], "runtime_projection_fixture")
         self.assertIn("learning_loop_finding", runtime_arm["projection_layers"])
+        self.assertEqual(payload["official_score_claimable"], False)
+        self.assertEqual(
+            payload["local_replay_result"]["status"],
+            "bounded_local_source_backed_replay_completed",
+        )
+        self.assertEqual(payload["local_replay_result"]["matched_baseline"]["case_count"], 2)
+        self.assertEqual(
+            payload["local_replay_result"]["matched_baseline"]["retrieval_probe_hit_count"],
+            0,
+        )
+        self.assertEqual(
+            payload["local_replay_result"]["aippocampus_runtime"]["retrieval_probe_hit_count"],
+            2,
+        )
         self.assertGreaterEqual(
             runtime_arm["test_time_learning"]["lesson_candidate_count"],
             1,

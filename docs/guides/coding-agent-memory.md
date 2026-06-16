@@ -18,6 +18,28 @@ Product profile boundaries live in
 [product-profiles.md](../architecture/host/product-profiles.md); this lane is the
 `personal_default`/agent-memory path, not the enterprise-governed path.
 
+## First Success Path
+
+When a coding agent is about to edit and the user hints that there was an old
+decision, rejected route, correction, or handoff, start here:
+
+```sh
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Useful success looks like a selected route plus a next source-open/deepen action,
+not merely "status ready." If recall has no local source yet, fall back to:
+
+```sh
+aippocampus onboard --provider auto --status
+aippocampus search "a distinctive old phrase" --json
+```
+
+Treat the first packet as navigation until the source has been reopened. The win
+for coding agents is avoiding a repeated mistake or reopening the relevant
+decision source before editing.
+
 ## Who This Is For
 
 This lane is for people and agents who need:

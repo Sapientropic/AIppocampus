@@ -70,6 +70,10 @@ class CircuitFeedbackTests(unittest.TestCase):
             plan["plan"]["cognitive_map"]["conditional_branches"],
         )
         self.assertTrue(plan["static_depends_on_preserved"])
+        self.assertEqual(plan["scheduler_plan_changed_count"], 3)
+        self.assertEqual(plan["runtime_consumer_count"], 1)
+        self.assertEqual(plan["salience_decay_applied_count"], 0)
+        self.assertEqual(plan["consumer_boundary"], "feedback_changes_scheduler_plan_not_source_truth")
 
         cyclic = feedback.dynamic_job_orchestration_plan(
             {"a": {"depends_on": ["b"]}, "b": {"depends_on": ["a"]}},

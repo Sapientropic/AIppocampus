@@ -53,19 +53,29 @@ For role-based documentation paths, use
 
 ## Quick Start
 
-If you are using Codex and you have an agent that can run local setup commands,
-the ordinary path is agent-mediated: ask the agent to install the local
-AIppocampus plugin, verify that Codex can call the MCP tools, then enable the
-core hooks only after you trust this machine:
+First run should end in one source-backed recall moment, not a diagnostics
+maze. Use the canonical
+[first recall decision card](docs/guides/first-recall-decision-card.md) when a
+human or agent needs the shortest safe path.
+
+If the `aippocampus` command already exists from a source checkout or editable
+install, the ordinary Codex path is agent-mediated: ask the agent to install
+the local plugin and verify that Codex can call the MCP tools.
 
 ```sh
 aippocampus plugin install --codex --verify
-aippocampus update apply --surface hooks
 ```
 
-The Codex plugin command is a source checkout / editable local package path,
-not the public PyPI `uvx` first-recall path. For a user-facing install closeout,
-agents can ask for JSON directly; successful installs return the concise
+If the command does not exist yet, use the no-clone probe first:
+
+```sh
+uvx aippocampus --help
+uvx aippocampus onboard --provider auto --status
+```
+
+The Codex plugin command is a source checkout / editable local package path; the
+`uvx` path is the public package probe. For a user-facing install closeout,
+agents can ask for JSON directly; successful installs return a concise
 public-safe summary:
 
 ```sh
@@ -74,13 +84,30 @@ aippocampus plugin install --codex --verify --json
 
 `--compact-json`, `--public`, and `--summary` remain aliases for the same
 public-safe summary. Use `--operator-json` only when you need the full
-marketplace/cache/host-probe detail. First run should end in one source-backed
-recall moment, not a diagnostics maze:
+marketplace/cache/host-probe detail.
+
+Then make the useful moment visible. From a source checkout, the bundled public
+example produces a source-backed receipt without touching private history:
+
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
+
+With local source already registered, use the same receipt shape on a real old
+cue:
 
 ```sh
 aippocampus search "a distinctive old phrase"
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Only after that first source-backed receipt works, enable prompt/lifecycle hooks
+if this machine is trusted for ambient continuity:
+
+```sh
+aippocampus update status
+aippocampus update apply --surface hooks
 ```
 
 Rollback stays explicit:

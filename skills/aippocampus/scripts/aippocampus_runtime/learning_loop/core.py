@@ -736,10 +736,25 @@ def extract_workflow_candidates(
     existing_assets: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, Any]]:
     assets = existing_assets or {}
+    supported_asset_families = {
+        "skills",
+        "aippo_clauses",
+        "docs",
+        "docs_routes",
+        "playbooks",
+        "checklists",
+        "automations",
+        "subagents",
+        "action_hints",
+        "recall_routes",
+    }
+    unknown_inventory_families = sorted(set(assets) - supported_asset_families)
     asset_order = (
         "skills",
         "aippo_clauses",
+        "docs",
         "docs_routes",
+        "playbooks",
         "checklists",
         "automations",
         "subagents",
@@ -750,6 +765,14 @@ def extract_workflow_candidates(
         kind: {str(item) for item in assets.get(kind, [])}
         for kind in asset_order
     }
+    # `docs`, `docs_routes`, and `playbooks` are distinct public surfaces but
+    # equivalent for duplicate-packaging suppression: if a workflow already has
+    # a documented playbook, do not recommend a new automation just because the
+    # lesson is machine-local.
+    if assets.get("docs"):
+        asset_index["docs_routes"].update(str(item) for item in assets.get("docs", []))
+    if assets.get("playbooks"):
+        asset_index["docs"].update(str(item) for item in assets.get("playbooks", []))
 
     def existing_asset(workflow: str) -> tuple[str, str]:
         for kind in asset_order:
@@ -814,6 +837,11 @@ def extract_workflow_candidates(
                 "existing_asset_kind": existing_kind,
                 "existing_asset_id": existing_id,
                 "asset_match_reason": "workflow_family_exact_match" if existing_kind else "",
+                "inventory_warnings": (
+                    [{"unknown_inventory_families": unknown_inventory_families}]
+                    if unknown_inventory_families
+                    else []
+                ),
                 "packaging_boundary": (
                     "machine_local_lesson_not_general_skill"
                     if transferability == "this_machine_only"
@@ -834,6 +862,7 @@ def extract_workflow_candidates(
                     "asset_creation_requires_explicit_action",
                     *(["existing_asset_checked"] if any(asset_index.values()) else []),
                     *([f"existing_{existing_kind}_matched"] if existing_kind else []),
+                    *(["unknown_inventory_family"] if unknown_inventory_families else []),
                     f"transferability:{transferability}",
                 ],
             }

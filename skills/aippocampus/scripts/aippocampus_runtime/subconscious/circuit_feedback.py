@@ -140,6 +140,14 @@ def dynamic_job_orchestration_plan(
     if "cognitive_map" in plan and "pattern_completion_learning_loop_review" in branches:
         plan["cognitive_map"]["conditional_branches"].append("pattern_completion_learning_loop_review")
     cycle_errors = _dependency_cycle_errors(plan)
+    scheduler_plan_changed_count = sum(
+        len(row.get("conditional_branches") or []) for row in plan.values()
+    )
+    salience_decay_applied_count = sum(
+        1
+        for row in feedback_rows
+        if str(row.get("quality_outcome") or "") in {"stale_candidate", "anti_nag_suppressed"}
+    )
     return {
         "kind": "aippocampus_dynamic_job_orchestration_plan",
         "schema_version": SCHEMA_VERSION,
@@ -148,6 +156,10 @@ def dynamic_job_orchestration_plan(
         "cycle_prevention_ok": not cycle_errors,
         "policy": policy,
         "static_depends_on_preserved": True,
+        "scheduler_plan_changed_count": scheduler_plan_changed_count,
+        "salience_decay_applied_count": salience_decay_applied_count,
+        "runtime_consumer_count": int(bool(scheduler_plan_changed_count or salience_decay_applied_count)),
+        "consumer_boundary": "feedback_changes_scheduler_plan_not_source_truth",
     }
 
 

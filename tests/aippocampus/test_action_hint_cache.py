@@ -12,6 +12,10 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.hooks import action_hint_cache as cache  # noqa: E402
 from aippocampus_runtime.learning_loop.core import project_action_time_guidance  # noqa: E402
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (  # noqa: E402
+    append_ledger_rows,
+    ledger_rows_from_guidance_outcomes,
+)
 from aippocampus_runtime.reflection.aar_v2 import build_aar_v2_report  # noqa: E402
 
 
@@ -339,6 +343,110 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertEqual(result["learned_provider_intake"]["included_count"], 1)
         self.assertEqual(result["learned_provider_intake"]["prepared_record_count"], 1)
         self.assertEqual(records[0]["provider_family"], "aippo_learned_clause")
+
+    def test_refresh_cache_applies_effectiveness_ledger_before_hot_cache(self) -> None:
+        guidance = [
+            {
+                "guidance_id": "useful-guidance",
+                "next_action": "run_preflight_before_broad_test",
+                "source_refs": [source_ref("useful")],
+                "command_terms": ["pytest"],
+            },
+            {
+                "guidance_id": "stale-guidance",
+                "next_action": "run_preflight_before_broad_test",
+                "source_refs": [source_ref("stale")],
+                "command_terms": ["pytest"],
+            },
+        ]
+        ledger_rows = ledger_rows_from_guidance_outcomes(
+            guidance,
+            [
+                {
+                    "lesson_id": "useful-guidance",
+                    "outcome": "prevented_repeat",
+                    "source_refs": [source_ref("useful-outcome")],
+                },
+                {
+                    "lesson_id": "stale-guidance",
+                    "outcome": "repeated_failure_after_surface",
+                    "source_refs": [source_ref("stale-outcome")],
+                },
+            ],
+        )
+
+        result = cache.refresh_action_hint_cache(
+            learning_guidance=guidance,
+            effectiveness_ledger_rows=ledger_rows,
+            now_unix=1000,
+        )
+        records = result["cache"]["records"]
+
+        self.assertTrue(result["effectiveness_ledger_intake"]["applied_to_guidance_before_cache"])
+        self.assertEqual(result["effectiveness_ledger_intake"]["summary"]["row_count"], 2)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["record_id"], "useful-guidance")
+        self.assertEqual(records[0]["effectiveness_status"], "useful_signal")
+        self.assertGreater(records[0]["navigation_priority_delta"], 0)
+
+    def test_refresh_cache_loads_default_effectiveness_ledger_from_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ledger_path = root / ".aippocampus" / "learning-loop" / "effectiveness-ledger.jsonl"
+            guidance = [
+                {
+                    "guidance_id": "stale-guidance",
+                    "next_action": "run_preflight_before_broad_test",
+                    "source_refs": [source_ref("stale")],
+                    "command_terms": ["pytest"],
+                }
+            ]
+            rows = ledger_rows_from_guidance_outcomes(
+                guidance,
+                [
+                    {
+                        "lesson_id": "stale-guidance",
+                        "outcome": "stale_superseded",
+                        "source_refs": [source_ref("stale-outcome")],
+                    }
+                ],
+            )
+            append_ledger_rows(ledger_path, rows)
+
+            result = cache.refresh_action_hint_cache(
+                cwd=root,
+                learning_guidance=guidance,
+                now_unix=1000,
+            )
+
+        self.assertEqual(result["effectiveness_ledger_intake"]["status"], "found")
+        self.assertTrue(result["effectiveness_ledger_intake"]["applied_to_guidance_before_cache"])
+        self.assertEqual(result["cache"]["record_count"], 0)
+
+    def test_refresh_cache_write_uses_default_cache_path_when_none_is_supplied(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = cache.refresh_action_hint_cache(
+                cwd=root,
+                write=True,
+                learning_guidance=[
+                    {
+                        "guidance_id": "default-cache-guidance",
+                        "next_action": "run_preflight_before_broad_test",
+                        "source_refs": [source_ref("default-cache")],
+                        "command_terms": ["pytest"],
+                    }
+                ],
+                now_unix=1000,
+            )
+            default_path = cache.default_action_hint_cache_path(root)
+            records = cache.load_action_hint_records(default_path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["default_cache_path_used"])
+        self.assertEqual(result["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertEqual(result["cache_status"], "with_cache_records")
+        self.assertEqual(len(records), 1)
 
 
 if __name__ == "__main__":

@@ -28,6 +28,11 @@ from aippocampus_runtime.source.semantic_scope_labels import (
 )
 
 LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
+PROCESS_NOISE_PREFIXES = (
+    ("<subagent_notification>", "process_notification"),
+    ("<tool", "tool_process"),
+)
+DEFAULT_HUMAN_SNIPPET_CHARS = 220
 
 
 def non_negative_int(value: str) -> int:
@@ -97,6 +102,21 @@ def as_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def process_noise_reason(text: str) -> str:
+    """Mark agent/tool plumbing so it does not outrank real source receipts.
+
+    Clean source is still source-reachable audit material, but foreground search
+    should not make process notifications look like remembered user context.
+    Keep the marker in JSON for diagnostics while demoting it in default cards.
+    """
+
+    snippet = str(text or "").lstrip().casefold()
+    for prefix, reason in PROCESS_NOISE_PREFIXES:
+        if snippet.startswith(prefix):
+            return reason
+    return ""
+
+
 def search_clean_source(
     cwd: str | Path,
     patterns: list[str],
@@ -138,6 +158,7 @@ def search_clean_source(
 
     matches: list[dict[str, Any]] = []
     for message in iter_clean_messages(messages_path):
+        message_text = str(message.get("text") or "")
         if "scope_labels" not in message:
             missing_scope_label_count += 1
         base_scope_labels = [
@@ -150,33 +171,38 @@ def search_clean_source(
         score = score_message(message, terms)
         if score <= 0:
             continue
-        matches.append(
-            {
-                "id": message.get("message_id") or message.get("id"),
-                "message_id": message.get("message_id") or message.get("id"),
-                "turn_id": message.get("turn_id"),
-                "source_id": message.get("source_id"),
-                "source_ref": message.get("source_ref"),
-                "clean_ordinal": message.get("clean_ordinal"),
-                "source_line": message.get("source_line"),
-                "raw_start_line": message.get("raw_start_line") or message.get("source_line"),
-                "raw_end_line": message.get("raw_end_line") or message.get("source_line"),
-                "timestamp": message.get("timestamp"),
-                "role": message.get("role"),
-                "phase": message.get("phase") or "",
-                "turn_index": message.get("turn_index"),
-                "is_final": bool(message.get("is_final")),
-                "scope_labels": message_scope_labels,
-                "semantic_scope_labels": semantic_scope_labels,
-                "score": round(score, 3),
-                "snippet": compact_text(str(message.get("text") or ""), snippet_chars)
-                if snippet_chars
-                else "",
-                "snippet_omitted": snippet_chars == 0,
-            }
-        )
+        noise_reason = process_noise_reason(message_text)
+        match = {
+            "id": message.get("message_id") or message.get("id"),
+            "message_id": message.get("message_id") or message.get("id"),
+            "turn_id": message.get("turn_id"),
+            "source_id": message.get("source_id"),
+            "source_ref": message.get("source_ref"),
+            "clean_ordinal": message.get("clean_ordinal"),
+            "source_line": message.get("source_line"),
+            "raw_start_line": message.get("raw_start_line") or message.get("source_line"),
+            "raw_end_line": message.get("raw_end_line") or message.get("source_line"),
+            "timestamp": message.get("timestamp"),
+            "role": message.get("role"),
+            "phase": message.get("phase") or "",
+            "turn_index": message.get("turn_index"),
+            "is_final": bool(message.get("is_final")),
+            "scope_labels": message_scope_labels,
+            "semantic_scope_labels": semantic_scope_labels,
+            "score": round(score, 3),
+            "snippet": compact_text(message_text, snippet_chars) if snippet_chars else "",
+            "snippet_omitted": snippet_chars == 0,
+        }
+        if noise_reason:
+            match["search_noise"] = True
+            match["noise_reason"] = noise_reason
+        matches.append(match)
     matches.sort(
-        key=lambda item: (-as_float(item.get("score")), as_int(item.get("source_line")))
+        key=lambda item: (
+            1 if item.get("search_noise") else 0,
+            -as_float(item.get("score")),
+            as_int(item.get("source_line")),
+        )
     )
     if label_filter and missing_scope_label_count:
         warnings.append(
@@ -232,18 +258,28 @@ def render_human_search_result(result: dict[str, Any]) -> str:
     matches = list(result.get("matches") or [])
     lines: list[str] = []
     if matches:
-        lines.append("Source-backed snippets")
+        lines.append("Source-backed action cards")
+        lines.append("Source-backed snippets are receipts; reopen before relying on exact wording.")
         lines.append(f"query: {query}")
         for index, match in enumerate(matches, start=1):
             source = source_label_for_match(match)
             date = date_for_match(match)
             turn = turn_for_match(match)
-            role = str(match.get("role") or "unknown")
-            phase = str(match.get("phase") or "none")
-            score = match.get("score")
             lines.append(f"{index}. Source: {source} · {date} · {turn}")
-            lines.append(f"   role={role} · phase={phase} · score={score}")
-            lines.append(f'   "{match.get("snippet")}"')
+            lines.append("   boundary: source-backed receipt; reopen before quoting or strong claims")
+            if match.get("snippet_omitted"):
+                lines.append("   snippet omitted in public mode; reopen source for exact text.")
+            elif match.get("search_noise"):
+                lines.append("   process snippet omitted; JSON keeps search_noise for audit.")
+            else:
+                snippet = compact_text(
+                    str(match.get("snippet") or ""),
+                    DEFAULT_HUMAN_SNIPPET_CHARS,
+                )
+                if snippet:
+                    lines.append(f'   match: "{snippet}"')
+                else:
+                    lines.append("   match omitted; reopen source for exact text.")
         lines.append(
             "Next: reopen source before quoting beyond these snippets, or refine with "
             "a project cue / time cue if this is not the thread you meant."
@@ -287,6 +323,8 @@ def public_search_result(
                     "date": timestamp[:10] if timestamp else None,
                     "snippet_omitted": True,
                     "source_refs_omitted": True,
+                    "search_noise": bool(match.get("search_noise")),
+                    "noise_reason": match.get("noise_reason"),
                 }
             )
         public["matches"] = matches

@@ -12,7 +12,7 @@ intent.
 | Mark whether a route helped or was wrong | `aippocampus agent feedback <route_id> --outcome helped --feedback-jsonl <local-feedback.jsonl> --json` | yes, to the chosen local JSONL | durable only with an explicit path | low-authority navigation metadata | keep working; reopen source before claims |
 | Quiet a route or ticket here | `aippocampus do-not-use-here <route-or-ticket-id> --feedback-jsonl <local-feedback.jsonl> --json` | yes, to the chosen local feedback lane | scoped activation pressure, not deletion | low-authority suppression hint | use why-not/why-recall for explanation; reopen source before claims |
 | Leave a margin note for a later agent | `aippocampus self-note append --current-thread "short note"` | yes | local low-authority note | `direction_only` scent | use as posture; reopen source for facts |
-| Prepare action-time hints | `aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json` | cache only | prepared local navigation cache | navigation only | install/status the action hook if desired |
+| Prepare action-time hints | `aippocampus hooks action refresh-cache --write --json` | cache only | prepared default local navigation cache | navigation only | install/status the action hook if desired |
 | Inspect continuity-domain candidates | `aippocampus continuity-domain report --json` | no | read/report first; append/publish is operator work | route planning, not fact text | use scoped preview before any append/publish |
 | Sync or register the local tool surface | `aippocampus update status` / `aippocampus plugin install --codex --verify` | control-plane artifacts | explicit local setup | not memory truth | verify foreground tool visibility |
 

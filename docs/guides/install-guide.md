@@ -40,8 +40,8 @@ path proves the user actually needs them.
 
 Give this path to the active local agent when Codex is the intended host. The
 agent should install the source-checkout / editable local plugin package, verify foreground MCP tool
-visibility, then offer core hooks and one LLM-provider choice without turning
-the first run into a diagnostics checklist:
+visibility, then show one source-backed recall/search receipt before offering
+hooks or provider choices:
 
 ```sh
 aippocampus plugin install --codex --verify
@@ -65,8 +65,24 @@ without local paths, raw stderr tails, command arrays, or unrelated plugin
 paths. `--public`, `--compact-json`, and `--summary` remain explicit aliases;
 use `--operator-json` only for deep install/probe debugging.
 
-After verify, enable prompt/lifecycle hooks only when the user trusts this
-machine and wants ambient continuity:
+After verify, show the first useful receipt. From a source checkout, the public
+bundle is safe and does not read private history:
+
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
+
+For real local history that is already registered, use the same source-backed
+shape:
+
+```sh
+aippocampus search "a distinctive old phrase"
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Enable prompt/lifecycle hooks only after that first receipt works and the user
+trusts this machine for ambient continuity:
 
 ```sh
 aippocampus update apply --surface hooks

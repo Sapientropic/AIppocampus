@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import gzip
+import json
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -82,6 +85,35 @@ class LogRetentionTests(unittest.TestCase):
             self.assertTrue(plan["read_only"])
             self.assertEqual(plan["would_rotate_count"], 1)
             self.assertEqual(plan["apply_command"], "aippocampus logs rotate --apply")
+
+    def test_rotate_json_defaults_to_plan_and_requires_explicit_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "logs" / "build_associations_hook.log"
+            log.parent.mkdir()
+            log.write_bytes(b"oversized diagnostic bytes" * 8)
+
+            with mock.patch("sys.stdout", new=StringIO()) as stdout:
+                code = log_retention.main(
+                    [
+                        "rotate",
+                        "--registry-dir",
+                        str(root),
+                        "--max-bytes",
+                        "20",
+                        "--json",
+                    ]
+                )
+
+            payload = json.loads(stdout.getvalue())
+
+            self.assertEqual(code, 0)
+            self.assertTrue(log.exists())
+            self.assertFalse((log.parent / "build_associations_hook.log.1.gz").exists())
+            self.assertEqual(payload["kind"], "aippocampus_logs_rotation_plan")
+            self.assertTrue(payload["read_only"])
+            self.assertTrue(payload["apply_required"])
+            self.assertFalse(payload["privacy_boundary"]["writes_performed"])
 
     def test_streaming_append_keeps_current_file_under_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

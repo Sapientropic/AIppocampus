@@ -28,6 +28,7 @@ import benchmark_live_semantic_gate as live_semantic_benchmark
 import benchmark_memory_decision_gate as gate_benchmark
 import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
+from shared.benchmark_entrypoints import benchmark_entrypoint_manifest
 from shared.benchmark_report_contract import (
     benchmark_cli_summary,
     benchmark_report_contract_lint,
@@ -1499,6 +1500,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "--output to write the full report without duplicating it to stdout."
         ),
     )
+    parser.add_argument(
+        "--entrypoint-manifest-json",
+        action="store_true",
+        help="Print the cheap benchmark entrypoint classification manifest without running benchmarks.",
+    )
     return parser
 
 
@@ -1563,6 +1569,15 @@ def benchmark_suite_config_from_args(args: argparse.Namespace) -> BenchmarkSuite
 def main() -> int:
     parser = build_arg_parser()
     args = parser.parse_args()
+    if args.entrypoint_manifest_json:
+        print(
+            json.dumps(
+                benchmark_entrypoint_manifest(Path(__file__).resolve().parent),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
     payload = run_benchmark_suite_with_config(benchmark_suite_config_from_args(args))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

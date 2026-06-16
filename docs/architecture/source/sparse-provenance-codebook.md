@@ -38,6 +38,59 @@ rehydration call and only when lifecycle and privacy partitions allow it.
 The public fixture lives at
 `benchmark_corpus/sparse_provenance/public_clean_source_like_events.jsonl`.
 
+## V1 Scale-Layer Contract
+
+The scale-layer work tracked by #1869 keeps one authority order:
+
+1. `source_objects` are the reconstruction substrate below route packets.
+   They carry stable `source_object_id`, `chunk_id`, `span_id`, offsets,
+   content hash, manifest hash, source fingerprint, privacy partition, policy
+   version, lifecycle state, and visibility scope. Public summaries must show
+   counts, bytes, hashes, and proof status without raw source text.
+2. `durable_working_conclusions` are reviewable working objects linked back to
+   source spans. They may carry scope, freshness, claim classes, cannot-claim
+   fields, and reopen plans, but their prose is not source truth. Current
+   heads require an explicit resolver or head pointer; latest timestamp alone
+   is not enough.
+3. `pathlets_and_edges` preserve sequence-sensitive navigation such as
+   rejected paths, corrections, supersession, missing-middle links, and
+   outcome-shaped edges. They remain `reopenable_route` objects and require
+   source reopen before action.
+
+The V1 public fixture code lives in the same runtime owner,
+`aippocampus_runtime.source.provenance_codebook`, and adds:
+
+- persistent source-object layout with manifest, per-object JSON, per-span
+  JSON, and chunk files;
+- explicit span rehydration proofs that hash-match content and source
+  fingerprints;
+- fixture-local compression/proof reports using baseline dedupe plus portable
+  deflate fallback, without native dependency requirements;
+- early structured-trace template/residual encoding over public-safe
+  tool-call and machine-output-like fixtures. This reports stable template ids,
+  residual ids, normalized public fields, slot-level mask metadata, separate
+  template/residual metrics, baseline dedupe, portable compression comparison,
+  and proof levels without emitting raw payloads, local paths, token-like
+  strings, or private handles;
+- source-fingerprint reuse verification that fails closed on content, source
+  id, privacy partition, policy version, lifecycle state, or optional manifest
+  / encoder / retention / visibility mismatch;
+- durable working conclusion DAG validation and downstream degradation when
+  upstream source objects are blocked, missing, or cannot verify;
+- codebook health projection for Observatory, Vault, Map, and Quiet Room
+  inspection surfaces.
+
+Campus/Observatory status is inspection, not authority. The four public-safe
+status values are:
+
+- `verified_present`
+- `verified_present_but_blocked`
+- `cannot_verify`
+- `verified_present_with_action_required`
+
+`verified_present_with_action_required` must include a review route or
+fixture-safe placeholders for `who`, `why`, and `by_when`.
+
 ## Red Lines
 
 The V0 report keeps these as zero-failure counters:
@@ -48,6 +101,17 @@ The V0 report keeps these as zero-failure counters:
 - `stale_or_quarantined_as_current_count`
 - `lossy_summary_used_as_source_count`
 - `reconstruction_hash_mismatch_count`
+
+The V1 adversarial fixture also emits the canonical #1106 counters:
+
+- `privacy_bypass_count`
+- `masked_source_resurrection_count`
+- `source_backed_claim_without_reopen`
+- `stale_as_current_count`
+
+Negative controls may intentionally fail when hard masks or source-reopen
+gates are disabled, but passing reports must keep the canonical counters at
+zero and separate them from subtype diagnostics.
 
 Blocked or stale candidates may be counted as matched-and-suppressed
 diagnostics, but that is not a red-line failure unless they are emitted as a
@@ -66,7 +130,10 @@ foreground claims.
 
 ## Non-Claims
 
-This V0 does not prove natural-dialogue semantic template compression, neural
-MoE routing, private-history quality, or GB/TB-scale infrastructure readiness.
-It only proves that a small public corpus can be deduped, route-indexed,
-rehydrated deterministically, and blocked by lifecycle/privacy masks.
+This V0/V1 fixture track does not prove natural-dialogue semantic template
+compression, real private-history compression, neural MoE routing,
+private-history quality, Campus product readiness, or GB/TB-scale
+infrastructure readiness. It proves only fixture-local storage,
+dedupe/compression measurement, structured-trace template/residual masking,
+deterministic rehydration, cache-reuse rejection, object-family degradation,
+and lifecycle/privacy red-line behavior.

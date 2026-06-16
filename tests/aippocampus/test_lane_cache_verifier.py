@@ -144,6 +144,46 @@ class LaneCacheVerifierTests(unittest.TestCase):
         self.assertIn("cached_lane_output_as_source_truth", report["cannot_claim"])
         self.assertTrue(report["boundary"]["accepted_proposals_remain_navigation_only"])
 
+    def test_source_fingerprint_policy_and_lifecycle_boundaries_fail_closed(self) -> None:
+        proposal = {
+            "lane_id": "codebook_route",
+            "candidate_refs": ["spc:manifest:entry_0001"],
+            "source_fingerprint": "srcfp-old",
+            "privacy_partition": "public",
+            "policy_version": "public-v1",
+            "lifecycle_state": "current",
+            "manifest_version": "source-objects-v1",
+        }
+        context = {
+            "source_fingerprint": "srcfp-new",
+            "privacy_partition": "private_blocked",
+            "policy_version": "public-v2",
+            "lifecycle_state": "deleted_no_recall",
+            "manifest_version": "source-objects-v2",
+            "now_unix": 1_000.0,
+        }
+
+        verification = lane_cache_verifier.verify_lane_cache_proposal(
+            proposal,
+            current_context=context,
+        )
+        report = lane_cache_verifier.build_lane_cache_verifier_report(
+            [proposal],
+            current_context=context,
+        )
+
+        self.assertEqual(verification["decision"], "reject")
+        self.assertTrue(verification["deterministic_hot_path"])
+        self.assertEqual(verification["external_model_calls"], 0)
+        self.assertIn("source_fingerprint_mismatch", verification["reason_codes"])
+        self.assertIn("lifecycle_state_blocked", verification["reason_codes"])
+        self.assertIn("privacy_partition_mismatch", verification["reason_codes"])
+        self.assertEqual(report["metrics"]["fingerprint_rejected_reuse"], 1)
+        self.assertEqual(report["metrics"]["privacy_bypass_count"], 0)
+        self.assertEqual(report["metrics"]["masked_source_resurrection_count"], 0)
+        self.assertEqual(report["metrics"]["source_backed_claim_without_reopen"], 0)
+        self.assertEqual(report["metrics"]["stale_as_current_count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
