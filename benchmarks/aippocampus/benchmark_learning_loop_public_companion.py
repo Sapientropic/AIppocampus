@@ -351,7 +351,23 @@ def run_public_companion_eval(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Learning-loop public companion benchmark.\n"
+            "Question answered: can public fixture shape reproduce a small future-event "
+            "surface without private dogfood history?\n"
+            "Can claim: fixture wiring and public future-event companion metrics.\n"
+            "Important limits: this runner currently needs eligible workflow-order public "
+            "cases and cannot prove workflow guidance lift by itself.\n"
+            "Best next benchmark: use the owning workflow-guidance benchmark once public "
+            "eligible cases exist."
+        ),
+        epilog=(
+            "Use --json for the bounded report. The output intentionally does not serialize "
+            "raw fixture text or private history."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--rollout-json", type=Path, default=DEFAULT_ROLLOUT)
     parser.add_argument("--vcs-jsonl", type=Path, default=DEFAULT_VCS)
     parser.add_argument("--json", action="store_true", dest="json_output")

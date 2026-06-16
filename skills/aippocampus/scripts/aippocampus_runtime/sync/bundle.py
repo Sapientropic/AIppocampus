@@ -800,13 +800,95 @@ def available_requires_sync_dir_status() -> dict[str, Any]:
     }
 
 
-def _estimate_plan_file_count(command: str, sync_dir: str | None, registry_dir: str | None) -> int | None:
+def _sync_plan_file_breakdown(
+    command: str,
+    sync_dir: str | None,
+    registry_dir: str | None,
+    *,
+    include_raw: bool,
+) -> list[dict[str, Any]]:
     try:
         if command == "push":
             registry_root = Path(registry_dir).resolve() if registry_dir else aippocampus_registry_dir()
-            return sum(1 for _ in iter_registry_sync_files(registry_root)) + sum(
+            registry_count = sum(1 for _ in iter_registry_sync_files(registry_root))
+            clean_source_count = sum(1 for _ in iter_clean_source_sync_files(registry_root))
+            raw_count = sum(1 for _ in iter_raw_rollout_files(registry_root))
+            return [
+                {
+                    "category": "registry_metadata_and_indexes",
+                    "count": registry_count,
+                    "included": True,
+                    "privacy": "generated_registry_artifacts",
+                },
+                {
+                    "category": "clean_source_files",
+                    "count": clean_source_count,
+                    "included": True,
+                    "privacy": "private_clean_source_text_in_sync_bundle",
+                    "note": "push writes content-addressed clean-source chunks at apply time",
+                },
+                {
+                    "category": "raw_rollout_audit_files",
+                    "count": raw_count,
+                    "included": bool(include_raw),
+                    "privacy": "raw_private_history",
+                    "note": (
+                        "excluded by default; plaintext raw rollout push requires encrypted sync"
+                    ),
+                },
+            ]
+        if sync_dir:
+            manifest = load_sync_manifest(Path(sync_dir).resolve() / SYNC_MANIFEST_NAME, missing_ok=True)
+            files = manifest.get("files") if isinstance(manifest, dict) else None
+            if not isinstance(files, list):
+                return []
+            categories = {
+                "registry_metadata_and_indexes": 0,
+                "clean_source_chunks": 0,
+                "raw_rollout_audit_files": 0,
+                "other_manifest_files": 0,
+            }
+            for item in files:
+                path = str(item.get("path") if isinstance(item, dict) else "")
+                if path.startswith("raw-rollouts/"):
+                    categories["raw_rollout_audit_files"] += 1
+                elif path.startswith(f"{CLEAN_SOURCE_CHUNK_STORE}/"):
+                    categories["clean_source_chunks"] += 1
+                elif path.startswith("registry/"):
+                    categories["registry_metadata_and_indexes"] += 1
+                else:
+                    categories["other_manifest_files"] += 1
+            return [
+                {
+                    "category": name,
+                    "count": count,
+                    "included": True,
+                    "privacy": "manifest_path_categories_only",
+                }
+                for name, count in categories.items()
+                if count
+            ]
+    except Exception:
+        return []
+    return []
+
+
+def _estimate_plan_file_count(
+    command: str,
+    sync_dir: str | None,
+    registry_dir: str | None,
+    *,
+    include_raw: bool,
+) -> int | None:
+    try:
+        if command == "push":
+            registry_root = Path(registry_dir).resolve() if registry_dir else aippocampus_registry_dir()
+            total = sum(1 for _ in iter_registry_sync_files(registry_root)) + sum(
                 1 for _ in iter_clean_source_sync_files(registry_root)
             )
+            if include_raw:
+                total += sum(1 for _ in iter_raw_rollout_files(registry_root))
+            return total
         if sync_dir:
             manifest = load_sync_manifest(Path(sync_dir).resolve() / SYNC_MANIFEST_NAME, missing_ok=True)
             files = manifest.get("files") if isinstance(manifest, dict) else None
@@ -864,7 +946,16 @@ def main(argv: list[str] | None = None) -> int:
             result = sync_direction_plan(
                 args,
                 estimated_file_count=_estimate_plan_file_count(
-                    str(args.command), args.sync_dir, args.registry_dir
+                    str(args.command),
+                    args.sync_dir,
+                    args.registry_dir,
+                    include_raw=bool(args.include_raw),
+                ),
+                file_count_breakdown=_sync_plan_file_breakdown(
+                    str(args.command),
+                    args.sync_dir,
+                    args.registry_dir,
+                    include_raw=bool(args.include_raw),
                 ),
             )
         elif args.command == "status":

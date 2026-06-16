@@ -1154,16 +1154,93 @@ def print_human_summary(payload: dict[str, Any]) -> None:
             print(f"  - {name}: {gap.get('status')}")
 
 
+def claimability_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    cannot_claim = [str(item) for item in payload.get("cannot_claim") or []]
+    profile = (
+        (payload.get("profile_metadata") or {}).get("selected_profile") or {}
+        if isinstance(payload.get("profile_metadata"), dict)
+        else {}
+    )
+    quality_gate_ok = bool(payload.get("quality_gate_ok"))
+    ok = bool(payload.get("ok"))
+    can_cite = ok and quality_gate_ok
+    selected_profile = str(profile.get("name") or payload.get("profile") or "unknown")
+    if selected_profile == PUBLIC_FAST_PROFILE:
+        next_benchmark = "Escalate to release-evidence before public release claims."
+    elif selected_profile == RELEASE_EVIDENCE_PROFILE and cannot_claim:
+        next_benchmark = "Use the priority map to choose the owning benchmark for remaining cannot_claim items."
+    elif selected_profile == LIVE_SEMANTIC_PROFILE:
+        next_benchmark = "Pair live/provider results with deterministic release evidence before public claims."
+    else:
+        next_benchmark = "Use the smallest higher profile that owns the claim you need."
+    return {
+        "kind": "aippocampus_benchmark_suite_claimability_summary",
+        "status": payload.get("status"),
+        "profile": selected_profile,
+        "can_cite": can_cite,
+        "cite_status": "cite_with_limits" if can_cite else "do_not_cite_as_quality_proof",
+        "quality_gate_ok": quality_gate_ok,
+        "cannot_claim_count": len(cannot_claim),
+        "cannot_claim_sample": cannot_claim[:8],
+        "cannot_claim_truncated": len(cannot_claim) > 8,
+        "track_statuses": payload.get("track_statuses") or {},
+        "important_limits": [
+            "A benchmark run is evidence for its selected profile, not a general product certificate.",
+            "Inactive profile caveats remain claim boundaries; reopen the full report before public claims.",
+        ],
+        "best_next_benchmark": next_benchmark,
+    }
+
+
+def print_claimability_summary(payload: dict[str, Any]) -> None:
+    summary = claimability_summary(payload)
+    print("AIppocampus benchmark claimability")
+    print(f"- profile: {summary['profile']}")
+    print(f"- cite status: {summary['cite_status']}")
+    print(f"- quality gate ok: {str(summary['quality_gate_ok']).lower()}")
+    print(f"- cannot claim count: {summary['cannot_claim_count']}")
+    if summary["cannot_claim_sample"]:
+        print("- cannot claim sample:")
+        for item in summary["cannot_claim_sample"]:
+            print(f"  - {item}")
+    print(f"- best next benchmark: {summary['best_next_benchmark']}")
+
+
+def profile_help_cards() -> str:
+    lines = ["Profile cards:"]
+    for profile in PROFILE_LADDER:
+        name = profile["name"]
+        purpose = profile["purpose"]
+        runtime = profile["runtime_cost"]
+        lines.append(f"  {name}: {purpose} ({runtime})")
+    return "\n".join(lines)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     profile_names = ", ".join(PROFILE_CHOICES)
     parser = argparse.ArgumentParser(
+        usage=(
+            "benchmark_suite.py [--profile PROFILE] [--output REPORT.json] "
+            "[--cite-summary|--json] [overrides]"
+        ),
         description=(
-            "Run the repeatable AIppocampus benchmark baseline suite. "
-            "Profiles define claim surfaces; individual flags are overrides."
+            "Task-first benchmark suite:\n"
+            "  Ordinary PR confidence:\n"
+            "    python tools/aippocampus/run_tests.py --tier benchmark-smoke "
+            "--benchmark-suite-profile public-fast\n"
+            "  Public evidence update:\n"
+            "    python benchmarks/aippocampus/benchmark_suite.py --profile "
+            "release-evidence --output reports/benchmark-suite-release.json --cite-summary\n"
+            "  Full machine report to stdout:\n"
+            "    python benchmarks/aippocampus/benchmark_suite.py --profile public-fast --json\n\n"
+            "Profiles define claim surfaces; individual flags are overrides.\n\n"
+            f"{profile_help_cards()}"
         ),
         epilog=(
             f"Profile ladder: {profile_names}. "
             f"Profile and threshold rationale: {PROFILE_DOCS}\n"
+            "--output without --json writes the full report to disk while stdout stays compact. "
+            "--cite-summary prints the 'can I cite this?' card.\n"
             "Python callers should prefer BenchmarkSuiteConfig plus "
             "run_benchmark_suite_with_config(); run_benchmark_suite(**kwargs) "
             "is a compatibility bridge."
@@ -1375,6 +1452,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--cite-summary",
+        action="store_true",
+        help="Print a compact 'can I cite this?' readout while preserving --output full reports.",
+    )
     return parser
 
 
@@ -1448,6 +1530,8 @@ def main() -> int:
         )
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif args.cite_summary:
+        print_claimability_summary(payload)
     else:
         print_human_summary(payload)
     return 0 if args.json_output or payload.get("ok") else 1

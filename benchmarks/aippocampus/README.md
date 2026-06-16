@@ -4,6 +4,30 @@ This directory keeps the public benchmark runners visible while moving helper,
 adapter, fixture-builder, and family-specific implementation code into smaller
 layers.
 
+## What To Run
+
+Start with the claim you need to support, then choose the smallest profile that
+can actually answer it.
+
+- Ordinary PR confidence:
+  `python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast`
+- Fresh-clone public suite:
+  `python benchmarks/aippocampus/benchmark_suite.py --profile public-fast --cite-summary`
+- Public release evidence update:
+  `python benchmarks/aippocampus/benchmark_suite.py --profile release-evidence --output reports/benchmark-suite-release.json --cite-summary`
+- Live/provider calibration:
+  use `--profile live-semantic` only when the provider/key budget is explicit.
+- Private or sanitized replay:
+  use the owning protocol/runner; do not cite private-history output as public
+  release evidence without a sanitized rerun.
+
+`--json` keeps the Unix contract and prints the full report to stdout. When a
+foreground agent needs the full report on disk but only a readable claimability
+answer in chat, use `--output <report.json> --cite-summary`.
+
+The compact map of benchmark tracks, maturity, and escalation order lives in
+`docs/evidence/benchmarks/design/benchmark-priority-map.md`.
+
 ## Layout
 
 - `benchmark_*.py`: stable benchmark runners. These paths are cited by docs,

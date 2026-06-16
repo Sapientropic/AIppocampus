@@ -96,6 +96,46 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("usage: aippocampus hooks action refresh-cache", refresh_cache.stdout)
         self.assertNotIn("[{report,refresh-cache}]", refresh_cache.stdout)
 
+        prompt_install = self.run_cli("hooks", "prompt", "install", "--help")
+        lifecycle_install = self.run_cli("hooks", "lifecycle", "install", "--help")
+        action_install = self.run_cli("hooks", "action", "install", "--help")
+        self.assertIn("Prompt hook install boundary", prompt_install.stdout)
+        self.assertIn("Does not install provider keys", prompt_install.stdout)
+        self.assertIn("Lifecycle hook install boundary", lifecycle_install.stdout)
+        self.assertIn("Does not cold-archive", lifecycle_install.stdout)
+        self.assertIn("Action-time hook install boundary", action_install.stdout)
+        self.assertIn("prepared public-safe hint cache", action_install.stdout)
+        self.assertIn("uninstall --json", action_install.stdout)
+
+    def test_config_alias_recovers_to_safe_doctor(self) -> None:
+        help_proc = self.run_cli("config", "--help")
+        human_proc = self.run_cli("config")
+        json_proc = self.run_cli("config", "--compact-json")
+
+        self.assertEqual(help_proc.returncode, 0, help_proc.stderr)
+        self.assertIn("Config recovery card", help_proc.stdout)
+        self.assertIn("Values are never printed", help_proc.stdout)
+        self.assertEqual(human_proc.returncode, 0, human_proc.stderr)
+        self.assertIn("AIppocampus config doctor", human_proc.stdout)
+        self.assertIn("values are not printed", human_proc.stdout.lower())
+        self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
+        payload = json.loads(json_proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
+
+    def test_agent_recall_and_deepen_help_start_with_foreground_cards(self) -> None:
+        recall = self.run_cli("agent", "recall", "--help")
+        deepen = self.run_cli("agent", "deepen", "--help")
+
+        self.assertEqual(recall.returncode, 0, recall.stderr)
+        self.assertEqual(deepen.returncode, 0, deepen.stderr)
+        self.assertIn("Agent recall task card", recall.stdout)
+        self.assertIn("Default compact JSON is the foreground-safe surface", recall.stdout)
+        self.assertIn('aippocampus search "exact phrase"', recall.stdout)
+        self.assertIn("deepen/reopen before factual", recall.stdout)
+        self.assertIn("Agent deepen task card", deepen.stdout)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", deepen.stdout)
+        self.assertIn("Raw handles are local/private diagnostics", deepen.stdout)
+
     def test_lifecycle_hook_status_json_redacts_host_wiring_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1304,6 +1344,19 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(local_payload["source_side"], "local_registry")
         self.assertEqual(local_payload["destination_side"], "sync_dir")
         self.assertEqual(local_payload["mutates"], ["sync_dir"])
+        self.assertEqual(
+            [item["category"] for item in local_payload["estimated_file_breakdown"]],
+            [
+                "registry_metadata_and_indexes",
+                "clean_source_files",
+                "raw_rollout_audit_files",
+            ],
+        )
+        self.assertEqual(
+            local_payload["raw_rollout_boundary"],
+            "excluded_unless_include_raw_and_encrypted_sync_are_explicitly_requested",
+        )
+        self.assertIn("plan mode performs no writes", local_payload["conflict_boundary"])
         self.assertEqual(object_payload["kind"], "aippocampus_object_sync_direction_plan")
         self.assertEqual(object_payload["source_side"], "object_store_prefix")
         self.assertEqual(object_payload["destination_side"], "local_registry")

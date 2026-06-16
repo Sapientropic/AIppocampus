@@ -1118,7 +1118,30 @@ def build_parser() -> argparse.ArgumentParser:
     for action in ("status", "plan"):
         child = subparsers.add_parser(action)
         _add_common_options(child)
-    apply_parser = subparsers.add_parser("apply")
+    apply_parser = subparsers.add_parser(
+        "apply",
+        usage="aippocampus update apply [--surface SURFACE] [--all-local] [--agent-json|--json]",
+        description=(
+            "Mutating surface decision card:\n"
+            "  skill   replaces only the installable skill package; generated memory is not touched.\n"
+            "  plugin  rebuilds/refreshes the local Codex plugin package/cache when a target is clear.\n"
+            "  hooks   writes/merges Codex hook entries; rollback with matching hooks ... uninstall.\n"
+            "  mcp     reports or repairs MCP-facing package config; host restarts may still be needed.\n"
+            "  cli     reports the console/import path; update does not run pip for you.\n"
+            "  llm     checks provider readiness; API key values are never written by update.\n\n"
+            "Ordinary setup should choose the narrow surface that matches the task. "
+            "--all-local is a broad bootstrap/repair shortcut for skill + plugin + hooks, not the "
+            "default foreground suggestion."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  aippocampus update apply --surface hooks --agent-json\n"
+            "  aippocampus hooks prompt uninstall --json\n"
+            "  aippocampus plugin install --codex --verify --compact-json\n"
+            "  aippocampus update apply --all-local --foreground-tools-visible --agent-json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     _add_common_options(apply_parser)
     apply_parser.add_argument(
         "--surface",

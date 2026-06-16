@@ -70,6 +70,26 @@ class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["raw_text_serialized"])
         self.assertFalse(payload["privacy_boundary"]["private_history_used"])
 
+    def test_help_names_question_claims_and_limits(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "benchmarks/aippocampus/benchmark_learning_loop_public_companion.py",
+                "--help",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Question answered", result.stdout)
+        self.assertIn("Can claim", result.stdout)
+        self.assertIn("Important limits", result.stdout)
+        self.assertIn("cannot prove workflow guidance lift by itself", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,9 @@ room.
 - Release gates are calmer: focused tests first, `pr` when the changed surface
   deserves it, and broad/benchmark gates only for claims that actually depend on
   them.
+- Benchmark doors now start with the question you are trying to prove.
+  `--cite-summary` gives a small "can I cite this?" readout while the full JSON
+  report stays available.
 - Health redacts paths without turning the next command into a dead end.
 - Health no longer chases its own tail while a live thread is still talking:
   small fresh-message gaps stay a fresh window, and advisory upkeep is labeled

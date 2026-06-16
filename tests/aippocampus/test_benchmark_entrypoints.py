@@ -38,6 +38,17 @@ def run_repo_python_without_provider_keys(*args: str) -> subprocess.CompletedPro
 
 
 class BenchmarkEntrypointTests(unittest.TestCase):
+    def test_benchmark_readme_starts_with_task_first_run_choices(self) -> None:
+        text = (REPO_ROOT / "benchmarks" / "aippocampus" / "README.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("## What To Run", text)
+        self.assertIn("Ordinary PR confidence", text)
+        self.assertIn("--tier benchmark-smoke --benchmark-suite-profile public-fast", text)
+        self.assertIn("--profile release-evidence --output", text)
+        self.assertIn("--output <report.json> --cite-summary", text)
+
     def test_provider_conformance_supports_direct_and_module_json_entrypoints(self) -> None:
         direct = run_repo_python(
             "benchmarks/aippocampus/benchmark_provider_conformance.py",

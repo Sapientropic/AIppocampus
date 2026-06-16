@@ -1259,7 +1259,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    recall_parser = sub.add_parser("recall")
+    recall_parser = sub.add_parser(
+        "recall",
+        usage="aippocampus agent recall \"old cue\" [--json] [options]",
+        description=(
+            "Agent recall task card:\n"
+            "  Use for fuzzy continuity cues, old decisions, interrupted work, and handoffs.\n"
+            "  Default compact JSON is the foreground-safe surface; --public is a compatibility alias.\n"
+            "  Use `aippocampus search \"exact phrase\"` for exact wording lookup.\n"
+            "  Treat recall packets as routes; deepen/reopen before factual, stale, or public claims.\n"
+            "  Use --detail full only for local diagnostics that may expose private handles."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     recall_parser.add_argument("query", nargs="*")
     recall_parser.add_argument("--query", dest="query_flag")
     recall_parser.add_argument("--cwd")
@@ -1325,7 +1337,19 @@ def _parser() -> argparse.ArgumentParser:
     macro_parser.add_argument("--explain-schema", action="store_true")
     macro_parser.add_argument("--json", action="store_true")
 
-    deepen_parser = sub.add_parser("deepen")
+    deepen_parser = sub.add_parser(
+        "deepen",
+        usage="aippocampus agent deepen --request 1 --last-recall --json [options]",
+        description=(
+            "Agent deepen task card:\n"
+            "  Ordinary path: run recall, then reopen a numbered request from the last-recall cache.\n"
+            "  Copy-paste: aippocampus agent deepen --request 1 --last-recall --json\n"
+            "  Raw handles are local/private diagnostics; do not paste them into public output.\n"
+            "  If the cache is missing or stale, rerun agent recall or pass an explicit handle locally.\n"
+            "  Deepen opens source windows; use it before exact wording, disputed, or high-risk claims."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     deepen_parser.add_argument("handle", nargs="?")
     deepen_parser.add_argument("--request", type=int)
     deepen_parser.add_argument("--last-recall", action="store_true")

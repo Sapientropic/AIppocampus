@@ -373,7 +373,23 @@ CLI_STDOUT_BOUNDARY = {
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "LongMemEval-V2 official pilot decision report.\n"
+            "Question answered: should AIppocampus proceed toward a tiny official-harness "
+            "answer/latency pilot, and with which adapter boundary?\n"
+            "Can claim: integration readiness, budget shape, and decision status.\n"
+            "Important limits: this is not a V2 score, not a leaderboard/LAFS claim, and "
+            "does not execute the official reader.\n"
+            "Best next benchmark: run the tiny official-harness pilot only after the "
+            "Memory adapter contract is ready."
+        ),
+        epilog=(
+            "Default stdout is a static boundary card. Use --output for the sanitized JSON "
+            "decision report; use --json only for the stdout-boundary contract."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--pilot-questions", type=int, default=DEFAULT_PILOT_QUESTIONS)
     parser.add_argument("--max-pilot-questions", type=int, default=DEFAULT_MAX_PILOT_QUESTIONS)
     parser.add_argument("--reader-model", default=DEFAULT_READER_MODEL)

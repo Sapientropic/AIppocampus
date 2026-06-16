@@ -216,6 +216,31 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_recall_funnel_smoke")
         self.assertTrue(payload["ok"])
 
+    def test_cli_smoke_recall_funnel_help_explains_diagnostic_boundary(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "smoke",
+                "recall-funnel",
+                "--help",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Recall funnel smoke task card", proc.stdout)
+        self.assertIn("No-write diagnostic", proc.stdout)
+        self.assertIn("Cue text, source text, and local/private paths are redacted", proc.stdout)
+        self.assertIn("not source-backed evidence", proc.stdout)
+        self.assertIn("agent recall -> agent deepen", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
