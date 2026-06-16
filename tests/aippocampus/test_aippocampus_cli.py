@@ -139,7 +139,9 @@ class AippocampusCliTests(unittest.TestCase):
 
     def test_personal_control_and_learning_frontdoors_are_executable(self) -> None:
         pause_help = self.run_cli("pause", "--help")
+        pause = self.run_cli("pause", "--json")
         forget = self.run_cli("forget", "route:test", "--json")
+        privacy = self.run_cli("privacy", "--help")
         why_not = self.run_cli("why-not", "old cue", "--json")
         learning = self.run_cli("learning", "--json")
         learning_replay = self.run_cli("learning", "replay", "--json")
@@ -151,11 +153,37 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("usage: aippocampus pause [target] [options]", pause_help.stdout)
         self.assertIn("Boundary: feedback and quieting", pause_help.stdout)
         self.assertNotIn("{pause,forget,do-not-use-here}", pause_help.stdout)
+        self.assertNotIn("<local-feedback.jsonl>", pause_help.stdout)
+
+        self.assertEqual(pause.returncode, 0, pause.stderr)
+        pause_payload = json.loads(pause.stdout)
+        self.assertEqual(pause_payload["mode"], "pause")
+        self.assertNotEqual(pause_payload["status"], "plan_card")
+        pause_encoded = json.dumps(pause_payload, ensure_ascii=False)
+        self.assertNotIn("<route-or-ticket-id>", pause_encoded)
+        for action in pause_payload["safe_next_actions"]:
+            if "command" in action:
+                self.assertNotIn("route_to_", action["command"])
+        self.assertNotIn("hooks --help", pause_encoded)
+        self.assertIn("safe_next_actions", pause_payload)
 
         self.assertEqual(forget.returncode, 0, forget.stderr)
         forget_payload = json.loads(forget.stdout)
         self.assertEqual(forget_payload["mode"], "forget")
+        self.assertEqual(forget_payload["target"], "route:test")
+        self.assertNotEqual(forget_payload["status"], "plan_card")
+        self.assertTrue(forget_payload["write_boundary"]["wrote_event"])
+        self.assertTrue(forget_payload["quieted_future_routes"])
         self.assertIn("raw audit history was physically deleted", forget_payload["cannot_claim"])
+        self.assertNotIn("<route-or-ticket-id>", forget.stdout)
+
+        self.assertEqual(privacy.returncode, 0, privacy.stderr)
+        self.assertIn("aippocampus pause --json", privacy.stdout)
+        self.assertIn("aippocampus forget --json", privacy.stdout)
+        self.assertNotIn("route_to_", privacy.stdout)
+        self.assertNotIn("aippocampus pause --help", privacy.stdout)
+        self.assertNotIn("aippocampus forget --help", privacy.stdout)
+        self.assertNotIn("aippocampus do-not-use-here --help", privacy.stdout)
 
         self.assertEqual(why_not.returncode, 0, why_not.stderr)
         self.assertEqual(json.loads(why_not.stdout)["mode"], "why-not-recall")
@@ -336,10 +364,43 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 2)
         payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["status"], "needs_target")
         surfaces = {item["surface"] for item in payload["safe_next_actions"]}
         self.assertEqual(surfaces, {"recall-route", "coding-ticket"})
         self.assertIn("agent recall", payload["agent_next_action"]["command"])
+        self.assertNotIn("<route_id>", encoded)
+        self.assertNotIn("<ticket_id>", encoded)
+
+    def test_repro_package_template_has_structured_copyable_payload(self) -> None:
+        proc = self.run_cli("repro", "package", "--template", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["mode"], "repro_package_template")
+        self.assertNotIn("save template as", encoded)
+        self.assertIn("template_json", payload)
+        self.assertIn("stdin_payload", payload)
+        self.assertEqual(payload["agent_next_action"]["id"], "choose_repro_packaging_path")
+        self.assertEqual(
+            payload["primary_next_action"]["command"],
+            "aippocampus repro package --input-json repro-input.json --json",
+        )
+        self.assertIn(
+            "cat repro-input.json | aippocampus repro package --stdin --json",
+            {action["command"] for action in payload["safe_next_actions"]},
+        )
+
+    def test_repro_package_recovery_uses_concrete_example_paths(self) -> None:
+        proc = self.run_cli("repro", "package", "--json")
+
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["mode"], "repro_package_recovery")
+        self.assertIn("command-output.json", encoded)
+        self.assertNotIn("<command-output.json>", encoded)
 
     def test_hooks_help_shows_family_not_raw_installer_parser(self) -> None:
         family = self.run_cli("hooks", "--help")

@@ -252,16 +252,16 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
         self.assertEqual(navigate.returncode, 0, navigate.stderr)
         navigation_payload = json.loads(navigate.stdout)
-        self.assertEqual(navigation_payload["status"], "operator_only")
+        self.assertEqual(navigation_payload["status"], "needs_cue")
         self.assertFalse(navigation_payload["source_boundary"]["model_job_started"])
-        self.assertIn(
-            "aippocampus agent recall",
-            navigation_payload["foreground_next_action"]["command"],
-        )
+        self.assertNotIn("old cue", json.dumps(navigation_payload, ensure_ascii=False))
+        self.assertNotIn("foreground_next_action", navigation_payload)
+        self.assertEqual(navigation_payload["foreground_next_actions"][0]["requires"], "cue")
 
     def test_navigate_default_hides_internal_module_commands(self) -> None:
         human = self.run_cli("navigate")
         compact = self.run_cli("navigate", "--json")
+        cued = self.run_cli("navigate", "provider orchestration", "--json")
         operator = self.run_cli("navigate", "--operator-json")
 
         self.assertEqual(human.returncode, 0, human.stderr)
@@ -271,8 +271,16 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(compact.returncode, 0, compact.stderr)
         compact_payload = json.loads(compact.stdout)
         self.assertEqual(compact_payload["detail"], "compact")
+        self.assertEqual(compact_payload["status"], "needs_cue")
+        self.assertNotIn("old cue", json.dumps(compact_payload, ensure_ascii=False))
         self.assertIn("operator_detail_command", compact_payload["lanes"][0])
         self.assertNotIn("diagnostic_command", json.dumps(compact_payload))
+
+        self.assertEqual(cued.returncode, 0, cued.stderr)
+        cued_payload = json.loads(cued.stdout)
+        self.assertEqual(cued_payload["status"], "foreground_route_available")
+        self.assertTrue(cued_payload["cue_supplied"])
+        self.assertIn("provider orchestration", cued_payload["foreground_next_actions"][0]["command"])
 
         self.assertEqual(operator.returncode, 0, operator.stderr)
         operator_payload = json.loads(operator.stdout)
@@ -641,6 +649,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         cases = {
             ("search", "--json"): "aippocampus_search_recovery",
             ("plugin", "--json"): "aippocampus_plugin_chooser",
+            ("hooks", "--json"): "aippocampus_hooks_chooser",
             ("sync", "--json"): "aippocampus_sync_chooser",
             ("object-sync", "--json"): "aippocampus_sync_chooser",
             ("storage", "--json"): "aippocampus_storage_chooser",

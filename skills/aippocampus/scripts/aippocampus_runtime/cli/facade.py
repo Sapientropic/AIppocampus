@@ -241,6 +241,47 @@ def plugin_chooser_payload() -> dict[str, Any]:
     )
 
 
+def hooks_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_hooks_chooser",
+        decision="choose a hook family before checking, installing, or rolling back",
+        choices=[
+            foreground_shell_action(
+                action_id="check_prompt_hook",
+                label="Check prompt hook",
+                command="aippocampus hooks prompt status --last --json",
+                why="Prompt hooks are the Codex UserPromptSubmit recall affordance, not the whole hook family.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_lifecycle_hooks",
+                label="Check lifecycle hooks",
+                command="aippocampus hooks lifecycle status --json",
+                why="Lifecycle hooks cover bounded start/stop/compact maintenance.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_action_hints",
+                label="Check action-time hints",
+                command="aippocampus hooks action status --json",
+                why="Action-time hints are recommended trusted-Codex setup, but remain fail-open navigation guidance.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_claude_code_hooks",
+                label="Check Claude Code hook helper",
+                command="aippocampus hooks claude-code status --json",
+                why="Claude Code has a host-specific status/dry-run helper rather than Codex hook installation.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+        ],
+    )
+
+
 def sync_chooser_payload() -> dict[str, Any]:
     return foreground_chooser_card(
         kind="aippocampus_sync_chooser",
@@ -467,15 +508,48 @@ def print_privacy_card(*, file: TextIO | None = None) -> None:
     print("  Defaults are read-only and redacted; destructive or private-path output is explicit operator work.", file=target)
     print("", file=target)
     print("Controls:", file=target)
-    print("  aippocampus pause --help", file=target)
-    print("  aippocampus forget --help", file=target)
-    print("  aippocampus do-not-use-here --help", file=target)
+    print("  aippocampus pause --json", file=target)
+    print("  aippocampus forget --json", file=target)
+    print("  aippocampus do-not-use-here --json", file=target)
     print("", file=target)
     print("Portability and credentials:", file=target)
     print("  aippocampus export --help", file=target)
     print("  aippocampus import --help", file=target)
     print("  aippocampus provider-key --help", file=target)
     print("Boundary: provider keys are optional; AIppocampus should still have a no-key source-backed path.", file=target)
+
+
+def controls_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_controls_chooser",
+        decision="choose a scoped personal control",
+        choices=[
+            foreground_shell_action(
+                action_id="pause_scope",
+                label="Open pause scope card",
+                command="aippocampus pause --json",
+                why="Shows the scoped-control boundary before any feedback write.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="forget_scope",
+                label="Open forget scope card",
+                command="aippocampus forget --json",
+                why="Shows the scoped-control boundary before any feedback write.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="find_control_target",
+                label="Find a route id first",
+                command='aippocampus agent recall "route to quiet" --json',
+                why="Use this if you do not yet have the concrete route id.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ],
+    )
 
 
 def print_controls_card(*, file: TextIO | None = None) -> None:
@@ -485,9 +559,9 @@ def print_controls_card(*, file: TextIO | None = None) -> None:
     print("  Use these when you want less memory influence, narrower scope, or a route disabled here.", file=target)
     print("", file=target)
     print("Commands:", file=target)
-    print("  aippocampus pause --help", file=target)
-    print("  aippocampus forget --help", file=target)
-    print("  aippocampus do-not-use-here --help", file=target)
+    print("  aippocampus pause --json", file=target)
+    print("  aippocampus forget --json", file=target)
+    print("  aippocampus do-not-use-here --json", file=target)
     print("", file=target)
     print("Boundary: control commands do not delete private history by surprise; deletion/cleanup stays explicit.", file=target)
 
@@ -875,6 +949,13 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if args[0] == "privacy" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
         print_privacy_card()
         return None, 0
+    if args[0] == "controls" and set(args[1:]) <= {"--json"}:
+        payload = controls_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_controls_card()
+        return None, 0
     if args[0] == "controls" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
         print_controls_card()
         return None, 0
@@ -884,6 +965,13 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print_plugin_status_help()
+        return None, 0
+    if args[0] == "hooks" and set(args[1:]) <= {"--json"}:
+        payload = hooks_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_hooks_help()
         return None, 0
     if args[0] in {"sync", "object-sync"} and set(args[1:]) <= {"--json"}:
         payload = sync_chooser_payload()

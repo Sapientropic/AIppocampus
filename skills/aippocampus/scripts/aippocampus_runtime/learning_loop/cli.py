@@ -514,31 +514,67 @@ def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 def repro_package_template_payload() -> dict[str, Any]:
     schema = repro_package_input_schema()
+    template = schema["redacted_example"]
+    template_json = json.dumps(template, ensure_ascii=False, indent=2, sort_keys=True)
+    primary = foreground_shell_action(
+        action_id="package_repro_input_file",
+        label="Package a saved repro input JSON file",
+        command="aippocampus repro package --input-json repro-input.json --json",
+        why="Use this after writing the template JSON to repro-input.json and filling expected/actual.",
+        mutation_risk="read_only",
+        claim_boundary="repro_package_not_source_truth",
+    )
     return _public_payload(
         {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "repro_package_template",
             "ok": True,
-            "template": schema["redacted_example"],
+            "template": template,
+            "template_json": template_json,
+            "stdin_payload": template_json,
             "expected_input_schema": schema,
-            "agent_next_action": (
-                "save template as repro-input.json, fill expected/actual, then run "
-                "aippocampus repro package --input-json repro-input.json --json"
-            ),
+            "agent_next_action": {
+                "id": "choose_repro_packaging_path",
+                "primary": primary,
+                "no_file_payload_field": "stdin_payload",
+            },
+            "primary_next_action": primary,
+            "safe_next_actions": [
+                primary,
+                foreground_shell_action(
+                    action_id="package_repro_stdin",
+                    label="Package repro JSON through stdin",
+                    command="cat repro-input.json | aippocampus repro package --stdin --json",
+                    why="Portable Unix stdin path when a pipe is preferred.",
+                    mutation_risk="read_only",
+                    claim_boundary="repro_package_not_source_truth",
+                ),
+                foreground_shell_action(
+                    action_id="validate_repro_input_json",
+                    label="Validate repro input JSON",
+                    command="python -m json.tool repro-input.json",
+                    why="Check JSON syntax before packaging.",
+                    mutation_risk="read_only",
+                    claim_boundary="syntax_check_not_source_evidence",
+                ),
+            ],
             "next_actions": [
                 {
-                    "label": "package saved template",
-                    "command": (
-                        "aippocampus repro package --input-json repro-input.json --json"
+                    "label": str(action.get("label") or action.get("id")),
+                    "command": str(action["command"]),
+                    "mutates": False,
+                }
+                for action in [
+                    primary,
+                    foreground_shell_action(
+                        action_id="package_repro_stdin_legacy_list",
+                        label="Package repro JSON through stdin",
+                        command="cat repro-input.json | aippocampus repro package --stdin --json",
+                        mutation_risk="read_only",
+                        claim_boundary="repro_package_not_source_truth",
                     ),
-                    "mutates": False,
-                },
-                {
-                    "label": "pipe a saved JSON object",
-                    "command": "cat repro-input.json | aippocampus repro package --stdin --json",
-                    "mutates": False,
-                },
+                ]
             ],
             "privacy_boundary": _privacy_boundary(),
         }
@@ -552,7 +588,7 @@ def repro_package_input_schema() -> dict[str, Any]:
         "optional": ["surface", "source_refs", "privacy_boundary"],
         "redacted_example": {
             "surface": "agent_recall",
-            "command": "aippocampus agent recall \"old cue\" --json",
+            "command": "aippocampus agent recall \"old decision or handoff cue\" --json",
             "output_ref": "saved-output://local/redacted-command-output.json",
             "expected": "source-backed route appears with reopen boundary",
             "actual": "route was missing or degraded",
@@ -589,13 +625,13 @@ def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dic
                     "steps": [
                         "run `aippocampus learning guidance --json` or sanitized replay",
                         "save the relevant command outcome as the expected input schema",
-                        "run `aippocampus repro package --input-json <command-output.json> --json`",
+                        "run `aippocampus repro package --input-json command-output.json --json`",
                     ],
                     "copyable_validate_command": (
-                        "python -m json.tool <command-output.json>"
+                        "python -m json.tool command-output.json"
                     ),
                     "copyable_package_command": (
-                        "aippocampus repro package --input-json <command-output.json> --json"
+                        "aippocampus repro package --input-json command-output.json --json"
                     ),
                     "mutates": False,
                 },

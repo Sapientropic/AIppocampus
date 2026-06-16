@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from typing import Any
 
 _OPERATOR_LANES = (
@@ -19,28 +20,75 @@ _OPERATOR_LANES = (
 )
 
 
-def navigation_payload(*, operator_detail: bool = False) -> dict[str, Any]:
+def _quote(value: str) -> str:
+    return shlex.quote(value)
+
+
+def navigation_payload(*, cue: str | None = None, operator_detail: bool = False) -> dict[str, Any]:
+    clean_cue = (cue or "").strip()
     lanes = []
     for lane_id, diagnostic_command in _OPERATOR_LANES:
         lane = {
             "id": lane_id,
             "status": "operator_only",
             "operator_detail_command": "aippocampus navigate --operator-json",
+            "foreground_limitation": (
+                "diagnostic_sidecar_only; foreground navigation starts from a user cue "
+                "or a reopenable route returned by recall/search"
+            ),
         }
         if operator_detail:
             lane["diagnostic_command"] = diagnostic_command
         lanes.append(lane)
+    foreground_next_actions: list[dict[str, Any]]
+    if clean_cue:
+        foreground_next_actions = [
+            {
+                "id": "recall_with_supplied_cue",
+                "kind": "shell_command",
+                "command": f"aippocampus agent recall {_quote(clean_cue)} --json",
+                "requires": "none",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+            {
+                "id": "search_exact_supplied_cue",
+                "kind": "shell_command",
+                "command": f"aippocampus search {_quote(clean_cue)} --json",
+                "requires": "none",
+                "mutation_risk": "read_only",
+                "claim_boundary": "search_result_requires_source_boundary",
+            },
+        ]
+        status = "foreground_route_available"
+    else:
+        foreground_next_actions = [
+            {
+                "id": "provide_navigation_cue",
+                "kind": "shell_command",
+                "command": 'aippocampus navigate "old decision or handoff cue" --json',
+                "requires": "cue",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+            {
+                "id": "use_recall_directly",
+                "kind": "shell_command",
+                "command": 'aippocampus agent recall "old decision or handoff cue" --json',
+                "requires": "cue",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+        ]
+        status = "needs_cue"
     return {
         "kind": "aippocampus_navigation_frontdoor",
         "ok": True,
-        "status": "operator_only",
+        "status": status,
         "detail": "operator" if operator_detail else "compact",
+        "cue_supplied": bool(clean_cue),
         "lanes": lanes,
-        "foreground_next_action": {
-            "id": "use_recall_or_search_first",
-            "command": 'aippocampus agent recall "old cue" --json',
-            "alternatives": ['aippocampus search "exact phrase" --json'],
-        },
+        "foreground_next_actions": foreground_next_actions,
         "operator_next_action": "aippocampus navigate --operator-json",
         "source_boundary": {
             "navigation_sidecars_are_not_source_truth": True,
@@ -51,11 +99,13 @@ def navigation_payload(*, operator_detail: bool = False) -> dict[str, Any]:
 
 
 def render_text(payload: dict[str, Any]) -> str:
+    actions = payload.get("foreground_next_actions") or []
+    next_command = actions[0].get("command") if actions and isinstance(actions[0], dict) else ""
     lines = [
         "AIppocampus navigation sidecars",
         f"status: {payload.get('status')}",
-        "foreground: use agent recall/search first",
-        'next: aippocampus agent recall "old cue" --json',
+        "foreground: provide a cue, then use recall/search first",
+        f"next: {next_command}",
         "boundary: cognitive-map and concept expansion are operator-only diagnostics here",
         "claim rule: reopen source before treating any sidecar route as evidence",
         "operator details: aippocampus navigate --operator-json",
@@ -66,13 +116,13 @@ def render_text(payload: dict[str, Any]) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus navigate",
-        usage="aippocampus navigate [status] [--json]",
+        usage='aippocampus navigate ["cue"] [--json]',
         description=(
             "Show the boundary for cognitive-map and concept-expansion sidecars. "
             "Ordinary foreground continuity should start with recall/search."
         ),
     )
-    parser.add_argument("command", nargs="?", choices=["status"], default="status")
+    parser.add_argument("cue", nargs="?")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(
         "--operator-json",
@@ -84,7 +134,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    payload = navigation_payload(operator_detail=bool(args.operator_json))
+    cue = None if args.cue == "status" else args.cue
+    payload = navigation_payload(cue=cue, operator_detail=bool(args.operator_json))
     if args.json_output or args.operator_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:

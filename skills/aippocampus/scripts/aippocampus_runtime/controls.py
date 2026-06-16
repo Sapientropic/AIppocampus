@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.coding import host_contract
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
@@ -52,30 +53,35 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "pause",
-            "status": "plan_card",
+            "status": "needs_scope",
             "ok": True,
             "control": "pause",
+            "target": target,
             "what_it_can_do_now": [
-                "show the safe pause boundary",
-                "point to hook/status controls that can be changed explicitly",
+                "pause influence for one explicit route or ticket through local low-authority feedback",
+                "show the safe boundary for broader pause decisions without mutating source truth",
             ],
             "cannot_claim": [
                 "ambient continuity is paused globally",
                 "existing source or audit material was deleted",
             ],
             "safe_next_actions": [
-                {"label": "inspect hook surfaces", "command": "aippocampus hooks --help"},
-                {
-                    "label": "check install visibility",
-                    "command": "aippocampus update status --foreground-tools-visible --agent-json",
-                },
-                {
-                    "label": "quiet one route instead",
-                    "command": (
-                        "aippocampus do-not-use-here <route-or-ticket-id> "
-                        "--surface recall-route --json"
-                    ),
-                },
+                foreground_shell_action(
+                    action_id="find_pause_target",
+                    label="Find the route to pause here",
+                    command='aippocampus agent recall "route to pause" --json',
+                    why="Use recall to get a concrete route id before writing scoped feedback.",
+                    mutation_risk="read_only",
+                    claim_boundary="no_claim_before_reopen",
+                ),
+                foreground_shell_action(
+                    action_id="review_control_boundary",
+                    label="Review the control frontdoor",
+                    command="aippocampus controls --json",
+                    why="Use this when choosing between pause, forget, and do-not-use-here.",
+                    mutation_risk="read_only",
+                    claim_boundary="operator_diagnostic_not_source_evidence",
+                ),
             ],
             "boundary": _boundary(),
         }
@@ -83,7 +89,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
         "mode": "forget",
-        "status": "plan_card",
+        "status": "needs_scope",
         "ok": True,
         "control": "forget",
         "target": target,
@@ -96,16 +102,51 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             "all copies on other devices or backups were removed",
         ],
         "safe_next_actions": [
-            {
-                "label": "quiet this route or ticket",
-                "command": (
-                    "aippocampus do-not-use-here <route-or-ticket-id> --json"
-                ),
-            },
-            {"label": "export before transfer or review", "command": "aippocampus export --help"},
+            foreground_shell_action(
+                action_id="find_forget_target",
+                label="Find the route to forget here",
+                command='aippocampus agent recall "route to forget here" --json',
+                why="Use recall to get a concrete route id before scoped quieting.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+                foreground_shell_action(
+                    action_id="preview_export_for_review",
+                    label="Review export boundary",
+                    command="aippocampus export --help",
+                why="Use export only when reviewing or transferring explicit local material.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
         ],
         "boundary": _boundary(),
     }
+
+
+def _scoped_control_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    payload, code = do_not_use_here_payload(args)
+    scoped = dict(payload)
+    mode = str(args.command)
+    scoped.update(
+        {
+            "mode": mode,
+            "control": mode,
+            "status": "scoped_control_captured"
+            if payload.get("write_boundary", {}).get("wrote_event")
+            else "not_quieted_yet",
+            "cannot_claim": [
+                "raw audit history was physically deleted",
+                "all copies on other devices or backups were removed",
+                "source truth changed because of this control",
+            ],
+            "agent_next_action": (
+                "continue the task; this scoped local feedback can reduce future route pressure"
+                if payload.get("write_boundary", {}).get("wrote_event")
+                else "run aippocampus controls --json to choose a scoped retry path"
+            ),
+        }
+    )
+    return _public_payload(scoped), code
 
 
 def _render_plan_card(payload: Mapping[str, Any]) -> str:
@@ -175,13 +216,15 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                         },
                         {
                             "id": "quiet_recall_route_here",
-                            "command": "aippocampus do-not-use-here <route_id> --surface recall-route --json",
+                            "command_template": "aippocampus do-not-use-here ROUTE_ID_FROM_RECALL --surface recall-route --json",
+                            "requires": "route_id",
                             "surface": "recall-route",
                             "mutation_risk": "durable_low_authority_feedback_write",
                         },
                         {
                             "id": "quiet_coding_ticket_here",
-                            "command": "aippocampus do-not-use-here <ticket_id> --surface coding-ticket --json",
+                            "command_template": "aippocampus do-not-use-here TICKET_ID --surface coding-ticket --json",
+                            "requires": "ticket_id",
                             "surface": "coding-ticket",
                             "mutation_risk": "durable_local_control_write",
                         },
@@ -317,8 +360,8 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                     else "ticket quieted for this action-time decision; no source fact changed"
                     if consumed
                     else (
-                        "add --feedback-jsonl <local-feedback.jsonl> when you want this "
-                        "to quiet future ticket surfacing"
+                        "rerun with --feedback-jsonl local-feedback.jsonl or a writable "
+                        "default registry when you want this to quiet future ticket surfacing"
                     )
                 ),
                 "boundary": _boundary(),
@@ -340,9 +383,8 @@ def build_parser(prog: str = "aippocampus pause") -> argparse.ArgumentParser:
         epilog=(
             "Safe examples:\n"
             "  aippocampus pause --json\n"
-            "  aippocampus forget <route-or-source-scope> --json\n"
-            "  aippocampus do-not-use-here <route_id> --surface recall-route --feedback-jsonl <local-feedback.jsonl> --json\n"
-            "  aippocampus do-not-use-here <ticket_id> --surface coding-ticket --feedback-jsonl <local-feedback.jsonl> --json\n\n"
+            "  aippocampus forget --json\n"
+            "  aippocampus do-not-use-here --json\n\n"
             "Boundary: feedback and quieting change future activation pressure only; reopen source before claims."
         ),
     )
@@ -394,7 +436,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(raw)
     args.command = command
     if args.command in {"pause", "forget"}:
-        payload = _public_payload(_safe_plan_card(args.command, target=args.target or ""))
+        if args.target:
+            payload, code = _scoped_control_payload(args)
+            if args.json:
+                _json_out(payload)
+            else:
+                print(_render_plan_card(payload))
+            return code
+        payload = _public_payload(_safe_plan_card(args.command, target=""))
         if args.json:
             _json_out(payload)
         else:
