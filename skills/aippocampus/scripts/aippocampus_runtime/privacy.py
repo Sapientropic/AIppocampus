@@ -68,13 +68,15 @@ SENSITIVE_KEY_SUFFIXES = (
     "_password",
     "_private_key",
     "_refresh_token",
+    "_secret",
     "_secret_access_key",
     "_secret_key",
+    "_token",
 )
 
 SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(api[_-]?key|token|access[_-]?token|auth[_-]?token|refresh[_-]?token|"
-    r"client[_-]?secret|secret|password|passwd|authorization)\b\s*[:=]\s*"
+    r"(?i)\b([a-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|"
+    r"refresh[_-]?token|client[_-]?secret|secret|password|passwd|authorization|token))\b\s*[:=]\s*"
     r"([^\s,;\"']+)"
 )
 BEARER_VALUE_RE = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")

@@ -320,6 +320,16 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(rows[1]["outcome"], "dismissed")
         self.assertFalse(rows[1]["feedback_changes_source_truth"])
 
+    def test_do_not_use_here_missing_target_offers_route_and_ticket_actions(self) -> None:
+        proc = self.run_cli("do-not-use-here", "--json")
+
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "needs_target")
+        surfaces = {item["surface"] for item in payload["safe_next_actions"]}
+        self.assertEqual(surfaces, {"recall-route", "coding-ticket"})
+        self.assertIn("agent recall", payload["agent_next_action"]["command"])
+
     def test_hooks_help_shows_family_not_raw_installer_parser(self) -> None:
         family = self.run_cli("hooks", "--help")
         prompt = self.run_cli("hooks", "prompt", "--help")

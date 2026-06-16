@@ -1738,7 +1738,9 @@ def main(argv: list[str] | None = None) -> int:
                 _json_out(payload)
             else:
                 print("AIppocampus agent feedback: route_id required")
-                print("Next: " + payload["agent_next_action"])
+                next_action = payload.get("agent_next_action")
+                command = next_action.get("command") if isinstance(next_action, Mapping) else next_action
+                print("Next: " + str(command))
             return 2
         try:
             lane = feedback_lane_resolution(

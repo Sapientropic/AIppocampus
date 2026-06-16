@@ -237,9 +237,36 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         )
 
         self.assertTrue(human.ok, human.stderr)
-        self.assertIn('aippocampus search "old correction" --json', human.stdout)
+        self.assertIn("aippocampus onboard --provider auto --status --json", human.stdout)
         self.assertNotIn('"<distinctive exact phrase>"', human.stdout)
         self.assertNotIn('"<cue>"', human.stdout)
+
+    def test_json_why_recall_actions_use_real_cue_and_align_primary_command(self) -> None:
+        result = facade.run_command(
+            [
+                "why-recall",
+                "old correction",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.cwd / "missing-clean-source"),
+                "--json",
+            ],
+            capture_output=True,
+        )
+
+        self.assertTrue(result.ok, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["agent_next_action"]["id"], "check_onboarding_status")
+        self.assertEqual(
+            payload["action_card"]["next_command"],
+            payload["agent_next_action"]["command"],
+        )
+        encoded = json.dumps(payload, ensure_ascii=False)
+        commands = [item["command"] for item in payload["safe_next_actions"]]
+        self.assertIn('aippocampus agent recall "old correction" --json', commands)
+        self.assertNotIn('"<cue>"', encoded)
+        self.assertNotIn('"<distinctive exact phrase>"', encoded)
 
     def test_bare_why_commands_return_recovery_cards(self) -> None:
         for command in ("why-recall", "why-not-recall"):

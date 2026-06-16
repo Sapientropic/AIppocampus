@@ -161,7 +161,31 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                     "mode": "do-not-use-here",
                     "status": "needs_target",
                     "ok": False,
-                    "agent_next_action": "pass a route id or ticket id, then choose --surface recall-route or coding-ticket",
+                    "agent_next_action": {
+                        "id": "choose_control_target",
+                        "command": 'aippocampus agent recall "route to quiet" --json',
+                        "why": "Find the recall route id first, then quiet it for this workspace.",
+                    },
+                    "safe_next_actions": [
+                        {
+                            "id": "find_recall_route",
+                            "command": 'aippocampus agent recall "route to quiet" --json',
+                            "surface": "recall-route",
+                            "mutation_risk": "read_only",
+                        },
+                        {
+                            "id": "quiet_recall_route_here",
+                            "command": "aippocampus do-not-use-here <route_id> --surface recall-route --json",
+                            "surface": "recall-route",
+                            "mutation_risk": "durable_low_authority_feedback_write",
+                        },
+                        {
+                            "id": "quiet_coding_ticket_here",
+                            "command": "aippocampus do-not-use-here <ticket_id> --surface coding-ticket --json",
+                            "surface": "coding-ticket",
+                            "mutation_risk": "durable_local_control_write",
+                        },
+                    ],
                     "boundary": _boundary(),
                 }
             ),
@@ -183,7 +207,7 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             reason=reason_code,
             feedback_path=path,
             feedback_lane=lane,
-            schema_version="agent-opt-in-continuity-v0",
+            schema_version="agent-continuity-path-v1",
             kind="aippocampus_agent_continuity_path",
         )
         receipt = compact_feedback_receipt(payload)

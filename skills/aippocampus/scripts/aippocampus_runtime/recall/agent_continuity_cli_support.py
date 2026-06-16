@@ -91,18 +91,26 @@ def policy_boundary() -> dict[str, Any]:
 
 
 def handle_recovery_fields(mode: str) -> dict[str, Any]:
-    command = f"aippocampus agent {mode} --request 1 --last-recall --json"
+    recall_command = 'aippocampus agent recall "old decision or handoff cue" --json'
+    followup_command = f"aippocampus agent {mode} --request 1 --last-recall --json"
     return {
         "foreground_action": {
+            "tool_name": "agent_recall",
+            "arguments": {"query": "old decision or handoff cue"},
+            "cli_command": recall_command,
+            "claim_boundary": "no_claim_before_reopen",
+            "why": "No current recall handle was provided; recall must run before request-index deepen/explain.",
+        },
+        "follow_up_action": {
             "tool_name": f"agent_{mode}",
             "arguments": {"request_index": 1, "last_recall": True},
-            "cli_command": command,
+            "cli_command": followup_command,
             "claim_boundary": "no_claim_before_reopen",
         },
-        "agent_next_action": command,
+        "agent_next_action": recall_command,
         "next_safe_action": "rerun_agent_recall_then_request_index",
-        "examples": ['aippocampus agent recall "<cue>" --json', command],
-        "recovery_actions": ['aippocampus agent recall "<cue>" --json', command],
+        "examples": [recall_command, followup_command],
+        "recovery_actions": [recall_command, followup_command],
     }
 
 
@@ -358,13 +366,30 @@ def missing_feedback_route_payload(
             "mode": "feedback",
             "status": "needs_route_id",
             "ok": False,
-            "agent_next_action": (
-                "Run `aippocampus agent recall \"old cue\" --json`, deepen the selected route "
-                "if needed, then pass the route_id to `aippocampus agent feedback <route_id>`."
-            ),
-            "examples": [
-                'aippocampus agent recall "old cue" --json',
-                "aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
+            "agent_next_action": {
+                "id": "recall_before_feedback",
+                "command": 'aippocampus agent recall "old cue" --json',
+                "why": "Feedback needs a route_id from a recall result.",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "recall_before_feedback",
+                    "command": 'aippocampus agent recall "old cue" --json',
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                {
+                    "id": "deepen_if_needed",
+                    "command": "aippocampus agent deepen --request 1 --last-recall --json",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                {
+                    "id": "record_route_feedback",
+                    "command": "aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
+                    "mutation_risk": "durable_low_authority_feedback_write",
+                    "claim_boundary": "feedback_is_not_source_truth",
+                },
             ],
             "write_boundary": {
                 "wrote_event": False,

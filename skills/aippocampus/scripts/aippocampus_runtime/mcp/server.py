@@ -47,6 +47,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     compact_aippo_guidance_card,
     handle_from_last_recall_cache,
     last_recall_unavailable_payload,
+    missing_handle_payload,
     normalize_route_limit,
     write_last_recall_cache,
 )
@@ -389,28 +390,12 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             )
             return text_result(public_payload(arguments, payload), is_error=True)
     if handle is None:
-        return tool_error(
-            "missing_agent_handle",
-            (
-                "agent_deepen requires an opaque handle from agent_recall, "
-                "an AIppo route id, or request_index + last_recall from the compact foreground action."
-            ),
-            arguments=arguments,
-            required=["handle", "request_index + last_recall"],
-            agent_next_action=(
-                "Call agent_recall with the user's cue, then call agent_deepen with "
-                "request_index + last_recall or the selected private handle."
-            ),
-            example_arguments={
-                "query": "old decision or handoff cue",
-                "cwd": "<project cwd>",
-            },
-            example_followup_arguments={
-                "request_index": 1,
-                "last_recall": True,
-                "cwd": "<project cwd>",
-            },
+        payload = missing_handle_payload(
+            mode="deepen",
+            schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
+            kind="aippocampus_agent_continuity_path",
         )
+        return text_result(public_payload(arguments, payload), is_error=True)
     agent = agent_continuity_module()
     payload = agent.deepen(
         handle,
@@ -430,12 +415,12 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
     if "handle" not in arguments:
-        return tool_error(
-            "missing_agent_handle",
-            "agent_explain requires an opaque handle from agent_recall or an AIppo route id.",
-            arguments=arguments,
-            required=["handle"],
+        payload = missing_handle_payload(
+            mode="explain",
+            schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
+            kind="aippocampus_agent_continuity_path",
         )
+        return text_result(public_payload(arguments, payload), is_error=True)
     agent = agent_continuity_module()
     payload = agent.explain(
         arguments.get("handle"),

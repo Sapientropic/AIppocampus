@@ -387,6 +387,24 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertIn("agent recall", " ".join(payload["recovery_actions"]))
         self.assertNotIn(str(missing_path), encoded)
 
+    def test_agent_deepen_and_explain_missing_handle_lead_with_recall(self) -> None:
+        for request_id, tool_name in ((2037, "agent_deepen"), (2038, "agent_explain")):
+            with self.subTest(tool_name=tool_name):
+                response = mcp.handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "method": "tools/call",
+                        "params": {"name": tool_name, "arguments": {"cwd": str(self.cwd)}},
+                    }
+                )
+                payload = self.tool_payload(response)
+
+                self.assertTrue(response["result"]["isError"])
+                self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+                self.assertIn("agent recall", payload["agent_next_action"])
+                self.assertIn(tool_name.replace("_", " "), payload["follow_up_action"]["cli_command"])
+
     def test_recall_diagnostic_applies_provider_bridge_before_live_semantic_gate(self) -> None:
         env_var = "MCP_PROVIDER_BRIDGE_TEST_KEY"
         secret_value = "mcp-provider-bridge-secret-value"
@@ -1306,39 +1324,39 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertIn("example_arguments", payload["error"]["details"])
 
     def test_deepen_tools_return_recovery_cards_for_missing_selectors(self) -> None:
-        cases = [
-            (
-                "agent_deepen",
-                "missing_agent_handle",
-                "agent_recall",
-                "example_followup_arguments",
-            ),
-            (
-                "recall_deepen",
-                "missing_recall_handle",
-                "recall_context",
-                "example_followup_arguments",
-            ),
-        ]
-        for tool_name, code, recovery_tool, followup_key in cases:
-            with self.subTest(tool_name=tool_name):
-                response = mcp.handle_request(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": 4100,
-                        "method": "tools/call",
-                        "params": {"name": tool_name, "arguments": {"cwd": str(self.cwd)}},
-                    }
-                )
+        agent_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 4100,
+                "method": "tools/call",
+                "params": {"name": "agent_deepen", "arguments": {"cwd": str(self.cwd)}},
+            }
+        )
+        recall_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 4101,
+                "method": "tools/call",
+                "params": {"name": "recall_deepen", "arguments": {"cwd": str(self.cwd)}},
+            }
+        )
 
-                self.assertTrue(response["result"]["isError"])
-                payload = self.tool_payload(response)
-                details = payload["error"]["details"]
-                self.assertEqual(payload["error"]["code"], code)
-                self.assertIn("agent_next_action", details)
-                self.assertIn(recovery_tool, details["agent_next_action"])
-                self.assertIn("example_arguments", details)
-                self.assertIn(followup_key, details)
+        self.assertTrue(agent_response["result"]["isError"])
+        agent_payload = self.tool_payload(agent_response)
+        self.assertEqual(agent_payload["status"], "cannot_verify")
+        self.assertEqual(agent_payload["result"]["error"]["code"], "missing_recall_handle")
+        self.assertEqual(agent_payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertIn("agent recall", agent_payload["agent_next_action"])
+        self.assertIn("agent deepen --request 1 --last-recall", agent_payload["follow_up_action"]["cli_command"])
+
+        self.assertTrue(recall_response["result"]["isError"])
+        recall_payload = self.tool_payload(recall_response)
+        details = recall_payload["error"]["details"]
+        self.assertEqual(recall_payload["error"]["code"], "missing_recall_handle")
+        self.assertIn("agent_next_action", details)
+        self.assertIn("recall_context", details["agent_next_action"])
+        self.assertIn("example_arguments", details)
+        self.assertIn("example_followup_arguments", details)
 
     def test_get_turn_context_reports_missing_message_id(self) -> None:
         response = mcp.handle_request(

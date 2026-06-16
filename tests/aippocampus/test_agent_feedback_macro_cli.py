@@ -104,7 +104,8 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(missing.returncode, 2)
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["status"], "needs_route_id")
-        self.assertIn("agent recall", missing_payload["agent_next_action"])
+        self.assertIn("agent recall", missing_payload["agent_next_action"]["command"])
+        self.assertEqual(missing_payload["safe_next_actions"][0]["id"], "recall_before_feedback")
         self.assertIn("durable low-authority route calibration", help_proc.stdout)
         self.assertIn("Default durable example:", help_proc.stdout)
         self.assertIn("--feedback-jsonl <local-feedback.jsonl>", help_proc.stdout)
@@ -123,13 +124,16 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             malformed_payload["explanation"]["error"]["code"],
             "malformed_recall_handle",
         )
-        for payload in (missing_payload, malformed_payload):
-            self.assertEqual(payload["foreground_action"]["tool_name"], "agent_explain")
-            self.assertIn("--request 1 --last-recall", payload["agent_next_action"])
-            self.assertEqual(
-                payload["next_safe_action"],
-                "rerun_agent_recall_then_request_index",
-            )
+        self.assertEqual(missing_payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertIn("agent recall", missing_payload["agent_next_action"])
+        self.assertIn("agent explain --request 1 --last-recall", missing_payload["follow_up_action"]["cli_command"])
+        self.assertEqual(malformed_payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertIn("agent recall", malformed_payload["agent_next_action"])
+        self.assertIn("agent explain --request 1 --last-recall", malformed_payload["follow_up_action"]["cli_command"])
+        self.assertEqual(
+            missing_payload["next_safe_action"],
+            "rerun_agent_recall_then_request_index",
+        )
 
     def test_cli_agent_macro_help_is_task_first(self) -> None:
         proc = self.run_agent("macro", "--help")
