@@ -520,8 +520,12 @@ before quoting or deciding from memory.""",
     else:
         payload_rows = payload.get("rows")
         if isinstance(payload_rows, list):
+            scope_payload = payload.get("scope")
+            scope_mode = (
+                scope_payload.get("mode") if isinstance(scope_payload, Mapping) else "unknown"
+            )
             print("agent self-notes: direction_only atmosphere; reopen source before factual claims")
-            print("scope: " + str((payload.get("scope") or {}).get("mode") or "unknown"))
+            print("scope: " + str(scope_mode or "unknown"))
             for payload_row in payload_rows:
                 if isinstance(payload_row, dict):
                     route_count = len(payload_row.get("source_refs") or [])

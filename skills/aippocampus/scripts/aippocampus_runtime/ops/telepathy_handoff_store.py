@@ -635,7 +635,8 @@ def _load_source_ref_json(value: str | None) -> list[Any]:
 
 
 def _render_diagnose_text(payload: Mapping[str, Any]) -> str:
-    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), Mapping) else {}
+    raw_metrics = payload.get("metrics")
+    metrics: Mapping[str, Any] = raw_metrics if isinstance(raw_metrics, Mapping) else {}
     active = int(metrics.get("active_card_count") or 0)
     candidate_only = int(metrics.get("candidate_only_handoff_count") or 0)
     if active:
