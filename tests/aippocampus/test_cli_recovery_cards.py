@@ -637,6 +637,47 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("logs:", proc.stdout)
         self.assertNotIn("Traceback", proc.stdout + proc.stderr)
 
+    def test_bare_parent_json_commands_return_recovery_or_chooser_cards(self) -> None:
+        cases = {
+            ("search", "--json"): "aippocampus_search_recovery",
+            ("plugin", "--json"): "aippocampus_plugin_chooser",
+            ("sync", "--json"): "aippocampus_sync_chooser",
+            ("object-sync", "--json"): "aippocampus_sync_chooser",
+            ("storage", "--json"): "aippocampus_storage_chooser",
+            ("continuity-domain", "--json"): "aippocampus_continuity_domain_recovery",
+            ("work-guard", "--json"): "aippocampus_issue_work_orientation_packet",
+            ("telepathy", "--json"): "aippocampus_telepathy_handoff_error",
+        }
+
+        for args, kind in cases.items():
+            with self.subTest(args=args):
+                proc = self.run_cli(*args)
+                self.assertNotIn("usage:", proc.stdout + proc.stderr)
+                payload = json.loads(proc.stdout)
+                self.assertEqual(payload["kind"], kind)
+                self.assertIn("foreground-action-v1", payload["foreground_action_contract"])
+                self.assertIn("safe_next_actions" if "safe_next_actions" in payload else "choices", payload)
+
+    def test_bare_onboard_json_is_status_first_and_read_only(self) -> None:
+        proc = self.run_cli("onboard", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertIn("primary_next_action", payload["data"])
+        self.assertIn("providers", payload["data"])
+        self.assertNotIn("stats_after", json.dumps(payload, ensure_ascii=False))
+        self.assertIn("command", payload["primary_next_action"])
+
+    def test_agent_macro_positional_cue_returns_recall_recovery_card(self) -> None:
+        proc = self.run_cli("agent", "macro", "old cue", "--json")
+
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["error"]["code"], "macro_positional_cue_not_supported")
+        self.assertEqual(payload["agent_next_action"]["command"], 'aippocampus agent recall "old cue" --json')
+        self.assertIn("macro --explain-schema", json.dumps(payload, ensure_ascii=False))
+
     def test_sync_plan_outputs_direction_cards_without_private_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

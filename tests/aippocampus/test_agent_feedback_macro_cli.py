@@ -146,8 +146,9 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("AIppocampus agent macro: missing_macro_state_path", proc.stdout)
-        self.assertIn(".aippocampus/macro-orientation.jsonl", proc.stdout)
+        self.assertIn('aippocampus agent recall "project macro orientation cue" --json', proc.stdout)
         self.assertIn("aippocampus agent macro --explain-schema", proc.stdout)
+        self.assertIn("aippocampus agent macro --init-template --json", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
 
     def test_cli_agent_macro_schema_and_template_are_available(self) -> None:

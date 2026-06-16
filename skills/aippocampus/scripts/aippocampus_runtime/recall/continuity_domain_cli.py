@@ -16,6 +16,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import (
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -51,6 +55,45 @@ def _json_error(code: str, message: str) -> dict[str, Any]:
             "aippocampus continuity-domain produce --preview --json",
         ],
     }
+
+
+def recovery_payload() -> MappingPayload:
+    return foreground_recovery_card(
+        kind="aippocampus_continuity_domain_recovery",
+        error_code="continuity_domain_command_required",
+        message="Choose a read path, preview path, or explicit operator write path.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="preview_domain_candidates",
+                label="Preview candidate continuity domains",
+                command="aippocampus continuity-domain preview --json",
+                why="Preview is bounded and emits navigation-only candidate actions.",
+                mutation_risk="read_only",
+                claim_boundary="preview_not_source_truth",
+            ),
+            foreground_shell_action(
+                action_id="read_latest_snapshot",
+                label="Read latest published domain snapshot",
+                command="aippocampus continuity-domain latest --json",
+                why="Use existing snapshots as reopenable route hints, not facts.",
+                mutation_risk="read_only",
+                claim_boundary="source_reopen_required_before_claims",
+            ),
+            foreground_shell_action(
+                action_id="ordinary_recall_path",
+                label="Use ordinary recall for a continuity cue",
+                command='aippocampus agent recall "old continuity cue" --json',
+                why="Most foreground work should start from recall/deepen rather than domain backfill.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ],
+        source_boundary={
+            "continuity_domains_are_routes_not_source_truth": True,
+            "source_reopen_required_before_claims": True,
+            "no_write_happened": True,
+        },
+    )
 
 
 def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
@@ -390,6 +433,12 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
             for cue in event.get("activation_cues") or []
             if str(cue).strip()
         ][:6]
+        cue = cues[0] if cues else compact_text(str(event.get("title") or ""), 80)
+        recall_command = (
+            f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json"
+            if cue
+            else 'aippocampus agent recall "continuity domain candidate" --json'
+        )
         previews.append(
             {
                 "domain_handle": event.get("domain_id"),
@@ -397,6 +446,16 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
                 "domain_type": event.get("domain_type"),
                 "scale": event.get("scale"),
                 "activation_cues": cues,
+                "foreground_actions": [
+                    foreground_shell_action(
+                        action_id="recall_candidate_cue",
+                        label="Recall this candidate cue",
+                        command=recall_command,
+                        why="Candidate previews are navigation only; recall/deepen before claims.",
+                        mutation_risk="read_only",
+                        claim_boundary="no_claim_before_reopen",
+                    )
+                ],
                 "source_ref_count": len(refs) if isinstance(refs, list) else 0,
                 "source_reopen_required_before_claim": True,
             }
@@ -416,10 +475,13 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         "preview_is_not_source_truth": True,
     }
     if previews:
+        primary = previews[0].get("foreground_actions") or []
+        primary_action = primary[0] if primary and isinstance(primary[0], dict) else None
         clean["agent_next_action"] = {
             "id": "use_candidate_preview_as_reopenable_route",
             "label": "Use candidate_previews as navigation only; run recall/deepen on the cue before any factual claim.",
-            "command": "aippocampus agent recall <cue> --json",
+            "command": (primary_action or {}).get("command")
+            or 'aippocampus agent recall "continuity domain candidate" --json',
             "requires_operator_review": False,
         }
         clean["operator_next_action"] = {
@@ -656,8 +718,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    command_names = {"append", "publish", "latest", "list", "report", "produce", "preview"}
+    if not any(arg in command_names for arg in raw_args) and not any(
+        arg in {"-h", "--help"} for arg in raw_args
+    ):
+        payload = recovery_payload()
+        _print_payload(payload, json_output="--json" in raw_args)
+        return 2
     parser = build_arg_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
     try:
         if args.command == "append":
             payload = append_command(args)

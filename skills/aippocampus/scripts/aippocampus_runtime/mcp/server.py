@@ -349,7 +349,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
         max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
-        schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-opt-in-continuity-v0")),
+        schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-continuity-path-v1")),
     )
     payload["last_recall_cache_available"] = cache_written
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
@@ -384,7 +384,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             payload = last_recall_unavailable_payload(
                 mode="deepen",
                 exc=exc,
-                schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-opt-in-continuity-v0")),
+                schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
                 kind="aippocampus_agent_continuity_path",
             )
             return text_result(public_payload(arguments, payload), is_error=True)
@@ -1006,6 +1006,9 @@ def main(argv: list[str] | None = None) -> int:
         help="For list-tools, emit only visible tool names as JSON.",
     )
     args = parser.parse_args(raw_argv)
+    if args.names and args.command is None:
+        print(json.dumps(tool_names_summary(), ensure_ascii=False, indent=2))
+        return 0
     if args.list_tools or args.command in {"list-tools", "status"}:
         compact_default = (args.list_tools or args.command == "list-tools") and not (
             args.json or args.names

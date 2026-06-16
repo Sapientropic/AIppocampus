@@ -123,7 +123,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(report["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(report["mode"], "recall")
-        self.assertTrue(report["opt_in_required"])
+        self.assertFalse(report["opt_in_required"])
+        self.assertEqual(report["schema_version"], "agent-continuity-path-v1")
+        self.assertEqual(report["policy_boundary"]["activation_model"], "explicit_foreground_action")
         self.assertEqual(report["status"], "ok")
         self.assertEqual(report["foreground_action_card"]["decision"], "use_route_first")
         self.assertEqual(report["foreground_action_card"]["next_action"], "deepen")
@@ -172,7 +174,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(deepen_request["deepen_route_id_display_only"])
         self.assertEqual(deepen_request["callable_handle"], deepen_request["handle"])
         self.assertEqual(deepen_request["callable_handle_field"], "deepen_requests[].handle")
-        self.assertIn(deepen_request["handle"], deepen_request["copy_paste_command"])
+        self.assertNotIn(deepen_request["handle"], deepen_request["copy_paste_command"])
+        self.assertIn("--request 1 --last-recall --json", deepen_request["copy_paste_command"])
+        self.assertIn(deepen_request["handle"], deepen_request["private_handle_command"])
         self.assertEqual(report["suggested_next_command"], deepen_request["copy_paste_command"])
         self.assertNotIn("source_refs", json.dumps(deepen_request, ensure_ascii=False))
 
@@ -217,8 +221,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(report["deepen_requests"][0]["handle"], long_handle)
         self.assertIn("handle_preview", report["deepen_requests"][0])
         self.assertIn("handle_sha256_12", report["deepen_requests"][0])
-        self.assertIn("deepen route 1", human)
-        self.assertIn("--json --detail full for local-private handle", human)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
+        self.assertIn("private_handle_command", report["deepen_requests"][0])
         self.assertNotIn(long_handle, human)
         self.assertNotIn("aippo-nav:", human)
         self.assertLess(max(len(line) for line in human.splitlines()), 180)
@@ -287,10 +291,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
         public = agent_continuity.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
-                "schema_version": "agent-opt-in-continuity-v0",
+                "schema_version": "agent-continuity-path-v1",
                 "mode": "recall",
                 "status": "ok",
-                "opt_in_required": True,
+                "opt_in_required": False,
                 "foreground_action_card": {
                     "decision": "continue_normally",
                     "canonical_action": {
@@ -585,7 +589,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         human = agent_continuity._render_recall_human(routed_report)
         self.assertIn("why: attention_router:top_route_changed", human)
         self.assertIn("Navigation:", human)
-        self.assertIn("aippocampus agent deepen handle:attention", human)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
         self.assertTrue(routed_report["metrics"]["attention_router_applied"])
         self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
         self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
@@ -865,14 +869,14 @@ class AgentOptInContinuityTests(unittest.TestCase):
             "schema_version": agent_continuity.SCHEMA_VERSION,
             "mode": "recall",
             "status": "ok",
-            "opt_in_required": True,
+            "opt_in_required": False,
             "last_recall_cache_available": False,
             "foreground_action_card": {
                 "canonical_action": {
                     "action_id": "agent_deepen_selected_route",
                     "tool_name": "agent_deepen",
                     "arguments": {"request_index": 1, "last_recall": True},
-                    "cli_command": "aippocampus agent deepen --request 1 --last-recall",
+                    "cli_command": "aippocampus agent deepen --request 1 --last-recall --json",
                     "claim_boundary": "no_claim_before_reopen",
                 }
             },
@@ -1615,7 +1619,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
         self.assertIn("AIppocampus agent recall: ok", proc.stdout)
-        self.assertIn("Next: aippocampus agent deepen --request 1 --last-recall.", proc.stdout)
+        self.assertIn("Next: aippocampus agent deepen --request 1 --last-recall --json.", proc.stdout)
         self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
         self.assertIn("Boundary: route only", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)

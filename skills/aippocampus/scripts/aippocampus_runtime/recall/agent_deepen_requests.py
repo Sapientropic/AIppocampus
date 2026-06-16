@@ -29,13 +29,10 @@ def deepen_request_for_route(
         if handle
         else ""
     )
-    command = f"aippocampus agent deepen {shlex.quote(handle_arg)}" if handle_arg else None
+    private_handle_command = f"aippocampus agent deepen {shlex.quote(handle_arg)} --json" if handle_arg else None
+    request_command = f"aippocampus agent deepen --request {request_index} --last-recall --json"
     digest = hashlib.sha256(handle_arg.encode("utf-8")).hexdigest()[:12] if handle_arg else ""
-    human_next_action = (
-        command
-        if command and len(command) <= 180
-        else f"deepen route {request_index}; rerun with --json --detail full for local-private handle"
-    )
+    human_next_action = request_command
     return {
         "request_index": request_index,
         "route_id": packet.get("route_id"),
@@ -48,8 +45,9 @@ def deepen_request_for_route(
         "handle_preview": handle_preview(handle_arg) if handle_arg else "",
         "handle_sha256_12": digest,
         "human_next_action": human_next_action,
-        "machine_next_command": command,
-        "copy_paste_command": command,
+        "machine_next_command": request_command,
+        "copy_paste_command": request_command,
+        "private_handle_command": private_handle_command,
         "boundary": "opaque_navigation_handle_not_fact",
         "claim_boundary": "source_reopen_required_before_strong_claim",
     }

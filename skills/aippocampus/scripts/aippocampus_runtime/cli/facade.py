@@ -15,6 +15,11 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
+from aippocampus_runtime.contracts import (
+    foreground_chooser_card,
+    foreground_shell_action,
+)
+
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 PLUGIN_MANIFEST_RELATIVE = Path("plugins") / "aippocampus" / ".codex-plugin" / "plugin.json"
 
@@ -117,6 +122,31 @@ def print_storage_recovery_card(*, file: TextIO | None = None) -> None:
     print("boundary: cleanup is explicit operator work; dry-run before apply.", file=target)
 
 
+def storage_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_storage_chooser",
+        decision="choose an explicit storage action",
+        choices=[
+            foreground_shell_action(
+                action_id="inspect_storage_gc_candidates",
+                label="Preview rebuildable-cache cleanup",
+                command="aippocampus storage gc --dry-run --json --top 1 --cwd .",
+                why="Parent storage commands should lead to a bounded audit before any delete path.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="inspect_storage_status",
+                label="Inspect storage status",
+                command="aippocampus storage status --json --cwd .",
+                why="Use status when deciding whether storage pressure is real for this workspace.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
+
+
 def print_import_recovery_card(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
     print("AIppocampus import", file=target)
@@ -176,6 +206,64 @@ def import_recovery_payload() -> dict[str, Any]:
             "private_transcript_material_loaded": False,
         },
     }
+
+
+def plugin_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_plugin_chooser",
+        decision="choose plugin status, verify, or install",
+        choices=[
+            foreground_shell_action(
+                action_id="install_or_refresh_codex_plugin",
+                label="Install or refresh Codex plugin",
+                command="aippocampus plugin install --codex --verify --json",
+                why="This is the ordinary Codex setup path and verifies host-visible tools after refresh.",
+                mutation_risk="explicit_local_plugin_write",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_codex_plugin_status",
+                label="Check Codex plugin status",
+                command="aippocampus plugin status --agent-json",
+                why="Read current freshness/callability without changing local plugin files.",
+                mutation_risk="read_only",
+                claim_boundary="host_status_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="preview_codex_plugin_uninstall",
+                label="Preview explicit rollback",
+                command="aippocampus plugin uninstall --codex --dry-run --json",
+                why="Rollback stays preview-first and should not be confused with setup.",
+                mutation_risk="read_only_preview_of_delete",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+        ],
+    )
+
+
+def sync_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_sync_chooser",
+        decision="choose a read-only sync status before push or pull",
+        choices=[
+            foreground_shell_action(
+                action_id="check_sync_status",
+                label="Check local sync status",
+                command="aippocampus sync status --json",
+                why="Parent sync commands should not imply push/pull or object-store writes.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_object_sync_status",
+                label="Check object sync status",
+                command="aippocampus object-sync status --json",
+                why="Use this when an object-storage backend is involved.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
 
 
 def print_doctor_recovery_card(*, file: TextIO | None = None) -> None:
@@ -696,11 +784,33 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if args[0] == "controls" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
         print_controls_card()
         return None, 0
+    if args[0] == "plugin" and set(args[1:]) <= {"--json"}:
+        payload = plugin_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_plugin_status_help()
+        return None, 0
+    if args[0] in {"sync", "object-sync"} and set(args[1:]) <= {"--json"}:
+        payload = sync_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("AIppocampus sync")
+            print("decision: check status before push, pull, or object-store writes")
+            print("next: aippocampus sync status --json")
+            print("object-store: aippocampus object-sync status --json")
+            print("boundary: sync writes are explicit operator actions.")
+        return None, 0
     if len(args) >= 3 and args[:2] == ["plugin", "install"] and "--status" in args[2:]:
         print_plugin_status_help()
         return None, 0
-    if args == ["storage"]:
-        print_storage_recovery_card()
+    if args[0] == "storage" and set(args[1:]) <= {"--json"}:
+        payload = storage_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_storage_recovery_card()
         return None, 0
     if args and args[0] == "import" and set(args[1:]) <= {"--json"}:
         payload = import_recovery_payload()

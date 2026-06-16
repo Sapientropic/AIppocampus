@@ -12,7 +12,13 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from typing import Any, Iterable
+
+from aippocampus_runtime.contracts import (
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 
 SCHEMA_VERSION = "issue-work-active-pull-v0"
 
@@ -23,7 +29,8 @@ BENCHMARK_RE = re.compile(
 )
 ARCHITECTURE_RE = re.compile(
     r"\b(attention router|semantic scope|subconscious|warm ambient|aippo|"
-    r"macro orientation|architecture|design)\b",
+    r"macro orientation|learning[-_ ]loop|action[-_ ]time guidance|"
+    r"learning guidance|action hints|architecture|design)\b",
     re.I,
 )
 TRIVIAL_RE = re.compile(r"\b(typo|spelling|formatting|link fix|rename only)\b", re.I)
@@ -313,7 +320,68 @@ def _issue_error_payload(message: str) -> dict[str, Any]:
     }
 
 
+def _missing_input_payload() -> dict[str, Any]:
+    return foreground_recovery_card(
+        kind="aippocampus_issue_work_orientation_packet",
+        error_code="work_guard_issue_or_title_required",
+        message="Provide a GitHub issue number/URL or an explicit --title before using work-guard.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="inspect_issue_context",
+                label="Fetch and classify a GitHub issue",
+                command="aippocampus work-guard <issue-number> --json",
+                why="Use this when issue comments and source-route context may change the implementation path.",
+                mutation_risk="read_only",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_shell_action(
+                action_id="classify_title_body",
+                label="Classify provided title/body",
+                command='aippocampus work-guard --title "issue title" --body "issue body" --json',
+                why="Use this if GitHub is unavailable but the issue text is already in context.",
+                mutation_risk="read_only",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_shell_action(
+                action_id="run_recall_for_issue",
+                label="Pull continuity before memory-design work",
+                command='aippocampus agent recall "issue title and key terms" --json',
+                why="Memory-design, benchmark, AIppo, and learning-loop work should pull existing route owners first.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ],
+        source_boundary={
+            "work_guard_is_route_guidance_not_evidence": True,
+            "source_reopen_required_before_claims": True,
+            "no_write_happened": True,
+        },
+    )
+
+
+def _render_missing_input_text(payload: dict[str, Any]) -> str:
+    actions = [item for item in payload.get("safe_next_actions") or [] if isinstance(item, dict)]
+    lines = [
+        "AIppocampus work guard",
+        "decision: issue or title required",
+        "meaning: classify issue work before benchmark, architecture, AIppo, or learning-loop changes.",
+    ]
+    for action in actions[:3]:
+        lines.append(f"- {action.get('label') or action.get('id')}: {action.get('command')}")
+    lines.append("boundary: this is route guidance, not source evidence.")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if not raw_args:
+        payload = _missing_input_payload()
+        print(_render_missing_input_text(payload))
+        return 2
+    if set(raw_args) <= {"--json"}:
+        payload = _missing_input_payload()
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 2
     parser = argparse.ArgumentParser(
         prog="aippocampus work-guard",
         description=(
@@ -340,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--fixture-report", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
 
     issue_ref = args.issue or issue_reference_from_text(args.issue_ref or "")
     issue_context: dict[str, Any] = {}
@@ -361,7 +429,12 @@ def main(argv: list[str] | None = None) -> int:
 
     title = args.title or str(issue_context.get("title") or "")
     if not args.fixture_report and not title:
-        parser.error("work-guard requires --title or a GitHub issue number/URL")
+        payload = _missing_input_payload()
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(_render_missing_input_text(payload))
+        return 2
     body = _issue_body_with_comments(issue_context, args.body)
 
     payload = (

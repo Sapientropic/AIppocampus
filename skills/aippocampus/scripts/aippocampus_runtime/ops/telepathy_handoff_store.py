@@ -6,12 +6,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import (
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.ops import coordination_topology
 from aippocampus_runtime.ops import telepathy_coordination_packet as packets
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -429,6 +434,45 @@ def _handoff_not_found_payload(*, card_id: str, path: Path) -> dict[str, Any]:
     return payload
 
 
+def missing_command_payload() -> dict[str, Any]:
+    return foreground_recovery_card(
+        kind=ERROR_KIND,
+        error_code="telepathy_command_required",
+        message="Choose list, create, deepen/read, release, or diagnose.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="list_active_handoffs",
+                label="List active handoff cards",
+                command="aippocampus telepathy list --json",
+                why="Start read-only; Telepathy cards are opt-in local coordination, not source truth.",
+                mutation_risk="read_only",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_shell_action(
+                action_id="create_handoff_after_explicit_request",
+                label="Create a handoff card after explicit request",
+                command='aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex --json',
+                why="Only create when a human/upstream agent wants local coordination state.",
+                mutation_risk="explicit_local_write",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_shell_action(
+                action_id="deepen_existing_handoff",
+                label="Read one handoff card",
+                command="aippocampus telepathy deepen <card_id> --json",
+                why="Use an existing card id from list before treating it as a route.",
+                mutation_risk="read_only",
+                claim_boundary="source_reopen_required_before_claims",
+            ),
+        ],
+        source_boundary={
+            "telepathy_cards_are_navigation_only": True,
+            "source_reopen_required_before_claims": True,
+            "no_write_happened": True,
+        },
+    )
+
+
 def list_handoffs_payload(
     *,
     cwd: str | Path | None = None,
@@ -778,7 +822,15 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    commands = {"create", "list", "deepen", "read", "release", "diagnose"}
+    if not any(arg in commands for arg in raw_args) and not any(
+        arg in {"-h", "--help"} for arg in raw_args
+    ):
+        payload = _public_projection(missing_command_payload())
+        _print_payload(payload, json_output="--json" in raw_args)
+        return 2
+    args = _parser().parse_args(raw_args)
     try:
         if args.command == "create":
             preset = HANDOFF_PRESETS.get(args.preset, HANDOFF_PRESETS["handoff"])

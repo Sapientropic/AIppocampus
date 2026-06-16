@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.navigation.cognitive_map import (
     build_from_files as build_cognitive_map_from_files,
 )
@@ -159,6 +160,62 @@ def build_next_hints(*, dry_run: bool, frontier_mode: str) -> list[str]:
     if frontier_mode == "off":
         hints.append("aippocampus onboard --provider codex --frontier-mode smoke --format json")
     return hints[:4]
+
+
+def public_next_actions(*, dry_run: bool, frontier_mode: str, provider: str = "codex") -> list[dict[str, Any]]:
+    actions = [
+        foreground_shell_action(
+            action_id="try_source_backed_search",
+            label="Search registered clean source",
+            command='aippocampus search "distinctive old phrase" --json',
+            why="Use after onboarding/status when you remember exact wording.",
+            mutation_risk="read_only",
+            claim_boundary="source_reopen_required_before_quoting",
+        ),
+        foreground_shell_action(
+            action_id="try_agent_recall",
+            label="Recall from a vague cue",
+            command='aippocampus agent recall "old decision or handoff cue" --json',
+            why="Use when the cue is fuzzy and you need route selection.",
+            mutation_risk="read_only",
+            claim_boundary="no_claim_before_reopen",
+        ),
+    ]
+    if dry_run:
+        actions.insert(
+            0,
+            foreground_shell_action(
+                action_id="register_after_dry_run_review",
+                label="Register after reviewing the dry-run plan",
+                command=f"aippocampus onboard --provider {provider} --all --json",
+                why="Dry-run found a plan; this is the explicit write step if the plan is intended.",
+                mutation_risk="explicit_registration_write",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+        )
+        actions.insert(
+            1,
+            foreground_shell_action(
+                action_id="review_provider_status",
+                label="Review provider status before writing",
+                command=f"aippocampus onboard --provider {provider} --status --json",
+                why="Use this if consent or provider scope is still unclear.",
+                mutation_risk="read_only",
+                claim_boundary="host_status_not_memory_evidence",
+            ),
+        )
+    if frontier_mode == "off":
+        actions.append(
+            foreground_shell_action(
+                action_id="preview_frontier_smoke",
+                label="Preview frontier smoke mode",
+                command=f"aippocampus onboard --provider {provider} --frontier-mode smoke --dry-run --json",
+                why="Question/frontier extraction is optional and should be previewed before write paths.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            )
+        )
+    return actions[:4]
 
 
 def run_onboarding(
@@ -531,10 +588,17 @@ def public_onboarding_result(result: dict[str, Any]) -> dict[str, Any]:
     meta: dict[str, Any] = raw_meta if isinstance(raw_meta, dict) else {}
     raw_actions = data.get("actions")
     actions: dict[str, Any] = raw_actions if isinstance(raw_actions, dict) else {}
+    dry_run = bool(data.get("dry_run"))
+    provider = str(meta.get("provider") or "codex")
+    next_actions = public_next_actions(
+        dry_run=dry_run,
+        frontier_mode=str(frontier.get("status") or "off"),
+        provider=provider,
+    )
     return {
         "ok": result.get("ok"),
         "data": {
-            "dry_run": bool(data.get("dry_run")),
+            "dry_run": dry_run,
             "stats_before": public_stats(data.get("stats_before")),
             "stats_after": public_stats(data.get("stats_after")),
             "plan": public_plan_summary(data.get("plan")),
@@ -543,10 +607,11 @@ def public_onboarding_result(result: dict[str, Any]) -> dict[str, Any]:
             "action_count": len(actions),
             "storage_policy": data.get("storage_policy") or {},
         },
-        "next_count": len(result.get("next") or []),
+        "next_actions": next_actions,
+        "next_count": len(next_actions),
         "meta": {
             "schema_version": public_count(meta.get("schema_version")),
-            "provider": str(meta.get("provider") or "codex"),
+            "provider": provider,
             "duration_ms": public_count(meta.get("duration_ms")),
         },
         "output_boundary": "onboarding_cli_json_omits_private_artifacts_and_samples",

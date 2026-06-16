@@ -650,6 +650,22 @@ class AippocampusCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertIn("tools", payload)
         self.assertTrue(any(tool.get("name") == "memory_health" for tool in payload["tools"]))
+        by_name = {tool.get("name"): tool for tool in payload["tools"]}
+        self.assertIn({"required": ["query"]}, by_name["agent_recall"]["inputSchema"]["anyOf"])
+        self.assertIn({"required": ["intent"]}, by_name["agent_recall"]["inputSchema"]["anyOf"])
+        self.assertEqual(
+            by_name["get_turn_context"]["inputSchema"]["required_any"],
+            ["turn_id", "message_id", "turn_index"],
+        )
+
+    def test_mcp_names_shortcut_matches_list_tools_names(self) -> None:
+        shortcut = self.run_cli("mcp", "--names")
+        explicit = self.run_cli("mcp", "list-tools", "--names")
+
+        self.assertEqual(shortcut.returncode, 0, shortcut.stderr)
+        self.assertEqual(explicit.returncode, 0, explicit.stderr)
+        self.assertEqual(json.loads(shortcut.stdout), json.loads(explicit.stdout))
+        self.assertIn("agent_recall", json.loads(shortcut.stdout)["tool_names"])
 
     def test_mcp_list_tools_compact_summary_is_scan_friendly(self) -> None:
         proc = self.run_cli("mcp", "list-tools", "--compact")
@@ -1498,6 +1514,13 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(bounded.returncode, 0, bounded.stderr)
         bounded_payload = json.loads(bounded.stdout)
         self.assertEqual(bounded_payload["preview_scan_policy"]["mode"], "foreground_bounded_default")
+        preview = bounded_payload["candidate_previews"][0]
+        self.assertNotIn("<cue>", json.dumps(preview, ensure_ascii=False))
+        self.assertIn("agent recall", preview["foreground_actions"][0]["command"])
+        self.assertEqual(
+            preview["foreground_actions"][0]["claim_boundary"],
+            "no_claim_before_reopen",
+        )
         self.assertEqual(bounded_payload["metrics"]["registered_thread_count"], 12)
         self.assertEqual(bounded_payload["metrics"]["considered_thread_count"], 8)
         self.assertEqual(bounded_payload["metrics"]["scanned_thread_count"], 8)

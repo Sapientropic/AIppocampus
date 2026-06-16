@@ -9,6 +9,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import (
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.core import (
     compact_text,
     default_thread_clean_source_dir,
@@ -365,6 +369,59 @@ def public_search_result(
     return public
 
 
+def search_recovery_payload() -> dict[str, Any]:
+    return foreground_recovery_card(
+        kind="aippocampus_search_recovery",
+        error_code="search_cue_required",
+        message="Provide a cue or exact phrase before running clean-source search.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="search_exact_phrase",
+                label="Search exact remembered wording",
+                command='aippocampus search "distinctive exact phrase" --json',
+                why="Use search when the user or issue includes concrete old wording.",
+                mutation_risk="read_only",
+                claim_boundary="source_reopen_required_before_quoting",
+            ),
+            foreground_shell_action(
+                action_id="recall_vague_cue",
+                label="Recall from a vague continuity cue",
+                command='aippocampus agent recall "old decision or handoff cue" --json',
+                why="Use recall first when the cue is fuzzy and needs route selection.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+            foreground_shell_action(
+                action_id="check_onboarding_status",
+                label="Check whether local history is registered",
+                command="aippocampus onboard --provider auto --status --json",
+                why="Use this if search misses and local history may not be registered.",
+                mutation_risk="read_only",
+                claim_boundary="host_status_not_source_evidence",
+            ),
+        ],
+        source_boundary={
+            "source_backed_claim_allowed": False,
+            "search_did_not_run": True,
+            "source_reopen_required_before_claims": True,
+        },
+    )
+
+
+def render_search_recovery_text(payload: dict[str, Any]) -> str:
+    actions = [item for item in payload.get("safe_next_actions") or [] if isinstance(item, dict)]
+    lines = [
+        "AIppocampus search",
+        "what happened: no cue or exact phrase was provided.",
+        "decision: choose exact search, vague recall, or onboarding status.",
+    ]
+    for action in actions[:3]:
+        label = action.get("label") or action.get("id")
+        lines.append(f"- {label}: {action.get('command')}")
+    lines.append("boundary: search only supports source-backed claims after a real match/reopen.")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="aippocampus search",
@@ -391,7 +448,7 @@ or make strong claims beyond the reopened source boundary.""",
             "--include-paths is local diagnostic only."
         ),
     )
-    parser.add_argument("patterns", nargs="+")
+    parser.add_argument("patterns", nargs="*")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
         "--clean-source-dir",
@@ -420,6 +477,13 @@ or make strong claims beyond the reopened source boundary.""",
         help="Emit public-safe metadata only: no snippets, source refs, message ids, or local reopen ids.",
     )
     args = parser.parse_args(argv)
+    if not args.patterns:
+        payload = search_recovery_payload()
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(render_search_recovery_text(payload))
+        return 2
 
     result = search_clean_source(
         args.cwd,

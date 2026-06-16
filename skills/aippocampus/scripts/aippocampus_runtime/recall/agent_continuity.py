@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.recall_navigation import (
@@ -64,7 +65,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     write_last_recall_cache,
 )
 
-SCHEMA_VERSION = "agent-opt-in-continuity-v0"
+SCHEMA_VERSION = "agent-continuity-path-v1"
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 KIND = "aippocampus_agent_continuity_path"
 MAX_ROUTES = 5
@@ -410,6 +411,69 @@ def _macro_project_from_handle(value: Any) -> str | None:
     return project or None
 
 
+def _macro_positional_cue_payload(cue: str, *, project: str) -> dict[str, Any]:
+    return _public_payload(
+        foreground_recovery_card(
+            kind=KIND,
+            error_code="macro_positional_cue_not_supported",
+            message=(
+                "agent macro is a project navigation-prior command, not a cue search. "
+                "Use agent recall for positional cues."
+            ),
+            safe_next_actions=[
+                foreground_shell_action(
+                    action_id="recall_positional_cue",
+                    label="Recall this cue",
+                    command=f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json",
+                    why="A positional macro argument is most likely a continuity cue.",
+                    mutation_risk="read_only",
+                    claim_boundary="no_claim_before_reopen",
+                ),
+                foreground_shell_action(
+                    action_id="inspect_macro_project",
+                    label="Read macro orientation for the project",
+                    command=f"aippocampus agent macro --project {json.dumps(project, ensure_ascii=False)} --json",
+                    why="Use macro only as a navigation prior after project state exists.",
+                    mutation_risk="read_only",
+                    claim_boundary="macro_orientation_not_source_truth",
+                ),
+                foreground_shell_action(
+                    action_id="explain_macro_schema",
+                    label="Explain macro state schema",
+                    command="aippocampus agent macro --explain-schema",
+                    why="Use this when setting up a local macro-orientation state file.",
+                    mutation_risk="read_only",
+                    claim_boundary="operator_setup_not_source_evidence",
+                ),
+            ],
+            source_boundary={
+                "macro_orientation_is_navigation_only": True,
+                "source_reopen_required_before_claims": True,
+                "no_write_happened": True,
+            },
+        )
+        | {
+            "schema_version": SCHEMA_VERSION,
+            "mode": "macro",
+            "surface": "macro_orientation",
+            "project": project,
+            "cue": cue,
+        }
+    )
+
+
+def _render_macro_recovery_text(payload: Mapping[str, Any]) -> str:
+    actions = [item for item in payload.get("safe_next_actions") or [] if isinstance(item, Mapping)]
+    lines = [
+        "AIppocampus agent macro: cue provided",
+        "decision: use recall for cue-shaped input; macro is only a project navigation prior.",
+    ]
+    for action in actions[:3]:
+        lines.append(f"- {action.get('label') or action.get('id')}: {action.get('command')}")
+    lines.append("Boundary: macro orientation is navigation only, not source truth.")
+    return "\n".join(lines)
+
+
 def _load_macro_projection(
     *,
     project: str,
@@ -575,6 +639,22 @@ def macro_orientation(
         for packet in memory_packets
     ]
     forbidden_count = _count_forbidden_keys(memory_packets)
+    if deepen_requests:
+        suggested_next = "agent deepen"
+        foreground_action = None
+    elif projection.get("status") == "missing_macro_state_path":
+        suggested_next = "agent_recall_or_macro_schema_setup"
+        foreground_action = {
+            "action_id": "run_agent_recall_or_setup_macro_state",
+            "tool_name": "agent_recall",
+            "arguments": {"query": "project macro orientation cue"},
+            "cli_command": 'aippocampus agent recall "project macro orientation cue" --json',
+            "why": "No macro state exists; ordinary recall is the usable foreground path unless the user is setting up macro state.",
+            "claim_boundary": "no_claim_before_reopen",
+        }
+    else:
+        suggested_next = "continue_normally"
+        foreground_action = None
     result = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -582,10 +662,18 @@ def macro_orientation(
         "mode": "macro",
         "surface": "macro_orientation",
         "status": "ok" if memory_packets else str(projection.get("status") or "no_packet"),
-        "opt_in_required": True,
+        "opt_in_required": False,
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
-        "suggested_next": "agent deepen" if deepen_requests else "continue_normally",
+        "suggested_next": suggested_next,
+        "foreground_action": foreground_action,
+        "recovery_actions": [
+            'aippocampus agent recall "project macro orientation cue" --json',
+            "aippocampus agent macro --explain-schema",
+            "aippocampus agent macro --init-template --json",
+        ]
+        if projection.get("status") == "missing_macro_state_path"
+        else [],
         "diagnostics": diagnostics,
         "metrics": {
             "macro_packet_shown_count": len(memory_packets),
@@ -758,7 +846,7 @@ def recall(
                 "mode": "recall",
                 "surface": "agent_cli_or_mcp_adapter",
                 "status": "cannot_verify",
-                "opt_in_required": True,
+                "opt_in_required": False,
                 "foreground_action_card": action_card,
                 "audit_available": True,
                 "memory_packets": [],
@@ -876,7 +964,7 @@ def recall(
         "mode": "recall",
         "surface": "agent_cli_or_mcp_adapter",
         "status": "ok" if memory_packets else "no_routes",
-        "opt_in_required": True,
+        "opt_in_required": False,
         "foreground_action_card": action_card,
         "audit_available": True,
         "memory_packets": memory_packets,
@@ -933,7 +1021,7 @@ def activate_aippo(*, task: str = "") -> dict[str, Any]:
         "mode": "aippo",
         "surface": "project_workflow_ai_ppocampus",
         "status": "ok" if has_guidance else "no_active_contract",
-        "opt_in_required": True,
+        "opt_in_required": False,
         "task_hint_used": bool(str(task or "").strip()),
         "activation_packet": activation,
         "policy_boundary": policy_boundary(),
@@ -1369,6 +1457,7 @@ def _parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    macro_parser.add_argument("cue", nargs="*")
     macro_parser.add_argument("--project", default="AIppocampus")
     macro_parser.add_argument("--cwd")
     macro_parser.add_argument("--macro-state-jsonl")
@@ -1532,6 +1621,14 @@ def main(argv: list[str] | None = None) -> int:
             print(render_aippo_human(payload))
         return 0
     if args.command == "macro":
+        macro_cue = " ".join(args.cue).strip()
+        if macro_cue and not args.init_template and not args.explain_schema:
+            payload = _macro_positional_cue_payload(macro_cue, project=args.project)
+            if args.json:
+                _json_out(payload)
+            else:
+                print(_render_macro_recovery_text(payload))
+            return 2
         if args.init_template:
             payload = macro_state_template(args.project)
             if args.json:

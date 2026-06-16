@@ -156,6 +156,14 @@ class AippocampusMcpServerTests(unittest.TestCase):
             by_name["agent_recall"]["inputSchema"]["required_any"],
             ["query", "intent"],
         )
+        self.assertIn(
+            {"required": ["query"]},
+            by_name["agent_recall"]["inputSchema"]["anyOf"],
+        )
+        self.assertIn(
+            {"required": ["intent"]},
+            by_name["agent_recall"]["inputSchema"]["anyOf"],
+        )
         self.assertEqual(
             by_name["recall_context"]["inputSchema"]["required_any"],
             ["intent", "query"],
@@ -202,7 +210,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(payload["mode"], "recall")
         self.assertEqual(payload["surface"], "mcp_agent_recall_compact")
-        self.assertTrue(payload["opt_in_required"])
+        self.assertFalse(payload["opt_in_required"])
+        self.assertEqual(payload["schema_version"], "agent-continuity-path-v1")
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
         self.assertEqual(payload["action_boundary"]["primary_action_field"], "foreground_action")

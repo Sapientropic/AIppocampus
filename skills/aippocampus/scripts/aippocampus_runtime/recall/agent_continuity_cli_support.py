@@ -78,7 +78,9 @@ def handle_boundary_fields() -> dict[str, Any]:
 
 def policy_boundary() -> dict[str, Any]:
     return {
-        "opt_in_required": True,
+        "opt_in_required": False,
+        "activation_model": "explicit_foreground_action",
+        "legacy_opt_in_wording_retired": True,
         "default_hook_foreground": False,
         "navigation_only_not_fact": True,
         "source_reopen_required_for_strong_claims": True,
@@ -249,7 +251,7 @@ def capture_feedback(
     reason: str = "",
     feedback_path: str | Path | None = None,
     feedback_lane: Mapping[str, Any] | None = None,
-    schema_version: str = "agent-opt-in-continuity-v0",
+    schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
     """Capture low-authority outcome feedback without changing source truth."""
@@ -298,7 +300,7 @@ def capture_feedback(
 def compact_feedback_receipt(
     payload: Mapping[str, Any],
     *,
-    schema_version: str = "agent-opt-in-continuity-v0",
+    schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
     raw_event = payload.get("event")
@@ -346,7 +348,7 @@ def compact_feedback_receipt(
 
 def missing_feedback_route_payload(
     *,
-    schema_version: str = "agent-opt-in-continuity-v0",
+    schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
     return _public_payload(
@@ -772,8 +774,14 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
         diagnostics = [str(item) for item in payload.get("diagnostics") or [] if str(item)]
         if diagnostics:
             lines.append("Why: " + ", ".join(diagnostics[:3]))
-        lines.append("Expected: .aippocampus/macro-orientation.jsonl or --macro-state-jsonl.")
-        lines.append("Repair: aippocampus agent macro --explain-schema")
+        actions = [str(item) for item in payload.get("recovery_actions") or [] if str(item)]
+        if actions:
+            lines.append("Next: " + actions[0])
+            for action in actions[1:3]:
+                lines.append("Or: " + action)
+        else:
+            lines.append("Expected: .aippocampus/macro-orientation.jsonl or --macro-state-jsonl.")
+            lines.append("Repair: aippocampus agent macro --explain-schema")
     lines.append("Boundary: macro orientation is navigation only, not source truth.")
     return "\n".join(lines)
 
