@@ -479,6 +479,61 @@ class SearchCleanSourceTests(unittest.TestCase):
         )
         self.assertTrue(private_payload["privacy"]["paths_included"])
 
+    def test_successful_cli_json_includes_foreground_authority_envelope(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "AIppocampus",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["kind"], "aippocampus_search_result")
+        self.assertEqual(payload["entry_state"], "explicit_search_invoked")
+        self.assertEqual(payload["route_state"], "source_refs_available")
+        self.assertEqual(payload["claim_permission"], "bounded_search_receipt_requires_reopen")
+        self.assertEqual(payload["source_boundary"]["authority"], "bounded_evidence")
+        self.assertTrue(payload["source_boundary"]["source_reopen_required_before_claim"])
+        self.assertEqual(payload["foreground_action"]["action_id"], "reopen_search_match_source")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "get_turn_context")
+        self.assertEqual(payload["foreground_action"]["arguments"]["message_id"], "msg_final")
+        self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertIn("matches", payload)
+
+    def test_empty_cli_json_includes_no_route_authority_envelope(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "missing phrase",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "no_matches")
+        self.assertEqual(payload["claim_permission"], "no_claim_before_source_match")
+        self.assertEqual(payload["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(payload["foreground_action"]["action_id"], "refine_or_recall")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+
     def test_registry_search_cli_can_request_deep_budget(self) -> None:
         registry_file = self.cwd / "threads.json"
         registry_file.write_text(

@@ -211,6 +211,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         result,
         include_paths=bool(arguments.get("include_private_paths")),
         metadata_only=not include_source_snippets,
+        query_text=query,
     )
     if not include_source_snippets:
         payload["agent_next_action"] = (

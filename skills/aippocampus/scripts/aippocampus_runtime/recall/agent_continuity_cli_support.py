@@ -9,6 +9,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.aippo import working_contract as aippo_working_contract
 from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime import core
 from aippocampus_runtime.macro import state as macro_state
@@ -514,6 +515,15 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
     families = [str(item) for item in packet.get("task_families") or [] if str(item).strip()]
     status = str(payload.get("status") or "unknown")
     next_action = str(packet.get("next_action") or "").strip()
+    deepen_route_id = str(packet.get("deepen_route_id") or "").strip()
+    contract_action_raw = packet.get("contract_action")
+    contract_action = (
+        dict(contract_action_raw)
+        if isinstance(contract_action_raw, Mapping)
+        else aippo_working_contract.contract_deepen_action(deepen_route_id)
+        if deepen_route_id
+        else None
+    )
     task_text = str(task or "").strip()
     if status == "ok" and guidance:
         foreground_action = {
@@ -567,6 +577,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 ),
                 "suppressed_clause_count": int(packet.get("suppressed_clause_count") or 0),
             },
+            "contract_action": contract_action,
             "boundary": {
                 "authority": "working_guidance",
                 "navigation_only_not_fact": True,

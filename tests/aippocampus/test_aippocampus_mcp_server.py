@@ -294,6 +294,15 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(aippo_payload["surface"], "agent_aippo_guidance_card")
         self.assertEqual(aippo_payload["foreground_action"]["tool_name"], "agent_aippo")
         self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
+        self.assertEqual(
+            aippo_payload["contract_action"]["action_id"],
+            "deepen_aippo_working_contract",
+        )
+        self.assertEqual(aippo_payload["contract_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(
+            aippo_payload["contract_action"]["claim_boundary"],
+            "source_reopen_required_before_claim",
+        )
         self.assertNotIn("activation_packet", aippo_payload)
 
     def test_agent_recall_rejects_explicit_invalid_max_values(self) -> None:
@@ -1796,6 +1805,40 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "malformed_arguments")
         self.assertEqual(payload["error"]["details"]["expected"], "object")
+
+    def test_search_memory_metadata_only_has_structured_authority_next_action(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 5601,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "clean source",
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(self.clean),
+                        "max": 2,
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertFalse(response["result"].get("isError", False), payload)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["kind"], "aippocampus_search_result")
+        self.assertEqual(payload["entry_state"], "explicit_search_invoked")
+        self.assertEqual(payload["claim_permission"], "metadata_only_no_claim_before_reopen")
+        self.assertEqual(payload["source_boundary"]["authority"], "reopenable_route")
+        self.assertEqual(payload["foreground_action"]["action_id"], "recall_context_from_search")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "recall_context")
+        self.assertEqual(payload["foreground_action"]["arguments"]["intent"], "clean source")
+        self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertNotIn(str(self.cwd), encoded)
 
     def test_memory_health_runs_in_process_for_frozen_binary_entrypoints(self) -> None:
         old_argv = sys.argv[:]

@@ -18,7 +18,7 @@ from aippocampus_runtime.recall import authority
 
 SCHEMA_VERSION = "aippo-working-contract-v0"
 AIPPO_ID = "aippo_project_workflow_public_safe_v0"
-FOREGROUND_PACKET_BYTE_BUDGET = 700
+FOREGROUND_PACKET_BYTE_BUDGET = 1100
 ACTIVE_STATUSES = {"ripe"}
 REOPEN_BOUNDARIES = [
     "exact_quote",
@@ -94,6 +94,16 @@ def _json_bytes(value: Mapping[str, Any]) -> int:
 def _stable_hash(value: Mapping[str, Any]) -> str:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+
+
+def contract_deepen_action(deepen_route_id: str) -> dict[str, Any]:
+    return {
+        "action_id": "deepen_aippo_working_contract",
+        "tool_name": "agent_deepen",
+        "arguments": {"handle": deepen_route_id},
+        "claim_boundary": "source_reopen_required_before_claim",
+        "authority_after_running": "source_open_within_aippo_contract_scope",
+    }
 
 
 def _source_refs(value: Any) -> list[dict[str, Any]]:
@@ -338,6 +348,7 @@ def activation_packet_from_working_contract(
         ),
         "deepen_route_id": f"deepen:{contract.get('aippo_id') or AIPPO_ID}",
     }
+    packet["contract_action"] = contract_deepen_action(str(packet["deepen_route_id"]))
     if not families:
         packet["no_active_contract_reason"] = (
             "no_task_family_match"
@@ -372,6 +383,7 @@ def activation_packet_from_working_contract(
     compact_guidance = compact.get("use_guidance")
     guidance_items = compact_guidance if isinstance(compact_guidance, list) else []
     compact["use_guidance"] = [_text(item, 64) for item in guidance_items if isinstance(item, str)]
+    compact.pop("contract_action", None)
     return compact
 
 

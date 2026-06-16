@@ -140,6 +140,22 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_activation_packet_exposes_public_safe_contract_deepen_action(self) -> None:
+        report = aippo.build_aippo_working_contract_fixture_report()
+        packet = report["activation_packet"]
+
+        action = packet["contract_action"]
+
+        self.assertEqual(action["action_id"], "deepen_aippo_working_contract")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["handle"], packet["deepen_route_id"])
+        self.assertEqual(action["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertEqual(
+            action["authority_after_running"],
+            "source_open_within_aippo_contract_scope",
+        )
+        self.assertNotIn("source_refs", json.dumps(action, ensure_ascii=False))
+
     def test_compacted_activation_counts_match_visible_clause_ids(self) -> None:
         contract = aippo.build_project_workflow_public_safe_contract()
         packet = aippo.activation_packet_from_working_contract(
