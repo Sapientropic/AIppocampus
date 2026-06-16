@@ -335,7 +335,7 @@ def build_expected_null_remediation(
                 "fresh_context_advantage": "not classified",
             },
         )
-        source_miss_abstention = {
+        source_miss_abstention: dict[str, Any] = {
             "true_memory_abstention_count": sum(
                 1 for row in true_rows if row["abstained_on_missing_source"]
             ),

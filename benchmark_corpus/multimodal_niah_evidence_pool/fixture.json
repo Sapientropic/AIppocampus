@@ -19,6 +19,114 @@
     "future_atm_like_sizes": [25, 50, 100, 200],
     "growth_boundary": "Use the larger ladder only after the public fixture has enough source anchors to avoid repeated distractors."
   },
+  "observed_answerer_replay_cases": [
+    {
+      "case_id": "ground_truth_present_selection",
+      "corpus_case_id": "mmc-personalized-reference",
+      "query_shape": "personalized_reference",
+      "pool_size": 3,
+      "ground_truth_evidence_ids": ["msrc-img-001"],
+      "distractor_evidence_ids": ["msrc-video-001-frame-042", "msrc-email-001"],
+      "pool_evidence_ids": ["msrc-video-001-frame-042", "msrc-img-001", "msrc-email-001"],
+      "observed_selected_evidence_ids": ["msrc-img-001"],
+      "observed_cited_source_anchor_ids": ["img-001:full"],
+      "observed_answer_state": "answer_with_reopened_source",
+      "expected_answer_state": "answer_with_reopened_source",
+      "expected_abstain": false,
+      "retrieval_quality_scored": false
+    },
+    {
+      "case_id": "stale_conflict_repair",
+      "corpus_case_id": "mmc-conflict-final-bill",
+      "query_shape": "conflict_resolution",
+      "pool_size": 4,
+      "ground_truth_evidence_ids": ["msrc-bill-001"],
+      "distractor_evidence_ids": ["msrc-email-001", "msrc-receipt-001", "msrc-calendar-001"],
+      "pool_evidence_ids": ["msrc-calendar-001", "msrc-bill-001", "msrc-email-001", "msrc-receipt-001"],
+      "input_selected_evidence_ids": ["msrc-email-001"],
+      "input_cited_source_anchor_ids": ["email-001:body"],
+      "input_selected_answer_state": "answer_with_stale_conflicting_evidence",
+      "observed_selected_evidence_ids": ["msrc-bill-001"],
+      "observed_cited_source_anchor_ids": ["bill-001:total"],
+      "observed_answer_state": "answer_with_conflict_explanation",
+      "stale_or_conflicting_distractor_ids": ["msrc-email-001"],
+      "expected_answer_state": "answer_with_conflict_explanation",
+      "expected_abstain": false,
+      "retrieval_quality_scored": false
+    },
+    {
+      "case_id": "ambiguous_currentness_reopen",
+      "corpus_case_id": "mmc-conflict-final-bill",
+      "query_shape": "conflict_resolution",
+      "pool_size": 2,
+      "ground_truth_evidence_ids": ["msrc-bill-001"],
+      "distractor_evidence_ids": ["msrc-email-001"],
+      "pool_evidence_ids": ["msrc-email-001", "msrc-bill-001"],
+      "input_selected_evidence_ids": ["msrc-email-001"],
+      "observed_selected_evidence_ids": [],
+      "observed_cited_source_anchor_ids": [],
+      "observed_answer_state": "needs_source_reopen",
+      "stale_or_conflicting_distractor_ids": ["msrc-email-001"],
+      "expected_answer_state": "needs_source_reopen",
+      "expected_abstain": true,
+      "source_overrides": {
+        "msrc-email-001": {
+          "captured_at": "2026-05-01T08:30:00Z",
+          "authority_level": "user_message_source"
+        },
+        "msrc-bill-001": {
+          "captured_at": "2026-05-01T08:30:00Z",
+          "authority_level": "user_message_source"
+        }
+      },
+      "retrieval_quality_scored": false
+    },
+    {
+      "case_id": "unsupported_visual_detail",
+      "corpus_case_id": "mmc-unsupported-detail",
+      "query_shape": "unsupported_detail",
+      "pool_size": 3,
+      "ground_truth_evidence_ids": ["msrc-video-001-frame-042"],
+      "distractor_evidence_ids": ["msrc-img-001", "msrc-bill-001"],
+      "pool_evidence_ids": ["msrc-bill-001", "msrc-video-001-frame-042", "msrc-img-001"],
+      "observed_selected_evidence_ids": ["msrc-video-001-frame-042"],
+      "observed_cited_source_anchor_ids": ["video-001:frame-042"],
+      "observed_answer_state": "abstain_unsupported_visual_detail",
+      "expected_answer_state": "abstain_unsupported_visual_detail",
+      "expected_abstain": true,
+      "retrieval_quality_scored": false
+    },
+    {
+      "case_id": "prompt_leakage_guard",
+      "corpus_case_id": "mmc-personalized-reference",
+      "query_shape": "personalized_reference",
+      "pool_size": 3,
+      "ground_truth_evidence_ids": ["msrc-img-001"],
+      "distractor_evidence_ids": ["msrc-video-001-frame-042", "msrc-email-001"],
+      "pool_evidence_ids": ["msrc-video-001-frame-042", "msrc-img-001", "msrc-email-001"],
+      "observed_selected_evidence_ids": ["msrc-img-001"],
+      "observed_cited_source_anchor_ids": ["img-001:full"],
+      "observed_answer_state": "answer_with_reopened_source",
+      "expected_answer_state": "answer_with_reopened_source",
+      "expected_abstain": false,
+      "retrieval_quality_scored": false
+    },
+    {
+      "case_id": "retrieval_not_scored_guard",
+      "corpus_case_id": "mmc-cross-modal-join",
+      "query_shape": "cross_modal_join",
+      "pool_size": 5,
+      "ground_truth_evidence_ids": ["msrc-calendar-001", "msrc-receipt-001"],
+      "distractor_evidence_ids": ["msrc-bill-001", "msrc-email-001", "msrc-img-001"],
+      "pool_evidence_ids": ["msrc-email-001", "msrc-bill-001", "msrc-receipt-001", "msrc-img-001", "msrc-calendar-001"],
+      "observed_selected_evidence_ids": ["msrc-calendar-001", "msrc-receipt-001"],
+      "observed_cited_source_anchor_ids": ["calendar-001:event", "receipt-001:line-items"],
+      "observed_answer_state": "answer_with_cross_modal_sources",
+      "expected_answer_state": "answer_with_cross_modal_sources",
+      "expected_abstain": false,
+      "retrieval_quality_scored": false
+    }
+  ],
   "cases": [
     {
       "case_id": "niah-personalized-reference-small",

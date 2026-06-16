@@ -33,6 +33,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_context_packet,
     recall_deepen_packet,
 )
+from aippocampus_runtime.mcp.runtime_recovery import foreground_mcp_runtime_recovery_payload
 from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.mcp.tool_readiness import (
@@ -268,6 +269,18 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             "recall_deepen requires a recall_context handle or navigation seed.",
             arguments=arguments,
             required=["handle"],
+            agent_next_action=(
+                "Call recall_context with intent/query, then pass a selected route handle "
+                "to recall_deepen."
+            ),
+            example_arguments={
+                "intent": "continue the issue-work context",
+                "cwd": "<project cwd>",
+            },
+            example_followup_arguments={
+                "handle": "<handle from recall_context.routes[]>",
+                "cwd": "<project cwd>",
+            },
         )
     source_dir = clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
@@ -384,6 +397,19 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             ),
             arguments=arguments,
             required=["handle", "request_index + last_recall"],
+            agent_next_action=(
+                "Call agent_recall with the user's cue, then call agent_deepen with "
+                "request_index + last_recall or the selected private handle."
+            ),
+            example_arguments={
+                "query": "old decision or handoff cue",
+                "cwd": "<project cwd>",
+            },
+            example_followup_arguments={
+                "request_index": 1,
+                "last_recall": True,
+                "cwd": "<project cwd>",
+            },
         )
     agent = agent_continuity_module()
     payload = agent.deepen(
@@ -891,6 +917,17 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
                 tool_error("invalid_argument", str(exc), arguments=arguments),
             )
         except Exception as exc:
+            if name in {
+                "agent_recall",
+                "agent_aippo",
+                "agent_deepen",
+                "agent_explain",
+            } and isinstance(exc, (ImportError, AttributeError, RuntimeError)):
+                payload = foreground_mcp_runtime_recovery_payload(name, exc)
+                return jsonrpc_result(
+                    request_id,
+                    text_result(public_payload(arguments, payload), is_error=True),
+                )
             return jsonrpc_result(
                 request_id,
                 tool_error("tool_failed", f"{type(exc).__name__}: {exc}", arguments=arguments),

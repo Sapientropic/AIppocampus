@@ -128,6 +128,15 @@ class AIppoSkillBridgeTests(unittest.TestCase):
         self.assertGreater(report["metrics"]["next_action_clarity_count"], 0)
         self.assertGreater(report["metrics"]["unnecessary_deepen_suppression_count"], 0)
         self.assertGreater(report["metrics"]["candidate_only_clause_count"], 0)
+        self.assertEqual(report["metrics"]["trace_backed_observed_use_count"], 0)
+        self.assertGreater(report["metrics"]["synthetic_observed_use_count"], 0)
+        self.assertTrue(report["metrics"]["contract_smoke_gate_ok"])
+        self.assertFalse(report["metrics"]["synthetic_rows_count_as_product_usefulness"])
+        self.assertFalse(report["metrics"]["usefulness_gate_ok"])
+        self.assertIn(
+            "product_quality_ripening_from_synthetic_observed_use_rows",
+            report["cannot_claim"],
+        )
         self.assertNotIn("source_refs", encoded_packet)
         self.assertNotIn("source_support_ledger", encoded_packet)
         self.assertNotIn("aippocampus health", encoded_packet)

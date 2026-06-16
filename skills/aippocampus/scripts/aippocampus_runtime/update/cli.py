@@ -757,6 +757,8 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         surfaces,
         host_probe=host_probe,
         foreground_tools_visible_asserted=bool(args.foreground_tools_visible),
+        foreground_key_tools_callable_asserted=bool(args.foreground_key_tools_callable),
+        foreground_key_tool_failure=args.foreground_key_tool_failure,
     )
     surfaces["host_conformance"] = build_host_conformance_status(surfaces)
     actionable = [
@@ -1193,7 +1195,16 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--foreground-tools-visible",
         action="store_true",
-        help="Assert that this foreground agent can see/call AIppocampus tools after a host probe.",
+        help="Assert that this foreground agent can see AIppocampus tools after a host probe; this does not prove agent_recall/deepen calls work.",
+    )
+    parser.add_argument(
+        "--foreground-key-tools-callable",
+        action="store_true",
+        help="Assert that this same foreground MCP connection successfully called key AIppocampus tools.",
+    )
+    parser.add_argument(
+        "--foreground-key-tool-failure",
+        help="Path-safe summary of a current foreground agent_recall/deepen failure for stale-runtime diagnosis.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(

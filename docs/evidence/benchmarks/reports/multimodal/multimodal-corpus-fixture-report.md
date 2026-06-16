@@ -46,6 +46,7 @@ The deterministic smoke covers four corpus-style multimodal retrieval cases:
 ```powershell
 python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --json
 python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --raw-media-mode deterministic_fixture --json
+python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --source-open-replay --json
 ```
 
 Latest local deterministic run on 2026-06-03:
@@ -63,6 +64,14 @@ This is a small-N contract smoke over four synthetic QA rows. Treat the Wilson
 intervals in the JSON report as uncertainty metadata, not population-quality
 evidence.
 
+The optional `--source-open-replay` cohort is separate from the deterministic
+fixture. It adds six public-safe replay cases:
+`caption_shortcut_control`, `raw_media_required_success`,
+`unsupported_visual_detail`, `stale_or_weaker_source_conflict`,
+`cross_modal_join`, and `provider_unavailable_hold_open`. If no live or
+declared media provider is configured, the provider case is reported as a
+blocker and must not be converted into a fixture-green provider-quality claim.
+
 ## Claim Boundary
 
 Can claim:
@@ -73,6 +82,8 @@ Can claim:
   this deterministic fixture;
 - the report includes the required retrieval, source-reopen, unsupported-claim,
   stale/weaker-source, cross-modal join, and abstention metrics.
+- with `--source-open-replay`, deterministic fixture cases, source-open replay
+  cases, and provider-blocked cases are reported as separate cohorts.
 
 Cannot claim:
 
@@ -84,6 +95,8 @@ Cannot claim:
 - background scanning consent semantics;
 - face-recognition identity graph behavior;
 - captions, OCR, or tags as source truth.
+- fixture-only scores as live or declared media-provider quality;
+- live product lift from the replay cohort.
 
 ## Privacy Boundary
 

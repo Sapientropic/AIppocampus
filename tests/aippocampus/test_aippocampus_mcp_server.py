@@ -1092,6 +1092,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("Later source", encoded)
 
     def test_recall_deepen_redacts_local_paths_inside_source_window_text(self) -> None:
+        local_path = "X:" + "\\synthetic-private\\workspace\\secret.txt"
         self.messages.append(
             {
                 "message_id": "msg_path",
@@ -1102,7 +1103,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "phase": "final_answer",
                 "turn_index": 3,
                 "is_final": True,
-                "text": r"Path boundary example lives at E:\private\workspace\secret.txt.",
+                "text": f"Path boundary example lives at {local_path}.",
             }
         )
         with (self.clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
@@ -1153,7 +1154,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
-        self.assertNotIn(r"E:\private\workspace\secret.txt", encoded)
+        self.assertNotIn(local_path, encoded)
         self.assertIn("<redacted:local-path>", encoded)
 
     def test_search_memory_clamps_requested_limit_on_server_side(self) -> None:
@@ -1294,6 +1295,41 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertIn("turn_id", payload["error"]["details"]["required_any"])
         self.assertIn("agent_recall", payload["error"]["details"]["agent_next_action"])
         self.assertIn("example_arguments", payload["error"]["details"])
+
+    def test_deepen_tools_return_recovery_cards_for_missing_selectors(self) -> None:
+        cases = [
+            (
+                "agent_deepen",
+                "missing_agent_handle",
+                "agent_recall",
+                "example_followup_arguments",
+            ),
+            (
+                "recall_deepen",
+                "missing_recall_handle",
+                "recall_context",
+                "example_followup_arguments",
+            ),
+        ]
+        for tool_name, code, recovery_tool, followup_key in cases:
+            with self.subTest(tool_name=tool_name):
+                response = mcp.handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 4100,
+                        "method": "tools/call",
+                        "params": {"name": tool_name, "arguments": {"cwd": str(self.cwd)}},
+                    }
+                )
+
+                self.assertTrue(response["result"]["isError"])
+                payload = self.tool_payload(response)
+                details = payload["error"]["details"]
+                self.assertEqual(payload["error"]["code"], code)
+                self.assertIn("agent_next_action", details)
+                self.assertIn(recovery_tool, details["agent_next_action"])
+                self.assertIn("example_arguments", details)
+                self.assertIn(followup_key, details)
 
     def test_get_turn_context_reports_missing_message_id(self) -> None:
         response = mcp.handle_request(
@@ -1808,6 +1844,13 @@ class AippocampusMcpServerTests(unittest.TestCase):
                         "command": f"python {self.cwd / 'tools' / 'build_index.py'}",
                     },
                     "repair registry",
+                    {"id": "checkpoint", "severity": "info", "reason": "checkpoint can wait"},
+                    {
+                        "id": "storage_gc_rebuildable_cache",
+                        "severity": "warning",
+                        "reason": "generated cache pressure",
+                        "facade_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+                    },
                 ],
                 "checks": [{"name": f"large-{index}", "path": str(self.cwd / f"{index}.jsonl")} for index in range(12)],
                 "debug": {
@@ -1839,6 +1882,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["recommended_actions"][0]["id"], "build_index")
         self.assertIsInstance(payload["recommended_actions"][1], dict)
         self.assertEqual(payload["recommended_actions"][1]["id"], "recommended_action")
+        self.assertIn(
+            "storage_gc_rebuildable_cache",
+            [item["id"] for item in payload["recommended_actions"]],
+        )
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["agent_next_action"]["id"], "build_index")
         self.assertNotIn(str(self.cwd), encoded)
@@ -1871,6 +1918,36 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "health_unavailable")
         self.assertIn("agent_next_action", payload)
         self.assertIn("onboard --provider auto --status", payload["recovery_actions"][0])
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_agent_recall_import_failure_returns_foreground_runtime_recovery_card(self) -> None:
+        with mock.patch.object(
+            mcp,
+            "agent_continuity_module",
+            side_effect=ImportError(
+                f"cannot import name compact_aippo_guidance_card from {self.cwd}\\old.py"
+            ),
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 583,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "agent_recall",
+                        "arguments": {"query": "stale mcp runtime", "cwd": str(self.cwd)},
+                    },
+                }
+            )
+
+        self.assertTrue(response["result"].get("isError", False))
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_foreground_mcp_runtime_recovery")
+        self.assertEqual(payload["status"], "foreground_mcp_runtime_mismatch")
+        self.assertEqual(payload["error"]["code"], "foreground_mcp_runtime_mismatch")
+        self.assertIn("reload", payload["recovery_actions"][0])
+        self.assertIn("aippocampus agent recall", payload["agent_next_action"]["command"])
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:

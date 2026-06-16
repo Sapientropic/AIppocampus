@@ -10,10 +10,10 @@ source-window evidence packager.
 Run:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_attention_navigation_quality.py --json
+python benchmarks\aippocampus\benchmark_attention_navigation_quality.py --profile public-cohort --json
 ```
 
-The report kind is `aippocampus_attention_navigation_quality`.
+The report kind is `aippocampus_attention_navigation_public_cohort`.
 
 ## Current Public/Holdout Result
 
@@ -58,6 +58,12 @@ failure.
 
 ## 2026-06-10 Contract-Smoke Fixture
 
+Fast regression command:
+
+```powershell
+python benchmarks\aippocampus\benchmark_attention_navigation_quality.py --profile contract-smoke --json
+```
+
 The older checked-in fixture cohort covers 12 cases across:
 
 - positive source-backed routes;
@@ -92,16 +98,15 @@ Maturity metadata:
 - `next_promotion_target = public_cohort_candidate`
 
 The contract gate says the selected navigation fixtures still protect the
-declared red lines. It is not a public-quality cohort result until a later
-public/external cohort, sample-floor, uncertainty, holdout, and no-tuning-leak
-promotion explicitly passes.
+declared red lines. It is retained as a fast regression profile, not the current
+public-quality evidence profile.
 
 ## Public/Holdout Cohort Slice
 
 The public-safe cohort runner is:
 
 ```powershell
-python -c "import json, sys; sys.path.insert(0, 'benchmarks/aippocampus'); import benchmark_attention_navigation_quality as b; print(json.dumps(b.run_attention_navigation_public_holdout_cohort(), ensure_ascii=False, indent=2))"
+python benchmarks\aippocampus\benchmark_attention_navigation_quality.py --profile public-cohort --json
 ```
 
 It emits `aippocampus_attention_navigation_public_cohort` over synthetic/public

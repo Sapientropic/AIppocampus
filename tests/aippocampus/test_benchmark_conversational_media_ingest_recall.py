@@ -121,6 +121,75 @@ class ConversationalMediaIngestRecallBenchmarkTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertIn("media_source_unknown_attached_turn", report["blocker_codes"])
 
+    def test_source_open_replay_reports_public_safe_upload_selection_flow(self) -> None:
+        payload = benchmark.run_benchmark(source_open_replay=True)
+
+        self.assertTrue(payload["ok"], payload)
+        metrics = payload["metrics"]
+        expected_metrics = {
+            "conversational_media_replay_case_count",
+            "fixture_boolean_only_case_count",
+            "live_or_declared_media_provider_case_count",
+            "conversation_turn_source_open_rate",
+            "attached_media_source_open_rate",
+            "personal_reference_resolution_rate",
+            "text_hint_as_visual_proof_violation_count",
+            "stale_label_correction_success_rate",
+            "hidden_durable_write_count",
+            "background_media_access_denied_count",
+            "unsupported_visual_claim_rate",
+            "provider_unavailable_blocker_count",
+            "raw_media_bytes_public_reported_count",
+            "absolute_path_leak_count",
+            "live_product_lift_claimed",
+        }
+        self.assertTrue(expected_metrics.issubset(metrics), sorted(metrics))
+        self.assertEqual(metrics["conversational_media_replay_case_count"], 7)
+        self.assertEqual(metrics["fixture_boolean_only_case_count"], 6)
+        self.assertEqual(metrics["live_or_declared_media_provider_case_count"], 1)
+        self.assertEqual(metrics["conversation_turn_source_open_rate"], 1.0)
+        self.assertEqual(metrics["attached_media_source_open_rate"], 1.0)
+        self.assertEqual(metrics["personal_reference_resolution_rate"], 1.0)
+        self.assertEqual(metrics["text_hint_as_visual_proof_violation_count"], 0)
+        self.assertEqual(metrics["stale_label_correction_success_rate"], 1.0)
+        self.assertEqual(metrics["hidden_durable_write_count"], 0)
+        self.assertEqual(metrics["background_media_access_denied_count"], 1)
+        self.assertEqual(metrics["unsupported_visual_claim_rate"], 0.0)
+        self.assertEqual(metrics["provider_unavailable_blocker_count"], 1)
+        self.assertEqual(metrics["raw_media_bytes_public_reported_count"], 0)
+        self.assertEqual(metrics["absolute_path_leak_count"], 0)
+        self.assertFalse(metrics["live_product_lift_claimed"])
+
+        replay_cases = {case["case_id"]: case for case in payload["source_open_replay_cases"]}
+        self.assertEqual(
+            set(replay_cases),
+            {
+                "same_task_upload_success",
+                "text_hint_not_visual_proof",
+                "media_only_label_missing",
+                "stale_label_correction",
+                "hidden_durable_write_blocked",
+                "background_media_denied",
+                "provider_unavailable_hold_open",
+            },
+        )
+        self.assertTrue(replay_cases["same_task_upload_success"]["source_open"]["conversation_turn"])
+        self.assertTrue(replay_cases["same_task_upload_success"]["source_open"]["attached_media"])
+        self.assertEqual(
+            replay_cases["text_hint_not_visual_proof"]["answer_state"],
+            "hold_open_requires_attached_media_source_open",
+        )
+        self.assertTrue(replay_cases["media_only_label_missing"]["label_missing"])
+        self.assertTrue(replay_cases["hidden_durable_write_blocked"]["blocked"])
+        self.assertTrue(replay_cases["background_media_denied"]["blocked"])
+        self.assertTrue(replay_cases["provider_unavailable_hold_open"]["provider_blocked"])
+
+    def test_source_open_replay_cli_flag_is_declared(self) -> None:
+        parser = benchmark.build_arg_parser()
+        args = parser.parse_args(["--source-open-replay", "--json"])
+
+        self.assertTrue(args.source_open_replay)
+
 
 if __name__ == "__main__":
     unittest.main()

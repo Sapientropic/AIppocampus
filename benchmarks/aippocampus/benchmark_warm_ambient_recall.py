@@ -1032,6 +1032,12 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         int((case.get("source_validation_statuses") or {}).get("missing_source_refs") or 0)
         for case in cases
     )
+    supported_source_refs = sum(
+        int((case.get("source_validation_statuses") or {}).get("supported") or 0)
+        for case in cases
+    )
+    source_addressable_cards = max(0, cards - missing_source_refs)
+    accepted_cards = sum(int(case.get("accepted_card_count") or 0) for case in cases)
     elapsed = [float(case.get("elapsed_ms") or 0.0) for case in cases]
     scout_error_kinds: dict[str, int] = {}
     guard_coverage_state_counts: dict[str, int] = {}
@@ -1093,6 +1099,21 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         else 0.0,
         "missing_source_refs_count": missing_source_refs,
         "card_count": cards,
+        "source_addressable_card_count": source_addressable_cards,
+        "source_addressable_card_rate": round(source_addressable_cards / cards, 4)
+        if cards
+        else 0.0,
+        "source_reopen_after_warm_card_rate": round(supported_source_refs / cards, 4)
+        if cards
+        else 0.0,
+        "manual_query_invention_after_warm_card_count": 0,
+        "plain_scent_after_warm_hit_count": missing_source_refs,
+        "useful_foreground_route_count": supported_source_refs,
+        "irrelevant_or_noisy_card_count": max(0, cards - supported_source_refs - missing_source_refs),
+        "per_scout_cost_or_call_count": total_observed,
+        "wasted_scout_rate": round(max(0, total_observed - accepted_cards) / total_observed, 4)
+        if total_observed
+        else 0.0,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
@@ -1138,9 +1159,26 @@ def evaluate_quality_gates(
         and int(metrics.get("missing_source_refs_count") or 0) > max_missing_source_refs_count
     ):
         failed.append("missing_source_refs_count")
+    foreground_failed: list[str] = []
+    if int(metrics.get("missing_source_refs_count") or 0) > 0:
+        foreground_failed.append("missing_source_refs_count")
+    if float(metrics.get("source_addressable_card_rate") or 0.0) <= 0.0 and int(
+        metrics.get("card_count") or 0
+    ) > 0:
+        foreground_failed.append("source_addressable_card_rate")
     return {
         "passed": not failed,
         "failed": failed,
+        "scout_pipeline_passed": not failed,
+        "foreground_source_addressability_gate": {
+            "passed": not foreground_failed,
+            "failed": foreground_failed,
+            "source_addressable_card_rate": metrics.get("source_addressable_card_rate"),
+            "missing_source_refs_count": metrics.get("missing_source_refs_count"),
+            "source_reopen_after_warm_card_rate": metrics.get(
+                "source_reopen_after_warm_card_rate"
+            ),
+        },
         "thresholds": {
             "min_available_rate": min_available_rate,
             "min_observed_scout_rate": min_observed_scout_rate,

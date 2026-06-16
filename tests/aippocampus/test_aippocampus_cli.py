@@ -100,16 +100,26 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("Start here:", proc.stdout)
         self.assertIn('aippocampus agent recall "old cue"', proc.stdout)
         self.assertIn('aippocampus search "exact phrase"', proc.stdout)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", proc.stdout)
         self.assertIn("Personal path", proc.stdout)
         self.assertIn("Advanced/operator diagnostics", proc.stdout)
         self.assertLess(proc.stdout.index("Start here:"), proc.stdout.index("Personal path"))
         self.assertLess(proc.stdout.index("Personal path"), proc.stdout.index("Advanced/operator"))
+        start = proc.stdout[
+            proc.stdout.index("Start here:") : proc.stdout.index("Recovery/readiness:")
+        ]
+        self.assertLess(start.index("search"), start.index("agent recall"))
+        self.assertLess(start.index("agent recall"), start.index("agent deepen"))
+        self.assertNotIn("aippocampus health", start)
+        self.assertIn("Recovery/readiness:", proc.stdout)
+        self.assertLess(proc.stdout.index("agent deepen"), proc.stdout.index("Recovery/readiness:"))
         self.assertLess(proc.stdout.index("search"), proc.stdout.index("doctor provider"))
         self.assertIn("health", proc.stdout)
         self.assertIn("onboard", proc.stdout)
         self.assertIn("search", proc.stdout)
         self.assertIn("agent recall", proc.stdout)
         self.assertIn("learning", proc.stdout)
+        self.assertIn("repro package", proc.stdout)
         self.assertIn("do-not-use-here", proc.stdout)
         self.assertIn("pause / forget", proc.stdout)
         self.assertIn("continuity-domain", proc.stdout)
@@ -176,6 +186,23 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
         self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
+        self.assertEqual(status_payload["semantic_loop"]["stage"], "action_time_capable")
+        self.assertGreaterEqual(
+            status_payload["semantic_loop"]["stage_counts"]["promoted_guidance_candidate_count"],
+            1,
+        )
+        self.assertGreaterEqual(
+            status_payload["semantic_loop"]["stage_counts"]["action_time_guidance_count"],
+            1,
+        )
+        self.assertEqual(
+            status_payload["semantic_loop"]["stage_counts"]["raw_private_text_leak_count"],
+            0,
+        )
+        self.assertIn(
+            "candidate_only_safety_is_not_sufficient",
+            status_payload["semantic_loop"]["closeout_gate"],
+        )
         self.assertIn("learning replay --clean-source-events", status_payload["agent_next_action"])
         self.assertNotIn("benchmark", status_payload["agent_next_action"])
         self.assertTrue(

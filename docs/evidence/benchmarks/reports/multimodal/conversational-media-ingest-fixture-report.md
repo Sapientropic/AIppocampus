@@ -43,6 +43,7 @@ on what is visible in the media.
 
 ```powershell
 python benchmarks\aippocampus\benchmark_conversational_media_ingest_recall.py --json
+python benchmarks\aippocampus\benchmark_conversational_media_ingest_recall.py --source-open-replay --json
 ```
 
 Latest local deterministic run on 2026-06-03:
@@ -59,6 +60,12 @@ Latest local deterministic run on 2026-06-03:
 This is a small-N contract smoke over six synthetic QA/control rows. Treat the
 Wilson intervals in the JSON report as uncertainty metadata, not
 population-quality evidence.
+
+The optional `--source-open-replay` mode adds a seven-case public-safe replay
+cohort for same-task upload/selection flows. It keeps the original deterministic
+fixture rows as `fixture_boolean_only_case_count`, separately reports
+source-open replay cases, and holds provider-blocked cases open instead of
+claiming live product lift.
 
 ## Claim Boundary
 

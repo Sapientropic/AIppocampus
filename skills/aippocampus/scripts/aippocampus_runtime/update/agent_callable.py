@@ -239,6 +239,8 @@ def status_agent_callable(
     *,
     host_probe: dict[str, Any] | None = None,
     foreground_tools_visible_asserted: bool = False,
+    foreground_key_tools_callable_asserted: bool = False,
+    foreground_key_tool_failure: str | None = None,
 ) -> dict[str, Any]:
     config_text = _read_config_text(codex_home_path)
     plugin_ids = _configured_plugin_ids(config_text)
@@ -247,8 +249,16 @@ def status_agent_callable(
     host_mcp_registered = any("aippocampus" == item.casefold() for item in mcp_ids)
     host_probe_status = _host_probe_status(host_probe)
     foreground_override = os.environ.get("AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
+    foreground_key_override = os.environ.get("AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE")
+    foreground_failure = (
+        foreground_key_tool_failure
+        or os.environ.get("AIPPOCAMPUS_FOREGROUND_KEY_TOOL_FAILURE")
+        or ""
+    ).strip()
     foreground_tools_visible: bool | None
-    if foreground_tools_visible_asserted:
+    if foreground_key_tools_callable_asserted:
+        foreground_tools_visible = True
+    elif foreground_tools_visible_asserted:
         foreground_tools_visible = True
     elif foreground_override in {"1", "true", "TRUE", "yes"}:
         foreground_tools_visible = True
@@ -266,24 +276,44 @@ def status_agent_callable(
         mcp.get("package_artifact_current") or plugin.get("package_artifact_current")
     )
     key_tools_callable = host_probe_status.get("key_tools_callable")
-    key_tool_failed = key_tools_callable is False
-    ready = foreground_tools_visible is True and not key_tool_failed
+    current_thread_key_tools_callable: bool | None = None
+    current_thread_key_source: str | None = None
+    if foreground_failure:
+        current_thread_key_tools_callable = False
+        current_thread_key_source = "current_foreground_key_tool_failure"
+    elif foreground_key_tools_callable_asserted:
+        current_thread_key_tools_callable = True
+        current_thread_key_source = "cli:--foreground-key-tools-callable"
+    elif foreground_key_override in {"1", "true", "TRUE", "yes"}:
+        current_thread_key_tools_callable = True
+        current_thread_key_source = "env:AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE"
+    key_tool_failed = key_tools_callable is False or current_thread_key_tools_callable is False
+    ready = (
+        foreground_tools_visible is True
+        and current_thread_key_tools_callable is True
+        and not key_tool_failed
+    )
     host_probe_tool_names = {
         str(item) for item in host_probe_status.get("tool_names") or []
     }
     agent_native_tools_in_host_probe = sorted(host_probe_tool_names & AGENT_NATIVE_TOOL_NAMES)
     missing_agent_native_tools = sorted(AGENT_NATIVE_TOOL_NAMES - host_probe_tool_names)
     current_thread_discovery = (
-        "tools_visible_but_key_tools_failed"
+        "foreground_key_tool_call_failed"
+        if current_thread_key_tools_callable is False
+        else "verified_by_current_foreground_key_tool_calls"
+        if current_thread_key_tools_callable is True
+        else "tools_visible_but_key_tools_failed"
         if key_tool_failed
-        else
-        "verified_by_operator_override"
-        if ready
+        else "tools_visible_key_tools_unverified"
+        if foreground_tools_visible is True
         else "unknown_or_stale"
         if host_probe_status.get("ok") is True or host_plugin_installed or host_mcp_registered
         else "not_configured"
     )
-    if key_tool_failed:
+    if current_thread_key_tools_callable is False:
+        status = "foreground_mcp_runtime_mismatch"
+    elif key_tools_callable is False:
         status = "host_live_probe_key_tools_failed"
     elif host_probe_status.get("ok") is True and not ready:
         status = "host_live_probe_ok_current_thread_unverified"
@@ -299,10 +329,22 @@ def status_agent_callable(
         status = "host_not_exposed"
 
     next_command = "aippocampus update status --json"
-    if key_tool_failed:
-        next_command = "reload Codex Desktop/plugin tools or restart the MCP host, then rerun aippocampus plugin install --codex --verify"
+    if current_thread_key_tools_callable is False:
+        next_command = (
+            "reload Codex Desktop or restart the MCP transport, then use the CLI fallback: "
+            'aippocampus agent recall "<cue>" --json'
+        )
+    elif key_tools_callable is False:
+        next_command = (
+            "reload Codex Desktop/plugin tools or restart the MCP host, then rerun "
+            "aippocampus plugin install --codex --verify"
+        )
     elif host_probe_status.get("ok") is True and not ready:
-        next_command = "reload Codex Desktop or refresh plugin tools if agent-native tools are missing"
+        next_command = (
+            "call agent_recall and agent_deepen in this foreground thread, then rerun "
+            "aippocampus update status --foreground-key-tools-callable --agent-json; "
+            "reload Codex Desktop if those calls fail"
+        )
     elif host_probe_status.get("ok") is True:
         next_command = "aippocampus update status --json"
     elif not cli.get("console_script_available_on_path") and cli.get("module_entrypoint_available"):
@@ -324,7 +366,17 @@ def status_agent_callable(
         "host_probe_agent_native_tools": agent_native_tools_in_host_probe,
         "host_probe_missing_agent_native_tools": missing_agent_native_tools,
         "tools_visible": foreground_tools_visible,
-        "key_tools_callable": key_tools_callable,
+        "key_tools_callable": (
+            current_thread_key_tools_callable
+            if current_thread_key_tools_callable is not None
+            else key_tools_callable
+        ),
+        "host_probe_key_tools_callable": key_tools_callable,
+        "current_foreground_key_tools_callable": current_thread_key_tools_callable,
+        "current_foreground_key_tools_source": current_thread_key_source,
+        "current_foreground_key_tool_failure": (
+            redact_private_paths(foreground_failure) if foreground_failure else None
+        ),
         "key_tool_smokes": host_probe_status.get("key_tool_smokes") or [],
         "key_tool_failures": host_probe_status.get("key_tool_failures") or [],
         "live_host_schema_stale": key_tool_failed,
@@ -343,11 +395,11 @@ def status_agent_callable(
         "claim_boundary": (
             "package artifacts being current does not prove that the current "
             "foreground agent can call AIppocampus MCP/plugin tools; tools visible "
-            "does not prove key recall tools are callable"
+            "does not prove key recall/deepen tools are callable"
         ),
         "safety_notes": [
             "This is host exposure/readiness, not core recall quality",
-            "Unknown foreground tool visibility should not be reported as ready",
+            "Foreground tool visibility and current-connection key-tool calls are separate states",
         ],
     }
 

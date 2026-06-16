@@ -48,6 +48,11 @@ known mistake; it does not become evidence.
   source-backed probes, prerequisite/conflict resolution, freshness decay, and
   feedback severity may request deeper review, but self-report alone does not
   ripen a clause.
+- `aippocampus_runtime.learning_loop.semantic_learning` owns semantic
+  hypothesis intake, adjudication, and action-time guidance. It separates
+  backstage candidates from promoted guidance so recurring, workflow, and
+  cross-thread observations can become navigation hints while blind,
+  one-sided, self-report-only, stale, private, or thin material stays hidden.
 
 ## Boundaries
 
@@ -66,6 +71,25 @@ more runtime layers noticed it.
 Effectiveness reports are diagnostic. A fixture can show the route was surfaced
 and that the next synthetic attempt used a better order; it cannot prove live
 causal behavior lift.
+
+## Semantic Guidance Gate
+
+Semantic learning uses a three-stage contract:
+
+- `intake_semantic_learning_hypotheses(...)` records public-safe candidate
+  rows with source refs, scope, freshness, and candidate visibility state.
+- `adjudicate_semantic_learning_hypotheses(...)` promotes only source-backed
+  recurring/workflow/cross-thread patterns; rejected, retired, or backstage
+  candidates remain diagnostic.
+- `surface_semantic_learning_guidance(...)` emits only
+  `aippocampus_promoted_semantic_learning_guidance_candidate` rows. Foreground
+  guidance carries reopenable source refs, anti-nag/freshness policy, and
+  action grammar; it never emits raw hypotheses as advice.
+
+`aippocampus learning status --json` includes a compact `semantic_loop`
+summary and closeout gate. The gate is useful for dogfood/readiness because it
+shows candidate safety, promotion count, action-time usefulness count, and raw
+private text leak count separately.
 
 ## Replay Evidence
 
@@ -95,6 +119,11 @@ causal behavior lift.
   `private_dogfood_comparable_metrics` from `public_reproducible_metrics`, and
   records source-shape gaps when public fixtures do not express workflow order,
   environment workaround, or context-reopen cases.
+- Semantic dogfood fixture:
+  `build_semantic_learning_dogfood_fixture_report()` in
+  `aippocampus_runtime.learning_loop.semantic_learning`. This is a runtime
+  fixture for stage separation and action-time usefulness, not a semantic
+  benchmark score.
 
 Private dogfood can show local usefulness. The public companion keeps a
 shareable counterpart. Neither one is an official STATE-Bench held-out score,

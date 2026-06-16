@@ -102,6 +102,13 @@ def render_health_text(result: dict[str, Any]) -> None:
             print(f"logs: {logs.get('oversized_count', 0)} oversized artifact(s)")
         else:
             print("logs: within retention budget")
+    host_confounds = result.get("host_state_confounds") or {}
+    if host_confounds.get("available"):
+        print(
+            "codex host-state confounds: "
+            f"{host_confounds.get('total_observed_human')} observed "
+            f"({host_confounds.get('size_bucket')}); separate from AIppocampus cache"
+        )
     if trajectory.get("preemptive_actions"):
         print(
             "preemptive freshness: "

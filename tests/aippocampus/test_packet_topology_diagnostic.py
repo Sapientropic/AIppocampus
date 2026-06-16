@@ -12,7 +12,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.ops import packet_topology_diagnostic  # noqa: E402
-from aippocampus_runtime.topology import primitive_registry  # noqa: E402
+from aippocampus_runtime.topology import packet_preflight, primitive_registry  # noqa: E402
 
 
 class PacketTopologyDiagnosticTests(unittest.TestCase):
@@ -187,6 +187,76 @@ class PacketTopologyDiagnosticTests(unittest.TestCase):
             "annotation_backed",
         )
         self.assertIn("missing_middle_or_cut_point", report["topology_primitive_registry"])
+
+    def test_topology_preflight_repairs_reducer_backed_failures_without_authority_upgrade(self) -> None:
+        cases = [
+            {
+                "case_id": "missing_source_side",
+                "packet_type": "memory_packet",
+                "foreground_visible": True,
+                "task_anchor": "continue issue",
+                "agent_agency_room": True,
+                "authority_level": "navigation_only",
+                "claim_permission": "no_claim_before_reopen",
+            },
+            {
+                "case_id": "missing_user_need_side",
+                "packet_type": "memory_packet",
+                "foreground_visible": True,
+                "source_refs": [{"source_id": "issue:#1912"}],
+                "agent_agency_room": True,
+                "authority_level": "navigation_only",
+                "claim_permission": "no_claim_before_reopen",
+            },
+            {
+                "case_id": "missing_agency_side",
+                "packet_type": "memory_packet",
+                "action_shaping": True,
+                "source_refs": [{"source_id": "issue:#1912"}],
+                "task_anchor": "continue issue",
+                "rendered_as_action_instruction": True,
+                "authority_level": "navigation_only",
+                "claim_permission": "no_claim_before_reopen",
+            },
+            {
+                "case_id": "route_cycle",
+                "packet_type": "route_packet",
+                "route_state": "rejected",
+                "reopen_attempt_count": 3,
+                "repeated_failed_route": True,
+            },
+            {
+                "case_id": "agency_suppression",
+                "packet_type": "memory_packet",
+                "useful_navigation_available": True,
+                "foreground_suppressed": True,
+            },
+        ]
+        report = packet_preflight.build_packet_preflight_report(cases)
+        by_id = {row["case_id"]: row for row in report["preflight_results"]}
+
+        self.assertEqual(by_id["missing_source_side"]["action_taken"], "needs_reopen")
+        self.assertEqual(by_id["missing_user_need_side"]["action_taken"], "repair_hint_added")
+        self.assertEqual(by_id["missing_agency_side"]["action_taken"], "downgraded")
+        self.assertEqual(by_id["route_cycle"]["action_taken"], "repair_hint_added")
+        self.assertEqual(by_id["agency_suppression"]["action_taken"], "allowed")
+        self.assertGreaterEqual(report["metrics"]["topology_preflight_checked_count"], 5)
+        self.assertGreaterEqual(report["metrics"]["borromean_repair_hint_count"], 3)
+        self.assertEqual(report["metrics"]["authority_upgrade_violation_count"], 0)
+        self.assertEqual(report["metrics"]["false_positive_or_overfilter_count"], 0)
+
+    def test_topology_promotion_gate_keeps_annotations_review_only(self) -> None:
+        report = primitive_registry.topology_promotion_gate_report()
+        by_id = {row["primitive_id"]: row for row in report["primitives"]}
+
+        self.assertEqual(by_id["borromean_relation"]["action_time_effect"], "load_bearing")
+        self.assertEqual(
+            by_id["missing_middle_or_cut_point"]["promotion_decision"],
+            "producer_contract_backed_review_only",
+        )
+        self.assertEqual(by_id["weak_bridge"]["promotion_decision"], "annotation_only_review")
+        self.assertFalse(by_id["weak_bridge"]["load_bearing_allowed"])
+        self.assertEqual(by_id["knot"]["promotion_decision"], "vocabulary_only_research")
 
     def test_cli_report_sanitizes_private_packet_material(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

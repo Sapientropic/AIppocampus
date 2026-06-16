@@ -1149,6 +1149,9 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(metrics["missing_source_refs_count"], 3)
         self.assertEqual(metrics["false_evidence_count"], 2)
+        self.assertEqual(metrics["source_addressable_card_count"], 0)
+        self.assertEqual(metrics["source_addressable_card_rate"], 0.0)
+        self.assertEqual(metrics["plain_scent_after_warm_hit_count"], 3)
 
     def test_case_summary_reports_scout_usage_by_family(self) -> None:
         summary = benchmark.summarize_case(
@@ -1502,6 +1505,35 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
 
         self.assertFalse(gates["passed"])
         self.assertIn("missing_source_refs_count", gates["failed"])
+        self.assertFalse(gates["foreground_source_addressability_gate"]["passed"])
+        self.assertIn(
+            "missing_source_refs_count",
+            gates["foreground_source_addressability_gate"]["failed"],
+        )
+
+    def test_foreground_source_addressability_gate_is_separate_from_scout_pipeline(self) -> None:
+        gates = benchmark.evaluate_quality_gates(
+            cases=[
+                {
+                    "case_id": "missing-but-scout-passed",
+                    "available": True,
+                    "configured_scout_count": 50,
+                    "observed_scout_result_count": 50,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "card_count": 2,
+                    "source_validation_statuses": {"missing_source_refs": 2},
+                }
+            ],
+        )
+
+        self.assertTrue(gates["scout_pipeline_passed"])
+        self.assertTrue(gates["passed"])
+        self.assertFalse(gates["foreground_source_addressability_gate"]["passed"])
+        self.assertEqual(
+            gates["foreground_source_addressability_gate"]["source_addressable_card_rate"],
+            0.0,
+        )
 
     def test_benchmark_summarizes_timeout_and_rate_limit_failures(self) -> None:
         summary = benchmark.summarize_case(

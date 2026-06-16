@@ -34,6 +34,7 @@ from aippocampus_runtime.core import (
 from aippocampus_runtime.health_actions import action, dependency_ordered_actions
 from aippocampus_runtime.health_background_cognition import background_cognition_health
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
+from aippocampus_runtime.health_host_state import codex_host_state_confounds
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
 from aippocampus_runtime.health_trajectory import attach_health_trajectory
@@ -376,7 +377,8 @@ def _rewrite_redacted_action_commands(payload: dict[str, Any]) -> None:
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:
     cwd = Path(options.cwd).resolve()
-    rollout = locate_rollout(cwd, codex_home())
+    host_home = codex_home()
+    rollout = locate_rollout(cwd, host_home)
     index_dir = resolve_artifact_path(options.index_dir, cwd, default_thread_index_dir(cwd, rollout))
     anchors = Path(options.anchors)
     if not anchors.is_absolute():
@@ -874,6 +876,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "question_stats": question_stats,
         "background_cognition": background_cognition_health(root=registry_path.resolve().parent, registry_path=registry_path, jobs_path=jobs_path, cwd=cwd, now=now),
         "storage_pressure": storage_pressure,
+        "host_state_confounds": codex_host_state_confounds(host_home),
         "logs": logs,
         "product_readiness": product_readiness,
         "recommended_actions": actions,

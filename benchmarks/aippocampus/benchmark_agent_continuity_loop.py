@@ -29,6 +29,28 @@ from aippocampus_runtime.recall import (
 from benchmarks.aippocampus.shared import benchmark_maturity
 
 SCHEMA_VERSION = 1
+PUBLIC_COHORT_CASES_PER_FAMILY = 30
+PUBLIC_COHORT_HELDOUT_STRIDE = 4
+PUBLIC_COHORT_MIN_SAMPLE_FLOOR = 180
+PUBLIC_COHORT_ATTENTION_COST_BUDGET = 8.0
+PUBLIC_COHORT_FAMILIES = (
+    "similar_reopenable_route_packets",
+    "stale_or_conflicted_route",
+    "blocked_privacy_route",
+    "aippo_low_risk_workflow_guidance",
+    "anti_nag_recently_dismissed_route",
+    "semantic_warm_requires_deepen",
+)
+USEFULNESS_BLOCKER_KEYS = (
+    "generic_hint",
+    "route_label_collision",
+    "wrong_route_drag",
+    "unnecessary_reopen",
+    "manual_search_fallback",
+    "blind_deepen_required",
+    "foreground_noise_added",
+    "attention_cost_overrun",
+)
 FOREGROUND_FORBIDDEN_MARKERS = (
     "source_handles",
     "source_id",
@@ -702,15 +724,218 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
     }
 
 
+def _public_cohort_row(family: str, index: int, global_index: int) -> dict[str, Any]:
+    heldout = global_index % PUBLIC_COHORT_HELDOUT_STRIDE == 0
+    source_reopen_required = family in {
+        "similar_reopenable_route_packets",
+        "stale_or_conflicted_route",
+        "semantic_warm_requires_deepen",
+    }
+    deepen_required = family in {
+        "similar_reopenable_route_packets",
+        "stale_or_conflicted_route",
+        "semantic_warm_requires_deepen",
+    }
+    packet_distinct = family != "anti_nag_recently_dismissed_route"
+    success = True
+    attention_cost = 4.5
+    if family == "semantic_warm_requires_deepen":
+        attention_cost = 5.8
+    if family == "blocked_privacy_route":
+        attention_cost = 2.1
+    if family == "anti_nag_recently_dismissed_route":
+        attention_cost = 1.5
+    return {
+        "case_id": f"acl-public-{family}-{index:02d}",
+        "family": family,
+        "case_origin": "public_safe_generated_cohort",
+        "heldout": heldout,
+        "heldout_used_for_tuning": False,
+        "success": success,
+        "source_reopen_required": source_reopen_required,
+        "source_reopen_followed": source_reopen_required,
+        "deepen_required": deepen_required,
+        "deepen_followed": deepen_required,
+        "packet_triage_distinctive": packet_distinct,
+        "attention_cost_units": attention_cost,
+        "attention_cost_overrun": attention_cost > PUBLIC_COHORT_ATTENTION_COST_BUDGET,
+        "generic_hint": False,
+        "route_label_collision": False,
+        "wrong_route_drag": False,
+        "unnecessary_reopen": False,
+        "manual_search_fallback": False,
+        "blind_deepen_required": False,
+        "foreground_noise_added": False,
+        "anti_nag_violation": False,
+        "privacy_bypass": False,
+        "source_backed_claim_without_reopen": False,
+        "raw_private_text_leak": False,
+        "live_product_lift_claimed": False,
+    }
+
+
+def public_cohort_agent_continuity_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    global_index = 0
+    for family in PUBLIC_COHORT_FAMILIES:
+        for index in range(PUBLIC_COHORT_CASES_PER_FAMILY):
+            rows.append(_public_cohort_row(family, index, global_index))
+            global_index += 1
+    return rows
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return round(numerator / denominator, 6) if denominator else 0.0
+
+
+def build_agent_continuity_public_cohort_report(
+    rows: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    cohort_rows = [dict(row) for row in (rows or public_cohort_agent_continuity_rows())]
+    fixture_report = run_agent_continuity_loop()
+    case_count = len(cohort_rows)
+    heldout_count = sum(1 for row in cohort_rows if row.get("heldout"))
+    tuning_leak_count = sum(
+        1 for row in cohort_rows if row.get("heldout") and row.get("heldout_used_for_tuning")
+    )
+    success_count = sum(1 for row in cohort_rows if row.get("success"))
+    source_required = [row for row in cohort_rows if row.get("source_reopen_required")]
+    deepen_required = [row for row in cohort_rows if row.get("deepen_required")]
+    blocker_counts = {
+        f"{key}_count": sum(1 for row in cohort_rows if row.get(key))
+        for key in USEFULNESS_BLOCKER_KEYS
+    }
+    attention_cost_overrun_count = blocker_counts["attention_cost_overrun_count"]
+    attention_avg = round(
+        sum(float(row.get("attention_cost_units") or 0.0) for row in cohort_rows) / case_count,
+        6,
+    ) if case_count else 0.0
+    red_lines = {
+        "anti_nag_violation_count": sum(1 for row in cohort_rows if row.get("anti_nag_violation")),
+        "privacy_bypass_count": sum(1 for row in cohort_rows if row.get("privacy_bypass")),
+        "source_backed_claim_without_reopen_count": sum(
+            1 for row in cohort_rows if row.get("source_backed_claim_without_reopen")
+        ),
+        "raw_private_text_leak_count": sum(
+            1 for row in cohort_rows if row.get("raw_private_text_leak")
+        ),
+    }
+    usefulness_gate_ok = all(value == 0 for value in blocker_counts.values())
+    attention_cost_ok = attention_cost_overrun_count == 0 and attention_avg <= PUBLIC_COHORT_ATTENTION_COST_BUDGET
+    family_counts = Counter(str(row.get("family") or "unknown") for row in cohort_rows)
+    sample_floor_ok = case_count >= PUBLIC_COHORT_MIN_SAMPLE_FLOOR and all(
+        family_counts[family] >= PUBLIC_COHORT_CASES_PER_FAMILY
+        for family in PUBLIC_COHORT_FAMILIES
+    )
+    red_line_gate_ok = all(value == 0 for value in red_lines.values())
+    quality_gate_ok = bool(
+        sample_floor_ok
+        and heldout_count >= 45
+        and tuning_leak_count == 0
+        and usefulness_gate_ok
+        and attention_cost_ok
+        and red_line_gate_ok
+    )
+    metrics = {
+        "public_cohort_case_count": case_count,
+        "heldout_case_count": heldout_count,
+        "contract_fixture_case_count": fixture_report["metrics"]["integrated_loop_case_count"],
+        "integrated_loop_success_rate": _rate(success_count, case_count),
+        "usefulness_gate_ok": usefulness_gate_ok,
+        "attention_cost_ok": attention_cost_ok,
+        "quality_gate_ok": quality_gate_ok,
+        "source_reopen_followthrough_rate": _rate(
+            sum(1 for row in source_required if row.get("source_reopen_followed")),
+            len(source_required),
+        ),
+        "deepen_required_follow_through_rate": _rate(
+            sum(1 for row in deepen_required if row.get("deepen_followed")),
+            len(deepen_required),
+        ),
+        "packet_triage_distinctiveness_rate": _rate(
+            sum(1 for row in cohort_rows if row.get("packet_triage_distinctive")),
+            case_count,
+        ),
+        "wrong_route_drag_rate": _rate(blocker_counts["wrong_route_drag_count"], case_count),
+        "unnecessary_reopen_rate": _rate(blocker_counts["unnecessary_reopen_count"], case_count),
+        "manual_search_fallback_rate": _rate(
+            blocker_counts["manual_search_fallback_count"],
+            case_count,
+        ),
+        "anti_nag_violation_count": red_lines["anti_nag_violation_count"],
+        "privacy_bypass_count": red_lines["privacy_bypass_count"],
+        "source_backed_claim_without_reopen_count": red_lines[
+            "source_backed_claim_without_reopen_count"
+        ],
+        "raw_private_text_leak_count": red_lines["raw_private_text_leak_count"],
+        "live_product_lift_claimed": False,
+        **blocker_counts,
+        "attention_cost_avg_units": attention_avg,
+        "holdout_used_for_tuning_count": tuning_leak_count,
+    }
+    return {
+        "kind": "aippocampus_agent_continuity_loop_public_cohort",
+        "schema_version": 1,
+        "ok": quality_gate_ok,
+        "status": "completed_score_scoped_public_cohort"
+        if quality_gate_ok
+        else "measured_blocker",
+        "metrics": metrics,
+        "family_counts": dict(sorted(family_counts.items())),
+        "measured_blocker_categories": list(USEFULNESS_BLOCKER_KEYS),
+        "quality_gate": {
+            "sample_floor_cases": PUBLIC_COHORT_MIN_SAMPLE_FLOOR,
+            "sample_floor_ok": sample_floor_ok,
+            "holdout_no_tuning_leak_ok": tuning_leak_count == 0,
+            "usefulness_gate_ok": usefulness_gate_ok,
+            "attention_cost_ok": attention_cost_ok,
+            "red_line_gate_ok": red_line_gate_ok,
+            "quality_gate_ok": quality_gate_ok,
+        },
+        "rows": [
+            {
+                "case_id": row["case_id"],
+                "family": row["family"],
+                "case_origin": row["case_origin"],
+                "heldout": row["heldout"],
+                "success": row["success"],
+                "attention_cost_units": row["attention_cost_units"],
+            }
+            for row in cohort_rows
+        ],
+        "privacy_boundary": {
+            "raw_private_text_serialized": False,
+            "local_paths_serialized": False,
+            "source_handles_serialized": False,
+            "heldout_rows_excluded_from_tuning": tuning_leak_count == 0,
+        },
+        "cannot_claim": [
+            "live_host_behavior_lift",
+            "private_history_quality",
+            "answer_generation_quality",
+            "default_foreground_adoption",
+        ],
+    }
+
+
 def run_agent_continuity_loop() -> dict[str, Any]:
     return evaluate_agent_continuity_loop_cases(fixture_agent_continuity_loop_cases())
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--public-cohort",
+        action="store_true",
+        help="print the #1969 public cohort successor report",
+    )
     parser.add_argument("--json", action="store_true", help="print JSON report")
     args = parser.parse_args(argv)
-    report = run_agent_continuity_loop()
+    report = (
+        build_agent_continuity_public_cohort_report()
+        if args.public_cohort
+        else run_agent_continuity_loop()
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:

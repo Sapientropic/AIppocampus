@@ -233,6 +233,36 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_REASON_SHOULD_NOT_LEAK", encoded)
         self.assertNotIn("annotations", readiness)
 
+    def test_field_validation_report_separates_private_shortfall_from_public_pack(self) -> None:
+        report = benchmark.build_private_local_field_behavior_report()
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"])
+        self.assertFalse(report["field_validation_gate_ok"])
+        self.assertTrue(report["public_contract_gate_ok"])
+        self.assertEqual(report["status"], "field_validation_blocked")
+        self.assertEqual(metrics["field_case_count"], 7)
+        self.assertEqual(metrics["retained_control_case_count"], 7)
+        self.assertEqual(metrics["retained_case_shortfall"], 13)
+        self.assertGreaterEqual(metrics["negative_control_count"], 1)
+        self.assertEqual(metrics["behavior_scored_case_count"], 6)
+        self.assertEqual(metrics["private_text_leak_count"], 0)
+        self.assertEqual(metrics["raw_ref_or_local_path_leak_count"], 0)
+        self.assertEqual(metrics["public_fixture_only_case_count"], 50)
+        self.assertFalse(metrics["field_behavior_lift_claimed"])
+        self.assertFalse(metrics["live_host_behavior_lift_claimed"])
+        self.assertFalse(metrics["representative_e2e50_quality_claimed"])
+        self.assertIn(
+            "field_case_family_counts_not_available_in_sanitized_summary",
+            report["private_annotation_readiness"]["blocker_codes"],
+        )
+        self.assertIn("private_history_behavior_lift", report["cannot_claim"])
+        self.assertIn("representative_e2e50_quality", report["cannot_claim"])
+        self.assertFalse(report["evidence_separation"]["private_scarcity_blocks_public_pack"])
+        self.assertNotIn("PRIVATE_SENTINEL_TEXT", encoded)
+        self.assertNotIn("C:\\", encoded)
+
     def test_incomplete_pack_reports_20_case_blocker_without_20_case_claim(self) -> None:
         case_pack = benchmark.load_fixture()
         case_pack["cases"] = case_pack["cases"][:19]

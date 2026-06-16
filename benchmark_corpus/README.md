@@ -198,6 +198,7 @@ Run the public-safe multimodal corpus-style retrieval contract:
 ```powershell
 python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --json
 python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --raw-media-mode deterministic_fixture --json
+python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --source-open-replay --json
 ```
 
 This fixture has synthetic image, video-frame, email/message, receipt, invoice,
@@ -205,6 +206,9 @@ and calendar/location sources plus captions, OCR, object tags, thumbnail or
 embedding hints, and schema rows as derived artifacts. Derived artifacts are
 navigation only; the runner scores source reopen, conflict handling,
 cross-modal join, unsupported visual abstention, and retrieval recall@3. It
+can optionally separate deterministic fixture, source-open replay, and
+provider-blocked cases with `--source-open-replay`; a missing live or declared
+media provider is reported as a blocker, not as provider-quality evidence. It
 does not claim ATM-Bench Hard support, live vision quality, conversational
 media-upload recall, full-device indexing, or product privacy behavior. The
 report owner is

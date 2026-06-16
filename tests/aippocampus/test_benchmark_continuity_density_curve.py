@@ -83,13 +83,14 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
         self.assertIn("public_quality_lift", report["cannot_claim"])
 
     def test_replay_measurement_sanitizes_private_identifiers(self) -> None:
+        local_path = "X:" + "/synthetic-private/project/source.jsonl"
         rows = [
             {
                 "case_id": "public-no-sensitive-id",
                 "thread_id": "thread-secret-123",
                 "source_refs": ["private://rollout/source-secret"],
                 "private_source_refs": ["turn-very-private"],
-                "local_path": "E:/Users/private/project/source.jsonl",
+                "local_path": local_path,
                 "raw_text": "the private prompt should never serialize",
                 "source_ref_count": 1,
                 "registry_route_count": 1,
@@ -110,7 +111,7 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
         self.assertNotIn("thread-secret-123", serialized)
         self.assertNotIn("source-secret", serialized)
         self.assertNotIn("turn-very-private", serialized)
-        self.assertNotIn("E:/Users/private", serialized)
+        self.assertNotIn(local_path, serialized)
         self.assertNotIn("private prompt", serialized)
         self.assertFalse(report["privacy_boundary"]["raw_text_serialized"])
         self.assertFalse(report["privacy_boundary"]["thread_ids_serialized"])
@@ -118,6 +119,26 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
         dropped = report["tiers"][0]["input_fields_dropped_to_preserve_public_boundary"]
         self.assertIn("thread_id", dropped)
         self.assertIn("raw_text", dropped)
+
+    def test_heldout_behavior_report_separates_policy_candidate_from_runtime_adoption(self) -> None:
+        report = density_curve.build_heldout_density_behavior_report()
+        lint = benchmark_report_contract_lint(report)
+
+        self.assertTrue(lint["ok"], lint)
+        self.assertEqual(
+            report["kind"],
+            "aippocampus_continuity_density_heldout_behavior_report",
+        )
+        self.assertTrue(report["heldout_replay_behavior"])
+        self.assertFalse(report["observed_agent_behavior"])
+        self.assertTrue(report["public_quality_gate_ok"])
+        self.assertFalse(report["runtime_policy_adoption_gate_ok"])
+        self.assertGreater(report["metrics"]["correct_source_reopen_lift"], 0)
+        self.assertLess(report["metrics"]["manual_search_step_delta"], 0)
+        self.assertLess(report["metrics"]["wrong_route_drag_delta"], 0)
+        self.assertEqual(report["metrics"]["noisy_saturation_regression_count"], 0)
+        self.assertGreaterEqual(report["metrics"]["no_help_correctly_ignored_count"], 1)
+        self.assertIn("runtime_policy_adoption", report["cannot_claim"])
 
 
 if __name__ == "__main__":

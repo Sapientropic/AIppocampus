@@ -29,6 +29,8 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
     "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
     "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE",
+    "AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE",
+    "AIPPOCAMPUS_FOREGROUND_KEY_TOOL_FAILURE",
 ]
 
 
@@ -697,7 +699,7 @@ class UpdateSyncTests(unittest.TestCase):
             "host_live_probe_ok_current_thread_unverified",
         )
 
-    def test_status_can_mark_host_probe_ready_when_current_thread_visibility_is_explicit(self) -> None:
+    def test_status_keeps_visible_only_foreground_tools_unverified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1"}):
             root = Path(tmp)
             codex_home = root / "codex-home"
@@ -734,12 +736,14 @@ class UpdateSyncTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
-        self.assertTrue(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
-        self.assertEqual(agent["current_thread_tool_discovery"], "verified_by_operator_override")
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
+        self.assertEqual(agent["current_thread_tool_discovery"], "tools_visible_key_tools_unverified")
+        self.assertEqual(agent["foreground_tools_visibility_source"], "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
+        self.assertIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertEqual(len(agent["host_probe_agent_native_tools"]), 4)
 
-    def test_status_can_mark_current_thread_visibility_with_cli_assertion(self) -> None:
+    def test_status_requires_current_thread_key_tool_calls_with_cli_assertion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
             codex_home = root / "codex-home"
@@ -767,6 +771,7 @@ class UpdateSyncTests(unittest.TestCase):
                 "--host-probe-report",
                 str(probe),
                 "--foreground-tools-visible",
+                "--foreground-key-tools-callable",
                 "--no-child-check",
             )
 
@@ -775,6 +780,62 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(payload["summary"]["agent_callable_ready"])
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "cli:--foreground-tools-visible")
+        self.assertTrue(agent["current_foreground_key_tools_callable"])
+        self.assertEqual(
+            agent["current_thread_tool_discovery"],
+            "verified_by_current_foreground_key_tool_calls",
+        )
+
+    def test_status_reports_current_foreground_runtime_mismatch_after_key_tool_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {
+                            "tool_names": ["agent_recall", "agent_aippo", "agent_deepen"]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {"status": "available_requires_sync_dir"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--host-probe-report",
+                str(probe),
+                "--foreground-tools-visible",
+                "--foreground-key-tool-failure",
+                "ImportError: cannot import compact_aippo_guidance_card from E:\\private\\old.py",
+                "--no-child-check",
+            )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        agent = payload["surfaces"]["agent_callable"]
+        card = next(
+            item for item in payload["summary"]["capability_ladder"]
+            if item["id"] == "active_recall_ready"
+        )
+        self.assertEqual(code, 0)
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertTrue(payload["summary"]["agent_callable_host_ready"])
+        self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertEqual(agent["status"], "foreground_mcp_runtime_mismatch")
+        self.assertEqual(agent["current_thread_tool_discovery"], "foreground_key_tool_call_failed")
+        self.assertFalse(agent["current_foreground_key_tools_callable"])
+        self.assertTrue(agent["live_host_schema_stale"])
+        self.assertIn("aippocampus agent recall", agent["next_command"])
+        self.assertEqual(card["status"], "foreground_mcp_runtime_mismatch")
+        self.assertNotIn("E:\\private", encoded)
 
     def test_status_detects_stale_live_host_when_key_tool_smoke_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -844,7 +905,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn("E:\\private", encoded)
 
     def test_status_reports_host_conformance_label_for_recall_deepen_host(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1"}):
+        with tempfile.TemporaryDirectory() as tmp, provider_env({
+            "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1",
+            "AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE": "1",
+        }):
             root = Path(tmp)
             codex_home = root / "codex-home"
             probe = root / "codex-host-probe.json"
@@ -2027,7 +2091,7 @@ class UpdateSyncTests(unittest.TestCase):
             item for item in payload["next_actions"] if item["surface"] == "agent_callable"
         )
         self.assertIn("reload Codex Desktop", action["command"])
-        self.assertIn("--foreground-tools-visible --agent-json", action["command"])
+        self.assertIn("--foreground-key-tools-callable --agent-json", action["command"])
 
 
 if __name__ == "__main__":

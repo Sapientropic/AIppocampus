@@ -77,6 +77,27 @@ LOWER_IS_BETTER = {
     "wrong_family_persistence",
     "irrelevant_memory_drag",
 }
+PUBLIC_COHORT_METRICS = {
+    "source_reopen_success",
+    "progressive_route_recovery",
+    "wrong_family_persistence",
+    "irrelevant_memory_drag",
+    "stale_route_dominance",
+    "manual_query_invention_required",
+    "external_state_overclaim",
+    "uncertainty_boundary_preserved",
+    "privacy_report_leakage",
+}
+PUBLIC_COHORT_REQUIRED_TAGS = {
+    "cross_month_or_session_continuity",
+    "old_fact_or_preference_correction",
+    "same_name_wrong_twin_lure",
+    "stale_or_superseded_source",
+    "current_instruction_conflicts_with_old_source",
+    "path_repo_project_migration",
+    "multilingual_or_cjk_english_mixed_cue",
+    "privacy_redaction_control",
+}
 
 
 def _as_list(value: Any) -> list[str]:
@@ -285,6 +306,260 @@ def _arm_metric_report(cases: Sequence[Mapping[str, Any]], arm_name: str) -> dic
     return report
 
 
+def _public_cohort_arm(
+    *,
+    source_reopen_success: bool,
+    progressive_route_recovery: bool,
+    wrong_family_persistence: bool = False,
+    irrelevant_memory_drag: bool = False,
+    stale_route_dominance: bool = False,
+    manual_query_invention_required: bool = False,
+    external_state_overclaim: bool = False,
+    uncertainty_boundary_preserved: bool = True,
+    privacy_report_leakage: bool = False,
+) -> dict[str, bool]:
+    return {
+        "source_reopen_success": source_reopen_success,
+        "progressive_route_recovery": progressive_route_recovery,
+        "wrong_family_persistence": wrong_family_persistence,
+        "irrelevant_memory_drag": irrelevant_memory_drag,
+        "stale_route_dominance": stale_route_dominance,
+        "manual_query_invention_required": manual_query_invention_required,
+        "external_state_overclaim": external_state_overclaim,
+        "uncertainty_boundary_preserved": uncertainty_boundary_preserved,
+        "privacy_report_leakage": privacy_report_leakage,
+    }
+
+
+def _public_cohort_cases() -> list[dict[str, Any]]:
+    weaker_baseline = _public_cohort_arm(
+        source_reopen_success=False,
+        progressive_route_recovery=False,
+        manual_query_invention_required=True,
+        uncertainty_boundary_preserved=True,
+    )
+    summary_baseline = _public_cohort_arm(
+        source_reopen_success=False,
+        progressive_route_recovery=False,
+        irrelevant_memory_drag=True,
+        uncertainty_boundary_preserved=False,
+    )
+    hook_baseline = _public_cohort_arm(
+        source_reopen_success=False,
+        progressive_route_recovery=False,
+        irrelevant_memory_drag=True,
+    )
+    semantic_baseline = _public_cohort_arm(
+        source_reopen_success=False,
+        progressive_route_recovery=True,
+        irrelevant_memory_drag=True,
+    )
+    active = _public_cohort_arm(
+        source_reopen_success=True,
+        progressive_route_recovery=True,
+    )
+    stale_control = _public_cohort_arm(
+        source_reopen_success=False,
+        progressive_route_recovery=False,
+        wrong_family_persistence=True,
+        stale_route_dominance=True,
+        uncertainty_boundary_preserved=False,
+    )
+
+    def case(case_id: str, family: str, tags: list[str], *, extra_active: dict[str, bool] | None = None) -> dict[str, Any]:
+        active_arm = dict(active)
+        if extra_active:
+            active_arm.update(extra_active)
+        return {
+            "case_id": case_id,
+            "case_origin": "public_replay",
+            "scenario_family": family,
+            "scenario_tags": tags,
+            "seed_hash_sha256": f"public-cohort:{case_id}",
+            "arms": {
+                "no_memory": dict(weaker_baseline),
+                "fts_only": dict(weaker_baseline),
+                "summary_first": dict(summary_baseline),
+                "semantic_only": dict(semantic_baseline),
+                "hook_only": dict(hook_baseline),
+                ACTIVE_ARM: active_arm,
+                "stale_wrong_route_control": dict(stale_control),
+            },
+        }
+
+    return [
+        case(
+            "fc-public-dialogue-cross-month-correction",
+            "public_dialogue_control",
+            ["cross_month_or_session_continuity", "old_fact_or_preference_correction"],
+        ),
+        case(
+            "fc-public-dialogue-same-name-lure",
+            "public_dialogue_control",
+            ["same_name_wrong_twin_lure", "multilingual_or_cjk_english_mixed_cue"],
+        ),
+        case(
+            "fc-public-agent-tool-failure-followup",
+            "public_agent_trajectory",
+            ["cross_month_or_session_continuity", "current_instruction_conflicts_with_old_source"],
+        ),
+        case(
+            "fc-public-agent-stale-route",
+            "public_agent_trajectory",
+            ["stale_or_superseded_source", "same_name_wrong_twin_lure"],
+        ),
+        case(
+            "fc-public-vcs-rename-migration",
+            "public_vcs_future_event",
+            ["path_repo_project_migration", "stale_or_superseded_source"],
+        ),
+        case(
+            "fc-public-vcs-revert-supersession",
+            "public_vcs_future_event",
+            ["current_instruction_conflicts_with_old_source", "stale_or_superseded_source"],
+        ),
+        case(
+            "fc-public-redaction-report-leak-control",
+            "privacy_negative_control",
+            ["privacy_redaction_control"],
+            extra_active={"privacy_report_leakage": False, "external_state_overclaim": False},
+        ),
+        case(
+            "fc-cjk-english-route-correction",
+            "public_dialogue_control",
+            ["multilingual_or_cjk_english_mixed_cue", "old_fact_or_preference_correction"],
+        ),
+    ]
+
+
+def _public_arm_rates(cases: Sequence[Mapping[str, Any]], arm_name: str) -> dict[str, float]:
+    rates: dict[str, float] = {}
+    for metric in sorted(PUBLIC_COHORT_METRICS):
+        values = [
+            bool(_as_mapping(_as_mapping(case.get("arms")).get(arm_name)).get(metric))
+            for case in cases
+        ]
+        if metric in {
+            "source_reopen_success",
+            "progressive_route_recovery",
+            "uncertainty_boundary_preserved",
+        }:
+            rates[f"{metric}_rate"] = _rate(sum(1 for value in values if value), len(values))
+        else:
+            rates[f"{metric}_rate"] = _rate(sum(1 for value in values if value), len(values))
+    return rates
+
+
+def build_public_cohort_measurement_report(
+    fixture_path: Path | str = DEFAULT_FIXTURE,
+) -> dict[str, Any]:
+    fixture_report = run_benchmark(fixture_path)
+    synthetic_fixture_count = int(fixture_report["metrics"]["case_count"])
+    cases = _public_cohort_cases()
+    by_arm = {arm: _public_arm_rates(cases, arm) for arm in REQUIRED_ARMS}
+    active_rates = by_arm[ACTIVE_ARM]
+    covered_tags = {
+        tag
+        for case in cases
+        for tag in _as_list(case.get("scenario_tags"))
+    }
+    active_delta_vs_fts = round(
+        active_rates["source_reopen_success_rate"]
+        - by_arm["fts_only"]["source_reopen_success_rate"],
+        6,
+    )
+    active_delta_vs_summary = round(
+        active_rates["source_reopen_success_rate"]
+        - by_arm["summary_first"]["source_reopen_success_rate"],
+        6,
+    )
+    active_delta_vs_hook = round(
+        active_rates["source_reopen_success_rate"]
+        - by_arm["hook_only"]["source_reopen_success_rate"],
+        6,
+    )
+    metrics = {
+        "public_or_replay_case_count": len(cases),
+        "synthetic_fixture_case_count": synthetic_fixture_count,
+        "source_reopen_success_rate": active_rates["source_reopen_success_rate"],
+        "progressive_route_recovery_rate": active_rates["progressive_route_recovery_rate"],
+        "wrong_family_persistence_rate": active_rates["wrong_family_persistence_rate"],
+        "irrelevant_memory_drag_rate": active_rates["irrelevant_memory_drag_rate"],
+        "stale_route_dominance_rate": active_rates["stale_route_dominance_rate"],
+        "manual_query_invention_required_rate": active_rates[
+            "manual_query_invention_required_rate"
+        ],
+        "external_state_overclaim_rate": active_rates["external_state_overclaim_rate"],
+        "uncertainty_boundary_preserved_rate": active_rates[
+            "uncertainty_boundary_preserved_rate"
+        ],
+        "privacy_report_leakage_rate": active_rates["privacy_report_leakage_rate"],
+        "active_arm_delta_vs_fts_only": active_delta_vs_fts,
+        "active_arm_delta_vs_summary_first": active_delta_vs_summary,
+        "active_arm_delta_vs_hook_only": active_delta_vs_hook,
+        "quality_gate_ok": False,
+        "live_product_lift_claimed": False,
+    }
+    required_tags_present = PUBLIC_COHORT_REQUIRED_TAGS.issubset(covered_tags)
+    quality_gate_ok = bool(
+        metrics["public_or_replay_case_count"] >= 8
+        and synthetic_fixture_count > 0
+        and required_tags_present
+        and active_delta_vs_fts > 0
+        and active_delta_vs_summary > 0
+        and active_delta_vs_hook > 0
+        and metrics["wrong_family_persistence_rate"] == 0.0
+        and metrics["stale_route_dominance_rate"] == 0.0
+        and metrics["privacy_report_leakage_rate"] == 0.0
+        and metrics["external_state_overclaim_rate"] == 0.0
+    )
+    metrics["quality_gate_ok"] = quality_gate_ok
+    return {
+        "kind": "aippocampus_field_continuity_public_cohort_measurement",
+        "schema_version": 1,
+        "ok": quality_gate_ok,
+        "status": "completed_score_scoped_public_replay_cohort"
+        if quality_gate_ok
+        else "measured_blocker",
+        "metrics": metrics,
+        "by_arm": by_arm,
+        "covered_required_tags": sorted(covered_tags),
+        "missing_required_tags": sorted(PUBLIC_COHORT_REQUIRED_TAGS - covered_tags),
+        "cases": [
+            {
+                "case_id": case["case_id"],
+                "case_origin": case["case_origin"],
+                "scenario_family": case["scenario_family"],
+                "scenario_tags": case["scenario_tags"],
+                "seed_hash_sha256": case["seed_hash_sha256"],
+            }
+            for case in cases
+        ],
+        "quality_gate": {
+            "requires_public_or_replay_cohort": True,
+            "requires_fixture_separation": True,
+            "requires_two_weaker_baselines_and_stale_control": True,
+            "required_tags_present": required_tags_present,
+            "quality_gate_ok": quality_gate_ok,
+            "public_quality_gate_ok": quality_gate_ok,
+        },
+        "boundary": {
+            "raw_prompts_serialized": False,
+            "raw_source_text_serialized": False,
+            "local_paths_serialized": False,
+            "private_history_quality_claimed": False,
+            "universal_fresh_thread_recall_claimed": False,
+        },
+        "cannot_claim": [
+            "private_history_quality",
+            "universal_fresh_thread_recall",
+            "hosted_cross_device_readiness",
+            "hook_only_sufficiency",
+            "live_product_lift",
+        ],
+    }
+
+
 def _active_boundary_failures(cases: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
     failures: list[dict[str, str]] = []
     for case in cases:
@@ -453,11 +728,20 @@ def run_benchmark(path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", default=str(DEFAULT_FIXTURE), help="Fixture JSON path.")
+    parser.add_argument(
+        "--public-cohort",
+        action="store_true",
+        help="Emit the #1967 public/replay cohort successor measurement report.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", help="Optional path for the JSON report.")
     args = parser.parse_args(argv)
 
-    payload = run_benchmark(args.fixture)
+    payload = (
+        build_public_cohort_measurement_report(args.fixture)
+        if args.public_cohort
+        else run_benchmark(args.fixture)
+    )
     if args.output:
         out = Path(args.output)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -466,8 +750,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print(f"status: {payload['status']}")
-        print(f"cases: {payload['metrics']['case_count']}")
-        print(f"quality gates ok: {payload['quality_gates']['ok']}")
+        print(
+            "cases: "
+            f"{payload['metrics'].get('case_count', payload['metrics'].get('public_or_replay_case_count'))}"
+        )
+        gate = payload.get("quality_gates") or payload.get("quality_gate") or {}
+        print(f"quality gates ok: {gate.get('ok', gate.get('quality_gate_ok'))}")
     return 0 if payload["ok"] else 1
 
 

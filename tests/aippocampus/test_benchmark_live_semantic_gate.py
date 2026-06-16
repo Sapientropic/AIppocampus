@@ -455,6 +455,28 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
             7,
         )
 
+    def test_bounded_evidence_after_semantic_reopen_companion_measures_next_step(self) -> None:
+        payload = live_benchmark.bounded_evidence_after_semantic_reopen_report()
+        metrics = payload["metrics"]
+
+        self.assertEqual(
+            payload["kind"],
+            "aippocampus_bounded_evidence_after_semantic_reopen_report",
+        )
+        self.assertTrue(payload["quality_gate_ok"])
+        self.assertTrue(payload["observed_agent_behavior"])
+        self.assertFalse(payload["runtime_policy_adoption_gate_ok"])
+        self.assertGreaterEqual(metrics["provider_backed_semantic_route_count"], 1)
+        self.assertGreaterEqual(metrics["semantic_reopen_attempt_count"], 1)
+        self.assertGreaterEqual(metrics["semantic_reopen_success_count"], 1)
+        self.assertGreaterEqual(metrics["bounded_evidence_after_semantic_reopen_count"], 1)
+        self.assertGreaterEqual(metrics["answer_or_action_used_bounded_evidence_count"], 1)
+        self.assertEqual(metrics["manual_query_invention_after_semantic_hit_count"], 0)
+        self.assertEqual(metrics["bounded_evidence_false_positive_count"], 0)
+        self.assertGreaterEqual(metrics["source_missing_or_budget_block_count"], 1)
+        self.assertGreaterEqual(metrics["stale_conflict_privacy_high_risk_block_count"], 1)
+        self.assertIn("model_only_semantic_output_as_evidence", payload["cannot_claim"])
+
 
 if __name__ == "__main__":
     unittest.main()

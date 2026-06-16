@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -212,6 +213,93 @@ class ProviderConformanceBenchmarkTests(unittest.TestCase):
         self.assertNotIn("C:\\", serialized)
         self.assertNotIn("sk-live-provider-suite", serialized)
         self.assertNotIn("private-transcript", serialized)
+
+    def test_sanitized_replay_separates_synthetic_kit_from_multi_client_route(self) -> None:
+        payload = benchmark.build_provider_conformance_replay_report()
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["kind"], "aippocampus_provider_conformance_replay_report")
+        self.assertEqual(payload["status"], "sanitized_multi_client_replay_completed")
+        self.assertTrue(payload["config"]["synthetic_kit_kept_separate"])
+        self.assertTrue(payload["synthetic_conformance_kit"]["ok"])
+        self.assertGreaterEqual(metrics["real_or_dogfood_provider_count"], 2)
+        self.assertGreaterEqual(metrics["synthetic_provider_count"], 5)
+        self.assertGreaterEqual(metrics["live_or_sanitized_replay_case_count"], 6)
+        self.assertGreaterEqual(metrics["cross_provider_route_success_count"], 3)
+        self.assertGreaterEqual(metrics["cross_provider_source_reopen_success_count"], 3)
+        self.assertGreaterEqual(metrics["foreground_action_helpful_count"], 1)
+        self.assertEqual(metrics["provider_identity_conflation_count"], 0)
+        self.assertEqual(metrics["wrong_route_drag_count"], 0)
+        self.assertIn("all_client_drop_in_support", payload["cannot_claim"])
+        self.assertIn("live_provider_adapter_quality", payload["cannot_claim"])
+
+    def test_sanitized_replay_keeps_copied_summary_and_mcp_blob_as_controls(self) -> None:
+        payload = benchmark.build_provider_conformance_replay_report()
+        metrics = payload["metrics"]
+        cases = {
+            row["case_id"]: row
+            for row in payload["sanitized_provider_replay"]["cases"]
+        }
+
+        self.assertEqual(metrics["copied_summary_promoted_to_source_count"], 0)
+        self.assertEqual(metrics["mcp_blob_source_truth_violation_count"], 0)
+        self.assertEqual(metrics["injected_content_durable_memory_count"], 0)
+        self.assertGreaterEqual(metrics["missing_source_ref_affordance_count"], 1)
+        self.assertEqual(metrics["manual_search_fallback_count"], 1)
+        copied = cases["copied_summary_control_requires_source_ref"]
+        self.assertEqual(copied["foreground_action"]["decision"], "ask_for_source_ref_before_using_summary")
+        self.assertTrue(copied["foreground_action"]["helpful"])
+        self.assertTrue(copied["foreground_action"]["manual_search_fallback"])
+        mcp = cases["mcp_blob_only_control_stays_direction_only"]
+        self.assertEqual(
+            mcp["detected_failure_codes"],
+            ["provider_conformance.mcp_missing_source_ref_affordance"],
+        )
+        blob = [
+            row for row in mcp["artifacts"] if row["artifact_id"] == "mcp-blob-only-control"
+        ][0]
+        self.assertEqual(blob["action_grammar"], "direction_only")
+        self.assertFalse(blob["source_ref_present"])
+        self.assertFalse(blob["source_reopenable"])
+
+    def test_sanitized_replay_report_has_no_raw_provider_or_path_leaks(self) -> None:
+        payload = benchmark.build_provider_conformance_replay_report()
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        metrics = payload["metrics"]
+
+        self.assertEqual(metrics["raw_provider_log_leak_count"], 0)
+        self.assertEqual(metrics["local_path_or_settings_path_leak_count"], 0)
+        self.assertEqual(metrics["secret_leak_count"], 0)
+        self.assertFalse(payload["privacy_boundary"]["raw_provider_logs_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["source_ref_values_emitted"])
+        self.assertNotIn("codex:session:codex-public-route-1:turn:4", serialized)
+        self.assertNotIn("claude-code:session:claude-public-route-1:turn:6", serialized)
+        self.assertNotIn("E:\\", serialized)
+        self.assertNotIn("C:\\", serialized)
+        self.assertNotIn("sk-live-provider-suite", serialized)
+
+    def test_replay_cohort_cli_outputs_json_report(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(BENCHMARKS / "benchmark_provider_conformance.py"),
+                "--replay-cohort",
+                "--json",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+        )
+        payload = json.loads(result.stdout)
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["kind"], "aippocampus_provider_conformance_replay_report")
+        self.assertEqual(
+            payload["metrics"]["live_or_sanitized_replay_case_count"],
+            6,
+        )
 
 
 if __name__ == "__main__":

@@ -49,6 +49,11 @@ def plugin_cache_action_lines(plugin: dict[str, Any]) -> list[str]:
 
 def agent_callable_probe_lines(item: dict[str, Any]) -> list[str]:
     probe = item.get("host_live_probe") or {}
+    if item.get("status") == "foreground_mcp_runtime_mismatch":
+        lines = ["  warn: current foreground MCP connection failed key agent-native tools"]
+        if item.get("next_command"):
+            lines.append("  next: " + str(item.get("next_command")))
+        return lines
     if item.get("ready") and probe.get("ok"):
         return [f"  host probe: {probe.get('source')} ok"]
     if probe.get("ok"):
@@ -82,14 +87,19 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
     if bool(summary.get("agent_callable_host_ready")) and not bool(
         summary.get("agent_callable_current_thread_visible")
     ):
+        stale = agent.get("status") == "foreground_mcp_runtime_mismatch"
         cards.append(
             {
                 "id": "current_thread_tool_discovery",
-                "status": "host_ready_current_thread_unverified",
+                "status": (
+                    "foreground_mcp_runtime_mismatch"
+                    if stale
+                    else "host_ready_current_thread_unverified"
+                ),
                 "why": "The host probe passed, but this foreground thread has not proved it can see the AIppocampus tools.",
                 "command": str(
                     agent.get("next_command")
-                    or "reload Codex Desktop, then run `aippocampus update status --foreground-tools-visible --agent-json`"
+                    or "reload Codex Desktop, then run `aippocampus update status --agent-json`"
                 ),
             }
         )
@@ -177,8 +187,8 @@ def post_apply_next_actions(results: list[dict[str, Any]]) -> list[dict[str, Any
             ),
             "command": (
                 "reload Codex Desktop, then run "
-                "`aippocampus update status --foreground-tools-visible --agent-json` "
-                "from a thread that can see AIppocampus tools"
+                "`aippocampus update status --foreground-key-tools-callable --agent-json` "
+                "after this foreground thread successfully calls agent_recall and agent_deepen"
             ),
         }
     ]

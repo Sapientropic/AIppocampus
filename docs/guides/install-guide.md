@@ -1,40 +1,8 @@
 # Install Guide
 
-This guide covers the public installation paths for AIppocampus. The canonical
-roadmap remains `docs/roadmap.md`; this file is only the operator-facing install
-surface.
-
-For supported CLI, MCP, JSON, environment-variable, and import-stability
-expectations, see [public-api.md](public-api.md).
-For host-family support status and what not to overclaim, see
-[ecosystem-integration-matrix.md](ecosystem-integration-matrix.md).
-The install guide shows common commands only; the full environment-variable
-matrix and Python import layer policy live in that public API document so the
-stability boundary has one owner.
-Safe local configuration starts from
-[`../../.env.example`](../../.env.example) and
-[safe-environment.md](setup/safe-environment.md).
-The runtime and tooling dependency taxonomy lives in
-[dependency-contract.md](setup/dependency-contract.md).
-The product friction budget lives in
-[product-profiles.md](../architecture/host/product-profiles.md): first recall should
-stay `personal_default`; core hook setup is the consented next step for ambient
-continuity, while diagnostics, sync, governance, and research surfaces stay
-operator or opt-in paths unless a user explicitly needs them.
-The low-friction producer boundary lives in
-[opt-in-continuity-boundary-audit.md](../architecture/opt-in-continuity-boundary-audit.md):
-enabled deterministic continuity maintenance should use auditability and
-rollback instead of repeated per-event confirmation, while prompt hooks and
-public reports keep their stricter source/privacy boundaries.
-
-For a Codex user who has asked an agent to install or set up AIppocampus, start
-with the agent-mediated plugin path below. For no-clone package probing,
-non-Codex hosts, or CLI-only fallback, use the
-[10-minute public API path](public-api.md#ten-minute-public-path): package
-probe, read-only provider status, explicit onboarding only with user consent,
-then clean-source search for a first source-backed snippet. Treat sync, object
-storage, Dream, semantic jobs, and benchmarks as advanced surfaces unless that
-path proves the user actually needs them.
+For Codex users, start with the agent-mediated install card and one
+source-backed receipt. The goal is to see continuity work before opening the
+operator reference map.
 
 ## Agent-Mediated Codex Plugin Path
 
@@ -80,6 +48,41 @@ aippocampus search "a distinctive old phrase"
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
 ```
+
+## Before Advanced Setup
+
+This guide covers common public installation paths. The canonical roadmap
+remains `docs/roadmap.md`; this file is only the operator-facing install
+surface.
+
+For supported CLI, MCP, JSON, environment-variable, and import-stability
+expectations, see [public-api.md](public-api.md). For host-family support status
+and what not to overclaim, see
+[ecosystem-integration-matrix.md](ecosystem-integration-matrix.md). The full
+environment-variable matrix and Python import layer policy live in the public
+API document so the stability boundary has one owner.
+
+Safe local configuration starts from [`../../.env.example`](../../.env.example)
+and [safe-environment.md](setup/safe-environment.md). The runtime and tooling
+dependency taxonomy lives in [dependency-contract.md](setup/dependency-contract.md).
+The product friction budget lives in
+[product-profiles.md](../architecture/host/product-profiles.md): first recall
+should stay `personal_default`; core hook setup is the consented next step for
+ambient continuity, while diagnostics, sync, governance, and research surfaces
+stay operator or opt-in paths unless a user explicitly needs them.
+
+The low-friction producer boundary lives in
+[opt-in-continuity-boundary-audit.md](../architecture/opt-in-continuity-boundary-audit.md):
+enabled deterministic continuity maintenance should use auditability and
+rollback instead of repeated per-event confirmation, while prompt hooks and
+public reports keep their stricter source/privacy boundaries.
+
+For no-clone package probing, non-Codex hosts, or CLI-only fallback, use the
+[10-minute public API path](public-api.md#ten-minute-public-path): package
+probe, read-only provider status, explicit onboarding only with user consent,
+then clean-source search for a first source-backed snippet. Treat sync, object
+storage, Dream, semantic jobs, and benchmarks as advanced surfaces unless that
+path proves the user actually needs them.
 
 Enable prompt/lifecycle hooks only after that first receipt works and the user
 trusts this machine for ambient continuity:

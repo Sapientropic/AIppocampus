@@ -189,6 +189,42 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
         self.assertIn("GitHub #281 live fresh-thread quality", payload["cannot_claim"])
         self.assertIn("GitHub #281 private real-history quality", payload["cannot_claim"])
 
+    def test_public_cohort_successor_report_promotes_beyond_contract_smoke(self) -> None:
+        payload = benchmark.build_public_cohort_measurement_report()
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(
+            payload["status"],
+            "completed_score_scoped_public_replay_cohort",
+        )
+        self.assertGreaterEqual(metrics["public_or_replay_case_count"], 8)
+        self.assertGreaterEqual(metrics["synthetic_fixture_case_count"], 5)
+        self.assertEqual(metrics["source_reopen_success_rate"], 1.0)
+        self.assertEqual(metrics["progressive_route_recovery_rate"], 1.0)
+        self.assertEqual(metrics["wrong_family_persistence_rate"], 0.0)
+        self.assertEqual(metrics["irrelevant_memory_drag_rate"], 0.0)
+        self.assertEqual(metrics["stale_route_dominance_rate"], 0.0)
+        self.assertEqual(metrics["manual_query_invention_required_rate"], 0.0)
+        self.assertEqual(metrics["external_state_overclaim_rate"], 0.0)
+        self.assertEqual(metrics["uncertainty_boundary_preserved_rate"], 1.0)
+        self.assertEqual(metrics["privacy_report_leakage_rate"], 0.0)
+        self.assertGreater(metrics["active_arm_delta_vs_fts_only"], 0)
+        self.assertGreater(metrics["active_arm_delta_vs_summary_first"], 0)
+        self.assertGreater(metrics["active_arm_delta_vs_hook_only"], 0)
+        self.assertTrue(metrics["quality_gate_ok"])
+        self.assertFalse(metrics["live_product_lift_claimed"])
+
+        self.assertEqual(payload["missing_required_tags"], [])
+        self.assertIn(
+            "same_name_wrong_twin_lure",
+            payload["covered_required_tags"],
+        )
+        self.assertTrue(payload["quality_gate"]["requires_fixture_separation"])
+        self.assertFalse(payload["boundary"]["raw_prompts_serialized"])
+        self.assertFalse(payload["boundary"]["local_paths_serialized"])
+        self.assertIn("private_history_quality", payload["cannot_claim"])
+
     def test_report_is_sanitized_and_does_not_overclaim(self) -> None:
         payload = benchmark.run_benchmark()
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)

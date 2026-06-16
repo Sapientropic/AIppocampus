@@ -27,6 +27,15 @@ OPAQUE_HANDLE_KEYS = {
     "thread_key",
     "turn_id",
 }
+PROMPT_LIKE_KEYS = {
+    "content",
+    "messages",
+    "prompt",
+    "query",
+    "raw_prompt",
+    "user_prompt",
+}
+RAW_OUTPUT_KEYS = {"output", "raw_stderr", "raw_stdout", "stderr", "stdout"}
 LOCAL_PATH_PATTERN = re.compile(r"(?:[A-Za-z]:[\\/]|/(?:Users|home|tmp|var|private|Volumes)/)")
 WINDOWS_FORWARD_PATH_TEXT_RE = re.compile(r"[A-Za-z]:/[^\s,;\"')\]]+")
 SECRET_PATTERN = re.compile(
@@ -60,6 +69,32 @@ def _public_projection(value: Any) -> Any:
     if isinstance(projected, str):
         return WINDOWS_FORWARD_PATH_TEXT_RE.sub("<local-path-redacted>", projected)
     return projected
+
+
+def _redact_stdio_text(value: Any, *, inside_raw_output: bool = False) -> Any:
+    """Keep repro output shape useful while removing raw prompt/stdout text.
+
+    Repro packages are meant for public issue bodies. Raw stdout/stderr leaves
+    can contain private prompts even when they do not look like paths or secrets,
+    so string leaves under raw output surfaces are redacted by default. Metrics
+    and status outside those raw surfaces remain available for triage.
+    """
+
+    if isinstance(value, Mapping):
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key).casefold()
+            next_inside = inside_raw_output or key_text in RAW_OUTPUT_KEYS
+            if next_inside and key_text in PROMPT_LIKE_KEYS:
+                out[key] = "<prompt-like-text-redacted>"
+            else:
+                out[key] = _redact_stdio_text(item, inside_raw_output=next_inside)
+        return out
+    if isinstance(value, list):
+        return [_redact_stdio_text(item, inside_raw_output=inside_raw_output) for item in value]
+    if inside_raw_output and isinstance(value, str) and value:
+        return "<raw-output-text-redacted>"
+    return value
 
 
 def _line_count(value: Any) -> int:
@@ -131,7 +166,7 @@ def build_sanitized_repro_package(
         "status": materialized.get("status"),
     }
     public_command = _public_projection(command)
-    public_output = _public_projection(output_payload)
+    public_output = _public_projection(_redact_stdio_text(output_payload))
     package = {
         "kind": REPRO_PACKAGE_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -168,13 +203,18 @@ def build_sanitized_repro_package(
             "safe_to_paste_public_issue_by_default": True,
             "raw_prompt_serialized": False,
             "raw_stdout_stderr_serialized": False,
+            "raw_output_text_preserved": False,
+            "human_review_required": False,
             "local_paths_serialized": False,
             "secrets_serialized": False,
             "opaque_source_handles_hashed": True,
         },
     }
     package["privacy_scan"] = _privacy_scan(package)
-    package["ok"] = package["privacy_scan"]["private_field_leak_count"] == 0
+    public_safe = package["privacy_scan"]["private_field_leak_count"] == 0
+    package["ok"] = public_safe
+    package["privacy_boundary"]["safe_to_paste_public_issue_by_default"] = public_safe
+    package["privacy_boundary"]["human_review_required"] = not public_safe
     return package
 
 

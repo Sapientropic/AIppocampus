@@ -658,7 +658,10 @@ def _error_payload(code: str, message: str, *, error_class: str = "usage_error")
 
 
 def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]:
-    bounded_audit = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))}"
+    bounded_audit = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
+    comparable_metrics = (
+        f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
+    )
     return {
         "kind": "aippocampus_storage_gc_summary",
         "schema_version": SCHEMA_VERSION,
@@ -672,6 +675,8 @@ def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]
         "candidate_count_total": None,
         "sample_candidate_count": 0,
         "candidate_detail_deferred": True,
+        "metrics_status": "not_computed_in_summary_mode",
+        "pressure_interpretation": "unknown_until_bounded_audit",
         "metrics": {
             "reclaimable_rebuildable_bytes": None,
             "reclaimable_review_artifact_bytes": None,
@@ -687,12 +692,13 @@ def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]
             "full_candidate_preconditions_deferred": True,
         },
         "safe_next_action": {
-            "decision": "run bounded audit sample when cleanup looks worth investigating",
+            "decision": "run bounded audit sample to compute comparable reclaimable metrics",
             "command": bounded_audit,
         },
+        "comparable_metrics_command": comparable_metrics,
         "full_audit_available": True,
         "full_audit_flag": "--json --full",
-        "operator_audit_command": "aippocampus storage gc --dry-run --json --full",
+        "operator_audit_command": "aippocampus storage gc --dry-run --json --full --cwd .",
         "next_steps": [
             "Run the bounded audit sample only when a foreground user asks for cleanup detail.",
             "Use apply only for rebuildable cache candidates after deterministic checks pass.",

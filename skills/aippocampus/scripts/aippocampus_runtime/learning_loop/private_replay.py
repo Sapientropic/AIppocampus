@@ -30,9 +30,16 @@ from aippocampus_runtime.learning_loop.private_export import (
     load_behavior_event_rows,
     validate_private_replay_export,
 )
+from aippocampus_runtime.learning_loop.semantic_learning import (
+    summarize_semantic_learning_guidance_outcomes,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_learning_loop_private_replay_report"
+GUIDANCE_OUTCOME_KINDS = {
+    "aippocampus_learning_guidance_outcome",
+    "semantic_learning_guidance_outcome",
+}
 
 
 def private_replay_fixture_events() -> list[dict[str, Any]]:
@@ -161,6 +168,22 @@ def _raw_leak_count(report: Mapping[str, Any]) -> int:
     return sum(1 for sentinel in sentinels if sentinel in encoded)
 
 
+def _explicit_guidance_outcome_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        dict(row)
+        for row in rows
+        if isinstance(row, Mapping) and row.get("kind") in GUIDANCE_OUTCOME_KINDS
+    ]
+
+
+def _behavior_event_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        dict(row)
+        for row in rows
+        if isinstance(row, Mapping) and row.get("kind") not in GUIDANCE_OUTCOME_KINDS
+    ]
+
+
 def build_private_history_replay_report(
     events: Iterable[Mapping[str, Any]] | None = None,
     *,
@@ -169,7 +192,8 @@ def build_private_history_replay_report(
 ) -> dict[str, Any]:
     fixture_input = events is None
     rows = [dict(row) for row in (events if events is not None else private_replay_fixture_events())]
-    signals = adapt_behavior_events_to_review_signals(rows)
+    behavior_rows = _behavior_event_rows(rows)
+    signals = adapt_behavior_events_to_review_signals(behavior_rows)
     duplicated_signals = [*signals, *signals]
     recurring = detect_recurring_failure_findings(duplicated_signals)
     workflow = detect_workflow_order_findings(signals)
@@ -177,20 +201,22 @@ def build_private_history_replay_report(
         workflow,
         query_terms=["test", "pytest", "preflight", "context", "reopen"],
     )
+    explicit_outcomes = _explicit_guidance_outcome_rows(rows)
     ledger_rows = ledger_rows_from_guidance_outcomes(
         guidance,
-        [
-            {
-                "lesson_id": row.get("guidance_id"),
-                "outcome": "prevented_repeat",
-                "surface": "private_replay",
-                "source_refs": row.get("source_refs") or [],
-            }
-            for row in guidance
-        ],
+        explicit_outcomes,
         surface="private_replay",
     )
     ledger_report = summarize_effectiveness_ledger(ledger_rows)
+    semantic_outcome_report = summarize_semantic_learning_guidance_outcomes(
+        guidance,
+        [
+            row
+            for row in explicit_outcomes
+            if row.get("kind") == "semantic_learning_guidance_outcome"
+        ],
+    )
+    semantic_outcome_metrics = semantic_outcome_report["metrics"]
     expected_targets = _expected_repeat_targets(duplicated_signals)
     detected_targets = {
         (str(row.get("target_fingerprint") or ""), str(row.get("failure_family") or ""))
@@ -199,7 +225,7 @@ def build_private_history_replay_report(
     context_workflows = [
         row for row in workflow if row.get("workflow_family") == "context_reopen_before_retry"
     ]
-    expected_red_suppressed = sum(1 for row in rows if row.get("expected_local_red"))
+    expected_red_suppressed = sum(1 for row in behavior_rows if row.get("expected_local_red"))
     one_off_suppressed = sum(
         1
         for row in signals
@@ -240,7 +266,7 @@ def build_private_history_replay_report(
             ),
         },
         "sanitized_export_summary": dict(sanitized_export_summary or validate_private_replay_export(rows)),
-        "input_event_count": len(rows),
+        "input_event_count": len(behavior_rows),
         "private_history_role": "local_private_dogfood_harness",
         "private_dogfood_comparable_metrics": comparable,
         "metrics": {
@@ -251,9 +277,28 @@ def build_private_history_replay_report(
             "expected_tdd_red_suppressed_count": expected_red_suppressed,
             "guidance_count": len(guidance),
             "effectiveness_ledger_row_count": len(ledger_rows),
+            "observed_guidance_outcome_count": semantic_outcome_metrics[
+                "observed_outcome_row_count"
+            ],
+            "outcome_unobserved_count": semantic_outcome_metrics[
+                "outcome_unobserved_count"
+            ],
+            "repeat_semantic_failure_after_surface_count": semantic_outcome_metrics[
+                "repeat_semantic_failure_after_surface_count"
+            ],
+            "false_positive_nudge_count": semantic_outcome_metrics[
+                "false_positive_nudge_count"
+            ],
+            "source_reopen_after_semantic_guidance_rate": semantic_outcome_metrics[
+                "source_reopen_after_semantic_guidance_rate"
+            ],
+            "repeat_semantic_failure_prevented_or_redirected_count": semantic_outcome_metrics[
+                "repeat_semantic_failure_prevented_or_redirected_count"
+            ],
         },
         "effectiveness_ledger": ledger_report,
         "effectiveness_ledger_rows": ledger_rows,
+        "semantic_learning_outcome_report": semantic_outcome_report,
         "guidance_authority": {
             "all_navigation_only": all(row.get("navigation_only") for row in guidance),
             "all_source_reopen_required": all(

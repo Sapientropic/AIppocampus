@@ -20,23 +20,14 @@ with honest continuity instead of pretending there was never a break.
 
 > Source is the ground. Summaries are weather.
 
-For the felt product shape, start with
-[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md): real
-second-user examples where a new/projectless thread, a multilingual correction,
-an ambiguous automation cue, and a multi-day fuzzy self-reference became
-recoverable through source-backed continuity. The page shows the useful moments
-first, then states exactly what they do not prove.
+First useful receipt from a source checkout:
 
-For the current proof map, use the
-[Can-Claim Ladder](docs/evidence/can-claim-ladder.md): it leads with exact
-positive claims that are already supported, then routes to benchmark evidence
-and material claim boundaries.
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
 
-For a compact origin and current-value trail, use the
-[Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md):
-it separates current claims, deterministic fixtures, field reports,
-private/local aggregate evidence, and launch gates without weakening claim
-boundaries.
+That returns a public clean-source hit for `msg_public_001`: an old cue becomes
+a source-backed snippet, with a boundary and a next action.
 
 In ordinary use, AIppocampus should feel less like a control panel than a
 remembered doorway. It helps an agent ask: where did this come from, what did
@@ -101,6 +92,12 @@ aippocampus search "a distinctive old phrase"
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
 ```
+
+For the felt product shape after that first receipt, read
+[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md). For the current
+proof map, use the [Can-Claim Ladder](docs/evidence/can-claim-ladder.md). For a
+compact origin and current-value trail, use the
+[Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md).
 
 Only after that first source-backed receipt works, enable prompt/lifecycle hooks
 if this machine is trusted for ambient continuity:
