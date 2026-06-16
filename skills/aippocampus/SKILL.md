@@ -153,11 +153,12 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
 - Build or refresh the index only for explicit repair:
   `python3 -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
 - First-install or full-machine onboarding after explicit user consent:
-  `aippocampus onboard --provider codex --all --format json`.
+  run `aippocampus onboard --provider codex --status --json`, then follow its
+  explicit write recommendation after consent.
 - Claude Code transcript onboarding uses an explicit provider; preview first,
   then register only after consent:
-  `aippocampus onboard --provider claude-code --dry-run --format json`, then
-  `aippocampus onboard --provider claude-code --format json`.
+  `aippocampus onboard --provider claude-code --dry-run --json`, then
+  `aippocampus onboard --provider claude-code --json`.
 - Generic transcript import is preview-first:
   `aippocampus import conversation --format generic-jsonl --input "<path>" --dry-run --json`,
   then rerun without `--dry-run` only after consent.

@@ -148,12 +148,14 @@ the host is not Codex, or when the user wants a read-only check first:
 uvx aippocampus --help
 ```
 
-If local source is already registered, go straight to the first useful route:
+If local source is already registered, go straight to the first useful
+agent-mediated route. Exact search remains a good fallback when the user
+remembers wording:
 
 ```sh
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus search "a distinctive old phrase"
 ```
 
 If source is missing or the route is blocked, use the read-only local
@@ -172,12 +174,14 @@ Register local history only after user confirmation, and choose an explicit
 provider path:
 
 ```sh
-uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
-uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 These commands scan selected local agent transcript history or visible-message
@@ -188,9 +192,10 @@ without user consent. For the exact support boundary, use
 for Claude Code setup, use
 [`claude-code-mcp.md`](guides/setup/claude-code-mcp.md).
 
-For the first recall, try an exact phrase first. If the user only remembers a
-vague cue, search a project cue or a time cue and label the result as candidate
-navigation until a source-backed snippet appears. Add `--format json` only for
+For the first recall, use `agent recall`/`agent deepen` for vague decisions,
+handoffs, corrections, or project cues. Use exact search when the user
+remembers wording, and label vague routes as candidate navigation until a
+source-backed snippet or opened source appears. Add `--json` only for
 automation.
 
 ## Core Continuity Hooks
@@ -198,8 +203,8 @@ automation.
 Without prompt and lifecycle hooks, AIppocampus is still useful as manual,
 source-backed search. That is not the full ambient continuity experience.
 
-After the first source-backed recall works, offer Codex hook setup as a core
-trusted step, never as a silent install:
+After plugin verification, offer Codex hook/action-hint setup as a core trusted
+step, never as a silent install or as a generic operator detour:
 
 ```sh
 aippocampus update status

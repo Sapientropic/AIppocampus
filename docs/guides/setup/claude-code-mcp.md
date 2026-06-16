@@ -11,9 +11,9 @@ If AIppocampus source is already registered, start with one source-backed
 moment before host diagnostics:
 
 ```sh
-aippocampus search "a distinctive old phrase" --cwd "$PWD"
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
+aippocampus search "a distinctive old phrase" --cwd "$PWD"
 ```
 
 If Claude Code source is not registered yet, preview the local transcript
@@ -21,8 +21,8 @@ registration first, write only after explicit approval, then return to the
 search/recall path above:
 
 ```sh
-aippocampus onboard --provider claude-code --dry-run --format json
-aippocampus onboard --provider claude-code --format json
+aippocampus onboard --provider claude-code --dry-run --json
+aippocampus onboard --provider claude-code --json
 ```
 
 Use the MCP setup and smokes below when Claude Code itself needs to call
@@ -160,8 +160,8 @@ Provider states mean:
 Register Claude Code transcripts only with an explicit provider:
 
 ```sh
-aippocampus onboard --provider claude-code --dry-run --format json
-aippocampus onboard --provider claude-code --format json
+aippocampus onboard --provider claude-code --dry-run --json
+aippocampus onboard --provider claude-code --json
 ```
 
 `auto` remains conservative and defaults to Codex. It may report Claude Code as

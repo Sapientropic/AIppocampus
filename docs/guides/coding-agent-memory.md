@@ -127,9 +127,9 @@ uvx aippocampus --help
 If local source is already registered, make the demo a real recall route:
 
 ```sh
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus search "a distinctive old phrase"
 ```
 
 If source is missing or blocked, use the read-only status card:
@@ -147,17 +147,19 @@ After explicit user consent, choose one provider-specific write path and run the
 first real source-backed recall:
 
 ```sh
-uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
-uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
-Use an exact phrase when possible. If the user only remembers a project cue or
-time cue, treat the first result as candidate navigation until the CLI or MCP
-surface returns a source-backed snippet.
+Use exact search when the user remembers wording. If the user only remembers a
+project cue or time cue, treat the first result as candidate navigation until
+the CLI or MCP surface returns a source-backed snippet or opened source.
 
 ### Agent-Host Wiring Check
 

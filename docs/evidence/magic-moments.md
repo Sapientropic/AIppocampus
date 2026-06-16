@@ -151,18 +151,33 @@ Source:
 For the canonical first-recall flow, use
 [`docs/guides/first-recall-decision-card.md`](../guides/first-recall-decision-card.md).
 
-The current honest install probe uses the PyPI package:
+For Codex Desktop users who asked an agent to set up AIppocampus, start with
+the trusted local plugin path and then ask for one foreground continuity route:
+
+```sh
+aippocampus plugin install --codex --verify
+aippocampus update status
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+The no-clone public-safe probe remains useful when the user is evaluating the
+package without private history:
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus onboard --provider codex --status
+uvx aippocampus onboard --provider auto --status
 ```
 
-After explicit consent to register local history, the first useful proof is a
-source-backed search receipt:
+After explicit consent to register selected local history, ask for a
+source-backed continuity route. Exact search is the fallback/demo path when the
+user remembers wording:
 
 ```sh
-uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 

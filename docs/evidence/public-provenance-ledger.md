@@ -39,7 +39,7 @@ from today.
 | It keeps generated summaries and route hints below source reopen. | Source-discipline rows in [`current-claims.md`](current-claims.md), especially Track S, hard-negative, multimodal evidence-pool, and attention-router rows. | Not human-level semantic understanding or high-risk answer certification. |
 | It has public-safe benchmark fixtures and external adapter paths. | [`benchmark-evidence-map.md`](benchmark-evidence-map.md) and [`benchmarks/README.md`](benchmarks/README.md). | Adapter feasibility and contract fixtures are not official benchmark superiority. |
 | It has real product-shaped second-user evidence. | [`magic-moments.md`](magic-moments.md) and [`community-field-reports.md`](community-field-reports.md). | Field reports are not broad statistical proof until promoted. |
-| It has an opt-in agent-native recall/AIppo path. | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, and [`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md). | Explicit pull path only; not default hooks, every-turn recall, hosted API, public SDK stability, or source truth without deepen. |
+| It has an explicit foreground agent-native recall/AIppo path. | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, and [`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md). | Explicit pull path only; not default hooks, every-turn recall, hosted API, public SDK stability, or source truth without deepen. |
 | It has a claim-governance trail for both wins and expected-null results. | [`current-claims.md`](current-claims.md), [`benchmarks/design/benchmark-maturity-gates.md`](benchmarks/design/benchmark-maturity-gates.md), and [`can-claim-ladder.md`](can-claim-ladder.md). | Careful caveats should not be read as "nothing works yet." |
 
 ## Concept And Architecture Provenance
@@ -61,13 +61,13 @@ source of truth.
 | 2026-06-10 | Ficus / familiarity and bounded summaries as route material | [#1115](https://github.com/Sapientropic/AIppocampus/issues/1115), [#1116](https://github.com/Sapientropic/AIppocampus/issues/1116), and [`source-backed-attention-router.md`](../architecture/recall/source-backed-attention-router.md) | Familiarity and summaries can orient attention without becoming facts. |
 | 2026-06-10 | Agent-native recall/deepen/explain facade | [#1129](https://github.com/Sapientropic/AIppocampus/issues/1129) and [`docs/architecture/recall/agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md) | Agents have a compact packet grammar with provenance behind deepen/explain. |
 | 2026-06-10 | AIppo working-contract package | [#1131](https://github.com/Sapientropic/AIppocampus/issues/1131), [`docs/guides/public-api.md`](../guides/public-api.md), and [`agent-continuity-loop.md`](benchmarks/reports/recall-navigation/agent-continuity-loop.md) | Low-risk workflow guidance can be used as working contract, not source fact. |
-| 2026-06-10 | Opt-in agent continuity CLI path | [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162), [`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md), and [`public-api.md`](../guides/public-api.md) | `aippocampus agent ...` wires compact recall, AIppo activation, deepen/explain, and low-authority feedback. |
+| 2026-06-10 | Explicit foreground agent continuity CLI path | [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162), [`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md), and [`public-api.md`](../guides/public-api.md) | `aippocampus agent ...` wires compact recall, AIppo activation, deepen/explain, and low-authority feedback. |
 | 2026-06-10 | Benchmark maturity and sample-size gates | [#1165](https://github.com/Sapientropic/AIppocampus/issues/1165) and [`benchmarks/design/benchmark-maturity-gates.md`](benchmarks/design/benchmark-maturity-gates.md) | Small deterministic fixtures can stay useful without being over-read as quality proof. |
 
 ## Reproducible First Path
 
-The first useful proof is a source-backed receipt. In a source checkout, use
-the bundled public example before any package/status tour:
+The first useful public demo receipt is source-backed. In a source checkout,
+the bundled public example works without private history:
 
 ```sh
 aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
@@ -79,26 +79,28 @@ The no-clone package path is read-only first:
 uvx aippocampus --help
 ```
 
-If local source is already registered, try one source-backed moment:
+If local source is already registered, try one foreground continuity route.
+Exact search remains the fallback when the user remembers wording:
 
 ```sh
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "a continuity-sensitive cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus search "a distinctive old phrase"
 ```
 
 If source is missing or blocked, use the read-only provider matrix:
 
 ```sh
-uvx aippocampus onboard --provider auto --status --format json
+uvx aippocampus onboard --provider auto --status --json
 ```
 
 After explicit consent to register selected local history:
 
 ```sh
-uvx aippocampus onboard --provider codex --all --format json
-uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
 uvx aippocampus agent recall "a continuity-sensitive cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 uvx aippocampus mcp status
 uvx aippocampus mcp list-tools --json
 ```
@@ -132,7 +134,7 @@ evidence correctly.
 
 | Gate | Status | Blocks |
 | --- | --- | --- |
-| [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) opt-in agent continuity path | Closed; current route is `aippocampus agent ...` runtime wiring plus public API docs | Claiming one practical foreground agent path beyond fixtures now cites the landed facade and its boundaries. |
+| [#1162](https://github.com/Sapientropic/AIppocampus/issues/1162) explicit foreground agent continuity path | Closed; current route is `aippocampus agent ...` runtime wiring plus public API docs | Claiming one practical foreground agent path beyond fixtures now cites the landed facade and its boundaries. |
 | [#1153](https://github.com/Sapientropic/AIppocampus/issues/1153) context-loss continuous-memory slice | Closed with `github_1153_context_loss_public_continuity_v1`; contract gate passes, quality gate remains false | Stronger missing-context diagnostic behavior claim without superseding the old complete-spec expected-null row or claiming LoCoMo / private / live continuity quality. |
 | [#1154](https://github.com/Sapientropic/AIppocampus/issues/1154) E2E50 public behavior-pack pivot | Closed with public-safe behavior pack as primary path; private 7/20 retained count remains dogfood only | Shareable E2E50 behavior-pack contract without private-history case-count blocking. |
 | [#1157](https://github.com/Sapientropic/AIppocampus/issues/1157) LongMemEval-S answer/latency harness | Closed with fixed-reader harness; no promoted provider score yet | End-to-end answer/latency claim on top of verified retrieval. |

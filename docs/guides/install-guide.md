@@ -150,7 +150,8 @@ Register local history only after the user explicitly agrees, then choose the
 matching provider path:
 
 ```sh
-uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
@@ -263,8 +264,9 @@ skill copy, MCP config, plugin package, Codex hooks, and optional LLM provider
 key are current. Human output leads with profile-aware readiness:
 
 - `core_ready`: the small source-backed CLI/skill path is usable.
-- `magic_ready`: hooks plus the optional LLM route can power the more ambient
-  external-hippocampus feel.
+- `magic_ready`: current subsystem signal for hook/model plumbing. Do not read
+  this legacy field as "first useful magic moment is ready" unless source
+  search, foreground recall/deepen, and any chosen action hints are also ready.
 - `agent_callable_status`: whether package artifacts are merely current or the
   active host is known to expose AIppocampus tools to the foreground agent.
 - optional/plugin and operator surfaces stay visible without making the default
@@ -548,9 +550,9 @@ ready.
 
 ## First Onboarding
 
-If source is already registered, start with search or `agent recall` rather than
-onboarding. Preview provider readiness before writing only when the first recall
-path is blocked:
+If source is already registered, start with `agent recall`/`agent deepen`, or
+exact search when the user remembers wording, rather than onboarding. Preview
+provider readiness before writing only when the first recall path is blocked:
 
 ```sh
 aippocampus onboard --provider auto --status --cwd "$PWD"
@@ -560,16 +562,18 @@ Then register existing local transcript source and build clean-source indexes
 only after user consent, with an explicit provider:
 
 ```sh
-aippocampus onboard --provider codex --all
-aippocampus onboard --provider claude-code --dry-run --format json
-aippocampus onboard --provider claude-code --format json
+aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
+aippocampus onboard --provider claude-code --dry-run --json
+aippocampus onboard --provider claude-code --json
 aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 aippocampus import conversation --format generic-jsonl --input <path>
-aippocampus search "a distinctive old phrase"
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 Use `--dry-run` before broad imports when you want a preview, and use
-`--format json` for agent/operator automation. Generated memory artifacts
+`--json` for agent/operator automation. Generated memory artifacts
 default to the configured AIppocampus registry
 (`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
 `$CODEX_HOME/aippocampus-registry`) rather than the active project repository.

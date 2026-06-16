@@ -78,14 +78,19 @@ public-safe summary. Use `--operator-json` only when you need the full
 marketplace/cache/host-probe detail.
 
 Then make the useful moment visible. From a source checkout, the bundled public
-example produces a source-backed receipt without touching private history:
+example produces a source-backed receipt without touching private history. In
+trusted Codex setups, prefer the agent-mediated recall/deepen route for vague
+old-context cues; use exact search as the public-safe demo or fallback:
 
 ```sh
 aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 With local source already registered, use the same receipt shape on a real old
-cue:
+cue. Exact phrase search is still useful, but it should not replace the core
+agent continuity path:
 
 ```sh
 aippocampus search "a distinctive old phrase"
@@ -99,15 +104,14 @@ proof map, use the [Can-Claim Ladder](docs/evidence/can-claim-ladder.md). For a
 compact origin and current-value trail, use the
 [Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md).
 
-Only after that first source-backed receipt works, enable prompt/lifecycle hooks
-if this machine is trusted for ambient continuity:
+If this machine is trusted for ambient continuity, make hook/action-hint setup
+the visible next setup choice after plugin verification. Hooks are never
+installed silently, and rollback stays explicit:
 
 ```sh
 aippocampus update status
 aippocampus update apply --surface hooks
 ```
-
-Rollback stays explicit:
 
 ```sh
 aippocampus plugin uninstall --codex
@@ -141,11 +145,12 @@ The status command is read-only. It reports a provider-matrix readiness view;
 not silently register every provider.
 
 Only after you explicitly agree to register local history, choose the matching
-provider path and then search for one old source-backed conversation snippet:
+provider path and then ask for one old source-backed continuity route:
 
 ```sh
 # Codex: local history plus the most complete hook-capable host path.
-uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
 
 # Claude Code: local transcript onboarding; no AIppocampus Claude hooks claimed.
 uvx aippocampus onboard --provider claude-code --dry-run
@@ -156,9 +161,12 @@ uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-
 uvx aippocampus import conversation --format generic-jsonl --input <path>
 
 uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
-Manual search proves the source substrate is there. Codex is currently the
+Manual search demonstrates the source substrate; agent recall/deepen is the
+foreground continuity route. Codex is currently the
 host with AIppocampus prompt/lifecycle hooks: prompt hooks notice recall scents
 as a conversation starts, and lifecycle hooks refresh clean source and indexes
 after session events. Claude Code currently has local-history onboarding plus
@@ -240,7 +248,7 @@ uvx aippocampus agent deepen --request 1 --last-recall --json
 For a read-only local onboarding/status check:
 
 ```sh
-uvx aippocampus onboard --provider auto --status --format json
+uvx aippocampus onboard --provider auto --status --json
 ```
 
 This is a read-only provider matrix, not consent to ingest every detected
@@ -248,9 +256,10 @@ provider. Only after the user explicitly agrees to register local history, pick
 one provider-specific write path:
 
 ```sh
-uvx aippocampus onboard --provider codex --all --format json
-uvx aippocampus onboard --provider claude-code --dry-run --format json
-uvx aippocampus onboard --provider claude-code --format json
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
+uvx aippocampus onboard --provider claude-code --dry-run --json
+uvx aippocampus onboard --provider claude-code --json
 uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input <path>
 ```

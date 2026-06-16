@@ -49,7 +49,8 @@ this section remains the no-clone/API-stability path.
    source-backed snippet:
 
    ```sh
-   uvx aippocampus onboard --provider codex --all
+   uvx aippocampus onboard --provider codex --status --json
+   # Then follow the explicit write recommendation after consent.
    uvx aippocampus onboard --provider claude-code --dry-run
    uvx aippocampus onboard --provider claude-code
    uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
@@ -93,7 +94,7 @@ nearest explicit route without claiming global pause or destructive deletion.
 | --- | --- | --- | --- |
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
-| Opt-in agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, feedback as source truth, or destructive forgetting |
+| Explicit foreground agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, feedback as source truth, or destructive forgetting |
 | Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, host-private metadata as public identity, or internal registry modules as public CLI contracts |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
@@ -121,10 +122,11 @@ network API. Negative and anti-nag controls are part of the gesture: do not call
 AIppocampus every turn, and do not treat AIppo activation or bounded summaries
 as source evidence.
 
-`aippocampus agent recall --attention-router-mode auto` belongs to this opt-in
-agent continuity surface. It may sort already emitted reopenable routes only
-after the explicit-pull attention-router gate passes; it is not a default hook,
-every-prompt recall path, hosted API behavior, or source-truth upgrade.
+`aippocampus agent recall --attention-router-mode auto` belongs to this
+explicit foreground agent continuity surface. It may sort already emitted
+reopenable routes only after the explicit-pull attention-router gate passes; it
+is not a default hook, every-prompt recall path, hosted API behavior, or
+source-truth upgrade.
 Returned route labels, topics, and rank reasons are navigation previews only.
 
 The first executable AIppo working-contract fixture lives at
@@ -638,7 +640,7 @@ The sibling AIppo working-contract fixture uses the same boundary: foreground
 activation is working posture only, not evidence, and exact/public/disputed or
 high-risk claims still go through source reopen.
 
-The first packaged opt-in CLI path is:
+The first packaged foreground CLI path is:
 
 ```sh
 aippocampus agent recall "continue the old decision" --json
@@ -671,7 +673,7 @@ project/workflow working-contract activation. `agent feedback` records or
 returns calibration/routing evidence only; it cannot ripen a candidate-only,
 Dream-only, or stale clause without source support.
 
-`agent recall --attention-router` is an additive opt-in sorting path. It may
+`agent recall --attention-router` is an additive explicit sorting path. It may
 reorder already emitted `recall_context` routes through the deterministic
 attention router and reports `attention_router_navigation` diagnostics, but it
 does not create new source authority, change default hook behavior, or remove
