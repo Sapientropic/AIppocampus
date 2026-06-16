@@ -11,6 +11,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.source import provenance_codebook as codebook  # noqa: E402
+from aippocampus_runtime.source import provenance_codebook_economics as economics  # noqa: E402
 
 FIXTURE = (
     REPO_ROOT
@@ -165,6 +166,134 @@ class SparseProvenanceCodebookTests(unittest.TestCase):
         for sentinel in codebook.STRUCTURED_TRACE_SENTINELS:
             self.assertNotIn(sentinel, encoded)
 
+    def test_source_family_economics_report_splits_families_without_raw_text(self) -> None:
+        generated_rows = [
+            {
+                "source_id": "generated-report-1",
+                "text": "benchmark generated report shows workflow candidate route pressure",
+                "privacy_partition": "public",
+                "policy_version": "policy-v1",
+                "lifecycle_state": "current",
+                "source_family": "generated_report",
+            }
+        ]
+        mixed_rows = [
+            {
+                "source_id": "mixed-agent-1",
+                "text": "mixed long agent bundle with correction pathlet and environment workaround",
+                "privacy_partition": "public",
+                "policy_version": "policy-v1",
+                "lifecycle_state": "current",
+                "source_family": "mixed_agent_bundle",
+            }
+        ]
+
+        report = economics.source_family_economics_report(
+            [
+                {"family_id": "natural-clean-source", "rows": self.rows},
+                {
+                    "family_id": "structured-tool-traces",
+                    "rows": codebook.structured_trace_fixture_rows(),
+                },
+                {"family_id": "generated-reports", "rows": generated_rows},
+                {"family_id": "mixed-long-agent-bundle", "rows": mixed_rows},
+            ]
+        )
+        encoded = json.dumps(report, ensure_ascii=False)
+        by_family = {item["family_id"]: item for item in report["by_source_family"]}
+
+        self.assertTrue(report["read_only"])
+        self.assertEqual(report["family_count"], 4)
+        self.assertIn("natural-clean-source", by_family)
+        for row in by_family.values():
+            for field in (
+                "raw_bytes",
+                "encoded_store_bytes",
+                "build_time_ms",
+                "lookup_latency_ms",
+                "lookup_candidate_reduction",
+                "template_count",
+                "residual_bytes",
+                "rehydration_latency_ms",
+                "rehydration_hash_correct",
+                "ordinary_compression",
+                "supports",
+                "material_limits",
+                "evidence_candidate_usefulness",
+            ):
+                self.assertIn(field, row)
+        self.assertIn("gb_tb_readiness", report["cannot_claim"])
+        self.assertFalse(report["privacy_boundary"]["paths_included"])
+        self.assertNotIn("Route-chain calibration top-k2", encoded)
+        for sentinel in codebook.STRUCTURED_TRACE_SENTINELS:
+            self.assertNotIn(sentinel, encoded)
+
+    def test_source_family_economics_report_includes_codec_matrix_and_storage_gate(self) -> None:
+        report = economics.source_family_economics_report(
+            [
+                {"family_id": "natural-clean-source", "rows": self.rows},
+                {
+                    "family_id": "structured-tool-traces",
+                    "rows": codebook.structured_trace_fixture_rows(),
+                },
+            ]
+        )
+        encoded = json.dumps(report, ensure_ascii=False)
+        structured = {
+            item["family_id"]: item for item in report["by_source_family"]
+        }["structured-tool-traces"]
+        matrix = structured["codec_matrix"]
+
+        self.assertIn("baseline_content_addressed_dedupe", matrix)
+        self.assertIn("portable_deflate", matrix)
+        self.assertIn("zstd_no_dictionary", matrix)
+        self.assertIn("zstd_dictionary", matrix)
+        self.assertIn("template_residual", matrix)
+        self.assertIn(matrix["zstd_no_dictionary"]["status"], {"available", "skipped"})
+        self.assertIn(matrix["zstd_dictionary"]["status"], {"available", "skipped"})
+        self.assertFalse(matrix["zstd_dictionary"]["raw_dictionary_bytes_serialized"])
+        self.assertEqual(matrix["zstd_dictionary"]["training_privacy_partition"], "public")
+        self.assertEqual(matrix["template_residual"]["status"], "available")
+        self.assertIn("storage_primitive_decision_gate", report)
+        self.assertEqual(
+            report["storage_primitive_decision_gate"]["cdc"]["decision"],
+            "defer",
+        )
+        self.assertEqual(
+            report["storage_primitive_decision_gate"]["lmdb"]["decision"],
+            "defer",
+        )
+        self.assertIn("reopen_thresholds", report["storage_primitive_decision_gate"]["cdc"])
+        for sentinel in codebook.STRUCTURED_TRACE_SENTINELS:
+            self.assertNotIn(sentinel, encoded)
+
+    def test_compression_artifact_contract_blocks_cross_partition_reuse(self) -> None:
+        contract = codebook.compression_artifact_contract_report()
+        fields = set(contract["required_metadata_fields"])
+
+        self.assertTrue(set(codebook.COMPRESSION_FINGERPRINT_FIELDS).issubset(fields))
+        self.assertIn("dictionary_privacy_partition", fields)
+        self.assertIn("source_family", fields)
+        self.assertIn("public_projection_allowlist", contract)
+        self.assertNotIn("raw_dictionary_bytes", contract["public_projection_allowlist"])
+
+        trace = codebook.structured_trace_template_residual_report()
+        current = trace["public_projection"]["residuals"][0]
+        payload = current["source_fingerprint_payload"]
+        self.assertIn("dictionary_privacy_partition", payload)
+        rejected = codebook.verify_source_fingerprint_reuse(
+            {
+                "source_fingerprint_payload": {
+                    **payload,
+                    "dictionary_privacy_partition": "private-local",
+                }
+            },
+            current,
+        )
+
+        self.assertEqual(rejected["decision"], "reject_cached_reuse")
+        self.assertIn("dictionary_privacy_partition_mismatch", rejected["reason_codes"])
+
     def test_source_fingerprint_reuse_verifier_rejects_stale_or_policy_mismatch(self) -> None:
         store = codebook.build_source_object_store(self.rows)
         current = next(
@@ -197,6 +326,51 @@ class SparseProvenanceCodebookTests(unittest.TestCase):
         self.assertIn("privacy_or_lifecycle_blocked", blocked["reason_codes"])
         self.assertEqual(blocked["red_line_counters"]["fingerprint_rejected_reuse"], 1)
 
+    def test_compression_aware_fingerprint_verifier_rejects_policy_mismatches(self) -> None:
+        trace = codebook.structured_trace_template_residual_report()
+        current = trace["public_projection"]["residuals"][0]
+        payload = current["source_fingerprint_payload"]
+        cases = {
+            "template_id": "template_id_mismatch",
+            "schema_version": "schema_version_mismatch",
+            "redaction_policy_version": "redaction_policy_version_mismatch",
+            "mask_policy_version": "mask_policy_version_mismatch",
+            "visibility_scope": "visibility_scope_mismatch",
+            "codec_id": "codec_id_mismatch",
+            "codec_version": "codec_version_mismatch",
+            "dictionary_id": "dictionary_id_mismatch",
+            "dictionary_training_scope": "dictionary_training_scope_mismatch",
+            "dictionary_privacy_partition": "dictionary_privacy_partition_mismatch",
+            "dictionary_redaction_policy_version": "dictionary_redaction_policy_version_mismatch",
+            "source_family": "source_family_mismatch",
+        }
+
+        self.assertTrue(
+            set(codebook.COMPRESSION_FINGERPRINT_FIELDS).issubset(set(payload))
+        )
+        for field, reason in cases.items():
+            with self.subTest(field=field):
+                cached = {"source_fingerprint_payload": {**payload, field: "old-value"}}
+                rejected = codebook.verify_source_fingerprint_reuse(cached, current)
+
+                self.assertEqual(rejected["decision"], "reject_cached_reuse")
+                self.assertIn(reason, rejected["reason_codes"])
+                self.assertEqual(rejected["external_model_calls"], 0)
+                self.assertEqual(
+                    rejected["red_line_counters"]["fingerprint_rejected_reuse"],
+                    1,
+                )
+
+        missing = codebook.verify_source_fingerprint_reuse(
+            {
+                "source_fingerprint_payload": {
+                    key: value for key, value in payload.items() if key != "residual_policy_id"
+                }
+            },
+            current,
+        )
+        self.assertIn("missing_residual_policy_id", missing["reason_codes"])
+
     def test_durable_working_conclusions_and_pathlets_degrade_from_source_state(self) -> None:
         store = codebook.build_source_object_store(self.rows)
         allowed_span = next(span for span in store["spans"] if span["status"] == "verified_present")
@@ -225,6 +399,8 @@ class SparseProvenanceCodebookTests(unittest.TestCase):
                     "pathlet_id": "pathlet-blocked-edge",
                     "conclusion_ids": ["dwc-blocked"],
                     "edge_kind": "supersession",
+                    "ordering_authority": "clean_source_turn_order",
+                    "ordered_source_refs": [{"turn_index": 1}, {"turn_index": 2}],
                 }
             ],
         )
@@ -251,8 +427,48 @@ class SparseProvenanceCodebookTests(unittest.TestCase):
         self.assertTrue(
             graph["pathlets_and_edges"][0]["crosses_privacy_or_lifecycle_boundary"]
         )
+        self.assertEqual(
+            graph["pathlets_and_edges"][0]["ordering_status"],
+            "source_backed_order",
+        )
         self.assertFalse(cycle["ok"])
         self.assertEqual(cycle["error"]["code"], "cyclic_durable_working_conclusion_graph")
+
+    def test_pathlets_with_ambiguous_or_model_ordering_degrade_to_cannot_verify(self) -> None:
+        store = codebook.build_source_object_store(self.rows)
+        allowed_span = next(span for span in store["spans"] if span["status"] == "verified_present")
+        graph = codebook.build_durable_object_graph(
+            store,
+            conclusions=[
+                {"conclusion_id": "dwc-current", "source_span_ids": [allowed_span["span_id"]]},
+            ],
+            pathlets=[
+                {
+                    "pathlet_id": "pathlet-model-order",
+                    "conclusion_ids": ["dwc-current"],
+                    "edge_kind": "correction",
+                    "ordering_authority": "model_generated",
+                    "ordered_source_refs": [{"turn_index": 1}, {"turn_index": 2}],
+                },
+                {
+                    "pathlet_id": "pathlet-wrong-order",
+                    "conclusion_ids": ["dwc-current"],
+                    "edge_kind": "supersession",
+                    "ordering_authority": "clean_source_turn_order",
+                    "ordered_source_refs": [{"turn_index": 3}, {"turn_index": 2}],
+                },
+            ],
+        )
+        by_id = {item["pathlet_id"]: item for item in graph["pathlets_and_edges"]}
+
+        self.assertEqual(by_id["pathlet-model-order"]["status"], "cannot_verify")
+        self.assertIn(
+            "ordering_authority_not_source_backed",
+            by_id["pathlet-model-order"]["reason_codes"],
+        )
+        self.assertEqual(by_id["pathlet-wrong-order"]["status"], "cannot_verify")
+        self.assertIn("ambiguous_or_wrong_order", by_id["pathlet-wrong-order"]["reason_codes"])
+        self.assertIn("route back to source", by_id["pathlet-wrong-order"]["public_projection_note"])
 
     def test_codebook_health_projection_emits_four_public_safe_statuses(self) -> None:
         store = codebook.build_source_object_store(self.rows)
@@ -312,17 +528,49 @@ class SparseProvenanceCodebookTests(unittest.TestCase):
         )
         self.assertTrue(all(value == 0 for value in report["canonical_red_lines"].values()))
         self.assertGreater(
-            report["negative_controls"]["if_privacy_or_lifecycle_masks_disabled"][
-                "privacy_bypass_count"
-            ],
+            report["negative_controls"]["if_privacy_lifecycle_masks_disabled"][
+                "canonical_red_lines"
+            ]["privacy_bypass_count"],
             0,
         )
         self.assertGreater(
             report["negative_controls"]["if_source_reopen_gate_disabled"][
-                "source_backed_claim_without_reopen"
-            ],
+                "canonical_red_lines"
+            ]["source_backed_claim_without_reopen"],
             0,
         )
+        self.assertGreater(
+            report["negative_controls"]["if_stale_current_filter_disabled"][
+                "canonical_red_lines"
+            ]["stale_as_current_count"],
+            0,
+        )
+        self.assertGreater(
+            report["negative_controls"]["if_template_residual_redaction_disabled"][
+                "canonical_red_lines"
+            ]["masked_source_resurrection_count"],
+            0,
+        )
+        self.assertGreater(
+            report["negative_controls"]["if_dictionary_trained_from_unredacted_samples"][
+                "subtype_diagnostics"
+            ]["dictionary_sensitive_training_sample_count"],
+            0,
+        )
+        self.assertGreater(
+            report["negative_controls"]["if_cross_privacy_partition_dictionary_reuse"][
+                "subtype_diagnostics"
+            ]["cross_partition_dictionary_reuse_count"],
+            0,
+        )
+        self.assertGreater(
+            report["negative_controls"]["if_public_projection_serializes_sensitive_artifacts"][
+                "canonical_red_lines"
+            ]["masked_source_resurrection_count"],
+            0,
+        )
+        for control in report["negative_controls"].values():
+            self.assertTrue(control["observed_failure"])
         self.assertIn("production_readiness", report["cannot_claim"])
 
 

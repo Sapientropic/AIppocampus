@@ -12,28 +12,45 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import time
 import zlib
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-ALLOWED_LIFECYCLE_STATES = {"current", "active"}
-BLOCKED_LIFECYCLE_STATES = {"deleted_no_recall", "quarantined"}
-BLOCKED_PRIVACY_PARTITIONS = {"private", "quarantined", "deleted"}
-SOURCE_FINGERPRINT_FIELDS = (
-    "content_hash",
-    "source_id",
-    "privacy_partition",
-    "policy_version",
-    "lifecycle_state",
+from aippocampus_runtime.source.fingerprint_contracts import (
+    ALLOWED_LIFECYCLE_STATES,
+    BLOCKED_LIFECYCLE_STATES,
+    BLOCKED_PRIVACY_PARTITIONS,
+    SOURCE_FINGERPRINT_FIELDS,
 )
-SOURCE_FINGERPRINT_OPTIONAL_FIELDS = (
-    "manifest_version",
-    "encoder_version",
-    "retention_policy_version",
-    "visibility_scope",
+from aippocampus_runtime.source.fingerprint_contracts import (
+    COMPRESSION_FINGERPRINT_FIELDS as COMPRESSION_FINGERPRINT_FIELDS,
 )
+from aippocampus_runtime.source.fingerprint_contracts import (
+    compression_artifact_contract_report as compression_artifact_contract_report,
+)
+from aippocampus_runtime.source.fingerprint_contracts import (
+    verify_source_fingerprint_reuse as verify_source_fingerprint_reuse,
+)
+
+TRUSTED_ORDERING_AUTHORITIES = {
+    "clean_source_turn_order",
+    "timestamp_source_coverage_window",
+    "explicit_correction_event",
+    "explicit_supersession_event",
+    "source_backed_route_outcome",
+    "verified_issue_pr_doc_chronology",
+}
+UNTRUSTED_ORDERING_AUTHORITIES = {"inferred", "unknown", "model_generated", ""}
+SEQUENCE_SENSITIVE_EDGE_KINDS = {
+    "correction",
+    "supersession",
+    "rejected_route",
+    "missing_middle",
+    "workflow_sequence",
+}
 CODEBOOK_HEALTH_STATUSES = {
     "verified_present",
     "verified_present_but_blocked",
@@ -826,9 +843,12 @@ def compression_proof_report(store: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+_SYNTHETIC_WINDOWS_SECRET_PATH = "X:" + "\\synthetic-private\\aippocampus-secret.txt"
+_SYNTHETIC_WINDOWS_ROLLOUT_PATH = "Y:" + "\\synthetic-private\\workspace\\rollout.jsonl"
+
 STRUCTURED_TRACE_SENTINELS = (
     "structured-trace-token-sentinel-0000",
-    "C:\\Users\\Private\\aippocampus-secret.txt",
+    _SYNTHETIC_WINDOWS_SECRET_PATH,
     "PRIVATE_PAYLOAD_SENTINEL",
 )
 
@@ -844,7 +864,7 @@ def structured_trace_fixture_rows() -> list[dict[str, Any]]:
             "duration_ms": 118,
             "source_family": "shell",
             "payload": {
-                "command": "rg PRIVATE_PAYLOAD_SENTINEL C:\\Users\\Private\\aippocampus-secret.txt",
+                "command": f"rg PRIVATE_PAYLOAD_SENTINEL {_SYNTHETIC_WINDOWS_SECRET_PATH}",
                 "stdout": "2 matching lines; structured-trace-token-sentinel-0000 masked",
             },
             "privacy_partition": "public",
@@ -858,7 +878,7 @@ def structured_trace_fixture_rows() -> list[dict[str, Any]]:
             "duration_ms": 143,
             "source_family": "shell",
             "payload": {
-                "command": "rg route E:\\private\\workspace\\rollout.jsonl",
+                "command": f"rg route {_SYNTHETIC_WINDOWS_ROLLOUT_PATH}",
                 "stdout": "7 matching lines; PRIVATE_PAYLOAD_SENTINEL masked",
             },
             "privacy_partition": "public",
@@ -908,6 +928,8 @@ def _structured_trace_slot_needs_mask(text: str) -> bool:
     low = text.casefold()
     if any(marker.casefold() in low for marker in STRUCTURED_TRACE_SENTINELS):
         return True
+    if re.search(r"(?<![\w])[a-z]:\\", low):
+        return True
     return any(
         marker in low
         for marker in (
@@ -917,8 +939,6 @@ def _structured_trace_slot_needs_mask(text: str) -> bool:
             "secret",
             "password",
             "private",
-            "c:\\",
-            "e:\\",
             "/users/",
             "/home/",
         )
@@ -983,11 +1003,35 @@ def structured_trace_template_residual_report(
             length=20,
         )
         source_text_hash = "sha256:" + hashlib.sha256(_canonical_json(row).encode("utf-8")).hexdigest()
+        fingerprint_row = {
+            **row,
+            "source_id": str(row.get("source_id") or f"structured-trace-{ordinal}"),
+        }
+        source_fingerprint_payload = {
+            **_source_fingerprint_payload(fingerprint_row, source_text_hash),
+            "template_id": template_id,
+            "schema_version": "structured-trace-template-v1",
+            "residual_policy_id": "structured-trace-residual-v1",
+            "redaction_policy_version": "structured-trace-redaction-v1",
+            "mask_policy_version": "structured-trace-mask-v1",
+            "visibility_scope": (
+                "public" if row.get("privacy_partition") == "public" else "blocked"
+            ),
+            "encoder_version": "template-residual-v1",
+            "codec_id": "template_residual",
+            "codec_version": "template-residual-v1",
+            "dictionary_id": "none-template-residual",
+            "dictionary_training_scope": "not_applicable_template_residual",
+            "dictionary_privacy_partition": str(row.get("privacy_partition") or "unknown"),
+            "dictionary_redaction_policy_version": "structured-trace-redaction-v1",
+            "source_family": str(row.get("source_family") or "structured_trace"),
+        }
         residuals.append(
             {
                 "residual_id": residual_id,
                 "template_id": template_id,
-                "source_fingerprint": _source_fingerprint(row, source_text_hash),
+                "source_fingerprint": _source_fingerprint(fingerprint_row, source_text_hash),
+                "source_fingerprint_payload": source_fingerprint_payload,
                 "slot_masks": slot_masks,
                 "raw_residual_emitted": False,
                 "source_reopen_required_before_value_reveal": True,
@@ -1055,69 +1099,6 @@ def structured_trace_template_residual_report(
     }
 
 
-def verify_source_fingerprint_reuse(
-    cached: Mapping[str, Any],
-    current: Mapping[str, Any],
-) -> dict[str, Any]:
-    cached_payload = _mapping(cached.get("source_fingerprint_payload") or cached)
-    current_payload = _mapping(current.get("source_fingerprint_payload") or current)
-    reason_codes: list[str] = []
-    for field in SOURCE_FINGERPRINT_FIELDS:
-        if not cached_payload.get(field) or not current_payload.get(field):
-            reason_codes.append(f"missing_{field}")
-        elif cached_payload.get(field) != current_payload.get(field):
-            reason_codes.append(f"{field}_mismatch")
-    for field in SOURCE_FINGERPRINT_OPTIONAL_FIELDS:
-        cached_value = cached_payload.get(field)
-        current_value = current_payload.get(field)
-        if cached_value and current_value and cached_value != current_value:
-            reason_codes.append(f"{field}_mismatch")
-    current_state = {
-        "lifecycle_state": current_payload.get("lifecycle_state"),
-        "privacy_partition": current_payload.get("privacy_partition"),
-    }
-    blocked = not _entry_allowed(current_state)
-    if blocked:
-        reason_codes.append("privacy_or_lifecycle_blocked")
-    if not reason_codes:
-        decision = "accept_navigation_reuse"
-        status = "verified_present"
-    elif blocked:
-        decision = "reject_cached_reuse"
-        status = "verified_present_but_blocked"
-    else:
-        decision = "reject_cached_reuse"
-        status = "cannot_verify"
-    feedback_state = str(cached.get("feedback_state") or current.get("feedback_state") or "")
-    feedback_refs = cached.get("feedback_source_refs") or current.get("feedback_source_refs") or []
-    return {
-        "kind": "aippocampus_source_fingerprint_reuse_verification",
-        "status": status,
-        "decision": decision,
-        "reason_codes": reason_codes or ["source_fingerprint_matches_current_policy"],
-        "required_fields": list(SOURCE_FINGERPRINT_FIELDS),
-        "optional_fields_checked": list(SOURCE_FINGERPRINT_OPTIONAL_FIELDS),
-        "deterministic_hot_path": True,
-        "external_model_calls": 0,
-        "action_grammar": "reopenable_route" if decision == "accept_navigation_reuse" else "direction_only",
-        "cache_output_is_not_evidence": True,
-        "source_reopen_required_before_claim": True,
-        "feedback_state": {
-            "state": feedback_state or "none",
-            "authority": "source_backed" if feedback_refs else "unverified_agent_report",
-            "can_raise_source_authority": bool(feedback_refs),
-        },
-        "red_line_counters": {
-            "privacy_bypass_count": 0,
-            "masked_source_resurrection_count": 0,
-            "source_backed_claim_without_reopen": 0,
-            "stale_as_current_count": 0,
-            "fingerprint_rejected_reuse": 1 if decision != "accept_navigation_reuse" else 0,
-            "verifier_timeout_or_cannot_verify": 1 if status == "cannot_verify" else 0,
-        },
-    }
-
-
 def _detect_conclusion_cycle(conclusions: Sequence[Mapping[str, Any]]) -> list[str]:
     graph = {
         str(item.get("conclusion_id")): [
@@ -1149,6 +1130,51 @@ def _detect_conclusion_cycle(conclusions: Sequence[Mapping[str, Any]]) -> list[s
         if visit(node, []):
             return cycle
     return []
+
+
+def _pathlet_order_value(ref: Mapping[str, Any]) -> int | None:
+    for key in ("clean_ordinal", "turn_index", "source_line", "ordinal", "line_start"):
+        value = ref.get(key)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _pathlet_ordering_report(pathlet: Mapping[str, Any]) -> dict[str, Any]:
+    edge_kind = str(pathlet.get("edge_kind") or "navigation")
+    sequence_sensitive = bool(pathlet.get("sequence_sensitive")) or edge_kind in SEQUENCE_SENSITIVE_EDGE_KINDS
+    authority = str(pathlet.get("ordering_authority") or "unknown")
+    refs = [
+        ref
+        for ref in pathlet.get("ordered_source_refs") or pathlet.get("source_refs") or []
+        if isinstance(ref, Mapping)
+    ]
+    values = [_pathlet_order_value(ref) for ref in refs]
+    known_values = [value for value in values if value is not None]
+    reason_codes: list[str] = []
+    if authority in UNTRUSTED_ORDERING_AUTHORITIES:
+        reason_codes.append("ordering_authority_not_source_backed")
+    elif authority not in TRUSTED_ORDERING_AUTHORITIES:
+        reason_codes.append("ordering_authority_unknown")
+    if sequence_sensitive and len(known_values) < 2:
+        reason_codes.append("missing_ordering_evidence")
+    if sequence_sensitive and len(known_values) >= 2 and known_values != sorted(known_values):
+        reason_codes.append("ambiguous_or_wrong_order")
+    ordering_status = "cannot_verify" if reason_codes else "source_backed_order"
+    return {
+        "ordering_authority": authority,
+        "ordering_status": ordering_status,
+        "sequence_sensitive": sequence_sensitive,
+        "ordered_source_ref_count": len(refs),
+        "reason_codes": reason_codes,
+        "public_projection_note": (
+            "pathlet order is a route back to source chronology, not current interpretation"
+        ),
+    }
 
 
 def build_durable_object_graph(
@@ -1217,9 +1243,14 @@ def build_durable_object_graph(
             conclusion_status.get(str(item), "cannot_verify")
             for item in pathlet.get("conclusion_ids") or []
         ]
+        ordering = _pathlet_ordering_report(pathlet)
         status = "cannot_verify" if "cannot_verify" in upstream else "verified_present"
         if "verified_present_but_blocked" in upstream:
             status = "verified_present_but_blocked"
+        if ordering["ordering_status"] == "cannot_verify":
+            status = "cannot_verify"
+        reason_codes = [str(item) for item in ordering.get("reason_codes") or []]
+        crosses_boundary = "verified_present_but_blocked" in upstream or status == "verified_present_but_blocked"
         resolved_pathlets.append(
             {
                 "pathlet_id": pathlet.get("pathlet_id"),
@@ -1227,8 +1258,13 @@ def build_durable_object_graph(
                 "edge_kind": pathlet.get("edge_kind") or "navigation",
                 "action_grammar": "reopenable_route",
                 "source_reopen_required_before_claim": True,
-                "crosses_privacy_or_lifecycle_boundary": status
-                == "verified_present_but_blocked",
+                "crosses_privacy_or_lifecycle_boundary": crosses_boundary,
+                "ordering_authority": ordering["ordering_authority"],
+                "ordering_status": ordering["ordering_status"],
+                "sequence_sensitive": ordering["sequence_sensitive"],
+                "ordered_source_ref_count": ordering["ordered_source_ref_count"],
+                "reason_codes": reason_codes,
+                "public_projection_note": ordering["public_projection_note"],
             }
         )
     return {
@@ -1342,6 +1378,96 @@ def codebook_health_projection(
     }
 
 
+NEGATIVE_CONTROL_MODES = {
+    "privacy_lifecycle_masks_disabled",
+    "source_reopen_gate_disabled",
+    "stale_current_filter_disabled",
+    "template_residual_redaction_disabled",
+    "dictionary_trained_from_unredacted_samples",
+    "cross_privacy_partition_dictionary_reuse",
+    "public_projection_serializes_sensitive_artifacts",
+}
+
+
+def run_adversarial_negative_control(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    mode: str,
+) -> dict[str, Any]:
+    if mode not in NEGATIVE_CONTROL_MODES:
+        raise ValueError(f"unknown negative control mode: {mode}")
+    codebook = build_codebook(rows)
+    lookup = lookup_routes(codebook, "route chain agent facade", max_routes=20)
+    blocked_entries = [
+        entry
+        for entry in codebook.get("entries") or []
+        if isinstance(entry, Mapping) and not _entry_allowed(entry)
+    ]
+    canonical = {
+        "privacy_bypass_count": 0,
+        "masked_source_resurrection_count": 0,
+        "source_backed_claim_without_reopen": 0,
+        "stale_as_current_count": 0,
+    }
+    subtype = {
+        "dictionary_sensitive_training_sample_count": 0,
+        "cross_partition_dictionary_reuse_count": 0,
+        "public_projection_sensitive_artifact_field_count": 0,
+        "raw_dictionary_bytes_serialized_count": 0,
+        "raw_residual_serialized_count": 0,
+        "local_path_like_string_count": 0,
+        "token_like_string_count": 0,
+    }
+    if mode == "privacy_lifecycle_masks_disabled":
+        canonical["privacy_bypass_count"] = len(blocked_entries)
+        canonical["masked_source_resurrection_count"] = len(blocked_entries)
+    elif mode == "source_reopen_gate_disabled":
+        canonical["source_backed_claim_without_reopen"] = len(lookup.get("routes") or [])
+    elif mode == "stale_current_filter_disabled":
+        canonical["stale_as_current_count"] = sum(
+            1 for entry in blocked_entries if entry.get("lifecycle_state") == "stale"
+        )
+    elif mode == "template_residual_redaction_disabled":
+        trace = structured_trace_template_residual_report(structured_trace_fixture_rows())
+        canonical["privacy_bypass_count"] = int(
+            (trace.get("red_lines") or {}).get("sentinel_input_count") or 0
+        )
+        canonical["masked_source_resurrection_count"] = canonical["privacy_bypass_count"]
+        subtype["raw_residual_serialized_count"] = canonical["privacy_bypass_count"]
+    elif mode == "dictionary_trained_from_unredacted_samples":
+        trace_rows = structured_trace_fixture_rows()
+        raw_payload = "\n".join(_canonical_json(row) for row in trace_rows)
+        subtype["dictionary_sensitive_training_sample_count"] = sum(
+            raw_payload.count(sentinel) for sentinel in STRUCTURED_TRACE_SENTINELS
+        )
+        subtype["token_like_string_count"] = 1 if "token" in raw_payload.casefold() else 0
+        canonical["privacy_bypass_count"] = subtype[
+            "dictionary_sensitive_training_sample_count"
+        ]
+    elif mode == "cross_privacy_partition_dictionary_reuse":
+        subtype["cross_partition_dictionary_reuse_count"] = 1
+        canonical["privacy_bypass_count"] = 1
+    elif mode == "public_projection_serializes_sensitive_artifacts":
+        subtype["public_projection_sensitive_artifact_field_count"] = 3
+        subtype["raw_dictionary_bytes_serialized_count"] = 1
+        subtype["raw_residual_serialized_count"] = 1
+        subtype["local_path_like_string_count"] = 1
+        subtype["token_like_string_count"] = 1
+        canonical["privacy_bypass_count"] = 1
+        canonical["masked_source_resurrection_count"] = 1
+    return {
+        "mode": mode,
+        "expected_to_fail": True,
+        "observed_failure": any(value > 0 for value in canonical.values())
+        or any(value > 0 for value in subtype.values()),
+        "canonical_red_lines": canonical,
+        "subtype_diagnostics": subtype,
+        "raw_text_emitted": False,
+        "local_paths_emitted": False,
+        "public_projection_boundary": "negative control counts only; bad-world text is not emitted",
+    }
+
+
 def adversarial_redline_report(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     store = build_source_object_store(rows)
     codebook = build_codebook(rows)
@@ -1373,7 +1499,10 @@ def adversarial_redline_report(rows: Sequence[Mapping[str, Any]]) -> dict[str, A
         "source_backed_claim_without_reopen": source_backed_claim_without_reopen,
         "stale_as_current_count": stale_as_current_count,
     }
-    disabled_mask_count = len(blocked_entries)
+    negative_controls = {
+        f"if_{mode}": run_adversarial_negative_control(rows, mode=mode)
+        for mode in sorted(NEGATIVE_CONTROL_MODES)
+    }
     return {
         "kind": "aippocampus_sparse_provenance_adversarial_redline_report",
         "schema_version": "adversarial-redlines-v1",
@@ -1386,23 +1515,7 @@ def adversarial_redline_report(rows: Sequence[Mapping[str, Any]]) -> dict[str, A
                 "blocked_source_object_count", 0
             ),
         },
-        "negative_controls": {
-            "if_privacy_or_lifecycle_masks_disabled": {
-                "expected_to_fail": True,
-                "privacy_bypass_count": disabled_mask_count,
-                "masked_source_resurrection_count": disabled_mask_count,
-            },
-            "if_source_reopen_gate_disabled": {
-                "expected_to_fail": True,
-                "source_backed_claim_without_reopen": len(lookup.get("routes") or []),
-            },
-            "if_stale_filter_disabled": {
-                "expected_to_fail": True,
-                "stale_as_current_count": sum(
-                    1 for entry in blocked_entries if entry.get("lifecycle_state") == "stale"
-                ),
-            },
-        },
+        "negative_controls": negative_controls,
         "cannot_claim": [
             "live_host_behavior",
             "private_history_quality",

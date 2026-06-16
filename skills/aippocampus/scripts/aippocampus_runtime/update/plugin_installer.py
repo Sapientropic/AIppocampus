@@ -61,6 +61,7 @@ from aippocampus_runtime.update.plugin_public_summary import (
     public_install_summary,
     public_uninstall_summary,
 )
+from aippocampus_runtime.update.plugin_recovery import plugin_install_recovery
 from aippocampus_runtime.update.plugin_uninstall_preview import (
     uninstall_codex_plugin_preview,
 )
@@ -890,6 +891,12 @@ def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
         return
+    if result["kind"] == "aippocampus_plugin_install_recovery":
+        print("plugin install needs attention")
+        print(f"error: {result['error']['code']}")
+        print(f"next: {result['next_actions'][0]['command']}")
+        print("boundary: no private memory copied; local paths are hidden unless --operator-json is used.")
+        return
     if result["kind"] == "aippocampus_plugin_install_public_summary":
         print(f"plugin: {result['plugin']['action']} {result['plugin']['id']}")
         print(f"agent callable: {result['agent_callable_status']}")
@@ -955,18 +962,15 @@ def main(argv: list[str] | None = None) -> int:
             if args.json_output and not args.operator_json:
                 result = public_uninstall_summary(result)
     except Exception as exc:
-        error_message = f"{type(exc).__name__}: {exc}"
-        error = {
-            "ok": False,
-            "error": {
-                "code": "plugin_command_failed",
-                "message": error_message,
-            },
-        }
-        if getattr(args, "json_output", False):
-            print(json.dumps(error, ensure_ascii=False, indent=2))
-        else:
-            print(error_message)
+        error = plugin_install_recovery(
+            exc,
+            operator=bool(getattr(args, "operator_json", False)),
+        )
+        _emit_result(
+            error,
+            json_output=bool(getattr(args, "json_output", False))
+            or bool(getattr(args, "operator_json", False)),
+        )
         return 1
     _emit_result(
         result,

@@ -10,14 +10,22 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.learning_loop import (  # noqa: E402
     adapt_behavior_events_to_review_signals,
+    adjudicate_semantic_learning_hypotheses,
     build_learning_action_time_packet,
     build_learning_loop_dogfood_fixture_report,
+    build_semantic_learning_dogfood_fixture_report,
     build_semantic_learning_hypotheses,
+    build_semantic_learning_stage_report,
     detect_recurring_failure_findings,
     detect_workflow_order_findings,
     extract_learning_activations,
     extract_workflow_candidates,
+    intake_semantic_learning_hypotheses,
     project_action_time_guidance,
+    surface_semantic_learning_guidance,
+)
+from aippocampus_runtime.learning_loop.semantic_learning import (  # noqa: E402
+    summarize_semantic_learning_guidance_outcomes,
 )
 
 
@@ -478,6 +486,237 @@ class LearningLoopTests(unittest.TestCase):
         self.assertFalse(by_status["candidate"]["model_output_is_evidence"])
         self.assertEqual(by_status["review_only"]["candidate_kind"], "workflow_packaging_candidate")
         self.assertEqual(by_status["retired"]["candidate_kind"], "one_sided_route_candidate")
+
+    def test_semantic_learning_runtime_loop_promotes_only_adjudicated_source_backed_guidance(self) -> None:
+        hypotheses = [
+            {
+                "kind": "aippocampus_semantic_learning_hypothesis",
+                "hypothesis_id": "recurring-question",
+                "candidate_kind": "recurring_question_candidate",
+                "status": "candidate",
+                "source_refs": [source_ref("question-a"), source_ref("question-b")],
+                "source_thickness": "thick",
+                "freshness": "current",
+                "privacy_scope": "public",
+                "reason_codes": ["repeated_source_backed_occurrence"],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_hypothesis",
+                "hypothesis_id": "workflow-package",
+                "candidate_kind": "workflow_packaging_candidate",
+                "status": "candidate",
+                "source_refs": [source_ref("workflow-a"), source_ref("workflow-b")],
+                "source_thickness": "usable",
+                "freshness": "current",
+                "privacy_scope": "public",
+                "reason_codes": ["repeated_manual_workflow"],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_hypothesis",
+                "hypothesis_id": "blind-spot",
+                "candidate_kind": "blind_spot_candidate",
+                "status": "candidate",
+                "source_refs": [source_ref("blind-a"), source_ref("blind-b")],
+                "source_thickness": "usable",
+                "freshness": "current",
+                "privacy_scope": "public",
+                "reason_codes": ["one_sided_route_review_needed"],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_hypothesis",
+                "hypothesis_id": "self-report-only",
+                "candidate_kind": "cross_thread_resonance_candidate",
+                "status": "candidate",
+                "source_refs": [source_ref("self-report")],
+                "source_thickness": "thin",
+                "freshness": "current",
+                "privacy_scope": "public",
+                "evidence_basis": "self_report_only",
+            },
+            {
+                "kind": "aippocampus_semantic_learning_hypothesis",
+                "hypothesis_id": "stale-route",
+                "candidate_kind": "one_sided_route_candidate",
+                "status": "candidate",
+                "source_refs": [source_ref("stale-a"), source_ref("stale-b")],
+                "source_thickness": "usable",
+                "freshness": "stale",
+                "privacy_scope": "public",
+            },
+            {
+                "kind": "aippocampus_semantic_learning_hypothesis",
+                "hypothesis_id": "private-local",
+                "candidate_kind": "workflow_packaging_candidate",
+                "status": "candidate",
+                "source_refs": [source_ref("private-a"), source_ref("private-b")],
+                "source_thickness": "usable",
+                "freshness": "current",
+                "privacy_scope": "private_local",
+            },
+        ]
+
+        intake = intake_semantic_learning_hypotheses(hypotheses)
+        decisions = adjudicate_semantic_learning_hypotheses(intake["inbox"])
+        guidance = surface_semantic_learning_guidance(
+            decisions["promoted_guidance_candidates"],
+            query_terms=["recurring", "workflow", "question"],
+        )
+        raw_hypothesis_guidance = surface_semantic_learning_guidance(hypotheses)
+        stage = build_semantic_learning_stage_report(hypotheses)
+        encoded = json.dumps(stage, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(intake["stage_counts"]["candidate_count"], 6)
+        self.assertEqual(intake["stage_counts"]["review_queued_count"], 3)
+        self.assertEqual(intake["stage_counts"]["rejected_count"], 2)
+        self.assertEqual(intake["stage_counts"]["retired_count"], 1)
+        self.assertGreaterEqual(decisions["decision_counts"]["promote"], 2)
+        self.assertEqual(decisions["decision_counts"]["keep_backstage"], 1)
+        self.assertEqual(decisions["decision_counts"]["reject"], 2)
+        self.assertEqual(decisions["decision_counts"]["retire"], 1)
+        self.assertGreaterEqual(len(guidance["guidance"]), 1)
+        self.assertEqual(raw_hypothesis_guidance["guidance"], [])
+        first = guidance["guidance"][0]
+        self.assertTrue(first["navigation_only"])
+        self.assertTrue(first["source_reopen_required_before_claim"])
+        self.assertIn("semantic_learning_promoted_guidance", first["reason_codes"])
+        self.assertIn("action_grammar", first)
+        self.assertFalse(first["model_output_is_evidence"])
+        self.assertEqual(stage["metrics"]["raw_private_text_leak_count"], 0)
+        self.assertEqual(stage["stage"], "action_time_capable")
+        self.assertEqual(stage["metrics"]["repeat_semantic_failure_prevented_or_redirected_count"], 0)
+        self.assertEqual(stage["metrics"]["outcome_unobserved_count"], stage["metrics"]["action_time_guidance_count"])
+        self.assertGreaterEqual(stage["metrics"]["unproven_count"], 1)
+        self.assertNotIn("PUBLIC_FIXTURE_PAYLOAD_MARKER", encoded)
+
+    def test_semantic_learning_outcome_metrics_require_observed_rows(self) -> None:
+        guidance = [
+            {
+                "kind": "aippocampus_semantic_learning_action_guidance",
+                "guidance_id": "sem-positive",
+                "source_refs": [source_ref("positive-guidance")],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_action_guidance",
+                "guidance_id": "sem-ignored",
+                "source_refs": [source_ref("ignored-guidance")],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_action_guidance",
+                "guidance_id": "sem-dismissed",
+                "source_refs": [source_ref("dismissed-guidance")],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_action_guidance",
+                "guidance_id": "sem-negative",
+                "source_refs": [source_ref("negative-guidance")],
+            },
+            {
+                "kind": "aippocampus_semantic_learning_action_guidance",
+                "guidance_id": "sem-unobserved",
+                "source_refs": [source_ref("unobserved-guidance")],
+            },
+        ]
+        outcomes = [
+            {
+                "kind": "semantic_learning_guidance_outcome",
+                "guidance_id": "sem-positive",
+                "outcome": "prevented_repeat",
+                "observed_after_guidance": True,
+                "self_report_only": False,
+                "event_refs": [{"event_id": "event-positive"}],
+                "source_refs": [source_ref("positive-outcome")],
+            },
+            {
+                "kind": "semantic_learning_guidance_outcome",
+                "guidance_id": "sem-ignored",
+                "outcome": "ignored",
+                "observed_after_guidance": True,
+                "self_report_only": False,
+                "event_refs": [{"event_id": "event-ignored"}],
+            },
+            {
+                "kind": "semantic_learning_guidance_outcome",
+                "guidance_id": "sem-dismissed",
+                "outcome": "dismissed_noisy",
+                "observed_after_guidance": True,
+                "self_report_only": False,
+                "event_refs": [{"event_id": "event-dismissed"}],
+            },
+            {
+                "kind": "semantic_learning_guidance_outcome",
+                "guidance_id": "sem-negative",
+                "outcome": "repeated_failure_after_surface",
+                "observed_after_guidance": True,
+                "self_report_only": False,
+                "event_refs": [{"event_id": "event-negative"}],
+            },
+        ]
+
+        report = summarize_semantic_learning_guidance_outcomes(guidance, outcomes)
+        metrics = report["metrics"]
+        by_id = {row["guidance_id"]: row for row in report["outcomes"]}
+
+        self.assertEqual(metrics["surfaced_before_repeat_count"], 4)
+        self.assertEqual(metrics["repeat_semantic_failure_prevented_or_redirected_count"], 1)
+        self.assertEqual(metrics["repeat_semantic_failure_after_surface_count"], 1)
+        self.assertEqual(metrics["false_positive_nudge_count"], 2)
+        self.assertEqual(metrics["outcome_unobserved_count"], 1)
+        self.assertEqual(metrics["unproven_count"], 1)
+        self.assertEqual(metrics["useful_signal_count"], 1)
+        self.assertEqual(metrics["ineffective_count"], 3)
+        self.assertEqual(metrics["source_reopen_after_semantic_guidance_rate"], 0.25)
+        self.assertEqual(by_id["sem-unobserved"]["outcome"], "outcome_unobserved")
+        self.assertEqual(by_id["sem-unobserved"]["outcome_status"], "unproven")
+
+    def test_semantic_learning_self_report_outcome_stays_unproven(self) -> None:
+        report = summarize_semantic_learning_guidance_outcomes(
+            [{"guidance_id": "sem-self-report"}],
+            [
+                {
+                    "kind": "semantic_learning_guidance_outcome",
+                    "guidance_id": "sem-self-report",
+                    "outcome": "prevented_repeat",
+                    "observed_after_guidance": True,
+                    "self_report_only": True,
+                    "event_refs": [{"event_id": "event-self-report"}],
+                    "source_refs": [source_ref("self-report-outcome")],
+                }
+            ],
+        )
+
+        self.assertEqual(report["metrics"]["repeat_semantic_failure_prevented_or_redirected_count"], 0)
+        self.assertEqual(report["metrics"]["useful_signal_count"], 0)
+        self.assertEqual(report["metrics"]["unproven_count"], 1)
+
+    def test_semantic_learning_dogfood_report_separates_usefulness_from_candidate_safety(self) -> None:
+        report = build_semantic_learning_dogfood_fixture_report()
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"], report)
+        self.assertGreaterEqual(metrics["semantic_hypothesis_count"], 8)
+        self.assertGreaterEqual(metrics["review_queued_count"], 4)
+        self.assertGreaterEqual(metrics["promoted_guidance_candidate_count"], 3)
+        self.assertGreaterEqual(metrics["action_time_guidance_count"], 1)
+        self.assertEqual(metrics["surfaced_before_repeat_count"], 0)
+        self.assertEqual(metrics["repeat_semantic_failure_after_surface_count"], 0)
+        self.assertEqual(metrics["repeat_semantic_failure_prevented_or_redirected_count"], 0)
+        self.assertGreaterEqual(metrics["outcome_unobserved_count"], 1)
+        self.assertGreaterEqual(metrics["unproven_count"], 1)
+        self.assertGreaterEqual(metrics["stale_or_retired_suppression_count"], 1)
+        self.assertEqual(metrics["raw_private_text_leak_count"], 0)
+        self.assertEqual(report["deterministic_learning_metrics"]["separate_from_semantic"], True)
+        self.assertTrue(report["contract_fixture_smoke"]["fixture_metrics_are_not_real_history"])
+        families = {case["fixture_family"] for case in report["cases"]}
+        self.assertEqual(
+            families,
+            {
+                "recurring_question_family",
+                "blind_spot_one_sided_route",
+                "cross_thread_resonance",
+                "workflow_packaging",
+            },
+        )
+        self.assertIn("candidate_only_safety_is_not_sufficient", report["closeout_gate"])
 
     def test_dogfood_fixture_report_tracks_effectiveness_without_causality_claim(self) -> None:
         report = build_learning_loop_dogfood_fixture_report()

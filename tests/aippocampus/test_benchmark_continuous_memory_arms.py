@@ -417,10 +417,41 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             "full #378 continuous-memory superiority",
             readout["cannot_claim"],
         )
-        self.assertIn(
-            "public-quality continuous-memory advantage from this single diagnostic slice",
-            readout["cannot_claim"],
+
+    def test_context_loss_public_cohort_successor_readout_keeps_expected_null_boundary(self) -> None:
+        report = benchmark.build_context_loss_public_cohort_report()
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["kind"], "aippocampus_context_loss_public_cohort_report")
+        self.assertGreaterEqual(metrics["public_or_replay_case_count"], 6)
+        self.assertGreaterEqual(metrics["heldout_case_count"], 2)
+        self.assertGreater(metrics["deterministic_fixture_case_count"], 0)
+        self.assertEqual(metrics["private_aggregate_case_count"], 0)
+        self.assertEqual(metrics["live_host_evidence_count"], 0)
+        self.assertEqual(metrics["source_reopen_success_rate"], 1.0)
+        self.assertGreater(metrics["vague_continuation_success_rate"], 0.0)
+        self.assertGreater(metrics["manual_restatement_cost_delta"], 0)
+        self.assertEqual(metrics["wrong_route_drag_rate"], 0.0)
+        self.assertEqual(metrics["stale_revival_rate"], 0.0)
+        self.assertEqual(metrics["no_remember_precision"], 1.0)
+        self.assertEqual(metrics["unnecessary_foreground_hint_rate"], 0.0)
+        self.assertGreater(metrics["aippocampus_delta_vs_fresh_missing_context"], 0)
+        self.assertGreater(metrics["aippocampus_delta_vs_summary_only_host_native"], 0)
+        self.assertTrue(metrics["quality_gate_ok"])
+        self.assertFalse(metrics["public_quality_gate_ok"])
+        self.assertFalse(metrics["live_product_lift_claimed"])
+        self.assertEqual(metrics["raw_private_text_leak_count"], 0)
+
+        self.assertEqual(
+            report["arm_mapping"]["fresh_context_spec_loop_complete_spec"],
+            "boundary_reference_only",
         )
+        self.assertTrue(report["expected_null_boundary"]["historical_row_not_superseded"])
+        self.assertTrue(report["negative_controls"]["stale_wrong_memory_visible"])
+        self.assertTrue(report["quality_gate"]["requires_holdout_no_tuning_leak"])
+        self.assertFalse(report["privacy_boundary"]["raw_source_snippets_in_report"])
+        self.assertIn("broad_continuous_memory_superiority", report["cannot_claim"])
 
     def test_context_loss_slice_preserves_expected_null_and_separates_metrics(self) -> None:
         payload = benchmark.run_benchmark()
@@ -506,6 +537,10 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         )
         self.assertIn(
             "superseding continuous_memory.preregistered_repeat_profile_2026_06_08",
+            readout["cannot_claim"],
+        )
+        self.assertIn(
+            "public-quality continuous-memory advantage",
             readout["cannot_claim"],
         )
 

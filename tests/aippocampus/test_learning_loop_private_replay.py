@@ -9,6 +9,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.learning_loop import (  # noqa: E402
+    adapt_behavior_events_to_review_signals,
+    detect_workflow_order_findings,
+    project_action_time_guidance,
+)
 from aippocampus_runtime.learning_loop.private_export import (
     sanitize_events_for_private_replay,  # noqa: E402
 )
@@ -43,12 +48,38 @@ class LearningLoopPrivateReplayTests(unittest.TestCase):
         self.assertTrue(report["guidance_authority"]["all_navigation_only"])
         self.assertTrue(report["guidance_authority"]["all_source_reopen_required"])
         self.assertFalse(report["guidance_authority"]["can_support_factual_claim"])
-        self.assertGreaterEqual(metrics["effectiveness_ledger_row_count"], 1)
+        self.assertEqual(metrics["effectiveness_ledger_row_count"], 0)
         self.assertTrue(report["effectiveness_ledger"]["contract"]["effectiveness_is_navigation_priority_not_truth"])
         self.assertTrue(all(row["navigation_only"] for row in report["effectiveness_ledger_rows"]))
+        self.assertNotIn("prevented_repeat", report["effectiveness_ledger"]["outcome_counts"])
         self.assertNotIn("PRIVATE_HISTORY_PAYLOAD", encoded)
         self.assertNotIn("E:/private", encoded)
         self.assertNotIn("test_secret.py", encoded)
+
+    def test_private_replay_uses_only_explicit_guidance_outcomes_for_ledger(self) -> None:
+        events = private_replay_fixture_events()
+        guidance = project_action_time_guidance(
+            detect_workflow_order_findings(adapt_behavior_events_to_review_signals(events)),
+            query_terms=["test", "pytest", "preflight", "context", "reopen"],
+        )
+        outcome_row = {
+            "kind": "aippocampus_learning_guidance_outcome",
+            "guidance_id": guidance[0]["guidance_id"],
+            "outcome": "prevented_repeat",
+            "observed_after_guidance": True,
+            "self_report_only": False,
+            "event_refs": [{"event_id": "observed-positive"}],
+            "source_refs": [{"thread_key": "public-fixture", "message_id": "observed-positive"}],
+        }
+
+        report = build_private_history_replay_report([*events, outcome_row])
+
+        self.assertEqual(report["input_event_count"], len(events))
+        self.assertEqual(report["metrics"]["effectiveness_ledger_row_count"], 1)
+        self.assertEqual(
+            report["effectiveness_ledger"]["outcome_counts"],
+            {"prevented_repeat": 1},
+        )
 
     def test_private_export_sanitizes_raw_rollout_like_rows_for_replay(self) -> None:
         rows = sanitize_events_for_private_replay(

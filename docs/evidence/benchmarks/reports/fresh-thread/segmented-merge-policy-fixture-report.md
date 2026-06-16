@@ -1,6 +1,7 @@
 # Segmented Merge Policy Fixture Report
 
-Status: deterministic public-safe calibration fixture for #375 and #853.
+Status: deterministic public-safe calibration fixture for #375/#853, with an
+optional public-safe replay/source-evidence cohort for #1977.
 
 This report explains why the current `SEGMENT_MERGE_POLICY` defaults remain
 acceptable for the first segmented-search merge layer. It is a calibration
@@ -8,10 +9,17 @@ smoke, not product-quality proof. Real recall claims still belong to Track B
 source-evidence retrieval, private/public corpus runs, and dated readiness
 evidence.
 
+The optional replay cohort keeps a separate boundary: ranking hit-rate is
+measured across monolithic, full-fanout segmented, and budgeted-fanout segmented
+arms, while answer support after source reopen is counted separately. It uses
+stable public-safe source ids only; it must not emit raw/private text, local
+paths, or generated index payloads.
+
 ## Sources
 
 - Issues: <https://github.com/Sapientropic/AIppocampus/issues/375>,
-  <https://github.com/Sapientropic/AIppocampus/issues/853>
+  <https://github.com/Sapientropic/AIppocampus/issues/853>,
+  <https://github.com/Sapientropic/AIppocampus/issues/1977>
 - Runner: [`benchmarks/aippocampus/benchmark_segmented_merge_policy.py`](../../../../../benchmarks/aippocampus/benchmark_segmented_merge_policy.py)
 - Fixture: [`benchmark_corpus/segmented_merge_policy/fixture.json`](../../../../../benchmark_corpus/segmented_merge_policy/fixture.json)
 - Policy owner: [`skills/aippocampus/scripts/aippocampus_runtime/recall/scoring_policy.py`](../../../../../skills/aippocampus/scripts/aippocampus_runtime/recall/scoring_policy.py)
@@ -41,6 +49,12 @@ Command:
 python benchmarks\aippocampus\benchmark_segmented_merge_policy.py --json
 ```
 
+Replay/source-evidence cohort command:
+
+```powershell
+python benchmarks\aippocampus\benchmark_segmented_merge_policy.py --replay-cohort --json
+```
+
 Latest local result on 2026-06-07:
 
 | Metric | Value |
@@ -58,6 +72,30 @@ Latest local result on 2026-06-07:
 Decision: keep the current default weights and add stable source-identity
 dedupe ahead of the existing diversity policy. No policy values changed in this
 slice.
+
+## Replay/Source-Evidence Cohort
+
+The #1977 replay cohort is not the #376 physical-path soak and does not replace
+Track B source-evidence retrieval. It adds public-safe replay cases for vague
+cue, early/middle/late segment placement, cross-boundary pairing, duplicate
+recap suppression, stale/superseded suppression, final-answer vs user-cue
+mismatch, and a CJK/multilingual cue.
+
+It reports the common metric names:
+
+- `long_thread_replay_case_count`
+- `monolithic_target_hit_rate`
+- `full_fanout_target_hit_rate`
+- `budgeted_fanout_target_hit_rate`
+- `answer_support_after_source_reopen_rate`
+- miss/crowding/suppression counts
+- `query_latency_p50_ms` / `query_latency_p95_ms`
+- raw/private text and absolute-path leak counts
+
+The generated physical-path soak remains owned by
+[`tools/aippocampus/smoke/smoke_long_thread_segment_soak.py`](../../../../../tools/aippocampus/smoke/smoke_long_thread_segment_soak.py)
+and reports `generated_soak_case_count` through its own sanitized `metrics`
+projection.
 
 ## Sensitivity
 
@@ -78,6 +116,7 @@ This fixture does not prove:
 - broad long-thread recall quality;
 - natural user-query quality;
 - private-history segment merge quality;
+- generated physical soak quality from this runner;
 - source-evidence retrieval quality;
 - turn-aware segment-boundary quality;
 - SOTA or external-baseline superiority.

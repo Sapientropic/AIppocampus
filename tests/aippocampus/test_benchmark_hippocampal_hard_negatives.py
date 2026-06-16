@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -269,6 +270,101 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
         self.assertNotIn("audit packet", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)
+
+    def test_public_currentness_cohort_reports_supersession_metrics_separately(self) -> None:
+        payload = benchmark.run_benchmark(cohort="public-currentness")
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "public_currentness_cohort")
+        self.assertEqual(payload["config"]["cohort"], "public_currentness")
+        self.assertEqual(payload["dataset"]["source_family"], "public_vcs_issue_pr_fixture")
+        self.assertEqual(metrics["public_currentness_case_count"], 4)
+        self.assertEqual(metrics["public_dialogue_case_count"], 0)
+        self.assertEqual(metrics["synthetic_contract_case_count"], 0)
+        self.assertEqual(metrics["superseded_currentness_case_count"], 3)
+        self.assertEqual(metrics["current_source_selected_count"], 2)
+        self.assertEqual(metrics["stale_as_current_count"], 1)
+        self.assertEqual(metrics["wrong_source_evidence_count"], 1)
+        self.assertEqual(metrics["unsupported_as_fact_count"], 1)
+        self.assertEqual(metrics["confabulation_count"], 0)
+        self.assertEqual(metrics["honest_scent_or_skip_count"], 1)
+        self.assertEqual(metrics["source_reopen_before_evidence_rate"], 1.0)
+        self.assertTrue(metrics["public_quality_gate_ok"])
+        self.assertFalse(metrics["full_p1_matrix_claimed"])
+        self.assertEqual(
+            metrics["per_family_case_counts"],
+            {
+                "near_neighbor_lure": 1,
+                "said_but_unsupported": 1,
+                "superseded_currentness_trap": 2,
+                "surface_paraphrase_lure": 0,
+            },
+        )
+        self.assertEqual(metrics["unsupported_family_count"], 1)
+        self.assertEqual(
+            payload["unsupported_families"]["surface_paraphrase_lure"]["reason"],
+            "not_part_of_public_currentness_supersession_slice",
+        )
+        stale_case = next(
+            case
+            for case in payload["cases"]
+            if case["case_id"] == "public_currentness:issue-1024:stale_plan_as_current"
+        )
+        self.assertEqual(stale_case["outcome"], "stale_as_current")
+        self.assertEqual(stale_case["actual_decision"], "evidence")
+        self.assertFalse(payload["quality_gates"]["full_p1_matrix_claimed"])
+        self.assertTrue(payload["quality_gates"]["public_quality_gate_ok"])
+        self.assertIn("historical_terrain_not_current_evidence", serialized)
+        self.assertIn("public_currentness", serialized)
+        self.assertNotIn("E:\\", serialized)
+        self.assertNotIn("C:\\", serialized)
+
+    def test_all_cohort_keeps_public_currentness_and_locomo_boundaries_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_path = self._write_locomo_smoke_dataset(Path(tmp))
+
+            payload = benchmark.run_benchmark(
+                cohort="all",
+                public_dialogue_dataset_path=dataset_path,
+                public_dialogue_max_samples=1,
+                public_dialogue_max_cases=10,
+            )
+
+        self.assertIn("synthetic_cohort", payload)
+        self.assertIn("public_dialogue_cohort", payload)
+        self.assertIn("public_currentness_cohort", payload)
+        self.assertEqual(
+            payload["public_dialogue_cohort"]["unsupported_families"][
+                "superseded_currentness_trap"
+            ]["reason"],
+            "locomo_has_dialogue_order_but_no_reliable_supersession_labels",
+        )
+        self.assertEqual(
+            payload["public_currentness_cohort"]["metrics"]["public_currentness_case_count"],
+            4,
+        )
+        self.assertFalse(payload["public_currentness_cohort"]["metrics"]["full_p1_matrix_claimed"])
+
+    def test_public_currentness_cli_outputs_json(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(BENCHMARKS / "benchmark_hippocampal_hard_negatives.py"),
+                "--cohort",
+                "public-currentness",
+                "--json",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        payload = json.loads(result.stdout)
+
+        self.assertEqual(payload["config"]["cohort"], "public_currentness")
+        self.assertEqual(payload["metrics"]["public_currentness_case_count"], 4)
+        self.assertFalse(payload["metrics"]["full_p1_matrix_claimed"])
 
 
 if __name__ == "__main__":

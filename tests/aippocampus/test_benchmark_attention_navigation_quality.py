@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -96,6 +97,51 @@ class AttentionNavigationQualityBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["hard_red_lines"]["stale_as_current_count"], 0)
         self.assertEqual(payload["metrics"]["feature_hurt_case_count"], 0)
         self.assertIn("live_host_behavior_lift", payload["cannot_claim"])
+
+    def test_cli_profiles_expose_public_cohort_and_contract_smoke(self) -> None:
+        public_proc = subprocess.run(
+            [
+                sys.executable,
+                "benchmarks/aippocampus/benchmark_attention_navigation_quality.py",
+                "--profile",
+                "public-cohort",
+                "--json",
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        contract_proc = subprocess.run(
+            [
+                sys.executable,
+                "benchmarks/aippocampus/benchmark_attention_navigation_quality.py",
+                "--profile",
+                "contract-smoke",
+                "--json",
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(public_proc.returncode, 0, public_proc.stderr)
+        self.assertEqual(contract_proc.returncode, 0, contract_proc.stderr)
+        public_payload = json.loads(public_proc.stdout)
+        contract_payload = json.loads(contract_proc.stdout)
+
+        self.assertEqual(
+            public_payload["kind"],
+            "aippocampus_attention_navigation_public_cohort",
+        )
+        self.assertTrue(public_payload["public_quality_gate_ok"])
+        self.assertEqual(
+            contract_payload["kind"],
+            "aippocampus_attention_navigation_quality",
+        )
+        self.assertTrue(contract_payload["contract_gate_ok"])
+        self.assertFalse(contract_payload["public_quality_gate_ok"])
 
     def test_red_line_violation_fails_even_when_average_route_rate_is_high(self) -> None:
         cases = benchmark.fixture_navigation_quality_cases()

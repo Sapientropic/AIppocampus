@@ -63,6 +63,42 @@ class SegmentedMergePolicyBenchmarkTests(unittest.TestCase):
             0,
         )
 
+    def test_replay_cohort_separates_ranking_from_source_reopen_validation(self) -> None:
+        payload = benchmark.run_segmented_merge_policy_benchmark(include_replay_cohort=True)
+        metrics = payload["metrics"]
+
+        self.assertEqual(metrics["synthetic_policy_fixture_case_count"], 5)
+        self.assertEqual(metrics["generated_soak_case_count"], 0)
+        self.assertGreaterEqual(metrics["long_thread_replay_case_count"], 8)
+        self.assertEqual(metrics["monolithic_target_hit_rate"], 1.0)
+        self.assertEqual(metrics["full_fanout_target_hit_rate"], 1.0)
+        self.assertGreater(metrics["budgeted_fanout_target_hit_rate"], 0.0)
+        self.assertLess(
+            metrics["budgeted_fanout_target_hit_rate"],
+            metrics["full_fanout_target_hit_rate"],
+        )
+        self.assertGreaterEqual(metrics["segmented_vs_monolithic_delta"], 0.0)
+        self.assertEqual(metrics["answer_support_after_source_reopen_rate"], 1.0)
+        self.assertGreater(metrics["early_segment_miss_count"], 0)
+        self.assertGreater(metrics["middle_segment_miss_count"], 0)
+        self.assertEqual(metrics["cross_boundary_pairing_success_rate"], 1.0)
+        self.assertEqual(metrics["stale_superseded_false_promotion_count"], 0)
+        self.assertEqual(metrics["duplicate_recap_overpromotion_count"], 0)
+        self.assertGreater(metrics["wrong_segment_crowding_count"], 0)
+        self.assertGreaterEqual(metrics["query_latency_p50_ms"], 0.0)
+        self.assertGreaterEqual(metrics["query_latency_p95_ms"], metrics["query_latency_p50_ms"])
+        self.assertEqual(metrics["raw_private_text_leak_count"], 0)
+        self.assertEqual(metrics["absolute_path_leak_count"], 0)
+        self.assertIn("replay_source_evidence", payload["evidence_cohorts"])
+        self.assertEqual(
+            payload["evidence_cohorts"]["replay_source_evidence"]["validation"],
+            "source_open_support_checked_separately_from_ranking",
+        )
+
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("RAW_PRIVATE_TEXT_SHOULD_NOT_EMIT", dumped)
+        self.assertNotIn(str(ROOT), dumped)
+
     def test_fixture_contract_rejects_too_few_patterns(self) -> None:
         fixture = {
             "schema_version": 1,

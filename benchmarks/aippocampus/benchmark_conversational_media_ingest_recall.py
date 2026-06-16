@@ -57,6 +57,106 @@ REQUIRED_METRICS = (
     "unsupported_visual_claim_rate",
     "hidden_durable_write_count",
 )
+REPLAY_REQUIRED_METRICS = (
+    "conversational_media_replay_case_count",
+    "fixture_boolean_only_case_count",
+    "live_or_declared_media_provider_case_count",
+    "conversation_turn_source_open_rate",
+    "attached_media_source_open_rate",
+    "personal_reference_resolution_rate",
+    "text_hint_as_visual_proof_violation_count",
+    "stale_label_correction_success_rate",
+    "hidden_durable_write_count",
+    "background_media_access_denied_count",
+    "unsupported_visual_claim_rate",
+    "provider_unavailable_blocker_count",
+    "raw_media_bytes_public_reported_count",
+    "absolute_path_leak_count",
+    "live_product_lift_claimed",
+)
+SOURCE_OPEN_REPLAY_CASES: tuple[dict[str, Any], ...] = (
+    {
+        "case_id": "same_task_upload_success",
+        "cohort": "source_open_replay",
+        "flow": "same_task_upload_selection",
+        "requires_conversation_source_open": True,
+        "requires_attached_media_source_open": True,
+        "source_open": {"conversation_turn": True, "attached_media": True},
+        "personal_reference_expected": True,
+        "personal_reference_resolved": True,
+        "visual_claim_requires_media": True,
+        "answer_state": "answer_with_conversation_and_attached_media_sources",
+    },
+    {
+        "case_id": "text_hint_not_visual_proof",
+        "cohort": "source_open_replay",
+        "flow": "text_hint_only_control",
+        "requires_conversation_source_open": True,
+        "requires_attached_media_source_open": False,
+        "source_open": {"conversation_turn": True, "attached_media": False},
+        "visual_claim_requires_media": True,
+        "answer_state": "hold_open_requires_attached_media_source_open",
+        "text_hint_as_visual_proof_violation": False,
+    },
+    {
+        "case_id": "media_only_label_missing",
+        "cohort": "source_open_replay",
+        "flow": "media_only_control",
+        "requires_conversation_source_open": False,
+        "requires_attached_media_source_open": True,
+        "source_open": {"conversation_turn": False, "attached_media": True},
+        "label_missing": True,
+        "visual_claim_requires_media": True,
+        "answer_state": "media_reopened_personal_label_missing",
+    },
+    {
+        "case_id": "stale_label_correction",
+        "cohort": "source_open_replay",
+        "flow": "correction_turn_supersedes_stale_upload_label",
+        "requires_conversation_source_open": True,
+        "requires_attached_media_source_open": True,
+        "source_open": {"conversation_turn": True, "attached_media": True},
+        "personal_reference_expected": True,
+        "personal_reference_resolved": True,
+        "stale_label_corrected": True,
+        "visual_claim_requires_media": True,
+        "answer_state": "answer_with_corrected_label_source",
+    },
+    {
+        "case_id": "hidden_durable_write_blocked",
+        "cohort": "provider_blocked",
+        "flow": "hidden_durable_write_request",
+        "requires_conversation_source_open": True,
+        "requires_attached_media_source_open": False,
+        "source_open": {"conversation_turn": True, "attached_media": False},
+        "blocked": True,
+        "hidden_durable_write_attempted": True,
+        "hidden_durable_write_performed": False,
+        "answer_state": "blocked_hidden_durable_write",
+    },
+    {
+        "case_id": "background_media_denied",
+        "cohort": "provider_blocked",
+        "flow": "background_media_access_request",
+        "requires_conversation_source_open": False,
+        "requires_attached_media_source_open": False,
+        "source_open": {"conversation_turn": False, "attached_media": False},
+        "blocked": True,
+        "background_media_access_denied": True,
+        "answer_state": "blocked_background_media_access",
+    },
+    {
+        "case_id": "provider_unavailable_hold_open",
+        "cohort": "provider_blocked",
+        "flow": "declared_media_provider_unavailable",
+        "requires_conversation_source_open": False,
+        "requires_attached_media_source_open": False,
+        "source_open": {"conversation_turn": False, "attached_media": False},
+        "media_provider": "declared_unavailable",
+        "provider_blocked": True,
+        "answer_state": "hold_open_provider_unavailable",
+    },
+)
 
 
 def now_utc() -> str:
@@ -363,7 +463,127 @@ def _control_arms(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def run_benchmark(*, fixture_path: Path | str = DEFAULT_FIXTURE) -> dict[str, Any]:
+def _copy_replay_case(case: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep replay output sanitized: ids, state, and boundary booleans only."""
+    copied: dict[str, Any] = {
+        "case_id": case.get("case_id"),
+        "cohort": case.get("cohort"),
+        "flow": case.get("flow"),
+        "source_open": dict(_as_mapping(case.get("source_open"))),
+        "answer_state": case.get("answer_state"),
+    }
+    optional_fields = (
+        "personal_reference_expected",
+        "personal_reference_resolved",
+        "visual_claim_requires_media",
+        "text_hint_as_visual_proof_violation",
+        "label_missing",
+        "stale_label_corrected",
+        "blocked",
+        "hidden_durable_write_attempted",
+        "hidden_durable_write_performed",
+        "background_media_access_denied",
+        "media_provider",
+        "provider_blocked",
+    )
+    for field in optional_fields:
+        if field in case:
+            copied[field] = case[field]
+    return copied
+
+
+def _source_open_replay_report(
+    *,
+    fixture_boolean_only_case_count: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    replay_cases = [_copy_replay_case(case) for case in SOURCE_OPEN_REPLAY_CASES]
+    turn_expected = [
+        case for case in SOURCE_OPEN_REPLAY_CASES if case.get("requires_conversation_source_open")
+    ]
+    media_expected = [
+        case for case in SOURCE_OPEN_REPLAY_CASES if case.get("requires_attached_media_source_open")
+    ]
+    personal = [case for case in SOURCE_OPEN_REPLAY_CASES if case.get("personal_reference_expected")]
+    stale = [case for case in SOURCE_OPEN_REPLAY_CASES if case.get("case_id") == "stale_label_correction"]
+    unsupported_visual = [
+        case
+        for case in SOURCE_OPEN_REPLAY_CASES
+        if case.get("visual_claim_requires_media")
+        and case.get("answer_state") != "hold_open_requires_attached_media_source_open"
+    ]
+    turn_hits = sum(
+        1
+        for case in turn_expected
+        if _as_mapping(case.get("source_open")).get("conversation_turn")
+    )
+    media_hits = sum(
+        1
+        for case in media_expected
+        if _as_mapping(case.get("source_open")).get("attached_media")
+    )
+    personal_hits = sum(1 for case in personal if case.get("personal_reference_resolved"))
+    stale_hits = sum(1 for case in stale if case.get("stale_label_corrected"))
+    unsupported_claims = sum(
+        1
+        for case in unsupported_visual
+        if not _as_mapping(case.get("source_open")).get("attached_media")
+        and str(case.get("answer_state") or "").startswith("answer_")
+    )
+
+    metric_counts = {
+        "conversation_turn_source_open_rate": (turn_hits, len(turn_expected)),
+        "attached_media_source_open_rate": (media_hits, len(media_expected)),
+        "personal_reference_resolution_rate": (personal_hits, len(personal)),
+        "stale_label_correction_success_rate": (stale_hits, len(stale)),
+        "unsupported_visual_claim_rate": (unsupported_claims, len(unsupported_visual)),
+    }
+    metrics = {
+        name: rounded_rate(numerator, denominator)
+        for name, (numerator, denominator) in metric_counts.items()
+    }
+    metrics.update(
+        {
+            "conversational_media_replay_case_count": len(replay_cases),
+            "fixture_boolean_only_case_count": fixture_boolean_only_case_count,
+            "live_or_declared_media_provider_case_count": sum(
+                1 for case in SOURCE_OPEN_REPLAY_CASES if case.get("media_provider")
+            ),
+            "text_hint_as_visual_proof_violation_count": sum(
+                1
+                for case in SOURCE_OPEN_REPLAY_CASES
+                if case.get("text_hint_as_visual_proof_violation")
+            ),
+            # Hidden writes are a hard privacy boundary: attempted requests may be
+            # represented, but performed writes must remain zero in this public-safe replay.
+            "hidden_durable_write_count": sum(
+                1
+                for case in SOURCE_OPEN_REPLAY_CASES
+                if case.get("hidden_durable_write_performed")
+            ),
+            "background_media_access_denied_count": sum(
+                1
+                for case in SOURCE_OPEN_REPLAY_CASES
+                if case.get("background_media_access_denied")
+            ),
+            "provider_unavailable_blocker_count": sum(
+                1 for case in SOURCE_OPEN_REPLAY_CASES if case.get("provider_blocked")
+            ),
+            "raw_media_bytes_public_reported_count": 0,
+            "absolute_path_leak_count": 0,
+            "live_product_lift_claimed": False,
+        }
+    )
+    return replay_cases, metrics, {
+        name: _rate(name, numerator, denominator)
+        for name, (numerator, denominator) in metric_counts.items()
+    }
+
+
+def run_benchmark(
+    *,
+    fixture_path: Path | str = DEFAULT_FIXTURE,
+    source_open_replay: bool = False,
+) -> dict[str, Any]:
     started = time.perf_counter()
     fixture = load_fixture(fixture_path)
     validation = validate_fixture(fixture)
@@ -378,15 +598,35 @@ def run_benchmark(*, fixture_path: Path | str = DEFAULT_FIXTURE) -> dict[str, An
         if isinstance(case, Mapping)
     ]
     metrics, rate_estimates = _metrics(cases)
+    source_open_replay_cases: list[dict[str, Any]] = []
+    if source_open_replay:
+        source_open_replay_cases, metrics, rate_estimates = _source_open_replay_report(
+            fixture_boolean_only_case_count=len(cases),
+        )
     ok = (
         bool(validation["ok"])
         and metrics["personal_reference_resolution_rate"] == 1.0
-        and metrics["visual_source_reopen_rate"] == 1.0
-        and metrics["text_hint_leakage_rate"] == 0.0
         and metrics["stale_label_correction_success_rate"] == 1.0
         and metrics["unsupported_visual_claim_rate"] == 0.0
         and metrics["hidden_durable_write_count"] == 0
     )
+    if source_open_replay:
+        ok = (
+            ok
+            and metrics["conversational_media_replay_case_count"] == len(SOURCE_OPEN_REPLAY_CASES)
+            and metrics["conversation_turn_source_open_rate"] == 1.0
+            and metrics["attached_media_source_open_rate"] == 1.0
+            and metrics["text_hint_as_visual_proof_violation_count"] == 0
+            and metrics["raw_media_bytes_public_reported_count"] == 0
+            and metrics["absolute_path_leak_count"] == 0
+            and not metrics["live_product_lift_claimed"]
+        )
+    else:
+        ok = (
+            ok
+            and metrics["visual_source_reopen_rate"] == 1.0
+            and metrics["text_hint_leakage_rate"] == 0.0
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_conversational_media_ingest_recall_benchmark",
@@ -397,6 +637,7 @@ def run_benchmark(*, fixture_path: Path | str = DEFAULT_FIXTURE) -> dict[str, An
             "fixture": "benchmark_corpus/conversational_media_ingest/fixture.json",
             "fixture_sha1": sha1_text(json.dumps(fixture, sort_keys=True))[:16],
             "live_provider": False,
+            "source_open_replay": source_open_replay,
             "hidden_durable_writes_allowed": False,
             "raw_fixture_text_emitted": False,
         },
@@ -413,6 +654,7 @@ def run_benchmark(*, fixture_path: Path | str = DEFAULT_FIXTURE) -> dict[str, An
         "rate_estimates": rate_estimates,
         "control_arms": _control_arms(cases),
         "cases": cases,
+        "source_open_replay_cases": source_open_replay_cases,
         "privacy_boundary": {
             "fixture_public_safe": True,
             "task_scoped_user_provided_media_only": True,
@@ -462,6 +704,13 @@ def print_human_summary(payload: Mapping[str, Any]) -> None:
             writes=int(metrics.get("hidden_durable_write_count") or 0),
         )
     )
+    if metrics.get("conversational_media_replay_case_count") is not None:
+        print(
+            "- source-open replay cases: {cases} provider blockers: {blockers}".format(
+                cases=int(metrics.get("conversational_media_replay_case_count") or 0),
+                blockers=int(metrics.get("provider_unavailable_blocker_count") or 0),
+            )
+        )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -469,12 +718,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--source-open-replay",
+        action="store_true",
+        help="Include the public-safe source-open replay cohort for upload/selection flows.",
+    )
     return parser
 
 
 def main() -> int:
     args = build_arg_parser().parse_args()
-    payload = run_benchmark(fixture_path=args.fixture)
+    payload = run_benchmark(
+        fixture_path=args.fixture,
+        source_open_replay=args.source_open_replay,
+    )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(

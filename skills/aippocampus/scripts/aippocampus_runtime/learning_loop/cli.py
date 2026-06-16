@@ -6,6 +6,7 @@ import argparse
 import importlib.metadata
 import json
 import os
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,9 @@ from aippocampus_runtime.learning_loop.private_export import (
     load_behavior_event_rows,
 )
 from aippocampus_runtime.learning_loop.private_replay import build_private_history_replay_report
+from aippocampus_runtime.learning_loop.semantic_learning import (
+    build_semantic_learning_dogfood_fixture_report,
+)
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 KIND = "aippocampus_learning_frontdoor"
@@ -108,6 +112,9 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                 "command": current_history_command,
             }
         )
+    semantic_report = build_semantic_learning_dogfood_fixture_report()
+    semantic_metrics = dict(semantic_report.get("metrics") or {})
+    semantic_stage = dict((semantic_report.get("stage_report") or {}).get("metrics") or {})
     return _public_payload(
         {
             "kind": KIND,
@@ -120,9 +127,40 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                 "included_count": intake.get("included_count", 0),
                 "prepared_action_hint_count": prepared_count,
                 "effectiveness_ledger_row_count": ledger_intake.get("row_count", 0),
+                "semantic_loop_stage": (semantic_report.get("stage_report") or {}).get("stage"),
+                "semantic_action_time_guidance_count": semantic_metrics.get(
+                    "action_time_guidance_count", 0
+                ),
                 "cache_write_requested": False,
             },
             "lanes": lanes,
+            "semantic_loop": {
+                "stage": (semantic_report.get("stage_report") or {}).get("stage"),
+                "stage_counts": {
+                    "semantic_hypothesis_count": semantic_metrics.get(
+                        "semantic_hypothesis_count", 0
+                    ),
+                    "review_queued_count": semantic_metrics.get("review_queued_count", 0),
+                    "promoted_guidance_candidate_count": semantic_metrics.get(
+                        "promoted_guidance_candidate_count", 0
+                    ),
+                    "action_time_guidance_count": semantic_metrics.get(
+                        "action_time_guidance_count", 0
+                    ),
+                    "stale_private_thin_suppression_count": semantic_stage.get(
+                        "stale_private_thin_suppression_count", 0
+                    ),
+                    "raw_private_text_leak_count": semantic_metrics.get(
+                        "raw_private_text_leak_count", 0
+                    ),
+                },
+                "closeout_gate": semantic_report.get("closeout_gate") or [],
+                "deterministic_learning_metrics_separate": bool(
+                    (semantic_report.get("deterministic_learning_metrics") or {}).get(
+                        "separate_from_semantic"
+                    )
+                ),
+            },
             "agent_next_action": cache_command if prepared_count else current_history_command,
             "next_actions": next_actions,
             "cannot_claim": [
@@ -267,10 +305,27 @@ def _runtime_version() -> str:
         return "unknown"
 
 
+def _load_repro_package_input(args: argparse.Namespace) -> Any:
+    if args.input_json and args.stdin:
+        raise ValueError("choose only one of --input-json or --stdin")
+    if args.stdin:
+        return json.loads(sys.stdin.read())
+    return json.loads(args.input_json.read_text(encoding="utf-8"))
+
+
 def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
-    payload = json.loads(args.input_json.read_text(encoding="utf-8"))
+    payload = _load_repro_package_input(args)
     if not isinstance(payload, Mapping):
         raise ValueError("--input-json must contain a JSON object")
+    missing = [
+        field
+        for field in ("command", "expected", "actual")
+        if not str(payload.get(field) or "").strip()
+    ]
+    if missing:
+        raise ValueError("missing required repro fields: " + ", ".join(missing))
+    if not (payload.get("output") is not None or payload.get("stdout") is not None or payload.get("output_ref")):
+        raise ValueError("missing one of output, stdout, or output_ref")
     package = build_sanitized_repro_package(
         payload,
         version=args.version or _runtime_version(),
@@ -295,7 +350,58 @@ def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
-def repro_package_recovery_payload() -> dict[str, Any]:
+def repro_package_template_payload() -> dict[str, Any]:
+    schema = repro_package_input_schema()
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "repro_package_template",
+            "ok": True,
+            "template": schema["redacted_example"],
+            "expected_input_schema": schema,
+            "agent_next_action": (
+                "save template as repro-input.json, fill expected/actual, then run "
+                "aippocampus repro package --input-json repro-input.json --json"
+            ),
+            "next_actions": [
+                {
+                    "label": "package saved template",
+                    "command": (
+                        "aippocampus repro package --input-json repro-input.json --json"
+                    ),
+                    "mutates": False,
+                },
+                {
+                    "label": "pipe a saved JSON object",
+                    "command": "type repro-input.json | aippocampus repro package --stdin --json",
+                    "mutates": False,
+                },
+            ],
+            "privacy_boundary": _privacy_boundary(),
+        }
+    )
+
+
+def repro_package_input_schema() -> dict[str, Any]:
+    return {
+        "required": ["command", "expected", "actual"],
+        "one_of": ["output", "output_ref"],
+        "optional": ["surface", "source_refs", "privacy_boundary"],
+        "redacted_example": {
+            "surface": "agent_recall",
+            "command": "aippocampus agent recall \"old cue\" --json",
+            "output_ref": "saved-output://local/redacted-command-output.json",
+            "expected": "source-backed route appears with reopen boundary",
+            "actual": "route was missing or degraded",
+            "source_refs": [{"source_id": "public-fixture-source", "message_id": "msg_public_001"}],
+            "privacy_boundary": "no raw private stdout or prompt text",
+        },
+    }
+
+
+def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dict[str, Any]:
+    code = "learning_repro_input_malformed" if malformed_error else "learning_repro_input_required"
     return _public_payload(
         {
             "kind": KIND,
@@ -303,15 +409,49 @@ def repro_package_recovery_payload() -> dict[str, Any]:
             "mode": "repro_package_recovery",
             "ok": False,
             "error": {
-                "code": "learning_repro_input_required",
+                "code": code,
                 "message": (
-                    "repro-package needs a saved JSON object with command/output/expected/actual "
-                    "fields; no private stdout or prompt text was read."
+                    "repro-package needs a saved JSON object with command plus output or "
+                    "output_ref and expected/actual fields; no private stdout or prompt text "
+                    "was read."
                 ),
+                "malformed_error": malformed_error or "",
                 "next_command": (
-                    "aippocampus learning repro-package --input-json <command-output.json> --json"
+                    "aippocampus repro package --template --json"
                 ),
             },
+            "expected_input_schema": repro_package_input_schema(),
+            "recovery_paths": [
+                {
+                    "label": "from sanitized replay or guidance output",
+                    "steps": [
+                        "run `aippocampus learning guidance --json` or sanitized replay",
+                        "save the relevant command outcome as the expected input schema",
+                        "run `aippocampus repro package --input-json <command-output.json> --json`",
+                    ],
+                    "copyable_validate_command": (
+                        "python -m json.tool <command-output.json>"
+                    ),
+                    "copyable_package_command": (
+                        "aippocampus repro package --input-json <command-output.json> --json"
+                    ),
+                    "mutates": False,
+                },
+                {
+                    "label": "fresh command/output capture template",
+                    "steps": [
+                        "run the foreground command manually",
+                        "record only redacted output or an output_ref",
+                        "fill command/expected/actual/source_refs before packaging",
+                    ],
+                    "template": repro_package_input_schema()["redacted_example"],
+                    "copyable_template_command": "aippocampus repro package --template --json",
+                    "copyable_stdin_command": (
+                        "type command-output.json | aippocampus repro package --stdin --json"
+                    ),
+                    "mutates": False,
+                },
+            ],
             "next_actions": [
                 {
                     "label": "inspect learning guidance first",
@@ -407,6 +547,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create a public-safe dogfood repro package from a saved command/output JSON object.",
     )
     repro.add_argument("--input-json", type=Path)
+    repro.add_argument("--stdin", action="store_true")
+    repro.add_argument("--template", action="store_true")
     repro.add_argument("--version")
     repro.add_argument("--commit")
     repro.add_argument("--plugin-manifest-version")
@@ -426,13 +568,19 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
     elif args.command == "repro-package":
-        if not args.input_json:
+        if args.template:
+            payload = repro_package_template_payload()
+        elif not args.input_json and not args.stdin:
             payload = repro_package_recovery_payload()
         else:
             try:
                 payload = repro_package_payload(args)
             except ValueError as exc:
-                parser.error(str(exc))
+                payload = repro_package_recovery_payload(malformed_error=str(exc))
+            except (OSError, json.JSONDecodeError) as exc:
+                payload = repro_package_recovery_payload(
+                    malformed_error=f"{exc.__class__.__name__}: invalid or unreadable JSON"
+                )
     elif args.command == "guidance":
         payload = guidance_payload(cwd=_cwd(args.cwd), no_default_learning=args.no_default_learning)
     else:

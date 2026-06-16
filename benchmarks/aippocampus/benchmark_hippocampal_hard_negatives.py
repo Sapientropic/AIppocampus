@@ -33,6 +33,7 @@ DEFAULT_PUBLIC_DIALOGUE_DATASET = (
 ).resolve()
 SYNTHETIC_COHORT = "synthetic"
 PUBLIC_DIALOGUE_COHORT = "public-dialogue-derived"
+PUBLIC_CURRENTNESS_COHORT = "public-currentness"
 ALL_COHORTS = "all"
 REQUIRED_FAMILIES = {
     "near_neighbor_lure",
@@ -99,6 +100,11 @@ PUBLIC_DIALOGUE_SUPPORTED_FAMILIES = (
     "near_neighbor_lure",
     "said_but_unsupported",
     "surface_paraphrase_lure",
+)
+PUBLIC_CURRENTNESS_SUPPORTED_FAMILIES = (
+    "near_neighbor_lure",
+    "said_but_unsupported",
+    "superseded_currentness_trap",
 )
 TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
@@ -400,6 +406,210 @@ def _production_response_for_case(case: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _public_currentness_ref(source_id: str) -> str:
+    return f"public:vcs_issue_pr:{source_id}"
+
+
+def _public_currentness_case(
+    *,
+    case_id: str,
+    family: str,
+    query: str,
+    expected_decision: str,
+    target_refs: Sequence[str],
+    distractor_refs: Sequence[str] = (),
+    unsupported_refs: Sequence[str] = (),
+    current_refs: Sequence[str] = (),
+    superseded_refs: Sequence[str] = (),
+    supersedes: Mapping[str, Sequence[str]] | None = None,
+    ambiguity_policy: str = "source_required",
+) -> dict[str, Any]:
+    refs = list(dict.fromkeys([*target_refs, *distractor_refs, *unsupported_refs]))
+    current_ref_set = set(current_refs)
+    superseded_ref_set = set(superseded_refs)
+    currentness_by_ref = {
+        ref: "superseded" if ref in superseded_ref_set else "current" for ref in refs
+    }
+    visibility_by_ref = {
+        ref: "scent_only" if ref in superseded_ref_set else "normal" for ref in refs
+    }
+    supersedes = dict(supersedes or {})
+    return {
+        "case_id": case_id,
+        "family": family,
+        "degradation_level": "public_currentness",
+        "interference_level": "supersession_edge_distractor",
+        "query": query,
+        "expected_decision": expected_decision,
+        "acceptable_uncertainty": ["scent", "skip"],
+        "target_source_refs": list(target_refs),
+        "acceptable_scent_refs": list(target_refs) + list(superseded_refs),
+        "distractor_source_refs": list(distractor_refs),
+        "unsupported_source_refs": list(unsupported_refs),
+        "forbidden_claims": [
+            "A superseded public source is current evidence after a later update, revert, or PR close."
+        ],
+        "currentness": {
+            "source_ref_currentness": currentness_by_ref,
+            "source_ref_visibility_policy": visibility_by_ref,
+            "memory_event_type": "public_vcs_issue_pr_event",
+            "supersedes_source_refs": [
+                old_ref for old_refs in supersedes.values() for old_ref in old_refs
+            ],
+            "superseded_by_source_refs": {
+                old_ref: new_ref
+                for new_ref, old_refs in supersedes.items()
+                for old_ref in old_refs
+            },
+        },
+        "ambiguity_policy": ambiguity_policy,
+        "truth_source": "public_safe_deterministic_vcs_issue_pr_fixture",
+        "scorer_allowed_inputs": [
+            "query",
+            "public_vcs_issue_pr_source_ids",
+            "source_reopen_result",
+            "explicit_supersession_edges",
+        ],
+        "source_family": "public_vcs_issue_pr_fixture",
+        "current_source_refs": [ref for ref in refs if ref in current_ref_set],
+        "historical_terrain_refs": [ref for ref in refs if ref in superseded_ref_set],
+        "boundary": "historical_terrain_not_current_evidence",
+    }
+
+
+def _build_public_currentness_fixture() -> dict[str, Any]:
+    issue_old_plan = _public_currentness_ref("issue-1024-comment-old-cache-plan")
+    issue_update = _public_currentness_ref("issue-1024-comment-update-disable-cache")
+    pr_revert = _public_currentness_ref("pr-88-revert-cache-plan")
+    pr_current = _public_currentness_ref("pr-88-merged-current-loader")
+    nearby_issue = _public_currentness_ref("issue-1030-similar-loader-title")
+    unsupported_comment = _public_currentness_ref("issue-1042-unreviewed-suggestion")
+
+    cases = [
+        _public_currentness_case(
+            case_id="public_currentness:issue-1024:current_update_selected",
+            family="superseded_currentness_trap",
+            query="Which public issue comment is current after the cache-plan update?",
+            expected_decision="evidence",
+            target_refs=[issue_update],
+            distractor_refs=[issue_old_plan],
+            current_refs=[issue_update],
+            superseded_refs=[issue_old_plan],
+            supersedes={issue_update: [issue_old_plan]},
+        ),
+        _public_currentness_case(
+            case_id="public_currentness:issue-1024:stale_plan_as_current",
+            family="superseded_currentness_trap",
+            query="Can the original cache-plan comment be used as current evidence?",
+            expected_decision="evidence",
+            target_refs=[issue_update],
+            distractor_refs=[issue_old_plan],
+            current_refs=[issue_update],
+            superseded_refs=[issue_old_plan],
+            supersedes={issue_update: [issue_old_plan]},
+        ),
+        _public_currentness_case(
+            case_id="public_currentness:pr-88:near_neighbor_title_lure",
+            family="near_neighbor_lure",
+            query="Which public PR merged the current loader behavior?",
+            expected_decision="evidence",
+            target_refs=[pr_current],
+            distractor_refs=[nearby_issue, pr_revert],
+            current_refs=[pr_current],
+            superseded_refs=[pr_revert],
+            supersedes={pr_current: [pr_revert]},
+        ),
+        _public_currentness_case(
+            case_id="public_currentness:issue-1042:unsupported_suggestion",
+            family="said_but_unsupported",
+            query="Did the unreviewed public suggestion become accepted behavior?",
+            expected_decision="scent",
+            target_refs=[issue_update],
+            unsupported_refs=[unsupported_comment],
+            current_refs=[issue_update],
+            ambiguity_policy="unsupported_skip",
+        ),
+    ]
+    scorer_examples = [
+        {
+            "example_id": "public_currentness_current_update",
+            "case_id": "public_currentness:issue-1024:current_update_selected",
+            "decision": "evidence",
+            "confidence": 0.82,
+            "evidence_refs": [issue_update],
+            "scent_refs": [],
+            "source_reopened": True,
+            "claims": [],
+        },
+        {
+            "example_id": "public_currentness_stale_plan_wrongly_current",
+            "case_id": "public_currentness:issue-1024:stale_plan_as_current",
+            "decision": "evidence",
+            "confidence": 0.78,
+            "evidence_refs": [issue_old_plan],
+            "scent_refs": [],
+            "source_reopened": True,
+            "claims": [],
+        },
+        {
+            "example_id": "public_currentness_current_pr_selected",
+            "case_id": "public_currentness:pr-88:near_neighbor_title_lure",
+            "decision": "evidence",
+            "confidence": 0.8,
+            "evidence_refs": [pr_current],
+            "scent_refs": [],
+            "source_reopened": True,
+            "claims": [],
+        },
+        {
+            "example_id": "public_currentness_wrong_neighbor_selected",
+            "case_id": "public_currentness:pr-88:near_neighbor_title_lure",
+            "decision": "evidence",
+            "confidence": 0.77,
+            "evidence_refs": [nearby_issue],
+            "scent_refs": [],
+            "source_reopened": True,
+            "claims": [],
+        },
+        {
+            "example_id": "public_currentness_unsupported_as_fact",
+            "case_id": "public_currentness:issue-1042:unsupported_suggestion",
+            "decision": "evidence",
+            "confidence": 0.74,
+            "evidence_refs": [unsupported_comment],
+            "scent_refs": [],
+            "source_reopened": True,
+            "claims": [],
+        },
+        {
+            "example_id": "public_currentness_honest_scent",
+            "case_id": "public_currentness:issue-1042:unsupported_suggestion",
+            "decision": "scent",
+            "confidence": 0.48,
+            "evidence_refs": [],
+            "scent_refs": [issue_update],
+            "source_reopened": False,
+            "claims": [],
+        },
+    ]
+    return {
+        "schema_version": "aippocampus.hippocampal_public_currentness_fixture.v1",
+        "dataset_id": "hippocampal_hard_negative_public_currentness_v1",
+        "source": {
+            "source_family": "public_vcs_issue_pr_fixture",
+            "truth_source": "public_safe_deterministic_supersession_edges",
+            "raw_dataset_git_policy": "inline_public_safe_fixture",
+        },
+        "config": {
+            "uses_model_judge": False,
+            "uses_private_history": False,
+            "claim_surface": "public_currentness_hard_negative_cohort",
+        },
+        "cases": cases,
+        "scorer_examples": scorer_examples,
+    }
+
+
 def _build_public_dialogue_fixture(
     dataset: locomo.LocomoDataset,
     *,
@@ -652,6 +862,146 @@ def run_public_dialogue_cohort(
             "live_model_or_semantic_retriever_quality",
             "public_dataset_families_without_reported_support",
             "cross_conversation_life_wide_continuity_quality",
+        ],
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
+def _unsupported_public_currentness_families(
+    family_counts: Mapping[str, int],
+) -> dict[str, dict[str, str]]:
+    unsupported: dict[str, dict[str, str]] = {}
+    for family in sorted(REQUIRED_FAMILIES):
+        if int(family_counts.get(family) or 0) > 0:
+            continue
+        unsupported[family] = {
+            "reason": "not_part_of_public_currentness_supersession_slice",
+            "source_family": "public_vcs_issue_pr_fixture",
+            "boundary": (
+                "The deterministic public-currentness slice covers explicit "
+                "update/revert/supersede edges; unsupported families remain "
+                "reported instead of silently treated as measured."
+            ),
+        }
+    return unsupported
+
+
+def _superseded_currentness_case_count(cases: Sequence[Mapping[str, Any]]) -> int:
+    count = 0
+    for case in cases:
+        currentness_by_ref, _visibility_by_ref = _source_ref_currentness(case)
+        if any(str(value or "") in STALE_CURRENTNESS for value in currentness_by_ref.values()):
+            count += 1
+    return count
+
+
+def run_public_currentness_cohort() -> dict[str, Any]:
+    started = time.perf_counter()
+    fixture = _build_public_currentness_fixture()
+    cases = cases_by_id(fixture)
+    case_values = list(cases.values())
+    scored = _score_example_set(
+        fixture.get("scorer_examples") or [],
+        cases,
+        include_private_text=False,
+    )
+    family_counts = _family_counts(case_values)
+    unsupported_families = _unsupported_public_currentness_families(family_counts)
+    outcome_counts = scored["outcome_counts"]
+    base_metrics = scored["metrics"]
+    evidence_decision_count = int(base_metrics.get("evidence_decision_count") or 0)
+    source_reopen_count = int(base_metrics.get("source_reopen_count") or 0)
+    public_quality_gate_ok = bool(
+        len(cases) > 0
+        and int(base_metrics.get("correct_evidence_count") or 0) > 0
+        and int(base_metrics.get("stale_as_current_count") or 0) > 0
+        and not bool(_as_mapping(unsupported_families).get("superseded_currentness_trap"))
+    )
+    metrics = {
+        "case_count": len(cases),
+        "family_counts": family_counts,
+        **base_metrics,
+        "public_currentness_case_count": len(cases),
+        "public_dialogue_case_count": 0,
+        "synthetic_contract_case_count": 0,
+        "per_family_case_counts": family_counts,
+        "unsupported_family_count": len(unsupported_families),
+        "superseded_currentness_case_count": _superseded_currentness_case_count(case_values),
+        "current_source_selected_count": int(base_metrics.get("correct_evidence_count") or 0),
+        "honest_scent_or_skip_count": int(base_metrics.get("honest_uncertainty_count") or 0),
+        "source_reopen_before_evidence_rate": (
+            round(source_reopen_count / evidence_decision_count, 6)
+            if evidence_decision_count
+            else 0.0
+        ),
+        "public_quality_gate_ok": public_quality_gate_ok,
+        "full_p1_matrix_claimed": False,
+    }
+    quality_gates = {
+        "case_count_positive": len(cases) > 0,
+        "explicit_supersession_edges_present": metrics["superseded_currentness_case_count"] > 0,
+        "stale_currentness_failure_visible": metrics["stale_as_current_count"] > 0,
+        "current_source_success_visible": metrics["current_source_selected_count"] > 0,
+        "synthetic_and_public_metrics_separated": True,
+        "locomo_supersession_boundary_unchanged": True,
+        "source_safe_report": True,
+        "public_quality_gate_ok": public_quality_gate_ok,
+        "full_p1_matrix_claimed": False,
+    }
+    ok = all(bool(value) for key, value in quality_gates.items() if key != "full_p1_matrix_claimed")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_hippocampal_hard_negative_benchmark",
+        "status": "public_currentness_cohort" if ok else "public_currentness_cohort_unready",
+        "ok": ok,
+        "generated_at": now_utc(),
+        "config": {
+            "cohort": "public_currentness",
+            "uses_model_judge": False,
+            "uses_private_history": False,
+            "claim_surface": "public_currentness_hard_negative_cohort",
+        },
+        "dataset": {
+            "dataset_id": "hippocampal_hard_negative_public_currentness_v1",
+            "source_family": "public_vcs_issue_pr_fixture",
+            "truth_source": "public_safe_deterministic_supersession_edges",
+            "raw_dataset_git_policy": "inline_public_safe_fixture",
+        },
+        "quality_gates": quality_gates,
+        "outcome_weights": dict(OUTCOME_WEIGHTS),
+        "outcome_counts": outcome_counts,
+        "metrics": metrics,
+        "cases": scored["cases"],
+        "supported_families": list(PUBLIC_CURRENTNESS_SUPPORTED_FAMILIES),
+        "unsupported_families": unsupported_families,
+        "fixture_boundaries": [
+            "historical_terrain_not_current_evidence",
+            "stale_public_source_may_be_scent_but_not_current_evidence",
+            "does_not_cover_locomo_supersession_labels",
+        ],
+        "external_prediction_template": {
+            "format": "jsonl",
+            "fields": [
+                "case_id",
+                "decision",
+                "evidence_refs",
+                "scent_refs",
+                "source_reopened",
+            ],
+            "decision_values": ["evidence", "scent", "skip", "blocked"],
+        },
+        "privacy_boundary": {
+            "raw_public_source_text_emitted": False,
+            "absolute_paths_emitted": False,
+            "source_ref_hashes_only": True,
+            "uses_private_history": False,
+        },
+        "cannot_claim": [
+            "private_real_history_quality",
+            "full_h1_h2_or_p1_matrix_quality",
+            "full_p1_matrix_quality",
+            "live_model_or_semantic_retriever_quality",
+            "locomo_superseded_currentness_support",
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -1017,6 +1367,8 @@ def run_benchmark(
             max_samples=public_dialogue_max_samples,
             max_cases=public_dialogue_max_cases,
         )
+    if cohort == PUBLIC_CURRENTNESS_COHORT:
+        return run_public_currentness_cohort()
     if cohort == ALL_COHORTS:
         synthetic = _run_synthetic_benchmark(
             fixture_path=fixture_path,
@@ -1027,11 +1379,16 @@ def run_benchmark(
             max_samples=public_dialogue_max_samples,
             max_cases=public_dialogue_max_cases,
         )
+        public_currentness = run_public_currentness_cohort()
         return {
             "schema_version": SCHEMA_VERSION,
             "kind": "aippocampus_hippocampal_hard_negative_benchmark_bundle",
             "status": "hard_negative_cohorts_reported",
-            "ok": bool(synthetic.get("ok")) and bool(public_dialogue.get("ok")),
+            "ok": (
+                bool(synthetic.get("ok"))
+                and bool(public_dialogue.get("ok"))
+                and bool(public_currentness.get("ok"))
+            ),
             "generated_at": now_utc(),
             "config": {
                 "cohort": ALL_COHORTS,
@@ -1040,10 +1397,12 @@ def run_benchmark(
             },
             "synthetic_cohort": synthetic,
             "public_dialogue_cohort": public_dialogue,
+            "public_currentness_cohort": public_currentness,
             "cannot_claim": [
                 "single_collapsed_headline_score",
                 "private_real_history_quality",
                 "full_h1_h2_or_p1_matrix_quality",
+                "full_p1_matrix_quality",
             ],
         }
     raise ValueError(f"unsupported cohort: {cohort}")
@@ -1054,7 +1413,12 @@ def main() -> int:
     parser.add_argument("--fixture", default=str(DEFAULT_FIXTURE))
     parser.add_argument(
         "--cohort",
-        choices=[SYNTHETIC_COHORT, PUBLIC_DIALOGUE_COHORT, ALL_COHORTS],
+        choices=[
+            SYNTHETIC_COHORT,
+            PUBLIC_DIALOGUE_COHORT,
+            PUBLIC_CURRENTNESS_COHORT,
+            ALL_COHORTS,
+        ],
         default=SYNTHETIC_COHORT,
     )
     parser.add_argument(

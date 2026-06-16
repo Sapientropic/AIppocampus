@@ -502,6 +502,14 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             module_name_for_script("update.py"),
             ["status", *rest[1:]],
         )
+    if command == "repro":
+        repro_args = rest[1:] if rest and rest[0] == "package" else rest
+        return CommandInvocation(
+            command,
+            "learning.py",
+            module_name_for_script("learning.py"),
+            ["repro-package", *repro_args],
+        )
     if command == "config":
         return CommandInvocation(
             command,
@@ -847,11 +855,17 @@ def print_help(*, file: TextIO | None = None) -> None:
     parser.print_usage(target)
     print("", file=target)
     print("Start here:", file=target)
-    print("  aippocampus health                    One-screen readiness and next action", file=target)
-    print("  aippocampus agent recall \"old cue\"     Continue old work from source routes", file=target)
     print("  aippocampus search \"exact phrase\"      Find a remembered source snippet", file=target)
+    print("  aippocampus agent recall \"old cue\" --json", file=target)
+    print("                                        Continue old work from source routes", file=target)
+    print("  aippocampus agent deepen --request 1 --last-recall --json", file=target)
+    print("                                        Reopen the selected route before claims", file=target)
     print("  aippocampus plugin install --codex --verify", file=target)
     print("                                        Local Codex plugin install/refresh", file=target)
+    print("", file=target)
+    print("Recovery/readiness:", file=target)
+    print("  aippocampus health                    Use when source is missing/stale, host tools feel", file=target)
+    print("                                        installed-but-not-alive, or maintenance pressure matters", file=target)
     print("", file=target)
     print("Commands:", file=target)
     print("", file=target)
@@ -862,6 +876,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  search              Search clean-source memory", file=target)
     print("  agent recall        Opt-in agent recall/AIppo/deepen/explain path", file=target)
     print("  learning            Source-backed learning loop status/replay/guidance", file=target)
+    print("  repro package       Public-safe command/output issue package", file=target)
     print("  do-not-use-here     Quiet a route or ticket through low-authority feedback", file=target)
     print("  pause / forget      Safe personal-control cards, no destructive defaults", file=target)
     print("  latest-reply        Latest final assistant closeout, not commentary", file=target)

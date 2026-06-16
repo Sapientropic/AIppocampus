@@ -13,7 +13,7 @@ import benchmark_family_promotion_candidates as promotion  # noqa: E402
 
 
 class BenchmarkFamilyPromotionCandidateTests(unittest.TestCase):
-    def test_decision_report_selects_first_three_contract_smoke_families(self) -> None:
+    def test_decision_report_distinguishes_promoted_attention_from_remaining_candidates(self) -> None:
         report = promotion.build_family_promotion_candidate_report()
 
         self.assertEqual(report["kind"], "aippocampus_benchmark_family_promotion_candidates")
@@ -23,16 +23,25 @@ class BenchmarkFamilyPromotionCandidateTests(unittest.TestCase):
             [family["family_id"] for family in report["selected_families"]],
             [
                 "agent_continuity_loop",
-                "attention_navigation_quality",
                 "map_rot_lifecycle_debt",
             ],
+        )
+        self.assertEqual(
+            [family["family_id"] for family in report["promoted_families"]],
+            ["attention_navigation_quality"],
+        )
+        promoted = report["promoted_families"][0]
+        self.assertEqual(promoted["promotion_state"], "narrow_public_cohort_promoted")
+        self.assertTrue(promoted["public_cohort_completed"]["public_quality_gate_ok"])
+        self.assertTrue(
+            promoted["public_cohort_completed"]["explicit_agent_recall_auto_gate_ok"]
         )
         deferred = {item["family_id"]: item["reason"] for item in report["deferred_families"]}
         self.assertIn("e2e50_silent_constraint", deferred)
         self.assertIn("#279", deferred["e2e50_silent_constraint"])
         self.assertIn("rollout_hard_event", deferred)
 
-    def test_each_candidate_has_maturity_metadata_without_quality_promotion(self) -> None:
+    def test_remaining_candidates_have_maturity_metadata_without_quality_promotion(self) -> None:
         report = promotion.build_family_promotion_candidate_report()
 
         for family in report["selected_families"]:
@@ -88,7 +97,8 @@ class BenchmarkFamilyPromotionCandidateTests(unittest.TestCase):
             {
                 "contract_gate_ok": "current deterministic contract still passes",
                 "usefulness_gate_ok": "candidate cohort must prove user or agent usefulness blockers are zero",
-                "quality_gate_ok": "public cohort quality remains false until candidate cohort is measured and held out",
+                "public_quality_gate_ok": "true only for a named public/holdout surface, such as attention explicit-pull",
+                "quality_gate_ok": "alias for the surface-specific public_quality_gate_ok",
             },
         )
         self.assertEqual(report["sanitization_check"]["status"], "passed")

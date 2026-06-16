@@ -102,16 +102,29 @@ def compact_action(item: Any) -> dict[str, Any]:
 
 
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    recommended = [
+    all_recommended = [
         action
         for item in payload.get("recommended_actions") or []
         if (action := compact_action(item))
-    ][:3]
+    ]
+    recommended = all_recommended[:3]
+    storage_action = next(
+        (
+            item
+            for item in all_recommended
+            if item.get("id") == "storage_gc_rebuildable_cache"
+            and str(item.get("severity") or "").casefold() in {"critical", "warning"}
+        ),
+        None,
+    )
+    if storage_action and storage_action not in recommended:
+        recommended = [*recommended[:2], storage_action]
     blocking = [
         item
         for item in recommended
         if str(item.get("severity") or "").casefold() in {"critical", "warning"}
     ]
+    promotable_blocking = [] if payload.get("ok") else blocking
     # Compact health is usually read by a foreground agent. Show advisory upkeep
     # in the list, but do not promote it as the next action when memory is
     # already ready; otherwise a healthy live thread can get stuck maintaining
@@ -124,10 +137,12 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "status": payload.get("status") or ("ok" if payload.get("ok") else "attention_needed"),
         "cwd": payload.get("cwd"),
         "recommended_actions": recommended,
+        "storage_pressure": payload.get("storage_pressure"),
+        "host_state_confounds": payload.get("host_state_confounds"),
         "check_count": len(checks),
         "agent_next_action": (
-            blocking[0]
-            if blocking
+            promotable_blocking[0]
+            if promotable_blocking
             else recommended[0]
             if recommended and not payload.get("ok")
             else {

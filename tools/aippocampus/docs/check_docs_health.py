@@ -24,12 +24,14 @@ from cognitive_maturity_guard import (
     proof_slice_maturity_board_issues,
 )
 from current_claims_guard import current_claims_snapshot_issues
+from discussion_atlas_guard import discussion_atlas_static_issues
 from evidence_index_guard import evidence_index_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
     public_core_product_profile_issues,
 )
+from public_first_touch_guard import public_first_touch_order_issues
 from reader_path_guard import reader_path_issues
 from source_kernel_guard import source_kernel_contract_issues
 
@@ -1272,6 +1274,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(hippocampal_private_annotation_protocol_issues(repo_root))
     issues.extend(legacy_alias_inventory_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
+    issues.extend(public_first_touch_order_issues(repo_root))
     issues.extend(product_profile_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(public_core_product_profile_issues(repo_root))
@@ -1281,6 +1284,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(safe_environment_issues(repo_root))
     issues.extend(host_hook_boundary_issues(repo_root))
     issues.extend(architecture_index_issues(repo_root))
+    issues.extend(discussion_atlas_static_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

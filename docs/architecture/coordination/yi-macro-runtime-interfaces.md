@@ -27,6 +27,7 @@ macro packet into source evidence.
 | Three Powers route facets | `recall_fanout`, `telepathy_handoff_compatibility` | `macro.three_powers` | No source evidence, hard assignment, identity truth, or role truth. |
 | 世 / 应 role positioning | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.state.relation_position`, `macro.line_topology` | No agent personality truth or user-intent inference. |
 | 消息卦 momentum | `recheck_timing`, `compact_foreground_packet` | `macro.momentum`, agent macro packet | No energy score, metaphysical project-state claim, or evidence score. |
+| Total hexagram encoder | `compact_foreground_packet`, `recall_fanout` when complete/reviewed | `macro.total_encoder`, `recall.macro_live_recall` | No defaulting missing lines to 乾/人, no private/local-source projection, no symbolic advice. |
 | 纳甲-like active-axis timing | `recheck_timing`, `research_only` | `macro.timing`, `ops.macro_timing_recheck_experiment` | No currentness replacement, fact assignment, foreground prose, or default ranking change. |
 | 卦气-like source-epoch cadence | `recheck_timing`, `research_only` | `macro.timing`, `ops.macro_timing_recheck_experiment` | No literal calendar/solar-term timing, temporal-head replacement, scheduled background cost, or foreground prose. |
 | 乘 / 承 / 比 / 应 internal line topology | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.line_topology`, `macro.three_powers` | No ranking-weight change, source support, or mathematical topology claim. |
@@ -64,6 +65,19 @@ Every projection carries `authority_level=navigation_only`,
 Runtime consumers such as the attention route producer (#1188) and semantic
 warming bridge (#1386) may use these reason codes as reopen/deepen hints only;
 they must not duplicate this contract or treat the projection as evidence.
+
+## Total Encoder Contract
+
+`aippocampus_runtime.macro.total_encoder.build_total_hexagram_encoding(...)`
+derives all six bottom-to-top lines only when source-backed line evidence is
+complete, or when an explicit reviewed state is provided. Partial, ambiguous,
+insufficient-source, and blocked/private-local inputs degrade to diagnostic
+status and cannot feed `macro_live_recall` as a compact state hint.
+
+Each derived line carries source refs and a derivation reason. The public
+projection omits raw source text, local paths, and symbolic instruction. This
+keeps the macro state usable for route fanout without letting a missing line
+quietly become a full hexagram.
 
 ## Change-Line Transition Records
 
@@ -114,6 +128,22 @@ The fixture asserts:
   effect;
 - topology/sheaf-style consumption can read Yi-derived layer/movement signals
   without raising authority or bypassing source reopen.
+- total-encoder states can change macro route hints only when complete or
+  explicitly reviewed; degraded states produce diagnostics instead.
+
+## Load-Bearing Topology Boundary
+
+Topology primitives become action-time only through
+`aippocampus_runtime.topology.packet_preflight` and the promotion metadata in
+`aippocampus_runtime.topology.primitive_registry`.
+
+Reducer-backed failures such as authority overreach, Borromean
+source/user/agent breaks, and route cycles may repair, downgrade, suppress, or
+request source reopen. Missing-middle and weak-bridge findings are review-only
+annotations. Knot/unlinking language remains research vocabulary until a
+future fixture proves reliable action selection. The
+`macro.loadbearing_fixture` report keeps useful route/action changes separate
+from authority upgrades and raw leak checks.
 
 ## Transform-Orbit Diagnostics
 

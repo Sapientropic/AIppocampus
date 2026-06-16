@@ -96,6 +96,74 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["agent_next_action"]["id"], "no_action")
         self.assertEqual(payload["recommended_actions"][0]["id"], "prepare_graphify_corpus")
 
+    def test_agent_json_preserves_high_severity_storage_pressure_action(self) -> None:
+        pressure_action = {
+            "id": "storage_gc_rebuildable_cache",
+            "severity": "warning",
+            "reason": "Generated rebuildable cache pressure is high",
+            "facade_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+        }
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": False,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "recommended_actions": [
+                        {"id": "refresh_clean_source", "severity": "warning", "reason": "stale"},
+                        {"id": "build_index", "severity": "warning", "reason": "stale"},
+                        {"id": "prepare_graphify_corpus", "severity": "info", "reason": "old"},
+                        pressure_action,
+                    ],
+                    "storage_pressure": {
+                        "available": True,
+                        "pressure": True,
+                        "reasons": ["reclaimable_rebuildable_cache_bytes_high"],
+                    },
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+
+        payload = json.loads(stdout.getvalue())
+        action_ids = [item["id"] for item in payload["recommended_actions"]]
+
+        self.assertEqual(code, 0)
+        self.assertIn("storage_gc_rebuildable_cache", action_ids)
+        self.assertEqual(payload["storage_pressure"]["pressure"], True)
+
+    def test_agent_json_storage_pressure_is_visible_but_not_primary_when_ready(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "recommended_actions": [
+                        {
+                            "id": "storage_gc_rebuildable_cache",
+                            "severity": "warning",
+                            "reason": "Generated rebuildable cache pressure is high",
+                            "facade_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+                        }
+                    ],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action")
+        self.assertEqual(payload["recommended_actions"][0]["id"], "storage_gc_rebuildable_cache")
+
     def test_human_health_prints_copy_pasteable_next_commands(self) -> None:
         payload = {
             "ok": False,
@@ -499,6 +567,53 @@ class AippocampusHealthTests(unittest.TestCase):
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
         self.assertEqual(payload["storage_pressure"], pressure)
+
+    def test_health_reports_codex_host_state_confounds_without_paths_or_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+            registry_dir = root / "registry"
+            registry_dir.mkdir()
+            (registry_dir / "threads.json").write_text('{"threads":[]}', encoding="utf-8")
+            codex = root / "codex-home"
+            (codex / "logs").mkdir(parents=True)
+            (codex / "sessions" / "private-session-id").mkdir(parents=True)
+            (codex / "logs" / "state.sqlite").write_bytes(b"x" * 128)
+            (codex / "logs" / "state.sqlite-wal").write_bytes(b"y" * 64)
+            (codex / "sessions" / "private-session-id" / "rollout.jsonl").write_bytes(b"z" * 256)
+            (codex / "threads.json").write_text(
+                '{"threads":[{"id":"private-thread-id"}]}',
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(health, "codex_home", return_value=codex),
+                mock.patch.object(health, "locate_rollout", return_value=rollout),
+            ):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        registry_dir=registry_dir,
+                        **paths,
+                    )
+                )
+
+        confounds = payload["host_state_confounds"]
+        encoded = json.dumps(confounds, ensure_ascii=False)
+
+        self.assertTrue(confounds["available"])
+        self.assertEqual(confounds["artifact_scope"], "codex_host_state_not_aippocampus_registry")
+        self.assertGreater(confounds["logs_db_wal"]["total_bytes"], 0)
+        self.assertGreater(confounds["session_store"]["total_bytes"], 0)
+        self.assertTrue(confounds["thread_list"]["available"])
+        self.assertFalse(confounds["privacy_boundary"]["paths_included"])
+        self.assertNotIn(str(root), encoded)
+        self.assertNotIn("private-session-id", encoded)
+        self.assertNotIn("private-thread-id", encoded)
 
     def test_health_keeps_small_latest_turn_gap_advisory_before_bulk_stale_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

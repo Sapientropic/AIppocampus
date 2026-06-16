@@ -66,6 +66,8 @@ class MultimodalNiahEvidencePoolBenchmarkTests(unittest.TestCase):
 
         metrics = payload["metrics"]
         for key in {
+            "niah_observed_answerer_case_count",
+            "deterministic_fixture_only_case_count",
             "pool_ground_truth_coverage_rate",
             "answer_correctness",
             "source_selection_accuracy",
@@ -73,11 +75,28 @@ class MultimodalNiahEvidencePoolBenchmarkTests(unittest.TestCase):
             "unsupported_claim_rate",
             "abstention_accuracy",
             "stale_or_conflicting_distractor_selection_rate",
-            "needs_source_reopen_rate",
+            "ambiguous_currentness_reopen_or_abstain_rate",
+            "prompt_ground_truth_leak_count",
+            "retrieval_quality_claimed",
+            "provider_unavailable_blocker_count",
+            "raw_media_bytes_public_reported_count",
+            "absolute_path_leak_count",
         }:
             self.assertIn(key, metrics)
+        for key in {
+            "pool_ground_truth_coverage_rate",
+            "answer_correctness",
+            "source_selection_accuracy",
+            "source_anchor_citation_accuracy",
+            "unsupported_claim_rate",
+            "abstention_accuracy",
+            "stale_or_conflicting_distractor_selection_rate",
+            "ambiguous_currentness_reopen_or_abstain_rate",
+        }:
             self.assertIn(key, payload["rate_estimates"])
 
+        self.assertEqual(metrics["niah_observed_answerer_case_count"], 0)
+        self.assertEqual(metrics["deterministic_fixture_only_case_count"], 4)
         self.assertEqual(metrics["pool_ground_truth_coverage_rate"], 1.0)
         self.assertEqual(metrics["answer_correctness"], 1.0)
         self.assertEqual(metrics["source_selection_accuracy"], 1.0)
@@ -85,7 +104,12 @@ class MultimodalNiahEvidencePoolBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["unsupported_claim_rate"], 0.0)
         self.assertEqual(metrics["abstention_accuracy"], 1.0)
         self.assertEqual(metrics["stale_or_conflicting_distractor_selection_rate"], 0.0)
-        self.assertEqual(metrics["needs_source_reopen_rate"], 0.0)
+        self.assertEqual(metrics["ambiguous_currentness_reopen_or_abstain_rate"], 0.0)
+        self.assertEqual(metrics["prompt_ground_truth_leak_count"], 0)
+        self.assertFalse(metrics["retrieval_quality_claimed"])
+        self.assertEqual(metrics["provider_unavailable_blocker_count"], 0)
+        self.assertEqual(metrics["raw_media_bytes_public_reported_count"], 0)
+        self.assertEqual(metrics["absolute_path_leak_count"], 0)
         self.assertEqual(payload["conflict_decisions"]["current_source_selected_count"], 1)
         self.assertEqual(payload["conflict_decisions"]["needs_source_reopen_count"], 0)
         self.assertEqual(
@@ -187,6 +211,99 @@ class MultimodalNiahEvidencePoolBenchmarkTests(unittest.TestCase):
         self.assertTrue(row["needs_source_reopen"])
         self.assertEqual(row["selected_evidence_ids"], [])
         self.assertFalse(row["stale_or_conflicting_distractor_selected"])
+
+    def test_answerer_replay_scores_observed_fixed_reader_without_scoring_retrieval(self) -> None:
+        payload = benchmark.run_benchmark(answerer_replay=True)
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["config"]["answerer_replay"], True)
+        answerer_replay = payload["tracks"]["observed_answerer_replay"]
+        derived_text_pool = payload["tracks"]["derived_text_pool"]
+        self.assertEqual(answerer_replay["status"], "scored")
+        self.assertEqual(answerer_replay["provider_route"], "fixed_reader_replay")
+        self.assertEqual(derived_text_pool["metrics"]["niah_observed_answerer_case_count"], 0)
+        self.assertEqual(derived_text_pool["metrics"]["deterministic_fixture_only_case_count"], 4)
+        self.assertEqual(
+            answerer_replay["claim_boundary"]["measures"],
+            "observed_answerer_source_selection_citation_conflict_and_abstention",
+        )
+        self.assertTrue(answerer_replay["claim_boundary"]["retrieval_not_scored"])
+        self.assertIn("retrieval_quality", answerer_replay["claim_boundary"]["cannot_claim"])
+
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["niah_observed_answerer_case_count"], 6)
+        self.assertEqual(metrics["deterministic_fixture_only_case_count"], 4)
+        self.assertEqual(metrics["answer_correctness"], 1.0)
+        self.assertEqual(metrics["source_selection_accuracy"], 1.0)
+        self.assertEqual(metrics["source_anchor_citation_accuracy"], 1.0)
+        self.assertEqual(metrics["stale_or_conflicting_distractor_selection_rate"], 0.0)
+        self.assertEqual(metrics["ambiguous_currentness_reopen_or_abstain_rate"], 1.0)
+        self.assertEqual(metrics["unsupported_claim_rate"], 0.0)
+        self.assertEqual(metrics["abstention_accuracy"], 1.0)
+        self.assertEqual(metrics["prompt_ground_truth_leak_count"], 0)
+        self.assertFalse(metrics["retrieval_quality_claimed"])
+        self.assertEqual(metrics["provider_unavailable_blocker_count"], 0)
+        self.assertEqual(metrics["raw_media_bytes_public_reported_count"], 0)
+        self.assertEqual(metrics["absolute_path_leak_count"], 0)
+
+        by_id = {case["case_id"]: case for case in answerer_replay["cases"]}
+        self.assertEqual(
+            set(by_id),
+            {
+                "ground_truth_present_selection",
+                "stale_conflict_repair",
+                "ambiguous_currentness_reopen",
+                "unsupported_visual_detail",
+                "prompt_leakage_guard",
+                "retrieval_not_scored_guard",
+            },
+        )
+        self.assertEqual(by_id["stale_conflict_repair"]["selected_evidence_ids"], ["msrc-bill-001"])
+        self.assertTrue(by_id["stale_conflict_repair"]["input_stale_or_conflicting_distractor_selected"])
+        self.assertFalse(by_id["stale_conflict_repair"]["stale_or_conflicting_distractor_selected"])
+        self.assertEqual(
+            by_id["ambiguous_currentness_reopen"]["selected_answer_state"],
+            "needs_source_reopen",
+        )
+        self.assertTrue(by_id["ambiguous_currentness_reopen"]["needs_source_reopen"])
+        self.assertTrue(by_id["unsupported_visual_detail"]["abstention_correct"])
+        self.assertFalse(by_id["retrieval_not_scored_guard"]["retrieval_quality_scored"])
+
+        serialized_prompt_inputs = json.dumps(
+            [case["agent_visible_prompt"] for case in answerer_replay["cases"]],
+            ensure_ascii=False,
+        )
+        forbidden_fragments = [
+            "ground_truth_evidence_ids",
+            "expected_answer",
+            "answer_correct",
+            "failure_mode",
+            "hidden_scoring_metadata",
+            "msrc-bill-001",
+            "Marigold Gallery",
+        ]
+        for fragment in forbidden_fragments:
+            self.assertNotIn(fragment, serialized_prompt_inputs)
+
+    def test_answerer_replay_prompt_leakage_guard_counts_scoring_metadata(self) -> None:
+        fixture = benchmark.load_fixture()
+        fixture["observed_answerer_replay_cases"][0]["agent_visible_prompt"] = (
+            "ground_truth_evidence_ids msrc-img-001 answer_correct hidden_scoring_metadata"
+        )
+        source_fixture = benchmark.load_source_fixture(fixture)
+
+        payload = benchmark.run_benchmark(
+            fixture_payload=fixture,
+            source_fixture_payload=source_fixture,
+            answerer_replay=True,
+        )
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["metrics"]["prompt_ground_truth_leak_count"], 1)
+        self.assertIn(
+            "answerer_prompt_ground_truth_leak",
+            payload["tracks"]["observed_answerer_replay"]["blocker_codes"],
+        )
 
     def test_validation_rejects_input_selection_outside_supplied_pool(self) -> None:
         fixture = benchmark.load_fixture()

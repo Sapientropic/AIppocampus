@@ -171,12 +171,21 @@ def bounded_cli_projection(
         }
     if summary_only:
         metrics = report.get("metrics") or {}
-        audit_command = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))}"
+        audit_command = (
+            f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
+        )
+        pressure_present = bool(candidates) or any(
+            int(metrics.get(key) or 0) > 0
+            for key in (
+                "reclaimable_rebuildable_bytes",
+                "reclaimable_review_artifact_bytes",
+            )
+        )
         projection = {
             "kind": "aippocampus_storage_gc_summary",
             "schema_version": report.get("schema_version", schema_version),
             "ok": bool(report.get("ok", True)),
-            "status": report.get("status") or "dry_run_ready",
+            "status": report.get("status") or ("dry_run_ready" if pressure_present else "no_pressure"),
             "created_at": report.get("created_at"),
             "mode": report.get("mode"),
             "read_only": report.get("mode") == "dry_run",
@@ -186,6 +195,8 @@ def bounded_cli_projection(
                 "raw_session_like_ids_emitted": include_private_identifiers,
             },
             "metrics": metrics,
+            "metrics_status": "computed",
+            "pressure_interpretation": "pressure_present" if pressure_present else "no_pressure",
             "candidate_count_total": len(candidates),
             "sample_candidate_count": 0,
             "candidate_detail_deferred": bool(candidates),
@@ -211,6 +222,7 @@ def bounded_cli_projection(
                 "decision": "inspect bounded audit sample before any apply",
                 "command": audit_command,
             },
+            "comparable_metrics_command": audit_command,
             "warnings": list(report.get("warnings") or [])[:6],
             "next_steps": [
                 "Use the bounded audit sample only if the reclaimable amount is worth inspecting.",
@@ -218,7 +230,7 @@ def bounded_cli_projection(
             ],
             "full_audit_available": True,
             "full_audit_flag": "--json --full",
-            "operator_audit_command": "aippocampus storage gc --dry-run --json --full",
+            "operator_audit_command": "aippocampus storage gc --dry-run --json --full --cwd .",
         }
     else:
         projection["candidates"] = public_sample

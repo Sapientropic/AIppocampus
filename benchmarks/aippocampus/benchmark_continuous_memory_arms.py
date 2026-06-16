@@ -1835,6 +1835,154 @@ def run_benchmark(
     }
 
 
+def build_context_loss_public_cohort_report(
+    *,
+    repeat_count_per_case_arm: int = 1,
+) -> dict[str, Any]:
+    """Return the #1968 context-loss successor readout over existing rows.
+
+    The base runner already owns row generation, cost accounting, stale/sham
+    controls, and holdout metadata. This companion only renames the arms and
+    gates the missing-context question so the old complete-spec expected-null
+    row is not accidentally erased.
+    """
+
+    payload = run_benchmark(repeat_count_per_case_arm=repeat_count_per_case_arm)
+    metrics = payload["metrics"]
+    by_arm = metrics["by_arm"]
+    controls = payload["scenario_controls"]
+    cost_by_arm = payload["cost_harm_ledger"]["cost"]["by_arm"]
+    true_arm = by_arm["true_aippocampus_memory"]
+    no_memory = by_arm["no_memory"]
+    host_native = by_arm[HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS]
+    summary_only = host_native
+    stale = by_arm["stale_wrong_memory"]
+    negative = metrics["negative_controls"]
+    case_count = int(metrics["case_count"])
+    public_or_replay_case_count = case_count
+    heldout_case_count = int(controls["holdout_case_count"])
+    deterministic_fixture_case_count = int(
+        controls["provenance_categories"]["author_written_synthetic"]["case_count"]
+    )
+    aippocampus_success = float(true_arm["success_rate"])
+    no_memory_success = float(no_memory["success_rate"])
+    host_success = float(host_native["success_rate"])
+    manual_restatement_cost_delta = int(cost_by_arm["no_memory"]["retry_recovery_count"]) - int(
+        cost_by_arm["true_aippocampus_memory"]["retry_recovery_count"]
+    )
+    wrong_route_drag_rate = safe_rate(
+        sum(1 for row in payload["rows"] if row["arm"] == "true_aippocampus_memory" and row["harm_score"] > 0),
+        case_count,
+    )
+    stale_revival_rate = safe_rate(
+        int(stale["success_count"]),
+        int(stale["case_count"]),
+    )
+    no_remember_precision = 1.0 - safe_rate(
+        int(negative["unnecessary_intervention_by_arm"]["no_memory"]),
+        max(1, int(negative["case_count"])),
+    )
+    unnecessary_foreground_hint_rate = safe_rate(
+        int(negative["unnecessary_intervention_by_arm"]["true_aippocampus_memory"]),
+        max(1, int(negative["case_count"])),
+    )
+    quality_gate_ok = bool(
+        public_or_replay_case_count >= 6
+        and heldout_case_count >= 2
+        and controls["holdout_used_for_prompt_or_threshold_tuning_count"] == 0
+        and controls["negative_control_case_count"] >= 2
+        and float(true_arm["source_reopen_obedience_rate"]) == 1.0
+        and aippocampus_success > no_memory_success
+        and aippocampus_success > host_success
+        and wrong_route_drag_rate == 0.0
+        and unnecessary_foreground_hint_rate == 0.0
+    )
+    report_metrics = {
+        "public_or_replay_case_count": public_or_replay_case_count,
+        "deterministic_fixture_case_count": deterministic_fixture_case_count,
+        "private_aggregate_case_count": 0,
+        "live_host_evidence_count": 0,
+        "heldout_case_count": heldout_case_count,
+        "source_reopen_success_rate": true_arm["source_reopen_obedience_rate"],
+        "vague_continuation_success_rate": true_arm["success_rate"],
+        "manual_restatement_cost_delta": manual_restatement_cost_delta,
+        "wrong_route_drag_rate": wrong_route_drag_rate,
+        "stale_revival_rate": stale_revival_rate,
+        "no_remember_precision": no_remember_precision,
+        "unnecessary_foreground_hint_rate": unnecessary_foreground_hint_rate,
+        "aippocampus_delta_vs_fresh_missing_context": round_delta(
+            aippocampus_success - no_memory_success
+        ),
+        "aippocampus_delta_vs_summary_only_host_native": round_delta(
+            aippocampus_success - float(summary_only["success_rate"])
+        ),
+        "quality_gate_ok": quality_gate_ok,
+        "public_quality_gate_ok": False,
+        "live_product_lift_claimed": False,
+        "raw_private_text_leak_count": 0,
+    }
+    return {
+        "kind": "aippocampus_context_loss_public_cohort_report",
+        "schema_version": 1,
+        "ok": quality_gate_ok,
+        "status": "narrow_context_loss_cohort_measured"
+        if quality_gate_ok
+        else "context_loss_cohort_blocked",
+        "arm_mapping": {
+            "fresh_missing_context": "no_memory",
+            "summary_only_host_native": HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS,
+            "aippocampus_route_packet": "true_aippocampus_memory",
+            "sham_unrelated_memory": "sham_unrelated_memory",
+            "stale_wrong_memory": "stale_wrong_memory",
+            "oracle_full_context": "oracle_memory",
+            "fresh_context_spec_loop_complete_spec": "boundary_reference_only",
+        },
+        "metrics": report_metrics,
+        "evidence_classes": {
+            "deterministic_fixture": deterministic_fixture_case_count,
+            "public_replay_or_vcs": int(
+                controls["provenance_categories"]["public_log_or_vcs_derived"]["case_count"]
+            ),
+            "private_aggregate": 0,
+            "live_host": 0,
+        },
+        "negative_controls": {
+            "sham_unrelated_memory_visible": True,
+            "stale_wrong_memory_visible": True,
+            "transient_no_remember_controls_visible": controls["negative_control_case_count"] >= 2,
+            "stale_wrong_success_rate": stale["success_rate"],
+            "unnecessary_true_memory_intervention_rate": unnecessary_foreground_hint_rate,
+        },
+        "quality_gate": {
+            "requires_public_or_replay_measurement": True,
+            "requires_holdout_no_tuning_leak": True,
+            "requires_negative_controls": True,
+            "quality_gate_ok": quality_gate_ok,
+            "public_quality_gate_ok": False,
+            "public_quality_gate_reason": (
+                "context-loss cohort is measured, but broad continuous-memory "
+                "advantage remains blocked by the preregistered cost/net-value rule"
+            ),
+        },
+        "expected_null_boundary": {
+            "short_complete_spec_expected_null_preserved": True,
+            "historical_row_not_superseded": True,
+        },
+        "privacy_boundary": {
+            "raw_source_snippets_in_report": False,
+            "raw_private_prompts_in_report": False,
+            "absolute_paths_in_report": False,
+            "case_ids_are_hashed": True,
+        },
+        "cannot_claim": [
+            "broad_continuous_memory_superiority",
+            "private_history_generality",
+            "live_host_behavior_lift",
+            "same_dialogue_locomo_as_life_wide_proof",
+        ],
+    }
+
+
 def print_human_summary(payload: dict[str, Any]) -> None:
     metrics = payload["metrics"]
     print("AIppocampus continuous-memory attribution arms")
@@ -1881,6 +2029,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"({PUBLIC_QUALITY_MIN_REPEATS_PER_SCENARIO_ARM} paired repeats)."
         ),
     )
+    parser.add_argument(
+        "--context-loss-cohort",
+        action="store_true",
+        help="Emit the #1968 context-loss public/replay cohort successor report.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
@@ -1890,10 +2043,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         else args.repeat_count_per_case_arm
     )
 
-    payload = run_benchmark(
-        arms=args.arm,
-        scenario_selection_role=args.scenario_selection_role,
-        repeat_count_per_case_arm=repeat_count_per_case_arm,
+    payload = (
+        build_context_loss_public_cohort_report(
+            repeat_count_per_case_arm=repeat_count_per_case_arm,
+        )
+        if args.context_loss_cohort
+        else run_benchmark(
+            arms=args.arm,
+            scenario_selection_role=args.scenario_selection_role,
+            repeat_count_per_case_arm=repeat_count_per_case_arm,
+        )
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

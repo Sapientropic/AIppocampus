@@ -334,7 +334,16 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(payload["candidate_count_total"], 2)
         self.assertEqual(payload["sample_candidate_count"], 0)
         self.assertTrue(payload["candidate_detail_deferred"])
-        self.assertEqual(payload["safe_next_action"]["command"], "aippocampus storage gc --dry-run --json --top 1")
+        self.assertEqual(payload["metrics_status"], "computed")
+        self.assertEqual(payload["pressure_interpretation"], "pressure_present")
+        self.assertEqual(
+            payload["safe_next_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(
+            payload["comparable_metrics_command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
         self.assertEqual(payload["risk_boundary"]["apply_requires_explicit_flag"], True)
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertNotIn("session-one", encoded)
@@ -362,7 +371,11 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(payload["mode"], "dry_run")
         self.assertTrue(payload["read_only"])
-        self.assertEqual(payload["safe_next_action"]["command"], "aippocampus storage gc --dry-run --json --top 1")
+        self.assertEqual(
+            payload["safe_next_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(payload["pressure_interpretation"], "pressure_present")
 
     def test_summary_json_without_existing_reports_defers_full_scan_instead_of_building_capacity(
         self,
@@ -395,7 +408,19 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(payload["read_only"])
         self.assertTrue(payload["needs_full_scan"])
         self.assertTrue(payload["candidate_detail_deferred"])
-        self.assertEqual(payload["safe_next_action"]["command"], "aippocampus storage gc --dry-run --json --top 1")
+        self.assertEqual(payload["metrics_status"], "not_computed_in_summary_mode")
+        self.assertEqual(
+            payload["safe_next_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(
+            payload["comparable_metrics_command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(
+            payload["operator_audit_command"],
+            "aippocampus storage gc --dry-run --json --full --cwd .",
+        )
 
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
         self,

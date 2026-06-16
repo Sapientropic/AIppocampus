@@ -26,6 +26,9 @@ Each NIAH row records:
 - optional `input_selected_evidence_ids` and `input_cited_source_anchor_ids`
   when the fixture preserves a stale or weaker initial answerer choice for
   conflict-resolution repair;
+- optional `observed_answerer_replay_cases` for fixed-reader replay over
+  source selection, citation, conflict repair, prompt leakage, retrieval
+  boundary, and abstention behavior;
 - sanitized conflict-resolution decision fields such as `selection_decision`,
   `currentness_decision`, `selection_reason_codes`, and
   `needs_source_reopen`;
@@ -48,12 +51,15 @@ answer correctness flags, failure-mode labels, and hidden scoring metadata.
 ```powershell
 python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --json
 python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --source-reopen-mode deterministic_fixture --json
+python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --answerer-replay --json
 ```
 
-Latest local deterministic run on 2026-06-09:
+Latest local deterministic replay run on 2026-06-17:
 
 - `status=fixture_contract_scored`
 - `ok=true`
+- `niah_observed_answerer_case_count=6`
+- `deterministic_fixture_only_case_count=4`
 - `pool_ground_truth_coverage_rate=1.0`
 - `answer_correctness=1.0`
 - `source_selection_accuracy=1.0`
@@ -61,7 +67,12 @@ Latest local deterministic run on 2026-06-09:
 - `unsupported_claim_rate=0.0`
 - `abstention_accuracy=1.0`
 - `stale_or_conflicting_distractor_selection_rate=0.0`
-- `needs_source_reopen_rate=0.0`
+- `ambiguous_currentness_reopen_or_abstain_rate=1.0`
+- `prompt_ground_truth_leak_count=0`
+- `retrieval_quality_claimed=false`
+- `provider_unavailable_blocker_count=0`
+- `raw_media_bytes_public_reported_count=0`
+- `absolute_path_leak_count=0`
 - `input_stale_or_conflicting_distractor_selection_count=1`
 - `current_source_selected_count=1`
 - `needs_source_reopen_count=0`
@@ -73,6 +84,10 @@ captured time plus authority metadata, so the selected source becomes the final
 bill and the stale/conflicting distractor selection count drops to 0. A
 regression negative control covers the opposite boundary: when currentness is
 ambiguous, the decision step emits `needs_source_reopen` instead of guessing.
+The observed/fixed-reader replay keeps that ambiguity as a scored answerer case
+and treats reopen or abstention as the correct behavior, while prompt leakage
+and retrieval-quality claims remain guard metrics instead of answer-quality
+inputs.
 
 This is a small-N contract smoke over four synthetic QA rows with pool sizes
 3, 4, and 5. Treat the Wilson intervals in the JSON report as uncertainty
@@ -88,6 +103,9 @@ Can claim:
 - reports separate answer correctness, source selection, source-anchor
   citation, unsupported claims, abstention, and stale/conflicting distractor
   selection;
+- observed/fixed-reader replay covers ground-truth-present selection,
+  stale-conflict repair, ambiguous-currentness reopen, unsupported visual
+  detail abstention, prompt leakage guard, and retrieval-not-scored guard;
 - conflict-resolution decisions expose the old input selection, final selected
   source ids, currentness reason codes, and `needs_source_reopen` counts;
 - deterministic source-reopen mode verifies original source anchors without

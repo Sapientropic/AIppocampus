@@ -35,6 +35,12 @@ V0 runs post-packet:
 Foreground projection should stay tiny and only appear when it changes action
 selection. Full detail belongs behind explain/debug/Campus.
 
+Action-time preflight is a separate narrow consumer:
+`aippocampus_runtime.topology.packet_preflight.validate_packet_for_action(...)`.
+It maps existing diagnostics to `allowed`, `downgraded`,
+`repair_hint_added`, `suppressed_as_overreach`, or `needs_reopen` without
+raising authority or changing router weights.
+
 ## V0 Diagnostics
 
 The deterministic fixture covers reducible contract cases:
@@ -72,6 +78,14 @@ borromean_break_count
 invariant `source + user need + agent agency` is counted only when a packet is
 foreground-visible or action-shaping. Idle/background/silent-cache packets do
 not count.
+
+`build_packet_preflight_report(...)` adds action-time guard metrics:
+`topology_preflight_count`, `borromean_repair_count`,
+`route_cycle_redirect_count`, `missing_middle_review_count`,
+`weak_bridge_review_count`, `false_positive_or_overfilter_count`,
+`authority_upgrade_violation_count`, and `raw_private_text_leak_count`. These
+metrics verify routing behavior and boundaries; they are not a topology
+quality score.
 
 ## Boundary
 

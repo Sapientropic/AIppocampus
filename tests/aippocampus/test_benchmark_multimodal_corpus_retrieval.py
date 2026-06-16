@@ -95,6 +95,69 @@ class MultimodalCorpusRetrievalBenchmarkTests(unittest.TestCase):
         self.assertIn("live_vision_model_quality", payload["cannot_claim"])
         self.assertIn("raw_media_model_answer_quality", payload["cannot_claim"])
 
+    def test_source_open_replay_reports_required_cohorts_and_public_safe_metrics(self) -> None:
+        payload = benchmark.run_benchmark(source_open_replay=True)
+
+        self.assertEqual(payload["tracks"]["deterministic_fixture"]["status"], "scored")
+        self.assertEqual(payload["tracks"]["source_open_replay"]["status"], "scored")
+        self.assertEqual(payload["tracks"]["provider_blocked"]["status"], "blocked")
+
+        replay_case_ids = {
+            case["case_id"] for case in payload["tracks"]["source_open_replay"]["cases"]
+        }
+        self.assertEqual(
+            {
+                "caption_shortcut_control",
+                "raw_media_required_success",
+                "unsupported_visual_detail",
+                "stale_or_weaker_source_conflict",
+                "cross_modal_join",
+                "provider_unavailable_hold_open",
+            },
+            replay_case_ids,
+        )
+
+        metrics = payload["metrics"]
+        for key in {
+            "multimodal_replay_case_count",
+            "deterministic_fixture_only_case_count",
+            "live_or_declared_media_provider_case_count",
+            "raw_media_source_open_success_rate",
+            "visual_or_document_claim_source_open_rate",
+            "caption_shortcut_violation_count",
+            "unsupported_visual_claim_rate",
+            "stale_or_weaker_source_selected_rate",
+            "cross_modal_join_success_rate",
+            "abstention_accuracy",
+            "provider_unavailable_blocker_count",
+            "raw_media_bytes_public_reported_count",
+            "absolute_path_leak_count",
+            "live_product_lift_claimed",
+        }:
+            self.assertIn(key, metrics)
+
+        self.assertEqual(metrics["multimodal_replay_case_count"], 6)
+        self.assertEqual(metrics["deterministic_fixture_only_case_count"], 4)
+        self.assertEqual(metrics["live_or_declared_media_provider_case_count"], 0)
+        self.assertEqual(metrics["caption_shortcut_violation_count"], 0)
+        self.assertEqual(metrics["provider_unavailable_blocker_count"], 1)
+        self.assertEqual(metrics["raw_media_bytes_public_reported_count"], 0)
+        self.assertEqual(metrics["absolute_path_leak_count"], 0)
+        self.assertFalse(metrics["live_product_lift_claimed"])
+        self.assertIn("media_provider_unavailable", payload["blocker_codes"])
+
+    def test_declared_media_provider_is_counted_without_claiming_live_quality(self) -> None:
+        payload = benchmark.run_benchmark(
+            source_open_replay=True,
+            declared_media_provider="declared_public_safe_provider",
+        )
+
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["live_or_declared_media_provider_case_count"], 1)
+        self.assertEqual(metrics["provider_unavailable_blocker_count"], 0)
+        self.assertFalse(metrics["live_product_lift_claimed"])
+        self.assertIn("raw_media_model_answer_quality", payload["cannot_claim"])
+
     def test_default_report_sanitizes_fixture_text_and_local_paths(self) -> None:
         payload = benchmark.run_benchmark(raw_media_mode="deterministic_fixture")
 

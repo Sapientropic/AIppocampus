@@ -734,7 +734,10 @@ instead of deriving priority from this directory map.
 - **What belongs there:** Public-safe #375/#853 calibration fixture for `SEGMENT_MERGE_POLICY` and stable source-key
   dedupe over cross-segment diversity, adjacent-turn pairing, duplicate nearby recap
   suppression, stable source join overlap, and stale/superseded currentness; not source-evidence
-  retrieval or real long-thread recall quality.
+  retrieval or real long-thread recall quality. #1977 also lets the same runner emit an
+  optional public-safe replay/source-evidence cohort with source-open support validation
+  reported separately from ranking hit-rate. The #376 generated physical-path soak remains
+  owned by `tools/aippocampus/smoke/smoke_long_thread_segment_soak.py`.
 
 ### Dream live shadow A/B reminder evidence
 
@@ -1092,14 +1095,16 @@ empty output. The PR-tier guard for this contract is
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - **Reads / updates:** `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md`
 
-### E2E50 public-safe behavior-pack scorer
+### E2E50 public-safe behavior-pack scorer and private/local field-validation gate
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py`; sequence/load validator in
   `aippocampus_runtime/coding/sequence_packets.py`; Episode/Arc builder in
   `aippocampus_runtime/coding/episode_arcs.py`
 - **Reads / updates:** `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`,
   `docs/architecture/coordination/episode-arc-read-models.md`,
-  `benchmark_corpus/e2e50_silent_constraint/fixture.json`, #279/#663/#575/#1154
+  `benchmark_corpus/e2e50_silent_constraint/fixture.json`,
+  `docs/evidence/benchmarks/reports/e2e50/e2e50-field-validation-2026-06-16.md`,
+  #279/#663/#575/#1154/#1981
 
 ### Continuous-memory attribution arms, host-native baseline, pre-registration, preregistered slice readouts including `public_synthetic_preregistered_repeat` and `github_1153_context_loss_public_continuity_v1`, cost/harm ledger, cost/harm sensitivity, scenario provenance/holdout controls, and the missing-context diagnostic boundary
 
@@ -1219,6 +1224,14 @@ empty output. The PR-tier guard for this contract is
 - **Reads / updates:** `docs/evidence/benchmarks/reports/fresh-thread/state-dependent-preactivation-2026-06-10.md`,
   `docs/research/ambient-associative-recall.md`, #1082
 
+### Successor evidence sweep
+
+- **Entrypoint:** `benchmarks/aippocampus/benchmark_successor_evidence_sweep.py`
+- **Reads / updates:** `docs/evidence/reports/successor-evidence-sweep-2026-06-16.md`,
+  #1918-#1981
+- **Boundary:** executable closeout gate for proxy-successor issues; not a
+  benchmark score, live product-lift claim, or default-adoption proof.
+
 ### Warm ambient case-pack builder
 
 - **Entrypoint:** `benchmarks/aippocampus/builders/build_warm_ambient_trace_cases.py`
@@ -1320,17 +1333,19 @@ pasting raw JSON into multiple docs.
   `docs/evidence/benchmarks/reports/e2e50/e2e50-private-local-seed-followup-2026-06-10.md`,
   #279/#1086
 
-### E2E50 public-safe behavior-pack scorer and optional private annotation readiness replay
+### E2E50 public-safe behavior-pack scorer, optional private annotation readiness replay, and private/local field-validation gate
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py`; deterministic unittest included
-  in `benchmark-smoke`; sequence/load validator in
+  in `benchmark-smoke`; `--field-validation` emits the #1981 retained private/local case-count gate;
+  sequence/load validator in
   `aippocampus_runtime/coding/sequence_packets.py`; Episode/Arc builder in
   `aippocampus_runtime/coding/episode_arcs.py`
 - **Primary evidence owner:** `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`,
   `docs/architecture/coordination/episode-arc-read-models.md`,
   `benchmark_corpus/e2e50_silent_constraint/fixture.json`,
   `docs/evidence/benchmarks/reports/e2e50/e2e50-private-annotation-readiness-2026-06-10.json`,
-  #279/#663/#575/#1154
+  `docs/evidence/benchmarks/reports/e2e50/e2e50-field-validation-2026-06-16.md`,
+  #279/#663/#575/#1154/#1981
 
 ### Cognitive-load public behavior-trace feedback and default-path replay fixtures
 

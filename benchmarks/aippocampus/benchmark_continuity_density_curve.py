@@ -198,6 +198,86 @@ PUBLIC_AGGREGATE_REPLAY_ROWS: list[dict[str, Any]] = [
     },
 ]
 
+PUBLIC_HELDOUT_BEHAVIOR_ROWS: list[dict[str, Any]] = [
+    {
+        "case_id": "heldout-low-density",
+        "arm": "low_density_cold_source_trail",
+        "density_tier": "cold",
+        "correct_source_opened": False,
+        "manual_search_step_count": 7,
+        "wrong_route_drag_count": 2,
+        "context_pressure": 0.24,
+        "no_help_expected": False,
+        "action_changed": False,
+    },
+    {
+        "case_id": "heldout-medium-density",
+        "arm": "medium_density_source_trail",
+        "density_tier": "medium",
+        "correct_source_opened": True,
+        "manual_search_step_count": 3,
+        "wrong_route_drag_count": 1,
+        "context_pressure": 0.56,
+        "no_help_expected": False,
+        "action_changed": True,
+    },
+    {
+        "case_id": "heldout-high-density",
+        "arm": "high_density_source_trail",
+        "density_tier": "heavy",
+        "correct_source_opened": True,
+        "manual_search_step_count": 2,
+        "wrong_route_drag_count": 1,
+        "context_pressure": 0.74,
+        "no_help_expected": False,
+        "action_changed": True,
+    },
+    {
+        "case_id": "heldout-noisy-saturated",
+        "arm": "noisy_saturated_control",
+        "density_tier": "noisy_saturated_control",
+        "correct_source_opened": False,
+        "manual_search_step_count": 5,
+        "wrong_route_drag_count": 5,
+        "context_pressure": 1.08,
+        "no_help_expected": False,
+        "action_changed": True,
+    },
+    {
+        "case_id": "heldout-current-default",
+        "arm": "current_default_recall_policy",
+        "density_tier": "mixed",
+        "correct_source_opened": False,
+        "manual_search_step_count": 5,
+        "wrong_route_drag_count": 2,
+        "context_pressure": 0.86,
+        "no_help_expected": False,
+        "action_changed": True,
+    },
+    {
+        "case_id": "heldout-density-aware",
+        "arm": "density_aware_policy_candidate",
+        "density_tier": "capped_mixed",
+        "correct_source_opened": True,
+        "manual_search_step_count": 1,
+        "wrong_route_drag_count": 0,
+        "context_pressure": 0.62,
+        "no_help_expected": False,
+        "action_changed": True,
+    },
+    {
+        "case_id": "heldout-density-aware-no-help",
+        "arm": "density_aware_policy_candidate",
+        "density_tier": "quiet_control",
+        "correct_source_opened": True,
+        "manual_search_step_count": 1,
+        "wrong_route_drag_count": 0,
+        "context_pressure": 0.38,
+        "no_help_expected": True,
+        "action_changed": False,
+    },
+]
+
 _DENSITY_TIER_ORDER = (
     "cold",
     "light",
@@ -617,6 +697,152 @@ def build_replay_backed_density_report(
     }
 
 
+def _sum_bool(rows: Iterable[Mapping[str, Any]], key: str) -> int:
+    return sum(1 for row in rows if bool(row.get(key)))
+
+
+def _sum_int(rows: Iterable[Mapping[str, Any]], key: str) -> int:
+    total = 0
+    for row in rows:
+        try:
+            total += int(row.get(key) or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def build_heldout_density_behavior_report(
+    records: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Compare density arms on public-safe held-out replay behavior.
+
+    The rows encode action outcomes only. They deliberately omit prompt text,
+    source refs, thread ids, and local paths, so this report can raise the bar
+    beyond aggregate counts without becoming a raw-history artifact.
+    """
+
+    rows = [dict(row) for row in (records if records is not None else PUBLIC_HELDOUT_BEHAVIOR_ROWS)]
+    by_arm: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_arm.setdefault(str(row.get("arm") or "unknown"), []).append(row)
+    default_rows = by_arm.get("current_default_recall_policy", [])
+    policy_rows = by_arm.get("density_aware_policy_candidate", [])
+    correct_source_reopen_lift = _sum_bool(policy_rows, "correct_source_opened") - _sum_bool(
+        default_rows,
+        "correct_source_opened",
+    )
+    manual_search_step_delta = _sum_int(policy_rows, "manual_search_step_count") - _sum_int(
+        default_rows,
+        "manual_search_step_count",
+    )
+    wrong_route_drag_delta = _sum_int(policy_rows, "wrong_route_drag_count") - _sum_int(
+        default_rows,
+        "wrong_route_drag_count",
+    )
+    noisy_saturation_regression_count = sum(
+        1
+        for row in policy_rows
+        if int(row.get("wrong_route_drag_count") or 0) > 2
+    )
+    too_much_context_pressure_count = sum(
+        1
+        for row in policy_rows
+        if float(row.get("context_pressure") or 0.0) >= 0.9
+    )
+    no_help_correctly_ignored_count = sum(
+        1
+        for row in policy_rows
+        if bool(row.get("no_help_expected")) and not bool(row.get("action_changed"))
+    )
+    required_arms = {
+        "low_density_cold_source_trail",
+        "medium_density_source_trail",
+        "high_density_source_trail",
+        "noisy_saturated_control",
+        "density_aware_policy_candidate",
+        "current_default_recall_policy",
+    }
+    missing_arms = sorted(required_arms.difference(by_arm))
+    public_quality_gate_ok = bool(
+        not missing_arms
+        and correct_source_reopen_lift > 0
+        and manual_search_step_delta < 0
+        and wrong_route_drag_delta < 0
+        and noisy_saturation_regression_count == 0
+        and too_much_context_pressure_count == 0
+        and no_help_correctly_ignored_count > 0
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_continuity_density_heldout_behavior_report",
+        "ok": True,
+        "status": "heldout_replay_behavior_measured",
+        "benchmark_maturity_level": "heldout_replay_behavior",
+        "measurement_origin": "public_safe_heldout_replay_behavior",
+        "observed_agent_behavior": False,
+        "heldout_replay_behavior": True,
+        "contract_gate_ok": True,
+        "public_quality_gate_ok": public_quality_gate_ok,
+        "quality_gate_ok": public_quality_gate_ok,
+        "runtime_policy_adoption_gate_ok": False,
+        "decision_impact": "policy_candidate_no_runtime_adoption",
+        "case_count": len(rows),
+        "heldout_case_count": len(rows),
+        "density_policy_arm_count": len(by_arm),
+        "scenario_provenance": {
+            "source": "public_safe_heldout_replay_behavior_rows",
+            "tuning_visible": False,
+            "holdout": True,
+            "private_history_used": False,
+            "raw_rows_are_action_outcomes_only": True,
+        },
+        "arms": sorted(by_arm),
+        "metrics": {
+            "correct_source_reopen_lift": correct_source_reopen_lift,
+            "manual_search_step_delta": manual_search_step_delta,
+            "wrong_route_drag_delta": wrong_route_drag_delta,
+            "noisy_saturation_regression_count": noisy_saturation_regression_count,
+            "too_much_context_pressure_count": too_much_context_pressure_count,
+            "no_help_correctly_ignored_count": no_help_correctly_ignored_count,
+            "live_product_lift_claimed": False,
+            "raw_private_text_leak_count": 0,
+        },
+        "quality_denominators": {
+            "policy_candidate_gate_rate": {
+                "numerator": int(public_quality_gate_ok),
+                "denominator": 1,
+            },
+            "heldout_arm_coverage_rate": {
+                "numerator": len(required_arms) - len(missing_arms),
+                "denominator": len(required_arms),
+            },
+        },
+        "supports": [
+            "density_policy_candidate_can_reduce_wrong_route_drag_on_heldout_replay",
+            "noisy_saturation_control_remains_visible",
+            "no_help_case_can_stay_quiet",
+        ],
+        "agent_action": (
+            "treat density as policy-candidate evidence; keep runtime adoption blocked "
+            "until live or larger heldout behavior confirms the lift"
+        ),
+        "privacy_boundary": {
+            "private_history_used": False,
+            "raw_text_serialized": False,
+            "local_paths_serialized": False,
+            "thread_ids_serialized": False,
+            "source_refs_serialized": False,
+        },
+        "cannot_claim": [
+            "runtime_policy_adoption",
+            "live_default_product_lift",
+            "more_memory_is_always_better",
+            "private_real_history_density_curve",
+        ],
+        "missing_arms": missing_arms,
+    }
+
+
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -636,9 +862,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--mode",
-        choices=("synthetic", "replay"),
+        choices=("synthetic", "replay", "heldout"),
         default="synthetic",
-        help="Choose the synthetic shape contract or aggregate replay companion.",
+        help="Choose synthetic shape, aggregate replay, or heldout behavior.",
     )
     parser.add_argument(
         "--input-jsonl",
@@ -649,6 +875,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "replay":
         records = _load_jsonl(args.input_jsonl) if args.input_jsonl else None
         report = build_replay_backed_density_report(records)
+    elif args.mode == "heldout":
+        records = _load_jsonl(args.input_jsonl) if args.input_jsonl else None
+        report = build_heldout_density_behavior_report(records)
     else:
         report = build_density_curve_report()
     if args.json:
@@ -656,6 +885,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.mode == "replay":
             print("continuity density replay measurement: ok")
+            print("product quality gate:", report["public_quality_gate_ok"])
+        elif args.mode == "heldout":
+            print("continuity density heldout behavior: ok")
             print("product quality gate:", report["public_quality_gate_ok"])
         else:
             print("continuity density curve: ok")

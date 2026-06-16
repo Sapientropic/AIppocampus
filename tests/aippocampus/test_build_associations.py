@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -205,6 +206,51 @@ class BuildAssociationsTests(unittest.TestCase):
         matches = assoc.match_associations("这个外置海马体还要再收一下", associations)
 
         self.assertEqual([item["term"] for item in matches], ["外置海马体"])
+
+    def test_matching_large_term_set_avoids_regex_compile_churn(self) -> None:
+        associations = {
+            "terms": {
+                f"term-{index:04d}": {
+                    "term": f"term-{index:04d}",
+                    "status": "staging",
+                    "confidence": 0.1,
+                    "threads": [],
+                }
+                for index in range(2500)
+            }
+        }
+        associations["terms"]["AIppocampus"] = {
+            "term": "AIppocampus",
+            "status": "verified",
+            "confidence": 0.99,
+            "threads": [],
+        }
+        associations["terms"]["海马体联想"] = {
+            "term": "海马体联想",
+            "status": "verified",
+            "confidence": 0.98,
+            "threads": [],
+        }
+        original_compile = assoc.re._compile
+        compile_count = 0
+
+        def counted_compile(*args, **kwargs):
+            nonlocal compile_count
+            compile_count += 1
+            return original_compile(*args, **kwargs)
+
+        with mock.patch.object(assoc.re, "_compile", side_effect=counted_compile):
+            matches = assoc.match_associations(
+                "AIppocampus 的海马体联想要保持 source-backed",
+                associations,
+            )
+
+        matched_terms = {item["term"] for item in matches}
+        self.assertIn("AIppocampus", matched_terms)
+        self.assertIn("海马体联想", matched_terms)
+        self.assertLess(compile_count, 20)
+        self.assertFalse(assoc.term_in_text("AIppo", "AIppocampus"))
+        self.assertTrue(assoc.term_in_text("AIppocampus", "AIppocampus"))
 
     def test_anchor_keywords_are_verified_and_final_answer_terms_are_staging(self) -> None:
         result = assoc.build_associations(self.registry, max_messages_per_thread=50)

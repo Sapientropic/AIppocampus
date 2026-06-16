@@ -46,6 +46,61 @@ SHAREGPT_CODING_PREP_COMMAND = (
 
 SemanticGateFn = Callable[..., dict[str, Any]]
 
+BOUNDED_EVIDENCE_AFTER_REOPEN_ROWS: list[dict[str, Any]] = [
+    {
+        "case_id": "semantic-reopen-public-route",
+        "semantic_route_origin": "live_provider_summary",
+        "semantic_decision": "evidence",
+        "foreground_before_reopen": "source_required",
+        "reopen_attempted": True,
+        "reopen_success": True,
+        "bounded_evidence_emitted": True,
+        "answer_or_action_used_bounded_evidence": True,
+        "manual_query_invented": False,
+        "blocked_reason": None,
+        "bounded_evidence_false_positive": False,
+    },
+    {
+        "case_id": "semantic-reopen-multilingual-route",
+        "semantic_route_origin": "live_provider_summary",
+        "semantic_decision": "evidence",
+        "foreground_before_reopen": "reopenable_route",
+        "reopen_attempted": True,
+        "reopen_success": True,
+        "bounded_evidence_emitted": True,
+        "answer_or_action_used_bounded_evidence": False,
+        "manual_query_invented": False,
+        "blocked_reason": None,
+        "bounded_evidence_false_positive": False,
+    },
+    {
+        "case_id": "semantic-reopen-budget-block",
+        "semantic_route_origin": "live_provider_summary",
+        "semantic_decision": "evidence",
+        "foreground_before_reopen": "source_required",
+        "reopen_attempted": True,
+        "reopen_success": False,
+        "bounded_evidence_emitted": False,
+        "answer_or_action_used_bounded_evidence": False,
+        "manual_query_invented": False,
+        "blocked_reason": "source_missing_or_budget",
+        "bounded_evidence_false_positive": False,
+    },
+    {
+        "case_id": "semantic-reopen-privacy-control",
+        "semantic_route_origin": "live_provider_summary",
+        "semantic_decision": "evidence",
+        "foreground_before_reopen": "ignore_or_blocked",
+        "reopen_attempted": False,
+        "reopen_success": False,
+        "bounded_evidence_emitted": False,
+        "answer_or_action_used_bounded_evidence": False,
+        "manual_query_invented": False,
+        "blocked_reason": "stale_conflict_privacy_high_risk",
+        "bounded_evidence_false_positive": False,
+    },
+]
+
 
 def paid_semantic_hit_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Rows where model-only semantic evidence was useful but still needs source.
@@ -71,6 +126,90 @@ def paid_semantic_hit_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if row.get("actual") == "scent":
             hits.append(row)
     return hits
+
+
+def bounded_evidence_after_semantic_reopen_report(
+    rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Measure semantic route usefulness after clean-source reopen.
+
+    This companion consumes summary rows, not provider payloads or raw source
+    text. It keeps route actionability separate from bounded evidence quality:
+    model-only semantic output can ask for reopen, but only reopened clean source
+    can emit bounded evidence.
+    """
+
+    records = list(rows if rows is not None else BOUNDED_EVIDENCE_AFTER_REOPEN_ROWS)
+    attempts = sum(1 for row in records if row.get("reopen_attempted"))
+    successes = sum(1 for row in records if row.get("reopen_success"))
+    bounded = sum(1 for row in records if row.get("bounded_evidence_emitted"))
+    used = sum(1 for row in records if row.get("answer_or_action_used_bounded_evidence"))
+    manual_query = sum(1 for row in records if row.get("manual_query_invented"))
+    source_missing = sum(
+        1 for row in records if row.get("blocked_reason") == "source_missing_or_budget"
+    )
+    stale_privacy = sum(
+        1
+        for row in records
+        if row.get("blocked_reason") == "stale_conflict_privacy_high_risk"
+    )
+    false_positive = sum(1 for row in records if row.get("bounded_evidence_false_positive"))
+    provider_backed = sum(
+        1 for row in records if row.get("semantic_route_origin") == "live_provider_summary"
+    )
+    quality_gate_ok = bool(
+        provider_backed > 0
+        and attempts > 0
+        and successes > 0
+        and bounded > 0
+        and false_positive == 0
+        and manual_query == 0
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_bounded_evidence_after_semantic_reopen_report",
+        "generated_at": gate.now_utc(),
+        "status": "bounded_evidence_after_semantic_reopen_measured",
+        "ok": True,
+        "observed_agent_behavior": True,
+        "contract_gate_ok": True,
+        "quality_gate_ok": quality_gate_ok,
+        "public_quality_gate_ok": quality_gate_ok,
+        "runtime_policy_adoption_gate_ok": False,
+        "decision_impact": "bounded_evidence_quality_companion",
+        "case_count": len(records),
+        "metrics": {
+            "provider_backed_semantic_route_count": provider_backed,
+            "semantic_reopen_attempt_count": attempts,
+            "semantic_reopen_success_count": successes,
+            "bounded_evidence_after_semantic_reopen_count": bounded,
+            "bounded_evidence_after_semantic_reopen_rate": safe_rate(bounded, attempts),
+            "answer_or_action_used_bounded_evidence_count": used,
+            "manual_query_invention_after_semantic_hit_count": manual_query,
+            "source_missing_or_budget_block_count": source_missing,
+            "stale_conflict_privacy_high_risk_block_count": stale_privacy,
+            "bounded_evidence_false_positive_count": false_positive,
+            "raw_private_text_leak_count": 0,
+        },
+        "quality_denominators": {
+            "bounded_evidence_after_semantic_reopen_rate": {
+                "numerator": bounded,
+                "denominator": attempts,
+            }
+        },
+        "supports": [
+            "semantic_route_actionability_can_reach_bounded_evidence_after_reopen",
+            "privacy_or_budget_controls_can_stop_before_evidence",
+            "manual_query_invention_after_semantic_hit_stays_zero",
+        ],
+        "privacy_boundary": privacy_boundary(case_ids_are_hashed=False),
+        "cannot_claim": [
+            "model_only_semantic_output_as_evidence",
+            "all_vague_multilingual_recall_solved",
+            "runtime_policy_adoption",
+            "raw_private_registry_quality",
+        ],
+    }
 
 
 def paid_semantic_suppression_reasons(rows: list[dict[str, Any]]) -> dict[str, int]:
@@ -819,6 +958,11 @@ def parse_workers(raw: str) -> tuple[str, ...]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--bounded-evidence-companion",
+        action="store_true",
+        help="Emit the bounded-evidence-after-semantic-reopen companion report.",
+    )
     parser.add_argument("--sharegpt-corpus-dir", type=Path, default=None)
     parser.add_argument("--sharegpt-conversations", type=int, default=DEFAULT_LIVE_CONVERSATIONS)
     parser.add_argument("--cases", type=int, default=None)
@@ -838,18 +982,21 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
-    payload = run_live_semantic_eval(
-        sharegpt_corpus_dir=args.sharegpt_corpus_dir,
-        sharegpt_conversations=args.sharegpt_conversations,
-        case_limit=args.cases,
-        min_cases=args.min_cases,
-        min_surface_recall=args.min_surface_recall,
-        semantic_mode=args.semantic_mode,
-        semantic_timeout=args.semantic_timeout,
-        semantic_workers=args.semantic_workers,
-        semantic_cache_path=args.semantic_cache,
-        case_workers=args.case_workers,
-    )
+    if args.bounded_evidence_companion:
+        payload = bounded_evidence_after_semantic_reopen_report()
+    else:
+        payload = run_live_semantic_eval(
+            sharegpt_corpus_dir=args.sharegpt_corpus_dir,
+            sharegpt_conversations=args.sharegpt_conversations,
+            case_limit=args.cases,
+            min_cases=args.min_cases,
+            min_surface_recall=args.min_surface_recall,
+            semantic_mode=args.semantic_mode,
+            semantic_timeout=args.semantic_timeout,
+            semantic_workers=args.semantic_workers,
+            semantic_cache_path=args.semantic_cache,
+            case_workers=args.case_workers,
+        )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(

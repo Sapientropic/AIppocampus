@@ -78,6 +78,17 @@ SOURCE_NOISE_PATTERNS = [
     ]
 ]
 
+WHITESPACE_RE = re.compile(r"\s+")
+ASCII_TERM_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+NUMERIC_TERM_RE = re.compile(r"\d+")
+LOCAL_PATH_TERM_RE = re.compile(r"[A-Za-z]:\\|/(Users|home|tmp|var)/")
+ASCII_BOUNDARY_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyz"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "0123456789"
+    "_.-"
+)
+
 CJK_BOUNDARY_WORDS = [
     "UserPromptSubmit",
     "associations",
@@ -186,15 +197,34 @@ def save_associations(path: Path, data: dict[str, Any]) -> None:
 
 
 def normalize_term(value: str) -> str:
-    value = re.sub(r"\s+", " ", str(value)).strip(" \t\r\n\"'`.,;:!?，。；：！？、()[]{}<>《》")
+    value = WHITESPACE_RE.sub(" ", str(value)).strip(
+        " \t\r\n\"'`.,;:!?，。；：！？、()[]{}<>《》"
+    )
     return value
 
 
 def source_text_is_noise(text: str) -> bool:
-    stripped = re.sub(r"\s+", "", text).casefold()
+    stripped = "".join(text.split()).casefold()
     if stripped in TRIVIAL_PHRASES:
         return True
     return any(pattern.search(text) for pattern in SOURCE_NOISE_PATTERNS)
+
+
+def ascii_term_is_simple(term: str) -> bool:
+    return bool(term) and all(ch in ASCII_BOUNDARY_CHARS for ch in term)
+
+
+def has_local_path_marker(term: str) -> bool:
+    low = term.casefold()
+    if any(marker in low for marker in ("/users/", "/home/", "/tmp/", "/var/")):
+        return True
+    return any(
+        index + 2 < len(term)
+        and term[index].isalpha()
+        and term[index + 1] == ":"
+        and term[index + 2] == "\\"
+        for index in range(len(term))
+    )
 
 
 def term_is_noise(term: str) -> bool:
@@ -202,7 +232,7 @@ def term_is_noise(term: str) -> bool:
     if not term:
         return True
     low = term.casefold()
-    squashed = re.sub(r"\s+", "", low)
+    squashed = "".join(low.split())
     if squashed in TRIVIAL_PHRASES:
         return True
     if low in ASCII_STOP_TERMS:
@@ -215,9 +245,9 @@ def term_is_noise(term: str) -> bool:
         return True
     if len(term) < 3 and not any("\u4e00" <= ch <= "\u9fff" for ch in term):
         return True
-    if re.fullmatch(r"\d+", term):
+    if term.isdigit():
         return True
-    if re.search(r"[A-Za-z]:\\|/(Users|home|tmp|var)/", term):
+    if has_local_path_marker(term):
         return True
     return False
 
@@ -511,18 +541,56 @@ def build_associations(
     }
 
 
-def term_in_text(term: str, text: str) -> bool:
+def ascii_tokens_for_match(text: str) -> set[str]:
+    tokens: set[str] = set()
+    start: int | None = None
+    for index, ch in enumerate(text):
+        if ch in ASCII_BOUNDARY_CHARS:
+            if start is None:
+                start = index
+            continue
+        if start is not None:
+            tokens.add(text[start:index].casefold())
+            start = None
+    if start is not None:
+        tokens.add(text[start:].casefold())
+    return tokens
+
+
+def ascii_literal_with_boundary(term: str, text_casefold: str) -> bool:
+    needle = term.casefold()
+    start = 0
+    while True:
+        index = text_casefold.find(needle, start)
+        if index < 0:
+            return False
+        before_ok = index == 0 or text_casefold[index - 1] not in ASCII_BOUNDARY_CHARS
+        after_index = index + len(needle)
+        after_ok = (
+            after_index >= len(text_casefold)
+            or text_casefold[after_index] not in ASCII_BOUNDARY_CHARS
+        )
+        if before_ok and after_ok:
+            return True
+        start = index + 1
+
+
+def term_in_text(
+    term: str,
+    text: str,
+    *,
+    text_casefold: str | None = None,
+    ascii_tokens: set[str] | None = None,
+) -> bool:
     term = normalize_term(term)
     if not term:
         return False
     if any("\u4e00" <= ch <= "\u9fff" for ch in term):
         return term in text
-    return (
-        re.search(
-            rf"(?<![A-Za-z0-9_.-]){re.escape(term)}(?![A-Za-z0-9_.-])", text, flags=re.IGNORECASE
-        )
-        is not None
-    )
+    if ascii_term_is_simple(term):
+        tokens = ascii_tokens if ascii_tokens is not None else ascii_tokens_for_match(text)
+        return term.casefold() in tokens
+    return ascii_literal_with_boundary(term, text_casefold or text.casefold())
 
 
 def match_associations(
@@ -531,12 +599,19 @@ def match_associations(
     matches: list[dict[str, Any]] = []
     if not prompt:
         return matches
+    prompt_casefold = prompt.casefold()
+    ascii_tokens = ascii_tokens_for_match(prompt)
     for item in (associations.get("terms") or {}).values():
         if not isinstance(item, dict):
             continue
         term = str(item.get("term") or "")
         matched = []
-        if not term_is_noise(term) and term_in_text(term, prompt):
+        if not term_is_noise(term) and term_in_text(
+            term,
+            prompt,
+            text_casefold=prompt_casefold,
+            ascii_tokens=ascii_tokens,
+        ):
             matched.append(term)
         if not matched:
             continue

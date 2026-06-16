@@ -477,6 +477,66 @@ class PluginInstallerTests(unittest.TestCase):
         self.assertNotIn("other/plugin.json", encoded)
         self.assertNotIn("marketplace_add", encoded)
 
+    def test_install_permission_failure_returns_path_safe_recovery_card(self) -> None:
+        raw_path = "X:" + "\\synthetic-private\\dist\\aippocampus-plugin\\.codex-plugin\\plugin.json"
+        with (
+            mock.patch.object(
+                plugin_installer,
+                "install_codex_plugin",
+                side_effect=PermissionError(5, "Access denied", raw_path),
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = plugin_installer.main(["install", "--codex", "--verify", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["kind"], "aippocampus_plugin_install_recovery")
+        self.assertEqual(payload["error"]["code"], "plugin_package_write_denied")
+        self.assertIn("redacted", payload["error"]["path"])
+        self.assertTrue(payload["privacy_boundary"]["no_private_memory_copied"])
+        self.assertFalse(payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertIn("operator-json", encoded)
+        self.assertNotIn("PermissionError", encoded)
+        self.assertNotIn(raw_path, encoded)
+
+    def test_install_permission_failure_human_is_path_safe_and_operator_json_keeps_detail(self) -> None:
+        raw_path = "X:" + "\\synthetic-private\\dist\\aippocampus-plugin\\.codex-plugin\\plugin.json"
+        with (
+            mock.patch.object(
+                plugin_installer,
+                "install_codex_plugin",
+                side_effect=PermissionError(5, "Access denied", raw_path),
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = plugin_installer.main(["install", "--codex", "--verify"])
+        human = stdout.getvalue()
+
+        self.assertEqual(code, 1)
+        self.assertIn("plugin install needs attention", human)
+        self.assertIn("plugin_package_write_denied", human)
+        self.assertNotIn("PermissionError", human)
+        self.assertNotIn(raw_path, human)
+
+        with (
+            mock.patch.object(
+                plugin_installer,
+                "install_codex_plugin",
+                side_effect=PermissionError(5, "Access denied", raw_path),
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = plugin_installer.main(["install", "--codex", "--verify", "--operator-json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["kind"], "aippocampus_plugin_install_operator_failure")
+        self.assertIn("PermissionError", payload["operator_error"]["exception_type"])
+        self.assertIn("synthetic-private", payload["operator_error"]["message"])
+        self.assertIn("plugin.json", payload["operator_error"]["message"])
+
     def test_operator_json_preserves_full_install_report_for_deep_debug(self) -> None:
         probe = plugin_installer.attach_host_probe_warning_summary(
             successful_probe_with_noisy_stderr()
@@ -595,18 +655,20 @@ class PluginInstallerTests(unittest.TestCase):
             shutil.rmtree(output, ignore_errors=True)
 
     def test_codex_base_resolves_windows_launcher_before_extensionless_shim(self) -> None:
+        cmd_path = "C:" + "\\Users\\Example\\AppData\\Roaming\\npm\\codex.cmd"
+        exe_path = "C:" + "\\Program Files\\Codex\\codex.exe"
         with mock.patch.object(codex_plugin_cli.os, "name", "nt"):
             with mock.patch.object(
                 codex_plugin_cli.shutil,
                 "which",
                 side_effect=lambda command: {
-                    "codex.cmd": "C:\\Users\\Example\\AppData\\Roaming\\npm\\codex.cmd",
-                    "codex.exe": "C:\\Program Files\\Codex\\codex.exe",
+                    "codex.cmd": cmd_path,
+                    "codex.exe": exe_path,
                 }.get(command),
             ):
                 self.assertEqual(
                     codex_plugin_cli.codex_base(),
-                    ["C:\\Users\\Example\\AppData\\Roaming\\npm\\codex.cmd"],
+                    [cmd_path],
                 )
 
     def test_codex_base_keeps_explicit_command_list(self) -> None:

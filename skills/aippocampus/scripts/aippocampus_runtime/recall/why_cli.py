@@ -100,6 +100,42 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
     return parser
 
 
+def render_compact_help(mode: str) -> str:
+    if mode == "why-not-recall":
+        first_line = "Explain silence or no-help recall before you broaden search."
+        example = 'aippocampus why-not-recall "old decision about setup"'
+        when = "Use why-not-recall when recall stayed quiet or surfaced only broad/noisy routes."
+    else:
+        first_line = "Explain a surfaced, stale-looking, broad, or surprising recall route."
+        example = 'aippocampus why-recall "old decision about setup"'
+        when = "Use why-recall after recall/search when you need to understand a route before relying on it."
+    return "\n".join(
+        [
+            f"usage: aippocampus {mode} \"<cue>\" [--json]",
+            "",
+            "What this command is for:",
+            f"  {first_line}",
+            "",
+            "Useful shapes:",
+            f"  {example}",
+            '  aippocampus agent recall "old cue" --json',
+            "  aippocampus agent deepen --request 1 --last-recall --json",
+            "  primary next action: deepen selected route before claims, or refine cue if no route surfaced.",
+            "",
+            "When to use it:",
+            f"  {when}",
+            "  Use agent recall/deepen for the normal source-backed path.",
+            "",
+            "Boundary:",
+            "  This is recovery/explanation guidance, not source evidence.",
+            "  Reopen/deepen the selected route before claims.",
+            "",
+            "Advanced/operator flags:",
+            f"  aippocampus {mode} --help-advanced",
+        ]
+    )
+
+
 def _recovery_payload(mode: str) -> dict[str, Any]:
     return {
         "kind": "aippocampus_recall_diagnostic_recovery",
@@ -153,6 +189,12 @@ def main(argv: list[str] | None = None) -> int:
         raw_mode = args_list.pop(0)
         mode = "why-not-recall" if raw_mode == "why-not" else raw_mode
     prog = f"aippocampus {mode}"
+    if args_list and args_list[0] in {"--help", "-h"}:
+        print(render_compact_help(mode))
+        return 0
+    if args_list and args_list[0] in {"--help-advanced", "--advanced-help"}:
+        build_parser(prog=prog).print_help()
+        return 0
     args = build_parser(prog=prog).parse_args(args_list)
     if not args.cue:
         payload = _recovery_payload(mode)

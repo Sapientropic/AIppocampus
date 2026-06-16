@@ -188,6 +188,52 @@ def _family_entry(
     }
 
 
+def _promoted_family_entry(
+    *,
+    family_id: str,
+    display_name: str,
+    current_report: Mapping[str, Any],
+    promoted_surface: str,
+    remaining_non_goals: Sequence[str],
+) -> dict[str, Any]:
+    current = _contract_snapshot(current_report)
+    maturity = dict(current_report.get("benchmark_maturity") or {})
+    return {
+        "family_id": family_id,
+        "display_name": display_name,
+        "promotion_state": "narrow_public_cohort_promoted",
+        "promoted_surface": promoted_surface,
+        "current_public_maturity": current,
+        "public_cohort_completed": {
+            "benchmark_maturity_level": str(maturity.get("benchmark_maturity_level") or ""),
+            "case_count": int(maturity.get("case_count") or current_report.get("metrics", {}).get("case_count") or 0),
+            "failure_family_count": int(maturity.get("failure_family_count") or 0),
+            "minimum_family_case_floor": int(maturity.get("minimum_family_case_floor") or 0),
+            "sample_floor_met": bool(maturity.get("sample_floor_met")),
+            "holdout_case_count": int(maturity.get("holdout_case_count") or 0),
+            "holdout_used_for_tuning_count": int(maturity.get("holdout_used_for_tuning_count") or 0),
+            "wilson_or_uncertainty_reported": bool(
+                maturity.get("wilson_or_uncertainty_reported")
+            ),
+            "public_quality_gate_ok": bool(current_report.get("public_quality_gate_ok")),
+            "explicit_agent_recall_auto_gate_ok": bool(
+                current_report.get("explicit_agent_recall_auto_gate_ok")
+            ),
+            "hard_red_lines_zero": all(
+                int(value) == 0 for value in (current_report.get("hard_red_lines") or {}).values()
+            ),
+        },
+        "gate_status": {
+            "contract_gate_ok": bool(current_report.get("contract_gate_ok")),
+            "public_quality_gate_ok": bool(current_report.get("public_quality_gate_ok")),
+            "quality_gate_ok": bool(current_report.get("quality_gate_ok")),
+            "status": "narrow_public_cohort_promoted",
+        },
+        "sanitization_check": _sanitization_check(),
+        "non_goals": list(remaining_non_goals),
+    }
+
+
 def build_family_promotion_candidate_report() -> dict[str, Any]:
     """Build the #1195 public-safe candidate-family decision report."""
 
@@ -218,37 +264,6 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
                 "private_history_quality",
                 "answer_generation_quality",
                 "default_foreground_adoption",
-            ],
-        ),
-        _family_entry(
-            family_id="attention_navigation_quality",
-            display_name="Attention navigation quality",
-            priority_reason=(
-                "The live router cannot become a route producer until route precision, masks, "
-                "stale/currentness, conflict, action-time, and wrong-source controls have a "
-                "public cohort path."
-            ),
-            current_report=attention_quality.run_attention_navigation_quality(),
-            candidate_distribution={
-                "positive_route": 30,
-                "hard_mask": 30,
-                "stale_currentness": 30,
-                "conflict": 30,
-                "action_time": 30,
-                "wrong_source": 30,
-                "generic_hint": 30,
-                "anti_nag": 30,
-            },
-            cohort_source_plan=(
-                "Public synthetic route-token and evidence-packaging traces plus replayable "
-                "public VCS/source-disambiguation controls; source-open and source-required "
-                "states remain separate labels."
-            ),
-            candidate_non_goals=[
-                "broad_router_quality",
-                "source_truth_from_scores",
-                "semantic_model_training",
-                "default_foreground_hook_lift",
             ],
         ),
         _family_entry(
@@ -284,6 +299,21 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
             ],
         ),
     ]
+    promoted = [
+        _promoted_family_entry(
+            family_id="attention_navigation_quality",
+            display_name="Attention navigation quality",
+            current_report=attention_quality.run_attention_navigation_public_holdout_cohort(),
+            promoted_surface="explicit_agent_recall_auto_attention_router",
+            remaining_non_goals=[
+                "live_host_behavior_lift",
+                "answer_generation_quality",
+                "private_history_router_quality",
+                "default_foreground_hook_lift",
+                "representative_production_routing",
+            ],
+        )
+    ]
     deferred = [
         {
             "family_id": "e2e50_silent_constraint",
@@ -315,7 +345,9 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
         "decision_impact": "diagnostic_only",
         "decision_impact_not_applicable": True,
         "case_count": len(selected) + len(deferred),
+        "promoted_family_count": len(promoted),
         "selected_family_count": len(selected),
+        "promoted_families": promoted,
         "selected_families": selected,
         "deferred_families": deferred,
         "gate_separation": {
@@ -323,9 +355,10 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
             "usefulness_gate_ok": (
                 "candidate cohort must prove user or agent usefulness blockers are zero"
             ),
-            "quality_gate_ok": (
-                "public cohort quality remains false until candidate cohort is measured and held out"
+            "public_quality_gate_ok": (
+                "true only for a named public/holdout surface, such as attention explicit-pull"
             ),
+            "quality_gate_ok": "alias for the surface-specific public_quality_gate_ok",
         },
         "sanitization_check": _sanitization_check(),
         "measured_result": "deterministic candidate-family selection report emitted",
@@ -342,7 +375,8 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
             "candidate cohort implementation after held-out measurement and human review"
         ],
         "material_limits": [
-            "No selected family is promoted to public cohort quality by this report.",
+            "Attention navigation is promoted only for the narrow explicit-pull public cohort.",
+            "Agent-continuity loop and map-rot lifecycle debt remain selected candidate work.",
             "Candidate case counts are targets, not observed pass/fail results.",
             "Private history, live host behavior, and answer generation remain out of scope.",
         ],

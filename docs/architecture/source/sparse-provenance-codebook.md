@@ -80,6 +80,49 @@ The V1 public fixture code lives in the same runtime owner,
 - codebook health projection for Observatory, Vault, Map, and Quiet Room
   inspection surfaces.
 
+## Compression Artifact Contract
+
+Compression-derived artifacts are navigation-only derived artifacts, not source
+truth. Dictionaries, templates, residual chunks, route handles, chunk ids,
+proof anchors, and manifest integrity anchors must carry privacy/lifecycle
+metadata before reuse or public projection.
+
+The code-adjacent contract is
+`aippocampus_runtime.source.provenance_codebook.compression_artifact_contract_report()`.
+It is the canonical field owner for #1898 and points to #1893/#1894 for
+enforcement tests instead of mirroring verifier logic here.
+
+Allowed public projections may include aggregate ids, byte counts, codec
+versions, training scope, privacy partition, redaction/mask policy versions,
+template/residual counts, and hash-only route/chunk/proof anchors. They must
+not include raw dictionary bytes, raw residuals, raw payloads, raw source text,
+private handles, local paths, token-like strings, or proof material sufficient
+to reconstruct masked slots.
+
+Cross-privacy-partition dictionary/residual reuse, stale redaction policy
+reuse, and source-family mismatch reuse are blocked by the compression-aware
+fingerprint verifier.
+
+## Measurement And Storage Decision Gate
+
+`aippocampus_runtime.source.provenance_codebook_economics.source_family_economics_report()`
+is the read-only source-family measurement entrypoint. Per family it compares:
+
+- baseline content-addressed dedupe;
+- portable zlib deflate;
+- optional zstd without dictionary;
+- optional zstd dictionary with public-safe metadata only;
+- template/residual encoding for structured trace families.
+
+Optional zstd arms must degrade to `skipped` when no supported backend exists.
+The portable baseline remains available without native dependencies.
+
+FastCDC/content-defined chunking and LMDB chunk storage stay behind the
+`storage_primitive_decision_gate` section. The current default decision is
+`defer` unless public-safe source-family evidence shows material extra dedupe
+or file-system pressure while preserving source spans, privacy partitions,
+lifecycle boundaries, and rehydration proofs.
+
 Campus/Observatory status is inspection, not authority. The four public-safe
 status values are:
 

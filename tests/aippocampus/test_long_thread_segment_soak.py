@@ -40,6 +40,20 @@ class LongThreadSegmentSoakTests(unittest.TestCase):
         self.assertEqual(payload["quality_metrics"]["query_count"], 4)
         self.assertEqual(payload["quality_metrics"]["full_fanout_hit_rate"], 1.0)
         self.assertEqual(payload["quality_metrics"]["monolithic_hit_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["generated_soak_case_count"], 4)
+        self.assertEqual(payload["metrics"]["long_thread_replay_case_count"], 0)
+        self.assertEqual(payload["metrics"]["synthetic_policy_fixture_case_count"], 0)
+        self.assertEqual(payload["metrics"]["monolithic_target_hit_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["full_fanout_target_hit_rate"], 1.0)
+        self.assertGreaterEqual(payload["metrics"]["budgeted_fanout_target_hit_rate"], 0.25)
+        self.assertEqual(payload["metrics"]["answer_support_after_source_reopen_rate"], 0.0)
+        self.assertEqual(payload["metrics"]["raw_private_text_leak_count"], 0)
+        self.assertEqual(payload["metrics"]["absolute_path_leak_count"], 0)
+        self.assertGreaterEqual(payload["metrics"]["query_latency_p50_ms"], 0.0)
+        self.assertGreaterEqual(
+            payload["metrics"]["query_latency_p95_ms"],
+            payload["metrics"]["query_latency_p50_ms"],
+        )
         self.assertGreaterEqual(payload["quality_metrics"]["budgeted_fanout_hit_rate"], 0.25)
         self.assertGreaterEqual(payload["quality_metrics"]["full_vs_monolithic_agreement_rate"], 0.75)
         self.assertTrue(payload["quality_metrics"]["quality_gate_ok"])

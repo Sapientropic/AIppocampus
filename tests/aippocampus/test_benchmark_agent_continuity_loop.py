@@ -139,6 +139,53 @@ class AgentContinuityLoopBenchmarkTests(unittest.TestCase):
         self.assertGreater(report["red_lines"]["source_backed_claim_without_reopen"], 0)
         self.assertGreaterEqual(report["metrics"]["integrated_loop_success_count"], 5)
 
+    def test_public_cohort_report_measures_usefulness_blockers_and_attention_cost(self) -> None:
+        report = benchmark.build_agent_continuity_public_cohort_report()
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(
+            report["kind"],
+            "aippocampus_agent_continuity_loop_public_cohort",
+        )
+        self.assertEqual(metrics["public_cohort_case_count"], 180)
+        self.assertEqual(metrics["heldout_case_count"], 45)
+        self.assertEqual(metrics["contract_fixture_case_count"], 8)
+        self.assertEqual(metrics["integrated_loop_success_rate"], 1.0)
+        self.assertTrue(metrics["usefulness_gate_ok"])
+        self.assertTrue(metrics["attention_cost_ok"])
+        self.assertTrue(metrics["quality_gate_ok"])
+        self.assertEqual(metrics["source_reopen_followthrough_rate"], 1.0)
+        self.assertEqual(metrics["deepen_required_follow_through_rate"], 1.0)
+        self.assertGreater(metrics["packet_triage_distinctiveness_rate"], 0.0)
+        self.assertEqual(metrics["wrong_route_drag_rate"], 0.0)
+        self.assertEqual(metrics["unnecessary_reopen_rate"], 0.0)
+        self.assertEqual(metrics["manual_search_fallback_rate"], 0.0)
+        self.assertEqual(metrics["anti_nag_violation_count"], 0)
+        self.assertEqual(metrics["privacy_bypass_count"], 0)
+        self.assertEqual(metrics["source_backed_claim_without_reopen_count"], 0)
+        self.assertEqual(metrics["raw_private_text_leak_count"], 0)
+        self.assertFalse(metrics["live_product_lift_claimed"])
+
+        for key in (
+            "generic_hint_count",
+            "route_label_collision_count",
+            "wrong_route_drag_count",
+            "unnecessary_reopen_count",
+            "manual_search_fallback_count",
+            "blind_deepen_required_count",
+            "foreground_noise_added_count",
+            "attention_cost_overrun_count",
+        ):
+            self.assertIn(key, metrics)
+            self.assertEqual(metrics[key], 0)
+
+        self.assertEqual(set(report["family_counts"]), set(benchmark.PUBLIC_COHORT_FAMILIES))
+        self.assertTrue(report["quality_gate"]["sample_floor_ok"])
+        self.assertTrue(report["quality_gate"]["holdout_no_tuning_leak_ok"])
+        self.assertFalse(report["privacy_boundary"]["raw_private_text_serialized"])
+        self.assertIn("live_host_behavior_lift", report["cannot_claim"])
+
 
 if __name__ == "__main__":
     unittest.main()

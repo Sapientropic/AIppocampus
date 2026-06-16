@@ -185,15 +185,23 @@ def build_ficus_fixture_report() -> dict[str, Any]:
         "ficus_impression_count": len(impressions),
         "ficus_active_impression_count": packet["active_impression_count"],
         "ficus_masked_impression_count": packet["masked_impression_count"],
-        "ficus_repeated_search_reduced_count": sum(
+        "ficus_search_saved_proxy_count": sum(
             int(item.get("search_saved_proxy") or 0) for item in _active_impressions(impressions)
         ),
+        "ficus_repeated_search_observed_delta": 0,
+        "foreground_hint_usefulness_delta": 0,
         "foreground_packet_bytes": _json_bytes(packet),
     }
-    usefulness_gate_ok = metrics["ficus_repeated_search_reduced_count"] > 0 and packet["use_guidance"]
+    contract_smoke_gate_ok = bool(metrics["ficus_search_saved_proxy_count"]) and bool(packet["use_guidance"])
+    replay_usefulness_gate_ok = (
+        metrics["ficus_repeated_search_observed_delta"] > 0
+        and metrics["foreground_hint_usefulness_delta"] > 0
+    )
+    safety_gate_ok = all(value == 0 for value in red_lines.values())
     return {
         "kind": "aippocampus_ficus_mvp_fixture_report",
         "schema_version": SCHEMA_VERSION,
+        "status": "contract_smoke_only",
         "schema": ficus_schema(),
         "impressions": [
             {
@@ -209,23 +217,28 @@ def build_ficus_fixture_report() -> dict[str, Any]:
         "metrics": metrics,
         "red_lines": red_lines,
         "usefulness_gate": {
-            "safety_gate_ok": all(value == 0 for value in red_lines.values()),
-            "usefulness_gate_ok": bool(usefulness_gate_ok),
-            "quality_gate_ok": all(value == 0 for value in red_lines.values())
-            and bool(usefulness_gate_ok),
+            "safety_gate_ok": safety_gate_ok,
+            "fixture_contract_gate_ok": bool(contract_smoke_gate_ok),
+            "replay_usefulness_gate_ok": bool(replay_usefulness_gate_ok),
+            "usefulness_gate_ok": bool(replay_usefulness_gate_ok),
+            "quality_gate_ok": safety_gate_ok and bool(replay_usefulness_gate_ok),
+            "search_saved_proxy_counts_as_observed_usefulness": False,
         },
         "benchmark_readiness": {
             "PersonaMem_ready": False,
-            "next_benchmark_gate": "PersonaMem requires Ficus cohort evidence beyond this MVP.",
+            "next_benchmark_gate": (
+                "PersonaMem requires replayed Ficus hint-usefulness cohorts beyond this MVP."
+            ),
         },
-        "ok": all(value == 0 for value in red_lines.values())
-        and bool(usefulness_gate_ok)
+        "ok": safety_gate_ok
+        and bool(contract_smoke_gate_ok)
         and metrics["foreground_packet_bytes"] <= FOREGROUND_PACKET_BYTE_BUDGET,
         "cannot_claim": [
             "private_history_profile_quality",
             "PersonaMem_score",
             "sensitive_personal_impression_foreground_use",
             "profile_truth_without_source_reopen",
+            "observed_repeated_search_reduction",
         ],
     }
 

@@ -257,6 +257,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
     def test_cli_help_leads_with_use_case_before_diagnostic_flags(self) -> None:
         why_help = facade.run_command(["why-recall", "--help"], capture_output=True)
         why_not_help = facade.run_command(["why-not-recall", "--help"], capture_output=True)
+        advanced = facade.run_command(["why-recall", "--help-advanced"], capture_output=True)
 
         self.assertTrue(why_help.ok, why_help.stderr)
         self.assertTrue(why_not_help.ok, why_not_help.stderr)
@@ -264,14 +265,17 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("What this command is for", why_not_help.stdout)
         self.assertIn("deepen selected route", why_help.stdout)
         self.assertIn("refine cue", why_not_help.stdout)
-        self.assertLess(
-            why_help.stdout.index("What this command is for"),
-            why_help.stdout.index("--semantic-result-json"),
-        )
-        self.assertLess(
-            why_not_help.stdout.index("What this command is for"),
-            why_not_help.stdout.index("--semantic-result-json"),
-        )
+        self.assertIn('aippocampus why-recall "old decision about setup"', why_help.stdout)
+        self.assertIn('aippocampus agent deepen --request 1 --last-recall --json', why_help.stdout)
+        self.assertIn("source evidence", why_help.stdout)
+        self.assertNotIn("--semantic-result-json", why_help.stdout)
+        self.assertNotIn("--lock-path", why_help.stdout)
+        self.assertNotIn("--registry-dir", why_help.stdout)
+        self.assertNotIn("--semantic-result-json", why_not_help.stdout)
+        self.assertTrue(advanced.ok, advanced.stderr)
+        self.assertIn("--semantic-result-json", advanced.stdout)
+        self.assertIn("--lock-path", advanced.stdout)
+        self.assertIn("--registry-dir", advanced.stdout)
 
     def test_why_not_recall_distinguishes_low_specificity_surface_from_silence(self) -> None:
         payload = why.recall_diagnostic_report(

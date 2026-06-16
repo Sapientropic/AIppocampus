@@ -30,8 +30,18 @@ CASE_PACK_KIND = "aippocampus_e2e50_annotated_case_pack"
 REPORT_KIND = "aippocampus_e2e50_silent_constraint_case_pack"
 CLAIM_LEVEL = "public_safe_behavior_pack_contract"
 DEFAULT_FIXTURE = _paths.REPO_ROOT / "benchmark_corpus" / "e2e50_silent_constraint" / "fixture.json"
+DEFAULT_PRIVATE_ANNOTATION_READINESS = (
+    _paths.REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "benchmarks"
+    / "reports"
+    / "e2e50"
+    / "e2e50-private-annotation-readiness-2026-06-10.json"
+)
 MIN_ANNOTATED_SEED_CASES = 20
 PUBLIC_E2E50_TARGET_CASES = 50
+PRIVATE_FIELD_TARGET_CASES = 20
 PRIVATE_ANNOTATION_SUMMARY_KIND = "aippocampus_e2e50_private_annotation_summary"
 SEED_SCAN_KIND = "aippocampus_e2e50_seed_candidate_scan"
 PRIVATE_ANNOTATION_PRIVACY = "hash_count_only_no_text_no_paths_no_ids_no_raw_refs"
@@ -608,6 +618,119 @@ def private_annotation_readiness(summary: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def load_private_field_readiness_artifact(path: Path | str) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("private field readiness artifact must be a JSON object")
+    if payload.get("kind") == REPORT_KIND and isinstance(
+        payload.get("private_annotation_readiness"),
+        Mapping,
+    ):
+        return dict(payload["private_annotation_readiness"])
+    return private_annotation_readiness(payload)
+
+
+def build_private_local_field_behavior_report(
+    *,
+    readiness_path: Path | str = DEFAULT_PRIVATE_ANNOTATION_READINESS,
+    public_fixture_path: Path | str = DEFAULT_FIXTURE,
+) -> dict[str, Any]:
+    """Report #1981 field-validation readiness without exposing private rows.
+
+    This is deliberately a field-validation gate, not another public-pack score.
+    It consumes the sanitized private/local readiness artifact only at aggregate
+    level. If the retained field target is not met, the report succeeds as a
+    blocker record while keeping the field-quality gate closed.
+    """
+
+    public_report = run_benchmark(fixture_path=public_fixture_path)
+    readiness = load_private_field_readiness_artifact(readiness_path)
+    annotation_counts = _as_mapping(readiness.get("annotation_category_counts"))
+    field_case_count = _safe_int(readiness.get("retained_case_count"))
+    negative_control_count = _safe_int(annotation_counts.get("negative_control"))
+    behavior_scored_case_count = _safe_int(readiness.get("behavior_seed_count"))
+    retained_shortfall = max(0, PRIVATE_FIELD_TARGET_CASES - field_case_count)
+    field_family_counts = _as_mapping(readiness.get("case_family_counts"))
+    blocker_codes = set(_string_list(readiness.get("blocker_codes")))
+    if retained_shortfall:
+        blocker_codes.add("private_retained_case_shortfall")
+    if not field_family_counts:
+        blocker_codes.add("field_case_family_counts_not_available_in_sanitized_summary")
+    field_gate_ok = (
+        retained_shortfall == 0
+        and negative_control_count >= 1
+        and bool(field_family_counts)
+        and not blocker_codes
+    )
+    metrics = {
+        "field_case_count": field_case_count,
+        "retained_control_case_count": field_case_count,
+        "retained_case_shortfall": retained_shortfall,
+        "negative_control_count": negative_control_count,
+        "case_family_counts": dict(field_family_counts),
+        "behavior_scored_case_count": behavior_scored_case_count,
+        "private_text_leak_count": 0,
+        "raw_ref_or_local_path_leak_count": 0,
+        "public_fixture_only_case_count": int(public_report["metrics"]["total_cases"]),
+        "field_behavior_lift_claimed": False,
+        "live_host_behavior_lift_claimed": False,
+        "representative_e2e50_quality_claimed": False,
+        "semantic_judge_quality_claimed": False,
+    }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_e2e50_private_local_field_behavior_report",
+        "created_at": now_utc(),
+        "ok": metrics["private_text_leak_count"] == 0
+        and metrics["raw_ref_or_local_path_leak_count"] == 0
+        and (field_gate_ok or bool(blocker_codes)),
+        "status": "field_validation_ready" if field_gate_ok else "field_validation_blocked",
+        "field_validation_gate_ok": field_gate_ok,
+        "public_contract_gate_ok": bool(public_report.get("contract_gate_ok")),
+        "metrics": metrics,
+        "private_annotation_readiness": {
+            "status": readiness.get("status"),
+            "gate_ok": bool(readiness.get("gate_ok")),
+            "privacy": readiness.get("privacy"),
+            "reviewed_candidate_count": readiness.get("reviewed_candidate_count"),
+            "retained_case_count": readiness.get("retained_case_count"),
+            "behavior_seed_count": readiness.get("behavior_seed_count"),
+            "retained_case_shortfall": retained_shortfall,
+            "annotation_category_counts": dict(annotation_counts),
+            "blocker_codes": sorted(blocker_codes),
+        },
+        "sampling_confounds": [
+            "sanitized_private_summary_lacks_family_breakdown"
+            if not field_family_counts
+            else "field_family_breakdown_available",
+            "retained_field_case_target_not_met"
+            if retained_shortfall
+            else "retained_field_case_target_met",
+            "ordinary_post_compaction_behavior_scoring_not_enough_for_lift_claim"
+            if behavior_scored_case_count < PRIVATE_FIELD_TARGET_CASES
+            else "behavior_scoring_target_met",
+        ],
+        "evidence_separation": {
+            "public_safe_contract_pack": "scored_separately",
+            "private_local_field_validation": "aggregate_or_blocker_only",
+            "private_scarcity_blocks_public_pack": False,
+        },
+        "privacy_boundary": {
+            "private_text_emitted": False,
+            "raw_refs_emitted": False,
+            "local_paths_emitted": False,
+            "provider_payloads_emitted": False,
+            "thread_or_message_ids_emitted": False,
+        },
+        "cannot_claim": [
+            "private_history_behavior_lift",
+            "representative_e2e50_quality",
+            "live_host_behavior_lift",
+            "semantic_judge_quality",
+        ],
+    }
+
+
 def run_benchmark(
     *,
     fixture_path: Path | str = DEFAULT_FIXTURE,
@@ -720,6 +843,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Sanitized scanner output or private annotation summary JSON; raw annotation rows are not accepted here.",
     )
     parser.add_argument("--include-private-text", action="store_true")
+    parser.add_argument(
+        "--field-validation",
+        action="store_true",
+        help="Emit the #1981 private/local field-validation readiness report.",
+    )
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     return parser
@@ -727,16 +855,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    private_summary = (
-        load_private_annotation_summary(args.private_annotation_summary)
-        if args.private_annotation_summary
-        else None
-    )
-    payload = run_benchmark(
-        fixture_path=args.fixture,
-        private_annotation_summary=private_summary,
-        include_private_text=args.include_private_text,
-    )
+    if args.field_validation:
+        payload = build_private_local_field_behavior_report(
+            public_fixture_path=args.fixture,
+            readiness_path=args.private_annotation_summary
+            or DEFAULT_PRIVATE_ANNOTATION_READINESS,
+        )
+    else:
+        private_summary = (
+            load_private_annotation_summary(args.private_annotation_summary)
+            if args.private_annotation_summary
+            else None
+        )
+        payload = run_benchmark(
+            fixture_path=args.fixture,
+            private_annotation_summary=private_summary,
+            include_private_text=args.include_private_text,
+        )
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

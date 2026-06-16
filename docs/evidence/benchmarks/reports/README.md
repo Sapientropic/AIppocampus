@@ -17,7 +17,7 @@ as current evidence.
 | [`benchmark-family/`](benchmark-family/) | Cross-family promotion candidate reports. |
 | [`cognitive-runtime/`](cognitive-runtime/) | Cognitive Observatory and runtime-readout completeness reports. |
 | [`coordination/`](coordination/) | Natural handoff and Episode/Arc route-sequence usefulness reports. |
-| [`e2e50/`](e2e50/) | Private/local seed follow-up and annotation readiness artifacts. |
+| [`e2e50/`](e2e50/) | Public-pack boundary plus private/local seed, annotation-readiness, and field-validation artifacts. |
 | [`field-journey/`](field-journey/) | Field continuity, Journey replay, map-rot, and demo fixture reports. |
 | [`fresh-thread/`](fresh-thread/) | Fresh-thread recall, host-surface, segmented merge, and preactivation reports. |
 | [`hippocampal/`](hippocampal/) | Hippocampal recall, hard-negative, and comparison reports. |

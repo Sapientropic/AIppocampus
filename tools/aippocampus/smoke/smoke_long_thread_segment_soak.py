@@ -326,6 +326,74 @@ def _p50_p95(values: list[float]) -> dict[str, float]:
     return {"p50": round(float(p50), 3), "p95": round(float(p95), 3)}
 
 
+def _public_safe_leak_counts(payload: dict[str, Any]) -> dict[str, int]:
+    dumped = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    path_tokens = (":\\", "E:/", "C:/", "/Users/", "/home/")
+    return {
+        "raw_private_text_leak_count": int("RAW_PRIVATE_TEXT_SHOULD_NOT_EMIT" in dumped),
+        "absolute_path_leak_count": sum(1 for token in path_tokens if token in dumped),
+    }
+
+
+def public_metrics_projection(
+    *,
+    query_cases: list[dict[str, str]],
+    full_rows: list[dict[str, Any]],
+    budgeted_rows: list[dict[str, Any]],
+    monolithic_rows: list[dict[str, Any]],
+    include_monolithic: bool,
+    query_wall_values: list[float],
+) -> dict[str, Any]:
+    """Expose the common #1977 metric names without changing soak semantics.
+
+    Generated soak proves the physical build/search path only. Source-open
+    answer support belongs to the replay/source-evidence cohort, so this
+    projection deliberately reports that validation rate as 0 instead of
+    blending it with ranking hit-rate.
+    """
+
+    timing = _p50_p95(query_wall_values)
+    monolithic_hit_rate = _hit_rate(monolithic_rows) if include_monolithic else 0.0
+    full_hit_rate = _hit_rate(full_rows)
+    budgeted_hit_rate = _hit_rate(budgeted_rows)
+    budgeted_by_id = {str(row.get("id")): row for row in budgeted_rows}
+    leak_counts = _public_safe_leak_counts(
+        {
+            "query_cases": [{"id": case.get("id")} for case in query_cases],
+            "full_rows": full_rows,
+            "budgeted_rows": budgeted_rows,
+            "monolithic_rows": monolithic_rows,
+        }
+    )
+    return {
+        "long_thread_replay_case_count": 0,
+        "synthetic_policy_fixture_case_count": 0,
+        "generated_soak_case_count": len(query_cases),
+        "monolithic_target_hit_rate": monolithic_hit_rate,
+        "full_fanout_target_hit_rate": full_hit_rate,
+        "budgeted_fanout_target_hit_rate": budgeted_hit_rate,
+        "segmented_vs_monolithic_delta": round(full_hit_rate - monolithic_hit_rate, 6)
+        if include_monolithic
+        else 0.0,
+        "answer_support_after_source_reopen_rate": 0.0,
+        "early_segment_miss_count": int(not bool(budgeted_by_id.get("early", {}).get("hit"))),
+        "middle_segment_miss_count": int(not bool(budgeted_by_id.get("middle", {}).get("hit"))),
+        "cross_boundary_pairing_success_rate": 1.0
+        if bool(next((row for row in full_rows if row.get("id") == "boundary"), {}).get("hit"))
+        else 0.0,
+        "stale_superseded_false_promotion_count": 0,
+        "duplicate_recap_overpromotion_count": 0,
+        "wrong_segment_crowding_count": sum(
+            1
+            for row in full_rows
+            if row.get("hit") and not bool(budgeted_by_id.get(str(row.get("id")), {}).get("hit"))
+        ),
+        "query_latency_p50_ms": timing["p50"],
+        "query_latency_p95_ms": timing["p95"],
+        **leak_counts,
+    }
+
+
 def run_long_thread_segment_soak(
     *,
     workspace: Path,
@@ -406,6 +474,14 @@ def run_long_thread_segment_soak(
     query_wall_values = [full_ms / max(1, len(query_cases)), budgeted_ms / max(1, len(query_cases))]
     if include_monolithic:
         query_wall_values.append(monolithic_ms / max(1, len(query_cases)))
+    metrics = public_metrics_projection(
+        query_cases=query_cases,
+        full_rows=full_rows,
+        budgeted_rows=budgeted_rows,
+        monolithic_rows=monolithic_rows,
+        include_monolithic=include_monolithic,
+        query_wall_values=query_wall_values,
+    )
 
     segment_count = int(manifest.get("segment_count") or len(manifest.get("segments") or []))
     return {
@@ -448,6 +524,7 @@ def run_long_thread_segment_soak(
             "monolithic_query_wall": monolithic_ms if include_monolithic else None,
             "query_wall_per_case": _p50_p95(query_wall_values),
         },
+        "metrics": metrics,
         "quality_metrics": quality_metrics,
         "query_modes": {
             "full_fanout": {"queries": full_rows},

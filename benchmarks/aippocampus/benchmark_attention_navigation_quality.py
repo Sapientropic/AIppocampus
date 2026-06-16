@@ -548,11 +548,28 @@ def run_attention_navigation_quality() -> dict[str, Any]:
     return evaluate_navigation_quality_cases(fixture_navigation_quality_cases())
 
 
+def run_attention_navigation_profile(profile: str) -> dict[str, Any]:
+    if profile == "public-cohort":
+        return run_attention_navigation_public_holdout_cohort()
+    if profile == "contract-smoke":
+        return run_attention_navigation_quality()
+    raise ValueError(f"unknown attention navigation profile: {profile}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=("public-cohort", "contract-smoke"),
+        default="public-cohort",
+        help=(
+            "public-cohort is the current #1349/#1350 evidence profile; "
+            "contract-smoke keeps the older 12-case fast regression path."
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="print JSON report")
     args = parser.parse_args(argv)
-    report = run_attention_navigation_quality()
+    report = run_attention_navigation_profile(args.profile)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:

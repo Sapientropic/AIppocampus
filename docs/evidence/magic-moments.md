@@ -1,20 +1,6 @@
 # Magic Moments, Claim-Bounded
 
-Role: product and human evidence.
-Status: current claim-bounded live-use examples; not benchmark scores, release
-claims, or proof of innate model memory.
-
-AIppocampus should not make a new reader dig through benchmark caveats before
-seeing why the project exists. This page collects a few real second-user
-moments where source-backed continuity felt different from ordinary chat
-memory, while keeping the claim boundary visible.
-
-These examples come from external live-use notes in
-[Discussion #98](https://github.com/Sapientropic/AIppocampus/discussions/98)
-and the reader-facing field report in
-[Discussion #428](https://github.com/Sapientropic/AIppocampus/discussions/428).
-They are product-shaped evidence, not benchmark scores, release claims, or
-proof that the base model remembered anything by itself.
+State: current public receipt note; first useful shape leads before caveats.
 
 ## First Useful Shape
 
@@ -34,6 +20,23 @@ Example public-safe receipt:
   memory.
 - **Next action:** deepen/open the source turn before using exact wording or
   turning the route into a public claim.
+
+Role: product and human evidence.
+
+Status: current claim-bounded live-use examples; not benchmark scores, release
+claims, or proof of innate model memory.
+
+AIppocampus should not make a new reader dig through benchmark caveats before
+seeing why the project exists. This page collects a few real second-user
+moments where source-backed continuity felt different from ordinary chat
+memory, while keeping the claim boundary visible.
+
+These examples come from external live-use notes in
+[Discussion #98](https://github.com/Sapientropic/AIppocampus/discussions/98)
+and the reader-facing field report in
+[Discussion #428](https://github.com/Sapientropic/AIppocampus/discussions/428).
+They are product-shaped evidence, not benchmark scores, release claims, or
+proof that the base model remembered anything by itself.
 
 ## How To Read These
 

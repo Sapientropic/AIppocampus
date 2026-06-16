@@ -93,6 +93,7 @@ def _observed_use_rows(seed: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "clause_id": clause.get("clause_id"),
                 "clause_kind": clause.get("clause_kind"),
                 "packet_mode": "working_contract_seed",
+                "evidence_origin": "synthetic_contract_fixture",
                 "agent_action": "used",
                 "outcome_signal": "helped",
                 "source_support": {
@@ -117,6 +118,7 @@ def _observed_use_rows(seed: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "clause_id": command.get("clause_id"),
                 "clause_kind": command.get("clause_kind"),
                 "packet_mode": "working_contract_seed",
+                "evidence_origin": "synthetic_contract_fixture",
                 "agent_action": "corrected",
                 "outcome_signal": "unsupported_or_too_specific",
                 "source_support": {
@@ -293,6 +295,7 @@ def build_skill_observed_use_report(
         declared_need_class=declared_need_class,
     )
     seed = seed_report["seed"]
+    observed_rows_are_synthetic = observed_use_rows is None
     observed_rows = list(observed_use_rows or _observed_use_rows(seed))
     contract = _contract_from_observed_use(seed, observed_rows, built_at=built_at)
     packet = working_contract.activation_packet_from_working_contract(
@@ -330,6 +333,22 @@ def build_skill_observed_use_report(
         if isinstance(clause, Mapping) and clause.get("risk_notes")
     }
     packet_bytes = _json_bytes(packet)
+    synthetic_observed_use_count = sum(
+        1
+        for row in observed_rows
+        if str(row.get("evidence_origin") or "") == "synthetic_contract_fixture"
+    )
+    trace_backed_observed_use_count = sum(
+        1
+        for row in observed_rows
+        if str(row.get("evidence_origin") or "") in {"trace_backed", "replay_backed"}
+    )
+    contract_smoke_gate_ok = bool(usefulness_metrics["usefulness_gate_ok"])
+    product_usefulness_gate_ok = bool(
+        usefulness_metrics["usefulness_gate_ok"]
+        and trace_backed_observed_use_count > 0
+        and not observed_rows_are_synthetic
+    )
     red_lines = {
         "skill_instruction_promoted_without_observed_use_count": len(
             source_backed_ids - promotable_ids
@@ -355,6 +374,11 @@ def build_skill_observed_use_report(
     return {
         "kind": "aippocampus_skill_observed_use_ripening_report",
         "schema_version": SCHEMA_VERSION,
+        "status": (
+            "trace_backed_usefulness_candidate"
+            if product_usefulness_gate_ok
+            else "contract_smoke_only"
+        ),
         "seed": seed,
         "observed_use_rows": observed_rows,
         "ripened_contract": contract,
@@ -397,11 +421,25 @@ def build_skill_observed_use_report(
             "stable_workflow_search_avoided_count": usefulness_metrics[
                 "stable_workflow_search_avoided_count"
             ],
+            "trace_backed_observed_use_count": trace_backed_observed_use_count,
+            "synthetic_observed_use_count": synthetic_observed_use_count,
+            "manual_search_observed_delta": (
+                usefulness_metrics["stable_workflow_search_avoided_count"]
+                if product_usefulness_gate_ok
+                else 0
+            ),
+            "next_action_selection_delta": (
+                usefulness_metrics["aippo_next_action_delta_count"]
+                if product_usefulness_gate_ok
+                else 0
+            ),
             "generic_safety_posture_only_count": usefulness_metrics[
                 "generic_safety_posture_only_count"
             ],
             "aippo_next_action_delta_count": usefulness_metrics["aippo_next_action_delta_count"],
-            "usefulness_gate_ok": usefulness_metrics["usefulness_gate_ok"],
+            "contract_smoke_gate_ok": contract_smoke_gate_ok,
+            "usefulness_gate_ok": product_usefulness_gate_ok,
+            "synthetic_rows_count_as_product_usefulness": False,
         },
         "red_lines": red_lines,
         "cannot_claim": [
@@ -410,10 +448,11 @@ def build_skill_observed_use_report(
             "private_skill_generalization",
             "skill_marketplace_readiness",
             "eval_environments_as_default_cost_for_every_skill",
+            "product_quality_ripening_from_synthetic_observed_use_rows",
         ],
         "ok": all(value == 0 for value in red_lines.values())
         and packet_bytes <= FOREGROUND_PACKET_BYTE_BUDGET
-        and usefulness_metrics["usefulness_gate_ok"],
+        and contract_smoke_gate_ok,
     }
 
 

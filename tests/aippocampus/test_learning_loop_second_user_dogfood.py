@@ -81,6 +81,37 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertNotIn("sk-test-public-fixture", encoded)
         self.assertNotIn("super-secret-value", encoded)
 
+    def test_sanitized_repro_package_redacts_prompt_like_stdio_fields(self) -> None:
+        package = build_sanitized_repro_package(
+            {
+                "surface": "agent_recall",
+                "command": "aippocampus agent recall --query vague",
+                "stdout": {
+                    "raw_prompt": "PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE",
+                    "user_prompt": "PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE",
+                    "ordinary_text": "PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE",
+                    "metrics": {"candidate_count": 2},
+                },
+                "stderr": "PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE",
+                "expected": "no raw prompt text in public package",
+                "actual": "prompt-like fields survive",
+            }
+        )
+        sample = package["compact_sample_payload"]
+        encoded = json.dumps(package, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(package["ok"], package)
+        self.assertTrue(package["privacy_boundary"]["safe_to_paste_public_issue_by_default"])
+        self.assertFalse(package["privacy_boundary"]["raw_prompt_serialized"])
+        self.assertFalse(package["privacy_boundary"]["raw_stdout_stderr_serialized"])
+        self.assertFalse(package["privacy_boundary"]["raw_output_text_preserved"])
+        self.assertEqual(sample["stdout"]["raw_prompt"], "<prompt-like-text-redacted>")
+        self.assertEqual(sample["stdout"]["user_prompt"], "<prompt-like-text-redacted>")
+        self.assertEqual(sample["stdout"]["ordinary_text"], "<raw-output-text-redacted>")
+        self.assertEqual(sample["stdout"]["metrics"]["candidate_count"], 2)
+        self.assertEqual(sample["stderr"], "<raw-output-text-redacted>")
+        self.assertNotIn("PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE", encoded)
+
     def test_learning_cli_builds_sanitized_repro_package_from_saved_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "command.json"
@@ -124,6 +155,61 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertEqual(payload["repro_package"]["surface"], "benchmark")
         self.assertNotIn("E:/SDY/private", encoded)
 
+    def test_top_level_repro_package_alias_supports_template_and_stdin(self) -> None:
+        template = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "repro",
+                "package",
+                "--template",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(template.returncode, 0, template.stderr)
+        template_payload = json.loads(template.stdout)
+        self.assertEqual(template_payload["mode"], "repro_package_template")
+        self.assertIn("template", template_payload)
+        self.assertIn("aippocampus repro package", template_payload["agent_next_action"])
+
+        stdin_payload = {
+            "surface": "agent_recall",
+            "command": "aippocampus agent recall --query vague",
+            "stdout": {"raw_prompt": "PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE"},
+            "expected": "prompt redacted",
+            "actual": "raw prompt survived",
+        }
+        packaged = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "repro",
+                "package",
+                "--stdin",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            input=json.dumps(stdin_payload, ensure_ascii=False),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(packaged.returncode, 0, packaged.stderr)
+        packaged_payload = json.loads(packaged.stdout)
+        encoded = json.dumps(packaged_payload, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(packaged_payload["mode"], "repro_package")
+        self.assertNotIn("PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE", encoded)
+
     def test_learning_repro_package_missing_input_json_returns_recovery_card(self) -> None:
         proc = subprocess.run(
             [
@@ -147,7 +233,50 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["mode"], "repro_package_recovery")
         self.assertEqual(payload["error"]["code"], "learning_repro_input_required")
-        self.assertIn("--input-json <command-output.json>", payload["error"]["next_command"])
+        self.assertEqual(payload["error"]["next_command"], "aippocampus repro package --template --json")
+        self.assertIn("expected_input_schema", payload)
+        self.assertIn("redacted_example", payload["expected_input_schema"])
+        self.assertEqual(
+            {item["label"] for item in payload["recovery_paths"]},
+            {"from sanitized replay or guidance output", "fresh command/output capture template"},
+        )
+        self.assertIn("copyable_package_command", payload["recovery_paths"][0])
+        self.assertIn("copyable_template_command", payload["recovery_paths"][1])
+        self.assertIn("copyable_stdin_command", payload["recovery_paths"][1])
+        self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_stdout_serialized"])
+
+    def test_learning_repro_package_malformed_input_returns_recovery_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "bad.json"
+            input_path.write_text(
+                json.dumps({"command": "pytest", "expected": "pass"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "learning",
+                    "repro-package",
+                    "--input-json",
+                    str(input_path),
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertNotIn("usage:", proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["error"]["code"], "learning_repro_input_malformed")
+        self.assertIn("missing required repro fields", payload["error"]["malformed_error"])
+        self.assertIn("expected_input_schema", payload)
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_stdout_serialized"])
 
 

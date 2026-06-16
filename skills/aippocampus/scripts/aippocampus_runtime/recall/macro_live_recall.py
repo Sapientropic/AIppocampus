@@ -37,6 +37,19 @@ def macro_field_projection_from_projection(projection: Mapping[str, Any]) -> Map
 
 def context_from_projection(projection: Mapping[str, Any]) -> dict[str, Any] | None:
     entry = state_from_projection(projection)
+    total = projection.get("macro_total_encoding")
+    if (
+        projection.get("status") == "current"
+        and isinstance(total, Mapping)
+        and total.get("status") in {"derived_complete", "explicit_reviewed"}
+        and isinstance(total.get("macro_state_hint"), Mapping)
+    ):
+        context = macro_router_interface.build_macro_router_context(
+            total["macro_state_hint"],
+            macro_field_projection=macro_field_projection_from_projection(projection),
+        )
+        context["total_encoder_status"] = total.get("status")
+        return context
     if projection.get("status") != "current" or entry is None:
         return None
     return macro_router_interface.build_macro_router_context(
@@ -133,6 +146,11 @@ def reason_codes(
     active_layer = str(context.get("active_layer") or "human")
     codes = [
         "macro_orientation_recall_prior",
+        *(
+            [f"macro_state_{context.get('total_encoder_status')}"]
+            if context.get("total_encoder_status")
+            else []
+        ),
         f"macro_active_layer_{active_layer}",
         f"macro_fanout_{fanout_bias(context)}",
     ]
@@ -159,6 +177,14 @@ def navigation_diagnostics(
             if str(item).strip()
         ]
     active_layer = str(context.get("active_layer")) if context is not None else None
+    degraded_codes: list[str] = []
+    total = projection.get("macro_total_encoding")
+    if context is None and isinstance(total, Mapping):
+        degraded_codes = [
+            "macro_state_degraded",
+            f"macro_total_status_{total.get('status') or 'unknown'}",
+            *[str(code) for code in total.get("reason_codes") or [] if str(code).strip()],
+        ]
     return {
         "kind": "macro_navigation_recall_diagnostics",
         "status": "applied" if applied else str(projection.get("status") or "not_applied"),
@@ -175,7 +201,8 @@ def navigation_diagnostics(
         "reason_codes": reason_codes(
             context=context,
             projection_status=projection.get("status"),
-        ),
+        )
+        + degraded_codes,
         "diagnostics": diagnostics[:6],
         "source_boundary": {
             "macro_context_is_navigation_prior": True,
