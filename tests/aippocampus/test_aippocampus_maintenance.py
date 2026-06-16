@@ -309,6 +309,121 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             ],
         )
 
+    def test_maintenance_final_index_catchup_prevents_immediate_repeat_prompt(self) -> None:
+        health_calls = [
+            {
+                "ok": False,
+                "recommended_actions": [
+                    {"id": "build_index", "severity": "warning", "reason": "stale"},
+                    {
+                        "id": "prepare_graphify_corpus",
+                        "severity": "info",
+                        "reason": "index stale",
+                    },
+                ],
+            },
+            {
+                "ok": True,
+                "recommended_actions": [
+                    {
+                        "id": "prepare_graphify_corpus",
+                        "severity": "info",
+                        "reason": "graphify stale",
+                    }
+                ],
+            },
+            {
+                "ok": False,
+                "recommended_actions": [
+                    {"id": "build_index", "severity": "warning", "reason": "maintenance live delta"},
+                    {
+                        "id": "prepare_graphify_corpus",
+                        "severity": "info",
+                        "reason": "index stale",
+                    },
+                ],
+            },
+            {
+                "ok": False,
+                "recommended_actions": [
+                    {"id": "build_index", "severity": "warning", "reason": "maintenance live delta"},
+                    {
+                        "id": "prepare_graphify_corpus",
+                        "severity": "info",
+                        "reason": "index stale",
+                    },
+                ],
+            },
+            {
+                "ok": True,
+                "recommended_actions": [
+                    {
+                        "id": "prepare_graphify_corpus",
+                        "severity": "info",
+                        "reason": "graphify stale after final index",
+                    }
+                ],
+            },
+            {"ok": True, "recommended_actions": []},
+        ]
+        seen_modules: list[str] = []
+
+        def module_for(cmd: list[str]) -> str:
+            return cmd[2] if len(cmd) > 2 and cmd[1] == "-m" else Path(cmd[1]).stem
+
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            module = module_for(cmd)
+            seen_modules.append(module)
+            if module == "aippocampus_runtime.health":
+                return 0, health_calls.pop(0), "{}", ""
+            if module == "aippocampus_runtime.ops.graphify_corpus":
+                return 0, {"kind": "graphify_corpus", "ok": True}, "{}", ""
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        def fake_text(cmd: list[str]) -> tuple[int, str, str]:
+            module = module_for(cmd)
+            seen_modules.append(module)
+            if module == "aippocampus_runtime.recall.index_builder":
+                return 0, "indexed", ""
+            self.fail(f"unexpected text command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "run_text_checked", side_effect=fake_text),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(
+                [
+                    "--cwd",
+                    ".",
+                    "--no-refresh-cognitive-map",
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["maintenance_status"], "ok")
+        self.assertEqual(payload["remaining_recommended_action_count"], 0)
+        self.assertIn("build_index_final_catchup", payload["action_ids"])
+        self.assertIn("prepare_graphify_corpus_final_catchup", payload["action_ids"])
+        self.assertEqual(
+            seen_modules,
+            [
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.recall.index_builder",
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.ops.graphify_corpus",
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.recall.index_builder",
+                "aippocampus_runtime.health",
+                "aippocampus_runtime.ops.graphify_corpus",
+                "aippocampus_runtime.health",
+            ],
+        )
+
     def test_summary_json_is_bounded_and_omits_full_health_audit(self) -> None:
         health_calls = [{"ok": True, "recommended_actions": []}, {"ok": True, "recommended_actions": []}]
 

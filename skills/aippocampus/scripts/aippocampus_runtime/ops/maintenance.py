@@ -157,6 +157,21 @@ def failed_action_ids(failures: list[dict]) -> set[str]:
     return {str(item.get("id") or "") for item in failures}
 
 
+def index_builder_cmd(cwd: Path) -> list[str]:
+    return [sys.executable, "-m", "aippocampus_runtime.recall.index_builder", "--cwd", str(cwd)]
+
+
+def graphify_corpus_cmd(cwd: Path) -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "aippocampus_runtime.ops.graphify_corpus",
+        "--cwd",
+        str(cwd),
+        "--json",
+    ]
+
+
 def summary_payload(result: dict) -> dict:
     return {
         "kind": "aippocampus_maintenance_summary",
@@ -374,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
     if has_action(health, "build_index") and "build_clean_source" not in failed_action_ids(action_failures):
-        cmd = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder", "--cwd", str(cwd)]
+        cmd = index_builder_cmd(cwd)
         if args.fail_fast:
             out = run_text(cmd)
             action_results.append({"id": "build_index", "output": out.strip()})
@@ -435,7 +450,8 @@ def main(argv: list[str] | None = None) -> int:
                 if args.append_checkpoint:
                     rebuild_cmd = [
                         sys.executable,
-                        "-m", "aippocampus_runtime.recall.index_builder",
+                        "-m",
+                        "aippocampus_runtime.recall.index_builder",
                         "--cwd",
                         str(cwd),
                     ]
@@ -535,13 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         and not args.no_refresh_graphify
         and "build_index" not in failed_action_ids(action_failures)
     ):
-        cmd = [
-            sys.executable,
-            "-m", "aippocampus_runtime.ops.graphify_corpus",
-            "--cwd",
-            str(cwd),
-            "--json",
-        ]
+        cmd = graphify_corpus_cmd(cwd)
         if args.fail_fast:
             graphify = run_json(cmd)
             action_results.append({"id": "prepare_graphify_corpus", "result": graphify})
@@ -632,6 +642,88 @@ def main(argv: list[str] | None = None) -> int:
             health_final = health_payload
         else:
             action_failures.append(failure_result("health_final", health_cmd, code, stdout, stderr))
+    if (
+        not args.fail_fast
+        and health_final
+        and has_action(health_final, "build_index")
+        and "build_index" not in failed_action_ids(action_failures)
+    ):
+        # A live Codex thread can append enough rows during maintenance itself
+        # to trip the bulk freshness threshold after the first index build.
+        # One final catch-up keeps the front door from telling users to repeat
+        # the same maintenance command immediately after it succeeded.
+        catchup_cmd = index_builder_cmd(cwd)
+        code, catchup_stdout, catchup_stderr = run_text_checked(catchup_cmd)
+        if code == 0:
+            action_results.append(
+                {
+                    **command_result("build_index_final_catchup", catchup_cmd, code),
+                    "output": catchup_stdout.strip(),
+                }
+            )
+            code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
+            if code == 0 and health_payload is not None:
+                health_final = health_payload
+            else:
+                action_failures.append(
+                    failure_result(
+                        "health_after_index_final_catchup",
+                        health_cmd,
+                        code,
+                        health_stdout,
+                        health_stderr,
+                    )
+                )
+        else:
+            action_failures.append(
+                failure_result(
+                    "build_index_final_catchup",
+                    catchup_cmd,
+                    code,
+                    catchup_stdout,
+                    catchup_stderr,
+                )
+            )
+    if (
+        not args.fail_fast
+        and health_final
+        and has_action(health_final, "prepare_graphify_corpus")
+        and not args.no_refresh_graphify
+        and "build_index" not in failed_action_ids(action_failures)
+        and "build_index_final_catchup" not in failed_action_ids(action_failures)
+    ):
+        catchup_cmd = graphify_corpus_cmd(cwd)
+        code, graphify_payload, stdout, stderr = run_json_checked(catchup_cmd)
+        if code == 0 and graphify_payload is not None:
+            action_results.append(
+                {
+                    **command_result("prepare_graphify_corpus_final_catchup", catchup_cmd, code),
+                    "result": graphify_payload,
+                }
+            )
+            code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
+            if code == 0 and health_payload is not None:
+                health_final = health_payload
+            else:
+                action_failures.append(
+                    failure_result(
+                        "health_after_graphify_final_catchup",
+                        health_cmd,
+                        code,
+                        health_stdout,
+                        health_stderr,
+                    )
+                )
+        else:
+            action_failures.append(
+                failure_result(
+                    "prepare_graphify_corpus_final_catchup",
+                    catchup_cmd,
+                    code,
+                    stdout,
+                    stderr,
+                )
+            )
     remaining = health_final.get("recommended_actions", []) if health_final else []
     result = {
         "cwd": LOCAL_PATH_REDACTION,
