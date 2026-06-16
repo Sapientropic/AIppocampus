@@ -47,6 +47,34 @@ def plugin_cache_action_lines(plugin: dict[str, Any]) -> list[str]:
     return lines
 
 
+def action_hint_recommended_actions() -> list[dict[str, str]]:
+    """Executable action-time hint setup choices for trusted Codex installs.
+
+    Action hints remain fail-open route guidance, not source evidence and not a
+    recall blocker. The setup itself is still recommended for trusted Codex
+    environments so a successful prompt/lifecycle install is not misread as the
+    whole foreground experience.
+    """
+
+    return [
+        {
+            "id": "refresh_action_hints",
+            "label": "Refresh action-hint cache",
+            "command": "aippocampus hooks action refresh-cache --write --json",
+        },
+        {
+            "id": "install_action_hints",
+            "label": "Install action-time hints",
+            "command": "aippocampus hooks action install --json",
+        },
+        {
+            "id": "rollback_action_hints",
+            "label": "Rollback action-time hints",
+            "command": "aippocampus hooks action uninstall --json",
+        },
+    ]
+
+
 def agent_callable_probe_lines(item: dict[str, Any]) -> list[str]:
     probe = item.get("host_live_probe") or {}
     if item.get("status") == "foreground_mcp_runtime_mismatch":
@@ -145,16 +173,24 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "command": str(command),
             }
         )
-    if action_hints.get("installed") and action_hints.get("cache_status") != "with_fresh_records":
+    action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
+    if not action_hints_ready:
+        installed = bool(action_hints.get("installed"))
         cards.append(
             {
-                "id": "action_hint_cache",
-                "status": str(action_hints.get("cache_status") or "action_hints_cache_not_ready"),
-                "why": "Action-time hints are optional PreToolUse nudges; refresh the prepared cache when you want them.",
+                "id": "action_hint_cache" if installed else "action_hint_setup",
+                "status": str(
+                    action_hints.get("cache_status")
+                    or ("action_hints_cache_not_ready" if installed else "not_installed")
+                ),
+                "why": (
+                    "Action-time hints are recommended setup for trusted Codex sessions, but remain fail-open navigation hints rather than source evidence or a recall blocker."
+                ),
                 "command": str(
                     action_hints.get("next_command")
                     or "aippocampus hooks action refresh-cache --write --json"
                 ),
+                "recommended_next_actions": action_hint_recommended_actions(),
             }
         )
     if not bool(summary.get("core_ready")) and summary.get("core_blockers"):

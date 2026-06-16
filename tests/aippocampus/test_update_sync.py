@@ -1070,8 +1070,16 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["summary"]["action_hints_ready"])
         self.assertFalse(payload["summary"]["action_hints_installed"])
         self.assertEqual(payload["summary"]["action_hints_status"], "not_installed")
-        self.assertTrue(payload["action_hints"]["optional"])
+        self.assertEqual(payload["action_hints"]["setup_role"], "recommended_for_trusted_codex")
+        self.assertFalse(payload["action_hints"]["optional"])
         self.assertEqual(payload["action_hints"]["status"], "not_installed")
+        self.assertIn(
+            "action_hint_setup",
+            payload["summary"]["foreground_actions"],
+        )
+        recommended = payload["action_hints"]["recommended_next_actions"]
+        self.assertIn("install_action_hints", {item["id"] for item in recommended})
+        self.assertIn("refresh_action_hints", {item["id"] for item in recommended})
         self.assertNotIn("action_hints", payload["summary"]["needs_action"])
         self.assertIsInstance(payload["next_actions"], list)
         self.assertNotIn(str(codex_home), raw)

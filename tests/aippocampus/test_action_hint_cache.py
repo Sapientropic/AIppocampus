@@ -459,6 +459,29 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertEqual(result["cache_status"], "with_cache_records")
         self.assertEqual(len(records), 1)
 
+    def test_empty_refresh_cache_reports_learning_input_recovery_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = cache.refresh_action_hint_cache(
+                cwd=root,
+                write=False,
+                include_default_learning=True,
+                include_default_effectiveness_ledger=True,
+                now_unix=1000,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["cache"]["record_count"], 0)
+        self.assertEqual(result["foreground_action"]["id"], "discover_learning_sources")
+        action_ids = [item["id"] for item in result["safe_next_actions"]]
+        self.assertIn("discover_learning_sources", action_ids)
+        self.assertIn("inspect_learning_guidance", action_ids)
+        self.assertIn("activate_aippo_guidance", action_ids)
+        self.assertEqual(result["empty_cache_recovery"]["reason"], "no_learning_or_effectiveness_inputs_found")
+        encoded = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("<events.jsonl>", encoded)
+        self.assertNotIn(str(root), encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

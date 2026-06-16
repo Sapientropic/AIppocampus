@@ -141,9 +141,11 @@ class AippocampusCliTests(unittest.TestCase):
         pause_help = self.run_cli("pause", "--help")
         forget = self.run_cli("forget", "route:test", "--json")
         why_not = self.run_cli("why-not", "old cue", "--json")
-        learning = self.run_cli("learning", "replay", "--json")
+        learning = self.run_cli("learning", "--json")
+        learning_replay = self.run_cli("learning", "replay", "--json")
         learning_human = self.run_cli("learning", "replay")
         learning_status = self.run_cli("learning", "status", "--json")
+        learning_guidance = self.run_cli("learning", "guidance", "--json")
 
         self.assertEqual(pause_help.returncode, 0, pause_help.stderr)
         self.assertIn("usage: aippocampus pause [target] [options]", pause_help.stdout)
@@ -161,31 +163,32 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(learning.returncode, 0, learning.stderr)
         learning_payload = json.loads(learning.stdout)
         self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
-        self.assertEqual(learning_payload["mode"], "replay")
-        self.assertTrue(learning_payload["fixture_input"])
-        self.assertTrue(
-            learning_payload["metrics_boundary"]["fixture_metrics_are_not_real_history"]
-        )
-        self.assertEqual(learning_payload["evidence_origin"]["kind"], "synthetic_fixture")
-        self.assertIn("learning replay --events", learning_payload["agent_next_action"])
-        intervention = learning_payload["intervention_report"]
-        self.assertEqual(intervention["status"], "diagnostic_behavior_signal")
-        self.assertIn("eligible_intervention_case_count", intervention)
-        self.assertIn("hint_surface_count", intervention["hint_arm"])
-        self.assertIn("broad_wrong_route_avoided_count", intervention["hint_arm"])
-        self.assertIn("repeat_failure_after_hint_count", intervention["hint_arm"])
-        self.assertIn("over_nudge_count", intervention["hint_arm"])
-        self.assertIn("source_reopen_before_action_count", intervention["hint_arm"])
-        self.assertIn("causal_live_behavior_lift", intervention["cannot_claim"])
+        self.assertEqual(learning_payload["mode"], "status")
+        self.assertEqual(learning_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
+        self.assertIn("learning discover-history --json", learning_payload["agent_next_action"]["command"])
         self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
-        self.assertEqual(learning_human.returncode, 0, learning_human.stderr)
-        self.assertIn("origin: synthetic fixture, not real-history evidence", learning_human.stdout)
+
+        self.assertEqual(learning_replay.returncode, 2, learning_replay.stderr)
+        replay_payload = json.loads(learning_replay.stdout)
+        replay_encoded = json.dumps(replay_payload, ensure_ascii=False)
+        self.assertEqual(replay_payload["status"], "needs_source_selection")
+        self.assertFalse(replay_payload["fixture_input"])
+        self.assertEqual(replay_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
+        self.assertNotIn("<events.jsonl>", replay_encoded)
+        self.assertNotIn("<sanitized-events.jsonl>", replay_encoded)
+
+        self.assertEqual(learning_human.returncode, 2, learning_human.stderr)
+        self.assertIn("needs source selection", learning_human.stdout)
         self.assertEqual(learning_status.returncode, 0, learning_status.stderr)
         status_payload = json.loads(learning_status.stdout)
+        status_encoded = json.dumps(status_payload, ensure_ascii=False)
         self.assertEqual(status_payload["lanes"]["prepared_guidance"]["status"], "not_found")
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
         self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
+        self.assertEqual(status_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
+        self.assertNotIn("<events.jsonl>", status_encoded)
+        self.assertNotIn("<sanitized-events.jsonl>", status_encoded)
         self.assertEqual(status_payload["semantic_loop"]["stage"], "action_time_capable")
         self.assertGreaterEqual(
             status_payload["semantic_loop"]["stage_counts"]["promoted_guidance_candidate_count"],
@@ -203,10 +206,18 @@ class AippocampusCliTests(unittest.TestCase):
             "candidate_only_safety_is_not_sufficient",
             status_payload["semantic_loop"]["closeout_gate"],
         )
-        self.assertIn("learning replay --clean-source-events", status_payload["agent_next_action"])
-        self.assertNotIn("benchmark", status_payload["agent_next_action"])
+        self.assertNotIn("benchmark", status_payload["agent_next_action"]["command"])
         self.assertTrue(
             status_payload["lanes"]["current_history_extraction"]["requires_explicit_source"]
+        )
+        self.assertEqual(learning_guidance.returncode, 0, learning_guidance.stderr)
+        guidance_payload = json.loads(learning_guidance.stdout)
+        self.assertEqual(guidance_payload["mode"], "guidance")
+        self.assertIn("semantic_guidance", guidance_payload)
+        self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
+        self.assertNotEqual(
+            guidance_payload["agent_next_action"],
+            "produce or provide sanitized learning findings before expecting action-time hints",
         )
         foreground_commands = " ".join(
             str(action.get("command", "")) for action in status_payload["next_actions"]

@@ -50,13 +50,18 @@ def compact_agent_status_report(
         if str(item) not in {"", "agent_callable"}
     ]
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
+    action_hint_recommended_actions = update_actions.action_hint_recommended_actions()
+    action_hint_primary_command = (
+        action_hints.get("next_command")
+        or action_hint_recommended_actions[0]["command"]
+    )
     actions: list[dict[str, Any]] = []
-    if action_hints.get("installed") and not action_hints_ready and action_hints.get("next_command"):
+    if not action_hints_ready:
         actions.append(
             _compact_update_action(
                 surface="action_hints",
                 reason=str(action_hints.get("cache_status") or "action-time hints not ready"),
-                command=str(action_hints.get("next_command")),
+                command=str(action_hint_primary_command),
             )
         )
     for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
@@ -167,9 +172,16 @@ def compact_agent_status_report(
             "expired_record_count": int(action_hints.get("expired_record_count") or 0),
             "malformed_cache_line_count": int(action_hints.get("malformed_cache_line_count") or 0),
             "provider_counts": action_hints.get("provider_counts") or {},
-            "optional": True,
-            "next_command": action_hints.get("next_command"),
-            "claim_boundary": "action-time hints are optional PreToolUse cache-backed nudges, not ambient hook readiness or source truth",
+            "optional": False,
+            "setup_role": "ready" if action_hints_ready else "recommended_for_trusted_codex",
+            "fail_open": True,
+            "recall_blocking": False,
+            "next_command": action_hint_primary_command,
+            "recommended_next_actions": action_hint_recommended_actions,
+            "claim_boundary": (
+                "action-time hints are recommended setup for trusted Codex sessions, "
+                "but remain navigation-only and never source truth or a recall blocker"
+            ),
         },
         "agent_callable": {
             "status": agent_status,

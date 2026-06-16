@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.hooks.action_hint_cache_records import (
     BLOCKED_STATES,
     CACHE_KIND,
@@ -25,6 +26,62 @@ from aippocampus_runtime.learning_loop.effectiveness_ledger import (
 from aippocampus_runtime import core
 
 DEFAULT_ACTION_HINT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
+
+
+def _empty_cache_recovery(
+    *,
+    result: Mapping[str, Any],
+    learned_intake: Mapping[str, Any],
+    ledger_intake: Mapping[str, Any],
+    write_requested: bool,
+) -> dict[str, Any]:
+    learned_status = str(learned_intake.get("status") or "")
+    ledger_status = str(ledger_intake.get("status") or "")
+    if learned_status == "not_found" and ledger_status == "not_found":
+        reason = "no_learning_or_effectiveness_inputs_found"
+    elif learned_status in {"blocked", "not_found"} and ledger_intake.get("row_count"):
+        reason = "effectiveness_ledger_without_guidance"
+    elif learned_intake.get("finding_count") and not learned_intake.get("prepared_record_count"):
+        reason = "learning_findings_filtered_or_blocked"
+    elif write_requested:
+        reason = "write_requested_but_no_records_to_write"
+    else:
+        reason = "no_action_hint_records_prepared"
+    actions = [
+        foreground_shell_action(
+            action_id="discover_learning_sources",
+            label="Discover eligible learning sources",
+            command="aippocampus learning discover-history --json",
+            why="Find an existing sanitized or source-backed learning input before refreshing the hot cache.",
+            mutation_risk="read_only",
+            claim_boundary="learning_guidance_not_source_truth",
+        ),
+        foreground_shell_action(
+            action_id="inspect_learning_guidance",
+            label="Inspect learning guidance",
+            command="aippocampus learning guidance --json",
+            why="Check whether prepared or semantic guidance exists before writing cache files.",
+            mutation_risk="read_only",
+            claim_boundary="learning_guidance_not_source_truth",
+        ),
+        foreground_shell_action(
+            action_id="activate_aippo_guidance",
+            label="Use AIppo task guidance",
+            command='aippocampus agent aippo --task "action-time learning guidance" --json',
+            why="Use project/workflow guidance when no learned action hints are prepared yet.",
+            mutation_risk="read_only",
+            claim_boundary="guidance_not_source_truth",
+        ),
+    ]
+    return {
+        "empty_cache_recovery": {
+            "reason": reason,
+            "record_count": int((result.get("cache") or {}).get("record_count") or 0),
+            "write_requested": bool(write_requested),
+        },
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
+    }
 
 
 def action_hint_cache_resolution(
@@ -500,6 +557,15 @@ def refresh_action_hint_cache(
         },
         "privacy_boundary": report["privacy_boundary"],
     }
+    if int(report.get("record_count") or 0) == 0:
+        result.update(
+            _empty_cache_recovery(
+                result=result,
+                learned_intake=result["learned_provider_intake"],
+                ledger_intake=result["effectiveness_ledger_intake"],
+                write_requested=write,
+            )
+        )
     if write:
         write_report = write_action_hint_cache(cache_jsonl, report)
         result["wrote"] = True

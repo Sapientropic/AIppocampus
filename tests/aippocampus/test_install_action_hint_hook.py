@@ -75,7 +75,9 @@ class InstallActionHintHookTests(unittest.TestCase):
         card = result["frontstage_card"]
         self.assertEqual(card["authority"], "navigation_only")
         self.assertTrue(card["fail_open"])
-        self.assertTrue(card["optional"])
+        self.assertFalse(card["optional"])
+        self.assertFalse(card["recall_blocking"])
+        self.assertEqual(card["setup_role"], "recommended_for_trusted_codex")
         self.assertEqual(card["cache_status"], "with_missing_cache_file")
         self.assertEqual(card["cache_path_label"], DEFAULT_CACHE_LABEL)
         self.assertEqual(card["cache_scope"], "current_workspace")
