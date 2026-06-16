@@ -374,7 +374,7 @@ def repro_package_template_payload() -> dict[str, Any]:
                 },
                 {
                     "label": "pipe a saved JSON object",
-                    "command": "type repro-input.json | aippocampus repro package --stdin --json",
+                    "command": "cat repro-input.json | aippocampus repro package --stdin --json",
                     "mutates": False,
                 },
             ],
@@ -447,7 +447,7 @@ def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dic
                     "template": repro_package_input_schema()["redacted_example"],
                     "copyable_template_command": "aippocampus repro package --template --json",
                     "copyable_stdin_command": (
-                        "type command-output.json | aippocampus repro package --stdin --json"
+                        "cat command-output.json | aippocampus repro package --stdin --json"
                     ),
                     "mutates": False,
                 },

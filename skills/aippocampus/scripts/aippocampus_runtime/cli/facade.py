@@ -121,12 +121,61 @@ def print_import_recovery_card(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
     print("AIppocampus import", file=target)
     print("decision: choose bundle import or transcript registration", file=target)
-    print("next: aippocampus import <bundle.zip> --dest <folder>", file=target)
+    print("bundle: aippocampus import <bundle.zip> --dest <folder>", file=target)
     print(
         "transcript: aippocampus import conversation --format generic-jsonl --input <file> --dry-run --json",
         file=target,
     )
-    print("boundary: preview transcript imports before registering new source.", file=target)
+    print(
+        "boundary: no write happens from the bare chooser; preview transcript imports before registering new source.",
+        file=target,
+    )
+
+
+def import_recovery_payload() -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_import_recovery",
+        "ok": False,
+        "error": {
+            "code": "import_choice_required",
+            "message": "Choose a private AIppocampus bundle import or a preview-first conversation import.",
+        },
+        "choices": {
+            "bundle_import": {
+                "label": "private AIppocampus bundle import",
+                "command": "aippocampus import <bundle.zip> --dest <folder>",
+                "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
+            },
+            "conversation_import": {
+                "label": "generic conversation transcript import",
+                "preview_command": (
+                    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json"
+                ),
+                "write_command": (
+                    "aippocampus import conversation --format generic-jsonl --input <path>"
+                ),
+                "boundary": "preview first; the input transcript stays local operator material",
+            },
+        },
+        "agent_next_action": (
+            "Preview conversation imports with --dry-run --json before any registry write; "
+            "pass an explicit bundle path for private AIppocampus bundle transfer."
+        ),
+        "safety": {
+            "no_write_happened": True,
+            "preview_before_write": True,
+            "explicit_input_required": True,
+        },
+        "write_boundary": {
+            "written": False,
+            "no_write_happened": True,
+        },
+        "privacy_boundary": {
+            "raw_local_paths_emitted": False,
+            "local_path_redaction_required": True,
+            "private_transcript_material_loaded": False,
+        },
+    }
 
 
 def print_doctor_recovery_card(*, file: TextIO | None = None) -> None:
@@ -137,6 +186,30 @@ def print_doctor_recovery_card(*, file: TextIO | None = None) -> None:
     print("config: aippocampus doctor config --compact-json", file=target)
     print("spend: aippocampus doctor spend --json", file=target)
     print("boundary: doctor output is local diagnostics, not a recall result.", file=target)
+
+
+def print_repro_package_help(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("usage: aippocampus repro package [-h] [--input-json INPUT_JSON]", file=target)
+    print("                                  [--stdin] [--template]", file=target)
+    print("                                  [--version VERSION]", file=target)
+    print("                                  [--commit COMMIT]", file=target)
+    print("                                  [--plugin-manifest-version PLUGIN_MANIFEST_VERSION]", file=target)
+    print("                                  [--json]", file=target)
+    print("", file=target)
+    print("Create a public-safe command/output issue package.", file=target)
+    print("Primary path: aippocampus repro package --input-json command-output.json --json", file=target)
+    print("Portable stdin example: cat command-output.json | aippocampus repro package --stdin --json", file=target)
+    print("", file=target)
+    print("Options:", file=target)
+    print("  -h, --help", file=target)
+    print("  --input-json INPUT_JSON", file=target)
+    print("  --stdin", file=target)
+    print("  --template", file=target)
+    print("  --version VERSION", file=target)
+    print("  --commit COMMIT", file=target)
+    print("  --plugin-manifest-version PLUGIN_MANIFEST_VERSION", file=target)
+    print("  --json", file=target)
 
 
 def print_status_help(*, file: TextIO | None = None) -> None:
@@ -629,8 +702,17 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if args == ["storage"]:
         print_storage_recovery_card()
         return None, 0
-    if args == ["import"]:
-        print_import_recovery_card()
+    if args and args[0] == "import" and set(args[1:]) <= {"--json"}:
+        payload = import_recovery_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_import_recovery_card()
+        return None, 0
+    if len(args) >= 3 and args[:2] == ["repro", "package"] and any(
+        arg in {"-h", "--help"} for arg in args[2:]
+    ):
+        print_repro_package_help()
         return None, 0
     if args == ["doctor"]:
         print_doctor_recovery_card()

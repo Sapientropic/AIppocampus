@@ -156,6 +156,26 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertNotIn("E:/SDY/private", encoded)
 
     def test_top_level_repro_package_alias_supports_template_and_stdin(self) -> None:
+        help_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "repro",
+                "package",
+                "--help",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(help_proc.returncode, 0, help_proc.stderr)
+        self.assertIn("usage: aippocampus repro package", help_proc.stdout)
+        self.assertNotIn("aippocampus learning repro-package", help_proc.stdout)
+
         template = subprocess.run(
             [
                 sys.executable,
@@ -178,6 +198,16 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertEqual(template_payload["mode"], "repro_package_template")
         self.assertIn("template", template_payload)
         self.assertIn("aippocampus repro package", template_payload["agent_next_action"])
+        encoded_template = json.dumps(template_payload, ensure_ascii=False)
+        self.assertIn(
+            "aippocampus repro package --input-json repro-input.json --json",
+            encoded_template,
+        )
+        self.assertIn(
+            "cat repro-input.json | aippocampus repro package --stdin --json",
+            encoded_template,
+        )
+        self.assertNotIn("type repro-input.json |", encoded_template)
 
         stdin_payload = {
             "surface": "agent_recall",
@@ -243,6 +273,12 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertIn("copyable_package_command", payload["recovery_paths"][0])
         self.assertIn("copyable_template_command", payload["recovery_paths"][1])
         self.assertIn("copyable_stdin_command", payload["recovery_paths"][1])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertIn(
+            "cat command-output.json | aippocampus repro package --stdin --json",
+            encoded,
+        )
+        self.assertNotIn("type command-output.json |", encoded)
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_stdout_serialized"])
 
     def test_learning_repro_package_malformed_input_returns_recovery_card(self) -> None:

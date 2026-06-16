@@ -162,6 +162,45 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Do not use self-notes for factual claims", self_note.stdout)
         self.assertLess(self_note.stdout.index("Weak-memory"), self_note.stdout.index("--notes-path"))
 
+    def test_bare_self_note_is_action_card_not_argparse(self) -> None:
+        human = self.run_cli("self-note")
+        machine = self.run_cli("self-note", "--json")
+
+        self.assertEqual(human.returncode, 0, human.stderr)
+        self.assertNotIn("usage:", human.stdout + human.stderr)
+        self.assertIn("AIppocampus self-note", human.stdout)
+        self.assertIn("direction_only", human.stdout)
+        self.assertIn("aippocampus self-note append", human.stdout)
+        self.assertIn("aippocampus agent recall", human.stdout)
+
+        self.assertEqual(machine.returncode, 0, machine.stderr)
+        payload = json.loads(machine.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_agent_self_note_recovery")
+        self.assertEqual(payload["error"]["code"], "self_note_command_required")
+        self.assertFalse(payload["write_boundary"]["written"])
+        self.assertTrue(payload["source_boundary"]["direction_only_is_not_source_truth"])
+        self.assertEqual(
+            {choice["command"] for choice in payload["choices"]},
+            {
+                "aippocampus self-note append --current-thread \"short direction-only note\"",
+                "aippocampus self-note search <cue> --json",
+                "aippocampus self-note list --json",
+                "aippocampus self-note read <note_id> --json",
+            },
+        )
+
+    def test_self_note_read_missing_id_is_not_not_found(self) -> None:
+        proc = self.run_cli("self-note", "read", "--json")
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertNotIn("usage:", proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_agent_self_note_read")
+        self.assertEqual(payload["error"]["code"], "needs_note_id")
+        self.assertFalse(payload["write_boundary"]["written"])
+        self.assertIn("aippocampus self-note list --json", payload["agent_next_action"])
+        self.assertIn("aippocampus self-note search <cue> --json", payload["agent_next_action"])
+
     def test_warm_help_leads_with_safe_status_path(self) -> None:
         proc = self.run_cli("warm", "--help")
 
@@ -385,6 +424,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
     def test_bare_storage_import_and_doctor_are_recovery_cards(self) -> None:
         storage = self.run_cli("storage")
         import_card = self.run_cli("import")
+        import_json = self.run_cli("import", "--json")
         doctor = self.run_cli("doctor")
 
         self.assertEqual(storage.returncode, 0, storage.stderr)
@@ -394,6 +434,15 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(import_card.returncode, 0, import_card.stderr)
         self.assertIn("AIppocampus import", import_card.stdout)
         self.assertIn("import conversation", import_card.stdout)
+        self.assertEqual(import_json.returncode, 0, import_json.stderr)
+        payload = json.loads(import_json.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_import_recovery")
+        self.assertFalse(payload["write_boundary"]["written"])
+        self.assertTrue(payload["safety"]["no_write_happened"])
+        self.assertIn("bundle_import", payload["choices"])
+        self.assertIn("conversation_import", payload["choices"])
+        self.assertIn("--dry-run --json", payload["choices"]["conversation_import"]["preview_command"])
+        self.assertFalse(payload["privacy_boundary"]["raw_local_paths_emitted"])
         self.assertEqual(doctor.returncode, 0, doctor.stderr)
         self.assertIn("AIppocampus doctor", doctor.stdout)
         self.assertIn("doctor provider", doctor.stdout)
