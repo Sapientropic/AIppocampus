@@ -197,7 +197,10 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         template_payload = json.loads(template.stdout)
         self.assertEqual(template_payload["mode"], "repro_package_template")
         self.assertIn("template", template_payload)
-        self.assertIn("aippocampus repro package", template_payload["agent_next_action"])
+        self.assertEqual(
+            template_payload["agent_next_action"]["primary"]["command"],
+            "aippocampus repro package --input-json repro-input.json --json",
+        )
         encoded_template = json.dumps(template_payload, ensure_ascii=False)
         self.assertIn(
             "aippocampus repro package --input-json repro-input.json --json",
