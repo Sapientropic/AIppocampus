@@ -255,13 +255,30 @@ def status_agent_callable(
         or os.environ.get("AIPPOCAMPUS_FOREGROUND_KEY_TOOL_FAILURE")
         or ""
     ).strip()
+    truthy_env_values = {"1", "true", "TRUE", "yes"}
+    falsy_env_values = {"0", "false", "FALSE", "no", "off"}
+    foreground_key_override_true = foreground_key_override in truthy_env_values
+    foreground_visibility_requested = (
+        foreground_tools_visible_asserted
+        or foreground_key_tools_callable_asserted
+        or foreground_override is not None
+    )
+    foreground_probe_requested = (
+        foreground_visibility_requested
+        or foreground_key_override is not None
+        or bool(foreground_failure)
+    )
     foreground_tools_visible: bool | None
     if foreground_key_tools_callable_asserted:
         foreground_tools_visible = True
+    elif foreground_key_override_true:
+        foreground_tools_visible = True
     elif foreground_tools_visible_asserted:
         foreground_tools_visible = True
-    elif foreground_override in {"1", "true", "TRUE", "yes"}:
+    elif foreground_override in truthy_env_values:
         foreground_tools_visible = True
+    elif foreground_override in falsy_env_values:
+        foreground_tools_visible = False
     elif host_plugin_installed or host_mcp_registered:
         foreground_tools_visible = None
     elif host_probe_status.get("ok") is True:
@@ -284,7 +301,7 @@ def status_agent_callable(
     elif foreground_key_tools_callable_asserted:
         current_thread_key_tools_callable = True
         current_thread_key_source = "cli:--foreground-key-tools-callable"
-    elif foreground_key_override in {"1", "true", "TRUE", "yes"}:
+    elif foreground_key_override_true:
         current_thread_key_tools_callable = True
         current_thread_key_source = "env:AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE"
     key_tool_failed = key_tools_callable is False or current_thread_key_tools_callable is False
@@ -298,7 +315,7 @@ def status_agent_callable(
     }
     agent_native_tools_in_host_probe = sorted(host_probe_tool_names & AGENT_NATIVE_TOOL_NAMES)
     missing_agent_native_tools = sorted(AGENT_NATIVE_TOOL_NAMES - host_probe_tool_names)
-    current_thread_discovery = (
+    foreground_probe_state = (
         "foreground_key_tool_call_failed"
         if current_thread_key_tools_callable is False
         else "verified_by_current_foreground_key_tool_calls"
@@ -307,18 +324,32 @@ def status_agent_callable(
         if key_tool_failed
         else "tools_visible_key_tools_unverified"
         if foreground_tools_visible is True
-        else "unknown_or_stale"
+        else "foreground_tools_not_visible"
+        if foreground_tools_visible is False and foreground_probe_requested
+        else "foreground_probe_not_checked"
         if host_probe_status.get("ok") is True or host_plugin_installed or host_mcp_registered
         else "not_configured"
+    )
+    if (
+        not foreground_probe_requested
+        and foreground_probe_state == "foreground_probe_not_checked"
+    ):
+        foreground_probe_state = "not_requested"
+    current_thread_discovery = (
+        "foreground_probe_not_checked"
+        if foreground_probe_state == "not_requested"
+        else foreground_probe_state
     )
     if current_thread_key_tools_callable is False:
         status = "foreground_mcp_runtime_mismatch"
     elif key_tools_callable is False:
         status = "host_live_probe_key_tools_failed"
-    elif host_probe_status.get("ok") is True and not ready:
-        status = "host_live_probe_ok_current_thread_unverified"
     elif host_probe_status.get("ok") is True and ready:
         status = "host_live_probe_ok_current_thread_verified"
+    elif host_probe_status.get("ok") is True and not foreground_probe_requested:
+        status = "host_live_probe_ok_foreground_probe_not_checked"
+    elif host_probe_status.get("ok") is True and not ready:
+        status = "host_live_probe_ok_current_thread_unverified"
     elif ready:
         status = "ready"
     elif host_plugin_installed or host_mcp_registered:
@@ -342,8 +373,9 @@ def status_agent_callable(
     elif host_probe_status.get("ok") is True and not ready:
         next_command = (
             "call agent_recall and agent_deepen in this foreground thread, then rerun "
-            "aippocampus update status --foreground-key-tools-callable --agent-json; "
-            "reload Codex Desktop if those calls fail"
+            "aippocampus update status --foreground-tools-visible "
+            "--foreground-key-tools-callable --agent-json; if those calls fail, rerun "
+            "with --foreground-key-tool-failure <summary>"
         )
     elif host_probe_status.get("ok") is True:
         next_command = "aippocampus update status --json"
@@ -384,12 +416,18 @@ def status_agent_callable(
         "foreground_tools_visibility_source": (
             "cli:--foreground-tools-visible"
             if foreground_tools_visible_asserted
+            else "cli:--foreground-key-tools-callable"
+            if foreground_key_tools_callable_asserted
             else "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE"
-            if foreground_override
-            else "current_thread_unverified_after_host_probe"
-            if host_probe_status.get("ok") is True
+            if foreground_override is not None
+            else "env:AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE"
+            if foreground_key_override is not None
+            else "not_checked_in_this_status_call"
+            if host_probe_status.get("ok") is True and not foreground_probe_requested
             else "host_config_probe"
         ),
+        "foreground_probe_requested": foreground_probe_requested,
+        "foreground_probe_state": foreground_probe_state,
         "current_thread_tool_discovery": current_thread_discovery,
         "next_command": next_command,
         "claim_boundary": (

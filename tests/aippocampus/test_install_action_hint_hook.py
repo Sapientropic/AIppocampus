@@ -14,6 +14,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.hooks import install_action_hint as installer  # noqa: E402
 
+DEFAULT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
+
 
 class InstallActionHintHookTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -75,7 +77,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(card["fail_open"])
         self.assertTrue(card["optional"])
         self.assertEqual(card["cache_status"], "with_missing_cache_file")
-        self.assertEqual(card["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertEqual(card["cache_path_label"], DEFAULT_CACHE_LABEL)
+        self.assertEqual(card["cache_scope"], "current_workspace")
         commands = [step["command"] for step in card["next_steps"]]
         self.assertTrue(any("refresh-cache" in command for command in commands))
         self.assertTrue(any("--write --json" in command for command in commands))
@@ -113,6 +116,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["expired_record_count"], 0)
         self.assertEqual(result["provider_counts"], {"learning_loop": 1})
         self.assertEqual(result["cache_path"], "<redacted:cache-jsonl>")
+        self.assertEqual(result["cache_path_label"], "explicit-cache-jsonl")
+        self.assertEqual(result["cache_scope"], "explicit_override")
         self.assertTrue(result["cache_path_redacted"])
         self.assertEqual(result["frontstage_card"]["status"], "ready")
         self.assertTrue(result["frontstage_card"]["ready"])
@@ -234,7 +239,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertTrue(payload["installed"])
         self.assertTrue(payload["cache_path_configured"])
-        self.assertEqual(payload["frontstage_card"]["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertEqual(payload["frontstage_card"]["cache_path_label"], DEFAULT_CACHE_LABEL)
+        self.assertEqual(payload["frontstage_card"]["cache_scope"], "current_workspace")
         self.assertIn("--cache-jsonl", command)
         self.assertNotIn("<local-cache.jsonl>", encoded)
         self.assertNotIn(str(self.codex_home), encoded)

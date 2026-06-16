@@ -32,7 +32,10 @@ aippocampus hooks action status --json
 Status distinguishes `with_missing_cache_file`, `with_empty_cache`,
 `with_fresh_records`, and `with_expired_records`; it also reports malformed
 cache-line counts while redacting local paths by default. The default cache is
-`.aippocampus/action-hints/pretooluse-cache.jsonl`.
+registry-backed and workspace-scoped:
+`registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl`. A
+project-local `.aippocampus/...` cache is valid only when explicitly passed via
+`--cache-jsonl`.
 
 ## Provider Boundary
 

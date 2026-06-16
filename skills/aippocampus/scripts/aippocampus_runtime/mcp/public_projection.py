@@ -102,6 +102,7 @@ def compact_action(item: Any) -> dict[str, Any]:
 
 
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    readiness = payload.get("product_readiness") or {}
     all_recommended = [
         action
         for item in payload.get("recommended_actions") or []
@@ -131,23 +132,40 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     # itself instead of continuing the user's work.
     checks_obj = payload.get("checks")
     checks: list[Any] = checks_obj if isinstance(checks_obj, list) else []
+    ordinary_usable = (
+        bool(readiness.get("ordinary_first_recall_usable"))
+        if isinstance(readiness, dict) and "ordinary_first_recall_usable" in readiness
+        else bool(payload.get("ok"))
+    )
+    ready_status = (
+        readiness.get("status")
+        if isinstance(readiness, dict) and readiness.get("status")
+        else payload.get("status")
+    )
+    no_action_reason = (
+        "Ordinary source-backed recall/search can continue; latest current-thread context may need maintenance before exact latest claims."
+        if isinstance(readiness, dict) and readiness.get("latest_current_thread_may_be_missing")
+        else "Memory health is ready; advisory actions can wait unless you are doing local diagnostics."
+    )
     return {
         "detail": "compact",
-        "ok": bool(payload.get("ok")),
-        "status": payload.get("status") or ("ok" if payload.get("ok") else "attention_needed"),
+        "ok": ordinary_usable,
+        "status": ready_status or ("ok" if ordinary_usable else "attention_needed"),
         "cwd": payload.get("cwd"),
+        "product_readiness": readiness,
+        "freshness": payload.get("freshness"),
         "recommended_actions": recommended,
         "storage_pressure": payload.get("storage_pressure"),
         "host_state_confounds": payload.get("host_state_confounds"),
         "check_count": len(checks),
         "agent_next_action": (
             promotable_blocking[0]
-            if promotable_blocking
+            if not ordinary_usable and promotable_blocking
             else recommended[0]
-            if recommended and not payload.get("ok")
+            if recommended and not ordinary_usable
             else {
                 "id": "no_action",
-                "reason": "Memory health is ready; advisory actions can wait unless you are doing local diagnostics.",
+                "reason": no_action_reason,
             }
         ),
     }

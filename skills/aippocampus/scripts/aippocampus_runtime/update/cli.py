@@ -799,7 +799,16 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "agent_callable_host_ready": agent_callable_host_probe_ok(
                 surfaces["agent_callable"]
             ),
-            "agent_callable_current_thread_visible": surfaces["agent_callable"]["ready"],
+            "agent_callable_current_thread_visible": (
+                surfaces["agent_callable"].get("foreground_tools_visible") is True
+            ),
+            "agent_callable_current_thread_callable": surfaces["agent_callable"]["ready"],
+            "agent_callable_foreground_probe_requested": bool(
+                surfaces["agent_callable"].get("foreground_probe_requested")
+            ),
+            "agent_callable_foreground_probe_state": surfaces["agent_callable"].get(
+                "foreground_probe_state"
+            ),
             "host_conformance_label": surfaces["host_conformance"]["label"],
             "capability_ladder": capability_ladder,
             "needs_action": actionable,

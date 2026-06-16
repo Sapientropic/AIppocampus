@@ -183,6 +183,8 @@ def compact_agent_status_report(
             "live_host_schema_stale": bool(agent.get("live_host_schema_stale")),
             "key_tool_failures": agent.get("key_tool_failures") or [],
             "current_thread_tool_discovery": agent.get("current_thread_tool_discovery"),
+            "foreground_probe_requested": bool(agent.get("foreground_probe_requested")),
+            "foreground_probe_state": agent.get("foreground_probe_state"),
             "foreground_tools_visible": agent.get("foreground_tools_visible"),
             "next_command": agent.get("next_command"),
             "claim_boundary": agent.get("claim_boundary"),

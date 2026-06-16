@@ -22,13 +22,65 @@ from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     load_ledger_rows,
     summarize_effectiveness_ledger,
 )
+from aippocampus_runtime import core
 
-DEFAULT_ACTION_HINT_CACHE_RELATIVE = Path(".aippocampus") / "action-hints" / "pretooluse-cache.jsonl"
-DEFAULT_ACTION_HINT_CACHE_LABEL = ".aippocampus/action-hints/pretooluse-cache.jsonl"
+DEFAULT_ACTION_HINT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
 
 
-def default_action_hint_cache_path(cwd: Path | None = None) -> Path:
-    return (cwd or Path.cwd()).resolve() / DEFAULT_ACTION_HINT_CACHE_RELATIVE
+def action_hint_cache_resolution(
+    explicit: str | Path | None = None,
+    *,
+    cwd: str | Path | None = None,
+    home: Path | None = None,
+    registry_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Resolve the prepared action-hint cache path without defaulting into a repo.
+
+    Action-time hints are hot-path route nudges, not source truth. The implicit
+    cache is registry-backed and workspace-scoped so normal refresh/install
+    commands do not create project-local `.aippocampus` files or leak hints
+    across unrelated workspaces. A caller may still pass `--cache-jsonl` for an
+    explicit local override during fixtures or manual inspection.
+    """
+
+    if explicit:
+        return {
+            "path": Path(explicit).expanduser().resolve(),
+            "path_source": "argument",
+            "scope": "explicit_override",
+            "path_label": "explicit-cache-jsonl",
+            "raw_path_emitted": False,
+        }
+    root = (
+        Path(registry_dir).expanduser().resolve()
+        if registry_dir
+        else core.aippocampus_registry_dir(home).resolve()
+    )
+    workspace = Path(cwd or Path.cwd()).expanduser().resolve()
+    workspace_scope = core.safe_path_name(core.workspace_thread_key(workspace), "workspace")
+    return {
+        "path": root / "action-hints" / workspace_scope / "pretooluse-cache.jsonl",
+        "path_source": "default_registry",
+        "scope": "current_workspace",
+        "scope_id": workspace_scope,
+        "path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+        "raw_path_emitted": False,
+    }
+
+
+def default_action_hint_cache_path(
+    cwd: Path | None = None,
+    *,
+    home: Path | None = None,
+    registry_dir: str | Path | None = None,
+) -> Path:
+    return Path(
+        action_hint_cache_resolution(
+            cwd=cwd,
+            home=home,
+            registry_dir=registry_dir,
+        )["path"]
+    )
 
 
 def _visible_ref_overlap(record: Mapping[str, Any], features: Mapping[str, Any]) -> bool:
@@ -347,9 +399,9 @@ def refresh_action_hint_cache(
     include_default_effectiveness_ledger: bool = True,
 ) -> dict[str, Any]:
     root = cwd.resolve() if cwd else Path.cwd()
-    default_cache_path_used = cache_jsonl is None
-    if cache_jsonl is None:
-        cache_jsonl = default_action_hint_cache_path(root)
+    cache_resolution = action_hint_cache_resolution(cache_jsonl, cwd=root)
+    default_cache_path_used = cache_resolution["path_source"] == "default_registry"
+    cache_jsonl = Path(cache_resolution["path"])
     learned_intake: dict[str, Any] = {
         "status": "not_requested",
         "source": "none",
@@ -432,7 +484,9 @@ def refresh_action_hint_cache(
         "write_requested": bool(write),
         "wrote": False,
         "cache_status": "not_written",
-        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+        "cache_path_label": cache_resolution["path_label"],
+        "cache_path_source": cache_resolution["path_source"],
+        "cache_scope": cache_resolution["scope"],
         "default_cache_path_used": default_cache_path_used,
         "cache": report,
         "learned_provider_intake": {

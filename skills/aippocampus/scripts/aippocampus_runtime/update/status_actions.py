@@ -57,7 +57,12 @@ def agent_callable_probe_lines(item: dict[str, Any]) -> list[str]:
     if item.get("ready") and probe.get("ok"):
         return [f"  host probe: {probe.get('source')} ok"]
     if probe.get("ok"):
-        lines = ["  host probe: ok; current foreground thread tool discovery is unverified"]
+        if item.get("foreground_probe_state") == "not_requested":
+            lines = [
+                "  host probe: ok; foreground tool discovery was not checked in this status call"
+            ]
+        else:
+            lines = ["  host probe: ok; current foreground thread tool discovery is unverified"]
         if item.get("next_command"):
             lines.append("  next: " + str(item.get("next_command")))
         return lines
@@ -85,18 +90,25 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         action_hints = {}
     cards: list[dict[str, Any]] = []
     if bool(summary.get("agent_callable_host_ready")) and not bool(
-        summary.get("agent_callable_current_thread_visible")
+        summary.get("agent_callable_ready")
     ):
         stale = agent.get("status") == "foreground_mcp_runtime_mismatch"
+        not_checked = agent.get("foreground_probe_state") == "not_requested"
         cards.append(
             {
                 "id": "current_thread_tool_discovery",
                 "status": (
                     "foreground_mcp_runtime_mismatch"
                     if stale
+                    else "host_ready_foreground_probe_not_checked"
+                    if not_checked
                     else "host_ready_current_thread_unverified"
                 ),
-                "why": "The host probe passed, but this foreground thread has not proved it can see the AIppocampus tools.",
+                "why": (
+                    "The host probe passed, but this status call did not check whether the foreground thread can see or call AIppocampus tools."
+                    if not_checked
+                    else "The host probe passed, but this foreground thread has not proved it can see and call the AIppocampus tools."
+                ),
                 "command": str(
                     agent.get("next_command")
                     or "reload Codex Desktop, then run `aippocampus update status --agent-json`"

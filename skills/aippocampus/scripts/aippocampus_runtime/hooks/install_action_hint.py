@@ -17,6 +17,7 @@ from typing import Any
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks.action_hint_cache import (
     DEFAULT_ACTION_HINT_CACHE_LABEL,
+    action_hint_cache_resolution,
     default_action_hint_cache_path,
     load_action_hint_records_with_diagnostics,
 )
@@ -103,7 +104,25 @@ def cache_path_from_command(command: str) -> Path | None:
     return Path(raw)
 
 
-def _cache_status(commands: list[str]) -> dict[str, Any]:
+def _cache_path_label(path: Path, *, codex_home_path: Path | None = None) -> dict[str, str]:
+    default_path = default_action_hint_cache_path(Path.cwd(), home=codex_home_path)
+    try:
+        if path.resolve() == default_path.resolve():
+            return {
+                "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                "cache_scope": "current_workspace",
+                "cache_path_source": "default_registry",
+            }
+    except OSError:
+        pass
+    return {
+        "cache_path_label": "explicit-cache-jsonl",
+        "cache_scope": "explicit_override",
+        "cache_path_source": "argument_or_existing_hook",
+    }
+
+
+def _cache_status(commands: list[str], *, codex_home_path: Path | None = None) -> dict[str, Any]:
     paths = [cache_path_from_command(command) for command in commands]
     valid_paths = [path for path in paths if path is not None]
     if not valid_paths:
@@ -118,9 +137,12 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
             "provider_counts": {},
             "cache_path": "",
             "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            "cache_scope": "not_configured",
+            "cache_path_source": "missing_hook_argument",
             "next_command": "aippocampus hooks action refresh-cache --write --json",
         }
     path = valid_paths[0]
+    path_meta = _cache_path_label(path, codex_home_path=codex_home_path)
     if not path.exists():
         return {
             "cache_status": "with_missing_cache_file",
@@ -132,7 +154,7 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
             "malformed_cache_line_count": 0,
             "provider_counts": {},
             "cache_path": str(path),
-            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            **path_meta,
             "next_command": "aippocampus hooks action refresh-cache --write --json",
         }
     cache = load_action_hint_records_with_diagnostics(path)
@@ -170,7 +192,7 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
         "malformed_cache_line_count": int(cache.get("malformed_cache_line_count") or 0),
         "provider_counts": provider_counts,
         "cache_path": str(path),
-        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+        **path_meta,
         "next_command": "aippocampus hooks action refresh-cache --write --json",
     }
 
@@ -239,7 +261,10 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
         "authority": "navigation_only",
         "event": ACTION_HINT_EVENT,
         "cache_status": cache_status,
-        "cache_path_label": str(status_result.get("cache_path_label") or DEFAULT_ACTION_HINT_CACHE_LABEL),
+        "cache_path_label": str(
+            status_result.get("cache_path_label") or DEFAULT_ACTION_HINT_CACHE_LABEL
+        ),
+        "cache_scope": str(status_result.get("cache_scope") or "unknown"),
         "cache_record_count": int(status_result.get("cache_record_count") or 0),
         "fresh_record_count": int(status_result.get("fresh_record_count") or 0),
         "purpose": "Small PreToolUse nudges for learned source routes; never source evidence.",
@@ -265,7 +290,10 @@ def install(
     if host != SUPPORTED_HOST:
         return _unsupported(path, host=host)
     if cache_jsonl is None:
-        cache_jsonl = default_action_hint_cache_path(Path.cwd())
+        cache_jsonl = default_action_hint_cache_path(Path.cwd(), home=path.parent)
+        cache_meta = action_hint_cache_resolution(cwd=Path.cwd(), home=path.parent)
+    else:
+        cache_meta = action_hint_cache_resolution(cache_jsonl, cwd=Path.cwd(), home=path.parent)
     data = load_hooks(path)
     groups = event_groups(data)
     target = action_hint_hook(module=module, cache_jsonl=cache_jsonl, timeout=timeout)
@@ -290,7 +318,9 @@ def install(
                         "event_supported": True,
                         "support_status": "supported_by_codex_hooks_json",
                         "command": target["command"],
-                        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                        "cache_path_label": cache_meta["path_label"],
+                        "cache_scope": cache_meta["scope"],
+                        "cache_path_source": cache_meta["path_source"],
                     }
                 )
             group["hooks"] = [
@@ -327,7 +357,9 @@ def install(
             "event_supported": True,
             "support_status": "supported_by_codex_hooks_json",
             "command": target["command"],
-            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            "cache_path_label": cache_meta["path_label"],
+            "cache_scope": cache_meta["scope"],
+            "cache_path_source": cache_meta["path_source"],
         }
     )
 
@@ -419,19 +451,25 @@ def status(
                 "event_supported": True,
                 "support_status": "supported_by_codex_hooks_json",
                 "commands": commands,
-                **(_cache_status(commands) if commands else {
-                    "cache_status": "not_installed",
-                    "cache_path_configured": False,
-                    "cache_exists": False,
-                    "cache_record_count": 0,
-                    "fresh_record_count": 0,
-                    "expired_record_count": 0,
-                    "malformed_cache_line_count": 0,
-                "provider_counts": {},
-                "cache_path": "",
-                    "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
-                    "next_command": "aippocampus hooks action refresh-cache --write --json",
-                }),
+                **(
+                    _cache_status(commands, codex_home_path=path.parent)
+                    if commands
+                    else {
+                        "cache_status": "not_installed",
+                        "cache_path_configured": False,
+                        "cache_exists": False,
+                        "cache_record_count": 0,
+                        "fresh_record_count": 0,
+                        "expired_record_count": 0,
+                        "malformed_cache_line_count": 0,
+                        "provider_counts": {},
+                        "cache_path": "",
+                        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                        "cache_scope": "not_configured",
+                        "cache_path_source": "missing_hook_argument",
+                        "next_command": "aippocampus hooks action refresh-cache --write --json",
+                    }
+                ),
             }
         )
     result["frontstage_card"] = action_hint_frontstage_card(result)

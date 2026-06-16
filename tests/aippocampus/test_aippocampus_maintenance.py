@@ -576,8 +576,16 @@ class AippocampusMaintenanceTests(unittest.TestCase):
                 return (
                     0,
                     {
-                        "ok": False,
-                        "status": "attention_needed",
+                        "ok": True,
+                        "product_readiness": {
+                            "ready": True,
+                            "ordinary_first_recall_usable": True,
+                            "freshness_degraded": True,
+                            "latest_current_thread_may_be_missing": True,
+                            "maintenance_recommended": True,
+                            "maintenance_required_before_recall": False,
+                            "status": "ready_with_freshness_degraded",
+                        },
                         "recommended_actions": [
                             {"id": "build_index", "severity": "warning", "reason": "index stale"}
                         ],
@@ -599,6 +607,10 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(seen_modules, ["aippocampus_runtime.health"])
         self.assertEqual(payload["mode"], "status")
         self.assertTrue(payload["read_only"])
+        self.assertTrue(payload["maintenance_ok"])
+        self.assertEqual(payload["maintenance_status"], "degraded")
+        self.assertTrue(payload["user_impact"]["can_continue_normally"])
+        self.assertEqual(payload["user_impact"]["recall_usable"], "yes_latest_may_be_missing")
         self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
 

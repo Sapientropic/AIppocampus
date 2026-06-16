@@ -675,19 +675,22 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["summary"]["agent_callable_ready"])
         self.assertEqual(
             payload["summary"]["agent_callable_status"],
-            "host_live_probe_ok_current_thread_unverified",
+            "host_live_probe_ok_foreground_probe_not_checked",
         )
         self.assertFalse(agent["ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
+        self.assertEqual(agent["status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertIsNone(agent["foreground_tools_visible"])
         self.assertEqual(
             agent["foreground_tools_visibility_source"],
-            "current_thread_unverified_after_host_probe",
+            "not_checked_in_this_status_call",
         )
-        self.assertEqual(agent["current_thread_tool_discovery"], "unknown_or_stale")
+        self.assertFalse(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "not_requested")
+        self.assertEqual(agent["current_thread_tool_discovery"], "foreground_probe_not_checked")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
-        self.assertIn("reload Codex Desktop", agent["next_command"])
+        self.assertIn("--foreground-tools-visible", agent["next_command"])
+        self.assertIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
@@ -696,7 +699,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(by_id["active_recall_ready"]["ready"])
         self.assertEqual(
             by_id["active_recall_ready"]["status"],
-            "host_live_probe_ok_current_thread_unverified",
+            "host_live_probe_ok_foreground_probe_not_checked",
         )
 
     def test_status_keeps_visible_only_foreground_tools_unverified(self) -> None:
@@ -740,6 +743,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
         self.assertEqual(agent["current_thread_tool_discovery"], "tools_visible_key_tools_unverified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
+        self.assertTrue(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "tools_visible_key_tools_unverified")
         self.assertIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertEqual(len(agent["host_probe_agent_native_tools"]), 4)
 
@@ -781,6 +786,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "cli:--foreground-tools-visible")
         self.assertTrue(agent["current_foreground_key_tools_callable"])
+        self.assertTrue(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "verified_by_current_foreground_key_tool_calls")
         self.assertEqual(
             agent["current_thread_tool_discovery"],
             "verified_by_current_foreground_key_tool_calls",
@@ -828,9 +835,11 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertFalse(payload["summary"]["agent_callable_ready"])
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
-        self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertTrue(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertEqual(agent["status"], "foreground_mcp_runtime_mismatch")
         self.assertEqual(agent["current_thread_tool_discovery"], "foreground_key_tool_call_failed")
+        self.assertTrue(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "foreground_key_tool_call_failed")
         self.assertFalse(agent["current_foreground_key_tools_callable"])
         self.assertTrue(agent["live_host_schema_stale"])
         self.assertIn("aippocampus agent recall", agent["next_command"])
@@ -989,7 +998,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
         self.assertFalse(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
+        self.assertEqual(agent["status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
@@ -1049,9 +1058,15 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
         self.assertEqual(
             payload["agent_callable"]["status"],
-            "host_live_probe_ok_current_thread_unverified",
+            "host_live_probe_ok_foreground_probe_not_checked",
         )
         self.assertTrue(payload["agent_callable"]["host_live_probe_ok"])
+        self.assertFalse(payload["agent_callable"]["foreground_probe_requested"])
+        self.assertEqual(payload["agent_callable"]["foreground_probe_state"], "not_requested")
+        self.assertEqual(
+            payload["agent_callable"]["current_thread_tool_discovery"],
+            "foreground_probe_not_checked",
+        )
         self.assertFalse(payload["summary"]["action_hints_ready"])
         self.assertFalse(payload["summary"]["action_hints_installed"])
         self.assertEqual(payload["summary"]["action_hints_status"], "not_installed")

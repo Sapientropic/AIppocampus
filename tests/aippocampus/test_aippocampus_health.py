@@ -567,6 +567,10 @@ class AippocampusHealthTests(unittest.TestCase):
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
         self.assertEqual(payload["storage_pressure"], pressure)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["product_readiness"]["ordinary_first_recall_usable"])
+        self.assertFalse(payload["product_readiness"]["maintenance_required_before_recall"])
+        self.assertTrue(payload["product_readiness"]["storage_pressure_cleanup_recommended"])
 
     def test_health_reports_codex_host_state_confounds_without_paths_or_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -663,9 +667,14 @@ class AippocampusHealthTests(unittest.TestCase):
 
         action_ids = [item["id"] for item in payload["recommended_actions"]]
 
-        self.assertFalse(payload["ok"])
+        self.assertTrue(payload["ok"])
         self.assertIn("build_index", action_ids)
         self.assertIn("build_clean_source", action_ids)
+        self.assertEqual(payload["product_readiness"]["status"], "ready_with_freshness_degraded")
+        self.assertTrue(payload["product_readiness"]["ordinary_first_recall_usable"])
+        self.assertTrue(payload["product_readiness"]["freshness_degraded"])
+        self.assertTrue(payload["product_readiness"]["latest_current_thread_may_be_missing"])
+        self.assertFalse(payload["product_readiness"]["maintenance_required_before_recall"])
         self.assertLess(action_ids.index("build_clean_source"), action_ids.index("build_index"))
         index_action = next(item for item in payload["recommended_actions"] if item["id"] == "build_index")
         self.assertEqual(index_action["depends_on"], ["build_clean_source"])

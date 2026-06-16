@@ -155,11 +155,10 @@ def maintenance_status(
         return "failed"
     if failures:
         return "blocked" if skipped else "degraded"
-    if health_final and any(
-        item.get("severity") in {"critical", "warning"}
-        for item in health_final.get("recommended_actions", [])
-    ):
-        return "degraded"
+    if health_final:
+        status = health_maintenance_status(health_final)
+        if status != "ok":
+            return status
     return "ok"
 
 
@@ -197,6 +196,14 @@ def unique_action_ids(action_ids: list[str]) -> list[str]:
 def health_maintenance_status(health: dict | None) -> str:
     if not health:
         return "unavailable"
+    readiness = health.get("product_readiness") or {}
+    if isinstance(readiness, dict) and readiness:
+        if readiness.get("maintenance_required_before_recall"):
+            return "attention_needed"
+        if readiness.get("maintenance_recommended"):
+            return "degraded"
+        if readiness.get("ordinary_first_recall_usable") or readiness.get("ready"):
+            return "ok"
     status = str(health.get("status") or "").strip()
     if status:
         return status
@@ -204,7 +211,15 @@ def health_maintenance_status(health: dict | None) -> str:
 
 
 def health_maintenance_ok(health: dict | None) -> bool:
-    if not health or not bool(health.get("ok")):
+    if not health:
+        return False
+    readiness = health.get("product_readiness") or {}
+    if isinstance(readiness, dict) and readiness:
+        return bool(
+            readiness.get("ordinary_first_recall_usable")
+            and not readiness.get("maintenance_required_before_recall")
+        )
+    if not bool(health.get("ok")):
         return False
     return not any(
         item.get("severity") in {"critical", "warning"}
@@ -260,6 +275,62 @@ def best_next_action(recommended: list[dict]) -> dict:
 
 
 def user_impact(health: dict | None, recommended: list[dict]) -> dict:
+    readiness = (health or {}).get("product_readiness") if isinstance(health, dict) else {}
+    if isinstance(readiness, dict) and readiness:
+        required_before_recall = bool(
+            readiness.get("maintenance_required_before_recall")
+            or (
+                readiness.get("ready") is False
+                and not readiness.get("ordinary_first_recall_usable")
+            )
+        )
+        if required_before_recall:
+            return {
+                "recall_usable": "degraded",
+                "can_continue_normally": False,
+                "ordinary_first_recall_usable": False,
+                "latest_current_thread_may_be_missing": bool(
+                    readiness.get("latest_current_thread_may_be_missing")
+                ),
+                "maintenance_recommended": True,
+                "maintenance_required_before_recall": True,
+                "summary": (
+                    "Source-backed recall/search may be incomplete until the required "
+                    "maintenance action is applied."
+                ),
+            }
+        if readiness.get("latest_current_thread_may_be_missing"):
+            return {
+                "recall_usable": "yes_latest_may_be_missing",
+                "can_continue_normally": True,
+                "ordinary_first_recall_usable": True,
+                "latest_current_thread_may_be_missing": True,
+                "maintenance_recommended": bool(readiness.get("maintenance_recommended")),
+                "maintenance_required_before_recall": False,
+                "summary": (
+                    "Ordinary source-backed recall/search can continue; run maintenance "
+                    "before relying on the latest current-thread details."
+                ),
+            }
+        if readiness.get("maintenance_recommended"):
+            return {
+                "recall_usable": "yes_with_optional_maintenance",
+                "can_continue_normally": True,
+                "ordinary_first_recall_usable": True,
+                "latest_current_thread_may_be_missing": False,
+                "maintenance_recommended": True,
+                "maintenance_required_before_recall": False,
+                "summary": "Core recall/search can continue; remaining items are optional upkeep.",
+            }
+        return {
+            "recall_usable": "yes",
+            "can_continue_normally": True,
+            "ordinary_first_recall_usable": True,
+            "latest_current_thread_may_be_missing": False,
+            "maintenance_recommended": False,
+            "maintenance_required_before_recall": False,
+            "summary": "Source-backed recall/search can continue normally.",
+        }
     if health_maintenance_ok(health):
         return {
             "recall_usable": "yes",
