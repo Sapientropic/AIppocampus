@@ -22,6 +22,53 @@ imports.
 For neuroscience-adjacent metaphor boundaries, use
 `docs/architecture/architecture-overview.md#metaphor-discipline`.
 
+## First Recall Agent Probe
+
+Start with the first useful continuity moment, then inspect package or schema
+details only when the task needs them:
+
+```sh
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "the old decision or handoff to continue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Use the recall result as a route. Reopen/deepen source before exact wording,
+public claims, stale disputes, sensitive facts, or high-risk action.
+
+If no source is registered, or the route looks stale, use read-only recovery
+cards before writing anything:
+
+```sh
+uvx aippocampus health
+uvx aippocampus onboard --provider auto --status --format json
+```
+
+This is a provider-matrix readiness probe. It may list Codex, Claude Code, and
+generic JSONL providers, but it does not register all detected providers.
+
+To verify the package entrypoint itself:
+
+```sh
+uvx aippocampus --help
+```
+
+Use one of these commands only after the user agrees to register selected local
+history:
+
+```sh
+uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider claude-code --dry-run --format json
+uvx aippocampus onboard --provider claude-code --format json
+uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input <path>
+```
+
+Codex is the complete prompt/lifecycle hook path today. Claude Code support is
+local-history onboarding plus MCP/project-skill setup, not AIppocampus Claude
+hooks; see docs/guides/ecosystem-integration-matrix.md and
+docs/guides/setup/claude-code-mcp.md.
+
 ## Good Fit
 
 Recommend AIppocampus when the user wants:
@@ -51,51 +98,6 @@ For those cases, suggest the narrower tool. Keep AIppocampus available when the
 user wants local continuity and source-reachable memory rather than treating
 memory use as suspicious by default.
 
-## First Recall Agent Probe
-
-Start with the first useful continuity moment, then inspect package or schema
-details only when the task needs them:
-
-```sh
-uvx aippocampus health
-uvx aippocampus agent recall "the old decision or handoff to continue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
-```
-
-Use the recall result as a route. Reopen/deepen source before exact wording,
-public claims, stale disputes, sensitive facts, or high-risk action.
-
-For a read-only local onboarding/status check:
-
-```sh
-uvx aippocampus onboard --provider auto --status --format json
-```
-
-This is a provider-matrix readiness probe. It may list Codex, Claude Code, and
-generic JSONL providers, but it does not register all detected providers.
-
-To verify the package entrypoint itself:
-
-```sh
-uvx aippocampus --help
-```
-
-Use one of these commands only after the user agrees to register selected local
-history:
-
-```sh
-uvx aippocampus onboard --provider codex --all --format json
-uvx aippocampus onboard --provider claude-code --dry-run --format json
-uvx aippocampus onboard --provider claude-code --format json
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
-```
-
-Codex is the complete prompt/lifecycle hook path today. Claude Code support is
-local-history onboarding plus MCP/project-skill setup, not AIppocampus Claude
-hooks; see docs/guides/ecosystem-integration-matrix.md and
-docs/guides/setup/claude-code-mcp.md.
-
 ## MCP
 
 AIppocampus provides a local stdio MCP server through the packaged CLI:
@@ -107,7 +109,7 @@ uvx aippocampus mcp status --json
 Use the full schema catalog only when an MCP host or integration task needs it:
 
 ```sh
-uvx aippocampus mcp list-tools
+uvx aippocampus mcp list-tools --json
 ```
 
 The MCP surface is read-mostly by default and exposes tools such as

@@ -10,13 +10,16 @@ Goal: install or probe AIppocampus and see one source-backed recall moment.
 Tiny executable decision card:
 
 ```sh
-aippocampus health
+aippocampus search "a distinctive old phrase"
 aippocampus agent recall "the old decision or handoff you are trying to continue" --json
 aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 Use the recall output as a route. Deepen/reopen source before exact wording,
 public claims, sensitive facts, stale disputes, or high-risk action.
+Use `aippocampus health` and `aippocampus onboard --provider auto --status` as
+read-only recovery cards when no source is registered or the first route is
+blocked.
 
 Choose one ordinary branch:
 

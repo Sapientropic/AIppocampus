@@ -450,7 +450,7 @@ def check_doctor_config(venv: Path, work_dir: Path, env: dict[str, str], checks:
 
 def check_mcp_tools(venv: Path, work_dir: Path, env: dict[str, str], checks: list[Check]) -> None:
     proc = run_command(
-        [str(venv_executable(venv, "aippocampus")), "mcp", "list-tools"],
+        [str(venv_executable(venv, "aippocampus")), "mcp", "list-tools", "--json"],
         cwd=work_dir,
         env=env,
     )

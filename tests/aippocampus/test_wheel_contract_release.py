@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tomllib
 import unittest
@@ -112,6 +113,35 @@ class WheelContractReleaseTests(unittest.TestCase):
             "source_tree_modules",
         ):
             self.assertIn(required, source)
+
+    def test_mcp_tool_contract_uses_full_json_catalog(self) -> None:
+        calls: list[list[str]] = []
+        payload = {"tools": [{"name": name} for name in wheel_contract.EXPECTED_MCP_TOOLS]}
+
+        class Proc:
+            returncode = 0
+            stdout = json.dumps(payload)
+            stderr = ""
+
+        def fake_run_command(command: list[str], **_: object) -> Proc:
+            calls.append(command)
+            return Proc()
+
+        with TemporaryDirectory() as tmp, patch.object(
+            wheel_contract,
+            "run_command",
+            side_effect=fake_run_command,
+        ):
+            checks: list[wheel_contract.Check] = []
+            wheel_contract.check_mcp_tools(
+                Path(tmp) / "venv",
+                Path(tmp),
+                {},
+                checks,
+            )
+
+        self.assertEqual(calls[0][1:], ["mcp", "list-tools", "--json"])
+        self.assertEqual(checks[0].status, "pass")
 
     def test_release_docs_and_workflows_run_fresh_wheel_contract(self) -> None:
         checklist = RELEASE_CHECKLIST.read_text(encoding="utf-8")

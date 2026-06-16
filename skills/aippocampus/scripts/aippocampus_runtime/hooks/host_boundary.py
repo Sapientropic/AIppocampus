@@ -35,7 +35,11 @@ def host_integration_text_lines() -> list[str]:
     meta = host_integration_metadata()
     return [
         f"host: {meta['host']}",
+        "host scope: codex_hooks_only",
         f"config surface: {meta['config_surface']}",
         f"provider-neutral: {str(meta['provider_neutral']).lower()}",
-        "unsupported host hooks: " + ", ".join(meta["unsupported_hosts"]),
+        "other hosts: "
+        + ", ".join(meta["unsupported_hosts"])
+        + " use onboarding/MCP/import routes; no AIppocampus-owned hooks claimed",
+        "not a failure: this installer only manages the Codex hooks.json surface",
     ]

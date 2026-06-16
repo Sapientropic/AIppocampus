@@ -107,6 +107,54 @@ def print_config_help(*, file: TextIO | None = None) -> None:
     print("  aippocampus doctor config --json", file=target)
 
 
+def print_storage_recovery_card(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("AIppocampus storage", file=target)
+    print("decision: choose an explicit storage action", file=target)
+    print("why: bare storage should not dump a long cleanup candidate list.", file=target)
+    print("next: aippocampus storage gc --dry-run --json", file=target)
+    print("apply: aippocampus storage gc --apply --i-understand-this-deletes-data", file=target)
+    print("boundary: cleanup is explicit operator work; dry-run before apply.", file=target)
+
+
+def print_import_recovery_card(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("AIppocampus import", file=target)
+    print("decision: choose bundle import or transcript registration", file=target)
+    print("next: aippocampus import <bundle.zip> --dest <folder>", file=target)
+    print(
+        "transcript: aippocampus import conversation --format generic-jsonl --input <file> --dry-run --json",
+        file=target,
+    )
+    print("boundary: preview transcript imports before registering new source.", file=target)
+
+
+def print_doctor_recovery_card(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("AIppocampus doctor", file=target)
+    print("decision: pick the health question first", file=target)
+    print("provider: aippocampus doctor provider --json", file=target)
+    print("config: aippocampus doctor config --compact-json", file=target)
+    print("spend: aippocampus doctor spend --json", file=target)
+    print("boundary: doctor output is local diagnostics, not a recall result.", file=target)
+
+
+def print_status_help(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
+    print("usage: aippocampus health [--json|--agent-json]", file=target)
+    print("alias: aippocampus status [--json|--agent-json]", file=target)
+    print("", file=target)
+    print("Status decision card:", file=target)
+    print("  Use health when you need one-screen readiness and a next action.", file=target)
+    print("  Use update status when checking installed skill/plugin/hook freshness.", file=target)
+    print("  Use operator diagnostics only when repairing local artifacts.", file=target)
+    print("", file=target)
+    print("Try:", file=target)
+    print("  aippocampus status", file=target)
+    print("  aippocampus health --agent-json", file=target)
+    print("  aippocampus update status --agent-json", file=target)
+
+
 @dataclass(frozen=True)
 class CommandSpec:
     script_name: str
@@ -178,6 +226,7 @@ COMMANDS = {
         prefix=("why-not",),
     ),
     "learning": CommandSpec("learning.py", "aippocampus_runtime.learning_loop.cli"),
+    "questions": CommandSpec("questions.py", "aippocampus_runtime.question.frontdoor"),
     "pause": CommandSpec("controls.py", "aippocampus_runtime.controls", prefix=("pause",)),
     "forget": CommandSpec("controls.py", "aippocampus_runtime.controls", prefix=("forget",)),
     "do-not-use-here": CommandSpec(
@@ -209,6 +258,7 @@ COMMANDS = {
         "telepathy_handoff_store.py",
         "aippocampus_runtime.ops.telepathy_handoff_store",
     ),
+    "navigate": CommandSpec("navigate.py", "aippocampus_runtime.navigation.frontdoor"),
 }
 
 SCRIPT_MODULES = {
@@ -347,6 +397,15 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
     if not argv:
         return None
     command, rest = argv[0], argv[1:]
+    if command in {"recall", "deepen", "explain", "feedback", "aippo", "macro"}:
+        return invocation_from_spec("agent", COMMANDS["agent"], [command, *rest])
+    if command == "provider-key":
+        return CommandInvocation(
+            command,
+            "onboard.py",
+            module_name_for_script("onboard.py"),
+            ["provider-key", *rest],
+        )
     if command == "import" and rest and rest[0] == "conversation":
         return CommandInvocation(
             command,
@@ -369,6 +428,14 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             ["config", *rest],
         )
     if command in COMMANDS:
+        if command == "agent" and not rest:
+            return invocation_from_spec(command, COMMANDS[command], ["--help"])
+        if command == "logs" and not rest:
+            return invocation_from_spec(command, COMMANDS[command], ["status"])
+        if command == "storage" and not rest:
+            return invocation_from_spec(command, COMMANDS[command], ["--help"])
+        if command == "warm" and not rest:
+            return invocation_from_spec(command, COMMANDS[command], ["status"])
         return invocation_from_spec(command, COMMANDS[command], rest)
     if command == "mcp":
         args = ["--list-tools", *rest[1:]] if rest and rest[0] == "list-tools" else rest
@@ -379,6 +446,8 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             args=args,
         )
     if command == "sync":
+        if not rest:
+            rest = ["status"]
         return CommandInvocation(
             command,
             "sync_bundle.py",
@@ -386,6 +455,8 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             rest,
         )
     if command == "object-sync":
+        if not rest:
+            rest = ["--help"]
         return CommandInvocation(
             command,
             "sync_object_storage.py",
@@ -433,10 +504,22 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if args[0] == "version" and any(arg in {"-h", "--help"} for arg in args[1:]):
         print_version_help()
         return None, 0
+    if args[0] == "status" and any(arg in {"-h", "--help"} for arg in args[1:]):
+        print_status_help()
+        return None, 0
     if args[0] == "config" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
         if any(arg in {"-h", "--help"} for arg in args[1:]):
             print_config_help()
             return None, 0
+    if args == ["storage"]:
+        print_storage_recovery_card()
+        return None, 0
+    if args == ["import"]:
+        print_import_recovery_card()
+        return None, 0
+    if args == ["doctor"]:
+        print_doctor_recovery_card()
+        return None, 0
     if args[0] in {"--version", "-V", "version"}:
         payload = version_payload()
         if "--json" in args:
@@ -680,6 +763,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  latest-reply        Latest final assistant closeout, not commentary", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
     print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
+    print("  questions status    Read source-backed question tracking status", file=target)
     print("  work-guard          Agent issue-work active-pull orientation packet", file=target)
     print("  update status       Check personal core/magic readiness", file=target)
     print("  export              Export a portable AIppocampus bundle", file=target)
@@ -695,6 +779,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  observatory         Read-only route-readiness observatory report", file=target)
     print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)
+    print("  navigate            Boundary card for navigation sidecars", file=target)
     print("  telepathy           Opt-in local handoff card lifecycle", file=target)
     print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
     print("  maintenance         Run bounded local maintenance", file=target)

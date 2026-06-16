@@ -75,7 +75,15 @@ aippocampus plugin install --codex --verify --json
 `--compact-json`, `--public`, and `--summary` remain aliases for the same
 public-safe summary. Use `--operator-json` only when you need the full
 marketplace/cache/host-probe detail. First run should end in one source-backed
-recall moment, not a diagnostics maze. Rollback stays explicit:
+recall moment, not a diagnostics maze:
+
+```sh
+aippocampus search "a distinctive old phrase"
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Rollback stays explicit:
 
 ```sh
 aippocampus plugin uninstall --codex
@@ -88,10 +96,19 @@ once whether to enable an LLM-backed route with a key; if the answer is no or
 the key is missing, keep the no-key source-backed search, MCP, plugin, and hook
 path useful.
 
-For a no-clone or non-Codex probe, use the read-only package check:
+For a no-clone or non-Codex probe, use the read-only package check, then try a
+source-backed moment if local source is already registered:
 
 ```sh
 uvx aippocampus --help
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
+```
+
+If source is missing or stale, use the status card:
+
+```sh
 uvx aippocampus onboard --provider auto --status
 ```
 
@@ -186,10 +203,14 @@ boundary without duplicating the public API or readiness docs.
 ## Agent One-Command Probe
 
 When an AI agent needs to verify the public CLI without cloning or writing local
-memory artifacts, use the PyPI package:
+memory artifacts, use the PyPI package, then prefer a first recall route over a
+diagnostic tour:
 
 ```sh
 uvx aippocampus --help
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 For a read-only local onboarding/status check:

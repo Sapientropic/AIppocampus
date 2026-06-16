@@ -21,6 +21,7 @@ class ActionHintReplayTests(unittest.TestCase):
         signals = {case["expected_signal"] for case in cases}
 
         self.assertIn("stale_route_avoided", signals)
+        self.assertIn("prepared_route_before_broad_search", signals)
         self.assertIn("source_reopen_before_claim", signals)
         self.assertIn("learned_preflight_before_broad_test", signals)
         self.assertIn("active_anchor_evidence_capture", signals)
@@ -39,8 +40,8 @@ class ActionHintReplayTests(unittest.TestCase):
         self.assertFalse(report["public_quality_gate_ok"])
         self.assertFalse(report["quality_gate_ok"])
         self.assertFalse(report["runtime_policy_adoption_gate_ok"])
-        self.assertEqual(report["usefulness_metrics"]["positive_case_count"], 4)
-        self.assertEqual(report["usefulness_metrics"]["hinted_positive_count"], 4)
+        self.assertEqual(report["usefulness_metrics"]["positive_case_count"], 5)
+        self.assertEqual(report["usefulness_metrics"]["hinted_positive_count"], 5)
         self.assertEqual(report["cost_metrics"]["false_positive_count"], 0)
         self.assertEqual(report["cost_metrics"]["anti_nag_suppression_count"], 1)
         self.assertEqual(report["cost_metrics"]["source_visible_suppression_count"], 1)

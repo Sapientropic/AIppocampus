@@ -385,7 +385,26 @@ def rotation_plan(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aippocampus logs")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus logs",
+        usage="aippocampus logs [status|rotate|run] [options]",
+        description=(
+            "Local log retention card.\n\n"
+            "Action card:\n"
+            "  logs              Show read-only status; never writes.\n"
+            "  logs status       Same read-only status with optional --json.\n"
+            "  logs rotate --plan Preview bounded rotation without touching logs.\n"
+            "  logs rotate --apply Apply the bounded rotation plan.\n\n"
+            "Logs are local audit artifacts. Status and plan never print log contents."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.set_defaults(
+        registry_dir=None,
+        max_bytes=None,
+        backups=None,
+        json_output=False,
+    )
     subparsers = parser.add_subparsers(dest="command")
     for name in ("status", "rotate"):
         sub = subparsers.add_parser(name)

@@ -338,6 +338,16 @@ def build_provider_key_bridge_plan(
     except ValueError as exc:
         issues.append(_issue("bridge_configuration_incomplete", str(exc)))
     ok = not issues
+    recommended_actions = [
+        {
+            "id": "apply_explicit_provider_key_bridge",
+            "message": (
+                "Run aippocampus onboard provider-key --apply only after choosing the "
+                "private credential source you want future Codex hooks to read."
+            ),
+            "command": "aippocampus onboard provider-key --apply --source explicit-dotenv --credential-dotenv <path> --json",
+        }
+    ] if ok else _blocked_plan_recommended_actions()
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_provider_key_bridge",
@@ -368,22 +378,34 @@ def build_provider_key_bridge_plan(
         ],
         "issues": issues,
         "privacy": _privacy(include_local_paths),
-        "recommended_actions": [
-            {
-                "id": "apply_explicit_provider_key_bridge",
-                "message": (
-                    "Run aippocampus onboard provider-key --apply only after choosing the "
-                    "private credential source you want future Codex hooks to read."
-                ),
-            }
-        ]
-        if ok
-        else [],
+        "recommended_actions": recommended_actions,
+        "agent_next_action": recommended_actions[0]["command"] if recommended_actions else "",
         "claim_boundary": (
             "An applied bridge can make future/restarted Codex hook processes set the provider env var; "
             "it does not prove an already-running Codex Desktop hook process can see the key."
         ),
     }
+
+
+def _blocked_plan_recommended_actions() -> list[dict[str, str]]:
+    return [
+        {
+            "id": "plan_with_private_credential_source",
+            "message": (
+                "Preview the bridge with an explicit private credential source; do not use "
+                "--apply until the user chooses that source."
+            ),
+            "command": "aippocampus onboard provider-key --plan --source explicit-dotenv --credential-dotenv <path> --json",
+        },
+        {
+            "id": "continue_without_provider_key",
+            "message": (
+                "Skip optional LLM-backed routes for now; local source-backed recall/search "
+                "still works without a provider key."
+            ),
+            "command": 'aippocampus search "a distinctive old phrase"',
+        },
+    ]
 
 
 def _wrapper_script_text(*, manifest_path: Path, package_scripts_dir: Path) -> str:
@@ -605,16 +627,36 @@ def render_text(report: dict[str, Any]) -> str:
     for issue_item in report.get("issues") or []:
         if isinstance(issue_item, dict):
             lines.append(f"- Issue: {issue_item.get('code')}")
+    for action in report.get("recommended_actions") or []:
+        if isinstance(action, dict) and action.get("command"):
+            lines.append(f"- Next: {action.get('command')}")
     lines.append("- Secret values are not printed or stored in hooks.json")
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aippocampus onboard provider-key")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus onboard provider-key",
+        description=(
+            "Task-first provider-key bridge:\n"
+            "  Use this only for optional LLM-backed semantic/background routes.\n"
+            "  Plan first, apply only after choosing a private credential source,\n"
+            "  and keep no-key source-backed recall/search usable.\n\n"
+            "Normal examples:\n"
+            "  aippocampus onboard provider-key --plan --source explicit-dotenv --credential-dotenv <path> --json\n"
+            "  aippocampus onboard provider-key --apply --source explicit-dotenv --credential-dotenv <path> --json\n"
+            "  aippocampus onboard provider-key --undo --json"
+        ),
+        epilog=(
+            "Privacy boundary: key values are never printed, never stored in hooks.json, "
+            "and local paths stay hidden unless --include-local-paths is explicit."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     action = parser.add_mutually_exclusive_group()
-    action.add_argument("--plan", action="store_true")
-    action.add_argument("--apply", action="store_true")
-    action.add_argument("--undo", action="store_true")
+    action.add_argument("--plan", action="store_true", help="Preview writes; this is the safe default.")
+    action.add_argument("--apply", action="store_true", help="Write the bridge after explicit user choice.")
+    action.add_argument("--undo", action="store_true", help="Remove the bridge and restore direct hooks.")
     parser.add_argument("--target", default=DEFAULT_TARGET, choices=SUPPORTED_TARGETS)
     parser.add_argument("--source", default="explicit-dotenv", choices=SUPPORTED_SOURCES)
     parser.add_argument("--provider-env-var", "--api-key-env", default=DEFAULT_PROVIDER_ENV_VAR)

@@ -6,41 +6,25 @@ evidence, diagnostics, and claim boundaries.
 
 ## Unreleased
 
-The next slice is about the first five minutes feeling less like a control
-room.
+The next slice is about fewer doors that open onto machinery.
 
-- First recall has one small decision card. Check health, search exact wording,
-  recall vague handoffs, deepen only when a source route matters, and preview
-  imports before writing local history.
-- Agent and MCP surfaces are quieter by default. Compact recall no longer
-  leaks private handles, `mcp status` gives a readiness card, and tool errors
-  say what an agent should do next.
-- Setup and sync are less brittle. Plugin install/help, onboard status,
-  provider-key guidance, local sync, object-sync, logs, and maintenance now
-  separate status, plan, and apply more clearly.
-- Optional background magic stays optional. Warm ambient, action-time hints,
-  Telepathy cards, self-notes, Observatory, and episode arcs now say when they
-  are navigation only, when they are empty, and when source must be reopened.
-- Release gates are calmer: focused tests first, `pr` when the changed surface
-  deserves it, and broad/benchmark gates only for claims that actually depend on
-  them.
-- Benchmark doors now start with the question you are trying to prove.
-  `--cite-summary` gives a small "can I cite this?" readout while the full JSON
-  report stays available.
-- Personal controls are less imaginary without pretending to be total power.
-  `why-not`, `learning`, and durable `do-not-use-here` feedback now have
-  foreground doors; `pause` and `forget` answer with safe control-plan cards
-  instead of pretending to delete the past.
-- Object sync starts with the thing you are trying to do. Status, plan, push,
-  pull, repair, raw files, and encryption now introduce themselves before the
-  credential wall.
-- Health redacts paths without turning the next command into a dead end.
-- Health no longer chases its own tail while a live thread is still talking:
-  small fresh-message gaps stay a fresh window, and advisory upkeep is labeled
-  optional.
+- First recall now has one visible next move. Provider status, health/status,
+  MCP tools, latest-reply, and compact recall prefer a small action card over a
+  wall of flags or handles.
+- Setup paths are kinder. Plugin install, local sync, object-sync, provider-key,
+  logs, doctor, storage GC, and conversation import explain status, plan, apply,
+  and no-write boundaries before they ask for paths or credentials.
+- Navigation-only features say so out loud. Warm ambient recall, self-notes,
+  action-time hints, Telepathy, question tracking, and the cognitive-map
+  frontdoor can guide attention without pretending to be source truth.
+- Release and benchmark doors are calmer. Focused tests run first, `pr` is the
+  local pre-push gate, benchmark smoke stays claim-boundary aware, and compact
+  summary JSON exists for agents that only need the verdict.
+- The docs now lead with the first useful thread coming back into view, not a
+  readiness ceremony.
 
-Still alpha. Still source-backed. Less ceremony before the first useful thread
-comes back into view.
+Still alpha. Still source-backed. A little less control room, a little more
+campfire map.
 
 ## 0.3.3 - 2026-06-15
 

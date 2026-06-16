@@ -70,9 +70,7 @@ def normalize_route_limit(
 def handle_boundary_fields() -> dict[str, Any]:
     return {
         "local_private_fields": list(LOCAL_PRIVATE_HANDLE_FIELDS),
-        "public_safe_command_preview": "aippocampus agent deepen <local-private-handle>",
         "handle_boundary": "local_private_reopen_token",
-        "public_safe_recall_command": "aippocampus agent recall <query> --json --public",
     }
 
 
@@ -100,6 +98,7 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
         "agent_next_action": command,
         "next_safe_action": "rerun_agent_recall_then_request_index",
         "examples": ['aippocampus agent recall "<cue>" --json', command],
+        "recovery_actions": ['aippocampus agent recall "<cue>" --json', command],
     }
 
 
@@ -307,12 +306,92 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     projected["surface"] = "agent_cli_public_compact"
     projected["output_boundary"] = "public_compact_no_local_private_handles"
     projected["last_recall_cache_available"] = bool(source.get("last_recall_cache_available"))
-    if projected.get("foreground_action"):
-        projected["suggested_next_command"] = projected["foreground_action"].get(
-            "cli_command",
-            projected.get("public_safe_command_preview"),
-        )
     return projected
+
+
+def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -> dict[str, Any]:
+    """Project AIppo activation into a foreground guidance card.
+
+    ``activate_aippo`` remains the local/operator envelope so deepen/explain
+    tests and audits can inspect the working contract. The default CLI/MCP
+    surface should not start by dumping activation_packet/metrics/red_lines;
+    it should tell the foreground agent whether there is usable guidance and
+    what source boundary still applies.
+    """
+
+    packet_raw = payload.get("activation_packet")
+    packet: Mapping[str, Any] = packet_raw if isinstance(packet_raw, Mapping) else {}
+    guidance = [str(item) for item in packet.get("use_guidance") or [] if str(item).strip()]
+    families = [str(item) for item in packet.get("task_families") or [] if str(item).strip()]
+    status = str(payload.get("status") or "unknown")
+    next_action = str(packet.get("next_action") or "").strip()
+    task_text = str(task or "").strip()
+    if status == "ok" and guidance:
+        foreground_action = {
+            "action_id": next_action or "use_aippo_working_contract_guidance",
+            "tool_name": "agent_aippo",
+            "arguments": {
+                "task_families": families[:3],
+                "guidance": guidance[:2],
+            },
+            "claim_boundary": "working_guidance_not_source_truth",
+            "why": "AIppo found low-risk project workflow guidance for this task.",
+        }
+    else:
+        foreground_action = {
+            "action_id": "run_agent_recall_if_prior_source_matters",
+            "tool_name": "agent_recall",
+            "arguments": {"query": task_text or "<continuity cue>"},
+            "cli_command": (
+                f'aippocampus agent recall "{task_text}" --json'
+                if task_text
+                else 'aippocampus agent recall "<continuity cue>" --json'
+            ),
+            "claim_boundary": "no_aippo_guidance_no_claim",
+            "why": "No active AIppo working contract matched strongly enough.",
+        }
+    reason_codes: list[str] = []
+    no_contract_reason = str(packet.get("no_active_contract_reason") or "").strip()
+    if no_contract_reason:
+        reason_codes.append(no_contract_reason)
+    if families and not guidance:
+        reason_codes.append("related_task_needs_reopen_or_contract_ripening")
+    elif not families and task_text:
+        reason_codes.append("no_task_family_match")
+    return _public_payload(
+        {
+            "kind": payload.get("kind"),
+            "schema_version": payload.get("schema_version"),
+            "mode": "aippo",
+            "surface": "agent_aippo_guidance_card",
+            "status": status,
+            "ok": status == "ok",
+            "task_hint_used": bool(payload.get("task_hint_used")),
+            "task_families": families[:4],
+            "use_guidance": guidance[:3],
+            "foreground_action": foreground_action,
+            "reason_codes": reason_codes,
+            "contract_status": {
+                "active_clause_count": int(packet.get("active_clause_count") or 0),
+                "available_active_clause_count": int(
+                    packet.get("available_active_clause_count") or 0
+                ),
+                "suppressed_clause_count": int(packet.get("suppressed_clause_count") or 0),
+            },
+            "boundary": {
+                "authority": "working_guidance",
+                "navigation_only_not_fact": True,
+                "source_reopen_required_for_claims": True,
+                "candidate_surfaces_are_not_truth": True,
+            },
+            "operator_json_available": True,
+            "operator_json_command": "aippocampus agent aippo <task> --json --operator-json",
+            "cannot_claim": [
+                "claim_ready_facts_without_source_reopen",
+                "public_product_readiness_from_aippo_guidance",
+            ],
+        }
+    )
 
 
 def last_recall_cache_path(explicit: str | Path | None = None) -> Path:

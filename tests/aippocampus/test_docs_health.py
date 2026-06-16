@@ -127,6 +127,18 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("python3 -m ...", skill_text)
         self.assertIn("py -m ...", skill_text)
         self.assertNotIn("`python -m aippocampus_runtime.", skill_text)
+        self.assertLess(
+            skill_text.index("First recall for a vague handoff or old decision"),
+            skill_text.index("Check state before or after long work"),
+        )
+        self.assertLess(
+            skill_text.index("Search clean source"),
+            skill_text.index("Check the local provider matrix"),
+        )
+        self.assertLess(
+            skill_text.index("Diagnostic/operator fallbacks"),
+            skill_text.index("`python3 -m aippocampus_runtime."),
+        )
         self.assertIn("suggested_agent_action", skill_text)
         self.assertIn("not_enough_for_claim", skill_text)
         self.assertIn("## Runtime Posture For Agents", agent_context)
@@ -134,6 +146,40 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("explicit source reopen", agent_context.lower())
         self.assertIn("## Agent Runtime Posture", coding_lane)
         self.assertIn("before broad manual search", coding_lane_flat)
+
+    def test_public_docs_keep_facade_first_success_before_diagnostics(self) -> None:
+        public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
+            encoding="utf-8"
+        )
+        first_card = (
+            REPO_ROOT / "docs" / "guides" / "first-recall-decision-card.md"
+        ).read_text(encoding="utf-8")
+        claude_skill = (
+            REPO_ROOT / ".claude" / "skills" / "aippocampus" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        llms = (REPO_ROOT / "llms.txt").read_text(encoding="utf-8")
+
+        self.assertLess(
+            llms.index("## First Recall Agent Probe"),
+            llms.index("## Good Fit"),
+        )
+        self.assertLess(
+            first_card.index("aippocampus search"),
+            first_card.index("aippocampus health"),
+        )
+        self.assertLess(
+            public_api.index("uvx aippocampus search"),
+            public_api.index("uvx aippocampus onboard --provider auto --status"),
+        )
+        self.assertIn("aippocampus mcp list-tools --json", public_api)
+        self.assertNotIn(
+            "python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl",
+            public_api,
+        )
+        self.assertLess(
+            claude_skill.index("## First Success Path"),
+            claude_skill.index("## Repair And Host Diagnostics"),
+        )
 
     def test_skill_hook_packet_decoder_maps_signals_to_actions(self) -> None:
         skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")

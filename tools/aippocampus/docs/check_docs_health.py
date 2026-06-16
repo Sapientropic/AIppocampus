@@ -323,10 +323,10 @@ REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
     "`aippocampus import conversation --format generic-jsonl --input <path>`": (
         "public API doc missing provider-neutral conversation import command"
     ),
-    "`python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`": (
-        "public API doc missing registry register-source command"
+    "Internal registry modules may be used by trusted operators": (
+        "public API doc missing trusted registry fallback boundary"
     ),
-    "not a generic arbitrary-file ingest endpoint": (
+    "not the public generic ingest contract": (
         "public API doc missing MCP/register-source boundary"
     ),
 }
@@ -1429,6 +1429,33 @@ def check_docs(root: Path) -> dict[str, Any]:
             issues.append(message)
     if "`python -m aippocampus_runtime." in text:
         issues.append("SKILL.md module fallback examples should use python3/py, not bare python")
+    recall_idx = text.find("First recall for a vague handoff or old decision")
+    search_idx = text.find("Search clean source")
+    health_idx = text.find("Check state before or after long work")
+    onboard_idx = text.find("Check the local provider matrix without writing artifacts")
+    user_command_indices = [idx for idx in (recall_idx, search_idx) if idx >= 0]
+    if not user_command_indices:
+        issues.append("SKILL.md missing recall/search first-success commands")
+    else:
+        first_user_idx = min(user_command_indices)
+        for diagnostic_idx, label in (
+            (health_idx, "health"),
+            (onboard_idx, "onboard status"),
+        ):
+            if diagnostic_idx >= 0 and diagnostic_idx < first_user_idx:
+                issues.append(
+                    f"SKILL.md should present recall/search before {label} diagnostics"
+                )
+    fallback_boundary_idx = text.find("Diagnostic/operator fallbacks")
+    first_internal_module_idx = text.find("`python3 -m aippocampus_runtime.")
+    if (
+        first_internal_module_idx >= 0
+        and fallback_boundary_idx >= 0
+        and first_internal_module_idx < fallback_boundary_idx
+    ):
+        issues.append(
+            "SKILL.md internal aippocampus_runtime module examples must stay behind the diagnostic/operator fallback boundary"
+        )
 
     references_dir = root / "references"
     for filename in REQUIRED_REFERENCES:

@@ -98,7 +98,9 @@ def build_issue_active_pull_packet(
             "schema_version": SCHEMA_VERSION,
             "should_pull": False,
             "output_mode": "silence",
+            "reason": "no benchmark, architecture, or memory-design trigger detected",
             "suggested_agent_action": "continue_without_recall",
+            "fallback_action": "continue normally; run agent recall if old source context becomes relevant",
             "lead_kinds": [],
             "existing_owner_refs": [],
             "existing_owner_ref_ids": [],
@@ -134,7 +136,9 @@ def build_issue_active_pull_packet(
         "schema_version": SCHEMA_VERSION,
         "should_pull": True,
         "output_mode": "reopenable_route",
+        "reason": "benchmark, architecture, or memory-design context may change the safe implementation route",
         "suggested_agent_action": "agent_recall",
+        "fallback_action": "if recall is unavailable, inspect listed owner refs before broad manual scaffolding",
         "lead_kinds": _unique(lead_kinds),
         "existing_owner_refs": [OWNER_REFS[item] | {"id": item} for item in owner_ids],
         "existing_owner_ref_ids": owner_ids,
@@ -218,7 +222,21 @@ def render_issue_work_guard_text(packet: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aippocampus work-guard")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus work-guard",
+        description=(
+            "Issue-work orientation card:\n"
+            "  Use before benchmark, architecture, recall, AIppo, source-side, or memory-design work.\n"
+            "  It decides whether to pull continuity/source owners before broad manual search.\n"
+            "  Output is route guidance only; it is not evidence and does not decide the issue for you."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  aippocampus work-guard --title \"Fix LongMemEval source-side cache\" --json\n"
+            "  aippocampus work-guard --title \"Fix typo in README\" --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--title", required=True)
     parser.add_argument("--body", default="")
     parser.add_argument("--changed-file", action="append", default=[])

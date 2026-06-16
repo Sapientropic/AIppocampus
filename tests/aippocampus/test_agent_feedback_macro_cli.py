@@ -99,9 +99,11 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         proc = self.run_agent("macro", "--help")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Show a compact macro-orientation navigation packet", proc.stdout)
+        self.assertIn("Macro-orientation navigation card:", proc.stdout)
+        self.assertIn("Do not use macro as source truth", proc.stdout)
+        self.assertIn('aippocampus agent recall "old cue" --json', proc.stdout)
         self.assertIn("aippocampus agent macro --explain-schema", proc.stdout)
-        self.assertIn("reopen source before factual claims", proc.stdout)
+        self.assertIn("run recall/deepen", proc.stdout)
 
     def test_cli_agent_macro_missing_state_explains_schema_repair(self) -> None:
         proc = self.run_agent("macro", "--cwd", str(self.cwd))

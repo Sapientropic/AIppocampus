@@ -70,6 +70,19 @@ The smallest public-safe path is read-only first:
 
 ```sh
 uvx aippocampus --help
+```
+
+If local source is already registered, try one source-backed moment:
+
+```sh
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "a continuity-sensitive cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
+```
+
+If source is missing or blocked, use the read-only provider matrix:
+
+```sh
 uvx aippocampus onboard --provider auto --status --format json
 ```
 
@@ -79,14 +92,15 @@ After explicit consent to register selected local history:
 uvx aippocampus onboard --provider codex --all --format json
 uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "a continuity-sensitive cue" --json
-uvx aippocampus mcp list-tools
+uvx aippocampus mcp status
+uvx aippocampus mcp list-tools --json
 ```
 
 This proves the packaged entrypoint, read-only readiness report, explicit
-onboarding path, source-backed search surface, and local MCP tool catalog can
-work on a user's machine. It does not prove broad recall quality, default hook
-lift, all-client support, hosted sync, semantic/Dream quality, or private
-history benchmark performance.
+onboarding path, source-backed search/route surfaces, and local MCP status or
+schema catalog can work on a user's machine. It does not prove broad recall
+quality, default hook lift, all-client support, hosted sync, semantic/Dream
+quality, or private history benchmark performance.
 
 For a no-private-data demo path, use
 [`docs/guides/demo-scenarios.md`](../guides/demo-scenarios.md). For dependency

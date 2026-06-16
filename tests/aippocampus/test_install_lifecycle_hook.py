@@ -169,8 +169,12 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         text = stdout.getvalue()
         self.assertIn("Codex lifecycle hooks not installed", text)
         self.assertIn("host: codex", text)
+        self.assertIn("host scope: codex_hooks_only", text)
         self.assertIn("config surface: codex_hooks_json", text)
         self.assertIn("provider-neutral: false", text)
+        self.assertIn("other hosts: claude-code, generic-jsonl use onboarding/MCP/import routes", text)
+        self.assertIn("not a failure", text)
+        self.assertNotIn("unsupported host hooks", text)
 
 
 if __name__ == "__main__":

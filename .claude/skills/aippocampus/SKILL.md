@@ -15,22 +15,20 @@ innate recall, or private transcript access. Treat summaries as navigation
 layers; when answering from memory, prefer source ids, source refs, and
 clean-source evidence over unsupported paraphrase.
 
-## Safe Checks
+## First Success Path
 
-Run these read-only checks before relying on AIppocampus:
-
-```sh
-aippocampus mcp list-tools
-aippocampus onboard --status --cwd "$PWD"
-python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json
-```
-
-If the MCP host is configured and the user wants a live proof, use the opt-in
-tool-call smoke:
+Aim for one source-backed recall moment before diagnostics. If source is
+already registered, search or ask for a bounded agent route:
 
 ```sh
-python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20
+aippocampus search "a distinctive old phrase" --cwd "$PWD"
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
 ```
+
+Treat search hits, recall routes, and AIppo/self-note packets as navigation
+until source is reopened for exact, stale, sensitive, disputed, or high-risk
+claims.
 
 ## Claude Code Onboarding
 
@@ -45,6 +43,29 @@ history:
 
 ```sh
 aippocampus onboard --provider claude-code --format json
+```
+
+After registration, return to the first success path and search for one
+source-backed snippet.
+
+## Repair And Host Diagnostics
+
+Use these checks when the first success path is blocked, or when the task is
+specifically host/MCP verification:
+
+```sh
+aippocampus health --cwd "$PWD"
+aippocampus onboard --status --provider auto --cwd "$PWD"
+aippocampus mcp status
+aippocampus mcp list-tools --json
+python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json
+```
+
+If the MCP host is configured and the user wants a live proof, use the opt-in
+tool-call smoke:
+
+```sh
+python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20
 ```
 
 Do not install hooks, mutate Claude Code settings, or ingest private host

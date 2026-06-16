@@ -131,6 +131,47 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
             self.assertEqual(diagnostic["metrics"]["candidate_only_handoff_count"], 1)
             self.assertIn("source_truth_without_reopen", deepened["cannot_claim"])
 
+    def test_cli_diagnose_human_output_is_handoff_status_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = root / "handoffs.jsonl"
+            telepathy_handoff_store.create_handoff(
+                scope="project:AIppocampus#issue:candidate-only",
+                owner="dream-scout",
+                source_support="candidate_only",
+                source_refs=[{"message_id": "msg_candidate"}],
+                store_path=store,
+                cwd=root,
+            )
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "diagnose",
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("AIppocampus Telepathy handoff status", proc.stdout)
+        self.assertIn("active: 1", proc.stdout)
+        self.assertIn("candidate-only: 1", proc.stdout)
+        self.assertIn("write mode: no_write_diagnostic_only", proc.stdout)
+        self.assertIn("authority: navigation_only", proc.stdout)
+        self.assertIn("reopen before reliance", proc.stdout)
+        self.assertNotIn("aippocampus_telepathy_handoff_diagnostic: ok", proc.stdout)
+
     def test_cli_create_and_list_emit_public_safe_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

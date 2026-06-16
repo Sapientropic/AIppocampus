@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -37,7 +38,9 @@ class IssueWorkGuardTests(unittest.TestCase):
 
         self.assertFalse(packet["should_pull"])
         self.assertEqual(packet["output_mode"], "silence")
+        self.assertIn("no benchmark", packet["reason"])
         self.assertEqual(packet["suggested_agent_action"], "continue_without_recall")
+        self.assertIn("continue normally", packet["fallback_action"])
 
     def test_fixture_report_covers_ignored_scent_and_trivial_silence(self) -> None:
         report = build_issue_work_guard_fixture_report()
@@ -64,6 +67,28 @@ class IssueWorkGuardTests(unittest.TestCase):
         self.assertFalse(pull_text.strip().startswith("{"))
         self.assertIn("decision: continue", quiet_text)
         self.assertIn("continue without an AIppocampus recall pull", quiet_text)
+
+    def test_cli_help_is_issue_work_orientation_card(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "work-guard",
+                "--help",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Issue-work orientation card:", proc.stdout)
+        self.assertIn("pull continuity/source owners before broad manual search", proc.stdout)
+        self.assertIn("aippocampus work-guard --title", proc.stdout)
 
 
 if __name__ == "__main__":

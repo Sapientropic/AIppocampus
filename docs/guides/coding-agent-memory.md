@@ -100,13 +100,26 @@ Start with the public package path. These commands work without a clone when
 
 ```sh
 uvx aippocampus --help
+```
+
+If local source is already registered, make the demo a real recall route:
+
+```sh
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
+```
+
+If source is missing or blocked, use the read-only status card:
+
+```sh
 uvx aippocampus onboard --provider auto --status
 ```
 
-The status check is read-only. It may report that no local provider history is
-registered yet, or that several providers are detectable; both are valid
-results. `auto --status` is a provider-matrix probe, not consent to ingest
-every provider.
+The status check may report that no local provider history is registered yet,
+or that several providers are detectable; both are valid results.
+`auto --status` is a provider-matrix probe, not consent to ingest every
+provider.
 
 After explicit user consent, choose one provider-specific write path and run the
 first real source-backed recall:
@@ -130,7 +143,8 @@ Use MCP checks only when you are validating an agent host or plugin integration,
 not as part of the ordinary first-recall moment:
 
 ```sh
-uvx aippocampus mcp list-tools
+uvx aippocampus mcp status
+uvx aippocampus mcp list-tools --json
 ```
 
 In a repository checkout, the public-safe smokes below exercise the coding-agent

@@ -5,6 +5,29 @@ connecting Claude Code to the AIppocampus MCP server and explicitly onboarding
 Claude Code transcript source. It does not replace the provider/clean-source
 contract in `docs/architecture/runtime-script-map.md`.
 
+## First Success In Claude Code
+
+If AIppocampus source is already registered, start with one source-backed
+moment before host diagnostics:
+
+```sh
+aippocampus search "a distinctive old phrase" --cwd "$PWD"
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+If Claude Code source is not registered yet, preview the local transcript
+registration first, write only after explicit approval, then return to the
+search/recall path above:
+
+```sh
+aippocampus onboard --provider claude-code --dry-run --format json
+aippocampus onboard --provider claude-code --format json
+```
+
+Use the MCP setup and smokes below when Claude Code itself needs to call
+AIppocampus tools, or when the first success path is blocked by host wiring.
+
 ## MCP Setup
 
 Anthropic documents Claude Code MCP servers through `claude mcp add`,

@@ -28,7 +28,10 @@ import benchmark_live_semantic_gate as live_semantic_benchmark
 import benchmark_memory_decision_gate as gate_benchmark
 import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
-from shared.benchmark_report_contract import benchmark_report_contract_lint
+from shared.benchmark_report_contract import (
+    benchmark_cli_summary,
+    benchmark_report_contract_lint,
+)
 from shared.benchmark_suite_quality import suite_quality_summary
 from suite_status import suite_status_fields
 
@@ -1192,6 +1195,32 @@ def claimability_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def compact_json_summary(
+    payload: dict[str, Any],
+    *,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    summary = benchmark_cli_summary(
+        kind="aippocampus_benchmark_suite_cli_summary",
+        schema_version=SCHEMA_VERSION,
+        report=payload,
+        status=str(payload.get("status") or "summary_only"),
+        full_report_available=output_path is not None,
+        full_report_route=str(output_path) if output_path is not None else "--output",
+    )
+    claimability = claimability_summary(payload)
+    summary.update(
+        {
+            "profile": claimability["profile"],
+            "can_cite": claimability["can_cite"],
+            "cite_status": claimability["cite_status"],
+            "track_statuses": payload.get("track_statuses") or {},
+            "best_next_benchmark": claimability["best_next_benchmark"],
+        }
+    )
+    return summary
+
+
 def print_claimability_summary(payload: dict[str, Any]) -> None:
     summary = claimability_summary(payload)
     print("AIppocampus benchmark claimability")
@@ -1221,7 +1250,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         usage=(
             "benchmark_suite.py [--profile PROFILE] [--output REPORT.json] "
-            "[--cite-summary|--json] [overrides]"
+            "[--cite-summary|--summary-json|--json] [overrides]"
         ),
         description=(
             "Task-first benchmark suite:\n"
@@ -1233,6 +1262,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "release-evidence --output reports/benchmark-suite-release.json --cite-summary\n"
             "  Full machine report to stdout:\n"
             "    python benchmarks/aippocampus/benchmark_suite.py --profile public-fast --json\n\n"
+            "  Full report file with compact JSON stdout:\n"
+            "    python benchmarks/aippocampus/benchmark_suite.py --profile public-fast "
+            "--output reports/benchmark-suite.json --summary-json\n\n"
             "Profiles define claim surfaces; individual flags are overrides.\n\n"
             f"{profile_help_cards()}"
         ),
@@ -1240,7 +1272,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             f"Profile ladder: {profile_names}. "
             f"Profile and threshold rationale: {PROFILE_DOCS}\n"
             "--output without --json writes the full report to disk while stdout stays compact. "
-            "--cite-summary prints the 'can I cite this?' card.\n"
+            "--cite-summary prints the 'can I cite this?' card. "
+            "--summary-json prints the same foreground contract as compact machine JSON. "
+            "--json keeps the full report on stdout for intentional pipelines.\n"
             "Python callers should prefer BenchmarkSuiteConfig plus "
             "run_benchmark_suite_with_config(); run_benchmark_suite(**kwargs) "
             "is a compatibility bridge."
@@ -1457,6 +1491,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print a compact 'can I cite this?' readout while preserving --output full reports.",
     )
+    parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help=(
+            "Print compact claimability/readiness JSON to stdout. Pair with "
+            "--output to write the full report without duplicating it to stdout."
+        ),
+    )
     return parser
 
 
@@ -1530,11 +1572,19 @@ def main() -> int:
         )
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif args.summary_json:
+        print(
+            json.dumps(
+                compact_json_summary(payload, output_path=args.output),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     elif args.cite_summary:
         print_claimability_summary(payload)
     else:
         print_human_summary(payload)
-    return 0 if args.json_output or payload.get("ok") else 1
+    return 0 if args.json_output or args.summary_json or payload.get("ok") else 1
 
 
 if __name__ == "__main__":

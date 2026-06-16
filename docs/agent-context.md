@@ -148,7 +148,16 @@ the host is not Codex, or when the user wants a read-only check first:
 uvx aippocampus --help
 ```
 
-Read-only local status/onboarding check:
+If local source is already registered, go straight to the first useful route:
+
+```sh
+uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
+```
+
+If source is missing or the route is blocked, use the read-only local
+status/onboarding card:
 
 ```sh
 uvx aippocampus onboard --provider auto --status
@@ -234,7 +243,8 @@ clean-source search is broken.
 List local MCP tools:
 
 ```sh
-uvx aippocampus mcp list-tools
+uvx aippocampus mcp status
+uvx aippocampus mcp list-tools --json
 ```
 
 Typical MCP tools include:

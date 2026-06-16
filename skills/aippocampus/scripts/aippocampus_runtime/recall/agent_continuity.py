@@ -42,6 +42,7 @@ from aippocampus_runtime.recall import (
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     DEFAULT_MACRO_STATE_RELATIVE_PATHS,
     capture_feedback,
+    compact_aippo_guidance_card,
     compact_feedback_receipt,
     handle_boundary_fields,
     handle_from_last_recall_cache,
@@ -1314,7 +1315,23 @@ def _parser() -> argparse.ArgumentParser:
     )
     recall_parser.add_argument("--json", action="store_true")
 
-    aippo_parser = sub.add_parser("aippo")
+    aippo_parser = sub.add_parser(
+        "aippo",
+        description=(
+            "AIppo guidance card:\n"
+            "  Use when a project/workflow task might already have a low-risk working contract.\n"
+            "  Default JSON is a compact foreground card, not the operator audit envelope.\n"
+            "  Use guidance for planning/review/patch shape only; reopen source before claims.\n"
+            "  If no contract matches, run agent recall instead of treating silence as failure."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  aippocampus agent aippo --task \"fix hook install UX\" --json\n"
+            "  aippocampus agent aippo \"semantic gate MCP health\" --json\n"
+            "  aippocampus agent aippo <task> --json --operator-json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     aippo_parser.add_argument("task", nargs="*")
     aippo_parser.add_argument("--task", dest="task_flag")
     aippo_parser.add_argument(
@@ -1323,16 +1340,25 @@ def _parser() -> argparse.ArgumentParser:
         help="Compatibility no-op: AIppo activation output is already public-safe.",
     )
     aippo_parser.add_argument("--json", action="store_true")
+    aippo_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit the full activation envelope for local diagnostics.",
+    )
 
     macro_parser = sub.add_parser(
         "macro",
         description=(
-            "Show a compact macro-orientation navigation packet. Macro state is a "
-            "navigation prior only; reopen source before factual claims."
+            "Macro-orientation navigation card:\n"
+            "  Use when project motion, layer, or phase may change which source route to open first.\n"
+            "  Do not use macro as source truth, proof, or a replacement for agent recall/deepen.\n"
+            "  For exact wording, disputed facts, public claims, or release notes, run recall/deepen.\n"
+            "  Schema/template commands are advanced operator setup for the navigation prior."
         ),
         epilog=(
             "Examples:\n"
             "  aippocampus agent macro --project AIppocampus\n"
+            "  aippocampus agent recall \"old cue\" --json\n"
             "  aippocampus agent macro --explain-schema\n"
             "  aippocampus agent macro --init-template --json"
         ),
@@ -1488,6 +1514,8 @@ def main(argv: list[str] | None = None) -> int:
         task = args.task_flag or " ".join(args.task)
         payload = activate_aippo(task=task)
         if args.json:
+            if not args.operator_json:
+                payload = compact_aippo_guidance_card(payload, task=task)
             _json_out(payload)
         else:
             print(render_aippo_human(payload))
