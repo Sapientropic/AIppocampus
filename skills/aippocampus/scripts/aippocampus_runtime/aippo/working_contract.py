@@ -319,6 +319,9 @@ def activation_packet_from_working_contract(
     direct_guidance = DIRECT_JOURNEY_GUIDANCE.get(direct_family or "", {})
     if not guidance and direct_guidance:
         guidance = list(direct_guidance.get("guidance") or [])
+    selected_count = len(selected)
+    contract_active_count = len(active)
+    active_not_foreground_available_count = max(0, contract_active_count - selected_count)
     display_hint = (
         f"AIppo {families[0]} guidance."
         if families
@@ -334,9 +337,12 @@ def activation_packet_from_working_contract(
         "use_guidance": guidance,
         "allowed_without_reopen": ["planning", "patch_shape", "review", *families],
         "requires_reopen_for": ["exact_or_public_claim", "disputed_or_stale", "high_risk"],
-        "active_clause_count": len(selected),
-        "available_active_clause_count": len(active),
-        "suppressed_clause_count": len(clauses) - len(active),
+        "active_clause_count": selected_count,
+        "available_active_clause_count": selected_count,
+        "contract_active_clause_count": contract_active_count,
+        "active_not_foreground_available_count": active_not_foreground_available_count,
+        "suppressed_clause_count": len(clauses) - contract_active_count,
+        "availability_basis": "task_scoped",
         "active_clause_ids": [clause["clause_id"] for clause in selected],
         "claim_permission": "working_contract_allowed_no_fact_claim",
         "next_action": (
@@ -364,10 +370,13 @@ def activation_packet_from_working_contract(
     compact["display_hint"] = _text(display_hint, 80)
     compact["task_families"] = families[:1]
     compact.pop("allowed_without_reopen", None)
-    compact.pop("available_active_clause_count", None)
-    compact.pop("suppressed_clause_count", None)
     compact["active_clause_ids"] = trimmed_ids
     compact["active_clause_count"] = len(trimmed_ids)
+    compact["available_active_clause_count"] = len(trimmed_ids)
+    compact["active_not_foreground_available_count"] = max(
+        0,
+        int(compact.get("contract_active_clause_count") or 0) - len(trimmed_ids),
+    )
     use_guidance = compact.get("use_guidance")
     compact["use_guidance"] = use_guidance[:1] if isinstance(use_guidance, list) else []
     if _json_bytes(compact) <= max_packet_bytes:
@@ -378,6 +387,12 @@ def activation_packet_from_working_contract(
     if _json_bytes(compact) <= max_packet_bytes:
         return compact
     compact.pop("requires_reopen_for", None)
+    if _json_bytes(compact) <= max_packet_bytes:
+        return compact
+    compact.pop("contract_active_clause_count", None)
+    compact.pop("active_not_foreground_available_count", None)
+    compact.pop("suppressed_clause_count", None)
+    compact.pop("availability_basis", None)
     if _json_bytes(compact) <= max_packet_bytes:
         return compact
     compact_guidance = compact.get("use_guidance")

@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,7 @@ DEFAULT_TARGET = "codex-hooks"
 DEFAULT_PROVIDER_ENV_VAR = "DEEPSEEK_API_KEY"
 SUPPORTED_TARGETS = (DEFAULT_TARGET,)
 SUPPORTED_SOURCES = (
+    "visible-env-key",
     "explicit-dotenv",
     "macos-keychain",
     "windows-credential-manager",
@@ -44,6 +47,10 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 def normalize_source(source: str | None) -> str:
     value = str(source or "explicit-dotenv").strip().replace("_", "-").casefold()
     aliases = {
+        "env": "visible-env-key",
+        "visible-env": "visible-env-key",
+        "visible-env-key": "visible-env-key",
+        "process-env": "visible-env-key",
         "dotenv": "explicit-dotenv",
         "explicit-dotenv-file": "explicit-dotenv",
         "keychain": "macos-keychain",
@@ -101,6 +108,8 @@ def _selector_attributes_from_legacy(
 def _privacy(include_local_paths: bool) -> dict[str, bool]:
     return {
         "secret_values_printed": False,
+        "secret_values_hashed": False,
+        "secret_values_persisted": False,
         "local_paths_included": include_local_paths,
         "base_url_value_printed": False,
         "credential_store_service_names_included": include_local_paths,
@@ -110,6 +119,38 @@ def _privacy(include_local_paths: bool) -> dict[str, bool]:
     }
 
 
+def _primary_agent_next_action(recommended_actions: list[dict[str, Any]]) -> Any:
+    if not recommended_actions:
+        return None
+    primary = recommended_actions[0]
+    return primary.get("command") or primary
+
+
+def _env_var_is_visible(env_var: str) -> bool:
+    # Presence-only by design: membership proves launcher visibility without
+    # reading, hashing, validating, or persisting the provider key value.
+    return bool(env_var and env_var in os.environ)
+
+
+def _child_process_env_visibility(env_var: str) -> dict[str, Any]:
+    script = "import os, sys; sys.exit(0 if sys.argv[1] in os.environ else 2)"
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", script, env_var],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError as exc:
+        return {
+            "checked": True,
+            "visible": False,
+            "error": {"code": "child_env_check_failed", "message": str(exc)},
+        }
+    return {"checked": True, "visible": proc.returncode == 0, "exit_code": proc.returncode}
+
+
 def _candidate_for_source(
     *,
     source: str,
@@ -117,6 +158,29 @@ def _candidate_for_source(
     credential_dotenv: Path | None,
     include_local_paths: bool,
 ) -> dict[str, Any]:
+    if source == "visible-env-key":
+        current_visible = _env_var_is_visible(provider_env_var)
+        child_visibility = _child_process_env_visibility(provider_env_var)
+        child_visible = child_visibility.get("visible")
+        return {
+            "source": "visible_env_key",
+            "provider": "provider_key_bridge",
+            "env_var": public_token(provider_env_var),
+            "status": (
+                "visible_env_key_present"
+                if current_visible and child_visible is not False
+                else "visible_env_key_missing"
+            ),
+            "visible_in_current_process": current_visible,
+            "visible_in_child_process": bool(child_visible) if isinstance(child_visible, bool) else None,
+            "child_process_check": child_visibility,
+            "presence_only": True,
+            "value_checked": False,
+            "value_printed": False,
+            "value_hashed": False,
+            "value_persisted": False,
+            "path_included": False,
+        }
     if source == "explicit-dotenv":
         if credential_dotenv is None:
             return {
@@ -167,6 +231,8 @@ def _source_descriptor(
             "dotenv_path": str(credential_dotenv.resolve()),
             "env_var": provider_env_var,
         }
+    if source == "visible-env-key":
+        raise ValueError("visible-env-key confirmation does not write a bridge manifest")
     if source == "macos-keychain":
         if not keychain_service:
             raise ValueError("--keychain-service is required for macos-keychain bridge")
@@ -322,32 +388,79 @@ def build_provider_key_bridge_plan(
         credential_dotenv=dotenv_path,
         include_local_paths=include_local_paths,
     )
+    if normalized_source == "visible-env-key" and candidate.get("status") != "visible_env_key_present":
+        issues.append(
+            _issue(
+                "visible_env_key_missing",
+                "provider env var is not visible in the current process and inherited child process",
+            )
+        )
     if normalized_source == "explicit-dotenv" and candidate.get("status") != "candidate_present":
         issues.append(_issue("credential_candidate_missing", "explicit .env candidate is missing the provider env var"))
-    try:
-        build_bridge_manifest(
-            target=target,
-            source=normalized_source,
-            provider_env_var=env_name,
-            credential_dotenv=dotenv_path,
-            keychain_service=keychain_service,
-            keychain_account=keychain_account,
-            credential_target=credential_target,
-            selector_attributes=selector_attributes,
-        )
-    except ValueError as exc:
-        issues.append(_issue("bridge_configuration_incomplete", str(exc)))
+    if normalized_source != "visible-env-key":
+        try:
+            build_bridge_manifest(
+                target=target,
+                source=normalized_source,
+                provider_env_var=env_name,
+                credential_dotenv=dotenv_path,
+                keychain_service=keychain_service,
+                keychain_account=keychain_account,
+                credential_target=credential_target,
+                selector_attributes=selector_attributes,
+            )
+        except ValueError as exc:
+            issues.append(_issue("bridge_configuration_incomplete", str(exc)))
     ok = not issues
-    recommended_actions = [
-        {
-            "id": "apply_explicit_provider_key_bridge",
-            "message": (
-                "Run aippocampus onboard provider-key --apply only after choosing the "
-                "private credential source you want future Codex hooks to read."
-            ),
-            "command": "aippocampus onboard provider-key --apply --source explicit-dotenv --credential-dotenv <path> --json",
-        }
-    ] if ok else _blocked_plan_recommended_actions()
+    if normalized_source == "visible-env-key" and ok:
+        recommended_actions = [
+            {
+                "id": "confirm_visible_env_key",
+                "message": (
+                    f"Confirm {env_name} is already visible to this launcher; future hook "
+                    "processes are ready only when started from an environment with the same variable."
+                ),
+                "command": f"aippocampus onboard provider-key --apply --source visible-env-key --provider-env-var {env_name} --json",
+            }
+        ]
+    elif ok:
+        recommended_actions = [
+            {
+                "id": "apply_explicit_provider_key_bridge",
+                "message": (
+                    "Run aippocampus onboard provider-key --apply only after choosing the "
+                    "private credential source you want future Codex hooks to read."
+                ),
+                "command_template": (
+                    "aippocampus onboard provider-key --apply --source explicit-dotenv "
+                    "--credential-dotenv {credential_dotenv_path} --json"
+                ),
+                "requires": ["credential_dotenv_path"],
+            }
+        ]
+    else:
+        recommended_actions = _blocked_plan_recommended_actions()
+    writes = [] if normalized_source == "visible-env-key" else [
+        _public_path_item("bridge_manifest", manifest, include_local_paths=include_local_paths),
+        _public_path_item("bridge_hook_script", hook_script, include_local_paths=include_local_paths),
+        _public_path_item("codex_hooks_json", hooks_path, include_local_paths=include_local_paths),
+    ]
+    provider_env: dict[str, Any] = {
+        "env_var": env_name,
+        "value_printed": False,
+        "value_checked": False,
+        "value_hashed": False,
+        "value_stored_in_manifest": False,
+        "value_stored_in_hooks_json": False,
+    }
+    if normalized_source == "visible-env-key":
+        provider_env.update(
+            {
+                "visible_in_current_process": bool(candidate.get("visible_in_current_process")),
+                "visible_in_child_process": candidate.get("visible_in_child_process"),
+                "presence_only": True,
+            }
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_provider_key_bridge",
@@ -364,30 +477,31 @@ def build_provider_key_bridge_plan(
             credential_target=credential_target,
             selector_attributes=selector_attributes,
         ),
-        "provider_env": {
-            "env_var": env_name,
-            "value_printed": False,
-            "value_stored_in_manifest": False,
-            "value_stored_in_hooks_json": False,
-        },
+        "provider_env": provider_env,
         "candidate": candidate,
-        "writes": [
-            _public_path_item("bridge_manifest", manifest, include_local_paths=include_local_paths),
-            _public_path_item("bridge_hook_script", hook_script, include_local_paths=include_local_paths),
-            _public_path_item("codex_hooks_json", hooks_path, include_local_paths=include_local_paths),
-        ],
+        "writes": writes,
         "issues": issues,
         "privacy": _privacy(include_local_paths),
+        "alternate_paths": {
+            "source_options": ["explicit-dotenv", "no-key"],
+            "explicit_dotenv_command_template": (
+                "aippocampus onboard provider-key --plan --source explicit-dotenv "
+                "--credential-dotenv {credential_dotenv_path} --json"
+            ),
+            "requires": ["credential_dotenv_path"],
+            "no_key_source_backed_recall_still_works": True,
+        },
         "recommended_actions": recommended_actions,
-        "agent_next_action": recommended_actions[0]["command"] if recommended_actions else "",
+        "agent_next_action": _primary_agent_next_action(recommended_actions),
         "claim_boundary": (
-            "An applied bridge can make future/restarted Codex hook processes set the provider env var; "
-            "it does not prove an already-running Codex Desktop hook process can see the key."
+            "Current process provider-key readiness is based on env-var presence only; future hook "
+            "processes are ready only when launched from an environment with the same variable; this "
+            "does not prove an already-running Codex Desktop hook process can see the key."
         ),
     }
 
 
-def _blocked_plan_recommended_actions() -> list[dict[str, str]]:
+def _blocked_plan_recommended_actions() -> list[dict[str, Any]]:
     return [
         {
             "id": "plan_with_private_credential_source",
@@ -395,7 +509,11 @@ def _blocked_plan_recommended_actions() -> list[dict[str, str]]:
                 "Preview the bridge with an explicit private credential source; do not use "
                 "--apply until the user chooses that source."
             ),
-            "command": "aippocampus onboard provider-key --plan --source explicit-dotenv --credential-dotenv <path> --json",
+            "command_template": (
+                "aippocampus onboard provider-key --plan --source explicit-dotenv "
+                "--credential-dotenv {credential_dotenv_path} --json"
+            ),
+            "requires": ["credential_dotenv_path"],
         },
         {
             "id": "continue_without_provider_key",
@@ -415,6 +533,13 @@ def build_provider_key_bridge_chooser(
     include_local_paths: bool = False,
 ) -> dict[str, Any]:
     env_name = public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
+    if _env_var_is_visible(env_name):
+        return build_provider_key_bridge_plan(
+            target=target,
+            source="visible-env-key",
+            provider_env_var=env_name,
+            include_local_paths=include_local_paths,
+        )
     recommended_actions = _blocked_plan_recommended_actions()
     return {
         "schema_version": SCHEMA_VERSION,
@@ -442,11 +567,15 @@ def build_provider_key_bridge_chooser(
             "no_key_source_backed_recall_still_works": True,
             "source_options": ["explicit-dotenv"],
         },
+        "alternate_paths": {
+            "source_options": ["explicit-dotenv", "no-key"],
+            "no_key_source_backed_recall_still_works": True,
+        },
         "writes": [],
         "issues": [],
         "privacy": _privacy(include_local_paths),
         "recommended_actions": recommended_actions,
-        "agent_next_action": recommended_actions[0]["command"],
+        "agent_next_action": _primary_agent_next_action(recommended_actions),
         "claim_boundary": (
             "A provider-key bridge is optional. It can help future/restarted hooks use LLM-backed "
             "semantic routes, but source-backed recall/search remains usable without it."
@@ -527,6 +656,23 @@ def apply_provider_key_bridge(
         return plan
 
     normalized_source = normalize_source(source)
+    if normalized_source == "visible-env-key":
+        return {
+            **plan,
+            "action": "apply",
+            "applied": True,
+            "writes": [],
+            "recommended_actions": [
+                {
+                    "id": "rerun_provider_doctor_from_hook_launcher",
+                    "message": (
+                        "Run aippocampus doctor provider --json from the environment that will "
+                        "launch Codex or hooks; existing hook processes may need restart."
+                    ),
+                }
+            ],
+            "agent_next_action": "aippocampus doctor provider --json",
+        }
     env_name = public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     codex_home_resolved = Path(codex_home_path or codex_home()).resolve()
     manifest_path = bridge_manifest_path(codex_home_resolved)
@@ -679,6 +825,8 @@ def render_text(report: dict[str, Any]) -> str:
     for action in report.get("recommended_actions") or []:
         if isinstance(action, dict) and action.get("command"):
             lines.append(f"- Next: {action.get('command')}")
+        elif isinstance(action, dict) and action.get("command_template"):
+            lines.append(f"- Next template: {action.get('command_template')}")
     lines.append("- Secret values are not printed or stored in hooks.json")
     return "\n".join(lines) + "\n"
 

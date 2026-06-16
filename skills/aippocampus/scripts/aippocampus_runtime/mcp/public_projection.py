@@ -8,6 +8,7 @@ import json
 from typing import Any, cast
 
 from aippocampus_runtime import core
+from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -108,7 +109,6 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         for item in payload.get("recommended_actions") or []
         if (action := compact_action(item))
     ]
-    recommended = all_recommended[:3]
     storage_action = next(
         (
             item
@@ -118,20 +118,12 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         None,
     )
-    if storage_action and storage_action not in recommended:
-        recommended = [*recommended[:2], storage_action]
     blocking = [
         item
-        for item in recommended
+        for item in all_recommended
         if str(item.get("severity") or "").casefold() in {"critical", "warning"}
     ]
     promotable_blocking = [] if payload.get("ok") else blocking
-    # Compact health is usually read by a foreground agent. Show advisory upkeep
-    # in the list, but do not promote it as the next action when memory is
-    # already ready; otherwise a healthy live thread can get stuck maintaining
-    # itself instead of continuing the user's work.
-    checks_obj = payload.get("checks")
-    checks: list[Any] = checks_obj if isinstance(checks_obj, list) else []
     ordinary_usable = (
         bool(readiness.get("ordinary_first_recall_usable"))
         if isinstance(readiness, dict) and "ordinary_first_recall_usable" in readiness
@@ -159,6 +151,89 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         None,
     )
+    freshness_obj = payload.get("freshness")
+    freshness = cast(dict[str, Any], freshness_obj) if isinstance(freshness_obj, dict) else {}
+    freshness_degraded = bool(
+        isinstance(readiness, dict)
+        and (
+            readiness.get("freshness_degraded")
+            or readiness.get("latest_current_thread_may_be_missing")
+        )
+    ) or bool(
+        freshness.get("latest_visible_gap")
+        or any(
+            item.get("id") in {"build_clean_source", "build_index", "build_segments"}
+            for item in all_recommended
+        )
+    )
+    storage_pressure_obj = payload.get("storage_pressure")
+    storage_pressure = (
+        cast(dict[str, Any], storage_pressure_obj) if isinstance(storage_pressure_obj, dict) else {}
+    )
+    host_confounds_obj = payload.get("host_state_confounds")
+    host_confounds = cast(dict[str, Any], host_confounds_obj) if isinstance(host_confounds_obj, dict) else {}
+    recommended_action_ids = [
+        str(item.get("id") or "")
+        for item in all_recommended
+        if str(item.get("id") or "")
+    ][:5]
+    storage_cleanup_recommended = bool(
+        isinstance(readiness, dict)
+        and readiness.get("storage_pressure_cleanup_recommended")
+    ) or bool(storage_pressure.get("pressure"))
+    freshness_summary = _without_empty(
+        {
+            "degraded": True if freshness_degraded else None,
+            "latest_current_thread_may_be_missing": True
+            if (
+                bool(
+                    isinstance(readiness, dict)
+                    and readiness.get("latest_current_thread_may_be_missing")
+                )
+                or bool(freshness.get("latest_visible_gap"))
+            )
+            else None,
+            "index_message_delta": freshness.get("index_message_delta"),
+            "clean_source_message_delta": freshness.get("clean_source_message_delta"),
+            "clean_source_turn_delta": freshness.get("clean_source_turn_delta"),
+        }
+    )
+    storage_summary = _without_empty(
+        {
+            "cleanup_recommended": True if storage_cleanup_recommended else None,
+            "pressure": storage_pressure.get("pressure") if storage_pressure.get("pressure") else None,
+            "dry_run_command": storage_cleanup_action.get("command")
+            if storage_cleanup_action
+            else storage_pressure.get("dry_run_command")
+            if storage_cleanup_recommended
+            else None,
+        }
+    )
+    host_state_summary = _without_empty(
+        {
+            "confounds_detected": True if host_confounds.get("confounds_detected") else None,
+            "available": host_confounds.get("available") if host_confounds.get("available") else None,
+            "artifact_scope": host_confounds.get("artifact_scope") if host_confounds else None,
+        }
+    )
+    # This card is the default foreground JSON surface. Keep only decision fields
+    # here; freshness/storage/host-state objects are operator diagnostics and
+    # belong behind the full detail command below.
+    maintenance_summary = _without_empty(
+        {
+            "recommended_action_count": len(all_recommended),
+            "blocking_action_count": (
+                readiness.get("blocking_action_count") if isinstance(readiness, dict) else None
+            ),
+            "high_severity_action_count": (
+                readiness.get("high_severity_action_count") if isinstance(readiness, dict) else None
+            ),
+            "recommended_action_ids": recommended_action_ids,
+            "freshness": freshness_summary,
+            "storage": storage_summary,
+            "host_state": host_state_summary,
+        }
+    )
     if ordinary_usable and all_recommended:
         agent_next_action: dict[str, Any] = {
             "id": "continue_with_nonblocking_maintenance",
@@ -174,12 +249,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             ][:5],
         }
         if (
-            isinstance(readiness, dict)
-            and (
-                readiness.get("freshness_degraded")
-                or readiness.get("latest_current_thread_may_be_missing")
-            )
-            and exact_latest_action
+            freshness_degraded and exact_latest_action
         ):
             agent_next_action["before_exact_latest_claims"] = {
                 "kind": "shell_command",
@@ -196,8 +266,8 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         agent_next_action = (
             promotable_blocking[0]
             if not ordinary_usable and promotable_blocking
-            else recommended[0]
-            if recommended and not ordinary_usable
+            else all_recommended[0]
+            if all_recommended and not ordinary_usable
             else {
                 "id": "no_action",
                 "reason": (
@@ -205,19 +275,22 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 ),
             }
         )
-    return {
+    foreground_action = dict(agent_next_action)
+    card = {
+        "kind": "aippocampus_health_card",
         "detail": "compact",
         "ok": ordinary_usable,
         "status": ready_status or ("ok" if ordinary_usable else "attention_needed"),
-        "cwd": payload.get("cwd"),
-        "product_readiness": readiness,
-        "freshness": payload.get("freshness"),
-        "recommended_actions": recommended,
-        "storage_pressure": payload.get("storage_pressure"),
-        "host_state_confounds": payload.get("host_state_confounds"),
-        "check_count": len(checks),
-        "agent_next_action": agent_next_action,
+        "ordinary_first_recall_usable": ordinary_usable,
+        "blocks_first_recall": not ordinary_usable,
+        "blocks_exact_latest_claims": freshness_degraded,
+        "foreground_action": foreground_action,
+        "agent_next_action": foreground_action,
+        "maintenance_summary": maintenance_summary,
+        "operator_detail_command": "aippocampus health --detail full --json",
+        "output_boundary": "compact_foreground_no_operator_diagnostic_objects",
     }
+    return _without_empty(card)
 
 
 def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -336,6 +409,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     memory_packets = [
         packet for packet in payload.get("memory_packets") or [] if isinstance(packet, dict)
     ]
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    labels_low_specificity = recall_choices.low_specificity_route_choices(
+        metrics, len(memory_packets)
+    )
     route_receipts: list[dict[str, Any]] = []
     for index, packet in enumerate(memory_packets[:3], start=1):
         route_receipts.append(
@@ -353,6 +430,14 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                         120,
                     ),
                     "route_family": packet.get("route_kind") or packet.get("output_mode"),
+                    "choice_reason": recall_choices.route_choice_reason(
+                        packet,
+                        index=index,
+                        route_count=len(memory_packets),
+                        labels_low_specificity=labels_low_specificity,
+                    )
+                    if len(memory_packets) > 1
+                    else None,
                     "claim_permission": packet.get("claim_permission"),
                     "next_action_boundary": "reopen_required_before_claim",
                 }
@@ -400,6 +485,11 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "why": "A route surfaced without a safe deepen action; refine or exact-search before relying on it.",
             "claim_boundary": "no_claim_before_reopen",
         }
+    elif labels_low_specificity and foreground_action.get("tool_name") == "agent_deepen":
+        foreground_action = recall_choices.with_low_specificity_foreground_action(
+            foreground_action,
+            metrics=metrics,
+        )
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
@@ -419,6 +509,8 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "effective_max_routes": (payload.get("metrics") or {}).get("effective_max_routes"),
                 "memory_packet_count": (payload.get("metrics") or {}).get("memory_packet_count"),
                 "deepen_request_count": (payload.get("metrics") or {}).get("deepen_request_count"),
+                "route_label_specificity_floor": metrics.get("route_label_specificity_floor"),
+                "topic_label_present_count": metrics.get("topic_label_present_count"),
             }
         ),
         "audit_available": bool(payload.get("audit_available")),

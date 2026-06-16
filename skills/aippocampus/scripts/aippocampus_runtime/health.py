@@ -1088,6 +1088,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Emit compact agent-facing JSON with next actions instead of operator detail.",
     )
     parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits the compact foreground card; --detail full emits operator diagnostics.",
+    )
+    parser.add_argument(
         "--operator-json",
         action="store_true",
         help="Emit the full local operator audit JSON; implies JSON output.",
@@ -1156,7 +1162,8 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as exc:
         result = missing_rollout_health_report(args.cwd, exc)
     public_result = public_health_report(result, include_paths=bool(args.include_paths))
-    compact_json = bool(args.agent_json or (args.json_output and not (args.operator_json or args.full)))
+    full_detail_json = bool(args.operator_json or args.full or args.detail == "full")
+    compact_json = bool(args.agent_json or (args.json_output and not full_detail_json))
     if compact_json:
         print(json.dumps(compact_health_payload(public_result), ensure_ascii=False, indent=2))
     elif json_requested:

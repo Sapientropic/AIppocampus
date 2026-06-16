@@ -515,6 +515,25 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
     families = [str(item) for item in packet.get("task_families") or [] if str(item).strip()]
     status = str(payload.get("status") or "unknown")
     next_action = str(packet.get("next_action") or "").strip()
+    active_clause_count = int(packet.get("active_clause_count") or 0)
+    available_raw = packet.get("available_active_clause_count")
+    available_active_clause_count = (
+        int(available_raw)
+        if isinstance(available_raw, (int, float)) and not isinstance(available_raw, bool)
+        else active_clause_count
+    )
+    contract_active_clause_count = int(packet.get("contract_active_clause_count") or 0)
+    active_not_foreground_available_count = int(
+        packet.get("active_not_foreground_available_count") or 0
+    )
+    suppressed_clause_count = int(packet.get("suppressed_clause_count") or 0)
+    direct_guidance_available = bool(guidance and next_action and next_action != "use_hint")
+    use_hint_available = (
+        status == "ok"
+        and bool(guidance)
+        and next_action == "use_hint"
+        and available_active_clause_count > 0
+    )
     deepen_route_id = str(packet.get("deepen_route_id") or "").strip()
     contract_action_raw = packet.get("contract_action")
     contract_action = (
@@ -525,7 +544,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         else None
     )
     task_text = str(task or "").strip()
-    if status == "ok" and guidance:
+    if use_hint_available or (status == "ok" and direct_guidance_available):
         foreground_action = {
             "action_id": next_action or "use_aippo_working_contract_guidance",
             "tool_name": "agent_aippo",
@@ -557,6 +576,8 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         reason_codes.append("related_task_needs_reopen_or_contract_ripening")
     elif not families and task_text:
         reason_codes.append("no_task_family_match")
+    if next_action == "use_hint" and guidance and available_active_clause_count <= 0:
+        reason_codes.append("use_hint_blocked_no_available_active_clause")
     return _public_payload(
         {
             "kind": payload.get("kind"),
@@ -571,11 +592,23 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             "foreground_action": foreground_action,
             "reason_codes": reason_codes,
             "contract_status": {
-                "active_clause_count": int(packet.get("active_clause_count") or 0),
-                "available_active_clause_count": int(
-                    packet.get("available_active_clause_count") or 0
+                "active_clause_count": active_clause_count,
+                "available_active_clause_count": available_active_clause_count,
+                "contract_active_clause_count": contract_active_clause_count,
+                "active_not_foreground_available_count": active_not_foreground_available_count,
+                "suppressed_clause_count": suppressed_clause_count,
+                "availability_basis": str(
+                    packet.get("availability_basis")
+                    or "unknown_packet_projection"
                 ),
-                "suppressed_clause_count": int(packet.get("suppressed_clause_count") or 0),
+            },
+            "match_diagnostics": {
+                "task_family_count": len(families),
+                "selected_clause_count": active_clause_count,
+                "available_active_clause_count": available_active_clause_count,
+                "contract_active_clause_count": contract_active_clause_count,
+                "active_not_foreground_available_count": active_not_foreground_available_count,
+                "direct_guidance_available": direct_guidance_available,
             },
             "contract_action": contract_action,
             "boundary": {

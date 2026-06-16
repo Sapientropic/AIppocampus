@@ -54,12 +54,16 @@ class AippocampusHealthTests(unittest.TestCase):
         raw = stdout.getvalue()
         payload = json.loads(raw)
         self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertEqual(payload["detail"], "compact")
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["agent_next_action"]["id"], "refresh_clean_source")
-        self.assertIsInstance(payload["recommended_actions"][0], dict)
+        self.assertEqual(payload["foreground_action"]["id"], "refresh_clean_source")
+        self.assertNotIn("recommended_actions", payload)
+        self.assertNotIn("freshness", payload)
+        self.assertNotIn("storage_pressure", payload)
+        self.assertNotIn("host_state_confounds", payload)
         self.assertNotIn(private_path, raw)
-        self.assertIn("<local-path-redacted>", raw)
 
     def test_agent_json_health_does_not_promote_advisory_actions_when_ready(self) -> None:
         with (
@@ -98,7 +102,10 @@ class AippocampusHealthTests(unittest.TestCase):
             payload["agent_next_action"]["primary"]["message"],
             "ordinary source-backed recall/search can continue",
         )
-        self.assertEqual(payload["recommended_actions"][0]["id"], "prepare_graphify_corpus")
+        self.assertEqual(
+            payload["maintenance_summary"]["recommended_action_ids"][0],
+            "prepare_graphify_corpus",
+        )
 
     def test_agent_json_health_uses_no_action_only_when_clean_ready(self) -> None:
         with (
@@ -120,6 +127,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["agent_next_action"]["id"], "no_action")
+        self.assertEqual(payload["maintenance_summary"]["recommended_action_count"], 0)
 
     def test_agent_json_preserves_high_severity_storage_pressure_action(self) -> None:
         pressure_action = {
@@ -154,11 +162,12 @@ class AippocampusHealthTests(unittest.TestCase):
             code = health.main(["--agent-json"])
 
         payload = json.loads(stdout.getvalue())
-        action_ids = [item["id"] for item in payload["recommended_actions"]]
+        action_ids = payload["maintenance_summary"]["recommended_action_ids"]
 
         self.assertEqual(code, 0)
         self.assertIn("storage_gc_rebuildable_cache", action_ids)
-        self.assertEqual(payload["storage_pressure"]["pressure"], True)
+        self.assertNotIn("storage_pressure", payload)
+        self.assertTrue(payload["maintenance_summary"]["storage"]["pressure"])
 
     def test_agent_json_storage_pressure_is_visible_but_not_primary_when_ready(self) -> None:
         with (
@@ -198,7 +207,11 @@ class AippocampusHealthTests(unittest.TestCase):
             payload["agent_next_action"]["when_idle"]["command"],
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
-        self.assertEqual(payload["recommended_actions"][0]["id"], "storage_gc_rebuildable_cache")
+        self.assertEqual(
+            payload["maintenance_summary"]["recommended_action_ids"][0],
+            "storage_gc_rebuildable_cache",
+        )
+        self.assertNotIn("storage_pressure", payload)
 
     def test_agent_json_freshness_degraded_keeps_executable_latest_guidance(self) -> None:
         with (
@@ -246,6 +259,116 @@ class AippocampusHealthTests(unittest.TestCase):
             "aippocampus maintenance",
         )
         self.assertTrue(payload["agent_next_action"]["primary"]["ordinary_first_recall_usable"])
+        self.assertTrue(payload["blocks_exact_latest_claims"])
+        self.assertNotIn("freshness", payload)
+
+    def test_agent_json_health_card_excludes_operator_only_objects(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [{"name": f"check-{index}"} for index in range(20)],
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "freshness_degraded": True,
+                        "latest_current_thread_may_be_missing": True,
+                        "maintenance_recommended": True,
+                        "storage_pressure_cleanup_recommended": True,
+                        "status": "ready_with_freshness_degraded",
+                    },
+                    "freshness": {
+                        "latest_visible_gap": True,
+                        "index_message_delta": 12,
+                        "clean_source_message_delta": 4,
+                        "rollout_message_count": 999,
+                    },
+                    "storage_pressure": {
+                        "available": True,
+                        "pressure": True,
+                        "metrics": {"generated_index_amplification_ratio": 16.0},
+                        "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+                    },
+                    "host_state_confounds": {
+                        "available": True,
+                        "artifact_scope": "codex_host_state_not_aippocampus_registry",
+                        "logs_db_wal": {"total_bytes": 123456},
+                    },
+                    "recommended_actions": [
+                        {
+                            "id": "build_clean_source",
+                            "severity": "warning",
+                            "reason": "latest clean source missing",
+                            "facade_command": "aippocampus maintenance",
+                        },
+                        {
+                            "id": "storage_gc_rebuildable_cache",
+                            "severity": "warning",
+                            "reason": "generated cache pressure",
+                            "facade_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+                        },
+                    ],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--json"])
+
+        raw = stdout.getvalue()
+        payload = json.loads(raw)
+
+        self.assertEqual(code, 0)
+        self.assertLess(len(raw), 3200)
+        self.assertEqual(payload["kind"], "aippocampus_health_card")
+        self.assertTrue(payload["ordinary_first_recall_usable"])
+        self.assertTrue(payload["blocks_exact_latest_claims"])
+        self.assertEqual(
+            payload["foreground_action"]["before_exact_latest_claims"]["command"],
+            "aippocampus maintenance",
+        )
+        self.assertEqual(
+            payload["foreground_action"]["when_idle"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        for operator_key in (
+            "freshness",
+            "storage_pressure",
+            "host_state_confounds",
+            "recommended_actions",
+            "checks",
+            "product_readiness",
+            "cwd",
+        ):
+            self.assertNotIn(operator_key, payload)
+
+    def test_health_json_detail_full_keeps_operator_diagnostics(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "freshness": {"latest_visible_gap": False},
+                    "storage_pressure": {"available": True, "pressure": False},
+                    "host_state_confounds": {"available": True},
+                    "recommended_actions": [],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--json", "--detail", "full"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertNotEqual(payload.get("kind"), "aippocampus_health_card")
+        self.assertIn("freshness", payload)
+        self.assertIn("storage_pressure", payload)
+        self.assertIn("host_state_confounds", payload)
 
     def test_human_health_prints_copy_pasteable_next_commands(self) -> None:
         payload = {
@@ -859,7 +982,8 @@ class AippocampusHealthTests(unittest.TestCase):
         public_encoded = json.dumps(public_payload, ensure_ascii=False)
         self.assertEqual(public_payload["detail"], "compact")
         self.assertNotIn(str(workspace), public_encoded)
-        self.assertEqual(public_payload["cwd"], health.LOCAL_PATH_REDACTION)
+        self.assertEqual(public_payload["kind"], "aippocampus_health_card")
+        self.assertNotIn("cwd", public_payload)
         self.assertNotIn("privacy", public_payload)
         self.assertEqual(private_payload["cwd"], str(workspace.resolve()))
         self.assertTrue(private_payload["privacy"]["paths_included"])

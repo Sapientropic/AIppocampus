@@ -1851,6 +1851,67 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
 
+    def test_cli_agent_aippo_use_hint_reports_available_clause(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+                "fix failing pytest after forgetting ruff",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        status = payload["contract_status"]
+
+        self.assertEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertGreaterEqual(status["available_active_clause_count"], 1)
+        self.assertEqual(status["available_active_clause_count"], status["active_clause_count"])
+        self.assertGreaterEqual(status["contract_active_clause_count"], status["active_clause_count"])
+        self.assertIn("active_not_foreground_available_count", status)
+        self.assertEqual(
+            payload["match_diagnostics"]["available_active_clause_count"],
+            status["available_active_clause_count"],
+        )
+
+    def test_cli_agent_aippo_no_match_recovers_instead_of_use_hint(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+                "casual chat about weather",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+
+        self.assertEqual(payload["status"], "no_active_contract")
+        self.assertEqual(payload["contract_status"]["available_active_clause_count"], 0)
+        self.assertNotEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertIn("no_task_family_match", payload["reason_codes"])
+
     def test_cli_agent_aippo_core_product_journeys_are_not_empty_contracts(self) -> None:
         proc = subprocess.run(
             [

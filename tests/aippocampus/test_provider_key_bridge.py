@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -75,12 +76,26 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             report["recommended_actions"][0]["id"],
             "plan_with_private_credential_source",
         )
-        self.assertIn("--credential-dotenv <path>", report["agent_next_action"])
+        self.assertIsInstance(report["agent_next_action"], dict)
+        self.assertEqual(
+            report["agent_next_action"]["command_template"],
+            (
+                "aippocampus onboard provider-key --plan --source explicit-dotenv "
+                "--credential-dotenv {credential_dotenv_path} --json"
+            ),
+        )
+        self.assertEqual(report["agent_next_action"]["requires"], ["credential_dotenv_path"])
+        self.assertNotIn("<path>", json.dumps(report["recommended_actions"], ensure_ascii=False))
         self.assertIn("aippocampus search", report["recommended_actions"][1]["command"])
 
     def test_cli_plan_without_source_is_successful_chooser(self) -> None:
-        with patch("sys.stdout", new=StringIO()) as stdout:
-            code = provider_key_bridge.main(["--plan", "--json"])
+        old_default_key = os.environ.pop(provider_key_bridge.DEFAULT_PROVIDER_ENV_VAR, None)
+        try:
+            with patch("sys.stdout", new=StringIO()) as stdout:
+                code = provider_key_bridge.main(["--plan", "--json"])
+        finally:
+            if old_default_key is not None:
+                os.environ[provider_key_bridge.DEFAULT_PROVIDER_ENV_VAR] = old_default_key
 
         self.assertEqual(code, 0)
         payload = json.loads(stdout.getvalue())
@@ -89,12 +104,52 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertFalse(payload["applied"])
         self.assertEqual(payload["candidate"]["status"], "source_choice_required")
         self.assertTrue(payload["chooser"]["no_write_happened"])
-        commands = [item["command"] for item in payload["recommended_actions"]]
+        commands = [item["command"] for item in payload["recommended_actions"] if item.get("command")]
+        command_templates = [
+            item["command_template"]
+            for item in payload["recommended_actions"]
+            if item.get("command_template")
+        ]
         self.assertIn(
-            "aippocampus onboard provider-key --plan --source explicit-dotenv --credential-dotenv <path> --json",
-            commands,
+            (
+                "aippocampus onboard provider-key --plan --source explicit-dotenv "
+                "--credential-dotenv {credential_dotenv_path} --json"
+            ),
+            command_templates,
         )
         self.assertIn('aippocampus search "a distinctive old phrase"', commands)
+        self.assertNotIn("<path>", json.dumps(payload["recommended_actions"], ensure_ascii=False))
+
+    def test_cli_plan_without_source_prefers_visible_env_key_without_secret_leak(self) -> None:
+        fixture_value = fake_provider_bridge_value("VISIBLE_ENV")
+        with patch.dict(os.environ, {BRIDGE_PROVIDER_ENV_VAR: fixture_value}, clear=False):
+            with patch("sys.stdout", new=StringIO()) as stdout:
+                code = provider_key_bridge.main(
+                    [
+                        "--plan",
+                        "--provider-env-var",
+                        BRIDGE_PROVIDER_ENV_VAR,
+                        "--json",
+                    ]
+                )
+            payload = json.loads(stdout.getvalue())
+            encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["source"]["kind"], "visible-env-key")
+        self.assertEqual(payload["candidate"]["status"], "visible_env_key_present")
+        self.assertTrue(payload["provider_env"]["visible_in_current_process"])
+        self.assertTrue(payload["provider_env"]["visible_in_child_process"])
+        self.assertEqual(
+            payload["recommended_actions"][0]["id"],
+            "confirm_visible_env_key",
+        )
+        self.assertIn("--source visible-env-key", payload["agent_next_action"])
+        self.assertNotIn("--credential-dotenv <path>", payload["agent_next_action"])
+        self.assertIn("explicit-dotenv", payload["alternate_paths"]["source_options"])
+        self.assertFalse(payload["privacy"]["secret_values_printed"])
+        self.assertNotIn(fixture_value, encoded)
 
     def test_bridge_apply_installs_redacted_codex_hook_wrapper_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -2004,21 +2004,23 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertEqual(payload["ok"], False)
         self.assertIn("agent_next_action", payload)
-        self.assertIsInstance(payload["recommended_actions"][0], dict)
-        self.assertEqual(payload["recommended_actions"][0]["id"], "build_index")
-        self.assertIsInstance(payload["recommended_actions"][1], dict)
-        self.assertEqual(payload["recommended_actions"][1]["id"], "recommended_action")
+        self.assertIn("foreground_action", payload)
         self.assertIn(
             "storage_gc_rebuildable_cache",
-            [item["id"] for item in payload["recommended_actions"]],
+            payload["maintenance_summary"]["recommended_action_ids"],
         )
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["agent_next_action"]["id"], "build_index")
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
         self.assertNotIn("checks", payload)
+        self.assertNotIn("recommended_actions", payload)
+        self.assertNotIn("freshness", payload)
+        self.assertNotIn("storage_pressure", payload)
+        self.assertNotIn("host_state_confounds", payload)
 
     def test_memory_health_exception_returns_recovery_card_not_bare_tool_error(self) -> None:
         with mock.patch.object(
