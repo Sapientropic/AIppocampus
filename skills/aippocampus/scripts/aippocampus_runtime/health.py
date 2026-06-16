@@ -273,6 +273,8 @@ def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, 
 
 def public_health_report(payload: dict[str, Any], *, include_paths: bool = False) -> dict[str, Any]:
     public = dict(payload) if include_paths else redact_sensitive_values(redact_private_paths(payload))
+    if not include_paths:
+        _rewrite_redacted_action_commands(public)
     privacy = dict(public.get("privacy") or {})
     privacy.update(
         {
@@ -282,6 +284,22 @@ def public_health_report(payload: dict[str, Any], *, include_paths: bool = False
     )
     public["privacy"] = privacy
     return public
+
+
+def _rewrite_redacted_action_commands(payload: dict[str, Any]) -> None:
+    for item in payload.get("recommended_actions") or []:
+        if not isinstance(item, dict):
+            continue
+        command = str(item.get("command") or "")
+        facade_command = str(item.get("facade_command") or "")
+        if LOCAL_PATH_REDACTION not in command and LOCAL_PATH_REDACTION not in facade_command:
+            continue
+        if "aippocampus maintenance" in facade_command or "aippocampus_runtime" in command:
+            # The full report keeps the exact cwd for operator diagnostics. Once
+            # paths are redacted, that same command becomes uncopyable; default
+            # foreground health should give a runnable current-directory action.
+            item["command"] = "aippocampus maintenance"
+            item["facade_command"] = "aippocampus maintenance"
 
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:

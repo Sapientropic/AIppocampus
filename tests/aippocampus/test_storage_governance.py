@@ -492,6 +492,38 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(len(search_hits), 1)
         self.assertIn("storage governance rebuild verification phrase", search_hits[0]["snippet"])
 
+    def test_public_health_actions_keep_commands_runnable_after_path_redaction(self) -> None:
+        action = health.health_action(
+            "build_index",
+            "warning",
+            "index is stale",
+            "aippocampus_runtime.recall.index_builder",
+            self.root,
+        )
+        public = health.public_health_report(
+            {
+                "cwd": str(self.root),
+                "recommended_actions": [action],
+                "privacy": {},
+            }
+        )
+
+        public_action = public["recommended_actions"][0]
+        self.assertEqual(public_action["command"], "aippocampus maintenance")
+        self.assertEqual(public_action["facade_command"], "aippocampus maintenance")
+        self.assertNotIn(str(self.root), json.dumps(public, ensure_ascii=False))
+        self.assertNotIn("<local-path-redacted>", public_action["command"])
+
+        private = health.public_health_report(
+            {
+                "cwd": str(self.root),
+                "recommended_actions": [action],
+                "privacy": {},
+            },
+            include_paths=True,
+        )
+        self.assertIn(str(self.root), private["recommended_actions"][0]["facade_command"])
+
     def test_apply_blocks_raw_or_missing_source_precondition(self) -> None:
         payload = self._retention_payload()
         payload["rollout"] = {"size_bytes": 0}

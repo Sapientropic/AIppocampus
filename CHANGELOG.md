@@ -24,6 +24,7 @@ room.
 - Release gates are calmer: focused tests first, `pr` when the changed surface
   deserves it, and broad/benchmark gates only for claims that actually depend on
   them.
+- Health redacts paths without turning the next command into a dead end.
 
 Still alpha. Still source-backed. Less ceremony before the first useful thread
 comes back into view.
