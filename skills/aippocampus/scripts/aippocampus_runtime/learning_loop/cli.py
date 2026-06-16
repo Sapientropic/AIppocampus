@@ -15,10 +15,14 @@ from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
 from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
 from aippocampus_runtime.learning_loop.private_export import (
+    LearningReplayInputError,
     export_private_replay_events,
     load_behavior_event_rows,
 )
-from aippocampus_runtime.learning_loop.private_replay import build_private_history_replay_report
+from aippocampus_runtime.learning_loop.private_replay import (
+    build_private_history_replay_report,
+    replay_recovery_payload,
+)
 from aippocampus_runtime.learning_loop.semantic_learning import (
     build_semantic_learning_dogfood_fixture_report,
 )
@@ -772,6 +776,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay":
         try:
             payload = replay_payload(args)
+        except LearningReplayInputError as exc:
+            payload = replay_recovery_payload(exc)
         except ValueError as exc:
             parser.error(str(exc))
     elif args.command == "discover-history":

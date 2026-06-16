@@ -130,6 +130,62 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Personal controls card", controls.stdout)
         self.assertIn("do-not-use-here", controls.stdout)
 
+    def test_agent_parent_json_is_foreground_chooser_not_argparse(self) -> None:
+        proc = self.run_cli("agent", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertNotIn("usage:", proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_agent_recovery")
+        self.assertEqual(payload["status"], "command_required")
+        self.assertEqual(payload["choices"][0]["id"], "recall")
+        self.assertEqual(payload["choices"][1]["id"], "aippo")
+        self.assertIn("aippocampus agent recall", payload["choices"][0]["command_template"])
+        self.assertIn("aippocampus agent aippo", payload["choices"][1]["command"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertIn("command_template", encoded)
+        for choice in payload["choices"]:
+            if "command" in choice:
+                self.assertNotIn("<", choice["command"])
+                self.assertNotIn(">", choice["command"])
+
+    def test_memory_privacy_controls_json_frontdoors_are_status_cards(self) -> None:
+        cards = {
+            "memory": self.run_cli("memory", "--json"),
+            "privacy": self.run_cli("privacy", "--json"),
+            "controls": self.run_cli("controls", "--json"),
+        }
+
+        for name, proc in cards.items():
+            self.assertEqual(proc.returncode, 0, f"{name}: {proc.stderr}")
+            self.assertNotIn("unknown command", proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload["surface_class"], "foreground_chooser_card")
+            self.assertIn("safe_next_actions", payload)
+            self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+            for action in payload["safe_next_actions"]:
+                self.assertIn("mutation_risk", action)
+                self.assertIn("claim_boundary", action)
+                if "command" in action:
+                    self.assertNotIn("<", action["command"])
+                    self.assertNotIn(">", action["command"])
+
+        self.assertEqual(cards["memory"].returncode, 0)
+        memory_payload = json.loads(cards["memory"].stdout)
+        self.assertEqual(memory_payload["kind"], "aippocampus_memory_chooser")
+        self.assertIn(
+            "aippocampus agent recall",
+            memory_payload["safe_next_actions"][0]["command_template"],
+        )
+
+        privacy_payload = json.loads(cards["privacy"].stdout)
+        self.assertEqual(privacy_payload["kind"], "aippocampus_privacy_chooser")
+        self.assertTrue(any(action["id"] == "open_controls" for action in privacy_payload["safe_next_actions"]))
+
+        controls_payload = json.loads(cards["controls"].stdout)
+        self.assertEqual(controls_payload["kind"], "aippocampus_controls_chooser")
+        self.assertTrue(any(action["id"] == "do_not_use_here" for action in controls_payload["safe_next_actions"]))
+
     def test_plugin_install_status_recovers_to_plugin_status(self) -> None:
         proc = self.run_cli("plugin", "install", "--status")
 
@@ -210,6 +266,22 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("does not make model calls", proc.stdout)
         self.assertIn("ordinary source-backed", proc.stdout.casefold())
         self.assertLess(proc.stdout.index("aippocampus warm status"), proc.stdout.index("--prompt"))
+
+    def test_bare_warm_json_is_safe_status_chooser(self) -> None:
+        proc = self.run_cli("warm", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertNotIn("usage:", proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_warm_chooser")
+        self.assertEqual(payload["status"], "command_or_prompt_required")
+        self.assertEqual(payload["choices"][0]["id"], "status")
+        self.assertEqual(payload["choices"][0]["command"], "aippocampus warm status --json")
+        self.assertTrue(any(choice.get("operator_only") for choice in payload["choices"]))
+        for choice in payload["choices"]:
+            if "command" in choice:
+                self.assertNotIn("<", choice["command"])
+                self.assertNotIn(">", choice["command"])
 
     def test_doctor_config_human_output_is_decision_grade(self) -> None:
         proc = self.run_cli("doctor", "config")
@@ -673,6 +745,21 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 for action in actions:
                     if isinstance(action, dict) and "command" in action:
                         self.assertIn("aippocampus ", action["command"])
+
+    def test_continuity_domain_json_does_not_put_placeholders_in_executable_commands(self) -> None:
+        proc = self.run_cli("continuity-domain", "--json")
+
+        self.assertIn(proc.returncode, {0, 2}, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("<local-path-redacted>", encoded)
+        for action in payload.get("safe_next_actions") or []:
+            if isinstance(action, dict):
+                command = str(action.get("command") or "")
+                self.assertNotIn("<", command)
+                self.assertNotIn("old continuity cue", command)
+                if action.get("command_template"):
+                    self.assertEqual(action.get("requires"), "cue")
 
     def test_bare_onboard_json_is_status_first_and_read_only(self) -> None:
         proc = self.run_cli("onboard", "--json")

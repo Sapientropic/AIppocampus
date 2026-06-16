@@ -55,6 +55,19 @@ writes have different durability and authority.
 For neuroscience-adjacent metaphor boundaries, use
 [`docs/architecture/architecture-overview.md#metaphor-discipline`](architecture/architecture-overview.md#metaphor-discipline).
 
+## Which Tool Should The Agent Call First?
+
+Use the smallest foreground pull path that matches the situation; this is the
+same action/recovery posture tracked in #2057.
+
+| Situation | First tool | Then |
+| --- | --- | --- |
+| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
+| Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
+| Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
+| No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
+| Route was wrong, noisy, or should be quiet here | feedback/control command | Treat it as low-authority scoped feedback, not source truth. |
+
 ## What AIppocampus Is Not
 
 AIppocampus is not:

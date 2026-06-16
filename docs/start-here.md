@@ -7,13 +7,32 @@ through architecture, benchmarks, planning notes, and research memos.
 
 Goal: install or probe AIppocampus and see one source-backed recall moment.
 
-Tiny executable decision card:
+Choose one ordinary branch first. Each branch below only shows commands that
+make sense under that branch's assumptions.
 
-```sh
-aippocampus search "a distinctive old phrase"
-aippocampus agent recall "the old decision or handoff you are trying to continue" --json
-aippocampus agent deepen --request 1 --last-recall --json
-```
+- Codex agent/local setup:
+
+  ```sh
+  aippocampus plugin install --codex --verify
+  aippocampus update status --agent-json
+  aippocampus agent recall "old decision or handoff cue" --json
+  aippocampus agent deepen --request 1 --last-recall --json
+  ```
+
+- No-clone or read-only probe:
+
+  ```sh
+  uvx aippocampus --help
+  uvx aippocampus onboard --provider auto --status
+  ```
+
+- Existing source memory:
+
+  ```sh
+  aippocampus agent recall "old decision or handoff cue" --json
+  aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus search "a distinctive old phrase"
+  ```
 
 Use the recall output as a route. Deepen/reopen source before exact wording,
 public claims, sensitive facts, stale disputes, or high-risk action.
@@ -21,17 +40,11 @@ Use `aippocampus health` and `aippocampus onboard --provider auto --status` as
 read-only recovery cards when no source is registered or the first route is
 blocked.
 
-Choose one ordinary branch:
-
-- Codex agent/local setup:
-  start with the [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path),
-  then run the card above.
-- No-clone or read-only probe:
-  use the [10-minute public path](guides/public-api.md#ten-minute-public-path),
-  then try one public-safe recall/status command.
-- Existing source memory:
-  use the [first recall path](guides/install-guide.md#first-recall-path) and
-  [first recall decision card](guides/first-recall-decision-card.md).
+For the longer version, use the
+[agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path),
+the [10-minute public path](guides/public-api.md#ten-minute-public-path), or the
+[first recall install path](guides/install-guide.md#first-recall-path) with the
+[first recall decision card](guides/first-recall-decision-card.md).
 
 Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) for why the
 first source-backed moment should feel worth the setup. Use

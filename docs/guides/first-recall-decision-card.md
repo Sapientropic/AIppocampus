@@ -34,6 +34,21 @@ aippocampus agent deepen --request 1 --last-recall --json
 
 ## Decide The First Move
 
+1. Choose the setup branch before running recall commands:
+
+   ```sh
+   # Trusted Codex/local setup.
+   aippocampus plugin install --codex --verify
+   aippocampus update status --agent-json
+
+   # No-clone/read-only probe.
+   uvx aippocampus --help
+   uvx aippocampus onboard --provider auto --status
+   ```
+
+   If local source is already registered, skip setup/probe and start with the
+   recall or exact-search branch below.
+
 1. If the user remembers a vague decision, handoff, correction, or project cue,
    ask the agent facade for a bounded foreground packet:
 

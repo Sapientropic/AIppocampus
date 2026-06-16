@@ -79,14 +79,15 @@ def recovery_payload() -> MappingPayload:
                 mutation_risk="read_only",
                 claim_boundary="source_reopen_required_before_claims",
             ),
-            foreground_shell_action(
-                action_id="ordinary_recall_path",
-                label="Use ordinary recall for a continuity cue",
-                command='aippocampus agent recall "old continuity cue" --json',
-                why="Most foreground work should start from recall/deepen rather than domain backfill.",
-                mutation_risk="read_only",
-                claim_boundary="no_claim_before_reopen",
-            ),
+            {
+                "id": "ordinary_recall_path",
+                "label": "Use ordinary recall for a continuity cue",
+                "requires": "cue",
+                "command_template": "aippocampus agent recall <cue> --json",
+                "why": "Most foreground work should start from recall/deepen rather than domain backfill.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
         ],
         source_boundary={
             "continuity_domains_are_routes_not_source_truth": True,
@@ -154,6 +155,27 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
 
 
 MappingPayload = dict[str, Any]
+GENERIC_FOREGROUND_CUE_TERMS = {
+    "aippocampus",
+    "aiippocampus",
+    "codex-hindsight-memory",
+    "recall",
+    "append",
+    "maintenance",
+    "runtime",
+    "continuity-domain",
+    "continuity",
+    "route",
+    "source",
+    "source-backed",
+    "foreground",
+    "action",
+}
+GENERIC_FOREGROUND_CUE_PHRASES = {
+    "runtime-contract.md",
+    "old continuity cue",
+    "continuity domain candidate",
+}
 
 
 def _read_event(args: argparse.Namespace) -> dict[str, Any]:
@@ -422,6 +444,33 @@ def _strip_producer_local_detail(payload: MappingPayload) -> MappingPayload:
     return clean
 
 
+def _foreground_cue_quality(cue: str) -> tuple[str, str]:
+    text = compact_text(str(cue or ""), 80).strip()
+    if not text:
+        return "low_information", "empty"
+    low = text.casefold()
+    if low in GENERIC_FOREGROUND_CUE_PHRASES:
+        return "low_information", "generic_tool_word"
+    if low.endswith((".md", ".py", ".json", ".jsonl", ".toml", ".yaml", ".yml")) and " " not in low:
+        return "low_information", "file_name_only"
+    tokens = [token for token in low.replace("_", "-").split() if token]
+    if tokens and all(token.strip('"`.,;:!?') in GENERIC_FOREGROUND_CUE_TERMS for token in tokens):
+        return "low_information", "generic_tool_word"
+    if low in GENERIC_FOREGROUND_CUE_TERMS:
+        return "low_information", "generic_tool_word"
+    return "actionable", ""
+
+
+def _best_foreground_cue(cues: list[str], fallback_title: str) -> tuple[str, str, str]:
+    for cue in [*cues, fallback_title]:
+        quality, reason = _foreground_cue_quality(cue)
+        if quality == "actionable":
+            return compact_text(str(cue), 80), quality, reason
+    first = cues[0] if cues else fallback_title
+    quality, reason = _foreground_cue_quality(first)
+    return compact_text(str(first), 80), quality, reason
+
+
 def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload]:
     previews: list[MappingPayload] = []
     for event in payload.get("candidate_events") or []:
@@ -433,20 +482,23 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
             for cue in event.get("activation_cues") or []
             if str(cue).strip()
         ][:6]
-        cue = cues[0] if cues else compact_text(str(event.get("title") or ""), 80)
-        recall_command = (
-            f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json"
-            if cue
-            else 'aippocampus agent recall "continuity domain candidate" --json'
-        )
-        previews.append(
-            {
+        title = compact_text(str(event.get("title") or "untitled domain"), 96)
+        cue, quality, reason = _best_foreground_cue(cues, title)
+        preview = {
                 "domain_handle": event.get("domain_id"),
-                "title": compact_text(str(event.get("title") or "untitled domain"), 96),
+                "title": title,
                 "domain_type": event.get("domain_type"),
                 "scale": event.get("scale"),
                 "activation_cues": cues,
-                "foreground_actions": [
+                "foreground_candidate_quality": quality,
+                "source_ref_count": len(refs) if isinstance(refs, list) else 0,
+                "source_reopen_required_before_claim": True,
+            }
+        if reason:
+            preview["suppression_reason"] = reason
+        if quality == "actionable" and cue:
+            recall_command = f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json"
+            preview["foreground_actions"] = [
                     foreground_shell_action(
                         action_id="recall_candidate_cue",
                         label="Recall this candidate cue",
@@ -455,11 +507,10 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
                         mutation_risk="read_only",
                         claim_boundary="no_claim_before_reopen",
                     )
-                ],
-                "source_ref_count": len(refs) if isinstance(refs, list) else 0,
-                "source_reopen_required_before_claim": True,
-            }
-        )
+                ]
+        else:
+            preview["foreground_actions"] = []
+        previews.append(preview)
     return previews
 
 
@@ -474,9 +525,13 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         "local_paths_emitted": False,
         "preview_is_not_source_truth": True,
     }
-    if previews:
-        primary = previews[0].get("foreground_actions") or []
+    actionable_previews = [
+        preview for preview in previews if preview.get("foreground_candidate_quality") == "actionable"
+    ]
+    if actionable_previews:
+        primary = actionable_previews[0].get("foreground_actions") or []
         primary_action = primary[0] if primary and isinstance(primary[0], dict) else None
+        clean["foreground_candidate_quality"] = "actionable"
         clean["agent_next_action"] = {
             "id": "use_candidate_preview_as_reopenable_route",
             "label": "Use candidate_previews as navigation only; run recall/deepen on the cue before any factual claim.",
@@ -490,10 +545,20 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
             "command": "aippocampus continuity-domain produce --append --publish --json",
             "requires_operator_review": True,
         }
+    elif previews:
+        clean["foreground_candidate_quality"] = "needs_broader_scan"
+        clean["agent_next_action"] = {
+            "id": "needs_broader_scan_or_cue",
+            "label": "Only low-information continuity-domain cues surfaced; broaden the scan or provide a user cue.",
+            "command": "aippocampus continuity-domain preview --broad-scan --json",
+            "requires_operator_review": False,
+        }
     else:
+        clean["foreground_candidate_quality"] = "needs_broader_scan"
         clean["agent_next_action"] = {
             "id": "no_continuity_domain_candidates",
             "label": "No supported continuity-domain candidates were found; keep the public dry-run report as evidence.",
+            "command": "aippocampus continuity-domain preview --broad-scan --json",
             "requires_operator_review": False,
         }
     return redact_sensitive_values(redact_private_paths(clean))

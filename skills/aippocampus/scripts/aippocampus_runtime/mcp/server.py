@@ -160,6 +160,53 @@ def tool_error(
     return text_result(payload, is_error=True)
 
 
+def missing_input_recovery_card(
+    *,
+    code: str,
+    message: str,
+    tool_name: str,
+    arguments: dict[str, Any],
+    required_any: list[str],
+    safe_next_actions: list[dict[str, Any]],
+    staged_followup: list[dict[str, Any]] | None = None,
+    legacy_details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "required_any": required_any,
+        "agent_next_action": (
+            f"Call {safe_next_actions[0]['tool_name']} with the suggested arguments."
+            if safe_next_actions
+            else None
+        ),
+        "example_arguments": safe_next_actions[0].get("arguments") if safe_next_actions else {},
+    }
+    if legacy_details:
+        details.update(legacy_details)
+    payload: dict[str, Any] = {
+        "ok": False,
+        "status": "needs_input",
+        "surface_class": "foreground_recovery_card",
+        "error": {
+            "code": code,
+            "message": message,
+            "tool_name": tool_name,
+            "required_any": required_any,
+            "details": details,
+        },
+        "agent_next_action": safe_next_actions[0] if safe_next_actions else None,
+        "safe_next_actions": safe_next_actions,
+        "source_boundary": {
+            "claim_authority": "none_until_source_reopened",
+            "navigation_only": True,
+            "source_reopen_required_before_claim": True,
+        },
+        "related_issue": "https://github.com/Sapientropic/AIppocampus/issues/2057",
+    }
+    if staged_followup:
+        payload["staged_followup"] = staged_followup
+    return text_result(public_payload(arguments, payload), is_error=True)
+
+
 def clean_source_unavailable(
     source_dir: Path, required: list[str], arguments: dict[str, Any]
 ) -> dict[str, Any]:
@@ -189,8 +236,22 @@ def clean_source_message_sort_key(item: dict[str, Any]) -> int:
 def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     query = str(arguments.get("query") or "").strip()
     if not query:
-        return tool_error(
-            "missing_query", "search_memory requires a non-empty query.", arguments=arguments
+        return missing_input_recovery_card(
+            code="missing_query",
+            message="search_memory requires a non-empty query.",
+            tool_name="search_memory",
+            arguments=arguments,
+            required_any=["query"],
+            safe_next_actions=[
+                {
+                    "tool_name": "search_memory",
+                    "arguments": {"query": "<specific cue or phrase>", "max": 10},
+                },
+                {
+                    "tool_name": "recall_context",
+                    "arguments": {"intent": "<task or memory cue>"},
+                },
+            ],
         )
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
     source_dir = clean_source_dir_for(arguments)
@@ -233,15 +294,26 @@ def continuity_domains_snapshot_arg(arguments: dict[str, Any]) -> Path | None:
 def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
     intent = str(arguments.get("intent") or arguments.get("query") or "").strip()
     if not intent:
-        return tool_error(
-            "missing_intent",
-            "recall_context requires a non-empty intent or query.",
+        return missing_input_recovery_card(
+            code="missing_intent",
+            message="recall_context requires a non-empty intent or query.",
+            tool_name="recall_context",
             arguments=arguments,
             required_any=["intent", "query"],
-            agent_next_action=(
-                "Call recall_context with intent/query, then pass a selected handle to recall_deepen."
-            ),
-            example_arguments={"intent": "continue the issue-work context", "cwd": "<project cwd>"},
+            safe_next_actions=[
+                {
+                    "tool_name": "recall_context",
+                    "arguments": {"intent": "continue the issue-work context", "cwd": "<project cwd>"},
+                },
+                {
+                    "tool_name": "agent_recall",
+                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
+                },
+                {
+                    "tool_name": "search_memory",
+                    "arguments": {"query": "<exact phrase or cue>", "max": 10},
+                },
+            ],
         )
     source_dir = clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
@@ -267,22 +339,46 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
     if "handle" not in arguments:
-        return tool_error(
-            "missing_recall_handle",
-            "recall_deepen requires a recall_context handle or navigation seed.",
+        return missing_input_recovery_card(
+            code="missing_recall_handle",
+            message="recall_deepen requires a recall_context handle or navigation seed.",
+            tool_name="recall_deepen",
             arguments=arguments,
-            required=["handle"],
-            agent_next_action=(
-                "Call recall_context with intent/query, then pass a selected route handle "
-                "to recall_deepen."
-            ),
-            example_arguments={
-                "intent": "continue the issue-work context",
-                "cwd": "<project cwd>",
-            },
-            example_followup_arguments={
-                "handle": "<handle from recall_context.routes[]>",
-                "cwd": "<project cwd>",
+            required_any=["handle"],
+            safe_next_actions=[
+                {
+                    "tool_name": "recall_context",
+                    "arguments": {"intent": "continue the issue-work context", "cwd": "<project cwd>"},
+                },
+                {
+                    "tool_name": "agent_recall",
+                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
+                },
+            ],
+            staged_followup=[
+                {
+                    "tool_name": "recall_context",
+                    "arguments": {"intent": "continue the issue-work context", "cwd": "<project cwd>"},
+                },
+                {
+                    "tool_name": "recall_deepen",
+                    "arguments": {"handle": "<handle from recall_context.routes[]>", "cwd": "<project cwd>"},
+                },
+            ],
+            legacy_details={
+                "required": ["handle"],
+                "agent_next_action": (
+                    "Call recall_context with intent/query, then pass a selected route handle "
+                    "to recall_deepen."
+                ),
+                "example_arguments": {
+                    "intent": "continue the issue-work context",
+                    "cwd": "<project cwd>",
+                },
+                "example_followup_arguments": {
+                    "handle": "<handle from recall_context.routes[]>",
+                    "cwd": "<project cwd>",
+                },
             },
         )
     source_dir = clean_source_dir_for(arguments)
@@ -430,10 +526,22 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
 def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
     cue = str(arguments.get("cue") or arguments.get("intent") or arguments.get("query") or "").strip()
     if not cue:
-        return tool_error(
-            "missing_cue",
-            "recall_diagnostic requires a non-empty cue, intent, or query.",
+        return missing_input_recovery_card(
+            code="missing_cue",
+            message="recall_diagnostic requires a non-empty cue, intent, or query.",
+            tool_name="recall_diagnostic",
             arguments=arguments,
+            required_any=["cue", "intent", "query"],
+            safe_next_actions=[
+                {
+                    "tool_name": "recall_diagnostic",
+                    "arguments": {"cue": "<memory cue or route question>", "mode": "why-recall"},
+                },
+                {
+                    "tool_name": "agent_recall",
+                    "arguments": {"query": "<memory cue or route question>"},
+                },
+            ],
         )
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = recall_diagnostic_report(
@@ -473,6 +581,20 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
     ]
     if final_messages and not arguments.get("rollout"):
         message = final_messages[-1] if detail == "full" else compact_message(final_messages[-1])
+        raw_message = final_messages[-1]
+        selector = {
+            key: raw_message.get(key)
+            for key in ("message_id", "turn_id", "turn_index")
+            if raw_message.get(key) not in (None, "")
+        }
+        source_reopen_action = {
+            "action_id": "reopen_latest_final_answer_context",
+            "tool_name": "get_turn_context",
+            "arguments": selector,
+            "claim_boundary": "source_open_required_before_quoting",
+            "authority_after_running": "source_open_within_clean_source_turn_scope",
+            "why": "Use the clean-source selector before quoting exact wording from the compact latest-reply card.",
+        }
         return text_result(
             public_payload(
                 arguments,
@@ -482,10 +604,9 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
                     "source": str(source_dir / "messages.jsonl"),
                     "message": message,
                     "message_count": len(messages),
-                    "agent_next_action": (
-                        "Use this compact final-answer preview for orientation; "
-                        "call get_turn_context or recall_deepen before quoting exact wording."
-                    ),
+                    "agent_next_action": source_reopen_action,
+                    "source_reopen_action": source_reopen_action,
+                    "safe_next_actions": [source_reopen_action],
                 },
             )
         )
@@ -506,16 +627,32 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
     message_id = arguments.get("message_id")
     turn_index = arguments.get("turn_index")
     if not turn_id and not message_id and turn_index is None:
-        return tool_error(
-            "missing_turn_selector",
-            "get_turn_context requires turn_id, message_id, or turn_index.",
+        return missing_input_recovery_card(
+            code="missing_turn_selector",
+            message="get_turn_context requires turn_id, message_id, or turn_index.",
+            tool_name="get_turn_context",
             arguments=arguments,
             required_any=["turn_id", "message_id", "turn_index"],
-            agent_next_action=(
-                "Call agent_recall or recall_context first, then pass a message_id, "
-                "turn_id, or turn_index from the selected route."
-            ),
-            example_arguments={"message_id": "<message_id from route>", "clean_source_dir": "<optional>"},
+            safe_next_actions=[
+                {
+                    "tool_name": "agent_recall",
+                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
+                },
+                {
+                    "tool_name": "recall_context",
+                    "arguments": {"intent": "<task or memory cue>", "cwd": "<project cwd>"},
+                },
+            ],
+            staged_followup=[
+                {
+                    "tool_name": "agent_recall",
+                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
+                },
+                {
+                    "tool_name": "get_turn_context",
+                    "arguments": {"message_id": "<message_id from selected route>"},
+                },
+            ],
         )
 
     required = ["messages.jsonl", "turns.jsonl"]
@@ -775,11 +912,22 @@ def call_list_telepathy_handoffs(arguments: dict[str, Any]) -> dict[str, Any]:
 def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
     card_id = str(arguments.get("card_id") or "").strip()
     if not card_id:
-        return tool_error(
-            "missing_telepathy_handoff_card_id",
-            "deepen_telepathy_handoff requires a card_id.",
+        return missing_input_recovery_card(
+            code="missing_telepathy_handoff_card_id",
+            message="deepen_telepathy_handoff requires a card_id.",
+            tool_name="deepen_telepathy_handoff",
             arguments=arguments,
-            required=["card_id"],
+            required_any=["card_id"],
+            safe_next_actions=[
+                {
+                    "tool_name": "list_telepathy_handoffs",
+                    "arguments": {"status": "active", "max": 20},
+                },
+                {
+                    "tool_name": "deepen_telepathy_handoff",
+                    "arguments": {"card_id": "<card_id from list_telepathy_handoffs.cards[]>"},
+                },
+            ],
         )
     payload = telepathy_handoff_store.deepen_handoff_payload(
         card_id=card_id,

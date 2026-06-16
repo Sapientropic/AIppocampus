@@ -94,7 +94,7 @@ nearest explicit route without claiming global pause or destructive deletion.
 | --- | --- | --- | --- |
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
-| Explicit foreground agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, feedback as source truth, or destructive forgetting |
+| Agent continuity pull path | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, feedback as source truth, or destructive forgetting |
 | Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, host-private metadata as public identity, or internal registry modules as public CLI contracts |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
@@ -103,6 +103,17 @@ nearest explicit route without claiming global pause or destructive deletion.
 | Research or roadmap work | Roadmap, evidence docs, benchmarks, and research notes | Evidence for the current implementation or design direction only | Public API stability for Dream, subconscious jobs, semantic caches, benchmark cache files, or cognitive-map artifacts |
 
 ## Copyable Agent Gesture
+
+For an agent-facing first call, choose the narrow foreground pull path before
+reading the full tool catalog:
+
+| Situation | First tool | Then |
+| --- | --- | --- |
+| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
+| Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
+| Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
+| No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
+| Route was wrong, noisy, or should be quiet here | feedback/control command | Treat it as low-authority scoped feedback, not source truth. |
 
 Agent hosts that want one minimal source-backed continuity move should copy the
 `source_backed_continuity_gesture_v1` workflow from
@@ -123,7 +134,7 @@ AIppocampus every turn, and do not treat AIppo activation or bounded summaries
 as source evidence.
 
 `aippocampus agent recall --attention-router-mode auto` belongs to this
-explicit foreground agent continuity surface. It may sort already emitted
+agent continuity pull path. It may sort already emitted
 reopenable routes only after the explicit-pull attention-router gate passes; it
 is not a default hook, every-prompt recall path, hosted API behavior, or
 source-truth upgrade.

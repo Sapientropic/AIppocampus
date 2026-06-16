@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1329,6 +1330,163 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertFalse((target / "scripts" / "runtime.pyo").exists())
             self.assertFalse((target / ".aippocampus").exists())
             self.assertTrue(payload["applied_surfaces"][0]["ok"])
+
+    def test_apply_blocks_dirty_git_source_before_replacing_skill_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            target = codex_home / "skills" / "aippocampus"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("old target stays\n", encoding="utf-8")
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "commit", "-m", "fixture"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
+                "# dirty source\n",
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 2, payload)
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["status"], "blocked_dirty_worktree")
+            self.assertTrue(payload["dirty_worktree_detected"])
+            self.assertEqual(payload["surface"], "skill")
+            self.assertIn("skills/aippocampus/SKILL.md", payload["dirty_paths"])
+            self.assertIn("source_path", payload["would_write"])
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "old target stays\n")
+            commands = {action["command"] for action in payload["safe_next_actions"]}
+            self.assertIn("git status --short", commands)
+            self.assertIn("aippocampus update plan --agent-json", commands)
+
+    def test_apply_allows_clean_git_source_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "commit", "-m", "fixture"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["applied_surfaces"][0]["ok"])
+            self.assertNotIn("dirty_worktree_override", payload["applied_surfaces"][0])
+
+    def test_apply_blocks_dirty_git_target_without_auto_stashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            target_repo = root / "target-repo"
+            write_minimal_repo(repo)
+            target = target_repo / "skills" / "aippocampus"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("tracked target\n", encoding="utf-8")
+            subprocess.run(["git", "init"], cwd=target_repo, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "add", "."], cwd=target_repo, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "commit", "-m", "target fixture"],
+                cwd=target_repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            (target / "SKILL.md").write_text("dirty target\n", encoding="utf-8")
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--skill-target",
+                str(target),
+                "--codex-home",
+                str(root / "codex-home"),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 2, payload)
+            self.assertEqual(payload["status"], "blocked_dirty_worktree")
+            self.assertEqual(payload["surface"], "skill")
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "dirty target\n")
+            self.assertFalse(payload["override_used"])
+            self.assertIn("--force-dirty-worktree", payload["override"])
+
+    def test_apply_force_dirty_worktree_override_is_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "commit", "-m", "fixture"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
+                "# dirty source but reviewed\n",
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--force-dirty-worktree",
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["applied_surfaces"][0]["ok"])
+            self.assertTrue(payload["applied_surfaces"][0]["dirty_worktree_override"])
+            self.assertEqual(
+                (codex_home / "skills" / "aippocampus" / "SKILL.md").read_text(encoding="utf-8"),
+                "# dirty source but reviewed\n",
+            )
 
     def test_status_detects_stale_mcp_config_and_flat_script_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

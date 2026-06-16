@@ -99,6 +99,45 @@ class AippocampusMcpServerTests(unittest.TestCase):
         text = response["result"]["content"][0]["text"]
         return json.loads(text)
 
+    def call_tool_payload(self, name: str, arguments: dict[str, object]) -> dict:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": f"call-{name}",
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            }
+        )
+        return self.tool_payload(response)
+
+    def test_mcp_missing_input_returns_foreground_recovery_cards(self) -> None:
+        cases = {
+            "recall_context": "missing_intent",
+            "search_memory": "missing_query",
+            "get_turn_context": "missing_turn_selector",
+            "recall_deepen": "missing_recall_handle",
+            "recall_diagnostic": "missing_cue",
+            "deepen_telepathy_handoff": "missing_telepathy_handoff_card_id",
+        }
+
+        for tool_name, code in cases.items():
+            with self.subTest(tool=tool_name):
+                payload = self.call_tool_payload(tool_name, {})
+
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["status"], "needs_input")
+                self.assertEqual(payload["surface_class"], "foreground_recovery_card")
+                self.assertEqual(payload["error"]["code"], code)
+                self.assertIn("safe_next_actions", payload)
+                self.assertTrue(payload["safe_next_actions"][0]["tool_name"])
+                self.assertEqual(payload["source_boundary"]["claim_authority"], "none_until_source_reopened")
+                if tool_name == "get_turn_context":
+                    self.assertIn("staged_followup", payload)
+                    self.assertEqual(payload["staged_followup"][0]["tool_name"], "agent_recall")
+                    self.assertEqual(payload["staged_followup"][1]["tool_name"], "get_turn_context")
+                if tool_name == "deepen_telepathy_handoff":
+                    self.assertEqual(payload["safe_next_actions"][0]["tool_name"], "list_telepathy_handoffs")
+
     def test_initialize_and_tools_list_expose_stage4_memory_tools(self) -> None:
         init = mcp.handle_request(
             {

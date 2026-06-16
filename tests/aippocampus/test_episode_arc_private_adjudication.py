@@ -206,7 +206,7 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
             registry_path.write_text(json.dumps(registry, ensure_ascii=False), encoding="utf-8")
 
             result = facade.run_command(
-                ["episode-arcs", "--registry", str(registry_path), "--json"],
+                ["episode-arcs", "--registry", str(registry_path), "--json", "--top", "5"],
                 capture_output=True,
             )
             human = facade.run_command(
@@ -229,6 +229,16 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertEqual(summary_payload["complete_arc_count"], 1)
         self.assertEqual(summary_payload["current_validity_counts"]["needs_reopen"], 1)
         self.assertIn("refresh_sources", summary_payload["safe_use_counts"])
+        self.assertEqual(
+            summary_payload["safe_next_actions"][0]["command"],
+            "aippocampus episode-arcs --json --top 5",
+        )
+        self.assertEqual(summary_payload["safe_next_actions"][0]["kind"], "retrieve_actionable_arc_handles")
+        self.assertIn("top_arcs", payload)
+        self.assertEqual(payload["top_arcs"][0]["current_validity"], "needs_reopen")
+        self.assertIn("arc_handle", payload["top_arcs"][0])
+        self.assertIn("source_reopen_action", payload["top_arcs"][0])
+        self.assertNotIn("source_refs", json.dumps(payload["top_arcs"], ensure_ascii=False))
         self.assertNotIn("session:cli-private-arc", result.stdout)
         self.assertNotIn("session:cli-private-arc", summary.stdout)
         self.assertIn("AIppocampus episode-arcs", human.stdout)

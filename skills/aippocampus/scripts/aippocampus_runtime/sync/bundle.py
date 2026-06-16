@@ -65,6 +65,39 @@ class SyncManifestError(ValueError):
     """Raised when an existing sync manifest is present but cannot be trusted."""
 
 
+def missing_manifest_recovery_payload() -> dict[str, Any]:
+    return {
+        "ok": False,
+        "status": "missing_manifest",
+        "sync_dir_label": "<local-sync-dir-redacted>",
+        "manifest_exists": False,
+        "schema_version": None,
+        "file_count": 0,
+        "raw_rollout_included": False,
+        "privacy_boundary": {"local_paths_included": False},
+        "issues": [
+            {
+                "code": "missing_manifest",
+                "path_redacted": True,
+            }
+        ],
+        "safe_next_actions": [
+            {
+                "id": "sync_status",
+                "command": "aippocampus sync status --sync-dir <folder> --json",
+            },
+            {
+                "id": "repair_plan",
+                "command": "aippocampus sync repair --plan --sync-dir <folder> --json",
+            },
+            {
+                "id": "push_plan",
+                "command": "aippocampus sync push --plan --sync-dir <folder> --json",
+            },
+        ],
+    }
+
+
 def load_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -705,11 +738,7 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
             ],
         }
     if not manifest:
-        return {
-            "ok": False,
-            "sync_dir": str(sync_root),
-            "issues": [{"code": "missing_manifest", "path": str(manifest_path)}],
-        }
+        return missing_manifest_recovery_payload()
 
     issues: list[dict] = []
     for item in manifest.get("files") or []:
@@ -777,6 +806,8 @@ def status_sync_bundle(sync_dir: str | Path) -> dict:
             ],
         }
     repair = repair_sync_bundle(sync_root) if manifest else None
+    if not manifest:
+        return missing_manifest_recovery_payload()
     return {
         "ok": bool(manifest) and bool(repair and repair.get("ok")),
         "sync_dir": str(sync_root),

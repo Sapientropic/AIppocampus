@@ -118,6 +118,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("onboard", proc.stdout)
         self.assertIn("search", proc.stdout)
         self.assertIn("agent recall", proc.stdout)
+        self.assertIn("Agent continuity pull path", proc.stdout)
+        self.assertNotIn("Opt-in agent recall", proc.stdout)
         self.assertIn("learning", proc.stdout)
         self.assertIn("repro package", proc.stdout)
         self.assertIn("do-not-use-here", proc.stdout)
@@ -619,6 +621,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(final_payload["closeout_available"])
         self.assertNotIn("text", final_payload["message"])
         self.assertIn("settled final closeout", final_payload["message"]["preview"])
+        self.assertEqual(
+            final_payload["safe_next_actions"][0]["command"],
+            "aippocampus latest-reply --detail full --operator-json",
+        )
+        self.assertEqual(
+            final_payload["safe_next_actions"][0]["authority_after_running"],
+            "source_open_within_local_rollout_scope",
+        )
         self.assertNotEqual(commentary_proc.returncode, 0)
         commentary_payload = json.loads(commentary_proc.stdout)
         encoded_commentary = json.dumps(commentary_payload, ensure_ascii=False)
@@ -626,7 +636,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(commentary_payload["diagnostic_only"])
         self.assertNotIn(commentary_text, encoded_commentary)
         self.assertNotIn("preview", commentary_payload["message"])
-        self.assertIn("agent recall", commentary_payload["agent_next_action"])
+        self.assertIn("agent recall", commentary_payload["safe_next_actions"][0]["command"])
         self.assertEqual(operator_proc.returncode, 1)
         self.assertIn(commentary_text, operator_proc.stdout)
 
@@ -650,7 +660,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["status"], "no_latest_reply_source_found")
         self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
         self.assertTrue(payload["error"]["path_redacted"])
-        self.assertIn("agent recall", payload["agent_next_action"])
+        self.assertIn("agent recall", payload["agent_next_action"]["command"])
         self.assertIn("source_backed_claim", payload["cannot_claim"])
         self.assertNotIn(str(missing_cwd), raw)
         self.assertNotIn("Traceback", raw)
@@ -1598,23 +1608,31 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(bounded_payload["preview_scan_policy"]["mode"], "foreground_bounded_default")
         preview = bounded_payload["candidate_previews"][0]
         self.assertNotIn("<cue>", json.dumps(preview, ensure_ascii=False))
-        self.assertIn("agent recall", preview["foreground_actions"][0]["command"])
-        self.assertEqual(
-            preview["foreground_actions"][0]["claim_boundary"],
-            "no_claim_before_reopen",
-        )
+        self.assertIn(preview["foreground_candidate_quality"], {"actionable", "low_information"})
+        if preview["foreground_candidate_quality"] == "actionable":
+            self.assertIn("agent recall", preview["foreground_actions"][0]["command"])
+            self.assertEqual(
+                preview["foreground_actions"][0]["claim_boundary"],
+                "no_claim_before_reopen",
+            )
+        else:
+            self.assertEqual(preview["foreground_actions"], [])
+            self.assertIn("suppression_reason", preview)
         self.assertEqual(bounded_payload["metrics"]["registered_thread_count"], 12)
         self.assertEqual(bounded_payload["metrics"]["considered_thread_count"], 8)
         self.assertEqual(bounded_payload["metrics"]["scanned_thread_count"], 8)
         self.assertTrue(bounded_payload["metrics"]["scan_partial"])
         self.assertTrue(bounded_payload["scan_policy"]["partial"])
         self.assertIn("--broad-scan", bounded_payload["scan_policy"]["broad_scan_command"])
-        self.assertEqual(
+        self.assertIn(
             bounded_payload["agent_next_action"]["id"],
-            "use_candidate_preview_as_reopenable_route",
+            {"use_candidate_preview_as_reopenable_route", "needs_broader_scan_or_cue"},
         )
         self.assertNotIn("--append", bounded_payload["agent_next_action"]["command"])
-        self.assertIn("--append", bounded_payload["operator_next_action"]["command"])
+        if bounded_payload["agent_next_action"]["id"] == "use_candidate_preview_as_reopenable_route":
+            self.assertIn("--append", bounded_payload["operator_next_action"]["command"])
+        else:
+            self.assertEqual(bounded_payload["foreground_candidate_quality"], "needs_broader_scan")
 
         self.assertEqual(human.returncode, 0, human.stderr)
         self.assertIn("scan: 8/12 threads", human.stdout)
@@ -1686,6 +1704,65 @@ class AippocampusCliTests(unittest.TestCase):
             self.assertNotIn(str(preview["title"]).casefold(), rejected)
             for cue in preview["activation_cues"]:
                 self.assertNotIn(str(cue).casefold(), rejected)
+
+    def test_continuity_domain_preview_does_not_promote_generic_tool_words(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = self.write_continuity_domain_registry(
+                root,
+                thread_count=3,
+                title="AIppocampus recall append maintenance runtime-contract.md",
+                message_text=(
+                    "recall append maintenance AIppocampus aippocampus runtime-contract.md "
+                    "continuity-domain preview foreground action should prefer "
+                    "provider orchestration source-backed continuity route"
+                ),
+            )
+            proc = self.run_cli(
+                "continuity-domain",
+                "--registry-dir",
+                str(registry_dir),
+                "preview",
+                "--json",
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded_action = json.dumps(payload["agent_next_action"], ensure_ascii=False).casefold()
+        self.assertNotIn('"recall"', encoded_action)
+        self.assertNotIn('"append"', encoded_action)
+        self.assertNotIn('"maintenance"', encoded_action)
+        self.assertNotIn('"aippocampus"', encoded_action)
+        self.assertIn("--broad-scan", encoded_action)
+        self.assertEqual(payload["foreground_candidate_quality"], "needs_broader_scan")
+        for preview in payload["candidate_previews"]:
+            self.assertIn(preview["foreground_candidate_quality"], {"actionable", "low_information"})
+            if preview["foreground_candidate_quality"] == "low_information":
+                self.assertIn("suppression_reason", preview)
+
+    def test_continuity_domain_preview_noisy_candidates_return_broader_scan_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = self.write_continuity_domain_registry(
+                root,
+                thread_count=1,
+                title="AIppocampus recall append maintenance",
+                message_text="recall append maintenance AIppocampus aippocampus runtime-contract.md",
+            )
+            proc = self.run_cli(
+                "continuity-domain",
+                "--registry-dir",
+                str(registry_dir),
+                "preview",
+                "--json",
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(payload["agent_next_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertIn("--broad-scan", payload["agent_next_action"]["command"])
+        self.assertNotIn("agent recall", payload["agent_next_action"]["command"])
 
     def test_onboard_status_text_points_to_first_recall_modes(self) -> None:
         from aippocampus_runtime.onboarding import facade as onboard_facade

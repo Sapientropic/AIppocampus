@@ -188,6 +188,26 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIsNone(portable_paths["workspace"])
         self.assertIsNone(portable_paths["rollout"])
 
+    def test_missing_local_sync_manifest_returns_redacted_recovery_actions(self) -> None:
+        missing_sync_dir = self.root / "missing-sync-dir"
+
+        status = sync_bundle.status_sync_bundle(missing_sync_dir)
+        repair = sync_bundle.repair_sync_bundle(missing_sync_dir)
+
+        for payload in (status, repair):
+            with self.subTest(payload=payload):
+                encoded = json.dumps(payload, ensure_ascii=False)
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["status"], "missing_manifest")
+                self.assertEqual(payload["sync_dir_label"], "<local-sync-dir-redacted>")
+                self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
+                self.assertEqual(payload["issues"][0]["code"], "missing_manifest")
+                self.assertTrue(payload["issues"][0]["path_redacted"])
+                self.assertIn("safe_next_actions", payload)
+                self.assertEqual(payload["safe_next_actions"][0]["id"], "sync_status")
+                self.assertEqual(payload["safe_next_actions"][1]["id"], "repair_plan")
+                self.assertNotIn(str(missing_sync_dir), encoded)
+
     def test_push_excludes_generated_sqlite_pointer_from_default_sync(self) -> None:
         (self.index_dir / "source_index.sqlite").write_bytes(b"stable sqlite cache")
         versions = self.index_dir / "versions"
