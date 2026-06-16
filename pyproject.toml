@@ -259,6 +259,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/domain_handles.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/mutation_boundary.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/recall_navigation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/source_ref_registry.py",

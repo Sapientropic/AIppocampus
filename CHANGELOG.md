@@ -25,6 +25,9 @@ room.
   deserves it, and broad/benchmark gates only for claims that actually depend on
   them.
 - Health redacts paths without turning the next command into a dead end.
+- Health no longer chases its own tail while a live thread is still talking:
+  small fresh-message gaps stay a fresh window, and advisory upkeep is labeled
+  optional.
 
 Still alpha. Still source-backed. Less ceremony before the first useful thread
 comes back into view.

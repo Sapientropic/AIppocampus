@@ -61,6 +61,41 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertNotIn(private_path, raw)
         self.assertIn("<local-path-redacted>", raw)
 
+    def test_agent_json_health_does_not_promote_advisory_actions_when_ready(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "recommended_actions": [
+                        {
+                            "id": "prepare_graphify_corpus",
+                            "severity": "info",
+                            "reason": "graphify corpus was prepared from an older index manifest",
+                            "facade_command": "aippocampus maintenance --cwd C:/private/work",
+                        },
+                        {
+                            "id": "checkpoint",
+                            "severity": "suggestion",
+                            "reason": "checkpoint can wait until idle",
+                            "facade_command": "aippocampus maintenance --cwd C:/private/work",
+                        },
+                    ],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action")
+        self.assertEqual(payload["recommended_actions"][0]["id"], "prepare_graphify_corpus")
+
     def test_human_health_prints_copy_pasteable_next_commands(self) -> None:
         payload = {
             "ok": False,
@@ -110,6 +145,44 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertIn("1. build_clean_source: aippocampus maintenance --cwd .", text)
         self.assertIn("2. build_index: aippocampus maintenance --cwd .", text)
         self.assertNotIn("python -m aippocampus_runtime", text)
+
+    def test_human_health_labels_ready_advisory_commands_as_optional(self) -> None:
+        payload = {
+            "ok": True,
+            "rollout": {"path": "rollout.jsonl", "size": 10, "message_count": 2},
+            "index": {"exists": True, "stale": False, "message_delta": 2, "byte_delta": 100, "rag": {}},
+            "clean_source": {"exists": True, "stale": False},
+            "segments": {"exists": False, "needed": False},
+            "checkpoint": {"due": True},
+            "graphify": {"stale": True},
+            "storage": {},
+            "question_stats": {},
+            "background_cognition": {},
+            "logs": {},
+            "health_trajectory": {},
+            "product_readiness": {
+                "status": "ready_with_live_delta",
+                "ready": True,
+                "blocking_action_count": 0,
+            },
+            "recommended_actions": [
+                {
+                    "id": "prepare_graphify_corpus",
+                    "severity": "info",
+                    "reason": "graphify corpus was prepared from an older index manifest",
+                    "command": "aippocampus maintenance",
+                }
+            ],
+        }
+
+        with mock.patch("sys.stdout", new=StringIO()) as stdout:
+            health.render_health_text(payload)
+
+        text = stdout.getvalue()
+        self.assertIn("thread memory health: OK", text)
+        self.assertIn("best next action: continue", text)
+        self.assertIn("Optional maintenance:", text)
+        self.assertNotIn("\nNext:", text)
 
     def write_rollout(
         self,
@@ -257,86 +330,97 @@ class AippocampusHealthTests(unittest.TestCase):
             "checkpoint_state": root / "checkpoint_state.json",
         }
 
-    def test_health_flags_single_latest_turn_gap_before_bulk_stale_threshold(self) -> None:
+    def write_latest_turn_gap_artifacts(
+        self,
+        root: Path,
+        workspace: Path,
+    ) -> tuple[Path, dict[str, Path]]:
+        rollout = workspace / "rollout.jsonl"
+        self.write_rollout(rollout, workspace, include_second_turn=False)
+        current_size = rollout.stat().st_size
+        rollout.write_text(
+            rollout.read_text(encoding="utf-8")
+            + "\n".join(
+                json.dumps(row, ensure_ascii=False)
+                for row in [
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-05T00:01:01Z",
+                        "payload": {
+                            "type": "user_message",
+                            "message": "latest source-backed freshness marker",
+                        },
+                    },
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-05T00:01:02Z",
+                        "payload": {
+                            "type": "agent_message",
+                            "phase": "final_answer",
+                            "message": "latest final answer must be searchable",
+                        },
+                    },
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        anchors = workspace / "thread-anchors.md"
+        anchors.write_text("# Anchors\n", encoding="utf-8")
+        index_dir = root / "index"
+        index_dir.mkdir()
+        (index_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-06-05T00:00:03Z",
+                    "message_count": 3,
+                    "source_rollout_size": current_size,
+                    "last_message_line": 4,
+                    "anchor_sha256": health.file_sha256(anchors),
+                    "rag": {"enabled": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+        (index_dir / "source_index.sqlite").write_bytes(b"index")
+        clean = root / "clean-source"
+        clean.mkdir()
+        (clean / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "upgrade_contract": {"source_backed": True},
+                    "source_rollout_size": current_size,
+                    "message_count": 2,
+                    "turn_count": 1,
+                }
+            ),
+            encoding="utf-8",
+        )
+        (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+        (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+        return rollout, {
+            "anchors": anchors,
+            "index_dir": index_dir,
+            "clean_source_dir": clean,
+            "graphify_corpus": root / "graphify-corpus",
+            "segments_dir": root / "segments",
+            "checkpoint_state": root / "checkpoint_state.json",
+        }
+
+    def test_health_keeps_small_latest_turn_gap_advisory_before_bulk_stale_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             workspace = root / "workspace"
             workspace.mkdir()
-            rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace, include_second_turn=False)
-            current_size = rollout.stat().st_size
-            rollout.write_text(
-                rollout.read_text(encoding="utf-8")
-                + "\n".join(
-                    json.dumps(row, ensure_ascii=False)
-                    for row in [
-                        {
-                            "type": "event_msg",
-                            "timestamp": "2026-06-05T00:01:01Z",
-                            "payload": {
-                                "type": "user_message",
-                                "message": "latest source-backed freshness marker",
-                            },
-                        },
-                        {
-                            "type": "event_msg",
-                            "timestamp": "2026-06-05T00:01:02Z",
-                            "payload": {
-                                "type": "agent_message",
-                                "phase": "final_answer",
-                                "message": "latest final answer must be searchable",
-                            },
-                        },
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            anchors = workspace / "thread-anchors.md"
-            anchors.write_text("# Anchors\n", encoding="utf-8")
-            index_dir = root / "index"
-            index_dir.mkdir()
-            (index_dir / "manifest.json").write_text(
-                json.dumps(
-                    {
-                        "created_at": "2026-06-05T00:00:03Z",
-                        "message_count": 3,
-                        "source_rollout_size": current_size,
-                        "last_message_line": 4,
-                        "rag": {"enabled": True},
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
-            (index_dir / "source_index.sqlite").write_bytes(b"index")
-            clean = root / "clean-source"
-            clean.mkdir()
-            (clean / "manifest.json").write_text(
-                json.dumps(
-                    {
-                        "schema_version": 2,
-                        "upgrade_contract": {"source_backed": True},
-                        "source_rollout_size": current_size,
-                        "message_count": 2,
-                        "turn_count": 1,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
-            (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+            rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
 
             with mock.patch.object(health, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
-                        index_dir=index_dir,
-                        clean_source_dir=clean,
-                        graphify_corpus=root / "graphify-corpus",
-                        segments_dir=root / "segments",
-                        checkpoint_state=root / "checkpoint_state.json",
-                        anchors=anchors,
+                        **paths,
                         max_stale_messages=25,
                         max_stale_bytes=5 * 1024 * 1024,
                     )
@@ -344,12 +428,36 @@ class AippocampusHealthTests(unittest.TestCase):
 
         action_ids = [item["id"] for item in payload["recommended_actions"]]
 
-        self.assertFalse(payload["ok"])
+        self.assertTrue(payload["ok"])
         self.assertTrue(payload["freshness"]["latest_visible_gap"])
         self.assertTrue(payload["freshness"]["raw_newer_than_index"])
         self.assertTrue(payload["freshness"]["raw_newer_than_clean_source"])
         self.assertEqual(payload["index"]["message_delta"], 2)
         self.assertEqual(payload["clean_source"]["expected_message_delta"], 2)
+        self.assertEqual(payload["product_readiness"]["status"], "ready_with_live_delta")
+        self.assertNotIn("build_index", action_ids)
+        self.assertNotIn("build_clean_source", action_ids)
+
+    def test_health_recommends_source_maintenance_at_bulk_stale_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        **paths,
+                        max_stale_messages=2,
+                        max_stale_bytes=5 * 1024 * 1024,
+                    )
+                )
+
+        action_ids = [item["id"] for item in payload["recommended_actions"]]
+
+        self.assertFalse(payload["ok"])
         self.assertIn("build_index", action_ids)
         self.assertIn("build_clean_source", action_ids)
         self.assertLess(action_ids.index("build_clean_source"), action_ids.index("build_index"))

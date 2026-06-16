@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, cast
 
 from aippocampus_runtime import core
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -44,7 +44,8 @@ def compact_thread(
     *,
     include_private_identifiers: bool = False,
 ) -> dict[str, Any]:
-    paths = item.get("paths") if isinstance(item.get("paths"), dict) else {}
+    paths_obj = item.get("paths")
+    paths = cast(dict[str, Any], paths_obj) if isinstance(paths_obj, dict) else {}
     raw_thread_key = str(item.get("thread_key") or "").strip()
     thread_handle = (
         raw_thread_key
@@ -102,7 +103,17 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         for item in payload.get("recommended_actions") or []
         if (action := compact_action(item))
     ][:3]
-    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    blocking = [
+        item
+        for item in recommended
+        if str(item.get("severity") or "").casefold() in {"critical", "warning"}
+    ]
+    # Compact health is usually read by a foreground agent. Show advisory upkeep
+    # in the list, but do not promote it as the next action when memory is
+    # already ready; otherwise a healthy live thread can get stuck maintaining
+    # itself instead of continuing the user's work.
+    checks_obj = payload.get("checks")
+    checks: list[Any] = checks_obj if isinstance(checks_obj, list) else []
     return {
         "detail": "compact",
         "ok": bool(payload.get("ok")),
@@ -111,19 +122,23 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "recommended_actions": recommended,
         "check_count": len(checks),
         "agent_next_action": (
-            recommended[0]
-            if recommended
+            blocking[0]
+            if blocking
+            else recommended[0]
+            if recommended and not payload.get("ok")
             else {
                 "id": "no_action",
-                "reason": "Run memory_health with detail=full only when diagnosing setup.",
+                "reason": "Memory health is ready; advisory actions can wait unless you are doing local diagnostics.",
             }
         ),
     }
 
 
 def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else {}
-    paths = entry.get("paths") if isinstance(entry.get("paths"), dict) else {}
+    entry_obj = payload.get("entry")
+    entry = cast(dict[str, Any], entry_obj) if isinstance(entry_obj, dict) else {}
+    paths_obj = entry.get("paths")
+    paths = cast(dict[str, Any], paths_obj) if isinstance(paths_obj, dict) else {}
     status = payload.get("status") or "registered"
     raw_thread_key = str(entry.get("thread_key") or payload.get("thread_key") or "").strip()
     thread_handle = core.stable_text_fingerprint(
@@ -259,8 +274,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _recall_context_foreground_action(route: dict[str, Any], index: int) -> dict[str, Any]:
-    reopen = route.get("source_reopen_path") if isinstance(route.get("source_reopen_path"), dict) else {}
-    arguments = reopen.get("arguments") if isinstance(reopen.get("arguments"), dict) else {}
+    reopen_obj = route.get("source_reopen_path")
+    reopen = cast(dict[str, Any], reopen_obj) if isinstance(reopen_obj, dict) else {}
+    arguments_obj = reopen.get("arguments")
+    arguments = cast(dict[str, Any], arguments_obj) if isinstance(arguments_obj, dict) else {}
     if arguments:
         return {
             "action_id": "recall_deepen_selected_route",
