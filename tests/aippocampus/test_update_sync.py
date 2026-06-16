@@ -1055,6 +1055,15 @@ class UpdateSyncTests(unittest.TestCase):
                 for card in payload["foreground_status_cards"]
             )
         )
+        current_thread_card = next(
+            card
+            for card in payload["foreground_status_cards"]
+            if card["id"] == "current_thread_tool_discovery"
+        )
+        self.assertTrue(current_thread_card["command"].startswith("aippocampus "))
+        self.assertIn("agent_recall", current_thread_card["manual_instruction"])
+        self.assertNotIn("call agent_recall", current_thread_card["command"])
+        self.assertNotIn("<summary>", json.dumps(current_thread_card, ensure_ascii=False))
         self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
         self.assertEqual(
             payload["agent_callable"]["status"],
@@ -1082,6 +1091,11 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("refresh_action_hints", {item["id"] for item in recommended})
         self.assertNotIn("action_hints", payload["summary"]["needs_action"])
         self.assertIsInstance(payload["next_actions"], list)
+        agent_actions = [
+            action for action in payload["next_actions"] if action.get("surface") == "agent_callable"
+        ]
+        self.assertTrue(agent_actions)
+        self.assertTrue(agent_actions[0]["command"].startswith("aippocampus "))
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(probe), raw)
 
@@ -2113,7 +2127,7 @@ class UpdateSyncTests(unittest.TestCase):
         action = next(
             item for item in payload["next_actions"] if item["surface"] == "agent_callable"
         )
-        self.assertIn("reload Codex Desktop", action["command"])
+        self.assertIn("Reload Codex Desktop", action["manual_instruction"])
         self.assertIn("--foreground-key-tools-callable --agent-json", action["command"])
 
 

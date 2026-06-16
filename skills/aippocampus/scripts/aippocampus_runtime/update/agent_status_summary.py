@@ -15,11 +15,20 @@ def agent_callable_host_probe_ok(item: dict[str, Any]) -> bool:
     )
 
 
-def _compact_update_action(*, surface: str, reason: str, command: str | None = None) -> dict[str, Any]:
+def _compact_update_action(
+    *,
+    surface: str,
+    reason: str,
+    command: str | None = None,
+    manual_instruction: str | None = None,
+) -> dict[str, Any]:
     result = {
         "surface": surface,
         "reason": compact_text(reason, 220),
         "command": command,
+        "manual_instruction": compact_text(manual_instruction, 220)
+        if manual_instruction
+        else None,
     }
     return {key: value for key, value in result.items() if value not in (None, "")}
 
@@ -64,19 +73,21 @@ def compact_agent_status_report(
                 command=str(action_hint_primary_command),
             )
         )
+    agent_next_action = update_actions.agent_callable_foreground_action(agent)
+    if agent.get("status") and (agent.get("next_command") or agent_next_action.get("command")) and not agent.get("ready"):
+        actions.append(
+            _compact_update_action(
+                surface="agent_callable",
+                reason=str(agent.get("status") or "foreground tools not verified"),
+                command=str(agent_next_action.get("command") or agent.get("next_command")),
+                manual_instruction=agent_next_action.get("manual_instruction"),
+            )
+        )
     for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
         item = surfaces.get(surface) or {}
         command = item.get("next_command") or item.get("documented_install_command")
         reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
         actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
-    if agent.get("next_command") and not agent.get("ready"):
-        actions.append(
-            _compact_update_action(
-                surface="agent_callable",
-                reason=str(agent.get("status") or "foreground tools not verified"),
-                command=str(agent.get("next_command")),
-            )
-        )
     cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None
     if isinstance(cache_refresh, dict) and cache_refresh.get("ok") is False:
         reason = str(
@@ -116,6 +127,9 @@ def compact_agent_status_report(
                     surface=surface,
                     reason=reason,
                     command=str(command) if command else None,
+                    manual_instruction=str(action.get("manual_instruction") or "")
+                    if action.get("manual_instruction")
+                    else None,
                 )
             )
     agent_ready = (
@@ -198,7 +212,8 @@ def compact_agent_status_report(
             "foreground_probe_requested": bool(agent.get("foreground_probe_requested")),
             "foreground_probe_state": agent.get("foreground_probe_state"),
             "foreground_tools_visible": agent.get("foreground_tools_visible"),
-            "next_command": agent.get("next_command"),
+            "next_command": agent_next_action.get("command"),
+            "manual_instruction": agent_next_action.get("manual_instruction"),
             "claim_boundary": agent.get("claim_boundary"),
         },
         "host_conformance": {
