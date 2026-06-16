@@ -63,6 +63,10 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
         for name in ("agent_recall", "agent_aippo", "agent_deepen", "agent_explain")
         if name in tool_names
     ]
+    key_tool_smokes = [
+        item for item in host_probe.get("key_tool_smokes") or [] if isinstance(item, dict)
+    ]
+    key_tool_failures = [item for item in key_tool_smokes if not item.get("ok")]
     ok = bool(result.get("ok"))
     agent_callable_status = result.get("agent_callable_status")
     warning_counts = _warning_summary_counts(warning_summary)
@@ -90,13 +94,17 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             "validation_ok": bool(host_probe.get("validation_ok")),
             "tool_count": len(tool_names),
             "key_tools_present": key_tools,
+            "key_tools_callable": None
+            if not key_tool_smokes
+            else not bool(key_tool_failures),
+            "key_tool_failure_count": len(key_tool_failures),
             "warning_summary": warning_counts,
         },
         "rollback_command": result.get("rollback_command"),
         "rollback_preview_command": result.get("rollback_preview_command")
         or "aippocampus plugin uninstall --codex --dry-run --json",
         "next_status_command": "aippocampus update status --json",
-        "claim_boundary": "host probe success proves host exposure, not recall quality or current-thread tool discovery",
+        "claim_boundary": "host probe success proves host exposure and key-tool callability when checked, not recall quality or current-thread tool discovery",
     }
 
 

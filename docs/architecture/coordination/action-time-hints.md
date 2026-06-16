@@ -25,13 +25,14 @@ module path.
 Refresh prepared cache after installing a cache-backed hook:
 
 ```powershell
-aippocampus hooks action refresh-cache --cache-jsonl <local-cache.jsonl> --write --json
+aippocampus hooks action refresh-cache --write --json
 aippocampus hooks action status --json
 ```
 
-Status distinguishes `without_cache_path`, `with_missing_cache_file`,
-`with_empty_cache`, `with_fresh_records`, and `with_expired_records`; it also
-reports malformed cache-line counts while redacting local paths by default.
+Status distinguishes `with_missing_cache_file`, `with_empty_cache`,
+`with_fresh_records`, and `with_expired_records`; it also reports malformed
+cache-line counts while redacting local paths by default. The default cache is
+`.aippocampus/action-hints/pretooluse-cache.jsonl`.
 
 ## Provider Boundary
 

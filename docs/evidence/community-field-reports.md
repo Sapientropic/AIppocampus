@@ -15,15 +15,15 @@ exposing private raw memory.
 ## Where To Submit
 
 - Public site entrypoint: [`/evidence/`](https://www.aippocampus.com/evidence/).
-- GitHub Discussions are enabled for the repository.
-- The dedicated `Evidence & Field Reports` Discussion category still needs to
-  be created by a maintainer. At implementation time on 2026-06-02, the
-  repository had the default categories: Announcements, General, Ideas, Polls,
-  Q&A, and Show and tell.
-- Until the dedicated category exists, use
+- GitHub Discussions are enabled for the repository. The canonical GitHub
+  field-report route today is
   [Show and tell](https://github.com/Sapientropic/AIppocampus/discussions/categories/show-and-tell)
   with the `[Field Report]` title prefix. The repository includes a structured
   Discussion form for that category.
+- Live category check on 2026-06-16 found the repository categories
+  Announcements, General, Ideas, Polls, Q&A, and Show and tell; no dedicated
+  `Evidence & Field Reports` category was present. Do not tell users to submit
+  to a missing category.
 
 ## What Belongs Here
 
@@ -75,11 +75,15 @@ This does not show:
   the dated verification ledger or the current claim-boundary snapshot instead
   of adding a second status source here.
 
-## Maintainer Setup
+## Optional Maintainer Upgrade
 
 GitHub Discussion category forms only activate when the YAML filename matches
 an existing category slug. See GitHub's
 [discussion category form docs](https://docs.github.com/discussions/managing-discussions-for-your-community/syntax-for-discussion-category-forms).
+
+The current route is Show and tell. A maintainer may later promote field
+reports into a dedicated category, but that is an upgrade, not the user-facing
+door today:
 
 1. Create a GitHub Discussions category named `Evidence & Field Reports`.
 2. Use the slug `evidence-and-field-reports` if GitHub offers the default slug.
@@ -87,7 +91,8 @@ an existing category slug. See GitHub's
    `.github/DISCUSSION_TEMPLATE/evidence-and-field-reports.yml`.
 4. Pin a starter post that links this page, the public `/evidence/` page, and
    the benchmark evidence map.
-5. Keep the Show and tell route as a fallback until existing field reports have
+5. Update this page only after a live category check confirms the category
+   exists. Keep Show and tell as the fallback until existing field reports have
    been moved or clearly labeled.
 
 ## Related Official Evidence Work

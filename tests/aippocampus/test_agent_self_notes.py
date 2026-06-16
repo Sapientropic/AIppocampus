@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -11,6 +13,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall import authority  # noqa: E402
+from aippocampus_runtime.source import agent_self_note_cli  # noqa: E402
 
 
 class AgentSelfNoteTests(unittest.TestCase):
@@ -203,6 +206,65 @@ class AgentSelfNoteTests(unittest.TestCase):
         )
 
         self.assertEqual([match["note_id"] for match in matches], [relevant["note_id"]])
+
+    def test_append_cli_source_less_receipt_makes_weak_boundary_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes_path = root / "agent-self-notes.jsonl"
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = agent_self_note_cli.main(
+                    [
+                        "append",
+                        "--cwd",
+                        str(root),
+                        "--notes-path",
+                        str(notes_path),
+                        "short margin note for future posture",
+                        "--json",
+                    ]
+                )
+            payload = json.loads(stdout.getvalue())
+
+            human_stdout = io.StringIO()
+            with contextlib.redirect_stdout(human_stdout):
+                human_code = agent_self_note_cli.main(
+                    [
+                        "append",
+                        "--cwd",
+                        str(root),
+                        "--notes-path",
+                        str(notes_path),
+                        "another margin note",
+                    ]
+                )
+
+        self.assertEqual(code, 0)
+        self.assertFalse(payload["source_ref_attached"])
+        self.assertEqual(payload["note"]["support_level"], "scent")
+        self.assertEqual(payload["note"]["authority"], "direction_only")
+        self.assertEqual(payload["note"]["truth_boundary"], "agent_self_note_not_source_fact")
+        self.assertTrue(payload["source_boundary"]["self_note_is_not_source_fact"])
+        self.assertTrue(payload["source_boundary"]["source_reopen_required_before_claim"])
+        self.assertIn("--current-thread", payload["agent_next_action"])
+        self.assertEqual(human_code, 0)
+        human = human_stdout.getvalue()
+        self.assertIn("source refs: 0", human)
+        self.assertIn("not source-backed", human)
+
+    def test_append_help_explains_when_to_use_and_when_not_to_use(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = agent_self_note_cli.main(["append", "--help"])
+
+        help_text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("When to use", help_text)
+        self.assertIn("When not to use", help_text)
+        self.assertIn("short voluntary foreground-agent margin notes", help_text)
+        self.assertIn("facts, user profile claims, durable lessons", help_text)
+        self.assertIn("source-backed learning", help_text)
 
 
 if __name__ == "__main__":

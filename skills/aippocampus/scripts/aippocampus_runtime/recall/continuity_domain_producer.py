@@ -42,6 +42,8 @@ from aippocampus_runtime.warm_ambient.query_pattern_routes import (
 )
 
 CONTINUITY_DOMAIN_PRODUCER_KIND = "aippocampus_continuity_domain_producer_report"
+DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET = 8
+DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET = 8
 SIGNAL_CANDIDATE_FILES = (
     "query_pattern_routes.jsonl",
     "semantic_cues.jsonl",
@@ -86,12 +88,40 @@ GENERIC_PRODUCER_TERMS = {
     "agent",
     "agents",
     "assistant",
+    "candidate",
+    "candidates",
+    "checkpoint",
+    "comment",
+    "comments",
+    "clean",
+    "conversation",
+    "conversations",
+    "from",
+    "generated",
+    "focus",
+    "health",
+    "issue",
+    "issues",
+    "line",
+    "lines",
     "source",
     "trail",
     "source trail",
     "clean source",
     "message",
+    "messages",
+    "normalized",
+    "plugin",
+    "plugins",
+    "recent",
+    "rollout",
+    "rollouts",
+    "transcript",
+    "transcripts",
+    "status",
     "thread",
+    "user",
+    "users",
     "project",
     "现在",
     "应该",
@@ -138,6 +168,19 @@ LOW_INFORMATION_PRODUCER_TERMS = {
     "一下",
     "一个",
     "一些",
+    "看看",
+    "看下",
+    "看一下",
+    "最近",
+    "用户",
+    "角度",
+    "现在试",
+    "然后提",
+    "实测",
+    "深度实测",
+    "再深度实测",
+    "资深产品经理",
+    "以资深产品经理",
 }
 UNTRUSTED_SINGLE_WORD_PRODUCER_TERMS = {
     "activation",
@@ -193,6 +236,35 @@ ENGLISH_LOW_INFORMATION_FILLER_TERMS = {
     "that",
     "these",
     "those",
+    "candidate",
+    "candidates",
+    "checkpoint",
+    "comment",
+    "comments",
+    "clean",
+    "conversation",
+    "conversations",
+    "from",
+    "generated",
+    "focus",
+    "health",
+    "issue",
+    "issues",
+    "line",
+    "lines",
+    "message",
+    "messages",
+    "normalized",
+    "plugin",
+    "plugins",
+    "recent",
+    "rollout",
+    "rollouts",
+    "transcript",
+    "transcripts",
+    "status",
+    "user",
+    "users",
     "my",
     "our",
     "their",
@@ -219,7 +291,10 @@ CJK_DEICTIC_ACTION_RE = re.compile(
     r"(这个|那个|这些|那些|这里|那里|这边|那边).{0,32}"
     r"(要怎么|怎么|怎样|如何|改|修改|调整|处理|做|办|弄)"
 )
-CJK_ACTION_PROMPT_RE = re.compile(r"(要怎么|怎么改|怎么办|怎么做|如何改|改一下|弄一下)")
+CJK_ACTION_PROMPT_RE = re.compile(
+    r"(要怎么|怎么改|怎么办|怎么做|怎么处理|如何改|如何处理|改一下|弄一下)"
+)
+LINE_RANGE_TOKEN_RE = re.compile(r"^\d{1,6}[-–]\d{1,6}$")
 
 
 def _hash(value: Any, *, prefix: str) -> str:
@@ -270,6 +345,8 @@ def _low_information_producer_term(
     # phrase, otherwise a generic follow-up can project an unrelated route.
     if _has_cjk(text) and CJK_DEICTIC_ACTION_RE.search(text):
         return True
+    if _has_cjk(text) and len(text) <= 96 and ("看看" in text or "试一下" in text):
+        return True
     if _has_cjk(text) and len(text) <= 32 and CJK_ACTION_PROMPT_RE.search(text):
         return True
     if _has_cjk(text) and len(text) <= 12:
@@ -290,6 +367,10 @@ def _clean_candidate_term_detail(
         return "", ""
     if _privacy_suppressed_term(text):
         return "", "privacy"
+    if LINE_RANGE_TOKEN_RE.fullmatch(text):
+        return "", "low_information"
+    if "/" in text and " " not in text and not _has_cjk(text):
+        return "", "shape"
     low = text.casefold()
     if low in GENERIC_PRODUCER_TERMS:
         return "", "low_information"
@@ -387,9 +468,6 @@ def _resolving_signal_refs(
 
 def _registry_terms(entry: Mapping[str, Any]) -> list[str]:
     values: list[str] = []
-    for key in ("title", "summary", "workspace_name", "project_label"):
-        if entry.get(key):
-            values.append(str(entry.get(key)))
     for key in ("keywords", "anchor_titles", "project_tags"):
         raw = entry.get(key)
         if isinstance(raw, list):
@@ -518,17 +596,27 @@ def _domain_event_from_term(
     co_terms: Counter[str],
     registry_term_set: set[str],
 ) -> dict[str, Any] | None:
+    raw_cues = [
+        term,
+        *[
+            item
+            for item, _count in co_terms.most_common(8)
+            if item.casefold() != term.casefold()
+        ],
+    ]
     cues = unique_preserve(
         [
-            term,
-            *[
-                item
-                for item, _count in co_terms.most_common(8)
-                if item.casefold() != term.casefold()
-            ],
+            cue
+            for cue in raw_cues
+            if _clean_candidate_term_detail(
+                cue,
+                trusted_domain_label=cue.casefold() in registry_term_set,
+            )[0]
         ],
         limit=6,
     )
+    if not cues:
+        return None
     event = {
         "event_kind": "domain_created",
         "domain_id": _hash([thread_key, term], prefix="cd_reg"),
@@ -598,11 +686,21 @@ def propose_continuity_domain_events_from_registry(
             registry,
             registry_dir=registry_root,
         )
-    threads = [
+    all_threads = [
         entry for entry in registry.get("threads") or [] if isinstance(entry, Mapping)
     ]
+    registered_thread_count = len(all_threads)
+    effective_thread_budget = (
+        max(0, int(max_threads)) if max_threads is not None else None
+    )
+    threads = all_threads
     if max_threads is not None:
         threads = threads[: max(0, int(max_threads))]
+    considered_thread_count = len(threads)
+    scan_truncated_by_budget = (
+        effective_thread_budget is not None
+        and registered_thread_count > effective_thread_budget
+    )
 
     term_refs: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     term_co_terms: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
@@ -714,7 +812,11 @@ def propose_continuity_domain_events_from_registry(
         "mode": "dry_run",
         "metrics": {
             "registered_thread_count": len(registry.get("threads") or []),
+            "considered_thread_count": considered_thread_count,
             "scanned_thread_count": scanned_thread_count,
+            "scan_budget_max_threads": effective_thread_budget,
+            "scan_truncated_by_budget": scan_truncated_by_budget,
+            "scan_partial": scan_truncated_by_budget,
             "candidate_domain_count": len(selected),
             "signal_candidate_count": signal_candidate_count,
             "accepted_event_count": len(candidate_events),
@@ -730,6 +832,15 @@ def propose_continuity_domain_events_from_registry(
             "hooks_create_domains": False,
             "source_reopen_required_before_claim": True,
             "raw_source_text_serialized": False,
+        },
+        "scan_policy": {
+            "partial": scan_truncated_by_budget,
+            "registered_thread_count": registered_thread_count,
+            "considered_thread_count": considered_thread_count,
+            "scanned_thread_count": scanned_thread_count,
+            "max_threads": effective_thread_budget,
+            "broad_scan_requires_explicit_flag": True,
+            "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
         },
     }
     if include_local_detail:

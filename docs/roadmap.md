@@ -131,9 +131,9 @@ tower while preserving the long garden.
 
 ## Roadmap Stages
 
-### Stage 0: Current Skill Baseline
+### Stage 0: Current Local Continuity Baseline
 
-Status: underway.
+Status: current and still hardening.
 
 - Clean source from raw rollouts.
 - Conclusion-first search over user turns and final answers.
@@ -144,11 +144,17 @@ Status: underway.
   memory.
 - Segment indexes and GB-scale planning.
 - Public skill copy with portable environment variable names.
+- First-recall/action-card front doors for agents before operator diagnostics.
+- Local generated-cache pressure reporting and explicit rebuildable-cache repair
+  paths.
 
 ### Stage 1: Standalone Public Repository
 
 Goal: make AIppocampus understandable, installable, and reviewable as its own
 project.
+
+Status: current public home; continue tightening first-use docs and public
+claim boundaries.
 
 - Move from a shared skills shelf into a dedicated `AIppocampus` repository.
 - Keep `skills/aippocampus/` as the installable skill package.
@@ -198,10 +204,15 @@ memory continuity.
 Goal: agents can use memory without shelling out through skill instructions for
 every operation.
 
+Status: current local stdio read-mostly catalog with compact foreground
+defaults; keep schema names synced from `aippocampus mcp list-tools --json`.
+
 - Provide a local MCP server for read-mostly memory tools:
-  `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`,
-  `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
-  `memory_health`.
+  `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`,
+  `search_memory`, `recall_context`, `recall_deepen`, `recall_diagnostic`,
+  `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`,
+  `sync_status`, `memory_health`, `list_telepathy_handoffs`, and
+  `deepen_telepathy_handoff`.
 - Keep mutating tools narrow and explicit.
 - Default tools should search clean source and registry, not raw rollout.
 - Raw/audit tools should be opt-in and clearly labeled.
@@ -211,6 +222,10 @@ every operation.
 ### Stage 5: Plugin Distribution
 
 Goal: package the skill, hooks, and MCP configuration as an installable product.
+
+Status: source package and local Codex install/verify path exist; marketplace
+UI, all-client discovery, and external distribution claims still need separate
+evidence.
 
 - Bundle `skills/aippocampus/`, MCP server config, lifecycle hook installers,
   and UI metadata in a Codex plugin.

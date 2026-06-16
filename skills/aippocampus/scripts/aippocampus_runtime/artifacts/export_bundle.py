@@ -107,12 +107,12 @@ def write_handoff(path: Path, manifest: dict[str, Any], include_raw: bool) -> No
                 "Suggested recovery commands:",
                 "",
                 "```powershell",
-                'aippocampus import "<this zip>"',
-                'python -m aippocampus_runtime.recall.rollout_search "keyword" --index "<extracted>\\index\\source_index.sqlite"',
+                'aippocampus import "<this zip>" --dest "<local folder>"',
+                'aippocampus search "keyword" --clean-source-dir "<extracted>\\index" --json',
                 "```",
                 "",
-                "`aippocampus_runtime.recall.rollout_search` resolves the generation pointer when the bundle carries",
-                "`index/source_index.pointer.json` and `index/generations/gen_*/source_index.sqlite`.",
+                "Use the imported `index/messages.jsonl` path as the search clean-source dir.",
+                "Private raw/searchable bundles are for local transfer; do not publish them.",
                 "",
             ]
         )
@@ -413,16 +413,41 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aippocampus export")
-    parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--rollout")
-    parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output")
+    parser = argparse.ArgumentParser(
+        prog="aippocampus export",
+        usage="aippocampus export [private local transfer | public metadata export] [options]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Portable memory export.\n\n"
+            "Choose the human intent first:\n"
+            "  Private local transfer:\n"
+            "    aippocampus export --redaction-profile raw-private --output <bundle.zip>\n"
+            "    Includes local/searchable memory artifacts and may include raw rollout data.\n"
+            "    Keep this bundle private and local.\n\n"
+            "  Public/shareable metadata:\n"
+            "    aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>\n"
+            "    Omits raw rollouts, clean-source text, anchors, graph labels, and searchable indexes.\n\n"
+            "Default remains raw-private for local handoff compatibility, but public sharing "
+            "requires an explicit public profile plus --no-raw."
+        ),
+    )
+    parser.add_argument("--cwd", default=os.getcwd(), help="Workspace whose current thread should be exported.")
+    parser.add_argument("--rollout", help="Operator-private raw rollout path override.")
+    parser.add_argument(
+        "--anchors",
+        default="thread-anchors.md",
+        help="Optional local anchor file copied only into private/searchable bundles.",
+    )
+    parser.add_argument("--output", help="Bundle zip path to write.")
     parser.add_argument(
         "--work-dir", default=None, help="Defaults to the global thread store's index directory."
     )
     parser.add_argument("--no-raw", action="store_true", help="Do not include raw rollout JSONL.")
-    parser.add_argument("--hash-source", action="store_true")
+    parser.add_argument(
+        "--hash-source",
+        action="store_true",
+        help="Hash source identifiers in generated index metadata where supported.",
+    )
     parser.add_argument(
         "--redaction-profile",
         default="raw-private",

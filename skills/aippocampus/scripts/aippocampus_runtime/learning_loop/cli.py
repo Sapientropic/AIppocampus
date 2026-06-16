@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import os
 from collections.abc import Mapping
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
+from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
 from aippocampus_runtime.learning_loop.private_export import (
     export_private_replay_events,
     load_behavior_event_rows,
@@ -51,11 +53,9 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
         include_default_learning=not no_default_learning,
     )
     intake = dict(report.get("learned_provider_intake") or {})
+    ledger_intake = dict(report.get("effectiveness_ledger_intake") or {})
     prepared_count = int(intake.get("prepared_record_count") or 0)
-    cache_command = (
-        "aippocampus hooks action refresh-cache "
-        "--cache-jsonl <local-cache.jsonl> --write --json"
-    )
+    cache_command = "aippocampus hooks action refresh-cache --write --json"
     replay_command = "aippocampus learning replay --events <sanitized-events.jsonl> --json"
     benchmark_command = "python benchmarks/aippocampus/benchmark_learning_loop_public_companion.py --json"
     lanes = {
@@ -68,6 +68,13 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
             "status": "available_on_request",
             "command": replay_command,
             "input_boundary": "sanitized_behavior_events_not_raw_rollout",
+        },
+        "effectiveness_ledger": {
+            "status": ledger_intake.get("status") or "not_found",
+            "row_count": ledger_intake.get("row_count", 0),
+            "applied_to_guidance_before_cache": bool(
+                ledger_intake.get("applied_to_guidance_before_cache")
+            ),
         },
         "operator_diagnostics": {
             "status": "operator_only",
@@ -107,6 +114,7 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                 "finding_count": intake.get("finding_count", 0),
                 "included_count": intake.get("included_count", 0),
                 "prepared_action_hint_count": prepared_count,
+                "effectiveness_ledger_row_count": ledger_intake.get("row_count", 0),
                 "cache_write_requested": False,
             },
             "lanes": lanes,
@@ -130,25 +138,20 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
             **payload,
             "mode": "guidance",
             "agent_next_action": (
-                "write a local action-hint cache only after choosing a cache path"
+                "write the default local action-hint cache"
                 if summary.get("prepared_action_hint_count")
                 else "produce or provide sanitized learning findings before expecting action-time hints"
             ),
-            "cache_command": (
-                "aippocampus hooks action refresh-cache "
-                "--cache-jsonl <local-cache.jsonl> --write --json"
-            ),
+            "cache_command": "aippocampus hooks action refresh-cache --write --json",
         }
     )
 
 
 def intervention_report_from_replay(report: Mapping[str, Any]) -> dict[str, Any]:
-    metrics = report.get("metrics") if isinstance(report.get("metrics"), Mapping) else {}
-    ledger = (
-        report.get("effectiveness_ledger")
-        if isinstance(report.get("effectiveness_ledger"), Mapping)
-        else {}
-    )
+    metrics_raw = report.get("metrics")
+    metrics = dict(metrics_raw) if isinstance(metrics_raw, Mapping) else {}
+    ledger_raw = report.get("effectiveness_ledger")
+    ledger = dict(ledger_raw) if isinstance(ledger_raw, Mapping) else {}
     guidance_count = int(metrics.get("guidance_count") or 0)
     false_positive_rate = float(metrics.get("false_positive_nudge_rate") or 0.0)
     return {
@@ -206,19 +209,83 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
         input_origin=input_origin,
         sanitized_export_summary=export_summary,
     )
+    fixture_input = bool(report.get("fixture_input"))
+    replay_next_actions = []
+    if fixture_input:
+        replay_next_actions.append(
+            {
+                "label": "run real sanitized replay",
+                "command": "aippocampus learning replay --events <sanitized-events.jsonl> --json",
+            }
+        )
+        replay_next_actions.append(
+            {
+                "label": "export private history to sanitized events first",
+                "command": (
+                    "aippocampus learning replay --clean-source-events <events.jsonl> "
+                    "--export-output <sanitized-events.jsonl> --json"
+                ),
+            }
+        )
     return _public_payload(
         {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "replay",
             "ok": bool(report.get("ok")),
-            "fixture_input": bool(report.get("fixture_input")),
+            "fixture_input": fixture_input,
             "input_origin": report.get("input_origin"),
+            "evidence_origin": report.get("evidence_origin") or {},
+            "metrics_boundary": {
+                "fixture_metrics_are_not_real_history": fixture_input,
+                "real_history_replay_requires_sanitized_events": True,
+            },
             "metrics": report.get("metrics") or {},
             "intervention_report": intervention_report_from_replay(report),
             "guidance_authority": report.get("guidance_authority") or {},
             "privacy_boundary": report.get("privacy_boundary") or _privacy_boundary(),
             "cannot_claim": report.get("cannot_claim") or [],
+            "agent_next_action": (
+                replay_next_actions[0]["command"]
+                if replay_next_actions
+                else "inspect replay metrics and append an effectiveness ledger only after review"
+            ),
+            "next_actions": replay_next_actions,
+        }
+    )
+
+
+def _runtime_version() -> str:
+    try:
+        return importlib.metadata.version("aippocampus")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
+    payload = json.loads(args.input_json.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError("--input-json must contain a JSON object")
+    package = build_sanitized_repro_package(
+        payload,
+        version=args.version or _runtime_version(),
+        commit=args.commit or "unknown",
+        plugin_manifest_version=args.plugin_manifest_version or "unknown",
+    )
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "repro_package",
+            "ok": bool(package.get("ok")),
+            "repro_package": package,
+            "agent_next_action": "paste repro_package into a public issue after human review",
+            "privacy_boundary": package.get("privacy_boundary") or _privacy_boundary(),
+            "cannot_claim": [
+                "source_truth_from_repro_package",
+                "official_benchmark_score_from_repro_package",
+                "private_history_quality",
+            ],
         }
     )
 
@@ -247,6 +314,12 @@ def render_human(payload: Mapping[str, Any]) -> str:
     metrics = payload.get("metrics")
     if isinstance(metrics, Mapping):
         lines.append("guidance: " + str(metrics.get("guidance_count", 0)))
+    origin = payload.get("evidence_origin")
+    if isinstance(origin, Mapping):
+        if origin.get("fixture_metrics_are_not_real_history"):
+            lines.append("origin: synthetic fixture, not real-history evidence")
+        elif origin.get("kind"):
+            lines.append("origin: " + str(origin.get("kind")))
     actions = [row for row in payload.get("next_actions") or [] if isinstance(row, Mapping)]
     if actions:
         lines.append("next: " + str(actions[0].get("command") or "continue"))
@@ -290,6 +363,16 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--rollout", type=Path)
     replay.add_argument("--export-output", type=Path)
     replay.add_argument("--json", action="store_true")
+
+    repro = sub.add_parser(
+        "repro-package",
+        help="Create a public-safe dogfood repro package from a saved command/output JSON object.",
+    )
+    repro.add_argument("--input-json", type=Path, required=True)
+    repro.add_argument("--version")
+    repro.add_argument("--commit")
+    repro.add_argument("--plugin-manifest-version")
+    repro.add_argument("--json", action="store_true")
     return parser
 
 
@@ -302,6 +385,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay":
         try:
             payload = replay_payload(args)
+        except ValueError as exc:
+            parser.error(str(exc))
+    elif args.command == "repro-package":
+        try:
+            payload = repro_package_payload(args)
         except ValueError as exc:
             parser.error(str(exc))
     elif args.command == "guidance":

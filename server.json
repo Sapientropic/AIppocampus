@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Sapientropic/aippocampus",
   "title": "AIppocampus",
-  "description": "Local-first MCP tools that help AI agents reopen source-backed continuity across threads.",
+  "description": "Local-first, source-backed continuity for AI agents: find old conversation source, reopen evidence, and continue across threads via stdio MCP.",
   "repository": {
     "url": "https://github.com/Sapientropic/AIppocampus",
     "source": "github"

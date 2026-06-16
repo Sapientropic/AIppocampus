@@ -140,6 +140,93 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertIn("AIppocampus 是清洗后的原文记忆库", output)
         self.assertIn("Next:", output)
 
+    def test_human_search_output_is_action_card_not_ranking_trace(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "原文记忆库",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                ]
+            )
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("Source-backed action cards", output)
+        self.assertIn("boundary:", output)
+        self.assertNotIn("role=", output)
+        self.assertNotIn("phase=", output)
+        self.assertNotIn("score=", output)
+
+    def test_public_metadata_only_human_search_renders_receipt_not_none_snippet(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "原文记忆库",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--public",
+                ]
+            )
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("snippet omitted in public mode", output)
+        self.assertNotIn('"None"', output)
+
+    def test_search_marks_process_noise_and_demotes_it_behind_source_receipts(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_process",
+                        "source_line": 40,
+                        "role": "assistant",
+                        "phase": "commentary",
+                        "turn_index": 4,
+                        "text": (
+                            "<subagent_notification> first recall first recall first recall "
+                            "process details only </subagent_notification>"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_real",
+                        "source_line": 41,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 4,
+                        "is_final": True,
+                        "text": "The first recall receipt is source-backed and ready to reopen.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        result = search.search_clean_source(
+            self.cwd,
+            ["first recall"],
+            clean_source_dir=self.source,
+            limit=2,
+        )
+        by_id = {match["id"]: match for match in result["matches"]}
+
+        self.assertEqual(result["matches"][0]["id"], "msg_real")
+        self.assertTrue(by_id["msg_process"]["search_noise"])
+        self.assertEqual(by_id["msg_process"]["noise_reason"], "process_notification")
+
     def test_human_search_no_result_gives_vague_cue_refinements_without_evidence_claim(self) -> None:
         stdout = io.StringIO()
         with (

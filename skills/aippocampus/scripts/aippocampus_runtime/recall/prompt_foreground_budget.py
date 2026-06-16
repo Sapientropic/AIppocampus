@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 
@@ -38,6 +39,10 @@ HIGHER_AUTHORITY_ACTIONS = {
 MEMORY_PACKET_MAX_BYTES = 560
 MEMORY_PACKET_TOTAL_MAX_BYTES = 2200
 MEMORY_PACKET_MAX_HINTS = 4
+COGNITIVE_LOAD_MAX_SECONDARY_ACTIONS = 2
+COGNITIVE_LOAD_MAX_ACTION_VOCABULARY = 3
+COGNITIVE_LOAD_MAX_DIAGNOSTIC_CONCEPTS = 3
+COGNITIVE_LOAD_MAX_CLAIM_BOUNDARIES = 2
 PROFILE_LIKE_MARKERS = (
     "adhd",
     "anxiety",
@@ -336,6 +341,81 @@ def _packet_triage_distinctiveness(packets: list[dict[str, Any]]) -> float:
     return round(len(signatures) / len(triage_packets), 3)
 
 
+def _packet_cognitive_load_metrics(packets: list[dict[str, Any]]) -> dict[str, Any]:
+    next_actions = [
+        str(packet.get("next_action") or "").strip()
+        for packet in packets
+        if str(packet.get("next_action") or "").strip()
+    ]
+    action_vocab = sorted(set(next_actions))
+    claim_boundaries = sorted(
+        {
+            str(packet.get("claim_permission") or "").strip()
+            for packet in packets
+            if str(packet.get("claim_permission") or "").strip()
+        }
+    )
+    diagnostic_concepts: set[str] = set()
+    for packet in packets:
+        for key in (
+            "review_needed",
+            "suppression_reason",
+            "risk_flags",
+            "triage_rank_reason_codes",
+            "route_delta_reason_codes",
+        ):
+            value = packet.get(key)
+            if value in (None, "", [], {}, False):
+                continue
+            if isinstance(value, list):
+                diagnostic_concepts.update(str(item) for item in value if str(item))
+            else:
+                diagnostic_concepts.add(str(key))
+
+    label_actions: dict[str, set[str]] = defaultdict(set)
+    for packet in packets:
+        label = str(packet.get("display_hint") or packet.get("route_label") or "").strip()
+        action = str(packet.get("next_action") or "").strip()
+        if label and action:
+            label_actions[label].add(action)
+    conflicting_next_action_count = sum(
+        max(0, len(actions) - 1) for actions in label_actions.values()
+    )
+    human_readable_action_present = any(
+        str(packet.get("display_hint") or packet.get("route_label") or "").strip()
+        and str(packet.get("next_action") or "").strip()
+        for packet in packets
+    )
+    primary_action_count = 1 if action_vocab and human_readable_action_present else 0
+    secondary_action_count = max(0, len(action_vocab) - primary_action_count)
+    requires_audit_read_to_act = bool(packets and not human_readable_action_present)
+    violations: list[str] = []
+    if secondary_action_count > COGNITIVE_LOAD_MAX_SECONDARY_ACTIONS:
+        violations.append("too_many_secondary_actions")
+    if len(action_vocab) > COGNITIVE_LOAD_MAX_ACTION_VOCABULARY:
+        violations.append("too_many_action_vocabularies")
+    if len(diagnostic_concepts) > COGNITIVE_LOAD_MAX_DIAGNOSTIC_CONCEPTS:
+        violations.append("too_many_diagnostic_concepts")
+    if len(claim_boundaries) > COGNITIVE_LOAD_MAX_CLAIM_BOUNDARIES:
+        violations.append("duplicative_claim_boundaries")
+    if conflicting_next_action_count:
+        violations.append("conflicting_next_actions")
+    if requires_audit_read_to_act:
+        violations.append("requires_audit_read_to_act")
+    return {
+        "primary_action_count": primary_action_count,
+        "secondary_action_count": secondary_action_count,
+        "action_vocabulary_count": len(action_vocab),
+        "action_vocabulary": action_vocab,
+        "diagnostic_concept_count": len(diagnostic_concepts),
+        "claim_boundary_count": len(claim_boundaries),
+        "conflicting_next_action_count": conflicting_next_action_count,
+        "requires_audit_read_to_act": requires_audit_read_to_act,
+        "human_readable_action_present": human_readable_action_present,
+        "violations": violations,
+    }
+
+
 def _blind_deepen_required_count(packets: list[dict[str, Any]]) -> int:
     return sum(
         1
@@ -443,6 +523,7 @@ def project_memory_packets_for_foreground(
         if packet.get("claim_permission") == "bounded_claim_allowed"
         and packet.get("output_mode") != "bounded_evidence"
     )
+    cognitive_load = _packet_cognitive_load_metrics(foreground)
     metrics = {
         "foreground_hint_count": len(foreground),
         "foreground_packet_bytes": total_bytes,
@@ -462,6 +543,7 @@ def project_memory_packets_for_foreground(
         "blind_deepen_required_count": blind_deepen_count,
         "top_route_selection_hint_present_count": top_route_selection_hint_present_count,
         "source_backed_claim_without_reopen": source_backed_claim_without_reopen,
+        "cognitive_load_budget_violation_count": len(cognitive_load["violations"]),
         "debug_or_source_field_leak_count": sum(
             1
             for marker in (
@@ -482,6 +564,9 @@ def project_memory_packets_for_foreground(
         "false_personalization_count": metrics["false_personalization_count"],
         "anti_nag_violation_count": metrics["anti_nag_violation_count"],
         "source_backed_claim_without_reopen": metrics["source_backed_claim_without_reopen"],
+        "cognitive_load_budget_violation_count": metrics[
+            "cognitive_load_budget_violation_count"
+        ],
         "debug_or_source_field_leak_count": metrics["debug_or_source_field_leak_count"],
     }
     return {
@@ -490,6 +575,7 @@ def project_memory_packets_for_foreground(
         "ok": all(value == 0 for value in red_lines.values()),
         "foreground_packets": foreground,
         "metrics": metrics,
+        "cognitive_load": cognitive_load,
         "red_lines": red_lines,
         "budget": {
             "max_packet_bytes": MEMORY_PACKET_MAX_BYTES,

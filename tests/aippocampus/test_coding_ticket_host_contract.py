@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -115,6 +116,43 @@ class CodingTicketHostContractTests(unittest.TestCase):
         self.assertIn("source_visible", contract["host_supplies"]["runtime_inputs"])
         self.assertIn("visibility", contract["host_decides"]["fields"])
         self.assertEqual(contract["normalized_ticket"]["feedback_expectations"], ticket["outcome_feedback_expected"])
+        self.assertEqual(
+            contract["foreground_consumption"]["default_lane"],
+            "host_mediated_foreground_or_backstage",
+        )
+        self.assertEqual(contract["foreground_consumption"]["card_kind"], "coding_continuity_lane_card")
+
+    def test_compact_lane_card_answers_how_foreground_agent_consumes_ticket(self) -> None:
+        ticket = coding_ticket("foreground", proposed_use="warn", intervention_level="warning")
+        decision = host_contract.host_decision_for_ticket(ticket)
+
+        card = host_contract.coding_continuity_lane_card(ticket, decision)
+
+        self.assertEqual(card["kind"], "coding_continuity_lane_card")
+        self.assertEqual(card["lane"], "foreground")
+        self.assertEqual(card["foreground_visibility"], "warning")
+        self.assertEqual(card["next_action"], "warn_route")
+        self.assertEqual(card["source_boundary"], "source_backed_proposal_not_permission_or_execution")
+        self.assertTrue(card["source_reopen_required_before_claim"])
+        self.assertIn("do_not_repeat", card)
+        encoded = json.dumps(card, ensure_ascii=False)
+        self.assertNotIn("derived_assessment", encoded)
+        self.assertNotIn("C:/", encoded)
+
+    def test_backstage_lane_card_routes_quiet_ticket_without_dumping_diagnostics(self) -> None:
+        ticket = coding_ticket(
+            "backstage-lane",
+            proposed_use="prepare_context",
+            intervention_level="backstage_only",
+        )
+        decision = host_contract.host_decision_for_ticket(ticket)
+
+        card = host_contract.coding_continuity_lane_card(ticket, decision)
+
+        self.assertEqual(card["lane"], "backstage")
+        self.assertEqual(card["next_action"], "prepare_context")
+        self.assertFalse(card["user_visible"])
+        self.assertEqual(card["agent_consumption"], "route_usable_guidance_through_action_hints_or_recall")
 
     def test_feedback_tunes_future_activation_without_rewriting_source_facts(self) -> None:
         ticket = coding_ticket("feedback", proposed_use="warn", intervention_level="warning")

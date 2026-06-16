@@ -63,6 +63,7 @@ class ImportBundleTests(unittest.TestCase):
                     "--name",
                     "imported",
                     "--no-anchor",
+                    "--include-private-paths",
                 ],
                 text=True,
                 encoding="utf-8",
@@ -80,9 +81,10 @@ class ImportBundleTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             result = json.loads(proc.stdout)
             self.assertEqual(
-                Path(result["sqlite_current"]).resolve(),
+                Path(result["diagnostics"]["sqlite_current"]).resolve(),
                 (dest / "imported" / "index" / "versions" / "source_index-current.sqlite").resolve(),
             )
+            self.assertTrue(result["privacy_boundary"]["local_paths_included"])
 
     def test_import_reports_generation_pointer_resolved_current_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -125,6 +127,7 @@ class ImportBundleTests(unittest.TestCase):
                     "--name",
                     "imported",
                     "--no-anchor",
+                    "--include-private-paths",
                 ],
                 text=True,
                 encoding="utf-8",
@@ -142,7 +145,7 @@ class ImportBundleTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             result = json.loads(proc.stdout)
             self.assertEqual(
-                Path(result["sqlite_current"]).resolve(),
+                Path(result["diagnostics"]["sqlite_current"]).resolve(),
                 (
                     dest
                     / "imported"
@@ -171,12 +174,71 @@ class ImportBundleTests(unittest.TestCase):
                 patch("sys.stdout", new=StringIO()) as stdout,
             ):
                 code = packaged_import_bundle.main(
-                    [str(bundle), "--dest", str(dest), "--name", "direct", "--no-anchor"]
+                    [
+                        str(bundle),
+                        "--dest",
+                        str(dest),
+                        "--name",
+                        "direct",
+                        "--no-anchor",
+                        "--include-private-paths",
+                    ]
                 )
 
             self.assertEqual(code, 0)
             result = json.loads(stdout.getvalue())
-            self.assertEqual(Path(result["extracted_to"]).resolve(), (dest / "direct").resolve())
+            self.assertEqual(
+                Path(result["diagnostics"]["extracted_to"]).resolve(),
+                (dest / "direct").resolve(),
+            )
+
+    def test_default_import_output_is_action_card_with_redacted_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = root / "bundle.zip"
+            dest = root / "workspace"
+            dest.mkdir()
+            with zipfile.ZipFile(bundle, "w") as zf:
+                zf.writestr(
+                    "bundle_manifest.json",
+                    json.dumps(
+                        {
+                            "message_count": 2,
+                            "cwd": "source-device",
+                            "raw_rollout_included": True,
+                            "redaction_profile": "raw-private",
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+                zf.writestr("index/messages.jsonl", "{}\n")
+
+            with patch("sys.stdout", new=StringIO()) as stdout:
+                code = packaged_import_bundle.main(
+                    [str(bundle), "--dest", str(dest), "--name", "direct"]
+                )
+
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_bundle_import_summary")
+        self.assertTrue(payload["summary"]["anchor_written"])
+        self.assertEqual(payload["summary"]["message_count"], 2)
+        self.assertEqual(payload["diagnostics"]["extracted_to"], "<local-path-redacted>")
+        self.assertNotIn(str(dest), json.dumps(payload, ensure_ascii=False))
+        self.assertIn("aippocampus search", payload["summary"]["next_command"])
+
+    def test_missing_bundle_accepts_json_and_redacts_local_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch("sys.stdout", new=StringIO()) as stdout:
+            missing = Path(tmp) / "missing-aippo-bundle.zip"
+            code = packaged_import_bundle.main([str(missing), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["error"]["code"], "bundle_not_found")
+        self.assertIn("<local-path-redacted>", payload["error"]["message"])
+        self.assertNotIn(str(missing.parent), encoded)
 
 
 if __name__ == "__main__":

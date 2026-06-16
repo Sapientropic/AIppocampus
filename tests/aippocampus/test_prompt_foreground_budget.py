@@ -322,6 +322,12 @@ class PromptForegroundBudgetTests(unittest.TestCase):
         self.assertEqual(by_id["route_bounded_summary"]["next_action"], "use_hint")
         self.assertEqual(report["metrics"]["unnecessary_reopen_prevented_count"], 1)
         self.assertEqual(by_id["route_reopenable"]["next_action"], "reopen_source")
+        self.assertEqual(report["metrics"]["cognitive_load_budget_violation_count"], 0)
+        self.assertEqual(report["cognitive_load"]["primary_action_count"], 1)
+        self.assertLessEqual(report["cognitive_load"]["secondary_action_count"], 2)
+        self.assertLessEqual(report["cognitive_load"]["action_vocabulary_count"], 3)
+        self.assertFalse(report["cognitive_load"]["requires_audit_read_to_act"])
+        self.assertTrue(report["cognitive_load"]["human_readable_action_present"])
 
         review = by_id["route_profile_like"]
         self.assertTrue(review["review_needed"])
@@ -343,6 +349,40 @@ class PromptForegroundBudgetTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["anti_nag_suppressed_count"], 2)
         self.assertEqual(report["metrics"]["anti_nag_violation_count"], 0)
         self.assertEqual(report["red_lines"]["anti_nag_violation_count"], 0)
+
+    def test_memory_packet_budget_reports_cognitive_load_violations_by_concept(self) -> None:
+        packets = [
+            {
+                "kind": "aippocampus_memory_packet",
+                "schema_version": "agent-native-recall-facade-v0",
+                "route_id": f"route_noise_{index}",
+                "output_mode": "reopenable_route",
+                "display_hint": "A route may matter.",
+                "claim_permission": "no_claim_before_reopen",
+                "next_action": next_action,
+                "deepen_route_id": f"deepen:route_noise_{index}",
+                "risk_flags": ["stale", "private", "diagnostic"],
+                "triage_rank_reason_codes": ["debug_probe", "operator_detail"],
+            }
+            for index, next_action in enumerate(
+                [
+                    "reopen_source",
+                    "ask_light_question",
+                    "run_diagnostic",
+                    "manual_search",
+                ],
+                start=1,
+            )
+        ]
+
+        report = budget.project_memory_packets_for_foreground(packets, max_hints=4)
+
+        self.assertFalse(report["ok"], report)
+        self.assertGreater(report["metrics"]["cognitive_load_budget_violation_count"], 0)
+        self.assertGreater(report["cognitive_load"]["action_vocabulary_count"], 3)
+        self.assertGreater(report["cognitive_load"]["secondary_action_count"], 2)
+        self.assertIn("too_many_action_vocabularies", report["cognitive_load"]["violations"])
+        self.assertIn("too_many_secondary_actions", report["cognitive_load"]["violations"])
 
 
 if __name__ == "__main__":

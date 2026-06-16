@@ -9,6 +9,7 @@ safety gates from quality gates, and keeps runtime weighting unchanged.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections import Counter, defaultdict
@@ -190,18 +191,112 @@ def _family_report(rows: Sequence[Mapping[str, Any]], *, min_denominator: int) -
     }
 
 
+def _safe_file_label(path: Path) -> dict[str, Any]:
+    name = path.name
+    digest = "sha1:" + hashlib.sha1(name.encode("utf-8", errors="replace")).hexdigest()[:12]
+    return {"label": name[:120], "fingerprint": digest}
+
+
+def _load_json_or_jsonl(path: Path) -> list[Mapping[str, Any]]:
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return []
+    if text.startswith("[") or text.startswith("{"):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(data, list):
+            return [row for row in data if isinstance(row, Mapping)]
+        if isinstance(data, Mapping):
+            nested = data.get("rows") or data.get("fixtures") or data.get("cases") or []
+            if nested:
+                return [row for row in nested if isinstance(row, Mapping)]
+            return [data]
+        return []
+    rows: list[Mapping[str, Any]] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, Mapping):
+            rows.append(item)
+    return rows
+
+
+def _feedback_row_to_meta(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    outcome = str(row.get("outcome") or row.get("signal") or "").strip()
+    if not outcome:
+        return None
+    negative = outcome in {"wrong_route_drag", "wrong_route", "blocked", "superseded", "expired", "ignored"}
+    positive = outcome in {"source_reopen_success", "reopened_deepened", "user_confirmed", "prevented_failure"}
+    if not (negative or positive):
+        return None
+    route_id = str(row.get("candidate_id") or row.get("route_id") or row.get("source_id") or "route-feedback")
+    return {
+        "family": "attention_semantic_route",
+        "case_id": "route_feedback_" + hashlib.sha1(route_id.encode("utf-8", errors="replace")).hexdigest()[:12],
+        "predicted": "reopen_first",
+        "label": "hold_back" if negative else "reopen_first",
+        "safety_gate": "pass",
+        "quality_gate": "wrong_route" if negative else "useful",
+    }
+
+
+def load_dated_evidence_rows(
+    report_paths: Sequence[Path] | None = None,
+    feedback_paths: Sequence[Path] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    files: list[dict[str, Any]] = []
+    families = Counter()
+    for path in report_paths or []:
+        loaded = [dict(row) for row in _load_json_or_jsonl(path)]
+        rows.extend(loaded)
+        files.append({**_safe_file_label(path), "row_family": "dated_report_rows", "row_count": len(loaded)})
+    for path in feedback_paths or []:
+        converted = [
+            converted
+            for row in _load_json_or_jsonl(path)
+            if (converted := _feedback_row_to_meta(row)) is not None
+        ]
+        rows.extend(converted)
+        files.append({**_safe_file_label(path), "row_family": "route_feedback_rows", "row_count": len(converted)})
+    for row in rows:
+        families[str(row.get("family") or "unknown")] += 1
+    return rows, {
+        "mode": "dated_evidence",
+        "row_count": len(rows),
+        "files": files,
+        "row_families": dict(sorted(families.items())),
+        "safe_labels_only": True,
+    }
+
+
 def build_diagnostic_meta_calibration_report(
     rows: Iterable[Mapping[str, Any]] | None = None,
     *,
     min_denominator: int = DEFAULT_MIN_DENOMINATOR,
+    evidence_mode: str = "fixture",
+    evidence_intake: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     materialized = list(rows) if rows is not None else fixture_rows()
+    dated_mode = evidence_mode == "dated" or bool(evidence_intake)
     grouped = _family_rows(materialized)
     local_global = build_local_global_compatibility_report()
     family_reports = {
         family: _family_report(grouped.get(family, []), min_denominator=min_denominator)
         for family in FAMILIES
     }
+    if dated_mode:
+        for report in family_reports.values():
+            if report["status"] == "measured_fixture_only":
+                report["status"] = "measured_dated_evidence"
     encoded = json.dumps({"rows": materialized, "families": family_reports}, ensure_ascii=False, sort_keys=True)
     forbidden_count = sum(1 for marker in FORBIDDEN_MARKERS if marker in encoded)
     safety_fail_count = sum(
@@ -214,8 +309,9 @@ def build_diagnostic_meta_calibration_report(
         "kind": REPORT_KIND,
         "created_at": now_utc(),
         "ok": forbidden_count == 0,
-        "status": "fixture_meta_calibration",
+        "status": "dated_evidence_meta_calibration" if dated_mode else "fixture_meta_calibration",
         "min_denominator": min_denominator,
+        "evidence_intake": dict(evidence_intake or {"mode": "fixture", "row_count": len(materialized), "files": []}),
         "family_reports": family_reports,
         "local_global_compatibility_fixture": {
             "ok": local_global["ok"],
@@ -246,6 +342,7 @@ def build_diagnostic_meta_calibration_report(
         },
         "cannot_claim": [
             "answer_truth_from_meta_calibration",
+            "diagnostic_meta_calibration_is_not_answer_truth",
             "runtime_weight_update",
             "private_history_quality",
             "benchmark_generalization_from_fixture_labels",
@@ -266,12 +363,20 @@ def load_rows(path: Path) -> list[Mapping[str, Any]]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path)
+    parser.add_argument("--evidence-report", type=Path, action="append", default=[])
+    parser.add_argument("--feedback-jsonl", type=Path, action="append", default=[])
     parser.add_argument("--min-denominator", type=int, default=DEFAULT_MIN_DENOMINATOR)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+    dated_rows: list[dict[str, Any]] | None = None
+    intake: dict[str, Any] | None = None
+    if args.evidence_report or args.feedback_jsonl:
+        dated_rows, intake = load_dated_evidence_rows(args.evidence_report, args.feedback_jsonl)
     payload = build_diagnostic_meta_calibration_report(
-        load_rows(args.input) if args.input else None,
+        dated_rows if dated_rows is not None else load_rows(args.input) if args.input else None,
         min_denominator=args.min_denominator,
+        evidence_mode="dated" if dated_rows is not None else "fixture",
+        evidence_intake=intake,
     )
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))

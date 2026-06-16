@@ -196,8 +196,11 @@ def smoke_plugin_install(
             (build_result or {}).get("hooks_auto_enabled")
         )
 
+        # Use the public facade shape rather than the legacy server flag. The
+        # bare/flag path is intentionally a compact readiness card for humans
+        # and foreground agents; smoke needs the full schema catalog.
         proc = subprocess.run(
-            [*mcp_command_from_config(install_dir), "--list-tools"],
+            [*mcp_command_from_config(install_dir), "list-tools", "--json"],
             cwd=install_dir,
             text=True,
             encoding="utf-8",

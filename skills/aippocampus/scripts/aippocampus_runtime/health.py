@@ -51,6 +51,9 @@ from aippocampus_runtime.registry.store import registry_paths
 from aippocampus_runtime.source.source_intake_health import clean_source_health_summaries
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
+STORAGE_PRESSURE_RECLAIMABLE_BYTES = 512 * 1024 * 1024
+STORAGE_PRESSURE_AMPLIFICATION_RATIO = 10.0
+STORAGE_PRESSURE_CANDIDATE_COUNT = 100
 
 
 @dataclass(frozen=True)
@@ -263,6 +266,75 @@ def load_question_stats(
 
 def default_question_jobs_path(registry_path: Path) -> Path:
     return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
+
+
+def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, Any]:
+    """Return a bounded generated-cache pressure card for foreground health.
+
+    This deliberately reuses storage governance instead of inventing a second
+    scanner. The report is about rebuildable generated cache only; source
+    history, clean source, raw rollouts, and provenance stay protected.
+    """
+
+    try:
+        from aippocampus_runtime.ops import storage_governance  # noqa: PLC0415
+        from aippocampus_runtime.ops.storage_governance_contract import (  # noqa: PLC0415
+            CLASS_REBUILDABLE,
+        )
+
+        plan = storage_governance.build_plan(
+            cwd,
+            registry_dir=registry_dir,
+            class_filter=CLASS_REBUILDABLE,
+            include_paths=False,
+            top=3,
+            fanout_budget=16,
+        )
+    except Exception as exc:
+        return {
+            "available": False,
+            "status": "unavailable",
+            "reason": "storage_governance_unavailable",
+            "error_type": type(exc).__name__,
+            "source_history_protected": True,
+            "foreground_blocking": False,
+        }
+    metrics = dict(plan.get("metrics") or {})
+    reclaimable = safe_int(metrics.get("reclaimable_rebuildable_bytes"))
+    amplification = float(metrics.get("generated_index_amplification_ratio") or 0.0)
+    candidate_count = safe_int(metrics.get("eviction_candidate_count"))
+    reasons: list[str] = []
+    if reclaimable >= STORAGE_PRESSURE_RECLAIMABLE_BYTES:
+        reasons.append("reclaimable_rebuildable_cache_bytes_high")
+    if amplification >= STORAGE_PRESSURE_AMPLIFICATION_RATIO:
+        reasons.append("generated_index_amplification_ratio_high")
+    if candidate_count >= STORAGE_PRESSURE_CANDIDATE_COUNT:
+        reasons.append("rebuildable_eviction_candidate_count_high")
+    status = "pressure" if reasons else "ok"
+    return {
+        "available": True,
+        "status": status,
+        "pressure": bool(reasons),
+        "reasons": reasons,
+        "metrics": {
+            "reclaimable_rebuildable_bytes": reclaimable,
+            "reclaimable_rebuildable_human": metrics.get("reclaimable_rebuildable_human"),
+            "protected_source_bytes": safe_int(metrics.get("protected_source_bytes")),
+            "protected_source_human": metrics.get("protected_source_human"),
+            "generated_index_amplification_ratio": amplification,
+            "eviction_candidate_count": candidate_count,
+        },
+        "dry_run_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+        "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+        "source_history_protected": True,
+        "foreground_blocking": False,
+        "privacy_boundary": {
+            "paths_included": False,
+            "raw_rollout_bodies_read": False,
+            "clean_source_bodies_read": False,
+            "rebuildable_cache_only": True,
+        },
+    }
 
 
 
@@ -607,6 +679,22 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         actions.append(
             action("consider_graphify", "info", "thread size crossed the deep graph threshold", f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.')
         )
+    storage_pressure = registry_cache_pressure_report(cwd, registry_path.resolve().parent)
+    if storage_pressure.get("pressure"):
+        metrics = storage_pressure.get("metrics") or {}
+        actions.append(
+            action(
+                "storage_gc_rebuildable_cache",
+                "warning",
+                (
+                    "Generated rebuildable cache pressure is high "
+                    f"({metrics.get('reclaimable_rebuildable_human')}, "
+                    f"{metrics.get('generated_index_amplification_ratio')}x clean-source ratio). "
+                    "Run the dry-run summary before applying cleanup."
+                ),
+                storage_pressure["dry_run_command"],
+            )
+        )
     actions = dependency_ordered_actions(actions)
     logs = log_retention.add_health_action(actions, registry_path.resolve().parent, max_bytes=options.max_log_bytes)
     actions = dependency_ordered_actions(actions)
@@ -637,8 +725,14 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "last_clean_source_line": visibility.last_clean_source_line,
         "live_delta_tolerance_messages": live_delta_tolerance,
     }
+    # Rebuildable cache pressure is a safe housekeeping warning. It should be
+    # visible in actions, but must not make an otherwise usable current thread
+    # look unavailable or hide the live-delta ready state.
     blocking_action_count = sum(
-        1 for item in actions if item["severity"] in {"critical", "warning"}
+        1
+        for item in actions
+        if item["severity"] in {"critical", "warning"}
+        and item.get("id") != "storage_gc_rebuildable_cache"
     )
     live_delta_tolerated = bool(
         freshness["latest_visible_gap"]
@@ -666,7 +760,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     }
 
     result: dict[str, Any] = {
-        "ok": not any(a["severity"] in {"critical", "warning"} for a in actions),
+        "ok": blocking_action_count == 0,
         "cwd": str(cwd),
         "rollout": {
             "path": str(rollout),
@@ -779,6 +873,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         },
         "question_stats": question_stats,
         "background_cognition": background_cognition_health(root=registry_path.resolve().parent, registry_path=registry_path, jobs_path=jobs_path, cwd=cwd, now=now),
+        "storage_pressure": storage_pressure,
         "logs": logs,
         "product_readiness": product_readiness,
         "recommended_actions": actions,

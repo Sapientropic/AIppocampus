@@ -204,6 +204,12 @@ def describe_host_contract(ticket: Mapping[str, Any] | None = None) -> dict[str,
                 "source_ref_rewrite",
             ],
         },
+        "foreground_consumption": {
+            "default_lane": "host_mediated_foreground_or_backstage",
+            "card_kind": "coding_continuity_lane_card",
+            "foreground_agent_uses": "compact lane card only; detailed diagnostics stay backstage",
+            "backstage_route": "route_usable_guidance_through_action_hints_or_recall",
+        },
         "validation": validation,
         "normalized_ticket": normalized,
     }
@@ -363,6 +369,40 @@ def host_decision_for_ticket(
         "normalized_ticket": normalized,
         "contract_validation": validation,
         "host_boundary": _host_boundary(),
+    }
+
+
+def coding_continuity_lane_card(
+    ticket: Mapping[str, Any],
+    decision: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized = normalize_ticket(ticket)
+    host_decision = dict(decision or host_decision_for_ticket(ticket))
+    visibility = str(host_decision.get("visibility") or "stay_silent")
+    foreground = visibility in {"light_nudge", "warning", "offer_next_step"}
+    return {
+        "kind": "coding_continuity_lane_card",
+        "schema_version": SCHEMA_VERSION,
+        "ticket_id": normalized.get("ticket_id"),
+        "lane": "foreground" if foreground else "backstage",
+        "foreground_visibility": visibility,
+        "user_visible": bool(host_decision.get("user_visible")),
+        "next_action": host_decision.get("host_action") or "no_action",
+        "agent_consumption": (
+            "compact_foreground_card"
+            if foreground
+            else "route_usable_guidance_through_action_hints_or_recall"
+        ),
+        "relevant_decision_count": len(normalized.get("relevant_decisions") or []),
+        "do_not_repeat": _strings(ticket.get("do_not_repeat"), limit=4),
+        "source_thickness": normalized.get("source_thickness"),
+        "evidence_ref_count": len(normalized.get("evidence_refs") or []),
+        "source_boundary": "source_backed_proposal_not_permission_or_execution",
+        "source_reopen_required_before_claim": True,
+        "host_decides_permission": True,
+        "host_decides_priority": True,
+        "host_decides_sequence": True,
+        "claim_permission": "navigation_only_not_fact",
     }
 
 

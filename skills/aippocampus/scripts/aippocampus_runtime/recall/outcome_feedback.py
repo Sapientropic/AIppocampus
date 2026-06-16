@@ -19,6 +19,7 @@ SCHEMA_VERSION = 1
 AUTHORITY = "retrieval_tuning_only_not_source_truth"
 PRIVACY_BOUNDARY = "local_counts_and_route_ids_no_raw_prompt_or_source_text"
 ALLOWED_OUTCOMES = {
+    "answer_improved_after_deepen",
     "source_reopen_success",
     "wrong_route_drag",
     "ignored",
@@ -31,6 +32,27 @@ ALLOWED_OUTCOMES = {
     "dismissed_anti_nag",
     "prevented_failure",
     "stale_route_revival",
+    "manual_search_avoided",
+    "no_visible_effect",
+    "recall_added_noise",
+    "user_confirmed_helpful",
+    "user_reprompted_with_thread_id",
+}
+HELPFUL_OUTCOMES = {
+    "answer_improved_after_deepen",
+    "accepted_route",
+    "deepened",
+    "manual_search_avoided",
+    "prevented_failure",
+    "source_reopen_success",
+    "user_confirmed_helpful",
+}
+NOISY_OR_HARMFUL_OUTCOMES = {
+    "recall_added_noise",
+    "requery_after_miss",
+    "user_correction",
+    "user_reprompted_with_thread_id",
+    "wrong_route_drag",
 }
 
 
@@ -160,17 +182,33 @@ def recall_outcome_report(path: str | Path) -> dict[str, Any]:
     by_route_family: dict[str, Counter[str]] = defaultdict(Counter)
     by_scoring_policy: dict[str, Counter[str]] = defaultdict(Counter)
     by_currentness: dict[str, Counter[str]] = defaultdict(Counter)
+    by_surface: dict[str, Counter[str]] = defaultdict(Counter)
     by_query_shape: Counter[str] = Counter()
+    surfaced_count = 0
+    helped_count = 0
+    noisy_count = 0
+    no_visible_effect_count = 0
     for event in events:
         outcome = str(event.get("outcome_signal") or "unknown")
-        _increment(by_route_family, str(event.get("route_family") or "unknown"), outcome)
+        route_family = str(event.get("route_family") or "unknown")
+        _increment(by_route_family, route_family, outcome)
         _increment(by_scoring_policy, str(event.get("scoring_policy") or "unknown"), outcome)
         _increment(by_currentness, str(event.get("currentness") or "unknown"), outcome)
+        _increment(by_surface, route_family, outcome)
         by_query_shape[str(event.get("query_shape_hash") or "unknown")] += 1
+        if int(event.get("delivered_candidate_count") or 0) > 0:
+            surfaced_count += 1
+        if outcome in HELPFUL_OUTCOMES:
+            helped_count += 1
+        if outcome in NOISY_OR_HARMFUL_OUTCOMES:
+            noisy_count += 1
+        if outcome in {"ignored", "no_visible_effect", "blocked_boundary", "superseded"}:
+            no_visible_effect_count += 1
     repeated = [
         {"query_shape": shape, "count": count}
         for shape, count in by_query_shape.most_common()
     ]
+    help_rate = round(helped_count / surfaced_count, 6) if surfaced_count else None
     return {
         "kind": "aippocampus_recall_outcome_report",
         "schema_version": SCHEMA_VERSION,
@@ -178,7 +216,20 @@ def recall_outcome_report(path: str | Path) -> dict[str, Any]:
         "by_route_family": {key: dict(counter) for key, counter in by_route_family.items()},
         "by_scoring_policy": {key: dict(counter) for key, counter in by_scoring_policy.items()},
         "by_currentness": {key: dict(counter) for key, counter in by_currentness.items()},
+        "by_surface": {key: dict(counter) for key, counter in by_surface.items()},
+        "surface_vs_help": {
+            "route_surfaced_count": surfaced_count,
+            "route_helped_user_count": helped_count,
+            "route_hurt_or_noisy_count": noisy_count,
+            "no_visible_effect_count": no_visible_effect_count,
+            "help_rate": help_rate,
+        },
         "repeated_query_shapes": repeated,
         "authority": AUTHORITY,
         "privacy_boundary": PRIVACY_BOUNDARY,
+        "contract": {
+            "surfaced_is_not_helped": True,
+            "feedback_does_not_mutate_source_truth": True,
+            "rows_are_low_authority_feedback": True,
+        },
     }

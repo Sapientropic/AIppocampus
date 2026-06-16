@@ -18,6 +18,9 @@ SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_dream_topology_scout_report"
 CANDIDATE_KIND = "dream_topology_candidate"
 SHADOW_ROUTE_KIND = "dream_shadow_route_candidate"
+REVIEW_TASK_KIND = "aippocampus_dream_topology_review_task"
+REVIEW_TASK_REPORT_KIND = "aippocampus_dream_topology_review_task_report"
+REVIEW_FINDING_KIND = "aippocampus_dream_topology_review_finding"
 FORBIDDEN_MARKERS = (
     "PRIVATE_DREAM_TOPOLOGY_TEXT",
     "raw_private_source_text",
@@ -555,12 +558,12 @@ def build_dream_topology_scout_report(
         "missing_middle_cut_point",
         "weak_bridge_between_issues",
         "obligation_knot_needs_unlinking",
-            "islanded_useful_cluster",
-            "shadow_route_repeated_failure_orbit",
-            "shadow_route_partial_glue",
-            "shadow_route_generic_vocab_control",
-            "transform_orbit_without_shadow_signal",
-            "healthy_no_shape_control",
+        "islanded_useful_cluster",
+        "shadow_route_repeated_failure_orbit",
+        "shadow_route_partial_glue",
+        "shadow_route_generic_vocab_control",
+        "transform_orbit_without_shadow_signal",
+        "healthy_no_shape_control",
         "private_psych_interpretation",
         "user_diagnosis",
         "profile_claim",
@@ -619,6 +622,143 @@ def build_dream_topology_scout_report(
             "transform_orbit_as_source_support",
             "automatic_route_merge_from_partial_glue",
         ],
+    }
+
+
+def _topology_review_suppression_reason(candidate: Mapping[str, Any]) -> str:
+    projection = candidate.get("cross_layer_projection")
+    if not isinstance(projection, Mapping) or projection.get("trigger_job") != "pattern_completion_learning_loop_review":
+        return "no_pattern_completion_trigger"
+    bucket = _label(candidate.get("scope_bucket") or candidate.get("privacy_partition"), fallback="")
+    scope = _text(candidate.get("scope")).casefold()
+    if bucket in {"private", "user_private", "machine_private", "restricted"} or scope.startswith("private:"):
+        return "private_scope_blocked"
+    freshness = _label(candidate.get("freshness") or "current", fallback="current")
+    if freshness in {"stale", "superseded", "retired", "archived", "local_only"} or scope.startswith("machine:"):
+        return "stale_or_local_only"
+    if not _strings(candidate.get("source_anchors")):
+        return "missing_source_anchor"
+    return ""
+
+
+def _review_task_for_candidate(candidate: Mapping[str, Any], *, now: str) -> dict[str, Any] | None:
+    reason = _topology_review_suppression_reason(candidate)
+    if reason:
+        return None
+    projection = candidate.get("cross_layer_projection")
+    projection = projection if isinstance(projection, Mapping) else {}
+    anchors = _strings(candidate.get("source_anchors"))[:8]
+    candidate_id = _text(candidate.get("candidate_id"))
+    task_id = "dream_review_" + stable_hash(candidate_id, projection.get("learning_finding_id"), *anchors)
+    return {
+        "kind": REVIEW_TASK_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "task_id": task_id,
+        "created_at": now,
+        "status": "queued",
+        "task_type": "pattern_completion_learning_loop_review",
+        "candidate_id": candidate_id,
+        "learning_finding_id": projection.get("learning_finding_id"),
+        "shape": candidate.get("shape"),
+        "dream_function": candidate.get("dream_function"),
+        "source_anchors": anchors,
+        "source_anchor_count": len(anchors),
+        "scope": candidate.get("scope") or "public_default",
+        "scope_bucket": candidate.get("scope_bucket") or "public_default",
+        "topic_epoch": candidate.get("topic_epoch") or "topic-v1",
+        "foreground_eligible": False,
+        "navigation_only": True,
+        "claim_permission": "none",
+        "source_reopen_required_before_claim": True,
+        "truth_boundary": "dream_topology_review_task_not_fact",
+        "next_safe_action": "background_review_or_explicit_operator_review",
+    }
+
+
+def materialize_pattern_completion_review_tasks(
+    candidates: Iterable[Mapping[str, Any]],
+    *,
+    now: str = "",
+) -> dict[str, Any]:
+    created_at = now or "unknown_time"
+    tasks: list[dict[str, Any]] = []
+    suppressed: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            continue
+        task = _review_task_for_candidate(candidate, now=created_at)
+        if task:
+            tasks.append(task)
+            continue
+        reason = _topology_review_suppression_reason(candidate)
+        if reason != "no_pattern_completion_trigger":
+            suppressed.append(
+                {
+                    "candidate_id": candidate.get("candidate_id"),
+                    "case_id": candidate.get("case_id"),
+                    "reason": reason,
+                }
+            )
+    return {
+        "kind": REVIEW_TASK_REPORT_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "created_at": created_at,
+        "tasks": tasks,
+        "suppressed": suppressed,
+        "metrics": {
+            "materialized_task_count": len(tasks),
+            "suppressed_task_count": len(suppressed),
+            "foreground_task_count": sum(1 for task in tasks if task.get("foreground_eligible")),
+            "authority_raise_count": 0,
+        },
+        "privacy_boundary": {
+            "raw_private_text_emitted": False,
+            "local_paths_emitted": False,
+            "source_reopen_required_before_claim": True,
+        },
+        "claim_boundary": "review_tasks_are_navigation_work_not_source_truth",
+    }
+
+
+def consume_pattern_completion_review_tasks(
+    tasks: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    noops: list[dict[str, Any]] = []
+    for task in tasks:
+        if not isinstance(task, Mapping) or task.get("kind") != REVIEW_TASK_KIND:
+            continue
+        anchors = _strings(task.get("source_anchors"))
+        if task.get("status") != "queued" or not anchors:
+            noops.append({"task_id": task.get("task_id"), "reason": "not_ready_or_missing_source"})
+            continue
+        findings.append(
+            {
+                "kind": REVIEW_FINDING_KIND,
+                "schema_version": SCHEMA_VERSION,
+                "task_id": task.get("task_id"),
+                "candidate_id": task.get("candidate_id"),
+                "status": "bounded_review_candidate",
+                "source_anchors": anchors[:8],
+                "source_anchor_count": len(anchors[:8]),
+                "supports_factual_claim": False,
+                "foreground_eligible": False,
+                "navigation_only": True,
+                "source_reopen_required_before_claim": True,
+                "recommendation": "review_pattern_completion_against_reopened_sources",
+            }
+        )
+    return {
+        "kind": "aippocampus_dream_topology_review_consumer_report",
+        "schema_version": SCHEMA_VERSION,
+        "findings": findings,
+        "noops": noops,
+        "metrics": {
+            "bounded_finding_count": len(findings),
+            "noop_count": len(noops),
+            "authority_raise_count": 0,
+        },
+        "claim_boundary": "bounded_findings_are_review_candidates_not_facts",
     }
 
 

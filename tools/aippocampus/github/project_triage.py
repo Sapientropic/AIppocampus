@@ -279,6 +279,9 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         "public schema",
         "schema metadata",
         "cli json",
+        "github live category check",
+        "live category check",
+        "github category check",
     ):
         return "Public readiness", "public-readiness keywords"
     if _contains(
@@ -404,6 +407,8 @@ def infer_kind(issue: IssueContext) -> tuple[str | None, str | None]:
         "trigger controls",
     ):
         return "Smoke", "benchmark-control keywords"
+    if _contains(text, "github live category check", "live category check", "github category check"):
+        return "Smoke", "live-category-check keywords"
     if _contains(text, "smoke", "validate ", "verification", "scan", "install paths"):
         return "Smoke", "verification keywords"
     if _contains(text, "docs", "document ", "readme", "guide", "taxonomy", "claim-boundary"):

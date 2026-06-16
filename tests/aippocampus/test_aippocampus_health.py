@@ -409,6 +409,97 @@ class AippocampusHealthTests(unittest.TestCase):
             "checkpoint_state": root / "checkpoint_state.json",
         }
 
+    def test_registry_cache_pressure_report_uses_storage_governance_metrics(self) -> None:
+        with mock.patch(
+            "aippocampus_runtime.ops.storage_governance.build_plan",
+            return_value={
+                "metrics": {
+                    "reclaimable_rebuildable_bytes": 2 * 1024 * 1024 * 1024,
+                    "reclaimable_rebuildable_human": "2.0 GB",
+                    "protected_source_bytes": 128 * 1024 * 1024,
+                    "protected_source_human": "128.0 MB",
+                    "generated_index_amplification_ratio": 16.0,
+                    "eviction_candidate_count": 140,
+                }
+            },
+        ) as build_plan:
+            report = health.registry_cache_pressure_report(
+                Path("workspace"),
+                Path("registry"),
+            )
+
+        build_plan.assert_called_once()
+        self.assertTrue(report["available"])
+        self.assertTrue(report["pressure"])
+        self.assertEqual(report["status"], "pressure")
+        self.assertIn("reclaimable_rebuildable_cache_bytes_high", report["reasons"])
+        self.assertEqual(
+            report["dry_run_command"],
+            "aippocampus storage gc --dry-run --summary-json --cwd .",
+        )
+        self.assertEqual(
+            report["repair_command"],
+            "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+        )
+        self.assertTrue(report["source_history_protected"])
+        self.assertFalse(report["privacy_boundary"]["paths_included"])
+
+    def test_health_surfaces_generated_cache_pressure_as_safe_repair_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(root, workspace, rollout)
+            registry_dir = root / "registry"
+            registry_dir.mkdir()
+            (registry_dir / "threads.json").write_text('{"threads":[]}', encoding="utf-8")
+
+            pressure = {
+                "available": True,
+                "status": "pressure",
+                "pressure": True,
+                "reasons": ["reclaimable_rebuildable_cache_bytes_high"],
+                "metrics": {
+                    "reclaimable_rebuildable_human": "2.0 GB",
+                    "generated_index_amplification_ratio": 16.0,
+                },
+                "dry_run_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+                "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+                "source_history_protected": True,
+                "foreground_blocking": False,
+            }
+            with (
+                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(
+                    health,
+                    "registry_cache_pressure_report",
+                    return_value=pressure,
+                ),
+            ):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        registry_dir=registry_dir,
+                        **paths,
+                    )
+                )
+
+        action_ids = [item["id"] for item in payload["recommended_actions"]]
+        self.assertIn("storage_gc_rebuildable_cache", action_ids)
+        action = next(
+            item
+            for item in payload["recommended_actions"]
+            if item["id"] == "storage_gc_rebuildable_cache"
+        )
+        self.assertEqual(action["severity"], "warning")
+        self.assertEqual(
+            action["command"],
+            "aippocampus storage gc --dry-run --summary-json --cwd .",
+        )
+        self.assertEqual(payload["storage_pressure"], pressure)
+
     def test_health_keeps_small_latest_turn_gap_advisory_before_bulk_stale_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

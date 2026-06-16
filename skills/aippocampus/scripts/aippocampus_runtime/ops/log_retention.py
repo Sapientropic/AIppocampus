@@ -369,6 +369,7 @@ def rotation_plan(
         "kind": "aippocampus_logs_rotation_plan",
         "ok": True,
         "read_only": True,
+        "apply_required": True,
         "oversized_count": health["oversized_count"],
         "would_rotate_count": health["oversized_count"],
         "max_bytes": health["max_bytes"],
@@ -407,13 +408,40 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
     for name in ("status", "rotate"):
-        sub = subparsers.add_parser(name)
+        sub = subparsers.add_parser(
+            name,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=(
+                "Read-only log status. No log contents or local paths are emitted."
+                if name == "status"
+                else (
+                    "Plan or apply bounded local log rotation.\n\n"
+                    "Safe first step:\n"
+                    "  aippocampus logs rotate --plan --json\n\n"
+                    "`--plan`/`--dry-run` performs no writes. `--apply` compresses "
+                    "oversized known log artifacts and retains the configured backup count."
+                )
+            ),
+        )
         sub.add_argument("--registry-dir", default=None)
         sub.add_argument("--max-bytes", type=int, default=None)
         sub.add_argument("--backups", type=int, default=None)
         if name == "rotate":
-            sub.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
-            sub.add_argument("--apply", action="store_true")
+            sub.add_argument(
+                "--plan",
+                "--dry-run",
+                action="store_true",
+                dest="plan",
+                help="No-write preview. Shows which known log artifacts would rotate.",
+            )
+            sub.add_argument(
+                "--apply",
+                action="store_true",
+                help=(
+                    "Write mode. Compress oversized known log artifacts, remove the "
+                    "current oversized file, and retain configured backups."
+                ),
+            )
         sub.add_argument("--json", action="store_true", dest="json_output")
     run = subparsers.add_parser("run")
     run.add_argument("--log", required=True)
@@ -458,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
 
     root = _registry_root(args.registry_dir)
     if command == "rotate":
-        if args.plan:
+        if args.plan or not args.apply:
             result = rotation_plan(root, max_bytes=args.max_bytes, backups=args.backups)
             if args.json_output:
                 print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -328,14 +328,74 @@ class StorageGovernanceTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "dry_run_ready")
-        self.assertIn("candidate_samples", payload)
+        self.assertEqual(payload["kind"], "aippocampus_storage_gc_summary")
         self.assertNotIn("candidates", payload)
+        self.assertNotIn("candidate_samples", payload)
         self.assertEqual(payload["candidate_count_total"], 2)
-        self.assertEqual(payload["candidates_returned"], 1)
-        self.assertTrue(payload["candidates_truncated"])
+        self.assertEqual(payload["sample_candidate_count"], 0)
+        self.assertTrue(payload["candidate_detail_deferred"])
+        self.assertEqual(payload["safe_next_action"]["command"], "aippocampus storage gc --dry-run --json --top 1")
+        self.assertEqual(payload["risk_boundary"]["apply_requires_explicit_flag"], True)
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertNotIn("session-one", encoded)
         self.assertNotIn("session:one", encoded)
+
+    def test_summary_json_without_mode_defaults_to_no_write_dry_run_card(self) -> None:
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--retention-report",
+                    str(self.retention_path),
+                    "--top",
+                    "1",
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["safe_next_action"]["command"], "aippocampus storage gc --dry-run --json --top 1")
+
+    def test_summary_json_without_existing_reports_defers_full_scan_instead_of_building_capacity(
+        self,
+    ) -> None:
+        with (
+            patch.object(
+                storage_governance.storage_capacity_report,
+                "build_report",
+                side_effect=AssertionError("summary card should not build capacity report"),
+            ),
+            patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--dry-run",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_storage_gc_summary")
+        self.assertEqual(payload["status"], "needs_full_scan")
+        self.assertTrue(payload["read_only"])
+        self.assertTrue(payload["needs_full_scan"])
+        self.assertTrue(payload["candidate_detail_deferred"])
+        self.assertEqual(payload["safe_next_action"]["command"], "aippocampus storage gc --dry-run --json --top 1")
 
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
         self,

@@ -188,6 +188,40 @@ class StateBenchAgentLearningTests(unittest.TestCase):
         self.assertNotIn("SECRET_AGENT_KEY", encoded)
         self.assertNotIn(str(adapter_dir), encoded)
 
+    def test_matched_fixture_run_records_both_arms_without_official_score_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_bench_root = root / "STATE-Bench"
+            self._write_train_fixture(state_bench_root)
+
+            payload = benchmark.build_state_bench_agent_learning_report(
+                state_bench_root=state_bench_root,
+                domain="customer_support",
+                max_train_files=5,
+                run_matched_fixture=True,
+                matched_task_ids=["fixture-warranty", "fixture-return"],
+            )
+            encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+        matched = payload["matched_task_run"]
+        self.assertEqual(matched["status"], "fixture_matched_task_run_completed")
+        self.assertEqual(matched["official_score_claimable"], False)
+        self.assertEqual(matched["matched_task_count"], 2)
+        self.assertEqual(matched["arms"]["no_memory"]["task_run_count"], 2)
+        self.assertEqual(matched["arms"]["aippocampus"]["task_run_count"], 2)
+        self.assertGreater(
+            matched["arms"]["aippocampus"]["retrieved_learning_count"],
+            matched["arms"]["no_memory"]["retrieved_learning_count"],
+        )
+        self.assertEqual(
+            payload["official_submission_decision"],
+            "adapter_fixture_matched_run_no_go_official_score",
+        )
+        self.assertFalse(payload["official_score_claimable"])
+        self.assertIn("official_state_bench_score", matched["cannot_claim"])
+        self.assertNotIn(RAW_USER_TEXT, encoded)
+        self.assertNotIn(str(state_bench_root), encoded)
+
     def test_runner_writes_report_without_absolute_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

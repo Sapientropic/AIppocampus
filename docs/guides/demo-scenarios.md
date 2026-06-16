@@ -13,21 +13,32 @@ profile boundary lives in
 Use the public example bundle:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "without pretending it has innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 ```
 
 Expected result: matches come from original visible clean-source text, not a
-summary-only memory.
+summary-only memory. The first success shape is:
+
+```text
+old cue -> source-backed snippet -> reopen/source boundary -> next action
+```
 
 Boundary: summaries or model-generated findings are not the source.
 
 ## Scenario 2: Fuzzy Life-Topic Recall
 
+Use the stable search facade first:
+
+```sh
+aippocampus search "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+aippocampus search "lighthouse metaphor pivot" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label personal_reflection --scope-label idea_seed --json
+```
+
+Maintainer diagnostic materialization, when you need to inspect the synthetic
+semantic sidecar itself:
+
 ```sh
 PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.semantic_scope_builder --jobs-output ./examples/public-memory-bundle/registry/subconscious_jobs.jsonl --clean-source-dir ./examples/public-memory-bundle/clean-source --no-write --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label idea_seed --json
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "lighthouse metaphor pivot" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label personal_reflection --scope-label idea_seed --json
 ```
 
 Expected result: the public example surfaces a non-project idea seed. This
@@ -129,7 +140,8 @@ the underlying clean-source turns.
 ## Scenario 5: Project Continuity Recall
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.mcp.server --list-tools
+aippocampus mcp status
+aippocampus mcp list-tools --json
 ```
 
 Expected result: `search_memory`, `recall_context`, `recall_deepen`, and
@@ -208,7 +220,7 @@ must not be read as a prompt-keyword classifier. Use
 ## Scenario 7: Inspect MCP Tools
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.mcp.server --list-tools
+aippocampus mcp list-tools --json
 ```
 
 Expected result: the tool list includes `search_memory`, `recall_context`,

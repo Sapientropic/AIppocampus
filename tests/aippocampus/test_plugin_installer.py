@@ -303,6 +303,92 @@ class PluginInstallerTests(unittest.TestCase):
         finally:
             shutil.rmtree(output, ignore_errors=True)
 
+    def test_codex_host_probe_calls_key_agent_tools_not_only_sync_status(self) -> None:
+        calls: list[str] = []
+
+        class FakeAppServerClient:
+            notifications: list[dict[str, str]]
+            protocol_noise: list[str]
+            stderr_tail: str
+
+            def __init__(self, _command: list[str], _cwd: Path) -> None:
+                self.notifications = []
+                self.protocol_noise = []
+                self.stderr_tail = ""
+
+            def request(
+                self,
+                method: str,
+                params: dict | None = None,
+                *,
+                timeout: float = 60.0,
+                raise_on_error: bool = True,
+            ) -> dict:
+                del timeout, raise_on_error
+                if method == "initialize":
+                    return {"result": {"userAgent": "fake-codex"}}
+                if method == "config/mcpServer/reload":
+                    return {"result": {"ok": True}}
+                if method == "mcpServerStatus/list":
+                    return {
+                        "result": {
+                            "data": [
+                                {
+                                    "name": "aippocampus",
+                                    "tools": {
+                                        "memory_health": {},
+                                        "search_memory": {},
+                                        "sync_status": {},
+                                        "agent_recall": {},
+                                        "agent_aippo": {},
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                if method == "thread/start":
+                    return {"result": {"thread": {"id": "thread-1"}}}
+                if method == "mcpServer/tool/call":
+                    tool = str((params or {}).get("tool") or "")
+                    calls.append(tool)
+                    if tool == "sync_status":
+                        payload = {
+                            "status": "available_requires_sync_dir",
+                            "backend": "local_folder",
+                        }
+                    else:
+                        payload = {"kind": f"{tool}_smoke", "ok": True}
+                    return {
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": json.dumps(payload),
+                                }
+                            ]
+                        }
+                    }
+                if method == "thread/archive":
+                    return {"result": {"ok": True}}
+                raise AssertionError(f"unexpected app-server method: {method}")
+
+            def close(self) -> None:
+                return None
+
+        with mock.patch.object(plugin_installer, "CodexAppServerClient", FakeAppServerClient):
+            result = plugin_installer.run_codex_host_probe(
+                repo_root=REPO_ROOT,
+                codex_command="codex",
+            )
+
+        self.assertTrue(result["validation_ok"], result)
+        self.assertEqual(calls, ["sync_status", "agent_recall", "agent_aippo"])
+        self.assertEqual(
+            [item["tool"] for item in result["key_tool_smokes"]],
+            ["agent_recall", "agent_aippo"],
+        )
+        self.assertTrue(all(item["ok"] for item in result["key_tool_smokes"]))
+
     def test_public_install_summary_omits_paths_and_raw_host_noise(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-public-summary"
         try:

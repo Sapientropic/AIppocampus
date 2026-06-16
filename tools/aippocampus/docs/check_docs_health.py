@@ -108,6 +108,12 @@ REQUIRED_PROJECT_DOCS = [
     "docs/planning/technical-differentiation-analysis.md",
 ]
 
+EVIDENCE_LEDGER_LINE_LENGTH_LIMIT = 1000
+LINE_ADDRESSABLE_EVIDENCE_LEDGERS = [
+    "docs/evidence/current-claims.md",
+    "docs/evidence/benchmark-evidence-map.md",
+]
+
 DOCS_ROOT_ALLOWED_MARKDOWN = {
     "README.md", "agent-context.md", "roadmap.md", "start-here.md",
     "the-unfinished-map.md", "未干的地图.md",
@@ -766,6 +772,39 @@ def benchmark_evidence_map_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def evidence_ledger_line_length_payload(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
+    issues: list[str] = []
+    metrics: dict[str, Any] = {
+        "line_length_limit": EVIDENCE_LEDGER_LINE_LENGTH_LIMIT,
+        "ledgers": {},
+    }
+    for rel_path in LINE_ADDRESSABLE_EVIDENCE_LEDGERS:
+        path = repo_root / rel_path
+        if not path.exists():
+            continue
+        max_line_length = 0
+        long_lines: list[dict[str, int]] = []
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            line_length = len(line)
+            max_line_length = max(max_line_length, line_length)
+            if line_length > EVIDENCE_LEDGER_LINE_LENGTH_LIMIT:
+                long_lines.append({"line": line_number, "length": line_length})
+        metrics["ledgers"][rel_path] = {
+            "max_line_length": max_line_length,
+            "long_line_count": len(long_lines),
+        }
+        for item in long_lines[:10]:
+            issues.append(
+                f"{rel_path}:{item['line']} has {item['length']} characters; "
+                "split evidence ledger rows into line-addressable fields"
+            )
+        if len(long_lines) > 10:
+            issues.append(
+                f"{rel_path} has {len(long_lines) - 10} more overlong evidence ledger lines"
+            )
+    return issues, metrics
+
+
 def hippocampal_private_annotation_protocol_issues(repo_root: Path) -> list[str]:
     path = repo_root / HIPPOCAMPAL_PRIVATE_ANNOTATION_DOC
     if not path.exists():
@@ -1204,6 +1243,11 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(evidence_index_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(current_claims_snapshot_issues(repo_root))
+    evidence_line_issues, evidence_line_metrics = evidence_ledger_line_length_payload(
+        repo_root
+    )
+    issues.extend(evidence_line_issues)
+    metrics["evidence_ledger_line_length"] = evidence_line_metrics
     issues.extend(proof_slice_maturity_board_issues(repo_root))
     issues.extend(cognitive_mechanism_public_claim_issues(repo_root))
     issues.extend(source_kernel_contract_issues(repo_root))

@@ -260,7 +260,8 @@ The CLI contract applies to documented operator commands, especially:
   `--summary` remain explicit summary aliases; `aippocampus plugin uninstall
   --codex --dry-run` previews the paired rollback plan and `aippocampus plugin
   uninstall --codex` applies it.
-- `aippocampus episode-arcs --json`
+- `aippocampus episode-arcs` as a compact foreground readout; add `--json`
+  only for the aggregate local audit report.
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
@@ -378,9 +379,11 @@ For these commands:
   `Wasted Motion`, `Quiet For A Reason`, and `Needs Ripening` buckets. These
   panels reuse existing diagnostics to make usefulness failures visible; they
   do not rank, activate, edit, or prove routes.
-- `episode-arcs --json` emits an aggregate-only, private-history Episode/Arc
-  adjudication readout for #663. It scans local clean-source messages/events and
-  reports counts, buckets, and claim boundaries for rejected-route chains. It
+- `episode-arcs` without `--json` emits a compact foreground readout with scan
+  counts, arc counts, next action, and claim boundary. `episode-arcs --json`
+  emits the full aggregate-only, private-history Episode/Arc adjudication
+  readout for #663. It scans local clean-source messages/events and reports
+  counts, buckets, and claim boundaries for rejected-route chains. It
   must not emit source text, raw command text, source refs, source-ref hash
   samples, event ids, thread ids, local paths, or registry paths. Sequence
   packets remain navigation-only and current validity still requires source
@@ -537,18 +540,26 @@ tool names are:
 - `register_thread`
 - `sync_status`
 - `memory_health`
+- `list_telepathy_handoffs`
+- `deepen_telepathy_handoff`
 
 For these tools:
 
 - Tool names and required input fields are stable. Mutating setup tools may add
   explicit consent-shaped required fields when needed to prevent accidental
   writes.
+- `agent_recall` and `recall_context` accept either `query` or `intent`;
+  `agent_deepen` accepts either `handle` or `request_index`. The MCP catalog
+  exposes these selector contracts as `required_any` so hosts can render useful
+  forms without guessing.
 - Optional input fields may be added.
 - Output fields may be added.
 - Tool errors use JSON payloads in MCP `content` text as documented in
   [install-guide.md](install-guide.md).
 - `unsupported_mutation` is intentional. The MCP surface should not grow broad
   write APIs just to prove integration.
+- Recall outcome feedback remains the explicit CLI/local JSONL lane today; MCP
+  does not expose broad `agent feedback` writes.
 
 The caller-facing MCP failure boundary is:
 
@@ -634,6 +645,10 @@ aippocampus agent deepen "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
 ```
+
+`agent feedback` is deliberately shown as CLI-only. It may record low-authority
+outcome feedback when the user or operator asks for it, but MCP hosts should
+not infer an unlisted feedback-write tool from this example.
 
 `agent recall` is a wrapper over the existing progressive
 `recall_context -> recall_deepen` path. Human CLI output is compact by default;

@@ -102,6 +102,7 @@ def plan_query_expansion(
     *,
     source_alias_rows: Iterable[Mapping[str, Any]] | None = None,
     semantic_bridge_rows: Iterable[Mapping[str, Any]] | None = None,
+    semantic_effectiveness_rows: Iterable[Mapping[str, Any]] | None = None,
     seed_terms: Iterable[str] | None = None,
     durable_aliases: Mapping[str, Iterable[str]] | None = None,
     limit: int = 64,
@@ -145,6 +146,7 @@ def plan_query_expansion(
     bridge_terms, bridge_diagnostics = semantic_bridge_expansion_terms(
         original,
         semantic_bridge_rows or [],
+        semantic_effectiveness_rows=semantic_effectiveness_rows,
         limit=limit,
     )
     if bridge_terms:
@@ -166,6 +168,7 @@ def plan_query_expansion(
             "expansion_sources": expansion_sources,
             "source_fingerprints": unique_preserve(fingerprints, limit=12),
             "semantic_bridge": bridge_diagnostics,
+            "semantic_effectiveness": bridge_diagnostics.get("semantic_effectiveness") or {},
             "provider_calls": 0,
         },
     }

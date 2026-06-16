@@ -41,8 +41,20 @@ class ExportBundleTests(unittest.TestCase):
             )
 
             text = handoff.read_text(encoding="utf-8")
-            self.assertIn("<extracted>\\index\\source_index.sqlite", text)
-            self.assertIn("resolves the generation pointer", text)
+            self.assertIn('aippocampus search "keyword" --clean-source-dir "<extracted>\\index" --json', text)
+            self.assertNotIn("python -m aippocampus_runtime", text)
+            self.assertIn("Private raw/searchable bundles are for local transfer", text)
+
+    def test_export_help_leads_with_private_vs_public_intents(self) -> None:
+        parser = packaged_export_bundle.build_arg_parser()
+
+        with self.assertRaises(SystemExit), patch("sys.stdout", new=StringIO()) as stdout:
+            parser.parse_args(["--help"])
+
+        output = stdout.getvalue()
+        self.assertIn("Private local transfer", output)
+        self.assertIn("Public/shareable metadata", output)
+        self.assertIn("--redaction-profile public-export --no-raw", output)
 
     def test_run_build_index_uses_package_api_without_subprocess(self) -> None:
         seen: dict[str, list[str]] = {}

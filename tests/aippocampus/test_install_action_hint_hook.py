@@ -67,17 +67,20 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(result["path_redacted"])
         self.assertEqual(result["commands"], ["<redacted:hook-command>"])
         self.assertTrue(result["commands_redacted"])
-        self.assertEqual(result["cache_status"], "without_cache_path")
+        self.assertEqual(result["cache_status"], "with_missing_cache_file")
         self.assertEqual(result["cache_record_count"], 0)
         self.assertEqual(result["support_status"], "supported_by_codex_hooks_json")
         card = result["frontstage_card"]
         self.assertEqual(card["authority"], "navigation_only")
         self.assertTrue(card["fail_open"])
         self.assertTrue(card["optional"])
-        self.assertEqual(card["cache_status"], "without_cache_path")
+        self.assertEqual(card["cache_status"], "with_missing_cache_file")
+        self.assertEqual(card["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
         commands = [step["command"] for step in card["next_steps"]]
         self.assertTrue(any("refresh-cache" in command for command in commands))
+        self.assertTrue(any("--write --json" in command for command in commands))
         self.assertTrue(any("uninstall" in command for command in commands))
+        self.assertNotIn("<local-cache.jsonl>", json.dumps(card, ensure_ascii=False))
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
 
@@ -208,7 +211,33 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertIn("Action-time hints:", output)
         self.assertIn("fail-open: true", output)
         self.assertIn("authority: navigation_only", output)
-        self.assertIn("aippocampus hooks action install", output)
+        self.assertIn("aippocampus hooks action refresh-cache --write --json", output)
+        self.assertNotIn("<local-cache.jsonl>", output)
+
+    def test_cli_install_without_cache_uses_default_cache_path_not_inert_hook(self) -> None:
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "install",
+                    "--codex-home",
+                    str(self.codex_home),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        hooks = self.read_hooks()
+        command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertTrue(payload["cache_path_configured"])
+        self.assertEqual(payload["frontstage_card"]["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertIn("--cache-jsonl", command)
+        self.assertNotIn("<local-cache.jsonl>", encoded)
+        self.assertNotIn(str(self.codex_home), encoded)
 
     def test_cli_rejects_zero_or_negative_timeout_before_writing(self) -> None:
         for value in ("0", "-1"):

@@ -38,6 +38,7 @@ def compact_agent_status_report(
             if isinstance(item, dict) and item.get("surface")
         }
     agent = surfaces.get("agent_callable") or {}
+    conformance = surfaces.get("host_conformance") or {}
     plugin = surfaces.get("plugin") or {}
     hooks = surfaces.get("hooks") or {}
     action_hints = hooks.get("action_hints") if isinstance(hooks, dict) else {}
@@ -143,6 +144,7 @@ def compact_agent_status_report(
             "agent_callable_host_ready": agent_host_ready,
             "agent_callable_current_thread_visible": agent_thread_visible,
             "agent_callable_status": agent_status,
+            "host_conformance_label": conformance.get("label"),
             "action_hints_ready": action_hints_ready,
             "action_hints_installed": bool(action_hints.get("installed")),
             "action_hints_status": str(action_hints.get("cache_status") or "not_installed_optional"),
@@ -176,10 +178,20 @@ def compact_agent_status_report(
                 (agent.get("host_live_probe") or {}).get("ok") is True
                 or agent_host_ready
             ),
+            "tools_visible": agent.get("tools_visible"),
+            "key_tools_callable": agent.get("key_tools_callable"),
+            "live_host_schema_stale": bool(agent.get("live_host_schema_stale")),
+            "key_tool_failures": agent.get("key_tool_failures") or [],
             "current_thread_tool_discovery": agent.get("current_thread_tool_discovery"),
             "foreground_tools_visible": agent.get("foreground_tools_visible"),
             "next_command": agent.get("next_command"),
             "claim_boundary": agent.get("claim_boundary"),
+        },
+        "host_conformance": {
+            "label": conformance.get("label"),
+            "dimensions": conformance.get("dimensions") or {},
+            "next_action": conformance.get("next_action"),
+            "claim_boundary": conformance.get("claim_boundary"),
         },
         "next_actions": actions[:5],
     }

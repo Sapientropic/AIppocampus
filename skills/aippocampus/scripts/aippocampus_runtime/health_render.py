@@ -17,6 +17,7 @@ def render_health_text(result: dict[str, Any]) -> None:
     storage = result.get("storage") or {}
     question_stats = result.get("question_stats") or {}
     background = result.get("background_cognition") or {}
+    storage_pressure = result.get("storage_pressure") or {}
     logs = result.get("logs") or {}
     trajectory = result.get("health_trajectory") or {}
     actions = result["recommended_actions"]
@@ -85,6 +86,17 @@ def render_health_text(result: dict[str, Any]) -> None:
         print("segments: not needed yet")
     print(f"checkpoint: {'due' if checkpoint['due'] else 'not due'}")
     print(f"graphify corpus: {'stale' if graphify['stale'] else 'fresh'}")
+    if storage_pressure.get("available"):
+        pressure_metrics = storage_pressure.get("metrics") or {}
+        if storage_pressure.get("pressure"):
+            print(
+                "generated cache pressure: "
+                f"{pressure_metrics.get('reclaimable_rebuildable_human')} reclaimable; "
+                f"{pressure_metrics.get('generated_index_amplification_ratio')}x clean-source ratio"
+            )
+            print(f"cache check: {storage_pressure.get('dry_run_command')}")
+        else:
+            print("generated cache pressure: ok")
     if logs:
         if logs.get("oversized"):
             print(f"logs: {logs.get('oversized_count', 0)} oversized artifact(s)")

@@ -1378,7 +1378,7 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertTrue(preview["source_reopen_required_before_claim"])
         self.assertEqual(
             payload["agent_next_action"]["id"],
-            "review_then_append_continuity_domains",
+            "use_candidate_preview_as_reopenable_route",
         )
         self.assertNotIn('"source_refs"', encoded)
         self.assertNotIn('"thread_key"', encoded)

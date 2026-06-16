@@ -61,6 +61,64 @@ def quote_powershell_double(value: str | Path) -> str:
     return f'"{escaped}"'
 
 
+def quote_powershell_single(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def windows_pythonw_executable(python_executable: str | Path | None = None) -> Path | None:
+    """Return the sibling no-console Python launcher when this install can use it."""
+
+    executable = Path(python_executable or sys.executable).resolve()
+    if executable.name.casefold() == "pythonw.exe":
+        return executable
+    candidate = executable.with_name("pythonw.exe")
+    return candidate if candidate.exists() else None
+
+
+def windows_hidden_lifecycle_command(module: str, *, log: bool = False) -> tuple[str, str]:
+    """Build a Windows lifecycle hook command without touching prompt-hook stdout."""
+
+    # Lifecycle hooks are background upkeep. On Windows, launching them through
+    # python.exe can flash a console window before the module gets a chance to
+    # spawn its own detached workers. Prefer pythonw.exe; keep a hidden
+    # Start-Process fallback for installs that do not ship pythonw.exe.
+    args = ["-m", module]
+    if log:
+        args.append("--log")
+    pythonw = windows_pythonw_executable()
+    if pythonw is not None:
+        return (
+            f"$env:PYTHONPATH={quote_powershell_double(SCRIPT_DIR)}; "
+            f"& {quote_powershell_double(pythonw)} " + " ".join(args),
+            "pythonw",
+        )
+    argument_list = "@(" + ", ".join(quote_powershell_single(item) for item in args) + ")"
+    return (
+        f"$env:PYTHONPATH={quote_powershell_double(SCRIPT_DIR)}; "
+        f"$p = Start-Process -WindowStyle Hidden -FilePath "
+        f"{quote_powershell_double(Path(sys.executable).resolve())} "
+        f"-ArgumentList {argument_list} -Wait -PassThru; exit $p.ExitCode",
+        "start_process_hidden_fallback",
+    )
+
+
+def command_uses_hidden_windows_lifecycle_launcher(command: str) -> bool:
+    lowered = command.casefold()
+    if "pythonw.exe" in lowered:
+        return True
+    return "start-process" in lowered and "-windowstyle hidden" in lowered
+
+
+def command_uses_visible_windows_lifecycle_launcher(command: str) -> bool:
+    lowered = command.casefold()
+    if command_uses_hidden_windows_lifecycle_launcher(command):
+        return False
+    return (
+        "aippocampus_runtime.hooks.lifecycle" in lowered
+        and ("python.exe" in lowered or "$env:pythonpath" in lowered or "powershell" in lowered)
+    )
+
+
 def command_for(
     script: Path | None = None,
     *,
@@ -69,10 +127,7 @@ def command_for(
 ) -> str:
     if script is None:
         if os.name == "nt":
-            command = (
-                f"$env:PYTHONPATH={quote_powershell_double(SCRIPT_DIR)}; "
-                f"& {quote_powershell_double(Path(sys.executable).resolve())} -m {module}"
-            )
+            command, _launcher = windows_hidden_lifecycle_command(module, log=log)
         else:
             command = (
                 f"PYTHONPATH={shlex.quote(str(SCRIPT_DIR))} "
@@ -86,7 +141,7 @@ def command_for(
         # string expression and exits with code 1; the call operator keeps
         # paths-with-spaces safe and preserves the hook as fail-open glue.
         command = f"& {command}"
-    if log:
+    if log and not (os.name == "nt" and script is None):
         command += " --log"
     return command
 
@@ -292,6 +347,36 @@ def status(
         if commands:
             installed_events[event] = commands
     installed = set(installed_events) == set(EVENTS)
+    hidden_by_event: dict[str, dict[str, Any]] = {}
+    hidden_ready = True
+    visible_events: list[str] = []
+    windows_relevant = os.name == "nt"
+    for event, commands in installed_events.items():
+        command_list = commands if isinstance(commands, list) else []
+        event_hidden = bool(command_list) and all(
+            command_uses_hidden_windows_lifecycle_launcher(command)
+            for command in command_list
+        )
+        event_visible = any(
+            command_uses_visible_windows_lifecycle_launcher(command)
+            for command in command_list
+        )
+        windows_relevant = windows_relevant or event_hidden or event_visible
+        if command_list and not event_hidden:
+            hidden_ready = False
+        if event_visible:
+            visible_events.append(event)
+        hidden_by_event[event] = {
+            "command_count": len(command_list),
+            "hidden_launch": event_hidden,
+        }
+    hidden_status = (
+        "not_applicable"
+        if not windows_relevant
+        else "ready"
+        if installed and hidden_ready
+        else "needs_reinstall"
+    )
     # Provider bridge wrappers are effective lifecycle hooks: they establish the
     # provider env and delegate to the lifecycle module. Keep low-level status
     # aligned with install/update so bridge-only setups are not diagnosed as
@@ -304,6 +389,22 @@ def status(
             "provider_key_bridge_installed": bool(bridge_events),
             "installed_via_provider_bridge": set(bridge_events) == set(EVENTS),
             "provider_key_bridge_events": sorted(bridge_events),
+            "windows_hidden_launch": {
+                "status": hidden_status,
+                "ready": hidden_status in {"ready", "not_applicable"},
+                "events": hidden_by_event,
+                "visible_launcher_events": sorted(visible_events),
+                "warning_code": (
+                    "windows_lifecycle_hook_may_show_console_window"
+                    if hidden_status == "needs_reinstall"
+                    else None
+                ),
+                "repair_command": (
+                    "aippocampus hooks lifecycle install"
+                    if hidden_status == "needs_reinstall"
+                    else None
+                ),
+            },
         }
     )
 

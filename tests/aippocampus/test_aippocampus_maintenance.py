@@ -71,6 +71,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             ):
                 code = maintenance.main(
                     [
+                        "apply",
                         "--cwd",
                         ".",
                         "--no-refresh-cognitive-map",
@@ -140,6 +141,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             ):
                 code = maintenance.main(
                     [
+                        "apply",
                         "--cwd",
                         ".",
                         "--no-refresh-cognitive-map",
@@ -200,7 +202,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
 
         def fake_text(cmd: list[str]) -> tuple[int, str, str]:
             if module_for(cmd) == "aippocampus_runtime.recall.index_builder":
-                return 3, "", "index writer locked"
+                return 3, "", r"index writer locked at E:\private\registry\threads\x\.index-publish.lock"
             self.fail(f"unexpected text command: {cmd}")
 
         with (
@@ -210,6 +212,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         ):
             code = maintenance.main(
                 [
+                    "apply",
                     "--cwd",
                     ".",
                     "--no-refresh-graphify",
@@ -223,6 +226,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["cwd"], "<local-path-redacted>")
         self.assertEqual(payload["action_failures"][0]["id"], "build_index")
         self.assertIn("index writer locked", payload["action_failures"][0]["message"])
+        self.assertIn("<local-path-redacted>", payload["action_failures"][0]["message"])
+        self.assertNotIn("E:\\private", json.dumps(payload, ensure_ascii=False))
         self.assertIn(
             "build_cognitive_map",
             [item["id"] for item in payload["action_results"]],
@@ -281,6 +286,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         ):
             code = maintenance.main(
                 [
+                    "apply",
                     "--cwd",
                     ".",
                     "--no-refresh-cognitive-map",
@@ -394,6 +400,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         ):
             code = maintenance.main(
                 [
+                    "apply",
                     "--cwd",
                     ".",
                     "--no-refresh-cognitive-map",
@@ -425,7 +432,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         )
 
     def test_summary_json_is_bounded_and_omits_full_health_audit(self) -> None:
-        health_calls = [{"ok": True, "recommended_actions": []}, {"ok": True, "recommended_actions": []}]
+        health_calls = [{"ok": True, "status": "ok", "recommended_actions": []}]
 
         def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
             if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
@@ -452,12 +459,14 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_maintenance_summary")
         self.assertEqual(payload["cwd"], "<local-path-redacted>")
         self.assertEqual(payload["maintenance_status"], "ok")
-        self.assertEqual(payload["mode"], "applied")
-        self.assertFalse(payload["read_only"])
-        self.assertEqual(payload["failure_count"], 0)
+        self.assertEqual(payload["mode"], "summary")
+        self.assertTrue(payload["read_only"])
+        self.assertTrue(payload["command_ok"])
+        self.assertTrue(payload["maintenance_ok"])
         self.assertNotIn("health_final", payload)
         self.assertEqual(payload["full_audit_flag"], "--json")
-        self.assertEqual(payload["plan_first_command"], "aippocampus maintenance --plan --summary-json")
+        self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
+        self.assertEqual(health_calls, [])
 
     def test_plan_is_read_only_and_does_not_run_maintenance_actions(self) -> None:
         seen_modules: list[str] = []
@@ -503,7 +512,95 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             payload["would_run_action_ids"],
             ["build_clean_source", "build_index"],
         )
-        self.assertEqual(payload["apply_command"], "aippocampus maintenance --summary-json")
+        self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
+        self.assertTrue(payload["command_ok"])
+        self.assertTrue(payload["plan_generated"])
+        self.assertEqual(payload["maintenance_status"], "attention_needed")
+        self.assertNotIn("health_error", payload)
+
+    def test_plan_projects_health_state_without_nested_health_error_or_duplicate_actions(self) -> None:
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
+                return (
+                    0,
+                    {
+                        "ok": False,
+                        "status": "attention_needed",
+                        "product_readiness": {"ready": False, "status": "needs_clean_source"},
+                        "recommended_actions": [
+                            {
+                                "id": "build_clean_source",
+                                "severity": "critical",
+                                "reason": "clean-source manifest missing",
+                            },
+                            {
+                                "id": "prepare_graphify_corpus",
+                                "severity": "info",
+                                "reason": "graphify stale",
+                            },
+                        ],
+                    },
+                    json.dumps({"ok": False, "status": "attention_needed"}),
+                    "",
+                )
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(["--cwd", ".", "--plan", "--summary-json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["read_only"])
+        self.assertTrue(payload["command_ok"])
+        self.assertFalse(payload["maintenance_ok"])
+        self.assertEqual(payload["maintenance_status"], "attention_needed")
+        self.assertEqual(
+            payload["would_run_action_ids"],
+            ["build_clean_source", "prepare_graphify_corpus", "build_cognitive_map"],
+        )
+        self.assertNotIn("health_error", payload)
+        self.assertNotIn("health_returncode", payload)
+        self.assertEqual(payload["best_next_action"]["id"], "build_clean_source")
+        self.assertEqual(payload["user_impact"]["recall_usable"], "degraded")
+
+    def test_natural_status_subcommand_is_read_only_summary_card(self) -> None:
+        seen_modules: list[str] = []
+
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            seen_modules.append(cmd[2])
+            if cmd[2] == "aippocampus_runtime.health":
+                return (
+                    0,
+                    {
+                        "ok": False,
+                        "status": "attention_needed",
+                        "recommended_actions": [
+                            {"id": "build_index", "severity": "warning", "reason": "index stale"}
+                        ],
+                    },
+                    "{}",
+                    "",
+                )
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(["status", "--cwd", ".", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(seen_modules, ["aippocampus_runtime.health"])
+        self.assertEqual(payload["mode"], "status")
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
+        self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
 
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (
@@ -520,7 +617,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             mock.patch.object(maintenance, "run_text", side_effect=RuntimeError("boom")),
         ):
             with self.assertRaises(RuntimeError):
-                maintenance.main(["--cwd", ".", "--fail-fast", "--json"])
+                maintenance.main(["apply", "--cwd", ".", "--fail-fast", "--json"])
 
     def test_graphify_refresh_is_skipped_when_index_rebuild_fails(self) -> None:
         stale_health = {
@@ -558,7 +655,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
-            code = maintenance.main(["--cwd", ".", "--json"])
+            code = maintenance.main(["apply", "--cwd", ".", "--json"])
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)

@@ -236,6 +236,69 @@ def _why_not_projection(
     }
 
 
+def _frontstage_action_card(
+    *,
+    mode: str,
+    decision: str,
+    projection: Mapping[str, Any],
+    route_ids: list[str],
+    reasons: list[str],
+) -> dict[str, Any]:
+    diagnostic = str(projection.get("diagnostic_class") or "")
+    if mode == "why-not-recall":
+        if diagnostic == "surfaced_but_low_specificity":
+            return {
+                "primary_action": "refine_cue_first",
+                "what_happened": "A route surfaced, but the cue was too broad to treat as a useful answer.",
+                "why": "low_specificity",
+                "next_command": 'tighten cue, then run aippocampus why-recall "<more specific cue>"',
+                "do_not": [
+                    "do not treat low-specificity surfacing as evidence",
+                    "deepen only if continuity matters",
+                ],
+                "claim_boundary": "diagnostic_not_source_evidence",
+            }
+        if not route_ids or decision in {"missing", "unknown", "suppressed", "silent"}:
+            return {
+                "primary_action": "refine_cue_or_check_index",
+                "what_happened": "No usable recall route surfaced.",
+                "why": ",".join(reasons[:3]) or "no_route",
+                "next_command": 'aippocampus search "<distinctive exact phrase>" --json',
+                "recovery_commands": [
+                    'aippocampus why-recall "<more specific cue>" --json',
+                    "aippocampus onboard --status --json",
+                ],
+                "do_not": ["do not claim from recall silence"],
+                "claim_boundary": "diagnostic_not_source_evidence",
+            }
+        return {
+            "primary_action": "use_why_recall_or_deepen",
+            "what_happened": "A route surfaced; why-not is not the best question for this cue.",
+            "why": diagnostic or "route_surfaced",
+            "next_command": 'aippocampus why-recall "<cue>"',
+            "do_not": ["do not treat this diagnostic as source evidence"],
+            "claim_boundary": "diagnostic_not_source_evidence",
+        }
+    if route_ids:
+        return {
+            "primary_action": "deepen_selected_route",
+            "what_happened": "Recall surfaced a route.",
+            "why": ",".join(reasons[:3]) or "route_returned",
+            "next_command": 'aippocampus agent recall "<cue>" --json; then deepen route 1',
+            "do_not": ["do not quote or claim until source is reopened"],
+            "claim_boundary": "diagnostic_not_source_evidence",
+        }
+    return {
+        "primary_action": "continue_or_refine_cue",
+        "what_happened": "No recall route surfaced.",
+        "why": ",".join(reasons[:3]) or "no_route",
+        "next_command": 'aippocampus search "<distinctive exact phrase>" --json',
+        "recovery_commands": ["aippocampus onboard --status --json"],
+        "do_not": ["do not claim from recall silence"],
+        "claim_boundary": "diagnostic_not_source_evidence",
+    }
+
+
 def recall_diagnostic_report(
     *,
     cue: str,
@@ -337,6 +400,13 @@ def recall_diagnostic_report(
         reports=reports,
         max_routes=limit,
     )
+    action_card = _frontstage_action_card(
+        mode=normalized_mode,
+        decision=decision,
+        projection=projection,
+        route_ids=route_ids,
+        reasons=reasons,
+    )
     return redact_private_paths(
         {
             "kind": DIAGNOSTIC_KIND,
@@ -349,6 +419,8 @@ def recall_diagnostic_report(
             "surface_reports": reports,
             "reasons": reasons,
             "route_ids": route_ids,
+            "action_card": action_card,
+            "foreground_next_action": action_card["primary_action"],
             "next_safe_action": next_safe_action(reasons),
             "cannot_claim": list(CANNOT_CLAIM),
             "reason_code_catalog_version": REASON_CODE_CATALOG_VERSION,

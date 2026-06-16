@@ -228,6 +228,16 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(prompt_hook["yield"]["foreground_cards"], 3)
         self.assertIn("low_yield_high_spend:warm_ambient", report["warning_codes"])
         self.assertIn("warm_ambient", report["budget_guardrails"]["routes_to_pause_or_inspect"])
+        self.assertEqual(report["decision"]["action"], "inspect")
+        self.assertEqual(report["decision"]["highest_spend_route"]["route"], "warm_ambient")
+        self.assertEqual(report["decision"]["lowest_yield_route"]["route"], "warm_ambient")
+        self.assertFalse(report["decision"]["estimated_cost_supported"])
+        self.assertEqual(report["decision"]["safe_next_command"], "aippocampus doctor spend --json")
+        rendered = spend_doctor.render_text(report)
+        self.assertIn("Decision: inspect", rendered)
+        self.assertIn("Highest spend: warm_ambient", rendered)
+        self.assertIn("Cost: token volume only", rendered)
+        self.assertIn("Next: aippocampus doctor spend --json", rendered)
         encoded = json.dumps(report, ensure_ascii=False)
         self.assertNotIn(FAKE_PRIVATE_MARKER, encoded)
         self.assertNotIn(FAKE_LOCAL_PATH, encoded)
@@ -260,12 +270,47 @@ class SpendDoctorTests(unittest.TestCase):
         telemetry = report["routes"]["dream"]["model_telemetry"]
         self.assertFalse(telemetry["usage_available"])
         self.assertEqual(telemetry["usage_missing_reason"], "artifact_legacy_no_usage")
+        self.assertEqual(report["decision"]["action"], "inspect_usage")
         self.assertEqual(
             telemetry["usage_missing_reason_counts"],
             {"artifact_legacy_no_usage": 1},
         )
         self.assertEqual(telemetry["prompt_cache_hit_tokens"], 0)
         self.assertEqual(telemetry["prompt_cache_miss_tokens"], 0)
+
+    def test_foreground_value_rate_is_normalized_and_ratio_keeps_over_one_meaning(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "aippocampus_prompt_hook_last_status.json").write_text(
+                json.dumps(
+                    {
+                        "last_prompt_hook": {
+                            "timestamp": "2026-06-05T14:20:00Z",
+                            "memory_surface": "candidate",
+                            "card_count": 4,
+                            "source_backed_count": 0,
+                            "candidate_count": 2,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            report = spend_doctor.build_spend_doctor_report(
+                registry_dir=root,
+                days=7,
+                now="2026-06-06T12:00:00Z",
+            )
+
+        prompt_hook = report["routes"]["prompt_hook"]["yield"]
+
+        self.assertEqual(prompt_hook["foreground_value_ratio"], 2.0)
+        self.assertEqual(prompt_hook["foreground_value_rate"], 1.0)
+        self.assertIn("metric_notes", prompt_hook)
+        self.assertIn("foreground_value_ratio", prompt_hook["metric_notes"][0])
 
     def test_warm_job_result_summary_persists_public_usage_for_future_spend_reports(self) -> None:
         summary = warm_recall.warm_job_result_summary(

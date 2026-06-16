@@ -940,10 +940,34 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="refuse plaintext pull/status/repair and read only the encrypted local-folder adapter",
     )
-    for flag in ("--recipient", "--recipient-file", "--identity-file"):
-        raw_group.add_argument(flag, action="append", default=[])
-    raw_group.add_argument("--age-bin", default=None)
-    raw_group.add_argument("--no-decrypt", action="store_true")
+    raw_group.add_argument(
+        "--recipient",
+        action="append",
+        default=[],
+        help="age recipient for encrypted push. Repeat for multiple recipients.",
+    )
+    raw_group.add_argument(
+        "--recipient-file",
+        action="append",
+        default=[],
+        help="File containing age recipient(s) for encrypted push; value is a local operator path.",
+    )
+    raw_group.add_argument(
+        "--identity-file",
+        action="append",
+        default=[],
+        help="age identity file for encrypted pull/status. Values are never printed by default.",
+    )
+    raw_group.add_argument(
+        "--age-bin",
+        default=None,
+        help="Override age executable path/name for encrypted sync diagnostics.",
+    )
+    raw_group.add_argument(
+        "--no-decrypt",
+        action="store_true",
+        help="Inspect encrypted sync envelopes without decrypting payload contents.",
+    )
     action_group.add_argument("--plan", "--dry-run", action="store_true", dest="plan")
     output_group.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(parse_argv)

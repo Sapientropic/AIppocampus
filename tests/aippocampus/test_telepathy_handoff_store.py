@@ -349,13 +349,107 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
             )
 
             self.assertEqual(help_proc.returncode, 0, help_proc.stdout + help_proc.stderr)
+            self.assertIn("Preset examples", help_proc.stdout)
+            self.assertIn("Advanced/operator schema flags", help_proc.stdout)
             self.assertIn("--preset", help_proc.stdout)
             self.assertIn("human-needed", help_proc.stdout)
+            self.assertLess(
+                help_proc.stdout.index("Preset examples"),
+                help_proc.stdout.index("--coordination-mode"),
+            )
+            self.assertLess(
+                help_proc.stdout.index("Advanced/operator schema flags"),
+                help_proc.stdout.index("--coordination-mode"),
+            )
             self.assertEqual(create_proc.returncode, 0, create_proc.stdout + create_proc.stderr)
             payload = json.loads(create_proc.stdout)
             self.assertEqual(payload["card"]["coordination_mode"], "human_needed")
             self.assertEqual(payload["card"]["status"], "blocked")
             self.assertEqual(payload["card"]["next_safe_action"], "ask_human_before_handoff")
+
+    def test_read_alias_and_not_found_error_are_action_cards(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = root / "handoffs.jsonl"
+            created = telepathy_handoff_store.create_handoff(
+                scope="issue:#123",
+                owner="codex-a",
+                store_path=store,
+                cwd=root,
+            )
+            read_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "read",
+                    created["card"]["card_id"],
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            missing_json = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "read",
+                    "missing-card",
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            missing_text = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                    "read",
+                    "missing-card",
+                    "--cwd",
+                    str(root),
+                    "--store-path",
+                    str(store),
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(read_proc.returncode, 0, read_proc.stdout + read_proc.stderr)
+        read_payload = json.loads(read_proc.stdout)
+        self.assertEqual(read_payload["kind"], telepathy_handoff_store.DEEPEN_KIND)
+        self.assertEqual(read_payload["card"]["card_id"], created["card"]["card_id"])
+        self.assertEqual(missing_json.returncode, 1)
+        missing_payload = json.loads(missing_json.stdout)
+        self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
+        self.assertIn("telepathy list --status all", missing_payload["agent_next_action"])
+        self.assertIn("next:", missing_text.stdout)
+        self.assertIn("telepathy list --status all", missing_text.stdout)
 
     def test_private_or_path_like_scope_uses_hash_only_preview(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

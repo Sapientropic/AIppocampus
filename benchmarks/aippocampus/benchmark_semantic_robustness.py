@@ -636,7 +636,24 @@ def run_semantic_robustness_benchmark(
         "generated_at": now_utc(),
         "status": "diagnostic_only",
         "ok": True,
+        "benchmark_maturity_level": "diagnostic_contract",
+        "measurement_origin": "deterministic_contract",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": True,
         "quality_gate_ok": quality_gate_ok,
+        "quality_gate_kind": "diagnostic_track_s_not_public_quality",
+        "public_quality_gate_ok": False,
+        "decision_impact": "diagnostic_only",
+        "case_count": len(s1_rows) + len(s2_rows) + len(s3_rows),
+        "supports": [
+            "public_safe_semantic_gate_perturbation_diagnostics",
+            "public_safe_retrieval_invariance_diagnostics",
+            "hard_negative_suppression_diagnostics",
+        ],
+        "agent_action": (
+            "Use Track S as diagnostic robustness evidence only; do not treat "
+            "quality_gate_ok as a public product-quality or answer-quality gate."
+        ),
         "config": {
             "uses_live_llm_judge": False,
             "requires_provider_keys": False,

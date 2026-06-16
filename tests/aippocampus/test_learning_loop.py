@@ -393,6 +393,59 @@ class LearningLoopTests(unittest.TestCase):
         self.assertTrue(all(row["auto_create_asset"] is False for row in candidates))
         self.assertTrue(any(row["skip_reason"] == "thin_or_one_off_evidence" for row in candidates))
 
+    def test_workflow_candidate_inventory_types_docs_automations_subagents_and_unknowns(self) -> None:
+        findings = [
+            {
+                "kind": "aippocampus_learning_finding",
+                "finding_kind": "workflow_order_finding",
+                "workflow_family": "cheap_preflight_before_broad_test",
+                "occurrence_count": 3,
+                "source_refs": [source_ref("docs")],
+                "scope": "machine:local",
+                "workspace_or_environment_profile": "local-only-windows",
+                "confidence": "high",
+            },
+            {
+                "kind": "aippocampus_learning_finding",
+                "finding_kind": "semantic_context_miss",
+                "workflow_family": "semantic_context_review",
+                "occurrence_count": 3,
+                "source_refs": [source_ref("subagent")],
+                "scope": "project:AIppocampus",
+                "confidence": "high",
+            },
+            {
+                "kind": "aippocampus_learning_finding",
+                "finding_kind": "workflow_order_finding",
+                "workflow_family": "nightly_cache_refresh",
+                "occurrence_count": 3,
+                "source_refs": [source_ref("automation")],
+                "scope": "project:AIppocampus",
+                "confidence": "high",
+            },
+        ]
+
+        candidates = extract_workflow_candidates(
+            findings,
+            existing_assets={
+                "docs": ["cheap_preflight_before_broad_test"],
+                "automations": ["nightly_cache_refresh"],
+                "subagents": ["semantic_context_review"],
+                "unknown_family": ["ignored_but_reported"],
+            },
+        )
+        by_workflow = {row["repeated_workflow_summary"]: row for row in candidates}
+
+        docs = by_workflow["cheap_preflight_before_broad_test"]
+        self.assertEqual(docs["recommended_form"], "extend_existing_asset")
+        self.assertEqual(docs["existing_asset_kind"], "docs")
+        self.assertNotEqual(docs["recommended_form"], "create_automation")
+        self.assertEqual(docs["transferability"], "this_machine_only")
+        self.assertEqual(by_workflow["semantic_context_review"]["existing_asset_kind"], "subagents")
+        self.assertEqual(by_workflow["nightly_cache_refresh"]["existing_asset_kind"], "automations")
+        self.assertIn("unknown_family", docs["inventory_warnings"][0]["unknown_inventory_families"])
+        self.assertIn("unknown_inventory_family", docs["reason_codes"])
+
     def test_semantic_learning_hypotheses_are_candidate_only_and_retire_when_stale(self) -> None:
         hypotheses = build_semantic_learning_hypotheses(
             [

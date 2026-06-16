@@ -59,6 +59,10 @@ def compact_thread(
     )
     pairs = {
         "thread_handle": thread_handle,
+        "thread_handle_authority": (
+            "private_registry_key" if include_private_identifiers else "diagnostic_local_fingerprint"
+        ),
+        "thread_handle_usable_as_source_selector": bool(include_private_identifiers),
         "title": core.compact_text(
             str(
                 item.get("title")
@@ -203,6 +207,47 @@ def _canonical_agent_action(card: Any) -> dict[str, Any]:
     }
 
 
+def _recall_miss_recovery_card(status: Any) -> dict[str, Any]:
+    miss_class = "no_route" if str(status or "") == "no_routes" else "weak_or_unavailable_route"
+    return {
+        "miss_class": miss_class,
+        "summary": (
+            "No compact source-backed route surfaced."
+            if miss_class == "no_route"
+            else "Recall did not produce a route that is safe to use directly."
+        ),
+        "primary_action": "refine_cue_or_run_exact_search",
+        "recovery_actions": [
+            'refine the cue with a project, object, person, or time clue',
+            'aippocampus search "<distinctive exact phrase>" --json',
+            "aippocampus onboard --status --json",
+        ],
+        "do_not": [
+            "do not claim from scent or route silence",
+            "do not broaden into manual search before checking source/index readiness when continuity was expected",
+        ],
+        "claim_boundary": "no_route_claim",
+    }
+
+
+def _weak_route_recovery_card() -> dict[str, Any]:
+    return {
+        "miss_class": "weak_route",
+        "summary": "Recall returned route-shaped context, but no safe deepen request was available.",
+        "primary_action": "refine_cue_or_run_exact_search",
+        "recovery_actions": [
+            "refine cue before relying on the route",
+            "run exact search for distinctive source wording",
+            "request full diagnostics only if this route should have been reopenable",
+        ],
+        "do_not": [
+            "do not treat direction-only context as evidence",
+            "do not quote or decide from a route without reopened source",
+        ],
+        "claim_boundary": "no_claim_before_reopen",
+    }
+
+
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Project agent_recall into one foreground action plus compact route receipts."""
 
@@ -244,15 +289,46 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "boundary": semantic.get("boundary"),
             }
         )
+    status = payload.get("status")
+    miss_recovery_card = None if memory_packets else _recall_miss_recovery_card(status)
+    weak_route_recovery_card = None
+    foreground_action = _canonical_agent_action(payload.get("foreground_action_card"))
+    if miss_recovery_card is not None:
+        foreground_action = {
+            "action_id": "recover_recall_miss",
+            "tool_name": "search_memory",
+            "arguments": {
+                "query": "<refined cue or exact phrase>",
+                "max": 5,
+            },
+            "cli_command": 'aippocampus search "<distinctive exact phrase>" --json',
+            "why": "No route surfaced; try exact source-backed search or check onboarding/index freshness.",
+            "claim_boundary": "no_route_claim",
+        }
+    elif foreground_action.get("action_id") == "continue_normally":
+        weak_route_recovery_card = _weak_route_recovery_card()
+        foreground_action = {
+            "action_id": "recover_weak_route",
+            "tool_name": "search_memory",
+            "arguments": {
+                "query": "<more specific cue or exact phrase>",
+                "max": 5,
+            },
+            "cli_command": 'aippocampus search "<distinctive exact phrase>" --json',
+            "why": "A route surfaced without a safe deepen action; refine or exact-search before relying on it.",
+            "claim_boundary": "no_claim_before_reopen",
+        }
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
         "schema_version": payload.get("schema_version"),
         "mode": payload.get("mode"),
         "surface": "mcp_agent_recall_compact",
-        "status": payload.get("status"),
+        "status": status,
         "opt_in_required": payload.get("opt_in_required"),
-        "foreground_action": _canonical_agent_action(payload.get("foreground_action_card")),
+        "foreground_action": foreground_action,
+        "miss_recovery_card": miss_recovery_card,
+        "weak_route_recovery_card": weak_route_recovery_card,
         "routes": route_receipts,
         "route_count": len(memory_packets),
         "metrics": _without_empty(

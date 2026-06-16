@@ -233,6 +233,11 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             "missing_intent",
             "recall_context requires a non-empty intent or query.",
             arguments=arguments,
+            required_any=["intent", "query"],
+            agent_next_action=(
+                "Call recall_context with intent/query, then pass a selected handle to recall_deepen."
+            ),
+            example_arguments={"intent": "continue the issue-work context", "cwd": "<project cwd>"},
         )
     source_dir = clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
@@ -293,6 +298,11 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
             "missing_query",
             "agent_recall requires a non-empty query or intent.",
             arguments=arguments,
+            required_any=["query", "intent"],
+            agent_next_action=(
+                "Call agent_recall with the user's cue or issue title, then deepen before factual claims."
+            ),
+            example_arguments={"query": "old decision or handoff cue", "cwd": "<project cwd>"},
         )
     agent = agent_continuity_module()
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
@@ -709,7 +719,32 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
     try:
         payload = aippocampus_health.health_report(cwd_arg(arguments))
     except Exception as exc:
-        return tool_error("health_check_failed", str(exc), arguments=arguments)
+        del exc
+        payload = {
+            "kind": "aippocampus_memory_health_recovery",
+            "ok": False,
+            "status": "unavailable",
+            "error": {
+                "code": "health_unavailable",
+                "message": "Memory health could not find usable local source artifacts for this scope.",
+            },
+            "agent_next_action": {
+                "id": "recover_or_continue_without_memory",
+                "label": "Check provider/onboarding status, register/sync a thread if this is setup, or continue without memory.",
+                "command": "aippocampus onboard --provider auto --status",
+            },
+            "recovery_actions": [
+                "aippocampus onboard --provider auto --status",
+                "aippocampus mcp list-tools --compact",
+                "aippocampus search <exact phrase> --json",
+                "continue without memory when no local source exists",
+            ],
+            "source_boundary": {
+                "no_rollout_found_is_not_a_recall_quality_claim": True,
+                "local_paths_serialized": False,
+            },
+        }
+        return text_result(public_payload(arguments, payload), is_error=False)
 
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
         payload = compact_health_payload(payload)
@@ -879,10 +914,12 @@ def handle_payload(payload: Any) -> list[dict[str, Any]]:
 
 
 def serve_stdio() -> int:
+    seen_request = False
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
+        seen_request = True
         try:
             payload = json.loads(line)
             responses = handle_payload(payload)
@@ -890,6 +927,8 @@ def serve_stdio() -> int:
             responses = [jsonrpc_error(None, -32700, f"Parse error: {exc}")]
         for response in responses:
             print(json.dumps(response, ensure_ascii=False, separators=(",", ":")), flush=True)
+    if not seen_request:
+        print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
     return 0
 
 

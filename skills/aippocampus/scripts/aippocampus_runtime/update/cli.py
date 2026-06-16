@@ -30,6 +30,7 @@ from aippocampus_runtime.update.agent_status_summary import (
     compact_agent_status_report,
 )
 from aippocampus_runtime.update.capability_ladder import build_capability_ladder
+from aippocampus_runtime.update.host_conformance import build_host_conformance_status
 from aippocampus_runtime.update.plugin_cache import (
     build_plugin_cache_status,
     installed_cache_auto_resolution,
@@ -549,6 +550,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         )
     }
     lifecycle_current = set(lifecycle_current_events) == set(HOOK_EVENTS)
+    lifecycle_hidden = install_lifecycle.status(path).get("windows_hidden_launch") or {}
     prompt_any = prompt_current or any(
         row["event"] == "UserPromptSubmit"
         and any(name in row["command"] for name in ("aippocampus_prompt_hook.py", "ambient_recall_hook.py"))
@@ -582,6 +584,8 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         reason_codes.append("stale_flat_script_commands")
     if duplicate_effective_hooks:
         reason_codes.append("duplicate_effective_hook_execution")
+    if lifecycle_hidden.get("warning_code"):
+        reason_codes.append(str(lifecycle_hidden["warning_code"]))
     return {
         "surface": "hooks",
         "status": status,
@@ -589,6 +593,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "prompt_installed": prompt_current,
         "lifecycle_installed": lifecycle_current,
         "lifecycle_events": sorted(lifecycle_current_events),
+        "windows_lifecycle_hidden_launch": lifecycle_hidden,
         "action_hints": action_hint_status,
         "action_hints_installed": bool(action_hint_status.get("installed")),
         "action_hints_ready": action_hint_status.get("cache_status") == "with_fresh_records",
@@ -603,12 +608,13 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
             "aippocampus hooks prompt install",
             "aippocampus hooks lifecycle install",
         ]
-        if status != "current"
+        if status != "current" or lifecycle_hidden.get("warning_code")
         else [],
         "safety_notes": [
             "hook apply rewrites only AIppocampus-owned Codex hook handlers and preserves other hooks",
             "old flat-script hook commands are replaced by module entrypoints",
             "provider-key bridge wrappers are explicit onboarding artifacts and do not store key values in hooks.json",
+            "Windows lifecycle hooks use a hidden launch path so background upkeep does not flash a terminal window",
         ],
     }
 
@@ -701,6 +707,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         host_probe=host_probe,
         foreground_tools_visible_asserted=bool(args.foreground_tools_visible),
     )
+    surfaces["host_conformance"] = build_host_conformance_status(surfaces)
     actionable = [
         name for name, item in surfaces.items() if surface_summary_blocker(name, item)
     ]
@@ -740,6 +747,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
                 surfaces["agent_callable"]
             ),
             "agent_callable_current_thread_visible": surfaces["agent_callable"]["ready"],
+            "host_conformance_label": surfaces["host_conformance"]["label"],
             "capability_ladder": capability_ladder,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
@@ -1115,8 +1123,30 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aippocampus update")
     subparsers = parser.add_subparsers(dest="action", required=True)
+    child_descriptions = {
+        "status": (
+            "Update status readiness card:\n"
+            "  Read one foreground-sized view of local skill/plugin/hook/MCP freshness.\n"
+            "  Prefer this before judging whether recall is broken; stale host/plugin state can hide fixed tools.\n"
+            "  Ordinary command: aippocampus update status --agent-json\n\n"
+            "Advanced/operator overrides:\n"
+            "  The path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
+        ),
+        "plan": (
+            "Update plan action card:\n"
+            "  Preview what apply would need before mutating local install surfaces.\n"
+            "  Use --agent-json for a compact machine-readable plan; use --json only for operator detail.\n"
+            "  Ordinary command: aippocampus update plan --agent-json\n\n"
+            "Advanced/operator overrides:\n"
+            "  The path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
+        ),
+    }
     for action in ("status", "plan"):
-        child = subparsers.add_parser(action)
+        child = subparsers.add_parser(
+            action,
+            description=child_descriptions[action],
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
         _add_common_options(child)
     apply_parser = subparsers.add_parser(
         "apply",

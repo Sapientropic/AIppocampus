@@ -6,11 +6,16 @@ Status: implementation map layer.
 Use this folder for sync, scale, compatibility, legacy alias, and planning
 automation docs. It is a maintenance surface, not the product claim layer.
 
-| File | Use |
-| --- | --- |
-| [compatibility-shim-inventory.md](compatibility-shim-inventory.md) | Compatibility shim ownership and sunset inventory. |
-| [encrypted-sync-v1.md](encrypted-sync-v1.md) | First encrypted sync design and compatibility boundary. |
-| [encrypted-sync-v2.md](encrypted-sync-v2.md) | Encrypted sync recovery, conflict, revocation, and migration design. |
-| [gb-scale-roadmap.md](gb-scale-roadmap.md) | Large-thread storage, retention, search, and sync scale roadmap. |
-| [legacy-alias-inventory.md](legacy-alias-inventory.md) | Legacy env/path alias classification and removal stages. |
-| [project-planning-automation.md](project-planning-automation.md) | GitHub issue triage and roadmap drift audit boundary. |
+Start with the row whose `Reader route` matches the task. For product claims,
+leave this folder and use
+[`../../evidence/current-claims.md`](../../evidence/current-claims.md) or
+[`../../evidence/readiness/stage-0-5-readiness.md`](../../evidence/readiness/stage-0-5-readiness.md).
+
+| File | Kind | Status | Reader route |
+| --- | --- | --- | --- |
+| [compatibility-shim-inventory.md](compatibility-shim-inventory.md) | Inventory | Current maintenance owner | Use before changing fallback env/path names or deleting compatibility shims. |
+| [encrypted-sync-v1.md](encrypted-sync-v1.md) | Contract/design | Current Stage 3 boundary | Use before enabling raw sync or claiming encrypted transfer readiness. |
+| [encrypted-sync-v2.md](encrypted-sync-v2.md) | Design | Forward-looking | Use for recovery, conflict, revocation, and migration design; do not cite as shipped behavior. |
+| [gb-scale-roadmap.md](gb-scale-roadmap.md) | Roadmap | Current scale planning | Use before changing retention, registry cache, large-thread search, or sync scale policy. |
+| [legacy-alias-inventory.md](legacy-alias-inventory.md) | Inventory | Current sunset map | Use before documenting or removing legacy `CODEX_MEMORY_*` / path aliases. |
+| [project-planning-automation.md](project-planning-automation.md) | Implementation map | Current GitHub automation boundary | Use before changing issue triage, milestones, or roadmap drift audits. |

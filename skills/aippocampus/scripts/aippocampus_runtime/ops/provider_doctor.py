@@ -257,6 +257,22 @@ def build_provider_doctor_report(
             validate_credentials=validate_credentials,
             credential_validator=credential_validator,
         )
+    elif validate_credentials:
+        report["credential_validation"] = {
+            "status": "not_run",
+            "reason": "validate_credentials_requires_explicit_discovery_source",
+            "agent_next_action": (
+                "Use --discover-credential-sources with --credential-dotenv <path> "
+                "when you want an explicit safe credential probe. Plain provider "
+                "doctor remains presence-only."
+            ),
+            "actual_provider_probe_performed": False,
+            "privacy_boundary": {
+                "secret_values_printed": False,
+                "dotenv_files_read": False,
+                "credential_stores_read": False,
+            },
+        }
     return report
 
 
@@ -358,7 +374,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         epilog=(
             "Privacy boundary: key values and base URLs are never printed. "
-            "No-key source-backed recall/search remains usable."
+            "No-key source-backed recall/search remains usable. "
+            "--validate-credentials only probes explicit discovery candidates; "
+            "without --discover-credential-sources it reports not_run."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

@@ -21,6 +21,10 @@ intuition layers until promoted by evidence and runtime contracts.
 9. [Agent Coding Context Blueprint](agent-coding-context-analysis.md)
 10. [Memory-System Pain Taxonomy](memory-system-pain-taxonomy.md)
 
+Use [Discussion Atlas And Design Transit Map](discussion-atlas.md) when a
+GitHub Discussion needs to be routed to its current owner doc, issue, evidence
+row, or archive boundary. It is a navigation map, not first-user onboarding.
+
 ## Subfolders
 
 | Folder | Use |

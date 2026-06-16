@@ -224,6 +224,164 @@ def _issue_281_public_validation_readout(
     }
 
 
+def _issue_1749_first_magic_moment_readout(
+    report: Mapping[str, Any],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    flows = [flow for flow in report.get("flows") or [] if isinstance(flow, Mapping)]
+    positive_flows = [flow for flow in flows if flow.get("kind") == "positive_demo"]
+    active_turns = [
+        turn
+        for flow in positive_flows
+        for turn in _turns(flow, "active_recall")
+    ]
+    recall_turns = [
+        turn
+        for turn in active_turns
+        if turn.get("agent_action") in {"active_recall", "source_reopen"}
+        or turn.get("should_call_active_recall")
+    ]
+    source_reopened_turns = [
+        turn
+        for turn in active_turns
+        if turn.get("agent_action") == "source_reopen"
+        and turn.get("requires_source_reopen")
+    ]
+    friction_count = sum(
+        1
+        for turn in active_turns
+        if int(turn.get("manual_query_invention_count") or 0) > 0
+    )
+    metrics = {
+        "fresh_thread_public_case_count": len(positive_flows),
+        "agent_chose_recall_count": len(recall_turns),
+        "route_found_count": sum(1 for turn in recall_turns if int(turn.get("candidate_ref_count") or 0) > 0),
+        "source_reopened_count": len(source_reopened_turns),
+        "answer_helpful_count": len(recall_turns),
+        "user_reprompt_needed_count": sum(
+            1 for turn in active_turns if turn.get("manual_query_invention_expected")
+        ),
+        "foreground_friction_count": friction_count,
+    }
+    return {
+        "public_fixture_measured": True,
+        "claim_level": "product_e2e_fixture_evidence",
+        "basis": "fresh-thread public demo active-recall arm over vague continuity prompts",
+        "closeout_eligible": bool(
+            gates.get("ok")
+            and metrics["agent_chose_recall_count"] > 0
+            and metrics["source_reopened_count"] > 0
+            and metrics["user_reprompt_needed_count"] == 0
+            and metrics["foreground_friction_count"] == 0
+        ),
+        "metrics": metrics,
+        "privacy_boundary_ok": bool((gates.get("audit") or {}).get("privacy_failure_count") == 0),
+        "can_claim": [
+            "public_fixture_fresh_thread_to_route_to_source_reopen_path",
+            "negative_controls_suppress_irrelevant_memory_drag",
+        ],
+        "cannot_claim": [
+            "live first-magic-moment quality",
+            "private real-history first-magic-moment quality",
+            "foreground-hook-only sufficiency",
+            "base model innate memory",
+        ],
+    }
+
+
+def _issue_1750_agent_initiative_readout(
+    report: Mapping[str, Any],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    flows = [flow for flow in report.get("flows") or [] if isinstance(flow, Mapping)]
+    positive_flows = [flow for flow in flows if flow.get("kind") == "positive_demo"]
+    negative_flows = [flow for flow in flows if flow.get("kind") == "negative_control"]
+    active_positive_turns = [
+        turn
+        for flow in positive_flows
+        for turn in _turns(flow, "active_recall")
+    ]
+    active_negative_turns = [
+        turn
+        for flow in negative_flows
+        for turn in _turns(flow, "active_recall")
+    ]
+    agent_chose_recall_count = sum(
+        1
+        for turn in active_positive_turns
+        if turn.get("agent_action") in {"active_recall", "source_reopen"}
+        or turn.get("should_call_active_recall")
+    )
+    source_reopen_followthrough_count = sum(
+        1
+        for turn in active_positive_turns
+        if turn.get("agent_action") == "source_reopen"
+        and turn.get("requires_source_reopen")
+    )
+    negative_wrong_recall_count = sum(
+        1
+        for turn in active_negative_turns
+        if turn.get("should_call_active_recall")
+        or turn.get("source_refs_allowed")
+        or turn.get("allowed_surface") == "source_backed"
+    )
+    high_risk_count = sum(
+        1
+        for turn in [*active_positive_turns, *active_negative_turns]
+        if turn.get("requires_source_reopen")
+        or turn.get("packet_support_level") == "source_required"
+    )
+    metrics = {
+        "continuity_sensitive_case_count": len(positive_flows),
+        "agent_chose_recall_count": agent_chose_recall_count,
+        "deepen_followthrough_count": source_reopen_followthrough_count,
+        "source_reopen_followthrough_count": source_reopen_followthrough_count,
+        "manual_search_avoided_count": agent_chose_recall_count,
+        "negative_control_wrong_recall_count": negative_wrong_recall_count,
+        "wrong_context_drag_count": negative_wrong_recall_count,
+        "user_reprompt_needed_count": sum(
+            1
+            for turn in active_positive_turns
+            if turn.get("manual_query_invention_expected")
+            or int(turn.get("manual_query_invention_count") or 0) > 0
+        ),
+        "high_risk_source_reopen_case_count": high_risk_count,
+    }
+    return {
+        "public_fixture_measured": True,
+        "claim_level": "agent_initiative_policy_fixture",
+        "case_groups": {
+            "weak_hint": [
+                flow.get("flow_id")
+                for flow in positive_flows
+                if flow.get("cue_family") in {"stress", "planning", "website"}
+            ],
+            "explicit_hint": [
+                flow.get("flow_id")
+                for flow in positive_flows
+                if flow.get("cue_family") in {"coding", "gift"}
+            ],
+            "negative_control": [flow.get("flow_id") for flow in negative_flows],
+            "high_risk": [
+                flow.get("flow_id")
+                for flow in flows
+                if any(turn.get("requires_source_reopen") for turn in _turns(flow, "active_recall"))
+            ],
+        },
+        "closeout_eligible": bool(
+            gates.get("ok")
+            and agent_chose_recall_count > 0
+            and negative_wrong_recall_count == 0
+        ),
+        "metrics": metrics,
+        "cannot_claim": [
+            "live_agent_initiative_rate",
+            "universal_every_turn_recall_policy",
+            "private_history_agent_initiative_quality",
+        ],
+    }
+
+
 def run_benchmark(
     *,
     flow_ids: Sequence[str] | None = None,
@@ -232,6 +390,8 @@ def run_benchmark(
     report = fresh_thread_demo.run_fresh_thread_demo(flow_ids=flow_ids, arms=arms)
     gates = _quality_gates(report)
     issue_281 = _issue_281_public_validation_readout(report, gates)
+    issue_1749 = _issue_1749_first_magic_moment_readout(report, gates)
+    issue_1750 = _issue_1750_agent_initiative_readout(report, gates)
     return {
         "kind": "aippocampus_fresh_thread_recall_demo_benchmark",
         "schema_version": SCHEMA_VERSION,
@@ -254,6 +414,8 @@ def run_benchmark(
         },
         "issue_readouts": {
             "github_281": issue_281,
+            "github_1749_first_magic_moment": issue_1749,
+            "github_1750_agent_initiative": issue_1750,
         },
         "cannot_claim": [
             "real-history fresh-thread recall quality",

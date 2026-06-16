@@ -220,6 +220,28 @@ class DocsHealthTests(unittest.TestCase):
         ):
             self.assertNotIn(repeated_caveat, demo_text)
 
+    def test_evidence_ledgers_stay_line_addressable(self) -> None:
+        issues, metrics = docs_health.evidence_ledger_line_length_payload(REPO_ROOT)
+
+        self.assertEqual([], issues)
+        self.assertLessEqual(
+            metrics["ledgers"]["docs/evidence/current-claims.md"]["max_line_length"],
+            docs_health.EVIDENCE_LEDGER_LINE_LENGTH_LIMIT,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            ledger = repo / "docs" / "evidence" / "current-claims.md"
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text("short\n" + ("x" * 1001) + "\n", encoding="utf-8")
+            issues, metrics = docs_health.evidence_ledger_line_length_payload(repo)
+
+        self.assertTrue(issues)
+        self.assertEqual(
+            1,
+            metrics["ledgers"]["docs/evidence/current-claims.md"]["long_line_count"],
+        )
+
     def test_private_thread_anchor_artifact_is_gitignored(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)
@@ -1648,9 +1670,9 @@ class DocsHealthTests(unittest.TestCase):
         )
 
         self.assertIn("--feedback-jsonl <local-feedback.jsonl>", card)
-        self.assertIn("--cache-jsonl <local-cache.jsonl> --write --json", card)
+        self.assertIn("hooks action refresh-cache --write --json", card)
         self.assertNotIn("agent feedback <route_id> --outcome helped --json` | receipt only", card)
-        self.assertNotIn("hooks action refresh-cache --write --json", card)
+        self.assertNotIn("<local-cache.jsonl>", card)
 
     def test_repo_markdown_scan_ignores_tmp_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

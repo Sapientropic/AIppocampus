@@ -12,7 +12,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.update.agent_callable import (
@@ -66,6 +66,17 @@ from aippocampus_runtime.update.plugin_uninstall_preview import (
 )
 
 REQUIRED_HOST_TOOLS = {"memory_health", "search_memory", "sync_status"}
+KEY_TOOL_SMOKE_ARGUMENTS: dict[str, dict[str, Any]] = {
+    "agent_recall": {
+        "query": "AIppocampus host probe schema freshness",
+        "max": 1,
+        "detail": "compact",
+    },
+    "agent_aippo": {
+        "task": "AIppocampus host probe schema freshness",
+        "detail": "compact",
+    },
+}
 IGNORED_TREE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs"}
 IGNORED_TREE_SUFFIXES = (".pyc", ".pyo")
 
@@ -380,7 +391,7 @@ def _find_installed_plugin(payload: dict[str, Any], selector: str) -> dict[str, 
     return None
 
 
-def _extract_sync_status_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
+def _extract_tool_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
     result = tool_response.get("result") or {}
     content = result.get("content") or []
     if not content:
@@ -391,6 +402,29 @@ def _extract_sync_status_payload(tool_response: dict[str, Any]) -> dict[str, Any
         return {}
     parsed = json.loads(text)
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _extract_sync_status_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
+    return _extract_tool_payload(tool_response)
+
+
+def _tool_smoke_result(tool_name: str, tool_response: dict[str, Any]) -> dict[str, Any]:
+    payload = _extract_tool_payload(tool_response)
+    result = tool_response.get("result") if isinstance(tool_response.get("result"), dict) else {}
+    is_error = bool((result or {}).get("isError") or tool_response.get("error"))
+    raw_payload_error = payload.get("error")
+    error = cast("dict[str, Any]", raw_payload_error) if isinstance(raw_payload_error, dict) else {}
+    raw_tool_error = tool_response.get("error")
+    tool_error = cast("dict[str, Any]", raw_tool_error) if isinstance(raw_tool_error, dict) else {}
+    return {
+        "tool": tool_name,
+        "ok": not is_error,
+        "is_error": is_error,
+        "error_code": error.get("code") or tool_error.get("code"),
+        "error_message": error.get("message") or tool_error.get("message"),
+        "payload_kind": payload.get("kind"),
+        "payload_status": payload.get("status") or payload.get("ok"),
+    }
 
 
 def _find_mcp_server(status_response: dict[str, Any], name: str) -> dict[str, Any] | None:
@@ -423,6 +457,17 @@ def _validate_host_probe(result: dict[str, Any]) -> list[str]:
         failures.append("sync_status did not report available_requires_sync_dir")
     if payload.get("backend") != "local_folder":
         failures.append("sync_status did not report local_folder backend")
+    key_smokes = [
+        item for item in result.get("key_tool_smokes") or [] if isinstance(item, dict)
+    ]
+    key_tools_listed = tools.intersection(KEY_TOOL_SMOKE_ARGUMENTS)
+    if key_tools_listed and not key_smokes:
+        failures.append("key agent tools were listed but no agent_recall/agent_aippo smoke ran")
+    for item in key_smokes:
+        if not item.get("ok"):
+            tool = str(item.get("tool") or "key_tool")
+            message = str(item.get("error_message") or item.get("error_code") or "tool smoke failed")
+            failures.append(f"{tool} key tool smoke failed: {message}")
     return failures
 
 
@@ -499,6 +544,37 @@ def run_codex_host_probe(
         )
         result["mcp_tool_is_error"] = bool((tool.get("result") or {}).get("isError"))
         result["mcp_tool_payload"] = _extract_sync_status_payload(tool)
+        key_tool_smokes: list[dict[str, Any]] = []
+        tool_names = set((result.get("mcp_status") or {}).get("tool_names") or [])
+        for tool_name, arguments in KEY_TOOL_SMOKE_ARGUMENTS.items():
+            if tool_name not in tool_names:
+                continue
+            smoke_args = dict(arguments)
+            smoke_args.setdefault("cwd", str(Path(repo_root).resolve()))
+            try:
+                smoke = client.request(
+                    "mcpServer/tool/call",
+                    {
+                        "server": PLUGIN_NAME,
+                        "threadId": thread_id,
+                        "tool": tool_name,
+                        "arguments": smoke_args,
+                    },
+                    timeout=timeout_seconds,
+                    raise_on_error=False,
+                )
+                key_tool_smokes.append(_tool_smoke_result(tool_name, smoke))
+            except Exception as exc:
+                key_tool_smokes.append(
+                    {
+                        "tool": tool_name,
+                        "ok": False,
+                        "is_error": True,
+                        "error_code": type(exc).__name__,
+                        "error_message": str(exc),
+                    }
+                )
+        result["key_tool_smokes"] = key_tool_smokes
         failures = _validate_host_probe(result)
         result["failures"] = failures
         result["validation_ok"] = not failures

@@ -29,23 +29,43 @@ class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
         self.assertFalse(report["quality_gate_ok"])
         self.assertEqual(
             public["workflow_guidance_status"],
-            "not_applicable_no_eligible_public_shape",
+            "measured",
         )
-        self.assertEqual(public["workflow_source_shape_eligible_count"], 0)
+        self.assertGreater(public["workflow_source_shape_eligible_count"], 0)
+        self.assertGreater(public["workflow_guidance_detected_count"], 0)
         surfaces = report["companion_surfaces"]
         self.assertTrue(surfaces["future_event_route_surface_companion"]["ok"])
         self.assertEqual(
             surfaces["workflow_guidance_companion"]["status"],
-            "not_applicable_no_eligible_public_shape",
+            "measured",
         )
         self.assertEqual(
             surfaces["workflow_guidance_companion"][
                 "zero_denominator_interpretation"
             ],
-            "guidance_not_measured_for_this_public_corpus",
+            "guidance_measured_on_public_eligible_shape",
+        )
+        self.assertGreater(
+            surfaces["workflow_guidance_companion"]["workflow_source_shape_eligible_count"],
+            0,
         )
         self.assertIn("official_state_bench_score", report["cannot_claim"])
         self.assertIn("benchmark_vcs_future_event_recall.py", " ".join(report["reused_benchmark_files"]))
+
+    def test_public_companion_can_still_report_zero_denominator_when_fixture_disabled(self) -> None:
+        report = companion.run_public_companion_eval(include_public_workflow_fixture=False)
+
+        public = report["public_reproducible_metrics"]
+        self.assertEqual(
+            public["workflow_guidance_status"],
+            "not_applicable_no_eligible_public_shape",
+        )
+        self.assertEqual(public["workflow_source_shape_eligible_count"], 0)
+        self.assertIsNone(
+            report["companion_surfaces"]["workflow_guidance_companion"][
+                "workflow_guidance_recall"
+            ]
+        )
 
     def test_public_companion_cli_emits_json_without_raw_fixture_text(self) -> None:
         result = subprocess.run(
@@ -89,6 +109,8 @@ class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
         self.assertIn("Can claim", result.stdout)
         self.assertIn("Important limits", result.stdout)
         self.assertIn("cannot prove workflow guidance lift by itself", result.stdout)
+        self.assertIn("X_failed -> Y_preflight_or_reopen -> X_succeeded", result.stdout)
+        self.assertIn("honest no-denominator result", result.stdout)
 
 
 if __name__ == "__main__":

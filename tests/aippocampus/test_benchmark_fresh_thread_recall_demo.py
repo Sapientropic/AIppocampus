@@ -55,6 +55,37 @@ class FreshThreadRecallDemoBenchmarkTests(unittest.TestCase):
         self.assertIn("live fresh-thread quality", readout["cannot_claim"])
         self.assertIn("private real-history fresh-thread quality", readout["cannot_claim"])
 
+    def test_issue_1749_first_magic_moment_readout_uses_source_backed_fixture(self) -> None:
+        payload = benchmark.run_benchmark()
+        readout = payload["issue_readouts"]["github_1749_first_magic_moment"]
+        metrics = readout["metrics"]
+
+        self.assertTrue(readout["public_fixture_measured"])
+        self.assertEqual(readout["claim_level"], "product_e2e_fixture_evidence")
+        self.assertGreaterEqual(metrics["agent_chose_recall_count"], 1)
+        self.assertGreaterEqual(metrics["route_found_count"], 1)
+        self.assertGreaterEqual(metrics["source_reopened_count"], 1)
+        self.assertGreaterEqual(metrics["answer_helpful_count"], 1)
+        self.assertEqual(metrics["user_reprompt_needed_count"], 0)
+        self.assertEqual(metrics["foreground_friction_count"], 0)
+        self.assertTrue(readout["privacy_boundary_ok"])
+        self.assertIn("live first-magic-moment quality", readout["cannot_claim"])
+
+    def test_issue_1750_agent_initiative_readout_has_positive_and_negative_controls(self) -> None:
+        payload = benchmark.run_benchmark()
+        readout = payload["issue_readouts"]["github_1750_agent_initiative"]
+        metrics = readout["metrics"]
+
+        self.assertTrue(readout["public_fixture_measured"])
+        self.assertGreaterEqual(metrics["continuity_sensitive_case_count"], 3)
+        self.assertGreaterEqual(metrics["agent_chose_recall_count"], 2)
+        self.assertGreaterEqual(metrics["source_reopen_followthrough_count"], 1)
+        self.assertEqual(metrics["negative_control_wrong_recall_count"], 0)
+        self.assertEqual(metrics["wrong_context_drag_count"], 0)
+        self.assertEqual(metrics["user_reprompt_needed_count"], 0)
+        self.assertIn("negative_control", readout["case_groups"])
+        self.assertIn("high_risk", readout["case_groups"])
+
     def test_report_has_no_private_artifacts_or_unsupported_evidence(self) -> None:
         payload = benchmark.run_benchmark()
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)

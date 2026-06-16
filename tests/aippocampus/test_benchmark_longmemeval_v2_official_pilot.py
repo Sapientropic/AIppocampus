@@ -161,9 +161,43 @@ class LongMemEvalV2OfficialPilotTests(unittest.TestCase):
         self.assertIn("longmemeval_v2_answer_accuracy", payload["cannot_claim"])
         self.assertIn("longmemeval_v2_lafs_gain", payload["cannot_claim"])
         self.assertTrue(payload["sanitized_report_validation"]["ok"])
+        self.assertFalse(payload["official_score_claimable"])
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(REPO_ROOT), dumped)
         self.assertNotIn("sk-", dumped)
+
+    def test_fixture_pilot_runs_lexical_and_continuity_arms_without_official_score_claim(self) -> None:
+        config = decision.PilotConfig(
+            pilot_questions=5,
+            max_pilot_questions=20,
+            reader_model="Qwen/Qwen3.5-9B",
+            reader_base_url_env="READER_BASE_URL",
+            reader_api_key_env="OPENAI_API_KEY",
+            evaluator_model="gpt-5.2",
+            evaluator_reasoning_effort="medium",
+            memory_context_max_tokens=200_000,
+            query_latency_budget_seconds=120.0,
+            total_cost_budget_usd=10.0,
+        )
+
+        payload = decision.build_report(config, include_fixture_pilot=True)
+        fixture = payload["fixture_official_harness_pilot"]
+
+        self.assertEqual(fixture["status"], "fixture_pilot_completed")
+        self.assertFalse(fixture["official_score_claimable"])
+        self.assertEqual(
+            {arm["arm"] for arm in fixture["arms"]},
+            {"lexical_default_context", "aippocampus_context"},
+        )
+        by_arm = {arm["arm"]: arm for arm in fixture["arms"]}
+        self.assertEqual(by_arm["lexical_default_context"]["memory_api_query_count"], 1)
+        self.assertEqual(by_arm["aippocampus_context"]["memory_api_query_count"], 1)
+        self.assertGreater(
+            by_arm["aippocampus_context"]["context_item_count"],
+            by_arm["lexical_default_context"]["context_item_count"],
+        )
+        self.assertFalse(payload["official_score_claimable"])
+        self.assertIn("official_v2_score_without_official_runner_outputs", fixture["cannot_claim"])
 
     def test_sanitized_report_validator_rejects_paths_and_credentials(self) -> None:
         payload = {

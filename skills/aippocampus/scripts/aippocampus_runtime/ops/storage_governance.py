@@ -657,7 +657,51 @@ def _error_payload(code: str, message: str, *, error_class: str = "usage_error")
     }
 
 
+def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]:
+    bounded_audit = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))}"
+    return {
+        "kind": "aippocampus_storage_gc_summary",
+        "schema_version": SCHEMA_VERSION,
+        "ok": True,
+        "status": "needs_full_scan",
+        "created_at": now_utc(),
+        "mode": "dry_run",
+        "read_only": True,
+        "requested_class": class_filter,
+        "needs_full_scan": True,
+        "candidate_count_total": None,
+        "sample_candidate_count": 0,
+        "candidate_detail_deferred": True,
+        "metrics": {
+            "reclaimable_rebuildable_bytes": None,
+            "reclaimable_review_artifact_bytes": None,
+        },
+        "privacy": {
+            "local_private_identifiers_included": False,
+            "raw_session_like_ids_emitted": False,
+        },
+        "risk_boundary": {
+            "apply_requires_explicit_flag": True,
+            "summary_performs_writes": False,
+            "source_history_protected": True,
+            "full_candidate_preconditions_deferred": True,
+        },
+        "safe_next_action": {
+            "decision": "run bounded audit sample when cleanup looks worth investigating",
+            "command": bounded_audit,
+        },
+        "full_audit_available": True,
+        "full_audit_flag": "--json --full",
+        "operator_audit_command": "aippocampus storage gc --dry-run --json --full",
+        "next_steps": [
+            "Run the bounded audit sample only when a foreground user asks for cleanup detail.",
+            "Use apply only for rebuildable cache candidates after deterministic checks pass.",
+        ],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(prog="aippocampus storage")
     subparsers = parser.add_subparsers(dest="command", required=True)
     gc_parser = subparsers.add_parser(
@@ -684,7 +728,7 @@ High-risk/private flags:
   --include-paths prints local filesystem paths and is for private operator
      diagnostics only.""",
     )
-    mode_group = gc_parser.add_mutually_exclusive_group(required=True)
+    mode_group = gc_parser.add_mutually_exclusive_group(required=False)
     mode_group.add_argument(
         "--dry-run",
         action="store_true",
@@ -730,11 +774,17 @@ High-risk/private flags:
         action="store_true",
         help="With --json, include the full candidate list instead of the --top bounded sample.",
     )
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
 
     if args.command != "gc":
         parser.print_help()
         return 2
+    if not args.dry_run and not args.apply:
+        if args.summary_json:
+            args.dry_run = True
+        else:
+            gc_parser.print_help(sys.stderr)
+            return 2
     if args.apply:
         try:
             result = apply_plan(
@@ -771,6 +821,27 @@ High-risk/private flags:
             print(render_apply_text(result))
         return 0 if result["ok"] else 2
 
+    explicit_top = "--top" in raw_args or any(item.startswith("--top=") for item in raw_args)
+    plan_top = max(1, int(args.top))
+    plan_fanout_budget = max(1, int(args.fanout_budget))
+    if args.summary_json:
+        plan_top = plan_top if explicit_top else 1
+        plan_fanout_budget = min(plan_fanout_budget, 16)
+        if args.capacity_report is None and args.retention_report is None:
+            retention_path, _attempted = _default_retention_report_path(Path(args.cwd).resolve())
+            if retention_path is None:
+                print(
+                    json.dumps(
+                        deferred_summary_payload(
+                            class_filter=args.class_filter,
+                            limit=plan_top,
+                        ),
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+                return 0
+            args.retention_report = str(retention_path)
     try:
         plan = build_plan(
             args.cwd,
@@ -780,9 +851,9 @@ High-risk/private flags:
             class_filter=args.class_filter,
             include_active=args.include_active,
             include_paths=args.include_paths,
-            top=args.top,
+            top=plan_top,
             planner_query=args.planner_query,
-            fanout_budget=args.fanout_budget,
+            fanout_budget=plan_fanout_budget,
         )
     except ValueError as exc:
         if args.json_output:
@@ -805,7 +876,7 @@ High-risk/private flags:
             json.dumps(
                 bounded_cli_projection(
                     plan,
-                    limit=args.top,
+                    limit=plan_top,
                     summary_only=True,
                     schema_version=SCHEMA_VERSION,
                 ),

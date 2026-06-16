@@ -5,6 +5,33 @@ Status: canonical first-recall front door for humans and agents.
 Use this card when AIppocampus is installed or being evaluated and the next
 goal is one useful source-backed recall moment, not a tour of every subsystem.
 
+## One Public-Safe Receipt
+
+This is the shape a first run should make visible before benchmark, hook, sync,
+or operator detail:
+
+```text
+cue: "without pretending it has innate memory"
+source-backed hit: msg_public_001 from examples/public-memory-bundle/clean-source
+snippet: "can an agent catch up without pretending it has innate memory?"
+boundary: the snippet supports only the quoted source trail; summaries and route ids are navigation.
+next: open/deepen the source turn before using exact wording or making a broader claim.
+```
+
+Copyable local demo command from a source checkout:
+
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
+
+If the user only has a vague cue, use the same shape with `agent recall` and
+then deepen the selected route:
+
+```sh
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
 ## Decide The First Move
 
 1. If the user remembers exact wording, search clean source first:

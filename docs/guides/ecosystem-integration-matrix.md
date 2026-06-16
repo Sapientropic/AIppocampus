@@ -7,6 +7,10 @@ It distinguishes source import, agent read tools, native host integration, and
 automatic ambient recall so the project does not clear integration issues by
 overstating what has actually been smoked.
 
+For the shared host-readiness labels (`cli_only`, `recall_only`,
+`recall_deepen`, `ambient_recall_deepen`, and `full_continuity_path`), use the
+[host-agnostic continuity conformance contract](../architecture/host/continuity-conformance-contract.md).
+
 ## Support Terms
 
 - **Data import/export** means AIppocampus can ingest or emit source-backed

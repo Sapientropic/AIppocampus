@@ -17,6 +17,18 @@ from aippocampus_runtime.hooks.action_hint_cache_records import (
     WEAK_SUPPORT_LEVELS,
     build_action_hint_cache_report,
 )
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (
+    apply_effectiveness_to_guidance,
+    load_ledger_rows,
+    summarize_effectiveness_ledger,
+)
+
+DEFAULT_ACTION_HINT_CACHE_RELATIVE = Path(".aippocampus") / "action-hints" / "pretooluse-cache.jsonl"
+DEFAULT_ACTION_HINT_CACHE_LABEL = ".aippocampus/action-hints/pretooluse-cache.jsonl"
+
+
+def default_action_hint_cache_path(cwd: Path | None = None) -> Path:
+    return (cwd or Path.cwd()).resolve() / DEFAULT_ACTION_HINT_CACHE_RELATIVE
 
 
 def _visible_ref_overlap(record: Mapping[str, Any], features: Mapping[str, Any]) -> bool:
@@ -125,6 +137,10 @@ def _match_score(record: Mapping[str, Any], features: Mapping[str, Any]) -> floa
             score += 0.75
     if set(record.get("match_terms") or []) & set(features.get("terms") or []):
         score += 1.0
+    try:
+        score += float(record.get("navigation_priority_delta") or 0.0)
+    except (TypeError, ValueError):
+        pass
     return round(score, 3)
 
 
@@ -245,6 +261,16 @@ def _default_learning_finding_paths(cwd: Path | None) -> list[Path]:
     ]
 
 
+def _default_effectiveness_ledger_paths(cwd: Path | None) -> list[Path]:
+    if cwd is None:
+        return []
+    root = cwd.resolve()
+    return [
+        root / ".aippocampus" / "learning-loop" / "effectiveness-ledger.jsonl",
+        root / ".aippocampus" / "learning" / "effectiveness-ledger.jsonl",
+    ]
+
+
 def _load_default_learning_findings(cwd: Path | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     candidates = _default_learning_finding_paths(cwd)
     for path in candidates:
@@ -261,6 +287,25 @@ def _load_default_learning_findings(cwd: Path | None) -> tuple[list[dict[str, An
         "source": "default_learning_findings",
         "candidate_count": len(candidates),
         "finding_count": 0,
+    }
+
+
+def _load_default_effectiveness_ledger(cwd: Path | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    candidates = _default_effectiveness_ledger_paths(cwd)
+    for path in candidates:
+        if path.exists():
+            rows = load_ledger_rows(path)
+            return rows, {
+                "status": "found",
+                "source": "default_effectiveness_ledger",
+                "candidate_count": len(candidates),
+                "row_count": len(rows),
+            }
+    return [], {
+        "status": "not_found",
+        "source": "default_effectiveness_ledger",
+        "candidate_count": len(candidates),
+        "row_count": 0,
     }
 
 
@@ -298,7 +343,13 @@ def refresh_action_hint_cache(
     attention_route_tokens: Iterable[Mapping[str, Any]] | None = None,
     now_unix: float | None = None,
     include_default_learning: bool = True,
+    effectiveness_ledger_rows: Iterable[Mapping[str, Any]] | None = None,
+    include_default_effectiveness_ledger: bool = True,
 ) -> dict[str, Any]:
+    root = cwd.resolve() if cwd else Path.cwd()
+    default_cache_path_used = cache_jsonl is None
+    if cache_jsonl is None:
+        cache_jsonl = default_action_hint_cache_path(root)
     learned_intake: dict[str, Any] = {
         "status": "not_requested",
         "source": "none",
@@ -335,6 +386,36 @@ def refresh_action_hint_cache(
                 "learned_clause_count": len(effective_aippo_clauses),
             }
         )
+    ledger_intake: dict[str, Any] = {
+        "status": "not_requested",
+        "source": "none",
+        "row_count": 0,
+    }
+    materialized_ledger_rows: list[dict[str, Any]] = []
+    if effectiveness_ledger_rows is not None:
+        materialized_ledger_rows = [
+            dict(row) for row in effectiveness_ledger_rows if isinstance(row, Mapping)
+        ]
+        ledger_intake.update(
+            {
+                "status": "explicit",
+                "source": "explicit_effectiveness_ledger",
+                "row_count": len(materialized_ledger_rows),
+            }
+        )
+    elif include_default_effectiveness_ledger:
+        materialized_ledger_rows, ledger_intake = _load_default_effectiveness_ledger(cwd)
+    if materialized_ledger_rows:
+        if learning_guidance is not None:
+            learning_guidance = apply_effectiveness_to_guidance(
+                learning_guidance,
+                materialized_ledger_rows,
+            )
+        if effective_aippo_clauses is not None:
+            effective_aippo_clauses = apply_effectiveness_to_guidance(
+                effective_aippo_clauses,
+                materialized_ledger_rows,
+            )
     report = build_action_hint_cache_report(
         aar_v2_records=aar_v2_records,
         learning_guidance=learning_guidance,
@@ -350,24 +431,26 @@ def refresh_action_hint_cache(
         "schema_version": SCHEMA_VERSION,
         "write_requested": bool(write),
         "wrote": False,
-        "cache_status": "without_cache_path" if cache_jsonl is None else "not_written",
+        "cache_status": "not_written",
+        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+        "default_cache_path_used": default_cache_path_used,
         "cache": report,
         "learned_provider_intake": {
             **learned_intake,
             "prepared_record_count": report["provider_counts"].get("aippo_learned_clause", 0),
         },
+        "effectiveness_ledger_intake": {
+            **ledger_intake,
+            "summary": summarize_effectiveness_ledger(materialized_ledger_rows),
+            "applied_to_guidance_before_cache": bool(materialized_ledger_rows),
+        },
         "privacy_boundary": report["privacy_boundary"],
     }
     if write:
-        if cache_jsonl is None:
-            result["ok"] = False
-            result["cache_status"] = "without_cache_path"
-            result["error"] = {"code": "missing_cache_jsonl", "message": "--write requires --cache-jsonl"}
-        else:
-            write_report = write_action_hint_cache(cache_jsonl, report)
-            result["wrote"] = True
-            result["cache_status"] = write_report["cache_status"]
-            result["write_report"] = write_report
+        write_report = write_action_hint_cache(cache_jsonl, report)
+        result["wrote"] = True
+        result["cache_status"] = write_report["cache_status"]
+        result["write_report"] = write_report
     return result
 
 
@@ -385,6 +468,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--active-recall-locks-json", type=Path)
     parser.add_argument("--attention-route-tokens-json", type=Path)
     parser.add_argument("--no-default-learning", action="store_true")
+    parser.add_argument("--effectiveness-ledger-jsonl", type=Path)
+    parser.add_argument("--no-default-effectiveness-ledger", action="store_true")
     parser.add_argument("--now-unix", type=float)
     parser.add_argument("--include-private-paths", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -403,6 +488,12 @@ def main(argv: list[str] | None = None) -> int:
         attention_route_tokens=_load_provider_rows(args.attention_route_tokens_json),
         now_unix=args.now_unix,
         include_default_learning=not args.no_default_learning,
+        effectiveness_ledger_rows=(
+            load_ledger_rows(args.effectiveness_ledger_jsonl)
+            if args.effectiveness_ledger_jsonl
+            else None
+        ),
+        include_default_effectiveness_ledger=not args.no_default_effectiveness_ledger,
     )
     if not args.include_private_paths and isinstance(result.get("write_report"), Mapping):
         result["write_report"] = {

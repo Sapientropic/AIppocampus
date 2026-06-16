@@ -37,6 +37,34 @@ def _normalize_dream_delivery_mode(value: object) -> str:
     return "off"
 
 
+def dream_delivery_lane_card(mode: str = "off") -> dict[str, Any]:
+    normalized = _normalize_dream_delivery_mode(mode)
+    if normalized == "off":
+        lane = "backstage_review"
+        absence_reason = "delivery_disabled"
+        product_meaning = "review_queue_or_operator_only"
+    elif normalized in {"shadow", "dry_run"}:
+        lane = "shadow_or_dry_run"
+        absence_reason = "not_delivered_treatment"
+        product_meaning = "measure_or_preview_without_foreground_context"
+    else:
+        lane = "opt_in_foreground_treatment"
+        absence_reason = "not_absent_when_eligible"
+        product_meaning = "deliver_one_bounded_navigation_hypothesis_when_eligible"
+    return {
+        "kind": "aippocampus_dream_delivery_lane_card",
+        "schema_version": 1,
+        "mode": normalized,
+        "lane": lane,
+        "foreground_absence_reason": absence_reason,
+        "default_product_meaning": product_meaning,
+        "foreground_fact_claim_allowed": False,
+        "source_reopen_required_before_claim": True,
+        "navigation_only": True,
+        "operator_review_path": "dream_or_subconscious_review_queue",
+    }
+
+
 def _float_env_or_default(value: object, default: float) -> float:
     if not isinstance(value, (str, int, float)):
         return default

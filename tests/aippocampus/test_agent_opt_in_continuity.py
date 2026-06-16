@@ -258,6 +258,64 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("aippo-nav:", encoded)
         self.assertLess(len(encoded.encode("utf-8")), 4096)
 
+    def test_public_recall_no_routes_returns_recovery_card_without_deepen_placeholder(self) -> None:
+        report = agent_continuity.recall(
+            "unlikely-no-match-token-xyz-12345",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            max_routes=2,
+        )
+        public = agent_continuity.public_recall_projection(
+            {**report, "last_recall_cache_available": False}
+        )
+        encoded = json.dumps(public, ensure_ascii=False)
+
+        self.assertEqual(public["status"], "no_routes")
+        self.assertEqual(public["route_count"], 0)
+        self.assertNotIn("suggested_next_command", public)
+        self.assertNotIn("public_safe_command_preview", public)
+        self.assertNotIn("<local-private-handle>", encoded)
+        self.assertNotIn("agent deepen", encoded)
+        self.assertEqual(public["foreground_action"]["action_id"], "recover_recall_miss")
+        self.assertEqual(public["foreground_action"]["tool_name"], "search_memory")
+        self.assertEqual(public["miss_recovery_card"]["miss_class"], "no_route")
+        self.assertIn("refine", " ".join(public["miss_recovery_card"]["recovery_actions"]))
+        self.assertIn("onboard --status", " ".join(public["miss_recovery_card"]["recovery_actions"]))
+
+    def test_public_recall_weak_route_without_deepen_request_gets_recovery_card(self) -> None:
+        public = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-opt-in-continuity-v0",
+                "mode": "recall",
+                "status": "ok",
+                "opt_in_required": True,
+                "foreground_action_card": {
+                    "decision": "continue_normally",
+                    "canonical_action": {
+                        "action_id": "continue_normally",
+                        "arguments": {},
+                        "claim_boundary": "no_route_claim",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_weak",
+                        "route_label": "broad direction-only route",
+                        "route_kind": "direction_only",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+                "deepen_requests": [],
+                "metrics": {"memory_packet_count": 1, "deepen_request_count": 0},
+            }
+        )
+
+        self.assertEqual(public["route_count"], 1)
+        self.assertEqual(public["foreground_action"]["action_id"], "recover_weak_route")
+        self.assertEqual(public["weak_route_recovery_card"]["miss_class"], "weak_route")
+        self.assertIn("exact search", " ".join(public["weak_route_recovery_card"]["recovery_actions"]))
+
     def test_recall_route_limit_rejects_explicit_zero_negative_and_overlarge(self) -> None:
         ok = agent_continuity.recall(
             "agent-native recall opt-in",

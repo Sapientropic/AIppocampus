@@ -170,26 +170,55 @@ def bounded_cli_projection(
             "raw_session_like_ids_emitted": False,
         }
     if summary_only:
+        metrics = report.get("metrics") or {}
+        audit_command = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))}"
         projection = {
+            "kind": "aippocampus_storage_gc_summary",
             "schema_version": report.get("schema_version", schema_version),
             "ok": bool(report.get("ok", True)),
             "status": report.get("status") or "dry_run_ready",
             "created_at": report.get("created_at"),
             "mode": report.get("mode"),
+            "read_only": report.get("mode") == "dry_run",
             "requested_class": report.get("requested_class"),
             "privacy": {
                 "local_private_identifiers_included": include_private_identifiers,
                 "raw_session_like_ids_emitted": include_private_identifiers,
             },
-            "metrics": report.get("metrics") or {},
+            "metrics": metrics,
             "candidate_count_total": len(candidates),
-            "candidates_returned": len(sample),
-            "candidates_truncated": truncated,
-            "candidate_samples": public_sample,
+            "sample_candidate_count": 0,
+            "candidate_detail_deferred": bool(candidates),
+            "category_summary": {
+                "rebuildable_cache": {
+                    "reclaimable_bytes": metrics.get("reclaimable_rebuildable_bytes", 0),
+                    "reclaimable_human": metrics.get("reclaimable_rebuildable_human"),
+                    "apply_boundary": "explicit_apply_only",
+                },
+                "review_artifacts": {
+                    "reclaimable_bytes": metrics.get("reclaimable_review_artifact_bytes", 0),
+                    "reclaimable_human": metrics.get("reclaimable_review_artifact_human"),
+                    "apply_boundary": "operator_review_only",
+                },
+            },
+            "risk_boundary": {
+                "apply_requires_explicit_flag": True,
+                "summary_performs_writes": False,
+                "source_history_protected": True,
+                "full_candidate_preconditions_deferred": True,
+            },
+            "safe_next_action": {
+                "decision": "inspect bounded audit sample before any apply",
+                "command": audit_command,
+            },
             "warnings": list(report.get("warnings") or [])[:6],
-            "next_steps": list(report.get("next_steps") or [])[:4],
+            "next_steps": [
+                "Use the bounded audit sample only if the reclaimable amount is worth inspecting.",
+                "Use apply only for rebuildable cache candidates after deterministic checks pass.",
+            ],
             "full_audit_available": True,
-            "full_audit_flag": "--full",
+            "full_audit_flag": "--json --full",
+            "operator_audit_command": "aippocampus storage gc --dry-run --json --full",
         }
     else:
         projection["candidates"] = public_sample

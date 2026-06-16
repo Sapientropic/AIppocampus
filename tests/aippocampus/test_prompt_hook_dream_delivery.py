@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from aippocampus_runtime.dream import delivery_policy as dream_delivery
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     dream_shadow,
@@ -155,6 +156,17 @@ class PromptHookDreamDeliveryTests(AmbientRecallHookCase):
         self.assertEqual(payload["working_memory"], [])
         self.assertNotIn("Dream hypothesis", encoded)
 
+    def test_default_dream_delivery_mode_has_backstage_review_lane_card(self) -> None:
+        card = dream_delivery.dream_delivery_lane_card("off")
+
+        self.assertEqual(card["kind"], "aippocampus_dream_delivery_lane_card")
+        self.assertEqual(card["mode"], "off")
+        self.assertEqual(card["lane"], "backstage_review")
+        self.assertEqual(card["foreground_absence_reason"], "delivery_disabled")
+        self.assertEqual(card["default_product_meaning"], "review_queue_or_operator_only")
+        self.assertFalse(card["foreground_fact_claim_allowed"])
+        self.assertTrue(card["source_reopen_required_before_claim"])
+
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
         working_memory = self._write_dream_working_memory()
         shadow_log = self.root / "dry-run-shadow.jsonl"
@@ -289,4 +301,3 @@ class PromptHookDreamDeliveryTests(AmbientRecallHookCase):
         self.assertEqual(event["delivery_decision"], "delivered_dream_treatment")
         self.assertEqual(context.count("Dream hypothesis, not source fact"), 1)
         self.assertIn("reopen source", context)
-

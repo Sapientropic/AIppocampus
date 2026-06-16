@@ -4,6 +4,27 @@ This folder keeps AIppocampus claims source-reopenable without making ordinary
 readers walk through every dated report first. Start here to choose the right
 evidence lane.
 
+## Product Receipt First
+
+The useful product shape is not a benchmark table. It is:
+
+```text
+old cue -> source-backed snippet or reopenable route -> source boundary -> next action
+```
+
+Public-safe copyable receipt from the bundled example:
+
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
+
+Recommendation card:
+
+| Recommend AIppocampus when... | Do not recommend it as... |
+| --- | --- |
+| A user or agent needs local, source-backed continuity across threads, projects, devices, or long-running relationship context. | A hosted team memory profile, a stateless vector store, or proof that the base model innately remembers. |
+| The workflow benefits from reopening original visible source before claims. | A way to bypass privacy, consent, source reopen, or external-account verification. |
+
 Use [`docs/evidence/can-claim-ladder.md`](can-claim-ladder.md) when you need
 the short positive map first: what is already proven, what is field-tested, and
 where the boundary starts.

@@ -29,6 +29,22 @@ from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 from conversation_sources import ConversationSourceRef  # noqa: E402
 
 
+def field_path_count(value: object, prefix: str = "") -> int:
+    if isinstance(value, dict):
+        total = 0
+        for key, item in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            total += 1 + field_path_count(item, path)
+        return total
+    if isinstance(value, list):
+        total = 0
+        for index, item in enumerate(value):
+            path = f"{prefix}[]" if prefix else f"[{index}]"
+            total += field_path_count(item, path)
+        return total
+    return 0
+
+
 class AippocampusMcpServerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -136,6 +152,16 @@ class AippocampusMcpServerTests(unittest.TestCase):
             by_name["get_turn_context"]["inputSchema"]["required_any"],
             ["turn_id", "message_id", "turn_index"],
         )
+        self.assertEqual(
+            by_name["agent_recall"]["inputSchema"]["required_any"],
+            ["query", "intent"],
+        )
+        self.assertEqual(
+            by_name["recall_context"]["inputSchema"]["required_any"],
+            ["intent", "query"],
+        )
+        self.assertIn("handle", by_name["agent_deepen"]["inputSchema"]["required_any"])
+        self.assertIn("request_index", by_name["agent_deepen"]["inputSchema"]["required_any"])
 
     def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
         last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
@@ -192,6 +218,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("copy_paste_command", encoded)
         self.assertNotIn("machine_next_command", encoded)
         self.assertNotIn("aippo-nav:", encoded)
+        self.assertLessEqual(len(encoded.encode("utf-8")), 5_000)
+        self.assertLessEqual(len(payload), 20)
+        self.assertLessEqual(field_path_count(payload), 120)
         self.assertTrue(payload["audit_available"])
         self.assertTrue(payload["policy_boundary"]["navigation_only_not_fact"])
         self.assertNotIn(str(self.cwd), encoded)
@@ -799,6 +828,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("继续", encoded)
+        self.assertLessEqual(len(encoded.encode("utf-8")), 5_000)
+        self.assertLessEqual(len(payload), 20)
+        self.assertLessEqual(field_path_count(payload), 120)
 
     def test_recall_context_full_detail_keeps_callable_navigation_handle(self) -> None:
         response = mcp.handle_request(
@@ -1482,6 +1514,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("paths", payload["threads"][0])
         self.assertTrue(payload["threads"][0]["thread_key_redacted"])
         self.assertTrue(payload["threads"][0]["thread_handle"].startswith("thread_"))
+        self.assertEqual(
+            payload["threads"][0]["thread_handle_authority"],
+            "diagnostic_local_fingerprint",
+        )
+        self.assertFalse(payload["threads"][0]["thread_handle_usable_as_source_selector"])
 
         full_response = mcp.handle_request(
             {
@@ -1616,6 +1653,52 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(list_payload["store_path"], mcp.LOCAL_PATH_REDACTION)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("source://private/raw-handle", encoded)
+
+    def test_telepathy_handoff_mcp_empty_and_missing_cards_have_recovery_actions(self) -> None:
+        store = self.cwd / "empty-handoffs.jsonl"
+        list_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 73,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_telepathy_handoffs",
+                    "arguments": {"cwd": str(self.cwd), "store_path": str(store)},
+                },
+            }
+        )
+        list_payload = self.tool_payload(list_response)
+
+        missing_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 74,
+                "method": "tools/call",
+                "params": {
+                    "name": "deepen_telepathy_handoff",
+                    "arguments": {
+                        "cwd": str(self.cwd),
+                        "store_path": str(store),
+                        "card_id": "missing-card",
+                    },
+                },
+            }
+        )
+        missing_payload = self.tool_payload(missing_response)
+        encoded = json.dumps([list_payload, missing_payload], ensure_ascii=False, sort_keys=True)
+
+        self.assertFalse(list_response["result"].get("isError", False))
+        self.assertEqual(list_payload["count"], 0)
+        self.assertEqual(
+            list_payload["empty_state"]["state"],
+            "no_matching_telepathy_handoffs",
+        )
+        self.assertIn("normal recall/search", list_payload["empty_state"]["agent_next_action"])
+        self.assertTrue(missing_response["result"].get("isError", False))
+        self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
+        self.assertIn("telepathy list --status all", missing_payload["agent_next_action"])
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("empty-handoffs.jsonl", encoded)
 
     def test_tools_call_rejects_malformed_arguments(self) -> None:
         response = mcp.handle_request(
@@ -1761,6 +1844,34 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
         self.assertNotIn("checks", payload)
+
+    def test_memory_health_exception_returns_recovery_card_not_bare_tool_error(self) -> None:
+        with mock.patch.object(
+            mcp.aippocampus_health,
+            "health_report",
+            side_effect=FileNotFoundError(f"no rollout found for cwd: {self.cwd}"),
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 582,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd)},
+                    },
+                }
+            )
+
+        self.assertFalse(response["result"].get("isError", False))
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_memory_health_recovery")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "health_unavailable")
+        self.assertIn("agent_next_action", payload)
+        self.assertIn("onboard --provider auto --status", payload["recovery_actions"][0])
+        self.assertNotIn(str(self.cwd), encoded)
 
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:
         requests = [

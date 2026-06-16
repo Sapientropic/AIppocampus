@@ -625,9 +625,14 @@ def _attach_route_metrics_and_warnings(
     for name, route in routes.items():
         value_count = _foreground_value_count(route)
         signal_count = _signal_count(route)
-        value_rate = round(value_count / signal_count, 4)
+        value_ratio = round(value_count / signal_count, 4)
+        value_rate = min(1.0, value_ratio)
         route["yield"]["foreground_value_count"] = value_count
+        route["yield"]["foreground_value_ratio"] = value_ratio
         route["yield"]["foreground_value_rate"] = value_rate
+        route["yield"]["metric_notes"] = [
+            "foreground_value_ratio may exceed 1 when one generated candidate produces multiple foreground cards; foreground_value_rate is normalized to 0..1."
+        ]
         effective_tokens = _safe_int((route.get("spend") or {}).get("effective_tokens"))
         if effective_tokens >= warn_effective_tokens and value_rate < warn_min_foreground_value_rate:
             warning = {
@@ -735,6 +740,82 @@ def _totals(routes: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     return {"spend": dict(spend_counter), "yield": dict(yield_counter)}
 
 
+def _route_spend_summary(route_name: str, route: Mapping[str, Any]) -> dict[str, Any]:
+    spend_value = route.get("spend")
+    spend: Mapping[str, Any] = spend_value if isinstance(spend_value, Mapping) else {}
+    yield_value = route.get("yield")
+    y: Mapping[str, Any] = yield_value if isinstance(yield_value, Mapping) else {}
+    return {
+        "route": route_name,
+        "effective_tokens": _safe_int(spend.get("effective_tokens")),
+        "request_count": _safe_int(spend.get("request_count")),
+        "known_usage": bool(spend.get("known_usage")),
+        "foreground_value_rate": _safe_float(y.get("foreground_value_rate")),
+        "foreground_value_ratio": _safe_float(y.get("foreground_value_ratio")),
+        "foreground_value_count": _safe_int(y.get("foreground_value_count")),
+        "generated_candidates": _safe_int(y.get("generated_candidates")),
+    }
+
+
+def _usage_gap_routes(routes: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    gaps: list[str] = []
+    for name, route in routes.items():
+        telemetry = route.get("model_telemetry")
+        if not isinstance(telemetry, Mapping):
+            continue
+        if telemetry.get("usage_available"):
+            continue
+        request_count = _safe_int(telemetry.get("request_count"))
+        missing_counts = telemetry.get("usage_missing_reason_counts")
+        if request_count or (isinstance(missing_counts, Mapping) and missing_counts):
+            gaps.append(str(name))
+    return gaps
+
+
+def _spend_decision(
+    routes: Mapping[str, Mapping[str, Any]],
+    *,
+    warnings: list[dict[str, Any]],
+    reporting_boundary: Mapping[str, Any],
+) -> dict[str, Any]:
+    summaries = [_route_spend_summary(name, route) for name, route in routes.items()]
+    highest = max(summaries, key=lambda item: item["effective_tokens"], default={})
+    spent_routes = [item for item in summaries if item["effective_tokens"] > 0]
+    lowest_candidates = spent_routes or summaries
+    lowest = min(
+        lowest_candidates,
+        key=lambda item: (item["foreground_value_rate"], -item["effective_tokens"]),
+        default={},
+    )
+    usage_gaps = _usage_gap_routes(routes)
+    warning_routes = sorted({str(item.get("route")) for item in warnings if item.get("route")})
+    if warning_routes:
+        action = "inspect"
+        reason = "At least one route crossed the spend threshold without enough normalized foreground value."
+    elif usage_gaps:
+        action = "inspect_usage"
+        reason = "Some model-backed artifacts lack usage telemetry, so token spend cannot be judged from local records."
+    else:
+        action = "continue"
+        reason = "No local spend/yield warning crossed the configured thresholds."
+    return {
+        "action": action,
+        "reason": reason,
+        "highest_spend_route": highest,
+        "lowest_yield_route": lowest,
+        "routes_to_pause_or_inspect": warning_routes,
+        "usage_telemetry_gaps": usage_gaps,
+        "estimated_cost_supported": bool(reporting_boundary.get("estimated_cost_supported")),
+        "cost_basis": reporting_boundary.get("cost_basis"),
+        "cost_explanation": (
+            "token volume only; provider billing dashboards are not scraped"
+            if not reporting_boundary.get("estimated_cost_supported")
+            else "estimated from configured local price table"
+        ),
+        "safe_next_command": "aippocampus doctor spend --json",
+    }
+
+
 def build_spend_doctor_report(
     *,
     registry_dir: Path | str | None = None,
@@ -759,6 +840,12 @@ def build_spend_doctor_report(
         warn_effective_tokens=max(1, int(warn_effective_tokens)),
         warn_min_foreground_value_rate=max(0.0, _safe_float(warn_min_foreground_value_rate)),
     )
+    reporting_boundary = {
+        "registry_location_printed": False,
+        "price_table_configured": False,
+        "estimated_cost_supported": False,
+        "cost_basis": "tokens_only_no_provider_billing_scrape",
+    }
     report = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_spend_doctor",
@@ -787,13 +874,13 @@ def build_spend_doctor_report(
             warn_effective_tokens=max(1, int(warn_effective_tokens)),
             warn_min_foreground_value_rate=max(0.0, _safe_float(warn_min_foreground_value_rate)),
         ),
-        "reporting_boundary": {
-            "registry_location_printed": False,
-            "price_table_configured": False,
-            "estimated_cost_supported": False,
-            "cost_basis": "tokens_only_no_provider_billing_scrape",
-        },
+        "reporting_boundary": reporting_boundary,
     }
+    report["decision"] = _spend_decision(
+        routes,
+        warnings=warnings,
+        reporting_boundary=reporting_boundary,
+    )
     return runtime_core.sanitize_external_model_payload(report)
 
 
@@ -808,6 +895,27 @@ def render_text(report: Mapping[str, Any]) -> str:
     spend_value = totals.get("spend")
     spend: Mapping[str, Any] = spend_value if isinstance(spend_value, Mapping) else {}
     lines.append(f"- Effective tokens: {_safe_int(spend.get('effective_tokens'))}")
+    decision_value = report.get("decision")
+    decision: Mapping[str, Any] = decision_value if isinstance(decision_value, Mapping) else {}
+    if decision:
+        highest = decision.get("highest_spend_route")
+        highest_route: Mapping[str, Any] = highest if isinstance(highest, Mapping) else {}
+        lowest = decision.get("lowest_yield_route")
+        lowest_route: Mapping[str, Any] = lowest if isinstance(lowest, Mapping) else {}
+        lines.append(f"- Decision: {decision.get('action')}")
+        if highest_route:
+            lines.append(
+                f"- Highest spend: {highest_route.get('route')} ({_safe_int(highest_route.get('effective_tokens'))} effective tokens)"
+            )
+        if lowest_route:
+            lines.append(
+                f"- Lowest yield: {lowest_route.get('route')} (rate {_safe_float(lowest_route.get('foreground_value_rate'))})"
+            )
+        lines.append(f"- Cost: {decision.get('cost_explanation') or 'token volume only'}")
+        if decision.get("safe_next_command"):
+            lines.append(f"- Next: {decision.get('safe_next_command')}")
+        if decision.get("reason"):
+            lines.append(f"- Why: {decision.get('reason')}")
     for warning in report.get("warnings") or []:
         if isinstance(warning, Mapping):
             lines.append(f"- Warning: {warning.get('code')}")

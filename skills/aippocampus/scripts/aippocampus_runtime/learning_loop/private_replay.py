@@ -21,6 +21,7 @@ from aippocampus_runtime.learning_loop.core import (
     project_action_time_guidance,
 )
 from aippocampus_runtime.learning_loop.effectiveness_ledger import (
+    append_ledger_rows,
     ledger_rows_from_guidance_outcomes,
     summarize_effectiveness_ledger,
 )
@@ -231,6 +232,13 @@ def build_private_history_replay_report(
         "ok": bool(guidance) and bool(context_workflows),
         "fixture_input": fixture_input,
         "input_origin": input_origin or ("fixture_synthetic" if fixture_input else "real_sanitized_history"),
+        "evidence_origin": {
+            "kind": "synthetic_fixture" if fixture_input else "sanitized_real_history",
+            "fixture_metrics_are_not_real_history": fixture_input,
+            "real_history_replay_command": (
+                "aippocampus learning replay --events <sanitized-events.jsonl> --json"
+            ),
+        },
         "sanitized_export_summary": dict(sanitized_export_summary or validate_private_replay_export(rows)),
         "input_event_count": len(rows),
         "private_history_role": "local_private_dogfood_harness",
@@ -287,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--clean-source-events", type=Path, help="Sanitized clean-source behavior events to export first.")
     parser.add_argument("--rollout", type=Path, help="Operator-selected raw rollout; exported to sanitized behavior events before replay.")
     parser.add_argument("--export-output", type=Path, help="Where to write temporary sanitized replay events.")
+    parser.add_argument("--effectiveness-ledger", type=Path, help="Append replay effectiveness rows here.")
+    parser.add_argument("--append-ledger", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
     export_summary = None
@@ -309,6 +319,10 @@ def main(argv: list[str] | None = None) -> int:
         input_origin=input_origin,
         sanitized_export_summary=export_summary,
     )
+    if args.append_ledger:
+        if not args.effectiveness_ledger:
+            parser.error("--append-ledger requires --effectiveness-ledger")
+        append_ledger_rows(args.effectiveness_ledger, report.get("effectiveness_ledger_rows") or [])
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
