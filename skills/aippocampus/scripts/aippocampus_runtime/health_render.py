@@ -129,7 +129,7 @@ def render_health_text(result: dict[str, Any]) -> None:
             print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
         runnable = [item for item in actions if item.get("command")]
         if runnable:
-            print("\nNext:")
+            print("\nNext:" if not result["ok"] else "\nOptional maintenance:")
             for index, item in enumerate(runnable[:3], start=1):
                 print(f"{index}. {item['id']}: {item.get('facade_command') or item['command']}")
 

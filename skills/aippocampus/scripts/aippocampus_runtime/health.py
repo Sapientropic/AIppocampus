@@ -394,7 +394,15 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     message_delta = max(0, current_message_count - indexed_messages)
     byte_delta = max(0, rollout_stat.st_size - indexed_bytes)
     live_delta_tolerance = max(0, int(options.live_delta_tolerance_messages))
-    if manifest and message_delta > live_delta_tolerance:
+    # A live foreground thread writes new rollout rows while health and
+    # maintenance are running. Treat small deltas as a fresh window so the
+    # readiness gate does not create a self-perpetuating maintenance loop; the
+    # bulk stale threshold still protects future-thread recall quality.
+    stale_message_threshold = max(
+        live_delta_tolerance + 1,
+        int(options.max_stale_messages),
+    )
+    if manifest and message_delta >= stale_message_threshold:
         index_reasons.append(
             f"{message_delta} latest visible message(s) are newer than the index"
         )
@@ -449,11 +457,11 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         0, expected_clean_source_message_count - clean_source_message_count
     )
     clean_source_turn_delta = max(0, expected_clean_source_turn_count - clean_source_turn_count)
-    if clean_manifest and clean_source_message_delta > live_delta_tolerance:
+    if clean_manifest and clean_source_message_delta >= stale_message_threshold:
         clean_reasons.append(
             f"{clean_source_message_delta} latest visible clean-source message(s) are missing"
         )
-    if clean_manifest and clean_source_turn_delta > live_delta_tolerance:
+    if clean_manifest and clean_source_turn_delta >= stale_message_threshold:
         clean_reasons.append(
             f"{clean_source_turn_delta} latest clean-source turn(s) are missing"
         )
@@ -636,9 +644,9 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         freshness["latest_visible_gap"]
         and blocking_action_count == 0
         and (
-            0 < message_delta <= live_delta_tolerance
-            or 0 < clean_source_message_delta <= live_delta_tolerance
-            or 0 < clean_source_turn_delta <= live_delta_tolerance
+            0 < message_delta < stale_message_threshold
+            or 0 < clean_source_message_delta < stale_message_threshold
+            or 0 < clean_source_turn_delta < stale_message_threshold
         )
     )
     checkpoint_status = "due_when_idle" if checkpoint_due else "current"
