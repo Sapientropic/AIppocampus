@@ -193,6 +193,12 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "why-not-recall")
         self.assertEqual(payload["kind"], "aippocampus_recall_diagnostic")
         self.assertIn("recall_context", payload["searched_surfaces"])
+        action_ids = [item["id"] for item in payload["safe_next_actions"]]
+        self.assertEqual(action_ids.count("recall_same_cue"), 1)
+        self.assertEqual(payload["next_safe_action"], payload["agent_next_action"]["id"])
+        self.assertEqual(payload["authority_next_safe_action"], "reopen_source")
+        deepen_action = next(item for item in payload["safe_next_actions"] if item["id"] == "deepen_after_recall")
+        self.assertEqual(deepen_action["depends_on"], "recall_same_cue")
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
@@ -264,6 +270,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         )
         encoded = json.dumps(payload, ensure_ascii=False)
         commands = [item["command"] for item in payload["safe_next_actions"]]
+        self.assertEqual(payload["next_safe_action"], "check_onboarding_status")
         self.assertIn('aippocampus agent recall "old correction" --json', commands)
         self.assertNotIn('"<cue>"', encoded)
         self.assertNotIn('"<distinctive exact phrase>"', encoded)

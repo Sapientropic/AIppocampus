@@ -206,7 +206,7 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
             "why": "No route is claim-ready; use the same cue as a bounded source search before broadening.",
             "mutation_risk": "read_only",
         }
-    actions = [
+    candidate_actions = [
         primary,
         {
             "id": "recall_same_cue",
@@ -218,11 +218,12 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
             "id": "deepen_after_recall",
             "command": deepen_command,
             "why": "Use after recall writes a same-machine last-recall request cache.",
+            "depends_on": "recall_same_cue",
             "mutation_risk": "read_only",
         },
     ]
     if primary["id"] != "check_onboarding_status":
-        actions.append(
+        candidate_actions.append(
             {
                 "id": "check_onboarding_status",
                 "command": onboard_command,
@@ -230,14 +231,25 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
                 "mutation_risk": "read_only",
             }
         )
+    actions: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for action in candidate_actions:
+        action_id = str(action.get("id") or "")
+        if action_id in seen_ids:
+            continue
+        seen_ids.add(action_id)
+        actions.append(action)
     action_card = payload.get("action_card")
     if isinstance(action_card, dict):
         action_card["next_command"] = primary["command"]
         action_card["primary_action"] = primary["id"]
         action_card["claim_boundary"] = "diagnostic_not_source_evidence"
+    if next_safe:
+        payload["authority_next_safe_action"] = next_safe
     payload["agent_next_action"] = primary
     payload["safe_next_actions"] = actions
     payload["foreground_next_action"] = primary["id"]
+    payload["next_safe_action"] = primary["id"]
     return payload
 
 

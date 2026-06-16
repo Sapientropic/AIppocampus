@@ -280,12 +280,20 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("suggested_next_command", public)
         self.assertNotIn("public_safe_command_preview", public)
         self.assertNotIn("<local-private-handle>", encoded)
+        self.assertNotIn("<", encoded)
         self.assertNotIn("agent deepen", encoded)
         self.assertEqual(public["foreground_action"]["action_id"], "recover_recall_miss")
         self.assertEqual(public["foreground_action"]["tool_name"], "search_memory")
+        self.assertEqual(
+            public["foreground_action"]["cli_command"],
+            'aippocampus search "distinctive exact phrase" --json',
+        )
         self.assertEqual(public["miss_recovery_card"]["miss_class"], "no_route")
         self.assertIn("refine", " ".join(public["miss_recovery_card"]["recovery_actions"]))
-        self.assertIn("onboard --status", " ".join(public["miss_recovery_card"]["recovery_actions"]))
+        self.assertIn(
+            "onboard --provider auto --status",
+            " ".join(public["miss_recovery_card"]["recovery_actions"]),
+        )
 
     def test_public_recall_weak_route_without_deepen_request_gets_recovery_card(self) -> None:
         public = agent_continuity.public_recall_projection(

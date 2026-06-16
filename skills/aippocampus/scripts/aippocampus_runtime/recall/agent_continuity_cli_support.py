@@ -9,6 +9,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime import core
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
@@ -88,6 +89,56 @@ def policy_boundary() -> dict[str, Any]:
         "public_sdk_stability_claim": False,
         "hosted_api_claim": False,
     }
+
+
+def agent_recall_missing_query_payload(
+    *,
+    schema_version: str,
+    kind: str,
+) -> dict[str, Any]:
+    payload = foreground_recovery_card(
+        kind=kind,
+        status="needs_input",
+        error_code="agent_recall_cue_required",
+        message="agent recall needs a cue, old decision, issue title, or handoff phrase.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="recall_vague_cue",
+                label="Run agent recall with a continuity cue",
+                command='aippocampus agent recall "old decision or handoff cue" --json',
+                why="Use recall for fuzzy continuity, unfinished work, and old route context.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+            foreground_shell_action(
+                action_id="search_exact_phrase",
+                label="Search exact clean-source wording",
+                command='aippocampus search "distinctive exact phrase" --json',
+                why="Use search when you know a distinctive exact phrase.",
+                mutation_risk="read_only",
+                claim_boundary="search_result_requires_source_boundary",
+            ),
+            foreground_shell_action(
+                action_id="check_onboarding_status",
+                label="Check source registration",
+                command="aippocampus onboard --provider auto --status --json",
+                why="Use this if recall/search has no local clean-source surface yet.",
+                mutation_risk="read_only",
+                claim_boundary="setup_status_not_memory_evidence",
+            ),
+        ],
+    )
+    payload.update(
+        {
+            "schema_version": schema_version,
+            "recovery_kind": "aippocampus_agent_recall_recovery",
+            "mode": "recall",
+            "surface": "agent_cli_or_mcp_adapter",
+            "policy_boundary": policy_boundary(),
+            "cannot_claim": ["source_backed_claim", "absence_of_memory"],
+        }
+    )
+    return payload
 
 
 def handle_recovery_fields(mode: str) -> dict[str, Any]:

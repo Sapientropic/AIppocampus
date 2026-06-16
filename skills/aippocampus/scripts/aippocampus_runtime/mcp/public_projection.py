@@ -301,8 +301,8 @@ def _recall_miss_recovery_card(status: Any) -> dict[str, Any]:
         "primary_action": "refine_cue_or_run_exact_search",
         "recovery_actions": [
             'refine the cue with a project, object, person, or time clue',
-            'aippocampus search "<distinctive exact phrase>" --json',
-            "aippocampus onboard --status --json",
+            'aippocampus search "distinctive exact phrase" --json',
+            "aippocampus onboard --provider auto --status --json",
         ],
         "do_not": [
             "do not claim from scent or route silence",
@@ -380,10 +380,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "action_id": "recover_recall_miss",
             "tool_name": "search_memory",
             "arguments": {
-                "query": "<refined cue or exact phrase>",
+                "query": "distinctive exact phrase",
                 "max": 5,
             },
-            "cli_command": 'aippocampus search "<distinctive exact phrase>" --json',
+            "cli_command": 'aippocampus search "distinctive exact phrase" --json',
             "why": "No route surfaced; try exact source-backed search or check onboarding/index freshness.",
             "claim_boundary": "no_route_claim",
         }
@@ -393,10 +393,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "action_id": "recover_weak_route",
             "tool_name": "search_memory",
             "arguments": {
-                "query": "<more specific cue or exact phrase>",
+                "query": "more specific cue or exact phrase",
                 "max": 5,
             },
-            "cli_command": 'aippocampus search "<distinctive exact phrase>" --json',
+            "cli_command": 'aippocampus search "distinctive exact phrase" --json',
             "why": "A route surfaced without a safe deepen action; refine or exact-search before relying on it.",
             "claim_boundary": "no_claim_before_reopen",
         }

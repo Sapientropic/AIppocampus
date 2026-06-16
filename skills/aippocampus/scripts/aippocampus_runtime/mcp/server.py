@@ -44,6 +44,7 @@ from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     RouteLimitError,
+    agent_recall_missing_query_payload,
     compact_aippo_guidance_card,
     handle_from_last_recall_cache,
     last_recall_unavailable_payload,
@@ -308,16 +309,11 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
 def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     query = str(arguments.get("query") or arguments.get("intent") or "").strip()
     if not query:
-        return tool_error(
-            "missing_query",
-            "agent_recall requires a non-empty query or intent.",
-            arguments=arguments,
-            required_any=["query", "intent"],
-            agent_next_action=(
-                "Call agent_recall with the user's cue or issue title, then deepen before factual claims."
-            ),
-            example_arguments={"query": "old decision or handoff cue", "cwd": "<project cwd>"},
+        payload = agent_recall_missing_query_payload(
+            schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
+            kind="aippocampus_agent_continuity_path",
         )
+        return text_result(public_payload(arguments, payload), is_error=True)
     agent = agent_continuity_module()
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = agent.recall(

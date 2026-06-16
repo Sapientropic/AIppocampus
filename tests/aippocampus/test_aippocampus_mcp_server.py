@@ -405,6 +405,25 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 self.assertIn("agent recall", payload["agent_next_action"])
                 self.assertIn(tool_name.replace("_", " "), payload["follow_up_action"]["cli_command"])
 
+    def test_agent_recall_missing_query_returns_recovery_card(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2039,
+                "method": "tools/call",
+                "params": {"name": "agent_recall", "arguments": {"cwd": str(self.cwd)}},
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["status"], "needs_input")
+        self.assertEqual(payload["error"]["code"], "agent_recall_cue_required")
+        self.assertEqual(payload["agent_next_action"]["id"], "recall_vague_cue")
+        self.assertIn("aippocampus agent recall", payload["agent_next_action"]["command"])
+        self.assertNotIn("<", encoded)
+
     def test_recall_diagnostic_applies_provider_bridge_before_live_semantic_gate(self) -> None:
         env_var = "MCP_PROVIDER_BRIDGE_TEST_KEY"
         secret_value = "mcp-provider-bridge-secret-value"

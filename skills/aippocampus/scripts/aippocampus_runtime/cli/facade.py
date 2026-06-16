@@ -276,6 +276,100 @@ def print_doctor_recovery_card(*, file: TextIO | None = None) -> None:
     print("boundary: doctor output is local diagnostics, not a recall result.", file=target)
 
 
+def doctor_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_doctor_chooser",
+        status="needs_subcommand",
+        decision="choose the local diagnostic question",
+        choices=[
+            foreground_shell_action(
+                action_id="provider",
+                label="Check optional provider visibility",
+                command="aippocampus doctor provider --json",
+                why="Use when model/provider key visibility or semantic-worker availability is the question.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="spend",
+                label="Review spend/yield diagnostics",
+                command="aippocampus doctor spend --json",
+                why="Use when local model spend, yield, or blocked warm work needs review.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="config",
+                label="Audit registered configuration",
+                command="aippocampus doctor config --compact-json",
+                why="Use when checking configured AIPPOCAMPUS_* knobs without printing values.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
+
+
+def smoke_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_smoke_chooser",
+        status="needs_subcommand",
+        decision="choose a bounded smoke runner",
+        choices=[
+            foreground_shell_action(
+                action_id="recall_funnel",
+                label="Run progressive recall funnel smoke",
+                command='aippocampus smoke recall-funnel "old decision or handoff cue" --json',
+                why="Use for a bounded diagnostic of recall_context -> deepen flow.",
+                mutation_risk="read_only",
+                claim_boundary="smoke_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="ordinary_agent_recall",
+                label="Use ordinary continuity path",
+                command='aippocampus agent recall "old decision or handoff cue" --json',
+                why="Use for normal foreground continuity work instead of a smoke diagnostic.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ],
+    )
+
+
+def logs_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_logs_chooser",
+        status="needs_subcommand",
+        decision="inspect log status before rotating local audit artifacts",
+        choices=[
+            foreground_shell_action(
+                action_id="status",
+                label="Inspect log retention status",
+                command="aippocampus logs status --json",
+                why="Read-only status never prints log contents.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="rotate_dry_run",
+                label="Preview bounded rotation",
+                command="aippocampus logs rotate --plan --json",
+                why="Use before any write to see which known artifacts would rotate.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="rotate_apply",
+                label="Apply bounded rotation explicitly",
+                command="aippocampus logs rotate --apply --json",
+                why="Write mode is explicit and should only follow a reviewed plan.",
+                mutation_risk="explicit_local_log_write",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
+
+
 def print_repro_package_help(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
     print("usage: aippocampus repro package [-h] [--input-json INPUT_JSON]", file=target)
@@ -824,8 +918,32 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     ):
         print_repro_package_help()
         return None, 0
-    if args == ["doctor"]:
-        print_doctor_recovery_card()
+    if args[0] == "doctor" and set(args[1:]) <= {"--json"}:
+        payload = doctor_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_doctor_recovery_card()
+        return None, 0
+    if args[0] == "smoke" and set(args[1:]) <= {"--json"}:
+        payload = smoke_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("AIppocampus smoke")
+            print("decision: choose a bounded smoke runner")
+            print('next: aippocampus smoke recall-funnel "old decision or handoff cue" --json')
+            print("ordinary path: aippocampus agent recall \"old decision or handoff cue\" --json")
+            print("boundary: smoke output is diagnostic, not source evidence.")
+        return None, 0
+    if args[0] == "logs" and set(args[1:]) <= {"--json"}:
+        payload = logs_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            invocation = resolve_command(["logs"])
+            if invocation is not None:
+                return invocation, run_invocation(invocation)
         return None, 0
     if args[0] in {"--version", "-V", "version"}:
         payload = version_payload()

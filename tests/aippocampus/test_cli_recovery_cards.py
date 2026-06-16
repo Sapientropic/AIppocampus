@@ -644,6 +644,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             ("sync", "--json"): "aippocampus_sync_chooser",
             ("object-sync", "--json"): "aippocampus_sync_chooser",
             ("storage", "--json"): "aippocampus_storage_chooser",
+            ("doctor", "--json"): "aippocampus_doctor_chooser",
+            ("smoke", "--json"): "aippocampus_smoke_chooser",
+            ("logs", "--json"): "aippocampus_logs_chooser",
             ("continuity-domain", "--json"): "aippocampus_continuity_domain_recovery",
             ("work-guard", "--json"): "aippocampus_issue_work_orientation_packet",
             ("telepathy", "--json"): "aippocampus_telepathy_handoff_error",
@@ -657,6 +660,10 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertEqual(payload["kind"], kind)
                 self.assertIn("foreground-action-v1", payload["foreground_action_contract"])
                 self.assertIn("safe_next_actions" if "safe_next_actions" in payload else "choices", payload)
+                actions = payload.get("safe_next_actions") or payload.get("choices") or []
+                for action in actions:
+                    if isinstance(action, dict) and "command" in action:
+                        self.assertIn("aippocampus ", action["command"])
 
     def test_bare_onboard_json_is_status_first_and_read_only(self) -> None:
         proc = self.run_cli("onboard", "--json")

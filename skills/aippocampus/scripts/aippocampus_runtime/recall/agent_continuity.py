@@ -42,6 +42,7 @@ from aippocampus_runtime.recall import (
 )
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     DEFAULT_MACRO_STATE_RELATIVE_PATHS,
+    agent_recall_missing_query_payload,
     capture_feedback,
     compact_aippo_guidance_card,
     compact_feedback_receipt,
@@ -1563,6 +1564,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "recall":
         query = args.query_flag or " ".join(args.query)
+        if not str(query or "").strip():
+            payload = agent_recall_missing_query_payload(
+                schema_version=SCHEMA_VERSION,
+                kind=KIND,
+            )
+            if args.json:
+                _json_out(payload)
+            else:
+                print("AIppocampus agent recall: cue required")
+                print("Next: " + str(payload["agent_next_action"]["command"]))
+                print("Then: " + str(payload["safe_next_actions"][1]["command"]))
+                print("Boundary: recovery guidance is not source evidence.")
+            return 2
         payload = recall(
             query,
             cwd=args.cwd,
