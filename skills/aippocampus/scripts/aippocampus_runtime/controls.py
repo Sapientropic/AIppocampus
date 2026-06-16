@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -20,13 +19,11 @@ from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_v
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     capture_feedback,
     compact_feedback_receipt,
+    feedback_lane_resolution,
 )
 
 KIND = "aippocampus_personal_control"
 SCHEMA_VERSION = 1
-DEFAULT_FEEDBACK_ENV = "AIPPOCAMPUS_FEEDBACK_JSONL"
-
-
 def _json_out(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
@@ -39,16 +36,6 @@ def _reason_code(value: str | None) -> str:
     raw = (value or "do_not_use_here").strip().lower()
     normalized = re.sub(r"[^a-z0-9_.-]+", "-", raw).strip("-_.")
     return (normalized or "do_not_use_here")[:80]
-
-
-def _feedback_path(value: str | None) -> tuple[Path | None, str]:
-    if value:
-        return Path(value), "argument"
-    env_value = os.environ.get(DEFAULT_FEEDBACK_ENV)
-    if env_value:
-        return Path(env_value), "environment"
-    return None, "none"
-
 
 def _boundary() -> dict[str, Any]:
     return {
@@ -86,7 +73,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
                     "label": "quiet one route instead",
                     "command": (
                         "aippocampus do-not-use-here <route-or-ticket-id> "
-                        "--surface recall-route --feedback-jsonl <local-feedback.jsonl> --json"
+                        "--surface recall-route --json"
                     ),
                 },
             ],
@@ -112,8 +99,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             {
                 "label": "quiet this route or ticket",
                 "command": (
-                    "aippocampus do-not-use-here <route-or-ticket-id> "
-                    "--feedback-jsonl <local-feedback.jsonl> --json"
+                    "aippocampus do-not-use-here <route-or-ticket-id> --json"
                 ),
             },
             {"label": "export before transfer or review", "command": "aippocampus export --help"},
@@ -182,7 +168,13 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             2,
         )
     reason_code = _reason_code(args.reason)
-    path, path_source = _feedback_path(args.feedback_jsonl)
+    lane = feedback_lane_resolution(
+        args.feedback_jsonl,
+        cwd=args.cwd,
+        registry_dir=args.registry_dir,
+    )
+    path = lane["path"]
+    path_source = str(lane.get("path_source") or "unknown")
     if args.surface == "recall-route":
         payload = capture_feedback(
             route_id=args.target,
@@ -190,6 +182,7 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             route_kind="active_path",
             reason=reason_code,
             feedback_path=path,
+            feedback_lane=lane,
             schema_version="agent-opt-in-continuity-v0",
             kind="aippocampus_agent_continuity_path",
         )
@@ -206,6 +199,7 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                     "surface": "recall-route",
                     "target": args.target,
                     "feedback_path_source": path_source,
+                    "feedback_lane": receipt.get("feedback_lane") or lane,
                     "quieted_future_routes": wrote_event,
                     "write_boundary": receipt.get("write_boundary"),
                     "feedback": receipt,
@@ -222,14 +216,14 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                         else {
                             "status": "not_quieted_yet",
                             "reason_codes": ["feedback_receipt_only"],
-                            "safe_readout": "nothing durable was written; add --feedback-jsonl",
+                            "safe_readout": "nothing durable was written; rerun with a resolvable feedback lane",
                         }
                     ),
                     "next_safe_action": (
                         "continue the task; future recall can use this JSONL as low-authority calibration"
-                        if wrote_event
-                        else "not quieted yet; add --feedback-jsonl <local-feedback.jsonl>"
-                    ),
+                    if wrote_event
+                    else "not quieted yet; rerun with --feedback-jsonl <path> or a writable default registry"
+                ),
                     "boundary": _boundary(),
                 }
             ),
@@ -264,6 +258,7 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                 "surface": "coding-ticket",
                 "target": args.target,
                 "feedback_path_source": path_source,
+                "feedback_lane": lane,
                 "quieted_future_tickets": bool(wrote_event),
                 "action_time_consumed": consumed,
                 "write_boundary": {
@@ -336,8 +331,10 @@ def build_parser(prog: str = "aippocampus pause") -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--feedback-jsonl",
-        help=f"Optional durable local feedback JSONL. Can also come from {DEFAULT_FEEDBACK_ENV}.",
+        help="Optional durable local feedback JSONL. Defaults to a scoped registry lane.",
     )
+    parser.add_argument("--cwd", help="Workspace scope for the default feedback lane.")
+    parser.add_argument("--registry-dir", help="Registry root for the default feedback lane.")
     parser.add_argument(
         "--outcome",
         default="wrong_route_drag",

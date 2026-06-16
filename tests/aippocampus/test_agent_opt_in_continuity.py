@@ -15,7 +15,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity, feedback_events  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, feedback_events  # noqa: E402
+from aippocampus_runtime.registry import api as registry_api  # noqa: E402
 
 
 class AgentOptInContinuityTests(unittest.TestCase):
@@ -667,6 +668,246 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_handles", encoded)
         self.assertNotIn("head_votes", encoded)
         self.assertNotIn("src_helpful", encoded)
+
+    def test_cli_agent_feedback_default_lane_is_consumed_by_next_recall(self) -> None:
+        registry = self.cwd / "registry"
+        env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+        base = [sys.executable, "-m", "aippocampus_runtime.cli.facade", "agent"]
+        run_kwargs = {
+            "cwd": SCRIPTS,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "capture_output": True,
+            "check": False,
+            "env": env,
+        }
+        recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        route_id = json.loads(recall_proc.stdout)["routes"][0]["route_id"]
+
+        feedback_proc = subprocess.run(
+            [
+                *base,
+                "feedback",
+                route_id,
+                "--outcome",
+                "wrong",
+                "--cwd",
+                str(self.cwd),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(feedback_proc.returncode, 0, feedback_proc.stderr)
+        feedback_payload = json.loads(feedback_proc.stdout)
+        self.assertEqual(feedback_payload["write_boundary"]["storage"], "jsonl")
+        self.assertEqual(feedback_payload["feedback_lane"]["path_source"], "default_registry")
+
+        full_recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--attention-router",
+                "--json",
+                "--detail",
+                "full",
+            ],
+            **run_kwargs,
+        )
+
+        self.assertEqual(full_recall_proc.returncode, 0, full_recall_proc.stderr)
+        full_payload = json.loads(full_recall_proc.stdout)
+        calibration = full_payload["attention_router_navigation"]["feedback_calibration"]
+        encoded = json.dumps(full_payload, ensure_ascii=False)
+        self.assertEqual(calibration["load_status"], "loaded")
+        self.assertGreaterEqual(calibration["event_count_loaded"], 1)
+        self.assertNotIn(str(registry), encoded)
+
+    def test_cli_agent_recall_default_compact_last_recall_round_trips(self) -> None:
+        registry = self.cwd / "registry"
+        env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+        base = [sys.executable, "-m", "aippocampus_runtime.cli.facade", "agent"]
+        run_kwargs = {
+            "cwd": SCRIPTS,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "capture_output": True,
+            "check": False,
+            "env": env,
+        }
+        recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        recall_payload = json.loads(recall_proc.stdout)
+        self.assertTrue(recall_payload["last_recall_cache_available"])
+        self.assertIn("--last-recall", recall_payload["foreground_action"]["cli_command"])
+
+        deepen_proc = subprocess.run(
+            [
+                *base,
+                "deepen",
+                "--request",
+                "1",
+                "--last-recall",
+                "--json",
+            ],
+            **run_kwargs,
+        )
+
+        self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
+        deepen_payload = json.loads(deepen_proc.stdout)
+        self.assertEqual(deepen_payload["mode"], "deepen")
+        self.assertEqual(deepen_payload["status"], "ok")
+        self.assertNotIn(str(registry), deepen_proc.stdout)
+
+    def test_last_recall_cache_preserves_dict_handles_as_json(self) -> None:
+        cache_path = self.cwd / "last-recall-dict.json"
+        handle_dict = {
+            "kind": "thread_candidate",
+            "route_id": "route_dict",
+            "thread_key": "session:test",
+        }
+
+        wrote = agent_continuity_cli_support.write_last_recall_cache(
+            [{"request_index": 1, "route_id": "route_dict", "handle": handle_dict}],
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=None,
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=1,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+        handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+            request_index=1,
+            path=cache_path,
+        )
+
+        self.assertTrue(wrote)
+        self.assertEqual(json.loads(handle), handle_dict)
+
+    def test_agent_deepen_accepts_json_thread_candidate_handle(self) -> None:
+        registry_dir = self.cwd / "registry"
+        thread_key = "session:thread-candidate"
+        clean_dir = registry_api.thread_store_dir(thread_key, registry_dir) / "clean-source"
+        clean_dir.mkdir(parents=True)
+        with (clean_dir / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "thread_key": thread_key,
+                        "message_id": "msg_tc",
+                        "turn_id": "turn_tc",
+                        "turn_index": 1,
+                        "source_line": 1,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "text": "Thread candidate handles should reopen clean source.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        payload = agent_continuity.deepen(
+            json.dumps(
+                {
+                    "kind": "thread_candidate",
+                    "route_id": "route_thread_candidate",
+                    "thread_key": thread_key,
+                },
+                ensure_ascii=False,
+            ),
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=registry_dir,
+        )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["result"]["route_id"], "route_thread_candidate")
+        self.assertEqual(payload["result"]["source_refs"][0]["thread_key"], thread_key)
+
+    def test_compact_projection_does_not_advertise_last_recall_when_cache_missing(self) -> None:
+        payload = {
+            "kind": agent_continuity.KIND,
+            "schema_version": agent_continuity.SCHEMA_VERSION,
+            "mode": "recall",
+            "status": "ok",
+            "opt_in_required": True,
+            "last_recall_cache_available": False,
+            "foreground_action_card": {
+                "canonical_action": {
+                    "action_id": "agent_deepen_selected_route",
+                    "tool_name": "agent_deepen",
+                    "arguments": {"request_index": 1, "last_recall": True},
+                    "cli_command": "aippocampus agent deepen --request 1 --last-recall",
+                    "claim_boundary": "no_claim_before_reopen",
+                }
+            },
+            "memory_packets": [
+                {
+                    "route_id": "route_missing_cache",
+                    "route_label": "missing cache route",
+                    "output_mode": "reopenable_route",
+                    "claim_permission": "no_claim_before_reopen",
+                }
+            ],
+            "metrics": {"requested_max_routes": 1, "effective_max_routes": 1},
+            "policy_boundary": agent_continuity.policy_boundary(),
+        }
+
+        projected = agent_continuity.public_recall_projection(payload)
+        encoded = json.dumps(projected, ensure_ascii=False)
+
+        self.assertFalse(projected["last_recall_cache_available"])
+        self.assertNotIn("--last-recall", encoded)
+        self.assertEqual(projected["foreground_action"]["action_id"], "repair_last_recall_cache")
+        self.assertIn("last_recall_cache_recovery_card", projected)
+
+    def test_last_recall_unavailable_recovery_does_not_loop_to_same_command(self) -> None:
+        payload = agent_continuity_cli_support.last_recall_unavailable_payload(
+            mode="deepen",
+            exc=ValueError("public compact recall projection needs the same-machine last recall cache"),
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            kind=agent_continuity.KIND,
+        )
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(payload["next_safe_action"], "rerun_agent_recall_or_use_full_detail_handle")
+        self.assertNotIn("--last-recall", encoded)
+        self.assertIn("--detail full", encoded)
 
     def test_memory_packet_budget_trimming_keeps_route_label(self) -> None:
         packet = {

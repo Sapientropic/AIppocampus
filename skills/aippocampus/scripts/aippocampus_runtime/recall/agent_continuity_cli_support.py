@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_v
 from aippocampus_runtime.recall import feedback_events
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
+DEFAULT_FEEDBACK_ENV = "AIPPOCAMPUS_FEEDBACK_JSONL"
 DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
     Path(".aippocampus") / "macro-orientation.jsonl",
     Path(".aippocampus") / "macro_orientation.jsonl",
@@ -102,6 +104,28 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
     }
 
 
+def last_recall_cache_recovery_fields(mode: str) -> dict[str, Any]:
+    command = 'aippocampus agent recall "<cue>" --json --detail full'
+    return {
+        "foreground_action": {
+            "tool_name": "agent_recall",
+            "arguments": {"query": "<cue>", "detail": "full"},
+            "cli_command": command,
+            "claim_boundary": "no_claim_before_reopen",
+        },
+        "agent_next_action": command,
+        "next_safe_action": "rerun_agent_recall_or_use_full_detail_handle",
+        "examples": [
+            'aippocampus agent recall "<cue>" --json',
+            command,
+        ],
+        "recovery_actions": [
+            "rerun compact recall to rebuild the same-machine request cache",
+            "use --detail full locally and pass the selected deepen_requests[].handle",
+        ],
+    }
+
+
 def missing_handle_payload(
     *,
     mode: str,
@@ -152,7 +176,7 @@ def last_recall_unavailable_payload(
                     "message": str(exc),
                 }
             },
-            **handle_recovery_fields(mode),
+            **last_recall_cache_recovery_fields(mode),
             "policy_boundary": policy_boundary(),
             "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
         }
@@ -163,6 +187,60 @@ def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
 
 
+def _workspace_feedback_scope_id(cwd: str | Path | None = None) -> str:
+    root = Path(cwd or Path.cwd()).expanduser().resolve()
+    digest = hashlib.sha256(str(root).encode("utf-8", errors="replace")).hexdigest()[:16]
+    return f"workspace_{digest}"
+
+
+def feedback_lane_resolution(
+    explicit: str | Path | None = None,
+    *,
+    cwd: str | Path | None = None,
+    registry_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Resolve the low-authority route-feedback lane for foreground controls.
+
+    The default lane is deliberately registry-backed and workspace-scoped. Do
+    not broaden this into a project-local `.aippocampus` write or a global
+    unscoped feedback file: route feedback is useful calibration, not source
+    truth, and `do-not-use-here` must not bleed across unrelated workspaces.
+    """
+
+    if explicit:
+        return {
+            "path": Path(explicit).expanduser().resolve(),
+            "path_source": "argument",
+            "scope": "explicit_override",
+            "path_label": "explicit-feedback-jsonl",
+            "raw_path_emitted": False,
+        }
+    env_value = os.environ.get(DEFAULT_FEEDBACK_ENV)
+    if env_value:
+        return {
+            "path": Path(env_value).expanduser().resolve(),
+            "path_source": "environment",
+            "scope": "explicit_override",
+            "path_label": f"{DEFAULT_FEEDBACK_ENV}",
+            "raw_path_emitted": False,
+        }
+    scope_id = _workspace_feedback_scope_id(cwd)
+    root = Path(registry_dir).expanduser().resolve() if registry_dir else core.aippocampus_registry_dir().resolve()
+    return {
+        "path": root / "agent" / "feedback" / scope_id / "route-feedback.jsonl",
+        "path_source": "default_registry",
+        "scope": "current_workspace",
+        "scope_id": scope_id,
+        "path_label": "registry/agent/feedback/<workspace-scope>/route-feedback.jsonl",
+        "raw_path_emitted": False,
+        "review_boundary": {
+            "local_jsonl_lane": True,
+            "source_truth_mutation_allowed": False,
+            "remove_or_edit_requires_explicit_local_file_action": True,
+        },
+    }
+
+
 def capture_feedback(
     *,
     route_id: str,
@@ -170,6 +248,7 @@ def capture_feedback(
     route_kind: str = "active_path",
     reason: str = "",
     feedback_path: str | Path | None = None,
+    feedback_lane: Mapping[str, Any] | None = None,
     schema_version: str = "agent-opt-in-continuity-v0",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
@@ -198,6 +277,7 @@ def capture_feedback(
             "status": "captured",
             "authority": "low_authority_feedback_signal",
             "event": event,
+            "feedback_lane": dict(feedback_lane or {}) if feedback_lane else None,
             "feedback_report": report,
             "wrote_event": wrote_event,
             "storage": "jsonl" if wrote_event else "receipt_only",
@@ -224,6 +304,8 @@ def compact_feedback_receipt(
     raw_event = payload.get("event")
     event: Mapping[str, Any] = raw_event if isinstance(raw_event, Mapping) else {}
     wrote_event = bool(payload.get("wrote_event"))
+    raw_lane = payload.get("feedback_lane")
+    lane: Mapping[str, Any] = raw_lane if isinstance(raw_lane, Mapping) else {}
     return _public_payload(
         {
             "kind": kind,
@@ -245,8 +327,9 @@ def compact_feedback_receipt(
                 "source_truth_changed_by_feedback": False,
                 "feedback_is_source_truth": False,
             },
+            "feedback_lane": dict(lane) if lane else None,
             "agent_next_action": (
-                "Feedback was written to the local JSONL calibration lane; continue the task "
+                "Feedback was written to the scoped local calibration lane; continue the task "
                 "and reopen source before making claims."
                 if wrote_event
                 else "This is only a receipt. Add --feedback-jsonl <path> when you want future "
@@ -305,7 +388,35 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     projected.update(handle_boundary_fields())
     projected["surface"] = "agent_cli_public_compact"
     projected["output_boundary"] = "public_compact_no_local_private_handles"
-    projected["last_recall_cache_available"] = bool(source.get("last_recall_cache_available"))
+    cache_available = bool(source.get("last_recall_cache_available"))
+    projected["last_recall_cache_available"] = cache_available
+    action = projected.get("foreground_action")
+    action_map = action if isinstance(action, Mapping) else {}
+    action_args = action_map.get("arguments") if isinstance(action_map.get("arguments"), Mapping) else {}
+    advertises_last_recall = bool(action_args.get("last_recall")) or "--last-recall" in str(
+        action_map.get("cli_command") or ""
+    )
+    if not cache_available and advertises_last_recall:
+        projected["foreground_action"] = {
+            "action_id": "repair_last_recall_cache",
+            "tool_name": "agent_recall",
+            "arguments": {"query": "<same cue>", "detail": "full"},
+            "cli_command": 'aippocampus agent recall "<same cue>" --json --detail full',
+            "why": (
+                "Recall found route-shaped context, but the same-machine request cache was "
+                "not written, so request-index deepen is not available from compact output."
+            ),
+            "claim_boundary": "no_claim_before_reopen",
+        }
+        projected["last_recall_cache_recovery_card"] = {
+            "status": "cache_unavailable",
+            "primary_action": "rerun_recall_or_use_full_local_diagnostics",
+            "safe_actions": [
+                'aippocampus agent recall "<same cue>" --json',
+                'aippocampus agent recall "<same cue>" --json --detail full',
+            ],
+            "boundary": "full detail may expose local-private handles; keep it local",
+        }
     return projected
 
 
@@ -411,7 +522,12 @@ def _encode_local_reopen_token(value: Any) -> dict[str, Any]:
     public output should keep using `--public` / `--compact-json`.
     """
 
-    raw = str(value or "").encode("utf-8")
+    raw_text = (
+        json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if isinstance(value, Mapping)
+        else str(value or "")
+    )
+    raw = raw_text.encode("utf-8")
     return {
         "encoding": LOCAL_REOPEN_TOKEN_ENCODING,
         "bytes": [byte ^ _LOCAL_REOPEN_TOKEN_MASK for byte in raw],

@@ -44,6 +44,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     capture_feedback,
     compact_aippo_guidance_card,
     compact_feedback_receipt,
+    feedback_lane_resolution,
     handle_boundary_fields,
     handle_from_last_recall_cache,
     handle_recovery_fields,
@@ -722,7 +723,9 @@ def recall(
 
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
-    registry_path = _as_path(registry_dir, Path()) if registry_dir else None
+    registry_path = (
+        _as_path(registry_dir, Path()) if registry_dir else core.aippocampus_registry_dir().resolve()
+    )
     requested_limit = normalize_route_limit(max_routes, default=MAX_ROUTES)
     macro_projection = _load_macro_projection(
         project=project,
@@ -986,7 +989,9 @@ def deepen(
 
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
-    registry_path = _as_path(registry_dir, Path()) if registry_dir else None
+    registry_path = (
+        _as_path(registry_dir, Path()) if registry_dir else core.aippocampus_registry_dir().resolve()
+    )
     match_limit = normalize_route_limit(max_matches, default=MAX_ROUTES)
     try:
         payload = recall_deepen_packet(
@@ -1419,17 +1424,17 @@ def _parser() -> argparse.ArgumentParser:
     feedback_parser = sub.add_parser(
         "feedback",
         description=(
-            "Record whether a recall/deepen route helped. With --feedback-jsonl it becomes "
-            "durable low-authority route calibration; without it, the command returns a receipt only. "
-            "Feedback is never source truth."
+            "Record whether a recall/deepen route helped. By default this writes durable "
+            "low-authority route calibration to a scoped local lane; --feedback-jsonl can "
+            "override the lane explicitly. Feedback is never source truth."
         ),
         epilog=(
-            "Durable examples:\n"
+            "Default durable example:\n"
+            "  aippocampus agent feedback <route_id> --outcome helped --json\n\n"
+            "Explicit lane examples:\n"
             "  aippocampus agent feedback <route_id> --outcome helped --feedback-jsonl <local-feedback.jsonl> --json\n"
             "  aippocampus agent feedback <route_id> --outcome wrong --reason wrong-project --feedback-jsonl <local-feedback.jsonl> --json\n\n"
-            "Receipt-only example:\n"
-            "  aippocampus agent feedback <route_id> --outcome helped --json\n\n"
-            "Use `aippocampus do-not-use-here <route_id> --feedback-jsonl <local-feedback.jsonl> --json` "
+            "Use `aippocampus do-not-use-here <route_id> --json` "
             "when the user wants an explicit quieting control."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1453,6 +1458,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     feedback_parser.add_argument("--reason", default="")
     feedback_parser.add_argument("--feedback-jsonl")
+    feedback_parser.add_argument("--cwd")
+    feedback_parser.add_argument("--registry-dir")
     feedback_parser.add_argument("--json", action="store_true")
     feedback_parser.add_argument(
         "--operator-json",
@@ -1479,7 +1486,11 @@ def main(argv: list[str] | None = None) -> int:
             run_semantic_gate=args.run_semantic_gate,
             semantic_gate_mode=args.semantic or args.semantic_gate_mode or "off",
             semantic_timeout=args.semantic_timeout,
-            feedback_path=args.feedback_jsonl,
+            feedback_path=feedback_lane_resolution(
+                args.feedback_jsonl,
+                cwd=args.cwd,
+                registry_dir=args.registry_dir,
+            )["path"],
         )
         cache_written = write_last_recall_cache(
             payload.get("deepen_requests") or [],
@@ -1633,12 +1644,18 @@ def main(argv: list[str] | None = None) -> int:
                 print("Next: " + payload["agent_next_action"])
             return 2
         try:
+            lane = feedback_lane_resolution(
+                args.feedback_jsonl,
+                cwd=args.cwd,
+                registry_dir=args.registry_dir,
+            )
             payload = capture_feedback(
                 route_id=args.route_id,
                 outcome=args.outcome,
                 route_kind=args.route_kind,
                 reason=args.reason,
-                feedback_path=args.feedback_jsonl,
+                feedback_path=lane["path"],
+                feedback_lane=lane,
                 schema_version=SCHEMA_VERSION,
                 kind=KIND,
             )

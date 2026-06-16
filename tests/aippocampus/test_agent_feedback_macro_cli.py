@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -22,7 +23,11 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def run_agent(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_agent(
+        self,
+        *args: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 sys.executable,
@@ -37,6 +42,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            env=env,
         )
 
     def test_cli_agent_top_help_teaches_recall_deepen_feedback_loop(self) -> None:
@@ -48,19 +54,50 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", proc.stdout)
         self.assertIn("aippocampus agent feedback <route_id>", proc.stdout)
 
-    def test_cli_agent_feedback_default_json_is_compact_receipt(self) -> None:
-        proc = self.run_agent("feedback", "route_test", "--outcome", "wrong_route", "--json")
+    def test_cli_agent_feedback_default_json_is_durable_scoped_lane(self) -> None:
+        registry = self.cwd / "registry"
+        env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+        proc = self.run_agent(
+            "feedback",
+            "route_test",
+            "--outcome",
+            "wrong_route",
+            "--cwd",
+            str(self.cwd),
+            "--json",
+            env=env,
+        )
         missing = self.run_agent("feedback", "--json")
         help_proc = self.run_agent("feedback", "--help")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["mode"], "feedback")
-        self.assertEqual(payload["write_boundary"]["storage"], "receipt_only")
-        self.assertFalse(payload["write_boundary"]["wrote_event"])
-        self.assertIn("--feedback-jsonl", payload["agent_next_action"])
+        self.assertEqual(payload["write_boundary"]["storage"], "jsonl")
+        self.assertTrue(payload["write_boundary"]["wrote_event"])
+        self.assertTrue(payload["write_boundary"]["will_affect_future_routes"])
+        self.assertEqual(payload["feedback_lane"]["path_source"], "default_registry")
+        self.assertFalse(payload["feedback_lane"]["raw_path_emitted"])
+        self.assertNotIn(str(registry), proc.stdout)
+        feedback_rows = [
+            json.loads(line)
+            for path in registry.rglob("*.jsonl")
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(feedback_rows[0]["route_id"], "route_test")
+        self.assertFalse(feedback_rows[0].get("feedback_changes_source_truth", False))
         self.assertNotIn("feedback_report", payload)
-        helped = self.run_agent("feedback", "route_test", "--outcome", "helped", "--json")
+        helped = self.run_agent(
+            "feedback",
+            "route_test",
+            "--outcome",
+            "helped",
+            "--cwd",
+            str(self.cwd),
+            "--json",
+            env=env,
+        )
         self.assertEqual(helped.returncode, 0, helped.stderr)
         helped_payload = json.loads(helped.stdout)
         self.assertEqual(helped_payload["receipt"]["outcome"], "source_reopen_success")
@@ -69,9 +106,8 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(missing_payload["status"], "needs_route_id")
         self.assertIn("agent recall", missing_payload["agent_next_action"])
         self.assertIn("durable low-authority route calibration", help_proc.stdout)
-        self.assertIn("Durable examples:", help_proc.stdout)
+        self.assertIn("Default durable example:", help_proc.stdout)
         self.assertIn("--feedback-jsonl <local-feedback.jsonl>", help_proc.stdout)
-        self.assertIn("Receipt-only example:", help_proc.stdout)
         self.assertIn("helped/useful", help_proc.stdout)
 
     def test_cli_agent_explain_json_errors_return_foreground_recovery_cards(self) -> None:

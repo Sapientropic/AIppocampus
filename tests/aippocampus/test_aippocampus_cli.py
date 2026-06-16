@@ -216,6 +216,10 @@ class AippocampusCliTests(unittest.TestCase):
     def test_do_not_use_here_writes_public_safe_feedback_rows_when_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             feedback_path = Path(tmp) / "feedback.jsonl"
+            registry = Path(tmp) / "registry"
+            project = Path(tmp) / "project"
+            project.mkdir()
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
             ticket_path = Path(tmp) / "ticket.json"
             ticket_path.write_text(
                 json.dumps(
@@ -240,15 +244,23 @@ class AippocampusCliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            recall = self.run_cli(
+            recall = self.run_cli_with_env(
                 "do-not-use-here",
                 "route_test",
                 "--feedback-jsonl",
                 str(feedback_path),
                 "--json",
+                env=env,
             )
-            receipt_only = self.run_cli("do-not-use-here", "route_receipt", "--json")
-            ticket = self.run_cli(
+            default_durable = self.run_cli_with_env(
+                "do-not-use-here",
+                "route_default",
+                "--cwd",
+                str(project),
+                "--json",
+                env=env,
+            )
+            ticket = self.run_cli_with_env(
                 "do-not-use-here",
                 "ticket_test",
                 "--surface",
@@ -258,24 +270,34 @@ class AippocampusCliTests(unittest.TestCase):
                 "--ticket-json",
                 str(ticket_path),
                 "--json",
+                env=env,
             )
             rows = [
                 json.loads(line)
                 for line in feedback_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
+            default_rows = [
+                json.loads(line)
+                for path in registry.rglob("*.jsonl")
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
 
         self.assertEqual(recall.returncode, 0, recall.stderr)
-        self.assertEqual(receipt_only.returncode, 0, receipt_only.stderr)
+        self.assertEqual(default_durable.returncode, 0, default_durable.stderr)
         self.assertEqual(ticket.returncode, 0, ticket.stderr)
         recall_payload = json.loads(recall.stdout)
-        receipt_payload = json.loads(receipt_only.stdout)
+        default_payload = json.loads(default_durable.stdout)
         ticket_payload = json.loads(ticket.stdout)
-        self.assertEqual(receipt_payload["status"], "not_durable")
-        self.assertFalse(receipt_payload["quieted_future_routes"])
-        self.assertEqual(receipt_payload["write_boundary"]["storage"], "receipt_only")
-        self.assertEqual(receipt_payload["why_not_card"]["status"], "not_quieted_yet")
-        self.assertIn("--feedback-jsonl", receipt_payload["next_safe_action"])
+        self.assertEqual(default_payload["status"], "captured")
+        self.assertTrue(default_payload["quieted_future_routes"])
+        self.assertEqual(default_payload["write_boundary"]["storage"], "jsonl")
+        self.assertEqual(default_payload["feedback_path_source"], "default_registry")
+        self.assertFalse(default_payload["feedback_lane"]["raw_path_emitted"])
+        self.assertEqual(default_payload["why_not_card"]["status"], "durable_feedback_available")
+        self.assertEqual(default_rows[0]["route_id"], "route_default")
+        self.assertNotIn(str(registry), default_durable.stdout)
         self.assertEqual(recall_payload["status"], "captured")
         self.assertTrue(recall_payload["quieted_future_routes"])
         self.assertEqual(recall_payload["feedback"]["write_boundary"]["storage"], "jsonl")
