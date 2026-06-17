@@ -132,6 +132,98 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertIn("&lt;img", health_body)
         self.assertIn("&lt;svg", health_body)
 
+    def test_dashboard_home_starts_with_foreground_health_action(self) -> None:
+        pages = packaged_dashboard.dashboard_pane_data_v2(
+            health={
+                "ok": True,
+                "status": "ordinary recall usable",
+                "product_readiness": {"ordinary_first_recall_usable": True},
+                "recommended_actions": [
+                    {
+                        "id": "build_index",
+                        "severity": "warning",
+                        "command": "aippocampus maintenance --cwd . --json",
+                    }
+                ],
+            },
+            anchors=[],
+            checkpoint_state={},
+            recent_messages=[],
+        )
+
+        now_body = pages["now"]["body"]
+        card_pos = now_body.index("foreground-action-card")
+        self.assertLess(card_pos, now_body.index("Noteinfo"))
+        self.assertLess(card_pos, now_body.index("从这里进入"))
+        self.assertIn("ordinary_first_recall_usable", now_body)
+        self.assertIn("blocks_first_recall", now_body)
+        self.assertIn("blocks_exact_latest_claims", now_body)
+        self.assertIn("aippocampus maintenance --cwd . --json", now_body)
+        self.assertEqual(pages["now"]["body_nodes"][0]["tag"], "div")
+        fields_node = next(
+            child
+            for child in pages["now"]["body_nodes"][0]["children"]
+            if child.get("tag") == "dl"
+        )
+        self.assertEqual(
+            fields_node["attrs"]["class"],
+            "foreground-health-fields",
+        )
+
+    def test_dashboard_health_pane_exposes_foreground_decision_fields(self) -> None:
+        pages = packaged_dashboard.dashboard_pane_data_v2(
+            health={
+                "ok": False,
+                "status": "attention_needed",
+                "product_readiness": {
+                    "ordinary_first_recall_usable": False,
+                    "freshness_degraded": True,
+                },
+                "recommended_actions": [
+                    {
+                        "id": "build_clean_source",
+                        "severity": "critical",
+                        "command": "aippocampus maintenance --cwd . --json",
+                    }
+                ],
+            },
+            anchors=[],
+            checkpoint_state={},
+            recent_messages=[],
+        )
+
+        health_body = pages["health"]["body"]
+        self.assertLess(health_body.index("foreground-action-card"), health_body.index("状态："))
+        self.assertIn("ordinary_first_recall_usable", health_body)
+        self.assertIn("blocks_first_recall", health_body)
+        self.assertIn("blocks_exact_latest_claims", health_body)
+        self.assertIn("aippocampus maintenance --cwd . --json", health_body)
+
+    def test_mobile_css_has_one_authoritative_scroll_model(self) -> None:
+        css = (ASSETS / "dashboard_v2.css").read_text(encoding="utf-8")
+        self.assertEqual(css.count("@media (max-width: 760px) {"), 1)
+        mobile = css.split("@media (max-width: 760px) {", 1)[1]
+
+        self.assertNotIn("body.codex-memory-dashboard {\n    height: auto !important", mobile)
+        self.assertNotIn("overflow: visible !important;\n  }\n  .codex-memory-dashboard .site-body", mobile)
+        self.assertRegex(
+            mobile,
+            r"\.codex-memory-dashboard \.render-container \{[^}]*overflow-y: auto !important;",
+        )
+        self.assertRegex(
+            mobile,
+            r"\.codex-memory-dashboard \.site-body-left-column \{[^}]*overflow-y: auto !important;",
+        )
+        self.assertRegex(
+            mobile,
+            r"\.codex-memory-dashboard \.site-body-right-column\.mobile-tools-drawer "
+            r"\.site-body-right-column-inner \{[^}]*overflow-y: auto !important;",
+        )
+        self.assertRegex(
+            mobile,
+            r"\.codex-memory-dashboard \.markdown-preview-view \{[^}]*overflow: visible !important;",
+        )
+
     def test_dashboard_pane_data_includes_structured_body_nodes(self) -> None:
         pages = packaged_dashboard.dashboard_pane_data_v2(
             health={"ok": True},

@@ -1662,7 +1662,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = {**payload, "last_recall_cache_available": cache_written}
         if args.json:
             if args.public_json or args.detail != "full":
-                payload = public_recall_projection(payload)
+                payload = public_recall_projection(payload, query=query)
             else:
                 payload = {
                     "detail": "full",

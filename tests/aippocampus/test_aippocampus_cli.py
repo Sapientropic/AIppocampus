@@ -652,7 +652,7 @@ class AippocampusCliTests(unittest.TestCase):
                             {
                                 "timestamp": "2026-06-16T00:00:00Z",
                                 "type": "event_msg",
-                                "payload": {"type": "user_message", "message": "hi"},
+                                "payload": {"type": "user_message", "message": "continue vault dashboard mobile issue"},
                             }
                         ),
                         json.dumps(
@@ -679,7 +679,7 @@ class AippocampusCliTests(unittest.TestCase):
                             {
                                 "timestamp": "2026-06-16T00:00:00Z",
                                 "type": "event_msg",
-                                "payload": {"type": "user_message", "message": "hi"},
+                                "payload": {"type": "user_message", "message": "continue vault dashboard mobile issue"},
                             }
                         ),
                         json.dumps(
@@ -733,10 +733,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn(commentary_text, encoded_commentary)
         self.assertNotIn("preview", commentary_payload["message"])
         commentary_action = commentary_payload["safe_next_actions"][0]
-        self.assertIn("agent recall", commentary_action["command_template"])
-        self.assertEqual(commentary_action["requires"], ["cue"])
-        self.assertTrue(commentary_action["template_only"])
-        self.assertNotIn("command", commentary_action)
+        self.assertEqual(
+            commentary_action["command"],
+            'aippocampus agent recall "continue vault dashboard mobile issue" --json',
+        )
+        self.assertNotIn("command_template", commentary_action)
         self.assertEqual(operator_proc.returncode, 1)
         self.assertIn(commentary_text, operator_proc.stdout)
 

@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import foreground_shell_action, foreground_template_action
+from aippocampus_runtime.contracts import (
+    command_value_needs_input,
+    foreground_shell_action,
+    foreground_template_action,
+)
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.rollout import normalize_rollout
 
@@ -41,12 +45,21 @@ def latest_reply(rollout: Path) -> dict:
     turn = None
     if msg and msg.get("turn_index") is not None:
         turn = next((item for item in turns if item.get("id") == msg.get("turn_index")), None)
+    user_cues = [
+        item
+        for item in messages
+        if item.get("role") == "user"
+        and (not msg or item.get("turn_index") == msg.get("turn_index"))
+    ]
+    if not user_cues:
+        user_cues = [item for item in messages if item.get("role") == "user"]
 
     return {
         "status": status,
         "warning": warning,
         "rollout": str(rollout),
         "message": msg,
+        "recovery_cue": user_cues[-1].get("text") if user_cues else "",
         "turn": turn,
         "message_count": len(messages),
         "turn_count": len(turns),
@@ -90,7 +103,17 @@ def _latest_reply_full_action() -> dict[str, Any]:
     return action
 
 
-def _latest_reply_recall_action() -> dict[str, Any]:
+def _latest_reply_recall_action(cue: Any = None) -> dict[str, Any]:
+    clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    if clean_cue and not command_value_needs_input(clean_cue):
+        return foreground_shell_action(
+            action_id="recall_current_thread_context",
+            label="Recall current-thread context",
+            command=f"aippocampus agent recall {json.dumps(clean_cue, ensure_ascii=False)} --json",
+            why="Use the latest user turn as the continuity cue when no final-answer closeout is available.",
+            mutation_risk="read_only",
+            claim_boundary="no_claim_before_reopen",
+        )
     return foreground_template_action(
         action_id="recall_current_thread_context",
         label="Recall current-thread context",
@@ -133,7 +156,7 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
     elif status == "only_commentary_found":
         payload["diagnostic_only"] = True
         payload["not_final_closeout"] = True
-        actions = [_latest_reply_recall_action(), _latest_reply_full_action()]
+        actions = [_latest_reply_recall_action(result.get("recovery_cue")), _latest_reply_full_action()]
         payload["agent_next_action"] = actions[0]
         payload["safe_next_actions"] = actions
         payload["message"] = _message_card(
@@ -144,7 +167,7 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
     else:
         payload["diagnostic_only"] = True
         payload["not_final_closeout"] = True
-        actions = [_latest_reply_recall_action()]
+        actions = [_latest_reply_recall_action(result.get("recovery_cue"))]
         payload["agent_next_action"] = actions[0]
         payload["safe_next_actions"] = actions
     return payload
