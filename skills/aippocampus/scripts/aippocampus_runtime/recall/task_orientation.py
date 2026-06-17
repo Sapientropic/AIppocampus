@@ -31,6 +31,7 @@ from aippocampus_runtime.recall.task_orientation_fixtures import (
     route_plan_from_active_path,
     source_ref,
 )
+from aippocampus_runtime.recall.understanding_state import build_understanding_state_read_model
 
 KIND = "aippocampus_task_orientation_packet"
 SCHEMA_VERSION = "task-orientation-v1"
@@ -127,7 +128,7 @@ def _route_readiness_rows(
             {
                 "title": f"suppressed {anchor['source_kind']}: {anchor['project_role']}",
                 "route_status": "suppressed",
-                "currentness": anchor["freshness"],
+                "currentness": anchor.get("freshness") or anchor.get("lifecycle_status") or "unknown",
                 "source_refs": [],
                 "confidence": "low",
                 "origin": "external_source_anchor",
@@ -149,32 +150,89 @@ def _route_readiness_rows(
     return rows
 
 
+def _compact_understanding_state(state: Mapping[str, Any]) -> dict[str, Any]:
+    """Project the richer read model into the ordinary foreground packet.
+
+    The full Understanding State can carry component diagnostics and route-cue
+    inventories. The default TOP must stay small enough to orient action, so it
+    carries the exposure policy, component status, and the already-budgeted
+    foreground projection while leaving full detail to progressive disclosure.
+    """
+
+    raw_metrics = state.get("metrics")
+    metrics: Mapping[str, Any] = raw_metrics if isinstance(raw_metrics, Mapping) else {}
+    raw_source_boundary = state.get("source_boundary")
+    source_boundary: Mapping[str, Any] = (
+        raw_source_boundary if isinstance(raw_source_boundary, Mapping) else {}
+    )
+    raw_foreground = state.get("foreground_projection")
+    foreground: Mapping[str, Any] = raw_foreground if isinstance(raw_foreground, Mapping) else {}
+    return {
+        "kind": state.get("kind"),
+        "schema_version": state.get("schema_version"),
+        "authority": state.get("authority"),
+        "truth_authority": state.get("truth_authority"),
+        "storage": state.get("storage"),
+        "projection_source": state.get("projection_source"),
+        "working_conclusion_exposure_strategy": {
+            "active_foreground_pull": "compact_orientation_only",
+            "detail_profile": "available",
+        },
+        "upstream_components": [
+            {
+                "component": item.get("component"),
+                "status": item.get("status"),
+                "item_count": item.get("item_count", 0),
+            }
+            for item in list(state.get("upstream_components") or [])[:8]
+            if isinstance(item, Mapping)
+        ],
+        "foreground_projection": {
+            "frontier": foreground.get("frontier"),
+            "first_route_count": len(foreground.get("first_routes_to_reopen") or []),
+            "mature_constraint_count": len(foreground.get("mature_constraints") or []),
+            "boundary": "orientation_only_reopen_before_claims",
+        },
+        "metrics": {
+            "upstream_component_count": metrics.get("upstream_component_count", 0),
+            "route_cue_count": metrics.get("route_cue_count", 0),
+            "learning_constraint_ref_count": metrics.get("learning_constraint_ref_count", 0),
+            "caution_packet_count": metrics.get("caution_packet_count", 0),
+            "foreground_too_heavy": metrics.get("foreground_too_heavy", False),
+        },
+        "source_boundary": {
+            "navigation_not_truth": source_boundary.get("navigation_not_truth", True),
+            "clean_source_is_authority": source_boundary.get("clean_source_is_authority", True),
+            "source_reopen_required_before_claim": source_boundary.get(
+                "source_reopen_required_before_claim", True
+            ),
+            "raw_source_text_serialized": False,
+            "local_paths_serialized": False,
+        },
+    }
+
+
 def _safe_next_actions(task: str) -> list[dict[str, Any]]:
+    del task
     return [
-        foreground_template_action(
-            action_id="run_agent_recall_for_orientation",
-            label="Run source-backed recall",
-            command_template='aippocampus agent recall "{task}" --json',
-            requires=["task"],
-            why="Find real reopenable routes before factual or closeout claims.",
-            claim_boundary="no_claim_before_reopen",
-        ),
-        foreground_template_action(
-            action_id="activate_aippo_for_task",
-            label="Check AIppo guidance",
-            command_template='aippocampus agent aippo "{task}" --json',
-            requires=["task"],
-            why="Use project workflow guidance only as low-risk planning input.",
-            claim_boundary="navigation_only_not_fact",
-        ),
-        foreground_template_action(
-            action_id="deepen_selected_recall_route",
-            label="Deepen selected recall route",
-            command_template="aippocampus agent deepen --request {request_index} --last-recall --json",
-            requires=["request_index"],
-            why="Open source before quoting, closing issues, or relying on stale details.",
-            claim_boundary="source_reopen_required_before_claims",
-        ),
+        {
+            "id": "run_agent_recall_for_orientation",
+            "command_template": 'aippocampus agent recall "{task}" --json',
+            "requires": ["task"],
+            "mutation_risk": "read_only",
+            "template_only": True,
+            "claim_boundary": "no_claim_before_reopen",
+        },
+        {
+            "id": "deepen_selected_recall_route",
+            "command_template": (
+                "aippocampus agent deepen --request {request_index} --last-recall --json"
+            ),
+            "requires": ["request_index"],
+            "mutation_risk": "read_only",
+            "template_only": True,
+            "claim_boundary": "source_reopen_required_before_claims",
+        },
     ]
 
 
@@ -189,7 +247,7 @@ def build_task_orientation_packet(
         return missing_task_payload(project=project)
     issue_packet = build_issue_active_pull_packet(title=clean_task)
     anchors, suppressed_anchors = build_external_source_anchors(clean_task)
-    constraints, suppressed_constraints = build_learning_constraints(issue_packet)
+    constraints, suppressed_constraints = build_learning_constraints(issue_packet, task=clean_task)
     route_rows = _route_readiness_rows(
         anchors=anchors,
         suppressed_anchors=suppressed_anchors,
@@ -202,7 +260,17 @@ def build_task_orientation_packet(
     )
     compact_path = compact_active_path_packet(active_path)
     actions = _safe_next_actions(clean_task)
-    packet = {
+    understanding_state = build_understanding_state_read_model(
+        clean_task,
+        project=project,
+        issue_packet=issue_packet,
+        external_source_anchors=anchors,
+        suppressed_external_source_anchors=suppressed_anchors,
+        learning_constraints=constraints,
+        suppressed_constraints=suppressed_constraints,
+        max_foreground_routes=max_paths,
+    )
+    packet: dict[str, Any] = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
         "mode": "orient",
@@ -210,14 +278,7 @@ def build_task_orientation_packet(
         "ok": True,
         "project": project,
         "task": clean_task,
-        "understanding_state_read_model": {
-            "kind": "aippocampus_understanding_state_read_model",
-            "schema_version": SCHEMA_VERSION,
-            "authority": "navigation_only_not_fact",
-            "truth_authority": "clean_source_after_reopen",
-            "storage": "derived_no_new_truth_store",
-            "projection_source": "active_path_packet_plus_issue_work_and_aippo",
-        },
+        "understanding_state_read_model": _compact_understanding_state(understanding_state),
         "frontier": "choose first source route; do not start broad manual search until recall/owners are checked",
         "load_bearing_unknowns": [
             "which reopened source route is actually current",
@@ -243,6 +304,8 @@ def build_task_orientation_packet(
             "learning_constraint_count": len(constraints),
             "suppressed_unripe_constraint_count": len(suppressed_constraints),
             "active_path_count": compact_path.get("path_count", 0),
+            "understanding_state_route_cue_count": understanding_state["metrics"]["route_cue_count"],
+            "understanding_state_foreground_too_heavy": understanding_state["metrics"]["foreground_too_heavy"],
             "external_model_calls": 0,
             "writes_performed": 0,
         },
@@ -309,12 +372,24 @@ def add_agent_subparser(sub: Any) -> None:
     orient_parser.add_argument("--project", default="AIppocampus")
     orient_parser.add_argument("--max", type=int, default=3)
     orient_parser.add_argument("--eval", action="store_true")
+    orient_parser.add_argument(
+        "--private-replay-aggregate",
+        action="store_true",
+        help="Opt in to aggregate-only private-history replay metrics for --eval.",
+    )
+    orient_parser.add_argument(
+        "--private-replay-events",
+        help="Sanitized private replay events JSON/JSONL to aggregate for --eval.",
+    )
     orient_parser.add_argument("--json", action="store_true")
 
 
 def run_agent_command(args: Any, json_out: Any) -> int:
     if args.eval:
-        payload = build_task_orientation_eval_report()
+        payload = build_task_orientation_eval_report(
+            include_private_replay_aggregate=getattr(args, "private_replay_aggregate", False),
+            private_replay_events=getattr(args, "private_replay_events", None),
+        )
     else:
         payload = build_task_orientation_packet(
             args.task_flag or " ".join(args.task),

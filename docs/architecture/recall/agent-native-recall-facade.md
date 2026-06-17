@@ -108,14 +108,27 @@ The deterministic check is:
 
 ```text
 aippocampus agent orient --eval --json
+aippocampus agent orient --eval --private-replay-aggregate --json
 ```
 
 That fixture compares route-only recall, static summary context, Task
 Orientation Packet, and Task Orientation Packet plus mature constraints. It can
 show reduced blind search inside the public test scenario while checking
 source-truth overclaim rate, but it is not a live recall-quality claim. Private
-replay remains opt-in and aggregate-only. The recall-layer product discipline
-audit lives in
+replay remains opt-in and aggregate-only; `--private-replay-aggregate` projects
+only aggregate/comparable metrics from the existing learning-loop replay
+harness, and `--private-replay-events <sanitized-events.jsonl>` is the explicit
+operator-selected path for local history.
+
+The richer read model is `aippocampus_understanding_state.v1` in
+`aippocampus_runtime.recall.understanding_state`. It can compose continuity
+domains, pathlets, Journey hints, Episode/Arc caution routes, repo familiarity,
+external anchors, and mature learning constraints. The ordinary Task
+Orientation Packet carries only a compact projection of that state: component
+status, a short exposure strategy, foreground route counts, and the same
+source-reopen boundary. Full lifecycle/gap detail stays behind code-level
+composition, explain/deepen, or detail/debug surfaces. The recall-layer product
+discipline audit lives in
 [`source-backed-product-discipline.md`](source-backed-product-discipline.md).
 
 ## Default Agent Pull Gesture

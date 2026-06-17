@@ -11,7 +11,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.cli import facade  # noqa: E402
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.recall import task_orientation  # noqa: E402
+from aippocampus_runtime.recall import task_orientation, understanding_state  # noqa: E402
 
 
 class TaskOrientationPacketTests(unittest.TestCase):
@@ -86,8 +86,12 @@ class TaskOrientationPacketTests(unittest.TestCase):
 
         self.assertTrue(any(item["source"] == "issue_work_guard" for item in constraints))
         self.assertTrue(any(item["source"] == "aippo_working_contract" for item in constraints))
+        self.assertTrue(any(item["source"] == "semantic_learning" for item in constraints))
+        self.assertTrue(any(item["source"] == "source_backed_lessons" for item in constraints))
+        self.assertTrue(any(item["source"] == "learning_loop_aippo_seed" for item in constraints))
         self.assertTrue(all(item["authority"] == "navigation_only_not_fact" for item in constraints))
-        self.assertGreaterEqual(packet["metrics"]["learning_constraint_count"], 2)
+        self.assertTrue(all("effectiveness_feedback" in item for item in constraints))
+        self.assertGreaterEqual(packet["metrics"]["learning_constraint_count"], 5)
         self.assertGreaterEqual(packet["metrics"]["suppressed_unripe_constraint_count"], 1)
         self.assertEqual(packet["red_lines"]["learning_constraint_promoted_to_fact"], 0)
         self.assertEqual(packet["red_lines"]["unripe_constraint_ranked_as_current"], 0)
@@ -98,6 +102,89 @@ class TaskOrientationPacketTests(unittest.TestCase):
             "issue_work_guard",
             {item["source"] for item in quiet["learning_and_aippo_constraints"]},
         )
+
+    def test_understanding_state_composes_upstream_read_models_without_bloating_foreground(self) -> None:
+        state = understanding_state.build_understanding_state_read_model(
+            "Continue Task Orientation Packet issue work after source-backed review",
+            project="AIppocampus",
+            continuity_snapshot={
+                "domains": [
+                    {
+                        "domain_id": "task_orientation_continuity",
+                        "title": "Task Orientation Packets",
+                        "activation_cues": ["Task Orientation Packet", "source-backed review"],
+                        "scope_labels": ["AIppocampus", "fresh-thread"],
+                        "lifecycle": {"status": "active"},
+                        "claim_contract": {
+                            "trust_level": "source_required",
+                            "action_grammar": "reopenable_route",
+                        },
+                        "evidence_trail": {
+                            "representative_refs": [
+                                {"source_id": "doc:task-orientation", "message_id": "m1"}
+                            ]
+                        },
+                    }
+                ]
+            },
+            journeys=[
+                {
+                    "kind": "aippocampus_journey",
+                    "path_label": "fresh-thread understanding recovery",
+                    "current_frontier": "Resume at the source-backed orientation boundary.",
+                    "status": "traveling",
+                    "source_refs": [{"thread_key": "journey-public", "message_id": "m2"}],
+                }
+            ],
+            episode_arcs=[
+                {
+                    "episode_id": "episode-task-orientation",
+                    "episode_kind": "rejected_route_arc",
+                    "event_order": ["attempted_route", "failed_check", "route_rejected"],
+                    "source_event_ids": ["attempt", "fail", "reject"],
+                    "source_ref_hashes": ["h1", "h2", "h3"],
+                    "current_validity": "needs_reopen",
+                }
+            ],
+            repo_familiarity_manifest={
+                "repo_commit": "public-fixture",
+                "source_rows": [
+                    {
+                        "kind": "recall_runtime",
+                        "landmark": "Task orientation runtime",
+                        "route_terms": ["task", "orientation", "recall"],
+                        "action_delta_required": "Check TOP runtime before broad search.",
+                        "first_source_to_reopen": "skills/aippocampus/scripts/aippocampus_runtime/recall/task_orientation.py",
+                        "stop_after": "Stop once the runtime projection answers the next source route.",
+                        "source_refs": [{"path": "skills/aippocampus/scripts/aippocampus_runtime/recall/task_orientation.py"}],
+                    }
+                ],
+            },
+        )
+        encoded = json.dumps(state, ensure_ascii=False, sort_keys=True)
+        components = {item["component"] for item in state["upstream_components"]}
+        foreground = state["foreground_projection"]
+
+        self.assertEqual(state["kind"], "aippocampus_understanding_state")
+        self.assertEqual(state["schema_version"], "aippocampus_understanding_state.v1")
+        self.assertEqual(state["authority"], "navigation_only_not_fact")
+        self.assertEqual(state["storage"], "derived_no_new_truth_store")
+        self.assertEqual(
+            state["working_conclusion_exposure_strategy"]["active_foreground_pull"],
+            "compact_orientation_only",
+        )
+        self.assertTrue(
+            {"continuity_domains", "journey", "episode_arcs", "repo_familiarity"}.issubset(
+                components
+            ),
+            components,
+        )
+        self.assertGreaterEqual(len(state["route_cues"]), 3)
+        self.assertLessEqual(len(foreground["first_routes_to_reopen"]), 3)
+        self.assertLessEqual(foreground["byte_size"], foreground["byte_budget"])
+        self.assertNotIn("RAW_SOURCE_SENTINEL", encoded)
+        self.assertNotIn("E:\\", encoded)
+        self.assertFalse(state["source_boundary"]["raw_source_text_serialized"])
 
     def test_public_fixture_eval_shows_less_blind_search_without_claiming_live_lift(self) -> None:
         report = task_orientation.build_task_orientation_eval_report()
@@ -126,6 +213,24 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertEqual(report["claim_boundary"], "public_fixture_only_not_live_quality_claim")
         self.assertFalse(report["private_replay"]["enabled_by_default"])
         self.assertTrue(report["private_replay"]["aggregate_only"])
+
+    def test_eval_can_include_opt_in_private_replay_aggregate_metrics(self) -> None:
+        report = task_orientation.build_task_orientation_eval_report(
+            include_private_replay_aggregate=True
+        )
+        private = report["private_replay"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
+        self.assertTrue(private["opt_in_required"])
+        self.assertEqual(private["status"], "measured_public_safe_aggregate")
+        self.assertTrue(private["aggregate_only"])
+        self.assertFalse(private["enabled_by_default"])
+        self.assertGreaterEqual(private["aggregate_metrics"]["guidance_count"], 1)
+        self.assertEqual(private["aggregate_metrics"]["raw_private_text_leak_count"], 0)
+        self.assertNotIn("PRIVATE_HISTORY_PAYLOAD", encoded)
+        self.assertNotIn("tool_output", encoded)
+        self.assertNotIn("E:/", encoded)
 
     def test_agent_orient_cli_returns_safe_packet_and_missing_task_recovery(self) -> None:
         result = facade.run_command(
@@ -165,6 +270,16 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertEqual(eval_result.exit_code, 0, eval_result.stderr)
         self.assertEqual(eval_payload["kind"], "aippocampus_task_orientation_eval_report")
         self.assertEqual(eval_payload["claim_boundary"], "public_fixture_only_not_live_quality_claim")
+
+        private_eval = facade.run_command(
+            ["agent", "orient", "--eval", "--private-replay-aggregate", "--json"],
+            capture_output=True,
+        )
+        private_payload = json.loads(private_eval.stdout)
+
+        self.assertEqual(private_eval.exit_code, 0, private_eval.stderr)
+        self.assertEqual(private_payload["private_replay"]["status"], "measured_public_safe_aggregate")
+        self.assertEqual(executable_command_violations(private_payload), [])
 
 
 if __name__ == "__main__":
