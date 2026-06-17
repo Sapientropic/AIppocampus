@@ -71,6 +71,7 @@ def successful_probe() -> dict:
                 "sync_status",
                 "agent_recall",
                 "agent_aippo",
+                "agent_background",
                 "agent_deepen",
                 "agent_explain",
             ]
@@ -341,6 +342,7 @@ class PluginInstallerTests(unittest.TestCase):
                                         "sync_status": {},
                                         "agent_recall": {},
                                         "agent_aippo": {},
+                                        "agent_background": {},
                                     },
                                 }
                             ]
@@ -382,10 +384,10 @@ class PluginInstallerTests(unittest.TestCase):
             )
 
         self.assertTrue(result["validation_ok"], result)
-        self.assertEqual(calls, ["sync_status", "agent_recall", "agent_aippo"])
+        self.assertEqual(calls, ["sync_status", "agent_recall", "agent_aippo", "agent_background"])
         self.assertEqual(
             [item["tool"] for item in result["key_tool_smokes"]],
-            ["agent_recall", "agent_aippo"],
+            ["agent_recall", "agent_aippo", "agent_background"],
         )
         self.assertTrue(all(item["ok"] for item in result["key_tool_smokes"]))
 
@@ -411,11 +413,12 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertEqual(summary["kind"], "aippocampus_plugin_install_public_summary")
             self.assertTrue(summary["ok"])
             self.assertEqual(summary["agent_callable_status"], "host_live_probe_ok")
-            self.assertEqual(summary["tool_count"], 7)
+            self.assertEqual(summary["tool_count"], 8)
             self.assertGreaterEqual(summary["nonfatal_host_warning_count"], 1)
             self.assertFalse(summary["aippocampus_action_required"])
             self.assertEqual(summary["next_action"], "reload host app if tools are not visible")
             self.assertIn("agent_recall", summary["host_probe"]["key_tools_present"])
+            self.assertIn("agent_background", summary["host_probe"]["key_tools_present"])
             self.assertEqual(summary["rollback_command"], "aippocampus plugin uninstall --codex")
             self.assertGreaterEqual(warnings["warning_count"], 1)
             self.assertGreaterEqual(

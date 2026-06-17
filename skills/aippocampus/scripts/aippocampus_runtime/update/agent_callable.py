@@ -18,10 +18,11 @@ HOST_PROBE_REPORT_RELATIVE = Path("aippocampus") / "host-probe" / "codex-plugin-
 AGENT_NATIVE_TOOL_NAMES = {
     "agent_recall",
     "agent_aippo",
+    "agent_background",
     "agent_deepen",
     "agent_explain",
 }
-KEY_AGENT_TOOL_NAMES = {"agent_recall", "agent_aippo"}
+KEY_AGENT_TOOL_NAMES = {"agent_recall", "agent_aippo", "agent_background"}
 
 
 def default_host_probe_report_path(codex_home_path: Path) -> Path:

@@ -742,6 +742,7 @@ class UpdateSyncTests(unittest.TestCase):
                             "tool_names": [
                                 "agent_recall",
                                 "agent_aippo",
+                                "agent_background",
                                 "agent_deepen",
                                 "agent_explain",
                             ]
@@ -773,7 +774,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(agent["foreground_probe_requested"])
         self.assertEqual(agent["foreground_probe_state"], "tools_visible_key_tools_unverified")
         self.assertIn("--foreground-key-tools-callable", agent["next_command"])
-        self.assertEqual(len(agent["host_probe_agent_native_tools"]), 4)
+        self.assertEqual(len(agent["host_probe_agent_native_tools"]), 5)
 
     def test_status_requires_current_thread_key_tool_calls_with_cli_assertion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

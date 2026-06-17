@@ -77,6 +77,10 @@ KEY_TOOL_SMOKE_ARGUMENTS: dict[str, dict[str, Any]] = {
         "task": "AIppocampus host probe schema freshness",
         "detail": "compact",
     },
+    "agent_background": {
+        "cue": "AIppocampus reviewed background findings smoke",
+        "limit": 1,
+    },
 }
 IGNORED_TREE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs"}
 IGNORED_TREE_SUFFIXES = (".pyc", ".pyo")

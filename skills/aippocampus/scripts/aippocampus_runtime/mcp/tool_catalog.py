@@ -67,6 +67,21 @@ TOOLS: list[dict[str, Any]] = [
         },
     ),
     tool_schema(
+        "agent_background",
+        "Surface reviewed background findings for a task cue; does not start background jobs or make findings source truth.",
+        {
+            "cue": {"type": "string"},
+            "query": {"type": "string"},
+            "task": {"type": "string"},
+            "registry_dir": {"type": "string"},
+            "working_memory_path": {"type": "string"},
+            "project": {"type": "string"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 12},
+            "include_private_paths": {"type": "boolean"},
+        },
+        required_any=["cue", "query", "task"],
+    ),
+    tool_schema(
         "agent_deepen",
         "Open the selected recall route from agent_recall before quoting or relying on it.",
         {

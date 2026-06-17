@@ -476,29 +476,50 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _chooser_payload(*, reason: str, public_hint: bool = False) -> dict[str, Any]:
-    recommended = PUBLIC_EXPORT_COMMAND if public_hint else PRIVATE_EXPORT_COMMAND
+    intent_action = {
+        "id": "choose_export_intent",
+        "label": "Choose export intent and output path",
+        "requires": ["export_intent", "output_path"],
+        "mutation_risk": "no_write_until_explicit_output",
+        "claim_boundary": "private_raw_export_requires_explicit_private_intent",
+        "why": (
+            "Bare export is privacy-sensitive; choose public metadata or explicit "
+            "private local transfer before writing a bundle."
+        ),
+    }
+    error: dict[str, Any] = {
+        "code": "export_intent_required",
+        "message": (
+            "Choose private local transfer or public/shareable metadata and provide "
+            "an explicit --output path. No write happened."
+        ),
+        "reason": reason,
+    }
+    if public_hint:
+        error["next_command"] = PUBLIC_EXPORT_COMMAND
     return {
         "ok": False,
         "kind": "aippocampus_export_chooser",
-        "error": {
-            "code": "export_intent_required",
-            "message": (
-                "Choose private local transfer or public/shareable metadata and provide "
-                "an explicit --output path. No write happened."
-            ),
-            "reason": reason,
-            "next_command": recommended,
-        },
+        "status": "intent_required",
+        "error": error,
+        "agent_next_action": intent_action,
+        "foreground_action": intent_action,
         "choices": [
             {
                 "intent": "private_local_transfer",
-                "command": PRIVATE_EXPORT_COMMAND,
+                "command_template": PRIVATE_EXPORT_COMMAND,
+                "requires": ["output_path"],
                 "boundary": "private local handoff only; may include searchable local memory artifacts",
+                "mutation_risk": "writes_private_bundle",
+                "claim_boundary": "private_local_transfer_only",
             },
             {
                 "intent": "public_shareable_metadata",
-                "command": PUBLIC_EXPORT_COMMAND,
+                "command_template": PUBLIC_EXPORT_COMMAND,
+                "requires": ["output_path"],
                 "boundary": "metadata-only public export; omits raw rollout and source text",
+                "mutation_risk": "writes_public_metadata_bundle",
+                "claim_boundary": "public_metadata_no_raw_source_text",
             },
         ],
         "recommended_public_command": PUBLIC_EXPORT_COMMAND,
