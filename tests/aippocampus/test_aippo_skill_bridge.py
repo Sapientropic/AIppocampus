@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,8 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.aippo import skill_bridge, skill_observed_use  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity_cli_support  # noqa: E402
+from aippocampus_runtime.recall import feedback_events  # noqa: E402
 
 
 class AIppoSkillBridgeTests(unittest.TestCase):
@@ -179,6 +182,183 @@ class AIppoSkillBridgeTests(unittest.TestCase):
         self.assertEqual(report["red_lines"]["overbroad_declared_clause_ripened_count"], 0)
         self.assertEqual(report["metrics"]["skill_clause_ripening_candidate_count"], 2)
         self.assertGreater(report["metrics"]["candidate_only_clause_count"], 0)
+
+    def test_trace_backed_foreground_feedback_can_feed_skill_observed_use(self) -> None:
+        skill_path = REPO_ROOT / "skills" / "aippocampus" / "SKILL.md"
+        markdown = skill_path.read_text(encoding="utf-8")
+        seed = skill_bridge.build_skill_to_aippo_report(
+            markdown,
+            source_ref="skills/aippocampus/SKILL.md",
+        )["seed"]
+        positive_clause = "skill_aippocampus_workflow_003"
+        control_clause = "skill_aippocampus_workflow_001"
+        positive = feedback_events.active_flow_event(
+            route_id=f"skill_clause:{positive_clause}",
+            route_kind="active_path",
+            signal="source_reopen_success",
+            source_id="public-fixture:skill-observed-use-positive",
+        )
+        positive.update(
+            {
+                "skill_id": seed["skill_id"],
+                "clause_id": positive_clause,
+                "evidence_origin": "trace_backed",
+            }
+        )
+        control = feedback_events.active_flow_event(
+            route_id=f"skill_clause:{control_clause}",
+            route_kind="active_path",
+            signal="wrong_route_drag",
+            source_id="public-fixture:skill-observed-use-control",
+        )
+        control.update(
+            {
+                "skill_id": seed["skill_id"],
+                "clause_id": control_clause,
+                "evidence_origin": "trace_backed",
+            }
+        )
+
+        rows = skill_observed_use.observed_use_rows_from_foreground_feedback(
+            seed,
+            [positive, control],
+        )
+        report = skill_observed_use.build_skill_observed_use_report(
+            markdown,
+            source_ref="skills/aippocampus/SKILL.md",
+            foreground_feedback_rows=[positive, control],
+            target_task="coding issue closeout with continuity-sensitive context",
+        )
+        contract_clauses = {
+            clause["clause_id"]: clause
+            for clause in report["ripened_contract"]["clauses"]
+        }
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(report["status"], "trace_backed_usefulness_candidate")
+        self.assertEqual(report["observed_use_ingestion"]["source"], "foreground_feedback")
+        self.assertEqual(report["metrics"]["trace_backed_observed_use_count"], 2)
+        self.assertEqual(report["metrics"]["trace_backed_positive_observed_use_count"], 1)
+        self.assertEqual(report["metrics"]["trace_backed_no_help_observed_use_count"], 1)
+        self.assertEqual(report["metrics"]["synthetic_observed_use_count"], 0)
+        self.assertTrue(report["metrics"]["usefulness_gate_ok"])
+        self.assertNotIn(
+            "product_quality_ripening_from_synthetic_observed_use_rows",
+            report["cannot_claim"],
+        )
+        self.assertEqual(
+            contract_clauses[positive_clause]["support"]["support_grade"],
+            "source_supported",
+        )
+        self.assertNotEqual(
+            contract_clauses[control_clause]["support"]["support_grade"],
+            "source_supported",
+        )
+        self.assertEqual(
+            report["red_lines"]["skill_instruction_promoted_without_observed_use_count"],
+            0,
+        )
+
+    def test_trace_backed_observed_use_can_load_from_jsonl_replay(self) -> None:
+        skill_path = REPO_ROOT / "skills" / "aippocampus" / "SKILL.md"
+        markdown = skill_path.read_text(encoding="utf-8")
+        positive_clause = "skill_aippocampus_workflow_003"
+        positive = feedback_events.active_flow_event(
+            route_id=f"skill_clause:{positive_clause}",
+            route_kind="active_path",
+            signal="source_reopen_success",
+            source_id="public-fixture:skill-observed-use-jsonl",
+        )
+        positive.update(
+            {
+                "skill_id": "aippocampus",
+                "clause_id": positive_clause,
+                "evidence_origin": "replay_backed",
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            replay_path = Path(tmp) / "foreground-feedback.jsonl"
+            replay_path.write_text(
+                json.dumps(positive, ensure_ascii=False) + "\nnot-json\n",
+                encoding="utf-8",
+            )
+            report = skill_observed_use.build_skill_observed_use_report(
+                markdown,
+                source_ref="skills/aippocampus/SKILL.md",
+                foreground_feedback_path=replay_path,
+                target_task="coding issue closeout with continuity-sensitive context",
+            )
+
+        self.assertEqual(report["observed_use_ingestion"]["source"], "foreground_feedback")
+        self.assertEqual(report["observed_use_ingestion"]["foreground_feedback_row_count"], 1)
+        self.assertEqual(report["observed_use_ingestion"]["invalid_feedback_line_count"], 1)
+        self.assertEqual(report["metrics"]["trace_backed_observed_use_count"], 1)
+        self.assertEqual(report["metrics"]["synthetic_observed_use_count"], 0)
+
+    def test_low_authority_feedback_does_not_ripen_skill_observed_use(self) -> None:
+        skill_path = REPO_ROOT / "skills" / "aippocampus" / "SKILL.md"
+        markdown = skill_path.read_text(encoding="utf-8")
+        clause_id = "skill_aippocampus_workflow_003"
+        receipt = agent_continuity_cli_support.capture_feedback(
+            route_id=f"skill_clause:{clause_id}",
+            outcome="helped",
+        )
+        event = dict(receipt["event"])
+        event.update({"skill_id": "aippocampus", "clause_id": clause_id})
+
+        rows = skill_observed_use.observed_use_rows_from_foreground_feedback(
+            skill_bridge.build_skill_to_aippo_report(
+                markdown,
+                source_ref="skills/aippocampus/SKILL.md",
+            )["seed"],
+            [event],
+        )
+        report = skill_observed_use.build_skill_observed_use_report(
+            markdown,
+            source_ref="skills/aippocampus/SKILL.md",
+            foreground_feedback_rows=[event],
+            target_task="coding issue closeout with continuity-sensitive context",
+        )
+
+        self.assertEqual(rows, [])
+        self.assertEqual(report["status"], "contract_smoke_only")
+        self.assertEqual(report["metrics"]["trace_backed_observed_use_count"], 0)
+        self.assertFalse(report["metrics"]["usefulness_gate_ok"])
+
+    def test_self_report_only_trace_row_does_not_ripen_skill_observed_use(self) -> None:
+        skill_path = REPO_ROOT / "skills" / "aippocampus" / "SKILL.md"
+        markdown = skill_path.read_text(encoding="utf-8")
+        clause_id = "skill_aippocampus_workflow_003"
+        event = feedback_events.active_flow_event(
+            route_id=f"skill_clause:{clause_id}",
+            route_kind="active_path",
+            signal="source_reopen_success",
+            source_id="public-fixture:self-report-only",
+        )
+        event.update(
+            {
+                "skill_id": "aippocampus",
+                "clause_id": clause_id,
+                "evidence_origin": "trace_backed",
+                "source_support": {
+                    "feedback_is_source_backed": True,
+                    "self_report_only": True,
+                    "source_ref_count": 1,
+                    "source_ref": "public-fixture:self-report-only",
+                },
+            }
+        )
+
+        report = skill_observed_use.build_skill_observed_use_report(
+            markdown,
+            source_ref="skills/aippocampus/SKILL.md",
+            foreground_feedback_rows=[event],
+            target_task="coding issue closeout with continuity-sensitive context",
+        )
+
+        self.assertEqual(report["metrics"]["trace_backed_observed_use_count"], 0)
+        self.assertFalse(report["metrics"]["usefulness_gate_ok"])
 
 
 if __name__ == "__main__":

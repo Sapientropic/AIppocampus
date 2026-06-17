@@ -443,6 +443,48 @@ def missing_feedback_route_payload(
     schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
+    route_choices = [
+        {
+            "id": f"feedback_last_recall_route_{choice['request_index']}",
+            "label": f"Record feedback on last recall route {choice['request_index']}",
+            "command": (
+                f"aippocampus agent feedback {choice['route_id']} "
+                "--outcome source_reopen_success --json"
+            ),
+            "route_id": choice["route_id"],
+            "request_index": choice["request_index"],
+            "source": "last_recall_cache",
+            "mutation_risk": "durable_low_authority_feedback_write",
+            "claim_boundary": "feedback_is_not_source_truth",
+            "why": "Use when the selected route from the current recall was helpful.",
+        }
+        for choice in last_recall_route_choices(limit=3)
+    ]
+    fallback_actions = [
+        _recall_with_cue_action(
+            action_id="recall_before_feedback",
+            label="Find a route before recording feedback",
+            why="Feedback needs a route_id from a recall result.",
+        ),
+        {
+            "id": "deepen_if_needed",
+            "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+            "why": "Use after recall when you need to inspect the first route before judging it.",
+        },
+        {
+            "id": "record_route_feedback",
+            "command_template": (
+                "aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json"
+            ),
+            "requires": ["route_id", "feedback_outcome"],
+            "mutation_risk": "durable_low_authority_feedback_write",
+            "claim_boundary": "feedback_is_not_source_truth",
+            "why": "Use once a concrete route id and outcome are known.",
+        },
+    ]
+    actions = route_choices or fallback_actions
     return _public_payload(
         {
             "kind": kind,
@@ -450,31 +492,10 @@ def missing_feedback_route_payload(
             "mode": "feedback",
             "status": "needs_route_id",
             "ok": False,
-            "agent_next_action": {
-                "id": "recall_before_feedback",
-                "command": 'aippocampus agent recall "old cue" --json',
-                "why": "Feedback needs a route_id from a recall result.",
-            },
-            "safe_next_actions": [
-                {
-                    "id": "recall_before_feedback",
-                    "command": 'aippocampus agent recall "old cue" --json',
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "no_claim_before_reopen",
-                },
-                {
-                    "id": "deepen_if_needed",
-                    "command": "aippocampus agent deepen --request 1 --last-recall --json",
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "no_claim_before_reopen",
-                },
-                {
-                    "id": "record_route_feedback",
-                    "command": "aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
-                    "mutation_risk": "durable_low_authority_feedback_write",
-                    "claim_boundary": "feedback_is_not_source_truth",
-                },
-            ],
+            "last_recall_route_choice_count": len(route_choices),
+            "agent_next_action": actions[0],
+            "foreground_action": actions[0],
+            "safe_next_actions": actions,
             "write_boundary": {
                 "wrote_event": False,
                 "storage": "none",
@@ -579,6 +600,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
     task_text = str(task or "").strip()
     if use_hint_available or (status == "ok" and direct_guidance_available):
         foreground_action = {
+            "id": next_action or "use_aippo_working_contract_guidance",
             "action_id": next_action or "use_aippo_working_contract_guidance",
             "tool_name": "agent_aippo",
             "arguments": {
@@ -589,15 +611,60 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             "why": "AIppo found low-risk project workflow guidance for this task.",
         }
     else:
-        foreground_action = {
-            "action_id": "run_agent_recall_if_prior_source_matters",
-            "tool_name": "agent_recall",
-            "arguments": {"query": task_text} if task_text else {"query_required": True},
-            "claim_boundary": "no_aippo_guidance_no_claim",
-            "why": "No active AIppo working contract matched strongly enough.",
-        }
         if task_text:
-            foreground_action["cli_command"] = f'aippocampus agent recall "{task_text}" --json'
+            foreground_action = {
+                "id": "run_agent_recall_if_prior_source_matters",
+                "action_id": "run_agent_recall_if_prior_source_matters",
+                "tool_name": "agent_recall",
+                "arguments": {"query": task_text},
+                "cli_command": f'aippocampus agent recall "{task_text}" --json',
+                "claim_boundary": "no_aippo_guidance_no_claim",
+                "why": "No active AIppo working contract matched strongly enough.",
+            }
+        else:
+            foreground_action = {
+                "id": "provide_task_cue",
+                "action_id": "provide_task_cue",
+                "tool_name": "agent_aippo",
+                "arguments_template": {"task": "{task_cue}"},
+                "cli_command_template": 'aippocampus agent aippo --task "{task_cue}" --json',
+                "requires": ["task_cue"],
+                "template_only": True,
+                "claim_boundary": "no_aippo_guidance_no_claim",
+                "why": "AIppo needs a concrete task description before it can choose a working contract.",
+            }
+    safe_next_actions: list[dict[str, Any]] = [dict(foreground_action)]
+    if not task_text:
+        safe_next_actions.append(
+            {
+                "id": "run_agent_recall_if_prior_source_matters",
+                "action_id": "run_agent_recall_if_prior_source_matters",
+                "tool_name": "agent_recall",
+                "arguments_template": {"query": "{continuity_cue}"},
+                "cli_command_template": 'aippocampus agent recall "{continuity_cue}" --json',
+                "requires": ["continuity_cue"],
+                "template_only": True,
+                "claim_boundary": "source_reopen_required_before_claims",
+                "why": "Use recall first when the task depends on old local source context.",
+            }
+        )
+        safe_next_actions.append(
+            {
+                "id": "inspect_operator_detail",
+                "action_id": "inspect_operator_detail",
+                "tool_name": "agent_aippo",
+                "arguments_template": {"task": "{task_cue}", "operator_json": True},
+                "cli_command_template": (
+                    'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+                ),
+                "requires": ["task_cue"],
+                "template_only": True,
+                "claim_boundary": "local_operator_diagnostic_not_public_claim",
+                "why": "Open the full activation packet only for local operator diagnostics.",
+            }
+        )
+    elif contract_action:
+        safe_next_actions.append(dict(contract_action))
     reason_codes: list[str] = []
     no_contract_reason = str(packet.get("no_active_contract_reason") or "").strip()
     if no_contract_reason:
@@ -608,19 +675,29 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         reason_codes.append("no_task_family_match")
     if next_action == "use_hint" and guidance and available_active_clause_count <= 0:
         reason_codes.append("use_hint_blocked_no_available_active_clause")
+    deduped_reason_codes: list[str] = []
+    seen_reason_codes: set[str] = set()
+    for reason_code in reason_codes:
+        if reason_code in seen_reason_codes:
+            continue
+        seen_reason_codes.add(reason_code)
+        deduped_reason_codes.append(reason_code)
     return _public_payload(
         {
             "kind": payload.get("kind"),
             "schema_version": payload.get("schema_version"),
             "mode": "aippo",
             "surface": "agent_aippo_guidance_card",
+            "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
             "status": status,
             "ok": status == "ok",
             "task_hint_used": bool(payload.get("task_hint_used")),
             "task_families": families[:4],
             "use_guidance": guidance[:3],
             "foreground_action": foreground_action,
-            "reason_codes": reason_codes,
+            "agent_next_action": foreground_action,
+            "safe_next_actions": safe_next_actions,
+            "reason_codes": deduped_reason_codes,
             "contract_status": {
                 "active_clause_count": active_clause_count,
                 "available_active_clause_count": available_active_clause_count,
@@ -654,10 +731,16 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                     "public_product_readiness",
                     "exact_user_history_claims",
                 ],
-                "detail_available_with": 'aippocampus agent aippo --task "task cue" --json --operator-json',
+                "detail_available_with_template": (
+                    'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+                ),
+                "detail_requires": ["task_cue"],
             },
             "operator_json_available": True,
-            "operator_json_command": 'aippocampus agent aippo --task "task cue" --json --operator-json',
+            "operator_json_command_template": (
+                'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+            ),
+            "operator_json_requires": ["task_cue"],
         }
     )
 
@@ -807,6 +890,43 @@ def read_last_recall_cache(path: str | Path | None = None) -> dict[str, Any]:
             "public compact recall projection needs the same-machine last recall cache; rerun agent recall"
         )
     raise ValueError("last recall cache has an unsupported shape")
+
+
+def last_recall_route_choices(path: str | Path | None = None, *, limit: int = 5) -> list[dict[str, Any]]:
+    """Return route ids from the same-machine last-recall cache without handles.
+
+    Personal controls and feedback only need the route id to write scoped,
+    low-authority calibration. Keep local reopen tokens and source paths out of
+    these foreground cards; those remain in deepen/explain flows.
+    """
+
+    try:
+        cache = read_last_recall_cache(path)
+    except Exception:
+        return []
+    choices: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for request in cache.get("requests") or []:
+        if not isinstance(request, Mapping):
+            continue
+        route_id = str(request.get("route_id") or "").strip()
+        if not route_id or route_id in seen:
+            continue
+        try:
+            request_index = int(request.get("request_index") or len(choices) + 1)
+        except (TypeError, ValueError):
+            request_index = len(choices) + 1
+        choices.append(
+            {
+                "request_index": request_index,
+                "route_id": route_id,
+                "source": "last_recall_cache",
+            }
+        )
+        seen.add(route_id)
+        if len(choices) >= limit:
+            break
+    return choices
 
 
 def handle_from_last_recall_cache(

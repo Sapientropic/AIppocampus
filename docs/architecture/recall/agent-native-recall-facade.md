@@ -331,6 +331,10 @@ is not a default cost for every imported skill.
 path. It keeps the seed as a lower-authority candidate, then compiles only
 source-backed observed-use rows into an `aippo_working_contract` package. The
 skill declaration and the observed-use feedback are both required source legs.
+Explicit trace-backed or replay-backed foreground feedback rows with a
+source/replay reference can now feed that path directly; ordinary low-authority
+feedback remains routing calibration only. Synthetic observed-use rows remain a
+contract smoke fixture and do not satisfy product-usefulness claims.
 A command list, self-report-only correction, or unsupported over-broad clause
 stays candidate-only or challenged, even if it came from a valid `SKILL.md`.
 The resulting foreground activation packet carries only compact working

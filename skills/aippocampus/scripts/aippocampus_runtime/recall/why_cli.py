@@ -8,6 +8,7 @@ import json
 import os
 from typing import Any, Mapping
 
+from aippocampus_runtime.contracts import FOREGROUND_ACTION_CONTRACT_VERSION
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.recall.why_reason_codes import DEFAULT_MAX_ROUTES
@@ -150,10 +151,30 @@ def render_compact_help(mode: str) -> str:
 
 
 def _recovery_payload(mode: str) -> dict[str, Any]:
+    actions = [
+        {
+            "id": "diagnose_with_cue",
+            "label": "Run recall diagnostic with a cue",
+            "command_template": f'aippocampus {mode} "{{cue}}" --json',
+            "requires": ["cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "diagnostic_not_source_evidence",
+            "why": "Use when you have the cue whose recall behavior needs explanation.",
+        },
+        {
+            "id": "deepen_selected_route",
+            "label": "Deepen selected route after recall",
+            "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+            "why": "Use after recall has written a same-machine route request cache.",
+        },
+    ]
     return {
         "kind": "aippocampus_recall_diagnostic_recovery",
         "mode": mode,
         "ok": False,
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "error": {
             "code": "cue_required",
             "message": "Provide a cue so the diagnostic can explain a recall route or silence.",
@@ -163,16 +184,10 @@ def _recovery_payload(mode: str) -> dict[str, Any]:
             "why-recall": "Use when recall surfaced a route that is surprising, stale-looking, broad, or needs explanation.",
             "why-not-recall": "Use when recall stayed silent or did not help for a cue you expected to work.",
         },
-        "next_actions": [
-            {
-                "label": "try recall first",
-                "command": 'aippocampus agent recall "old decision about setup" --json',
-            },
-            {
-                "label": "deepen selected route",
-                "command": "aippocampus agent deepen --request 1 --last-recall --json",
-            },
-        ],
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
+        "next_actions": actions,
         "claim_boundary": "Diagnostic output is route guidance, not source evidence; reopen source before claims.",
     }
 
@@ -185,6 +200,25 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
     deepen_command = "aippocampus agent deepen --request 1 --last-recall --json"
     next_safe = str(payload.get("next_safe_action") or "")
     decision = str(payload.get("decision") or "")
+    diagnostic = str(payload.get("diagnostic_class") or "")
+    specificity = str(payload.get("route_specificity") or "")
+    tighten_action = {
+        "id": "tighten_cue",
+        "label": "Tighten the diagnostic cue",
+        "command_template": 'aippocampus why-recall "{more_specific_cue}" --json',
+        "requires": ["more_specific_cue"],
+        "why": "The surfaced route was too broad; refine the cue before repeating recall.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "diagnostic_not_source_evidence",
+    }
+    deepen_action = {
+        "id": "deepen_after_recall",
+        "command": deepen_command,
+        "why": "Routes already surfaced; inspect the selected route before using it.",
+        "depends_on": "last_recall_cache",
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+    }
     if next_safe == "run_onboard_or_build_clean_source":
         primary = {
             "id": "check_onboarding_status",
@@ -192,13 +226,10 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
             "why": "Clean source or registration is missing; status is the next executable repair check.",
             "mutation_risk": "read_only",
         }
+    elif diagnostic == "surfaced_but_low_specificity" or specificity == "low":
+        primary = tighten_action
     elif decision == "surfaced" or next_safe == "reopen_source":
-        primary = {
-            "id": "recall_same_cue",
-            "command": recall_command,
-            "why": "Recall surfaced route-shaped context; reopen/deepen before claims.",
-            "mutation_risk": "read_only",
-        }
+        primary = deepen_action
     else:
         primary = {
             "id": "search_same_cue",
@@ -206,7 +237,7 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
             "why": "No route is claim-ready; use the same cue as a bounded source search before broadening.",
             "mutation_risk": "read_only",
         }
-    candidate_actions = [
+    candidate_actions: list[dict[str, Any]] = [
         primary,
         {
             "id": "recall_same_cue",
@@ -214,13 +245,7 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
             "why": "Use recall when the cue is fuzzy or route-shaped.",
             "mutation_risk": "read_only",
         },
-        {
-            "id": "deepen_after_recall",
-            "command": deepen_command,
-            "why": "Use after recall writes a same-machine last-recall request cache.",
-            "depends_on": "recall_same_cue",
-            "mutation_risk": "read_only",
-        },
+        deepen_action,
     ]
     if primary["id"] != "check_onboarding_status":
         candidate_actions.append(
@@ -231,7 +256,7 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
                 "mutation_risk": "read_only",
             }
         )
-    actions: list[dict[str, str]] = []
+    actions: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for action in candidate_actions:
         action_id = str(action.get("id") or "")
@@ -241,12 +266,15 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
         actions.append(action)
     action_card = payload.get("action_card")
     if isinstance(action_card, dict):
-        action_card["next_command"] = primary["command"]
+        next_command = primary.get("command") or primary.get("command_template")
+        action_card["next_command"] = next_command
         action_card["primary_action"] = primary["id"]
         action_card["claim_boundary"] = "diagnostic_not_source_evidence"
     if next_safe:
         payload["authority_next_safe_action"] = next_safe
+    payload["foreground_action_contract"] = FOREGROUND_ACTION_CONTRACT_VERSION
     payload["agent_next_action"] = primary
+    payload["foreground_action"] = primary
     payload["safe_next_actions"] = actions
     payload["foreground_next_action"] = primary["id"]
     payload["next_safe_action"] = primary["id"]
@@ -264,9 +292,9 @@ def render_recovery_text(payload: Mapping[str, Any]) -> str:
         "when to use why-not-recall: explain silence or no-help recall.",
     ]
     if actions:
-        lines.append("next: " + str(actions[0].get("command")))
+        lines.append("next: " + str(actions[0].get("command") or actions[0].get("command_template")))
         if len(actions) > 1:
-            lines.append("then: " + str(actions[1].get("command")))
+            lines.append("then: " + str(actions[1].get("command") or actions[1].get("command_template")))
     lines.append("boundary: diagnostic route guidance is not source evidence.")
     return "\n".join(lines)
 

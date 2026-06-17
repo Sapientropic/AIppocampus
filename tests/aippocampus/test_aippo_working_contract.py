@@ -253,6 +253,8 @@ class AIppoWorkingContractTests(unittest.TestCase):
             "update install guide python3 macOS": "product_workflow",
             "write upstream issue about MCP semantic auth": "issue_writing",
             "review plugin install and hook status": "host_readiness",
+            "critique foreground JSON agent-unfriendly fake command": "product_workflow",
+            "audit over-conservative placeholder cue in operator JSON": "product_workflow",
         }
 
         for task, family in probes.items():

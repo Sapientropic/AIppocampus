@@ -1676,8 +1676,21 @@ def main(argv: list[str] | None = None) -> int:
         task = args.task_flag or " ".join(args.task)
         payload = activate_aippo(task=task)
         if args.json:
-            if not args.operator_json:
-                payload = compact_aippo_guidance_card(payload, task=task)
+            guidance_card = compact_aippo_guidance_card(payload, task=task)
+            if args.operator_json:
+                payload = {
+                    **payload,
+                    "foreground_action_contract": guidance_card.get(
+                        "foreground_action_contract",
+                        FOREGROUND_ACTION_CONTRACT_VERSION,
+                    ),
+                    "foreground_action": guidance_card.get("foreground_action"),
+                    "agent_next_action": guidance_card.get("agent_next_action"),
+                    "safe_next_actions": guidance_card.get("safe_next_actions", []),
+                    "foreground_guidance_card": guidance_card,
+                }
+            else:
+                payload = guidance_card
             _json_out(payload)
         else:
             print(render_aippo_human(payload))
@@ -1820,7 +1833,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("AIppocampus agent feedback: route_id required")
                 next_action = payload.get("agent_next_action")
-                command = next_action.get("command") if isinstance(next_action, Mapping) else next_action
+                command = (
+                    next_action.get("command")
+                    or next_action.get("command_template")
+                    or next_action.get("id")
+                    if isinstance(next_action, Mapping)
+                    else next_action
+                )
                 print("Next: " + str(command))
             return 2
         try:

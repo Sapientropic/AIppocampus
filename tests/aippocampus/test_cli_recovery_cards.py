@@ -271,8 +271,25 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_agent_self_note_read")
         self.assertEqual(payload["error"]["code"], "needs_note_id")
         self.assertFalse(payload["write_boundary"]["written"])
-        self.assertIn("aippocampus self-note list --json", payload["agent_next_action"])
-        self.assertIn("aippocampus self-note search <cue> --json", payload["agent_next_action"])
+        self.assertEqual(payload["agent_next_action"]["id"], "list_notes")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertEqual(action_ids, ["list_notes", "search_notes", "source_backed_recall"])
+        self.assertEqual(payload["safe_next_actions"][0]["command"], "aippocampus self-note list --json")
+        self.assertEqual(payload["safe_next_actions"][1]["requires"], ["cue"])
+        self.assertIn("command_template", payload["safe_next_actions"][1])
+
+    def test_self_note_search_missing_cue_is_recovery_card(self) -> None:
+        proc = self.run_cli("self-note", "search", "--json")
+
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["status"], "needs_cue")
+        self.assertEqual(payload["error"]["code"], "needs_cue")
+        self.assertEqual(payload["agent_next_action"]["id"], "search_notes")
+        self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
+        self.assertNotIn('"query": ""', encoded)
+        self.assertNotIn("<cue>", encoded)
 
     def test_warm_help_leads_with_safe_status_path(self) -> None:
         proc = self.run_cli("warm", "--help")
@@ -850,6 +867,22 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertNotIn("old continuity cue", command)
                 if action.get("command_template"):
                     self.assertEqual(action.get("requires"), ["cue"])
+
+    def test_work_guard_json_uses_templates_for_missing_issue_context(self) -> None:
+        proc = self.run_cli("work-guard", "--json")
+
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_issue_work_orientation_packet")
+        self.assertEqual(payload["error"]["code"], "work_guard_issue_or_title_required")
+        self.assertEqual(executable_command_violations(payload), [])
+        self.assertNotIn("<issue-number>", encoded)
+        self.assertNotIn("issue title and key terms", encoded)
+        for action in payload["safe_next_actions"]:
+            self.assertIn("command_template", action)
+            self.assertNotIn("command", action)
+            self.assertIsInstance(action["requires"], list)
 
     def test_bare_onboard_json_is_status_first_and_read_only(self) -> None:
         proc = self.run_cli("onboard", "--json")

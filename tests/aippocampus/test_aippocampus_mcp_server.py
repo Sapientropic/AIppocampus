@@ -352,6 +352,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(aippo_payload["mode"], "aippo")
         self.assertEqual(aippo_payload["surface"], "agent_aippo_guidance_card")
         self.assertEqual(aippo_payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertEqual(aippo_payload["agent_next_action"], aippo_payload["foreground_action"])
+        self.assertEqual(aippo_payload["safe_next_actions"][0], aippo_payload["foreground_action"])
         self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
         self.assertNotIn("cannot_claim", aippo_payload)
         self.assertIn("source_backed_facts", aippo_payload["claim_boundary"]["must_reopen_for"])
@@ -365,6 +367,36 @@ class AippocampusMcpServerTests(unittest.TestCase):
             "source_reopen_required_before_claim",
         )
         self.assertNotIn("activation_packet", aippo_payload)
+
+        aippo_no_task_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 204,
+                "method": "tools/call",
+                "params": {"name": "agent_aippo", "arguments": {}},
+            }
+        )
+        aippo_no_task_payload = self.tool_payload(aippo_no_task_response)
+        encoded_no_task = json.dumps(aippo_no_task_payload, ensure_ascii=False, sort_keys=True)
+
+        self.assertFalse(
+            aippo_no_task_response["result"].get("isError", False),
+            aippo_no_task_payload,
+        )
+        self.assertEqual(aippo_no_task_payload["surface"], "agent_aippo_guidance_card")
+        self.assertEqual(
+            aippo_no_task_payload["agent_next_action"]["action_id"],
+            "provide_task_cue",
+        )
+        self.assertEqual(aippo_no_task_payload["agent_next_action"]["requires"], ["task_cue"])
+        self.assertEqual(
+            aippo_no_task_payload["safe_next_actions"][0],
+            aippo_no_task_payload["agent_next_action"],
+        )
+        self.assertNotIn("operator_json_command", aippo_no_task_payload)
+        self.assertIn("operator_json_command_template", aippo_no_task_payload)
+        self.assertNotIn("task cue", encoded_no_task)
+        self.assertEqual(executable_command_violations(aippo_no_task_payload), [])
 
     def test_agent_recall_rejects_explicit_invalid_max_values(self) -> None:
         valid = mcp.handle_request(

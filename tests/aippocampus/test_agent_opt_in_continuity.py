@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, background_findings, feedback_events  # noqa: E402
 from aippocampus_runtime.registry import api as registry_api  # noqa: E402
 
@@ -1897,14 +1898,20 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("benchmark_reporting", payload["task_families"])
         self.assertIn("measured results", " ".join(payload["use_guidance"]))
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
-        self.assertIn("operator_json_command", payload)
+        self.assertIn("operator_json_command_template", payload)
+        self.assertNotIn("operator_json_command", payload)
+        self.assertEqual(payload["operator_json_requires"], ["task_cue"])
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
         self.assertNotIn("red_lines", payload)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
+        self.assertNotIn("task cue", encoded)
+        self.assertEqual(executable_command_violations(payload), [])
 
     def test_cli_agent_aippo_use_hint_reports_available_clause(self) -> None:
         proc = subprocess.run(
@@ -1968,6 +1975,77 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotEqual(payload["foreground_action"]["action_id"], "use_hint")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("no_task_family_match", payload["reason_codes"])
+        self.assertEqual(len(payload["reason_codes"]), len(set(payload["reason_codes"])))
+
+    def test_cli_agent_aippo_no_task_returns_needs_input_action_card(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        action = payload["agent_next_action"]
+
+        self.assertEqual(payload["status"], "no_active_contract")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(action["action_id"], "provide_task_cue")
+        self.assertEqual(action["tool_name"], "agent_aippo")
+        self.assertEqual(action["requires"], ["task_cue"])
+        self.assertEqual(payload["safe_next_actions"][0], action)
+        self.assertNotIn("operator_json_command", payload)
+        self.assertIn("operator_json_command_template", payload)
+        self.assertNotIn("task cue", encoded)
+        self.assertEqual(executable_command_violations(payload), [])
+
+    def test_cli_agent_aippo_operator_json_exposes_foreground_contract(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--task",
+                "critique foreground JSON agent-unfriendly placeholder cue",
+                "--json",
+                "--operator-json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(payload["surface"], "project_workflow_ai_ppocampus")
+        self.assertIn("activation_packet", payload)
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertIn("product_workflow", payload["activation_packet"]["task_families"])
+        self.assertIn("foreground_guidance_card", payload)
+        self.assertNotIn("operator_json_command", payload["foreground_guidance_card"])
+        self.assertNotIn("task cue", encoded)
+        self.assertEqual(executable_command_violations(payload), [])
 
     def test_cli_agent_aippo_core_product_journeys_are_not_empty_contracts(self) -> None:
         proc = subprocess.run(

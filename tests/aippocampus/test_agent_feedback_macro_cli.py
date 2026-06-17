@@ -75,6 +75,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
     def test_cli_agent_feedback_default_json_is_durable_scoped_lane(self) -> None:
         registry = self.cwd / "registry"
         env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+        empty_env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(self.cwd / "empty-registry")}
         proc = self.run_agent(
             "feedback",
             "route_test",
@@ -85,7 +86,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             "--json",
             env=env,
         )
-        missing = self.run_agent("feedback", "--json")
+        missing = self.run_agent("feedback", "--json", env=empty_env)
         help_proc = self.run_agent("feedback", "--help")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -122,12 +123,46 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(missing.returncode, 2)
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["status"], "needs_route_id")
-        self.assertIn("agent recall", missing_payload["agent_next_action"]["command"])
+        self.assertIn("agent recall", missing_payload["agent_next_action"]["command_template"])
+        self.assertEqual(missing_payload["agent_next_action"]["requires"], ["cue"])
         self.assertEqual(missing_payload["safe_next_actions"][0]["id"], "recall_before_feedback")
+        self.assertEqual(missing_payload["safe_next_actions"][2]["requires"], ["route_id", "feedback_outcome"])
         self.assertIn("durable low-authority route calibration", help_proc.stdout)
         self.assertIn("Default durable example:", help_proc.stdout)
         self.assertIn("--feedback-jsonl <local-feedback.jsonl>", help_proc.stdout)
         self.assertIn("helped/useful", help_proc.stdout)
+
+    def test_cli_agent_feedback_prefers_last_recall_route_choices(self) -> None:
+        registry = self.cwd / "registry"
+        cache = registry / "agent" / "last-recall.json"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_agent_last_recall",
+                    "schema_version": "agent-continuity-path-v1",
+                    "requests": [
+                        {"request_index": 1, "route_id": "route_cached_feedback"},
+                        {"request_index": 2, "route_id": "route_second_feedback"},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        proc = self.run_agent(
+            "feedback",
+            "--json",
+            env={**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)},
+        )
+
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "needs_route_id")
+        self.assertEqual(payload["last_recall_route_choice_count"], 2)
+        self.assertEqual(payload["agent_next_action"]["source"], "last_recall_cache")
+        self.assertIn("route_cached_feedback", payload["agent_next_action"]["command"])
+        self.assertNotIn("old cue", json.dumps(payload, ensure_ascii=False))
 
     def test_cli_agent_explain_json_errors_return_foreground_recovery_cards(self) -> None:
         deepen_missing = self.run_agent("deepen", "--json")

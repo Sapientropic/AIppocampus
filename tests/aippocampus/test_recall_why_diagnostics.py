@@ -198,7 +198,9 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["next_safe_action"], payload["agent_next_action"]["id"])
         self.assertEqual(payload["authority_next_safe_action"], "reopen_source")
         deepen_action = next(item for item in payload["safe_next_actions"] if item["id"] == "deepen_after_recall")
-        self.assertEqual(deepen_action["depends_on"], "recall_same_cue")
+        self.assertEqual(deepen_action["depends_on"], "last_recall_cache")
+        self.assertEqual(payload["agent_next_action"]["id"], "tighten_cue")
+        self.assertEqual(payload["agent_next_action"]["requires"], ["more_specific_cue"])
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
@@ -227,7 +229,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("cue_hash", human.stdout)
         self.assertNotIn("route_ids", human.stdout)
         self.assertNotIn('"<cue>"', human.stdout)
-        self.assertIn('aippocampus agent recall "clean source continuity" --json', human.stdout)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human.stdout)
 
     def test_human_missing_source_card_uses_the_provided_cue(self) -> None:
         human = facade.run_command(
@@ -285,8 +287,32 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
                 self.assertNotIn("usage:", result.stdout + result.stderr)
                 self.assertIn("AIppocampus " + command, result.stdout)
                 self.assertIn("example cue:", result.stdout)
-                self.assertIn("aippocampus agent recall", result.stdout)
+                self.assertIn(f'aippocampus {command} "{{cue}}" --json', result.stdout)
                 self.assertIn("source evidence", result.stdout)
+
+    def test_cli_projection_uses_tighten_cue_for_low_specificity_surface(self) -> None:
+        from aippocampus_runtime.recall import why_cli
+
+        payload = why_cli._attach_foreground_actions(
+            {
+                "kind": "aippocampus_recall_diagnostic",
+                "mode": "why-not-recall",
+                "decision": "surfaced",
+                "diagnostic_class": "surfaced_but_low_specificity",
+                "route_specificity": "low",
+                "next_safe_action": "reopen_source",
+                "action_card": {"primary_action": "refine_cue_first"},
+            },
+            cue="provider key visible env fallback",
+        )
+
+        self.assertEqual(payload["agent_next_action"]["id"], "tighten_cue")
+        self.assertEqual(payload["next_safe_action"], "tighten_cue")
+        self.assertEqual(payload["foreground_next_action"], "tighten_cue")
+        self.assertIn("command_template", payload["agent_next_action"])
+        self.assertNotIn("command", payload["agent_next_action"])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["more_specific_cue"])
+        self.assertEqual(payload["authority_next_safe_action"], "reopen_source")
 
     def test_cli_help_leads_with_use_case_before_diagnostic_flags(self) -> None:
         why_help = facade.run_command(["why-recall", "--help"], capture_output=True)

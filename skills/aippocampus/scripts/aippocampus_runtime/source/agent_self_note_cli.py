@@ -397,6 +397,7 @@ def _append_receipt_boundary(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _read_not_found_payload(note_id: str) -> dict[str, Any]:
+    actions = _self_note_lookup_actions()
     return {
         "kind": "aippocampus_agent_self_note_read",
         "ok": False,
@@ -405,15 +406,15 @@ def _read_not_found_payload(note_id: str) -> dict[str, Any]:
             "message": "No scoped agent self-note matched that note_id.",
             "note_id": note_id,
         },
-        "agent_next_action": (
-            "Run `aippocampus self-note search <cue> --json` or "
-            "`aippocampus self-note list --json`; use agent recall/search for source-backed facts."
-        ),
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
         "privacy_boundary": _privacy_boundary(),
     }
 
 
 def _read_missing_id_payload() -> dict[str, Any]:
+    actions = _self_note_lookup_actions()
     return {
         "kind": "aippocampus_agent_self_note_read",
         "ok": False,
@@ -421,11 +422,9 @@ def _read_missing_id_payload() -> dict[str, Any]:
             "code": "needs_note_id",
             "message": "self-note read needs a note_id.",
         },
-        "agent_next_action": (
-            "Run `aippocampus self-note list --json` to pick a note id, or "
-            "`aippocampus self-note search <cue> --json`; use agent recall/search for "
-            "source-backed facts."
-        ),
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
         "write_boundary": _write_boundary(),
         "privacy_boundary": _privacy_boundary(),
     }
@@ -450,14 +449,13 @@ def _read_success_payload(row: Mapping[str, Any]) -> dict[str, Any]:
 
 def _empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
     if command == "search":
+        actions = _self_note_lookup_actions()
         return {
             "decision": "empty",
             "message": "No agent self-note matched this cue.",
             "query": query,
-            "agent_next_action": (
-                "Try a broader cue, append a short direction-only note if this is a posture "
-                "handoff, or use `aippocampus search` / `agent recall` for source-backed memory."
-            ),
+            "agent_next_action": actions[1],
+            "safe_next_actions": actions,
             "authority": "direction_only_empty_state",
         }
     return {
@@ -469,6 +467,37 @@ def _empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
         ),
         "authority": "direction_only_empty_state",
     }
+
+
+def _self_note_lookup_actions() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "list_notes",
+            "label": "List scoped self-notes",
+            "command": "aippocampus self-note list --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "why": "Use this to pick a concrete note_id without broadening scope.",
+        },
+        {
+            "id": "search_notes",
+            "label": "Search scoped self-notes",
+            "command_template": 'aippocampus self-note search "{cue}" --json',
+            "requires": ["cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "why": "Use when you have a cue for weak direction-only atmosphere.",
+        },
+        {
+            "id": "source_backed_recall",
+            "label": "Use source-backed recall instead",
+            "command_template": 'aippocampus agent recall "{cue}" --json',
+            "requires": ["cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+            "why": "Use for facts, continuity claims, or exact source-backed context.",
+        },
+    ]
 
 
 def _append_success_payload(
@@ -646,7 +675,8 @@ before quoting or deciding from memory.""",
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
                 print("self-note read needs a note_id", file=sys.stderr)
-                print("Next: " + str(payload.get("agent_next_action") or ""), file=sys.stderr)
+                formatted = format_action_for_human(payload.get("agent_next_action"))
+                print("Next: " + (formatted[0] if formatted else ""), file=sys.stderr)
             return 2
         row = next(
             (
@@ -667,9 +697,32 @@ before quoting or deciding from memory.""",
             print("next: " + str(payload.get("agent_next_action") or ""))
         else:
             print("self-note not found", file=sys.stderr)
-            print("Next: " + str(payload.get("agent_next_action") or ""), file=sys.stderr)
+            formatted = format_action_for_human(payload.get("agent_next_action"))
+            print("Next: " + (formatted[0] if formatted else ""), file=sys.stderr)
         return 0 if row is not None else 1
     if args.command == "search":
+        if not text:
+            actions = _self_note_lookup_actions()
+            payload = {
+                "kind": "aippocampus_agent_self_note_search_recovery",
+                "ok": False,
+                "status": "needs_cue",
+                "error": {
+                    "code": "needs_cue",
+                    "message": "self-note search needs a cue.",
+                },
+                "agent_next_action": actions[1],
+                "foreground_action": actions[1],
+                "safe_next_actions": actions,
+                "write_boundary": _write_boundary(),
+                "privacy_boundary": _privacy_boundary(),
+            }
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print("self-note search needs a cue", file=sys.stderr)
+                print("Next: " + str(actions[1]["command_template"]), file=sys.stderr)
+            return 2
         rows = search_agent_self_notes(text, scoped_rows, limit=args.max)
         payload = {
             "kind": "aippocampus_agent_self_note_search",

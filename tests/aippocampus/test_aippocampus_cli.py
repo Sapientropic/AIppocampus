@@ -41,6 +41,24 @@ class AippocampusCliTests(unittest.TestCase):
             check=False,
         )
 
+    def write_last_recall_cache(self, registry: Path, *route_ids: str) -> None:
+        target = registry / "agent" / "last-recall.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_agent_last_recall",
+                    "schema_version": "agent-continuity-path-v1",
+                    "requests": [
+                        {"request_index": index, "route_id": route_id}
+                        for index, route_id in enumerate(route_ids, start=1)
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
     def write_continuity_domain_registry(
         self,
         root: Path,
@@ -131,9 +149,12 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("update status", proc.stdout)
 
     def test_personal_control_and_learning_frontdoors_are_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_registry = Path(tmp) / "registry"
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(empty_registry)}
+            pause = self.run_cli_with_env("pause", "--json", env=env)
+            forget_plan = self.run_cli_with_env("forget", "--json", env=env)
         pause_help = self.run_cli("pause", "--help")
-        pause = self.run_cli("pause", "--json")
-        forget_plan = self.run_cli("forget", "--json")
         forget = self.run_cli("forget", "route:test", "--json")
         privacy = self.run_cli("privacy", "--help")
         why_not = self.run_cli("why-not", "old cue", "--json")
@@ -392,7 +413,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertFalse(rows[1]["feedback_changes_source_truth"])
 
     def test_do_not_use_here_missing_target_offers_route_and_ticket_actions(self) -> None:
-        proc = self.run_cli("do-not-use-here", "--json")
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(Path(tmp) / "registry")}
+            proc = self.run_cli_with_env("do-not-use-here", "--json", env=env)
 
         self.assertEqual(proc.returncode, 2)
         payload = json.loads(proc.stdout)
@@ -400,9 +423,30 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["status"], "needs_target")
         surfaces = {item["surface"] for item in payload["safe_next_actions"]}
         self.assertEqual(surfaces, {"recall-route", "coding-ticket"})
-        self.assertIn("agent recall", payload["agent_next_action"]["command"])
+        self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["cue_for_route_to_quiet"])
+        self.assertEqual(payload["safe_next_actions"][1]["requires"], ["route_id"])
+        self.assertEqual(payload["safe_next_actions"][2]["requires"], ["ticket_id"])
         self.assertNotIn("<route_id>", encoded)
         self.assertNotIn("<ticket_id>", encoded)
+        self.assertNotIn("route to quiet", encoded)
+
+    def test_personal_controls_prefer_last_recall_route_choices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "registry"
+            self.write_last_recall_cache(registry, "route_cached_one", "route_cached_two")
+            env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+            pause = self.run_cli_with_env("pause", "--json", env=env)
+            forget = self.run_cli_with_env("forget", "--json", env=env)
+            quiet = self.run_cli_with_env("do-not-use-here", "--json", env=env)
+
+        for proc in (pause, forget, quiet):
+            self.assertIn(proc.returncode, {0, 2}, proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload["agent_next_action"]["source"], "last_recall_cache")
+            self.assertEqual(payload["agent_next_action"]["request_index"], 1)
+            self.assertIn("route_cached_one", payload["agent_next_action"]["command"])
+            self.assertNotIn("route to quiet", json.dumps(payload, ensure_ascii=False))
 
     def test_repro_package_template_has_structured_copyable_payload(self) -> None:
         proc = self.run_cli("repro", "package", "--template", "--json")
@@ -1381,7 +1425,17 @@ class AippocampusCliTests(unittest.TestCase):
         search_payload = json.loads(empty_search.stdout)
         self.assertEqual(search_payload["count"], 0)
         self.assertEqual(search_payload["empty_state"]["decision"], "empty")
-        self.assertIn("agent recall", search_payload["empty_state"]["agent_next_action"])
+        self.assertEqual(search_payload["empty_state"]["agent_next_action"]["id"], "search_notes")
+        self.assertEqual(
+            search_payload["empty_state"]["agent_next_action"]["requires"],
+            ["cue"],
+        )
+        self.assertTrue(
+            any(
+                action["id"] == "source_backed_recall"
+                for action in search_payload["empty_state"]["safe_next_actions"]
+            )
+        )
 
     def test_self_note_read_is_intentional_not_phantom_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1423,7 +1477,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotEqual(missing.returncode, 0)
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["error"]["code"], "agent_self_note_not_found")
-        self.assertIn("search", missing_payload["agent_next_action"])
+        self.assertEqual(missing_payload["agent_next_action"]["id"], "list_notes")
+        self.assertTrue(
+            any(action["id"] == "search_notes" for action in missing_payload["safe_next_actions"])
+        )
         self.assertEqual(help_proc.returncode, 0)
         self.assertIn("usage: aippocampus self-note read", help_proc.stdout)
         self.assertIn("direction-only", help_proc.stdout)

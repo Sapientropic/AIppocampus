@@ -8,11 +8,20 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.aippo import skill_bridge, usefulness, working_contract
+from aippocampus_runtime.aippo import (
+    skill_bridge,
+    skill_observed_feedback,
+    usefulness,
+    working_contract,
+)
 from aippocampus_runtime.core import compact_text
 
 SCHEMA_VERSION = skill_bridge.SCHEMA_VERSION
 FOREGROUND_PACKET_BYTE_BUDGET = skill_bridge.FOREGROUND_PACKET_BYTE_BUDGET
+TRACE_BACKED_ORIGINS = skill_observed_feedback.TRACE_BACKED_ORIGINS
+observed_use_rows_from_foreground_feedback = (
+    skill_observed_feedback.observed_use_rows_from_foreground_feedback
+)
 
 
 def _text(value: Any, limit: int = 240) -> str:
@@ -172,6 +181,10 @@ def _skill_clause_source_row(
     support_grade = "source_supported" if ripens else "candidate_only"
     refs: list[dict[str, Any]] = []
     if ripens:
+        support = _mapping_field(observed_row or {}, "source_support")
+        feedback_source_ref = _text(
+            support.get("source_ref") or observed_row.get("foreground_feedback_signal"), 180
+        )
         refs = [
             {
                 "source_ref": f"skill:{seed.get('skill_id')}:SKILL.md",
@@ -180,7 +193,7 @@ def _skill_clause_source_row(
             },
             {
                 "source_ref": f"feedback:{observed_row.get('activation_id') if observed_row else 'missing'}",
-                "path": "fixtures/aippo/skill-observed-use-feedback.jsonl",
+                "path": feedback_source_ref or "foreground_feedback_event",
                 "kind": "observed_use_feedback",
             },
         ]
@@ -286,6 +299,8 @@ def build_skill_observed_use_report(
     declared_need_class: str = "continuity_sensitive_work",
     target_task: str = "coding issue closeout with continuity-sensitive context",
     observed_use_rows: Sequence[Mapping[str, Any]] | None = None,
+    foreground_feedback_rows: Sequence[Mapping[str, Any]] | None = None,
+    foreground_feedback_path: str | Path | None = None,
     built_at: str = "2026-06-12",
 ) -> dict[str, Any]:
     seed_report = skill_bridge.build_skill_to_aippo_report(
@@ -295,8 +310,41 @@ def build_skill_observed_use_report(
         declared_need_class=declared_need_class,
     )
     seed = seed_report["seed"]
-    observed_rows_are_synthetic = observed_use_rows is None
-    observed_rows = list(observed_use_rows or _observed_use_rows(seed))
+    loaded_feedback_rows, invalid_feedback_line_count = skill_observed_feedback.load_jsonl_rows(
+        foreground_feedback_path
+    )
+    if observed_use_rows is not None:
+        observed_rows_are_synthetic = False
+        observed_rows = list(observed_use_rows)
+        observed_use_ingestion = {
+            "source": "explicit_observed_use_rows",
+            "foreground_feedback_row_count": 0,
+            "invalid_feedback_line_count": invalid_feedback_line_count,
+        }
+    elif foreground_feedback_rows is not None or foreground_feedback_path:
+        all_feedback_rows = [
+            *(foreground_feedback_rows or []),
+            *loaded_feedback_rows,
+        ]
+        observed_rows_are_synthetic = False
+        observed_rows = skill_observed_feedback.observed_use_rows_from_foreground_feedback(
+            seed,
+            all_feedback_rows,
+        )
+        observed_use_ingestion = {
+            "source": "foreground_feedback",
+            "foreground_feedback_row_count": len(all_feedback_rows),
+            "invalid_feedback_line_count": invalid_feedback_line_count,
+            "observed_use_row_count": len(observed_rows),
+        }
+    else:
+        observed_rows_are_synthetic = True
+        observed_rows = _observed_use_rows(seed)
+        observed_use_ingestion = {
+            "source": "synthetic_contract_fixture",
+            "foreground_feedback_row_count": 0,
+            "invalid_feedback_line_count": invalid_feedback_line_count,
+        }
     contract = _contract_from_observed_use(seed, observed_rows, built_at=built_at)
     packet = working_contract.activation_packet_from_working_contract(
         contract,
@@ -343,6 +391,19 @@ def build_skill_observed_use_report(
         for row in observed_rows
         if str(row.get("evidence_origin") or "") in {"trace_backed", "replay_backed"}
     )
+    trace_backed_positive_observed_use_count = sum(
+        1
+        for row in observed_rows
+        if str(row.get("evidence_origin") or "") in TRACE_BACKED_ORIGINS
+        and row.get("agent_action") == "used"
+        and row.get("outcome_signal") == "helped"
+    )
+    trace_backed_no_help_observed_use_count = sum(
+        1
+        for row in observed_rows
+        if str(row.get("evidence_origin") or "") in TRACE_BACKED_ORIGINS
+        and row.get("outcome_signal") == "unsupported_or_too_specific"
+    )
     contract_smoke_gate_ok = bool(usefulness_metrics["usefulness_gate_ok"])
     product_usefulness_gate_ok = bool(
         usefulness_metrics["usefulness_gate_ok"]
@@ -381,6 +442,7 @@ def build_skill_observed_use_report(
         ),
         "seed": seed,
         "observed_use_rows": observed_rows,
+        "observed_use_ingestion": observed_use_ingestion,
         "ripened_contract": contract,
         "activation_packet": packet,
         "deepen_surface": deepen,
@@ -422,6 +484,8 @@ def build_skill_observed_use_report(
                 "stable_workflow_search_avoided_count"
             ],
             "trace_backed_observed_use_count": trace_backed_observed_use_count,
+            "trace_backed_positive_observed_use_count": trace_backed_positive_observed_use_count,
+            "trace_backed_no_help_observed_use_count": trace_backed_no_help_observed_use_count,
             "synthetic_observed_use_count": synthetic_observed_use_count,
             "manual_search_observed_delta": (
                 usefulness_metrics["stable_workflow_search_avoided_count"]
@@ -448,7 +512,11 @@ def build_skill_observed_use_report(
             "private_skill_generalization",
             "skill_marketplace_readiness",
             "eval_environments_as_default_cost_for_every_skill",
-            "product_quality_ripening_from_synthetic_observed_use_rows",
+            *(
+                ["product_quality_ripening_from_synthetic_observed_use_rows"]
+                if synthetic_observed_use_count or observed_rows_are_synthetic
+                else []
+            ),
         ],
         "ok": all(value == 0 for value in red_lines.values())
         and packet_bytes <= FOREGROUND_PACKET_BYTE_BUDGET
@@ -478,4 +546,5 @@ def build_skill_observed_use_fixture_report(
 __all__ = [
     "build_skill_observed_use_fixture_report",
     "build_skill_observed_use_report",
+    "observed_use_rows_from_foreground_feedback",
 ]

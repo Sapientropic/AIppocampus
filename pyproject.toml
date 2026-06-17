@@ -394,6 +394,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_support.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_packet_compaction.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/why_cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/why_diagnostics.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/attention_router_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_facade_contract.py",

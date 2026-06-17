@@ -21,6 +21,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     capture_feedback,
     compact_feedback_receipt,
     feedback_lane_resolution,
+    last_recall_route_choices,
 )
 
 KIND = "aippocampus_personal_control"
@@ -68,6 +69,36 @@ def _template_action(
     }
 
 
+def _last_recall_control_actions(command: str, *, limit: int = 3) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    action_prefix = command.replace("-", "_")
+    for choice in last_recall_route_choices(limit=limit):
+        route_id = str(choice.get("route_id") or "").strip()
+        request_index = int(choice.get("request_index") or len(actions) + 1)
+        if not route_id:
+            continue
+        actions.append(
+            foreground_shell_action(
+                action_id=f"{action_prefix}_last_recall_route_{request_index}",
+                label=f"{command.title()} last recall route {request_index}",
+                command=f"aippocampus {command} {route_id} --surface recall-route --json",
+                why=(
+                    "Use when the current last-recall route is the thing the user wants "
+                    f"to {command} for this workspace."
+                ),
+                mutation_risk="durable_low_authority_feedback_write",
+                claim_boundary="feedback_is_not_source_truth",
+            )
+            | {
+                "route_id": route_id,
+                "request_index": request_index,
+                "source": "last_recall_cache",
+                "surface": "recall-route",
+            }
+        )
+    return actions
+
+
 def _claim_boundary(command: str, *, scoped: bool = False) -> dict[str, Any]:
     return {
         "can_use_for": [
@@ -106,8 +137,9 @@ def _with_boundary_detail(
 
 
 def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
+    cached_actions = _last_recall_control_actions(command)
     if command == "pause":
-        actions = [
+        actions = cached_actions + [
             _template_action(
                 action_id="find_pause_target",
                 label="Find pause target",
@@ -146,6 +178,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             ],
         )
     actions = [
+        *cached_actions,
         _template_action(
             action_id="find_forget_target",
             label="Find forget target",
@@ -263,6 +296,38 @@ def _load_ticket_json(path: str | None) -> dict[str, Any] | None:
 
 def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if not args.target:
+        cached_actions = _last_recall_control_actions("do-not-use-here")
+        fallback_actions = [
+            _template_action(
+                action_id="find_recall_route",
+                label="Find recall route",
+                command_template='aippocampus agent recall "{cue_for_route_to_quiet}" --json',
+                requires=["cue_for_route_to_quiet"],
+                why="Use a real cue to get a concrete route id before applying scoped quieting.",
+            )
+            | {"surface": "recall-route"},
+            _template_action(
+                action_id="quiet_recall_route_here",
+                label="Quiet recall route here",
+                command_template="aippocampus do-not-use-here {route_id} --surface recall-route --json",
+                requires=["route_id"],
+                why="Use once a concrete route id is known.",
+                mutation_risk="durable_low_authority_feedback_write",
+                claim_boundary="feedback_is_not_source_truth",
+            )
+            | {"surface": "recall-route"},
+            _template_action(
+                action_id="quiet_coding_ticket_here",
+                label="Quiet coding ticket here",
+                command_template="aippocampus do-not-use-here {ticket_id} --surface coding-ticket --json",
+                requires=["ticket_id"],
+                why="Use once a concrete coding ticket id is known.",
+                mutation_risk="durable_local_control_write",
+                claim_boundary="feedback_is_not_source_truth",
+            )
+            | {"surface": "coding-ticket"},
+        ]
+        actions = cached_actions or fallback_actions
         return (
             _public_payload(
                 {
@@ -271,33 +336,10 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                     "mode": "do-not-use-here",
                     "status": "needs_target",
                     "ok": False,
-                    "agent_next_action": {
-                        "id": "choose_control_target",
-                        "command": 'aippocampus agent recall "route to quiet" --json',
-                        "why": "Find the recall route id first, then quiet it for this workspace.",
-                    },
-                    "safe_next_actions": [
-                        {
-                            "id": "find_recall_route",
-                            "command": 'aippocampus agent recall "route to quiet" --json',
-                            "surface": "recall-route",
-                            "mutation_risk": "read_only",
-                        },
-                        {
-                            "id": "quiet_recall_route_here",
-                            "command_template": "aippocampus do-not-use-here ROUTE_ID_FROM_RECALL --surface recall-route --json",
-                            "requires": "route_id",
-                            "surface": "recall-route",
-                            "mutation_risk": "durable_low_authority_feedback_write",
-                        },
-                        {
-                            "id": "quiet_coding_ticket_here",
-                            "command_template": "aippocampus do-not-use-here TICKET_ID --surface coding-ticket --json",
-                            "requires": "ticket_id",
-                            "surface": "coding-ticket",
-                            "mutation_risk": "durable_local_control_write",
-                        },
-                    ],
+                    "last_recall_route_choice_count": len(cached_actions),
+                    "agent_next_action": actions[0],
+                    "foreground_action": actions[0],
+                    "safe_next_actions": actions,
                     "boundary": _boundary(),
                 }
             ),
