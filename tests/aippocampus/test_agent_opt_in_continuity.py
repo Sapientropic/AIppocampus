@@ -965,9 +965,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
         encoded = json.dumps(payload, ensure_ascii=False)
 
-        self.assertEqual(payload["next_safe_action"], "rerun_agent_recall_or_use_full_detail_handle")
+        self.assertEqual(payload["next_safe_action"], "recall_with_cue_full_detail")
+        self.assertEqual(payload["agent_next_action"]["id"], "recall_with_cue_full_detail")
+        self.assertNotIn("follow_up_action", payload)
         self.assertNotIn("--last-recall", encoded)
-        self.assertIn("--detail full", encoded)
 
     def test_memory_packet_budget_trimming_keeps_route_label(self) -> None:
         packet = {

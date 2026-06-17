@@ -22,7 +22,12 @@ from aippocampus_runtime.hooks.action_hint_cache import (
     load_action_hint_records_with_diagnostics,
 )
 from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
-from aippocampus_runtime.hooks.foreground_status import action_hint_status_contract
+from aippocampus_runtime.hooks.foreground_status import (
+    action_hint_cache_refresh_primary,
+    action_hint_status_contract,
+    hook_install_closeout_contract,
+    no_action_needed_install_primary,
+)
 from aippocampus_runtime.hooks.host_boundary import add_host_integration
 from aippocampus_runtime.hooks.install_prompt import (
     load_hooks,
@@ -503,6 +508,43 @@ def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, 
     return public
 
 
+def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
+    public = redact_public_result(result, path=path)
+    ready = bool((public.get("frontstage_card") or {}).get("ready"))
+    primary = (
+        no_action_needed_install_primary(
+            label="Action-time hints installed",
+            message="No foreground action-hint setup action is needed.",
+        )
+        if ready
+        else action_hint_cache_refresh_primary(
+            claim_boundary=str(public.get("claim_boundary") or "host_setup_not_memory_evidence")
+        )
+    )
+    public.pop("path", None)
+    public.pop("commands", None)
+    public.pop("commands_redacted", None)
+    public["local_private_fields"] = ["path", "commands", "command"]
+    public["operator_json_available"] = True
+    public.update(
+        hook_install_closeout_contract(
+            surface="action_hint_hook_install",
+            title="Action-time hint install",
+            status="installed_ready" if ready else "installed_but_not_ready",
+            primary=primary,
+            status_command="aippocampus hooks action status --json",
+            rollback_command="aippocampus hooks action uninstall --json",
+            extra={
+                "ready": ready,
+                "cache_status": str(public.get("cache_status") or "unknown"),
+                "cache_path_label": str(public.get("cache_path_label") or ""),
+                "cache_scope": str(public.get("cache_scope") or ""),
+            },
+        )
+    )
+    return public
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         epilog=(
@@ -522,6 +564,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache-jsonl")
     parser.add_argument("--timeout", type=positive_timeout, default=DEFAULT_ACTION_HINT_TIMEOUT_SECONDS)
     parser.add_argument("--include-private-paths", action="store_true")
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit raw local hooks.json path and hook command for local diagnostics.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -540,7 +588,10 @@ def main(argv: list[str] | None = None) -> int:
         result = uninstall(path)
     else:
         result = status(path, host=args.host, include_private_paths=True)
-    if not args.include_private_paths:
+    include_private_paths = args.include_private_paths or args.operator_json
+    if args.action == "install" and not include_private_paths:
+        result = public_install_result(result, path=path)
+    elif not include_private_paths:
         result = redact_public_result(result, path=path)
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

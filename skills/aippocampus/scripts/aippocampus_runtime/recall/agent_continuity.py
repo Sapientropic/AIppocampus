@@ -14,7 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
+from aippocampus_runtime.contracts import (
+    FOREGROUND_ACTION_CONTRACT_VERSION,
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.recall_navigation import (
@@ -641,19 +645,43 @@ def macro_orientation(
         for packet in memory_packets
     ]
     forbidden_count = _count_forbidden_keys(memory_packets)
+    safe_next_actions: list[dict[str, Any]] = []
     if deepen_requests:
         suggested_next = "agent deepen"
         foreground_action = None
     elif projection.get("status") == "missing_macro_state_path":
         suggested_next = "agent_recall_or_macro_schema_setup"
-        foreground_action = {
-            "action_id": "run_agent_recall_or_setup_macro_state",
-            "tool_name": "agent_recall",
-            "arguments": {"query": "project macro orientation cue"},
-            "cli_command": 'aippocampus agent recall "project macro orientation cue" --json',
-            "why": "No macro state exists; ordinary recall is the usable foreground path unless the user is setting up macro state.",
-            "claim_boundary": "no_claim_before_reopen",
-        }
+        safe_next_actions = [
+            {
+                "id": "recall_project_macro_orientation",
+                "label": "Recall project macro-orientation context",
+                "command_template": 'aippocampus agent recall "{cue}" --json',
+                "requires": ["cue"],
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+                "why": (
+                    "No macro state exists; ordinary recall is the usable foreground path "
+                    "unless the user is setting up macro state."
+                ),
+            },
+            {
+                "id": "explain_macro_schema",
+                "label": "Explain macro state schema",
+                "command": "aippocampus agent macro --explain-schema",
+                "mutation_risk": "read_only",
+                "claim_boundary": "operator_setup_not_source_evidence",
+                "why": "Use this when preparing or repairing a local macro-orientation state file.",
+            },
+            {
+                "id": "init_macro_state_template",
+                "label": "Create a macro state template",
+                "command": "aippocampus agent macro --init-template --json",
+                "mutation_risk": "local_template_stdout_only",
+                "claim_boundary": "operator_setup_not_source_evidence",
+                "why": "Use this to inspect the expected local JSONL entry shape before writing state.",
+            },
+        ]
+        foreground_action = safe_next_actions[0]
     else:
         suggested_next = "continue_normally"
         foreground_action = None
@@ -668,14 +696,10 @@ def macro_orientation(
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
         "suggested_next": suggested_next,
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "foreground_action": foreground_action,
-        "recovery_actions": [
-            'aippocampus agent recall "project macro orientation cue" --json',
-            "aippocampus agent macro --explain-schema",
-            "aippocampus agent macro --init-template --json",
-        ]
-        if projection.get("status") == "missing_macro_state_path"
-        else [],
+        "agent_next_action": foreground_action,
+        "safe_next_actions": safe_next_actions,
         "diagnostics": diagnostics,
         "metrics": {
             "macro_packet_shown_count": len(memory_packets),

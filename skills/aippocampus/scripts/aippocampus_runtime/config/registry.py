@@ -256,7 +256,6 @@ def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
         foreground_action = {
             "action_id": "no_action_needed",
             "label": "No config action needed",
-            "command": full_audit_command,
             "why": "All observed AIPPOCAMPUS_* environment names are registered; open the full inventory only for operator audit.",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",

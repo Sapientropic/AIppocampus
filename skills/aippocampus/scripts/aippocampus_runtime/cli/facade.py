@@ -225,7 +225,7 @@ def plugin_chooser_payload() -> dict[str, Any]:
             foreground_shell_action(
                 action_id="check_codex_plugin_status",
                 label="Check Codex plugin status",
-                command="aippocampus plugin status --agent-json",
+                command="aippocampus plugin status --json",
                 why="Read current freshness/callability without changing local plugin files.",
                 mutation_risk="read_only",
                 claim_boundary="host_status_not_memory_evidence",
@@ -448,22 +448,22 @@ def print_status_help(*, file: TextIO | None = None) -> None:
     print("", file=target)
     print("Try:", file=target)
     print("  aippocampus status", file=target)
-    print("  aippocampus health --agent-json", file=target)
-    print("  aippocampus update status --agent-json", file=target)
+    print("  aippocampus health --json", file=target)
+    print("  aippocampus update status --json", file=target)
 
 
 def print_plugin_status_help(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
-    print("usage: aippocampus plugin status [--agent-json|--json]", file=target)
+    print("usage: aippocampus plugin status [--json|--operator-json]", file=target)
     print("", file=target)
     print("Plugin status readiness card:", file=target)
     print("  Checks whether the local Codex plugin package/cache and host-visible tools look fresh.", file=target)
     print("  It is a plugin-shaped shortcut to update status, not a plugin install or hook enablement command.", file=target)
     print("", file=target)
     print("Try:", file=target)
-    print("  aippocampus plugin status --agent-json", file=target)
+    print("  aippocampus plugin status --json", file=target)
     print("  aippocampus plugin install --codex --verify", file=target)
-    print("  aippocampus update status --agent-json", file=target)
+    print("  aippocampus update status --json", file=target)
 
 
 def print_first_run_setup_card(kind: str, *, file: TextIO | None = None) -> None:
@@ -474,8 +474,9 @@ def print_first_run_setup_card(kind: str, *, file: TextIO | None = None) -> None
     print("  Goal: make the local Codex/CLI surface callable, then see one source-backed recall/search result.", file=target)
     print("", file=target)
     print("Ordinary Codex path:", file=target)
+    print("  aippocampus start --json", file=target)
     print("  aippocampus plugin install --codex --verify", file=target)
-    print("  aippocampus update status --agent-json", file=target)
+    print("  aippocampus update status --json", file=target)
     print('  aippocampus agent recall "old decision or handoff cue" --json', file=target)
     print("", file=target)
     print("No installed command yet:", file=target)
@@ -839,6 +840,7 @@ class CommandResult:
 
 COMMANDS = {
     "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
+    "start": CommandSpec("start.py", "aippocampus_runtime.cli.start"),
     "status": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
     "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
@@ -943,6 +945,7 @@ SCRIPT_MODULES = {
     "install_aippocampus_action_hint_hook.py": "aippocampus_runtime.hooks.install_action_hint",
     "action_hint_cache.py": "aippocampus_runtime.hooks.action_hint_cache",
     "aippocampus_claude_code_hooks.py": "aippocampus_runtime.hooks.claude_code",
+    "start.py": "aippocampus_runtime.cli.start",
 }
 
 
@@ -1530,11 +1533,12 @@ def print_help(*, file: TextIO | None = None) -> None:
     parser.print_usage(target)
     print("", file=target)
     print("Start here:", file=target)
-    print("  aippocampus search \"exact phrase\"      Find a remembered source snippet", file=target)
+    print("  aippocampus start --json              Choose the first useful continuity path", file=target)
     print("  aippocampus agent recall \"old cue\" --json", file=target)
     print("                                        Continue old work from source routes", file=target)
     print("  aippocampus agent deepen --request 1 --last-recall --json", file=target)
     print("                                        Reopen the selected route before claims", file=target)
+    print("  aippocampus search \"exact phrase\"      Exact wording fallback/demo", file=target)
     print("  aippocampus plugin install --codex --verify", file=target)
     print("                                        Local Codex plugin install/refresh", file=target)
     print("", file=target)
@@ -1545,6 +1549,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("Commands:", file=target)
     print("", file=target)
     print("Personal path:", file=target)
+    print("  start               First useful continuity-path chooser", file=target)
     print("  health              Run runtime health checks", file=target)
     print("  version             Show active runtime and release metadata version", file=target)
     print("  onboard             Check/register provider-backed clean source", file=target)
@@ -1569,7 +1574,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  doctor config       Report registered env config without values", file=target)
     print("  doctor spend        Report local model spend/yield diagnostics", file=target)
     print("  mcp status          Compact MCP tool readiness", file=target)
-    print("  mcp list-tools      List full MCP tool schemas", file=target)
+    print("  mcp list-tools      Compact readiness by default; --json lists full schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  observatory         Read-only route-readiness observatory report", file=target)
     print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)

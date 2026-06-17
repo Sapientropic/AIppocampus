@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
-from aippocampus_runtime.hooks.foreground_status import lifecycle_status_contract
+from aippocampus_runtime.hooks.foreground_status import (
+    hook_install_closeout_contract,
+    lifecycle_status_contract,
+    no_action_needed_install_primary,
+)
 from aippocampus_runtime.hooks.host_boundary import (
     add_host_integration,
     host_integration_text_lines,
@@ -464,6 +468,36 @@ def public_lifecycle_result(result: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
+def public_lifecycle_install_result(result: dict[str, Any]) -> dict[str, Any]:
+    public = {
+        key: value
+        for key, value in result.items()
+        if key not in {"path", "command"}
+    }
+    public["local_private_fields"] = ["path", "command"]
+    public["operator_json_available"] = True
+    public.update(
+        hook_install_closeout_contract(
+            surface="lifecycle_hook_install",
+            title="Lifecycle hook install",
+            status="installed_ready" if result.get("installed") else "partial",
+            primary=no_action_needed_install_primary(
+                label="Lifecycle hooks installed",
+                message="No foreground lifecycle-hook setup action is needed.",
+            ),
+            status_command="aippocampus hooks lifecycle status --json",
+            rollback_command="aippocampus hooks lifecycle uninstall --json",
+            extra={
+                "events": list(result.get("events") or []),
+                "provider_key_bridge_installed": bool(
+                    result.get("provider_key_bridge_installed")
+                ),
+            },
+        )
+    )
+    return public
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -497,7 +531,12 @@ def main(argv: list[str] | None = None) -> int:
         result = status(path, script, module=args.module)
 
     if args.json_output:
-        output = result if args.operator_json else public_lifecycle_result(result)
+        if args.operator_json:
+            output = result
+        elif args.action == "install":
+            output = public_lifecycle_install_result(result)
+        else:
+            output = public_lifecycle_result(result)
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         print(
@@ -515,6 +554,8 @@ def main(argv: list[str] | None = None) -> int:
             print("next: aippocampus onboard provider-key --plan --json")
         if result.get("changed") is not None:
             print(f"changed: {result.get('changed')}")
+        if result.get("command") and args.operator_json:
+            print(f"command: {result.get('command')}")
     return 0
 
 

@@ -226,8 +226,49 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(payload["changed"])
         self.assertEqual(payload["cache_status"], "with_missing_cache_file")
         self.assertEqual(payload["cache_path"], "<redacted:cache-jsonl>")
+        self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
+        self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"]["status"], "installed_but_not_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("status", action_ids)
+        self.assertIn("rollback", action_ids)
+        self.assertIn("aippocampus hooks action uninstall --json", encoded)
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(cache_path), encoded)
+        self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
+
+    def test_cli_install_json_reports_empty_cache_as_not_ready_closeout(self) -> None:
+        cache_path = self.codex_home / "empty-action-hints.jsonl"
+        cache_path.write_text("", encoding="utf-8")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "install",
+                    "--codex-home",
+                    str(self.codex_home),
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertEqual(payload["cache_status"], "with_empty_cache")
+        self.assertEqual(payload["foreground_action"]["status"], "installed_but_not_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertIn("aippocampus hooks action refresh-cache --write --json", encoded)
+        self.assertIn("aippocampus hooks action status --json", encoded)
+        self.assertIn("aippocampus hooks action uninstall --json", encoded)
+        self.assertNotIn(str(cache_path), encoded)
+        self.assertNotIn(str(SCRIPTS.resolve()), encoded)
         self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
 
     def test_cli_status_human_frontstage_card_names_action_time_hints(self) -> None:

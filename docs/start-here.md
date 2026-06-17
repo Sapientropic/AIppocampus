@@ -13,8 +13,9 @@ make sense under that branch's assumptions.
 - Codex agent/local setup:
 
   ```sh
+  aippocampus start --json
   aippocampus plugin install --codex --verify
-  aippocampus update status --agent-json
+  aippocampus update status --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
   ```
@@ -29,6 +30,7 @@ make sense under that branch's assumptions.
 - Existing source memory:
 
   ```sh
+  aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
   aippocampus search "a distinctive old phrase"

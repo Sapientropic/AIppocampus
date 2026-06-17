@@ -42,7 +42,7 @@ def plugin_install_recovery(exc: Exception, *, operator: bool = False) -> dict[s
                 },
                 {
                     "label": "check status",
-                    "command": "aippocampus plugin status --agent-json",
+                    "command": "aippocampus plugin status --json",
                     "mutates": False,
                 },
             ],
@@ -72,7 +72,7 @@ def plugin_install_recovery(exc: Exception, *, operator: bool = False) -> dict[s
             },
             {
                 "label": "inspect plugin status",
-                "command": "aippocampus plugin status --agent-json",
+                "command": "aippocampus plugin status --json",
                 "mutates": False,
             },
             {

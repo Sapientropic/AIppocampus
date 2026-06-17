@@ -43,7 +43,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("Status decision card", proc.stdout)
-        self.assertIn("aippocampus update status --agent-json", proc.stdout)
+        self.assertIn("aippocampus update status --json", proc.stdout)
         self.assertNotIn("--index-dir", proc.stdout)
         self.assertNotIn("--deep-graph-bytes", proc.stdout)
 
@@ -94,12 +94,12 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(family.returncode, 0)
         self.assertIn("aippocampus plugin install --codex --verify", family.stdout)
         self.assertIn("status", family.stdout)
-        self.assertIn("aippocampus plugin status --agent-json", family.stdout)
+        self.assertIn("aippocampus plugin status --json", family.stdout)
 
         self.assertEqual(install.returncode, 0)
         self.assertIn("Ordinary Codex setup path", install.stdout)
         self.assertIn("aippocampus plugin install --codex --verify", install.stdout)
-        self.assertIn("aippocampus update status --agent-json", install.stdout)
+        self.assertIn("aippocampus update status --json", install.stdout)
         self.assertIn("aippocampus agent recall", install.stdout)
         self.assertLess(
             install.stdout.index("aippocampus plugin install --codex --verify"),
@@ -119,7 +119,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
         self.assertIn("First-run setup card", setup.stdout)
         self.assertIn("aippocampus plugin install --codex --verify", setup.stdout)
-        self.assertIn("aippocampus update status --agent-json", setup.stdout)
+        self.assertIn("aippocampus update status --json", setup.stdout)
         self.assertIn("First-run install card", install.stdout)
         self.assertIn("aippocampus agent recall", install.stdout)
         self.assertIn("Memory action card", memory.stdout)
@@ -192,7 +192,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("Plugin status readiness card", proc.stdout)
-        self.assertIn("aippocampus plugin status --agent-json", proc.stdout)
+        self.assertIn("aippocampus plugin status --json", proc.stdout)
 
     def test_status_alias_routes_to_health_instead_of_unknown_command(self) -> None:
         help_proc = self.run_cli("status", "--help")
@@ -673,9 +673,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
     def test_update_natural_guesses_recover_to_plan_first_cards(self) -> None:
         cases = [
-            ((), "update_command_required", "aippocampus update status --agent-json"),
-            (("check",), "update_status_alias", "aippocampus update status --agent-json"),
-            (("dry-run",), "update_plan_alias", "aippocampus update plan --agent-json"),
+            ((), "update_command_required", "aippocampus update status --json"),
+            (("check",), "update_status_alias", "aippocampus update status --json"),
+            (("dry-run",), "update_plan_alias", "aippocampus update plan --json"),
         ]
         for argv, code, command in cases:
             with self.subTest(argv=argv):
@@ -694,7 +694,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(human.returncode, 2)
         self.assertIn("No write happened", human.stdout)
         self.assertIn("valid surfaces", human.stdout)
-        self.assertIn("aippocampus update plan --agent-json", human.stdout)
+        self.assertIn("aippocampus update plan --json", human.stdout)
         self.assertNotIn("update_failed", human.stdout + human.stderr)
 
         self.assertEqual(agent.returncode, 2)
@@ -702,7 +702,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "update_apply_surface_required")
         self.assertTrue(payload["safety"]["no_write_happened"])
         self.assertIn("skill", payload["valid_surfaces"])
-        self.assertIn("aippocampus update plan --agent-json", payload["next_actions"][0]["command"])
+        self.assertIn("aippocampus update plan --json", payload["next_actions"][0]["command"])
 
     def test_object_sync_json_missing_config_returns_structured_error(self) -> None:
         env = {

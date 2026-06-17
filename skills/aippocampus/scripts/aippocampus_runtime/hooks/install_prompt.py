@@ -13,7 +13,11 @@ from typing import Any
 
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks.debug_log import prompt_hook_audit_status
-from aippocampus_runtime.hooks.foreground_status import prompt_status_contract
+from aippocampus_runtime.hooks.foreground_status import (
+    hook_install_closeout_contract,
+    no_action_needed_install_primary,
+    prompt_status_contract,
+)
 from aippocampus_runtime.hooks.host_boundary import (
     add_host_integration,
     host_integration_text_lines,
@@ -413,6 +417,42 @@ def status(
     return result
 
 
+def public_install_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Return the default foreground-safe prompt install closeout.
+
+    The raw hook command embeds local runtime paths by design; keep it available
+    only through explicit operator JSON instead of the compact install success
+    card agents normally see.
+    """
+
+    public = {
+        key: value
+        for key, value in result.items()
+        if key not in {"path", "command"}
+    }
+    public["local_private_fields"] = ["path", "command"]
+    public["operator_json_available"] = True
+    public.update(
+        hook_install_closeout_contract(
+            surface="prompt_hook_install",
+            title="Prompt hook install",
+            status="installed_ready" if result.get("installed") else "partial",
+            primary=no_action_needed_install_primary(
+                label="Prompt hook installed",
+                message="No foreground prompt-hook setup action is needed.",
+            ),
+            status_command="aippocampus hooks prompt status --json",
+            rollback_command="aippocampus hooks prompt uninstall --json",
+            extra={
+                "provider_key_bridge_installed": bool(
+                    result.get("provider_key_bridge_installed")
+                ),
+            },
+        )
+    )
+    return public
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -444,6 +484,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Local diagnostic: include full hook config path and hook commands in status output.",
     )
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit raw local hooks.json path and hook command for local diagnostics.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -470,14 +516,15 @@ def main(argv: list[str] | None = None) -> int:
             include_last=args.last,
             log_path=Path(args.log_path).resolve() if args.log_path else None,
             status_path=Path(args.status_path).resolve() if args.status_path else None,
-            include_private_paths=args.include_private_paths,
+            include_private_paths=args.include_private_paths or args.operator_json,
         )
 
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        output = result if args.operator_json or args.action != "install" else public_install_result(result)
+        print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         print(f"Codex prompt hook {'installed' if result.get('installed') else 'not installed'}")
-        print(f"hooks: {result.get('path')}")
+        print("hooks: hooks.json")
         for line in host_integration_text_lines():
             print(line)
         bridge_installed = bool(result.get("provider_key_bridge_installed"))
@@ -489,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
             print("next: aippocampus onboard provider-key --plan --json")
         if result.get("changed") is not None:
             print(f"changed: {result.get('changed')}")
-        if result.get("command"):
+        if result.get("command") and (args.include_private_paths or args.operator_json):
             print(f"command: {result.get('command')}")
         raw_last = result.get("last_prompt_hook")
         last = raw_last if isinstance(raw_last, dict) else {}

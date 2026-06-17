@@ -180,8 +180,13 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["surface"], "foreground_decision_card")
         self.assertEqual(payload["foreground_action"]["action_id"], "no_action_needed")
+        self.assertNotIn("command", payload["foreground_action"])
         self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
         self.assertIn("safe_next_actions", payload)
+        self.assertEqual(
+            payload["safe_next_actions"][0]["command"],
+            "aippocampus doctor config --detail full --json",
+        )
         self.assertNotIn("data", payload)
         self.assertNotIn("knobs", payload)
         self.assertNotIn("cannot_claim", payload)
@@ -245,6 +250,7 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
                 self.assertGreater(payload["registered_knob_count"], 0)
                 self.assertEqual(payload["configured_count"], 2)
                 self.assertEqual(payload["foreground_action"]["action_id"], "no_action_needed")
+                self.assertNotIn("command", payload["foreground_action"])
                 self.assertIn("safe_next_actions", payload)
                 self.assertNotIn("knobs", payload)
                 self.assertNotIn("C:/private/local/home", rendered)

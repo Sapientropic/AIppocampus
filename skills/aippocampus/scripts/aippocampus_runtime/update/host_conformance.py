@@ -74,7 +74,7 @@ def build_host_conformance_status(surfaces: dict[str, dict[str, Any]]) -> dict[s
         },
         "next_action": agent.get("next_command")
         if agent.get("live_host_schema_stale")
-        else "aippocampus update status --agent-json",
+        else "aippocampus update status --json",
         "claim_boundary": (
             "Conformance labels describe the current host affordance shape; they do "
             "not prove recall quality, all-client support, or source truth without reopen."

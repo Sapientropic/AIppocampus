@@ -127,28 +127,45 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertIn("helped/useful", help_proc.stdout)
 
     def test_cli_agent_explain_json_errors_return_foreground_recovery_cards(self) -> None:
+        deepen_missing = self.run_agent("deepen", "--json")
         missing = self.run_agent("explain", "--json")
         malformed = self.run_agent("explain", "not-a-valid-handle", "--json")
 
+        self.assertEqual(deepen_missing.returncode, 2)
         self.assertEqual(missing.returncode, 2)
         self.assertEqual(malformed.returncode, 2)
+        deepen_payload = json.loads(deepen_missing.stdout)
         missing_payload = json.loads(missing.stdout)
         malformed_payload = json.loads(malformed.stdout)
+        self.assertEqual(deepen_payload["result"]["error"]["code"], "missing_recall_handle")
         self.assertEqual(missing_payload["explanation"]["error"]["code"], "missing_recall_handle")
         self.assertEqual(
             malformed_payload["explanation"]["error"]["code"],
             "malformed_recall_handle",
         )
-        self.assertEqual(missing_payload["foreground_action"]["tool_name"], "agent_recall")
-        self.assertIn("agent recall", missing_payload["agent_next_action"])
-        self.assertIn("agent explain --request 1 --last-recall", missing_payload["follow_up_action"]["cli_command"])
-        self.assertEqual(malformed_payload["foreground_action"]["tool_name"], "agent_recall")
-        self.assertIn("agent recall", malformed_payload["agent_next_action"])
-        self.assertIn("agent explain --request 1 --last-recall", malformed_payload["follow_up_action"]["cli_command"])
-        self.assertEqual(
-            missing_payload["next_safe_action"],
-            "rerun_agent_recall_then_request_index",
-        )
+        for payload, mode in (
+            (deepen_payload, "deepen"),
+            (missing_payload, "explain"),
+            (malformed_payload, "explain"),
+        ):
+            encoded = json.dumps(payload, ensure_ascii=False)
+            self.assertIsInstance(payload["agent_next_action"], dict)
+            self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+            self.assertEqual(payload["agent_next_action"]["id"], "recall_with_cue")
+            self.assertIn("command_template", payload["agent_next_action"])
+            self.assertNotIn("command", payload["agent_next_action"])
+            self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
+            self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+            self.assertEqual(payload["agent_next_action"]["claim_boundary"], "no_claim_before_reopen")
+            self.assertIsInstance(payload["foreground_action"], dict)
+            self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+            self.assertEqual(payload["next_safe_action"], "recall_with_cue_then_request_index")
+            self.assertNotIn("recovery_actions", payload)
+            self.assertNotIn('agent recall "old decision or handoff cue"', encoded)
+            follow_up = payload["safe_next_actions"][1]
+            self.assertEqual(follow_up["id"], f"{mode}_last_recall_request")
+            self.assertEqual(follow_up["requires"], ["last_recall_cache", "request_index"])
+            self.assertIn(f"agent {mode} --request {{request_index}} --last-recall", follow_up["command_template"])
 
     def test_cli_agent_macro_help_is_task_first(self) -> None:
         proc = self.run_agent("macro", "--help")
@@ -162,13 +179,39 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
 
     def test_cli_agent_macro_missing_state_explains_schema_repair(self) -> None:
         proc = self.run_agent("macro", "--cwd", str(self.cwd))
+        json_proc = self.run_agent("macro", "--cwd", str(self.cwd), "--json")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
         self.assertIn("AIppocampus agent macro: missing_macro_state_path", proc.stdout)
-        self.assertIn('aippocampus agent recall "project macro orientation cue" --json', proc.stdout)
+        self.assertIn('aippocampus agent recall "{cue}" --json', proc.stdout)
         self.assertIn("aippocampus agent macro --explain-schema", proc.stdout)
         self.assertIn("aippocampus agent macro --init-template --json", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
+        payload = json.loads(json_proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+        self.assertEqual(payload["agent_next_action"]["id"], "recall_project_macro_orientation")
+        self.assertIn("command_template", payload["agent_next_action"])
+        self.assertNotIn("command", payload["agent_next_action"])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
+        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(payload["agent_next_action"]["claim_boundary"], "no_claim_before_reopen")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertNotIn("recovery_actions", payload)
+        self.assertNotIn('agent recall "project macro orientation cue"', encoded)
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertEqual(
+            action_ids,
+            [
+                "recall_project_macro_orientation",
+                "explain_macro_schema",
+                "init_macro_state_template",
+            ],
+        )
+        self.assertIn("command", payload["safe_next_actions"][1])
+        self.assertIn("command", payload["safe_next_actions"][2])
 
     def test_cli_agent_macro_schema_and_template_are_available(self) -> None:
         schema_proc = self.run_agent("macro", "--explain-schema")

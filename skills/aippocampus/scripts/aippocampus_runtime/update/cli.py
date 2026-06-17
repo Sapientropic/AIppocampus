@@ -108,12 +108,12 @@ def _update_recovery_payload(*, code: str, message: str, next_command: str) -> d
         "next_actions": [
             {
                 "label": "read update status",
-                "command": "aippocampus update status --agent-json",
+                "command": "aippocampus update status --json",
                 "mutates": False,
             },
             {
                 "label": "preview update plan",
-                "command": "aippocampus update plan --agent-json",
+                "command": "aippocampus update plan --json",
                 "mutates": False,
             },
         ],
@@ -1193,7 +1193,7 @@ def _dirty_worktree_recovery(surface: str, write_paths: dict[str, Path], overlap
             },
             {
                 "label": "preview update plan",
-                "command": "aippocampus update plan --agent-json",
+                "command": "aippocampus update plan --json",
                 "mutation_risk": "read_only",
             },
         ],
@@ -1230,17 +1230,17 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
                 "update apply is mutating and needs an explicit --surface or --all-local. "
                 "No write happened."
             ),
-            next_command="aippocampus update plan --agent-json",
+            next_command="aippocampus update plan --json",
         )
         report["next_actions"] = [
             {
                 "label": "preview update plan",
-                "command": "aippocampus update plan --agent-json",
+                "command": "aippocampus update plan --json",
                 "mutates": False,
             },
             {
                 "label": "read update status",
-                "command": "aippocampus update status --agent-json",
+                "command": "aippocampus update status --json",
                 "mutates": False,
             },
         ]
@@ -1398,7 +1398,12 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--agent-json",
         action="store_true",
-        help="Emit compact agent-facing JSON with readiness tiers and next actions.",
+        help="Compatibility alias for compact foreground JSON.",
+    )
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full local diagnostic JSON; --json stays compact for status/plan.",
     )
 
 
@@ -1410,15 +1415,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Update status readiness card:\n"
             "  Read one foreground-sized view of local skill/plugin/hook/MCP freshness.\n"
             "  Prefer this before judging whether recall is broken; stale host/plugin state can hide fixed tools.\n"
-            "  Ordinary command: aippocampus update status --agent-json\n\n"
+            "  Ordinary command: aippocampus update status --json\n\n"
             "Advanced/operator overrides:\n"
-            "  The path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
+            "  Use --operator-json for full diagnostic trees; the path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
         ),
         "plan": (
             "Update plan action card:\n"
             "  Preview what apply would need before mutating local install surfaces.\n"
-            "  Use --agent-json for a compact machine-readable plan; use --json only for operator detail.\n"
-            "  Ordinary command: aippocampus update plan --agent-json\n\n"
+            "  Use --json for a compact machine-readable plan; use --operator-json only for operator detail.\n"
+            "  Ordinary command: aippocampus update plan --json\n\n"
             "Advanced/operator overrides:\n"
             "  The path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
         ),
@@ -1476,23 +1481,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
-    wants_recovery_json = "--agent-json" in raw_argv or "--json" in raw_argv
-    filtered = [item for item in raw_argv if item not in {"--agent-json", "--json"}]
+    wants_recovery_json = (
+        "--agent-json" in raw_argv or "--json" in raw_argv or "--operator-json" in raw_argv
+    )
+    filtered = [
+        item for item in raw_argv if item not in {"--agent-json", "--json", "--operator-json"}
+    ]
     if not filtered:
         return _emit_update_recovery(
             _update_recovery_payload(
                 code="update_command_required",
                 message="Choose status, plan, or apply. No write happened.",
-                next_command="aippocampus update status --agent-json",
+                next_command="aippocampus update status --json",
             ),
             json_output=wants_recovery_json,
         )
     if filtered[0] in {"check", "dry-run"}:
         code = "update_status_alias" if filtered[0] == "check" else "update_plan_alias"
         command = (
-            "aippocampus update status --agent-json"
+            "aippocampus update status --json"
             if filtered[0] == "check"
-            else "aippocampus update plan --agent-json"
+            else "aippocampus update plan --json"
         )
         return _emit_update_recovery(
             _update_recovery_payload(
@@ -1513,7 +1522,11 @@ def main(argv: list[str] | None = None) -> int:
         # Public CLI output must not echo raw exception text; install/update
         # failures can include local paths or environment-derived diagnostics.
         del exc
-        if getattr(args, "json_output", False) or getattr(args, "agent_json", False):
+        if (
+            getattr(args, "json_output", False)
+            or getattr(args, "agent_json", False)
+            or getattr(args, "operator_json", False)
+        ):
             emit_public_text(
                 json.dumps(
                     {
@@ -1534,10 +1547,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if report.get("kind") == "aippocampus_update_recovery" and (
-        getattr(args, "agent_json", False) or getattr(args, "json_output", False)
+        getattr(args, "agent_json", False)
+        or getattr(args, "json_output", False)
+        or getattr(args, "operator_json", False)
     ):
         emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
-    elif args.agent_json:
+    elif args.agent_json or (
+        args.action in {"status", "plan"} and args.json_output and not args.operator_json
+    ):
         emit_public_text(
             json.dumps(
                 compact_agent_status_report(report, schema_version=SCHEMA_VERSION),
@@ -1546,7 +1563,7 @@ def main(argv: list[str] | None = None) -> int:
                 default=_json_default,
             )
         )
-    elif args.json_output:
+    elif args.json_output or args.operator_json:
         emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
     else:
         emit_public_text(render_text(report), end="")

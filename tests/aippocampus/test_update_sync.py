@@ -64,8 +64,14 @@ def pushd(path: Path) -> Iterator[None]:
 
 def run_update(*args: str) -> tuple[int, dict]:
     stdout = StringIO()
+    json_flag = "--json"
+    if args and args[0] in {"status", "plan"}:
+        # These tests inspect the full operator tree. Foreground `--json` is now
+        # intentionally agent-sized, so keep the legacy diagnostic assertions on
+        # the explicit operator surface.
+        json_flag = "--operator-json"
     with redirect_stdout(stdout):
-        code = update_cli.main([*args, "--json"])
+        code = update_cli.main([*args, json_flag])
     payload = json.loads(stdout.getvalue())
     return code, payload
 
@@ -1375,7 +1381,7 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "old target stays\n")
             commands = {action["command"] for action in payload["safe_next_actions"]}
             self.assertIn("git status --short", commands)
-            self.assertIn("aippocampus update plan --agent-json", commands)
+            self.assertIn("aippocampus update plan --json", commands)
 
     def test_apply_allows_clean_git_source_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

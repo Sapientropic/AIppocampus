@@ -39,7 +39,7 @@ aippocampus agent deepen --request 1 --last-recall --json
    ```sh
    # Trusted Codex/local setup.
    aippocampus plugin install --codex --verify
-   aippocampus update status --agent-json
+   aippocampus update status --json
 
    # No-clone/read-only probe.
    uvx aippocampus --help

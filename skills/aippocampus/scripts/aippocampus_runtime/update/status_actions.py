@@ -124,7 +124,7 @@ def agent_callable_foreground_action(item: dict[str, Any]) -> dict[str, str]:
     if shell:
         return {"command": shell}
     return {
-        "command": "aippocampus update status --agent-json",
+        "command": "aippocampus update status --json",
         "manual_instruction": raw_next or "Check foreground tool visibility before claiming agent-callable readiness.",
     }
 

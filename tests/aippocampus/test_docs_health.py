@@ -1021,6 +1021,25 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
+    def test_github_templates_keep_product_path_separate_from_benchmark_closeout(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        assert repo_root is not None
+
+        issue_dir = repo_root / ".github" / "ISSUE_TEMPLATE"
+        product = (issue_dir / "product_cli_ux_fix.md").read_text(encoding="utf-8")
+        benchmark = (issue_dir / "benchmark_readiness_public_claim.md").read_text(encoding="utf-8")
+        pr = (repo_root / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+
+        self.assertIn("Product / CLI / UX fix", product)
+        self.assertIn("Expected Smooth Behavior", product)
+        self.assertNotIn("Evidence Level / Verification Profile", product)
+        self.assertNotIn("Closeout class", product)
+        self.assertIn("Benchmark / readiness / public-claim work", benchmark)
+        self.assertIn("Evidence Level / Verification Profile", benchmark)
+        self.assertIn("Optional Benchmark / Readiness Closeout", pr)
+        self.assertLess(pr.index("## Verification"), pr.index("## Optional Benchmark"))
+        self.assertNotIn("feature_or_benchmark_proposal", "\n".join(path.name for path in issue_dir.glob("*.md")))
+
     def test_safe_environment_contract_reports_secret_values_and_plugin_env_block(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

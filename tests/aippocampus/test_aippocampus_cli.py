@@ -98,6 +98,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("Start here:", proc.stdout)
+        self.assertIn("aippocampus start --json", proc.stdout)
         self.assertIn('aippocampus agent recall "old cue"', proc.stdout)
         self.assertIn('aippocampus search "exact phrase"', proc.stdout)
         self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", proc.stdout)
@@ -108,8 +109,9 @@ class AippocampusCliTests(unittest.TestCase):
         start = proc.stdout[
             proc.stdout.index("Start here:") : proc.stdout.index("Recovery/readiness:")
         ]
-        self.assertLess(start.index("search"), start.index("agent recall"))
+        self.assertLess(start.index("start --json"), start.index("agent recall"))
         self.assertLess(start.index("agent recall"), start.index("agent deepen"))
+        self.assertLess(start.index("agent deepen"), start.index("search"))
         self.assertNotIn("aippocampus health", start)
         self.assertIn("Recovery/readiness:", proc.stdout)
         self.assertLess(proc.stdout.index("agent deepen"), proc.stdout.index("Recovery/readiness:"))
@@ -127,17 +129,6 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("continuity-domain", proc.stdout)
         self.assertIn("work-guard", proc.stdout)
         self.assertIn("update status", proc.stdout)
-        self.assertIn("mcp list-tools", proc.stdout)
-        self.assertIn("smoke recall-funnel", proc.stdout)
-        self.assertIn("storage gc", proc.stdout)
-        self.assertIn("doctor config", proc.stdout)
-        self.assertIn("doctor spend", proc.stdout)
-        self.assertIn("warm status", proc.stdout)
-        self.assertIn("telepathy", proc.stdout)
-        self.assertIn("why-recall", proc.stdout)
-        self.assertIn("why-not", proc.stdout)
-        self.assertIn("plugin install", proc.stdout)
-        self.assertIn("hooks [kind]        Host hook status/install/uninstall surfaces", proc.stdout)
 
     def test_personal_control_and_learning_frontdoors_are_executable(self) -> None:
         pause_help = self.run_cli("pause", "--help")
@@ -832,7 +823,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(update_status.returncode, 0, update_status.stderr)
         self.assertIn("Update status readiness card", update_status.stdout)
-        self.assertIn("aippocampus update status --agent-json", update_status.stdout)
+        self.assertIn("aippocampus update status --json", update_status.stdout)
         self.assertIn("Advanced/operator overrides", update_status.stdout)
         self.assertLess(
             update_status.stdout.index("Update status readiness card"),
@@ -841,12 +832,33 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(update_plan.returncode, 0, update_plan.stderr)
         self.assertIn("Update plan action card", update_plan.stdout)
-        self.assertIn("aippocampus update plan --agent-json", update_plan.stdout)
+        self.assertIn("aippocampus update plan --json", update_plan.stdout)
         self.assertIn("Advanced/operator overrides", update_plan.stdout)
 
         self.assertEqual(plugin_status.returncode, 0, plugin_status.stderr)
         self.assertIn("Plugin status readiness card", plugin_status.stdout)
-        self.assertIn("aippocampus plugin status --agent-json", plugin_status.stdout)
+        self.assertIn("aippocampus plugin status --json", plugin_status.stdout)
+
+    def test_status_json_is_foreground_card_and_operator_json_is_full_detail(self) -> None:
+        update_json = self.run_cli("update", "status", "--json", "--no-child-check")
+        plugin_json = self.run_cli("plugin", "status", "--json", "--no-child-check")
+        operator_json = self.run_cli("plugin", "status", "--operator-json", "--no-child-check")
+
+        self.assertEqual(update_json.returncode, 0, update_json.stderr)
+        update_payload = json.loads(update_json.stdout)
+        self.assertEqual(update_payload["kind"], "aippocampus_update_status_agent_json")
+        self.assertIn("foreground_status_cards", update_payload)
+        self.assertNotIn("surfaces", update_payload)
+
+        self.assertEqual(plugin_json.returncode, 0, plugin_json.stderr)
+        plugin_payload = json.loads(plugin_json.stdout)
+        self.assertEqual(plugin_payload["kind"], "aippocampus_update_status_agent_json")
+        self.assertNotIn("surfaces", plugin_payload)
+
+        self.assertEqual(operator_json.returncode, 0, operator_json.stderr)
+        operator_payload = json.loads(operator_json.stdout)
+        self.assertEqual(operator_payload["kind"], "aippocampus_update_status")
+        self.assertIn("surfaces", operator_payload)
 
     def test_package_facade_is_the_public_python_entrypoint(self) -> None:
         from aippocampus_runtime.cli import facade

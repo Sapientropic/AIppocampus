@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.aippo import working_contract as aippo_working_contract
+from aippocampus_runtime.contracts import FOREGROUND_ACTION_CONTRACT_VERSION
 from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime import core
 from aippocampus_runtime.macro import state as macro_state
@@ -146,49 +147,69 @@ def agent_recall_missing_query_payload(
     return payload
 
 
-def handle_recovery_fields(mode: str) -> dict[str, Any]:
-    recall_command = 'aippocampus agent recall "old decision or handoff cue" --json'
-    followup_command = f"aippocampus agent {mode} --request 1 --last-recall --json"
+def _foreground_template_action(
+    action_id: str, command_template: str, requires: list[str], label: str, why: str
+) -> dict[str, Any]:
     return {
-        "foreground_action": {
-            "tool_name": "agent_recall",
-            "arguments": {"query": "old decision or handoff cue"},
-            "cli_command": recall_command,
-            "claim_boundary": "no_claim_before_reopen",
-            "why": "No current recall handle was provided; recall must run before request-index deepen/explain.",
-        },
-        "follow_up_action": {
-            "tool_name": f"agent_{mode}",
-            "arguments": {"request_index": 1, "last_recall": True},
-            "cli_command": followup_command,
-            "claim_boundary": "no_claim_before_reopen",
-        },
-        "agent_next_action": recall_command,
-        "next_safe_action": "rerun_agent_recall_then_request_index",
-        "examples": [recall_command, followup_command],
-        "recovery_actions": [recall_command, followup_command],
+        "id": action_id,
+        "label": label,
+        "command_template": command_template,
+        "requires": list(requires),
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "why": why,
+    }
+
+
+def _recall_with_cue_action(*, label: str, why: str, action_id: str = "recall_with_cue") -> dict[str, Any]:
+    return _foreground_template_action(
+        action_id, 'aippocampus agent recall "{cue}" --json', ["cue"], label, why
+    )
+
+
+def _request_index_followup_action(mode: str) -> dict[str, Any]:
+    return _foreground_template_action(
+        f"{mode}_last_recall_request",
+        f"aippocampus agent {mode} --request {{request_index}} --last-recall --json",
+        ["last_recall_cache", "request_index"],
+        f"Run agent {mode} against a numbered route from the last recall",
+        "Requires a fresh recall cache and selected request index.",
+    )
+
+
+def handle_recovery_fields(mode: str) -> dict[str, Any]:
+    actions = [
+        _recall_with_cue_action(
+            label="Run agent recall with a continuity cue",
+            why="Recall must run before request-index deepen/explain.",
+        ),
+        _request_index_followup_action(mode),
+    ]
+    return {
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+        "foreground_action": actions[0],
+        "follow_up_action": actions[1],
+        "agent_next_action": actions[0],
+        "next_safe_action": "recall_with_cue_then_request_index",
+        "safe_next_actions": actions,
     }
 
 
 def last_recall_cache_recovery_fields(mode: str) -> dict[str, Any]:
-    command = 'aippocampus agent recall "<cue>" --json --detail full'
+    del mode
+    action = _recall_with_cue_action(
+        label="Rerun agent recall with full detail",
+        why="The last-recall cache was unavailable; rerun recall for a fresh route.",
+    ) | {
+        "id": "recall_with_cue_full_detail",
+        "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
+    }
     return {
-        "foreground_action": {
-            "tool_name": "agent_recall",
-            "arguments": {"query": "<cue>", "detail": "full"},
-            "cli_command": command,
-            "claim_boundary": "no_claim_before_reopen",
-        },
-        "agent_next_action": command,
-        "next_safe_action": "rerun_agent_recall_or_use_full_detail_handle",
-        "examples": [
-            'aippocampus agent recall "<cue>" --json',
-            command,
-        ],
-        "recovery_actions": [
-            'aippocampus agent recall "<cue>" --json',
-            command,
-        ],
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+        "foreground_action": action,
+        "agent_next_action": action,
+        "next_safe_action": "recall_with_cue_full_detail",
+        "safe_next_actions": [action],
     }
 
 
@@ -203,7 +224,7 @@ def missing_handle_payload(
             "code": "missing_recall_handle",
             "message": f"agent {mode} requires a local handle or --request N --last-recall",
         },
-        "next_safe_action": "rerun_agent_recall_then_request_index",
+        "next_safe_action": "recall_with_cue_then_request_index",
     }
     return _public_payload(
         {
@@ -901,11 +922,22 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
         diagnostics = [str(item) for item in payload.get("diagnostics") or [] if str(item)]
         if diagnostics:
             lines.append("Why: " + ", ".join(diagnostics[:3]))
-        actions = [str(item) for item in payload.get("recovery_actions") or [] if str(item)]
+        actions: list[str] = []
+        for action in payload.get("safe_next_actions") or []:
+            if not isinstance(action, Mapping):
+                continue
+            command = str(action.get("command") or "").strip()
+            if not command:
+                command = str(action.get("command_template") or action.get("id") or "").strip()
+            if command:
+                actions.append(command)
+            if len(actions) == 3:
+                break
         if actions:
-            lines.append("Next: " + actions[0])
-            for action in actions[1:3]:
-                lines.append("Or: " + action)
+            lines.extend(
+                ("Next: " if index == 0 else "Or: ") + command
+                for index, command in enumerate(actions)
+            )
         else:
             lines.append("Expected: .aippocampus/macro-orientation.jsonl or --macro-state-jsonl.")
             lines.append("Repair: aippocampus agent macro --explain-schema")

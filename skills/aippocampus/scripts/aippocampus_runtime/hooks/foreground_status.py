@@ -112,6 +112,72 @@ def contract_fields(card: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def hook_install_closeout_contract(
+    *,
+    surface: str,
+    title: str,
+    status: str,
+    primary: Mapping[str, Any],
+    status_command: str,
+    rollback_command: str,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the foreground-safe install closeout shared by hook installers.
+
+    Install closeouts are often pasted back to agents as compact JSON. Keep
+    runnable foreground actions, but keep hooks.json paths and host hook command
+    strings on operator-only surfaces so a success card cannot become a local
+    machine inventory dump.
+    """
+
+    card = _hook_card(
+        surface=surface,
+        title=title,
+        status=status,
+        installed=status in {"installed_ready", "installed_but_not_ready"},
+        primary=primary,
+        safe_actions=[
+            primary,
+            _status_action(
+                action_id="status",
+                label="Check hook status",
+                command=status_command,
+            ),
+            _write_action(
+                action_id="rollback",
+                label="Rollback hook install",
+                command=rollback_command,
+                why="Explicit rollback removes the hook wiring installed by this command.",
+            ),
+        ],
+        extra={
+            "install_closeout": True,
+            **dict(extra or {}),
+        },
+    )
+    card["kind"] = "aippocampus_hook_install_closeout_foreground_action"
+    fields = contract_fields(card)
+    fields["privacy_boundary"] = dict(card["privacy_boundary"])
+    return fields
+
+
+def no_action_needed_install_primary(*, label: str, message: str) -> dict[str, Any]:
+    return _no_action_needed(label=label, message=message)
+
+
+def action_hint_cache_refresh_primary(*, claim_boundary: str = CLAIM_BOUNDARY) -> dict[str, Any]:
+    return dict(
+        foreground_shell_action(
+            action_id="refresh_action_hint_cache",
+            label="Refresh action-hint cache",
+            command="aippocampus hooks action refresh-cache --write --json",
+            why="Prepare trusted action-hint input before treating the hook as ready.",
+            mutation_risk="explicit_local_cache_write",
+            claim_boundary=claim_boundary,
+        )
+    )
+
+
 def prompt_status_contract(
     *,
     status: str,

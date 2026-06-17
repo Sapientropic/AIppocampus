@@ -50,10 +50,11 @@ maze. Use the canonical
 human or agent needs the shortest safe path.
 
 If the `aippocampus` command already exists from a source checkout or editable
-install, the ordinary Codex path is agent-mediated: ask the agent to install
-the local plugin and verify that Codex can call the MCP tools.
+install, start with the foreground chooser. It picks the first useful continuity
+path and sends setup/status work to recovery when needed.
 
 ```sh
+aippocampus start --json
 aippocampus plugin install --codex --verify
 ```
 
@@ -83,9 +84,9 @@ trusted Codex setups, prefer the agent-mediated recall/deepen route for vague
 old-context cues; use exact search as the public-safe demo or fallback:
 
 ```sh
-aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 ```
 
 With local source already registered, use the same receipt shape on a real old
