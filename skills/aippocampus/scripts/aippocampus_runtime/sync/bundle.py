@@ -16,6 +16,7 @@ from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_
 from aippocampus_runtime.sync.cli_support import (
     parser_command,
     print_sync_human_result,
+    sync_dir_required_actions,
     sync_direction,
     sync_direction_plan,
     sync_help_card,
@@ -66,6 +67,7 @@ class SyncManifestError(ValueError):
 
 
 def missing_manifest_recovery_payload() -> dict[str, Any]:
+    actions = sync_dir_required_actions()
     return {
         "ok": False,
         "status": "missing_manifest",
@@ -81,23 +83,9 @@ def missing_manifest_recovery_payload() -> dict[str, Any]:
                 "path_redacted": True,
             }
         ],
-        "safe_next_actions": [
-            {
-                "id": "sync_status",
-                "command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
-                "requires": ["sync_dir"],
-            },
-            {
-                "id": "repair_plan",
-                "command_template": "aippocampus sync repair --plan --sync-dir {sync_dir} --json",
-                "requires": ["sync_dir"],
-            },
-            {
-                "id": "push_plan",
-                "command_template": "aippocampus sync push --plan --sync-dir {sync_dir} --json",
-                "requires": ["sync_dir"],
-            },
-        ],
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
     }
 
 
@@ -823,14 +811,20 @@ def status_sync_bundle(sync_dir: str | Path) -> dict:
 
 
 def available_requires_sync_dir_status() -> dict[str, Any]:
+    actions = sync_dir_required_actions()
     return {
         "ok": True,
         "status": "available_requires_sync_dir",
+        "surface_class": "foreground_status_card",
+        "foreground_action_contract": "foreground-action-v1",
         "backend": "local_folder",
         "backends": ["local_folder", "http_object_store"],
         "commands": ["status", "push", "pull", "repair"],
         "next_command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
         "requires": ["sync_dir"],
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
         "raw_rollout_sync": "explicit_only",
         "claim_boundary": "sync capability exists, but no local sync backend is selected",
     }

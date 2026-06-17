@@ -2145,6 +2145,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(data["status"], "available_requires_sync_dir")
         self.assertEqual(data["backend"], "local_folder")
         self.assertIn("push", data["commands"])
+        self.assertEqual(data["agent_next_action"]["command_template"], "aippocampus sync status --sync-dir {sync_dir} --json")
+        self.assertTrue(all("command" not in action for action in data["safe_next_actions"]))
 
     def test_sync_status_without_sync_dir_human_output_is_not_configured_ok(self) -> None:
         proc = self.run_cli("sync", "status")

@@ -46,6 +46,53 @@ def sync_direction(command: str) -> dict[str, Any]:
     }
 
 
+def sync_dir_required_actions() -> list[dict[str, Any]]:
+    """Return template actions that require the operator to choose a sync folder."""
+
+    return [
+        {
+            "id": "check_local_sync_status",
+            "label": "Check local sync status",
+            "command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
+            "requires": ["sync_dir"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "sync_status_not_source_evidence",
+            "why": "Choose the local sync folder before checking its manifest.",
+        },
+        {
+            "id": "preview_local_sync_push",
+            "label": "Preview local sync push",
+            "command_template": "aippocampus sync push --plan --sync-dir {sync_dir} --json",
+            "requires": ["sync_dir"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "sync_plan_not_source_evidence",
+            "why": "Preview local registry to sync folder before any folder write.",
+        },
+        {
+            "id": "preview_local_sync_pull",
+            "label": "Preview local sync pull",
+            "command_template": "aippocampus sync pull --plan --sync-dir {sync_dir} --json",
+            "requires": ["sync_dir"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "sync_plan_not_source_evidence",
+            "why": "Preview sync folder to local registry before any local registry write.",
+        },
+        {
+            "id": "preview_local_sync_repair",
+            "label": "Preview local sync repair",
+            "command_template": "aippocampus sync repair --plan --sync-dir {sync_dir} --json",
+            "requires": ["sync_dir"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "sync_plan_not_source_evidence",
+            "why": "Preview manifest repair before writing sync metadata.",
+        },
+    ]
+
+
 def sync_help_card(command: str | None = None) -> str:
     """Return a task-first local-folder sync card before path/crypto flags."""
 
