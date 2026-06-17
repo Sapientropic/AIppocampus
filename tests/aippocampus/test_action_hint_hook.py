@@ -314,6 +314,47 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(payload["diagnostics"]["prepared_record_count"], 1)
         self.assertNotIn("PRIVATE_CACHE_LINE", encoded)
 
+    def test_empty_cache_fast_bails_before_feature_extraction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "empty-action-hints.jsonl"
+            cache_path.write_text("", encoding="utf-8")
+            env = {**os.environ, "PYTHONPATH": str(SCRIPTS)}
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.hooks.action_hint",
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                ],
+                input=json.dumps(
+                    {
+                        "hook_event_name": "PreToolUse",
+                        "tool_name": "Bash",
+                        "tool_input": {
+                            "command": "pytest E:/Users/private/project/tests/test_secret.py",
+                            "file_path": "E:/Users/private/project/tests/test_secret.py",
+                        },
+                    }
+                ),
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(payload["decision"], "silent")
+        self.assertEqual(payload["reason"], "cache_not_ready")
+        self.assertEqual(payload["features"], {})
+        self.assertTrue(payload["diagnostics"]["hot_path_bailed"])
+        self.assertEqual(payload["diagnostics"]["cache_status"], "with_empty_cache")
+        self.assertNotIn("E:/Users/private", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

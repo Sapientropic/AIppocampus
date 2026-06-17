@@ -26,6 +26,7 @@ from aippocampus_runtime.hooks.debug_log import (  # noqa: E402
     write_debug_log,
     write_prompt_hook_audit_status,
 )
+from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry  # noqa: E402
 from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
 
 
@@ -53,8 +54,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             self.assertTrue(command.startswith("PYTHONPATH="), command)
         self.assertIn("-m", command)
         self.assertIn(self.module, command)
-        self.assertIn("--max-elapsed-ms 4300", command)
-        self.assertIn("--semantic-timeout 2.5", command)
+        self.assertIn("--max-elapsed-ms 3500", command)
+        self.assertIn("--semantic-timeout 1.2", command)
 
     def test_install_preserves_existing_hooks_and_is_idempotent(self) -> None:
         self.hooks_json.write_text(
@@ -88,8 +89,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertFalse(second["changed"])
         self.assertEqual(len(prompt_hooks), 1)
         self.assertIn(self.module, prompt_hooks[0]["command"])
-        self.assertIn("--max-elapsed-ms 4300", prompt_hooks[0]["command"])
-        self.assertIn("--semantic-timeout 2.5", prompt_hooks[0]["command"])
+        self.assertIn("--max-elapsed-ms 3500", prompt_hooks[0]["command"])
+        self.assertIn("--semantic-timeout 1.2", prompt_hooks[0]["command"])
         self.assertEqual(
             data["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "python existing.py"
         )
@@ -182,7 +183,11 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             credential_dotenv=dotenv,
             codex_home_path=self.codex_home,
         )
-        result = installer.status(self.hooks_json, include_last=True)
+        result = installer.status(
+            self.hooks_json,
+            include_last=True,
+            telemetry_path=self.codex_home / "no-skip-telemetry.json",
+        )
         encoded = json.dumps(result, ensure_ascii=False)
 
         self.assertTrue(result["installed"])
@@ -318,7 +323,11 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             "aippocampus_runtime.hooks.debug_log.default_prompt_hook_status_path",
             return_value=status_path,
         ):
-            result = installer.status(self.hooks_json, include_last=True)
+            result = installer.status(
+                self.hooks_json,
+                include_last=True,
+                telemetry_path=self.codex_home / "no-skip-telemetry.json",
+            )
 
         self.assertEqual(result["last_prompt_hook"]["status"], "found")
         self.assertEqual(result["last_prompt_hook"]["source"], "last_status")
@@ -340,6 +349,47 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["commands_redacted"])
         self.assertNotIn(str(self.codex_home), public_status)
         self.assertNotIn(str(SCRIPTS.resolve()), public_status)
+
+    def test_status_last_surfaces_aggregate_latency_risk_action(self) -> None:
+        telemetry_path = self.codex_home / "prompt_hook_skip_telemetry.json"
+        write_skip_telemetry(
+            {
+                "decision": "skip",
+                "score": 0.0,
+                "confidence": "low",
+                "reasons": ["no ambient recall cue"],
+                "semantic_gate": {
+                    "available": False,
+                    "availability_reason": "foreground_budget_skipped",
+                },
+                "ambient_recall": {"cache_status": {"status": "miss"}},
+                "elapsed_ms": 4310.0,
+            },
+            telemetry_path=telemetry_path,
+            hook_budget_ms=4300,
+            semantic_timeout=2.5,
+            runtime_load_ms=210.0,
+            hook_total_ms=4625.0,
+        )
+        installer.install(self.hooks_json, timeout=5)
+
+        result = installer.status(
+            self.hooks_json,
+            include_last=True,
+            telemetry_path=telemetry_path,
+        )
+        encoded = json.dumps(result, ensure_ascii=False)
+
+        risk = result["prompt_hook_latency_risk"]
+        self.assertEqual(risk["status"], "near_host_timeout_risk")
+        self.assertGreaterEqual(risk["near_timeout_event_count"], 1)
+        self.assertEqual(result["agent_next_action"]["id"], "refresh_prompt_hook_safe_budget")
+        self.assertEqual(
+            result["foreground_action"]["prompt_hook_latency_risk_status"],
+            "near_host_timeout_risk",
+        )
+        self.assertIn("aippocampus hooks prompt install --json", result["agent_next_action"]["command"])
+        self.assertNotIn(str(self.codex_home), encoded)
 
     def test_status_last_includes_sanitized_prompt_hook_audit_summary(self) -> None:
         log_path = self.codex_home / "prompt_hook_debug.jsonl"
@@ -375,7 +425,12 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             log_path=log_path,
         )
 
-        result = installer.status(self.hooks_json, include_last=True, log_path=log_path)
+        result = installer.status(
+            self.hooks_json,
+            include_last=True,
+            log_path=log_path,
+            telemetry_path=self.codex_home / "no-skip-telemetry.json",
+        )
 
         self.assertEqual(result["last_prompt_hook"]["status"], "found")
         self.assertEqual(
@@ -431,6 +486,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
                     "--last",
                     "--log-path",
                     str(log_path),
+                    "--skip-telemetry-path",
+                    str(self.codex_home / "no-skip-telemetry.json"),
                     "--json",
                 ]
             )

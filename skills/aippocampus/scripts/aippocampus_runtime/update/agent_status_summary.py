@@ -67,6 +67,18 @@ def compact_agent_status_report(
         if str(item) not in {"", "agent_callable"}
     ]
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
+    action_hints_installed = bool(action_hints.get("installed"))
+    action_hints_hot_path_active = bool(action_hints.get("hot_path_active"))
+    action_hints_setup_role = str(
+        action_hints.get("setup_role")
+        or (
+            "ready"
+            if action_hints_ready
+            else "cleanup_or_prepare_required"
+            if action_hints_installed
+            else "recommended_for_trusted_codex"
+        )
+    )
     action_hint_recommended_actions = update_actions.action_hint_recommended_actions()
     action_hint_primary_command = (
         action_hints.get("next_command")
@@ -173,7 +185,8 @@ def compact_agent_status_report(
             "agent_callable_status": agent_status,
             "host_conformance_label": conformance.get("label"),
             "action_hints_ready": action_hints_ready,
-            "action_hints_installed": bool(action_hints.get("installed")),
+            "action_hints_installed": action_hints_installed,
+            "action_hints_hot_path_active": action_hints_hot_path_active,
             "action_hints_status": str(action_hints.get("cache_status") or "not_installed_optional"),
             "dirty_worktree_guards": summary.get("dirty_worktree_guards") or {},
             "plan_surface_filter": summary.get("plan_surface_filter") or [],
@@ -189,6 +202,8 @@ def compact_agent_status_report(
         "action_hints": {
             "installed": bool(action_hints.get("installed")),
             "ready": action_hints_ready,
+            "hot_path_active": action_hints_hot_path_active,
+            "warning_state": str(action_hints.get("warning_state") or ""),
             "status": str(action_hints.get("cache_status") or "not_installed_optional"),
             "cache_path_configured": bool(action_hints.get("cache_path_configured")),
             "cache_exists": bool(action_hints.get("cache_exists")),
@@ -198,7 +213,7 @@ def compact_agent_status_report(
             "malformed_cache_line_count": int(action_hints.get("malformed_cache_line_count") or 0),
             "provider_counts": action_hints.get("provider_counts") or {},
             "optional": False,
-            "setup_role": "ready" if action_hints_ready else "recommended_for_trusted_codex",
+            "setup_role": action_hints_setup_role,
             "fail_open": True,
             "recall_blocking": False,
             "next_command": action_hint_primary_command,

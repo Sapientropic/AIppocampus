@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 OPTIONAL_RUNTIME_EXCEPTIONS = (ImportError, ModuleNotFoundError)
+FINAL_DIAGNOSTIC_WRITE_RESERVE_MS = 450
+
+
+def _has_final_diagnostic_budget(*, started: float, max_elapsed_ms: int) -> bool:
+    if max_elapsed_ms <= 0:
+        return True
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    return elapsed_ms <= max(0, max_elapsed_ms - FINAL_DIAGNOSTIC_WRITE_RESERVE_MS)
 
 
 def prompt_hook_audit_status(*args: Any, **kwargs: Any) -> dict[str, Any]:

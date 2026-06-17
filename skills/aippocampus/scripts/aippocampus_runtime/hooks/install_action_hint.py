@@ -238,6 +238,8 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
     cache_status = str(status_result.get("cache_status") or "not_installed")
     installed = bool(status_result.get("installed"))
     ready = installed and cache_status == "with_fresh_records"
+    warning_state = "installed_cache_not_ready" if installed and not ready else ""
+    hot_path_active = ready
     if not installed:
         first_command = "aippocampus learning guidance --json"
     elif not ready:
@@ -268,10 +270,18 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
         "status": "ready" if ready else cache_status,
         "installed": installed,
         "ready": ready,
-        "setup_role": "ready" if ready else "recommended_for_trusted_codex",
+        "setup_role": (
+            "ready"
+            if ready
+            else "cleanup_or_prepare_required"
+            if installed
+            else "recommended_for_trusted_codex"
+        ),
         "optional": False,
         "fail_open": True,
         "recall_blocking": False,
+        "hot_path_active": hot_path_active,
+        "warning_state": warning_state,
         "authority": "navigation_only",
         "event": ACTION_HINT_EVENT,
         "cache_status": cache_status,
@@ -487,6 +497,9 @@ def status(
             }
         )
     result["frontstage_card"] = action_hint_frontstage_card(result)
+    result["hot_path_active"] = bool(result["frontstage_card"].get("hot_path_active"))
+    result["warning_state"] = str(result["frontstage_card"].get("warning_state") or "")
+    result["setup_role"] = str(result["frontstage_card"].get("setup_role") or "")
     result.update(action_hint_status_contract(result["frontstage_card"]))
     return result if include_private_paths else redact_public_result(result, path=path)
 

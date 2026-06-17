@@ -11,11 +11,6 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.hooks.action_hint_cache import (
-    load_action_hint_records_with_diagnostics,
-    read_action_hint_records,
-)
-
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_pre_tool_action_hint_report"
 HINT_KIND = "aippocampus_pre_tool_action_hint"
@@ -337,6 +332,8 @@ def evaluate_action_hint(
     *,
     now_unix: float | None = None,
 ) -> dict[str, Any]:
+    from aippocampus_runtime.hooks.action_hint_cache import read_action_hint_records
+
     now_value = float(now_unix if now_unix is not None else time.time())
     features = extract_pending_action_features(envelope)
     if features["hook_event_name"] != SUPPORTED_EVENT:
@@ -413,6 +410,92 @@ def _silent_report(reason: str, *, diagnostics: Mapping[str, Any] | None = None)
     }
 
 
+def _cache_readiness(cache_jsonl: Path | None) -> dict[str, Any]:
+    """Return a tiny hot-path readiness check before reading hook payload details.
+
+    `PreToolUse` runs before ordinary agent actions, so empty/missing caches
+    must not pay the full feature-extraction and matching path. Missing and
+    zero-byte files are decided with filesystem metadata only; non-empty files
+    then use the normal cache loader to distinguish fresh from expired records.
+    """
+
+    if cache_jsonl is None:
+        return {
+            "cache_status": "with_missing_cache_file",
+            "cache_configured": False,
+            "cache_exists": False,
+            "record_count": 0,
+            "fresh_record_count": 0,
+            "malformed_cache_line_count": 0,
+            "records": [],
+        }
+    if not cache_jsonl.exists():
+        return {
+            "cache_status": "with_missing_cache_file",
+            "cache_configured": True,
+            "cache_exists": False,
+            "record_count": 0,
+            "fresh_record_count": 0,
+            "malformed_cache_line_count": 0,
+            "records": [],
+        }
+    try:
+        if cache_jsonl.stat().st_size <= 0:
+            return {
+                "cache_status": "with_empty_cache",
+                "cache_configured": True,
+                "cache_exists": True,
+                "record_count": 0,
+                "fresh_record_count": 0,
+                "malformed_cache_line_count": 0,
+                "records": [],
+            }
+    except OSError:
+        return {
+            "cache_status": "with_missing_cache_file",
+            "cache_configured": True,
+            "cache_exists": False,
+            "record_count": 0,
+            "fresh_record_count": 0,
+            "malformed_cache_line_count": 0,
+            "records": [],
+        }
+
+    from aippocampus_runtime.hooks.action_hint_cache import (
+        load_action_hint_records_with_diagnostics,
+    )
+    from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
+
+    cache_report = load_action_hint_records_with_diagnostics(cache_jsonl)
+    records = [row for row in cache_report.get("records") or [] if isinstance(row, Mapping)]
+    now_unix = time.time()
+    fresh_count = 0
+    for record in records:
+        freshness = str(record.get("freshness") or "").casefold()
+        try:
+            expires_at = float(record.get("expires_at_unix") or 0)
+        except (TypeError, ValueError):
+            expires_at = 0.0
+        if freshness in BLOCKED_STATES or (expires_at and expires_at <= now_unix):
+            continue
+        fresh_count += 1
+    if not records:
+        cache_status = "with_empty_cache"
+    elif fresh_count:
+        cache_status = "with_fresh_records"
+    else:
+        cache_status = "with_expired_records"
+    return {
+        "cache_status": cache_status,
+        "cache_configured": True,
+        "cache_exists": bool(cache_report.get("cache_exists", True)),
+        "record_count": len(records),
+        "fresh_record_count": fresh_count,
+        "malformed_cache_line_count": int(cache_report.get("malformed_cache_line_count") or 0),
+        "records": records,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-jsonl", type=Path, help="Prepared action-hint record JSONL.")
@@ -423,23 +506,31 @@ def main(argv: list[str] | None = None) -> int:
     except json.JSONDecodeError:
         report = _silent_report("malformed_input")
     else:
-        cache_diagnostics: dict[str, Any] = {}
-        if args.cache_jsonl:
-            cache_report = load_action_hint_records_with_diagnostics(args.cache_jsonl)
-            records = list(cache_report.get("records") or [])
-            cache_diagnostics = {
-                "malformed_cache_line_count": int(
-                    cache_report.get("malformed_cache_line_count") or 0
-                ),
-                "cache_line_count": int(cache_report.get("line_count") or 0),
-            }
+        readiness = _cache_readiness(args.cache_jsonl)
+        if readiness["cache_status"] != "with_fresh_records":
+            report = _silent_report(
+                "cache_not_ready",
+                diagnostics={
+                    "hot_path_bailed": True,
+                    "cache_status": readiness["cache_status"],
+                    "cache_configured": readiness["cache_configured"],
+                    "cache_exists": readiness["cache_exists"],
+                    "prepared_record_count": readiness["record_count"],
+                    "fresh_record_count": readiness["fresh_record_count"],
+                    "malformed_cache_line_count": readiness["malformed_cache_line_count"],
+                },
+            )
         else:
-            records = []
-        report = evaluate_action_hint(envelope, records)
-        if cache_diagnostics:
+            report = evaluate_action_hint(envelope, readiness["records"])
             diagnostics = report.setdefault("diagnostics", {})
             if isinstance(diagnostics, dict):
-                diagnostics.update(cache_diagnostics)
+                diagnostics.update(
+                    {
+                        "hot_path_bailed": False,
+                        "cache_status": readiness["cache_status"],
+                        "malformed_cache_line_count": readiness["malformed_cache_line_count"],
+                    }
+                )
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     elif report.get("hint"):
