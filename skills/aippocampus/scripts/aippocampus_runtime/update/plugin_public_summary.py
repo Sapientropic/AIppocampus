@@ -60,7 +60,13 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
     ]
     key_tools = [
         name
-        for name in ("agent_recall", "agent_aippo", "agent_deepen", "agent_explain")
+        for name in (
+            "agent_recall",
+            "agent_aippo",
+            "agent_background",
+            "agent_deepen",
+            "agent_explain",
+        )
         if name in tool_names
     ]
     key_tool_smokes = [

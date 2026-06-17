@@ -6,7 +6,13 @@ from typing import Any
 
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 
-KEY_AGENT_NATIVE_TOOLS = ("agent_recall", "agent_aippo", "agent_deepen", "agent_explain")
+KEY_AGENT_NATIVE_TOOLS = (
+    "agent_recall",
+    "agent_aippo",
+    "agent_background",
+    "agent_deepen",
+    "agent_explain",
+)
 
 
 def visible_tool_names() -> list[str]:

@@ -52,6 +52,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     normalize_route_limit,
     write_last_recall_cache,
 )
+from aippocampus_runtime.recall.background_findings import background_findings_card
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
@@ -462,6 +463,19 @@ def call_agent_aippo(arguments: dict[str, Any]) -> dict[str, Any]:
     else:
         payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
     return text_result(public_payload(arguments, payload))
+
+
+def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:
+    cue = str(arguments.get("cue") or arguments.get("query") or arguments.get("task") or "").strip()
+    payload = background_findings_card(
+        cue,
+        registry_dir=arguments.get("registry_dir"),
+        working_memory_path=arguments.get("working_memory_path"),
+        project=str(arguments.get("project") or "AIppocampus"),
+        limit=int_range(arguments.get("limit"), default=4, minimum=1, maximum=12),
+    )
+    is_error = payload.get("ok") is False or payload.get("status") == "needs_input"
+    return text_result(public_payload(arguments, payload), is_error=is_error)
 
 
 def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -940,6 +954,7 @@ def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
 TOOL_CALLS = {
     "agent_recall": call_agent_recall,
     "agent_aippo": call_agent_aippo,
+    "agent_background": call_agent_background,
     "agent_deepen": call_agent_deepen,
     "agent_explain": call_agent_explain,
     "search_memory": call_search_memory,
@@ -1050,6 +1065,7 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             if name in {
                 "agent_recall",
                 "agent_aippo",
+                "agent_background",
                 "agent_deepen",
                 "agent_explain",
             } and isinstance(exc, (ImportError, AttributeError, RuntimeError)):

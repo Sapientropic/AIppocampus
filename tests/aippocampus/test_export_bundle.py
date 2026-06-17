@@ -75,7 +75,10 @@ class ExportBundleTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "export_intent_required")
         self.assertTrue(payload["safety"]["no_write_happened"])
-        commands = [item["command"] for item in payload["choices"]]
+        self.assertNotIn("raw-private", payload["error"].get("next_command", ""))
+        self.assertNotIn("raw-private", json.dumps(payload.get("agent_next_action", {})))
+        self.assertNotIn("raw-private", json.dumps(payload.get("foreground_action", {})))
+        commands = [item.get("command") or item.get("command_template") for item in payload["choices"]]
         self.assertIn(
             "aippocampus export --redaction-profile raw-private --output <bundle.zip>",
             commands,
@@ -84,6 +87,10 @@ class ExportBundleTests(unittest.TestCase):
             "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>",
             commands,
         )
+        for choice in payload["choices"]:
+            self.assertEqual(choice["requires"], ["output_path"])
+        self.assertEqual(payload["agent_next_action"]["id"], "choose_export_intent")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
 
     def test_export_public_guesses_recover_without_writing(self) -> None:
         for argv in (["--json"], ["public"], ["--public"]):

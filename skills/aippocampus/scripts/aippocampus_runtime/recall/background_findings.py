@@ -18,6 +18,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall import background_finding_projection
 from aippocampus_runtime.subconscious import candidate_router
 
 DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
@@ -144,12 +145,13 @@ def _finding_next_actions(
 def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[str, Any]:
     use = row.get("dream_hypothesis_use")
     use_map = use if isinstance(use, Mapping) else {}
+    projection = background_finding_projection.projection_fields(row)
     return {
         "index": index,
         "finding_id": str(row.get("candidate_key") or f"background:{index}"),
         "surface": _finding_surface(row),
         "finding_type": str(row.get("candidate_type") or "working_memory"),
-        "title": core.compact_text(str(row.get("title") or "Background finding"), 140),
+        **projection,
         "why_it_may_matter_now": core.compact_text(
             str(
                 row.get("route_reason")
@@ -158,7 +160,6 @@ def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[st
             ),
             220,
         ),
-        "matched_terms": [str(term) for term in row.get("matched_terms") or []][:6],
         "score": row.get("score"),
         "confidence": row.get("confidence"),
         "route": row.get("route"),

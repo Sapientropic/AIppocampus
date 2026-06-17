@@ -372,6 +372,7 @@ class SpendDoctorTests(unittest.TestCase):
             )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertNotIn("Traceback", proc.stdout + proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_spend_doctor_card")
         self.assertEqual(payload["detail"], "compact")
