@@ -28,6 +28,8 @@ The first opt-in callable path lives in
 ```text
 aippocampus agent recall "<cue>" --json
 aippocampus agent recall "<cue>" --attention-router-mode auto --json
+aippocampus agent orient "<task>" --json
+aippocampus agent orient --eval --json
 aippocampus agent aippo --task "<work>" --json
 aippocampus agent deepen --request 1 --last-recall --json
 aippocampus agent explain --request 1 --last-recall --json
@@ -87,6 +89,34 @@ available in the same JSON for audit/debug, but they are not the foreground
 field profile. Public projections redact
 `foreground_action_card.callable_handle` the same way they redact
 `deepen_requests[].handle`.
+
+## Task Orientation Packet
+
+`aippocampus agent orient "<task>" --json` is the fresh-thread orientation
+surface for issue-scale work. It does not introduce a new understanding-state
+truth store. It derives a compact read model from the issue-work guard, AIppo
+working-contract guidance, external source anchor roles, and Active Path
+Packets.
+
+Use it before broad manual search when a task likely depends on old design
+context, current issue comments, benchmark boundaries, source-side work, or
+learning-loop constraints. Its foreground action points back to
+`aippocampus agent recall "{task}" --json`; `deepen` still owns exact, public,
+stale, sensitive, or issue-closeout claims.
+
+The deterministic check is:
+
+```text
+aippocampus agent orient --eval --json
+```
+
+That fixture compares route-only recall, static summary context, Task
+Orientation Packet, and Task Orientation Packet plus mature constraints. It can
+show reduced blind search inside the public test scenario while checking
+source-truth overclaim rate, but it is not a live recall-quality claim. Private
+replay remains opt-in and aggregate-only. The recall-layer product discipline
+audit lives in
+[`source-backed-product-discipline.md`](source-backed-product-discipline.md).
 
 ## Default Agent Pull Gesture
 

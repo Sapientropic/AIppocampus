@@ -42,7 +42,8 @@ FOREGROUND_CARD_RE = re.compile(
     r"\b(foreground card|compact card|json card|recovery card|agent-native|"
     r"safe_next_actions|claim_boundary|cannot_claim|doctor spend|health --json|"
     r"maintenance|import conversation|recall-funnel|work-guard|cli facade|"
-    r"public facade|task-first)\b",
+    r"public facade|task-first|task orientation|orientation packet|"
+    r"understanding state|external source anchor)\b",
     re.I,
 )
 TRIVIAL_RE = re.compile(r"\b(typo|spelling|formatting|link fix|rename only)\b", re.I)

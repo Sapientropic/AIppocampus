@@ -41,6 +41,7 @@ from aippocampus_runtime.recall import (
     foreground_action_card,
     macro_field_live,
     macro_live_recall,
+    task_orientation,
 )
 from aippocampus_runtime.recall import (
     agent_facade_contract as facade,
@@ -1438,6 +1439,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     recall_parser.add_argument("--json", action="store_true")
 
+    task_orientation.add_agent_subparser(sub)
+
     aippo_parser = sub.add_parser(
         "aippo",
         description=(
@@ -1672,6 +1675,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(render_recall_human(payload))
         return 0
+    if args.command == "orient":
+        return task_orientation.run_agent_command(args, _json_out)
     if args.command == "aippo":
         task = args.task_flag or " ".join(args.task)
         payload = activate_aippo(task=task)
