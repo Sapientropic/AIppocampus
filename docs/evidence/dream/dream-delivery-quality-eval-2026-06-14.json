@@ -1,9 +1,14 @@
 {
+  "agent_action": "use_as_issue_review_input_not_owner_status",
+  "benchmark_maturity_level": "diagnostic_proxy",
   "can_claim": [
     "public_synthetic_three_arm_delivery_quality_eval_exists",
     "bounded_hint_arm_improves_selected_route_and_action_cases",
     "stale_noisy_over_personalized_and_unsourced_controls_stay_quiet",
     "source_reopen_required_before_dream_material_can_support_claims"
+  ],
+  "can_support_after_action": [
+    "human-reviewed closeout note for bounded synthetic delivery-quality fixture"
   ],
   "cannot_claim": [
     "live_default_dream_delivery_quality",
@@ -12,6 +17,7 @@
     "dream_only_material_as_source_truth",
     "default_foreground_dream_adoption"
   ],
+  "case_count": 6,
   "cases": [
     {
       "arms": {
@@ -309,17 +315,52 @@
     }
   ],
   "claim_level": "public_synthetic_delivery_quality_eval",
+  "contract_gate_ok": true,
+  "decision_impact": "issue_closeout_candidate",
+  "decision_impact_gate_ok": false,
+  "decision_impact_reason": "public synthetic three-arm fixture only; useful for issue review, not an authoritative closeout or live delivery-quality claim",
   "issue_readouts": {
     "github_1438": {
       "arms_pre_registered": true,
-      "closeout_eligible": true,
+      "closeout_candidate": true,
+      "closeout_eligible": false,
+      "decision_impact_gate_ok": false,
       "delivery_quality_eval_measured": true,
+      "issue_state": "closed_historical",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1438",
       "live_private_delivery_quality_measured": false,
       "negative_controls_covered": true,
-      "sanitized_aggregate_only": true
+      "requires_human_review_before_closeout": true,
+      "review_next_actions": [
+        {
+          "claim_boundary": "review_action_not_closeout_evidence",
+          "command": "gh issue create --title \"Review Dream delivery quality successor\" --body \"Use benchmark_dream_delivery_quality.py --json as bounded review input; keep live/private quality unclaimed until reviewed.\"",
+          "id": "open_dream_delivery_successor",
+          "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1438",
+          "label": "Open successor for reviewed Dream delivery quality",
+          "mutation_risk": "read_only_or_review_only",
+          "owner_path": "benchmarks/aippocampus/benchmark_dream_delivery_quality.py",
+          "reason": "#1438 is closed/historical; this synthetic closeout candidate needs an open successor or review note before any owner-status claim.",
+          "status": "successor_missing"
+        },
+        {
+          "claim_boundary": "synthetic_report_not_live_quality_claim",
+          "command": "python benchmarks/aippocampus/benchmark_dream_delivery_quality.py --json",
+          "id": "rerun_public_dream_delivery_report",
+          "label": "Rerun public Dream delivery report for review packet",
+          "mutation_risk": "read_only_or_review_only",
+          "owner_path": "benchmarks/aippocampus/benchmark_dream_delivery_quality.py",
+          "reason": "Refresh the bounded synthetic report before writing a human review or successor issue.",
+          "status": "actionable"
+        }
+      ],
+      "sanitized_aggregate_only": true,
+      "successor_required": true,
+      "successor_status": "successor_missing"
     }
   },
   "kind": "aippocampus_dream_delivery_quality_eval",
+  "measurement_origin": "synthetic_fixture",
   "metrics": {
     "bounded_action_lift_count": 2,
     "bounded_route_lift_count": 3,
@@ -339,6 +380,7 @@
     "source_truth_overclaim_count": 0,
     "stale_route_suppressed_count": 1
   },
+  "observed_agent_behavior": false,
   "ok": true,
   "privacy_boundary": {
     "credential_values_serialized": false,
@@ -348,6 +390,31 @@
     "source_text_serialized": false,
     "thread_handles_serialized": false
   },
+  "public_quality_gate_ok": false,
+  "requires_human_review_before_closeout": true,
+  "review_next_actions": [
+    {
+      "claim_boundary": "review_action_not_closeout_evidence",
+      "command": "gh issue create --title \"Review Dream delivery quality successor\" --body \"Use benchmark_dream_delivery_quality.py --json as bounded review input; keep live/private quality unclaimed until reviewed.\"",
+      "id": "open_dream_delivery_successor",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1438",
+      "label": "Open successor for reviewed Dream delivery quality",
+      "mutation_risk": "read_only_or_review_only",
+      "owner_path": "benchmarks/aippocampus/benchmark_dream_delivery_quality.py",
+      "reason": "#1438 is closed/historical; this synthetic closeout candidate needs an open successor or review note before any owner-status claim.",
+      "status": "successor_missing"
+    },
+    {
+      "claim_boundary": "synthetic_report_not_live_quality_claim",
+      "command": "python benchmarks/aippocampus/benchmark_dream_delivery_quality.py --json",
+      "id": "rerun_public_dream_delivery_report",
+      "label": "Rerun public Dream delivery report for review packet",
+      "mutation_risk": "read_only_or_review_only",
+      "owner_path": "benchmarks/aippocampus/benchmark_dream_delivery_quality.py",
+      "reason": "Refresh the bounded synthetic report before writing a human review or successor issue.",
+      "status": "actionable"
+    }
+  ],
   "schema_version": 1,
   "scoring_contract": {
     "arms": [
@@ -360,5 +427,9 @@
     "provider_call_count": 0,
     "same_public_fixture_budget": true,
     "scoring_defined_before_cases": true
-  }
+  },
+  "useful_now": [
+    "compares bounded hint behavior against baseline and backstage-only arms",
+    "keeps stale, noisy, over-personalized, and unsourced controls quiet"
+  ]
 }
