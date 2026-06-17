@@ -179,6 +179,12 @@ MCP tool results redact local paths unless a local operator explicitly requests
 
 ## Hooks
 
+Claude Code supports local-history onboarding, MCP/project-skill setup, and
+scoped explicit AIppocampus hook handlers for `UserPromptSubmit` and `Stop`.
+Do not claim real-host firing, `PostToolUse` / `PostToolBatch` capture,
+compaction hook utility, all Claude Code versions, or broad native ambient
+quality without source/event evidence.
+
 Claude Code has its own upstream hook settings and event schemas. AIppocampus
 intakes that official Claude Code hooks contract through a scoped surface with
 read-only status/dry-run plus explicit install/uninstall commands. Start with

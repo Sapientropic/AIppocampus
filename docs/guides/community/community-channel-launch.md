@@ -31,7 +31,7 @@ date, and follow-up issue.
 
 | Gate | Priority | Status now | Owner |
 | --- | --- | --- | --- |
-| Quick Start and 10-minute public API path pass from a fresh clone. | P0 | Required before launch. | `README.md`, `docs/guides/public-api.md`, release checklist. |
+| Quick Start and 10-minute public path pass from a fresh clone. | P0 | Required before launch. | `README.md`, `docs/guides/ten-minute-public-path.md`, release checklist. |
 | `SECURITY.md`, `CODE_OF_CONDUCT.md`, and `CONTRIBUTING.md` are present and linked from the channel starter post. | P0 | Present; public launch pass must verify the links. | Repository root docs. |
 | First release tag or explicit pre-release launch decision exists. | P0 | Not yet claimed. | `docs/guides/setup/release-checklist.md`. |
 | Public privacy scan and release checks are current for the launch commit. | P0 | Must be rerun before launch. | `docs/guides/community/privacy-security-checklist.md`. |

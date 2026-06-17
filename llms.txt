@@ -69,9 +69,12 @@ uvx aippocampus onboard --provider claude-code --dry-run --format json
 uvx aippocampus onboard --provider claude-code --format json
 ```
 
-Codex is the complete prompt/lifecycle hook path today. Claude Code support is
-local-history onboarding plus MCP/project-skill setup, not AIppocampus Claude
-hooks; see docs/guides/ecosystem-integration-matrix.md and
+Codex is the complete prompt/lifecycle hook path today. Claude Code supports
+local-history onboarding, MCP/project-skill setup, and scoped explicit
+AIppocampus hook handlers for UserPromptSubmit and Stop. Do not claim
+real-host firing, PostToolUse/PostToolBatch capture, compaction hook utility,
+all Claude Code versions, or broad native ambient quality without source/event
+evidence; see docs/guides/ecosystem-integration-matrix.md and
 docs/guides/setup/claude-code-mcp.md.
 
 ## Good Fit
@@ -154,7 +157,8 @@ feedback-write tool.
 - Magic moments, claim-bounded: `docs/evidence/magic-moments.md`
 - Public provenance and current value: `docs/evidence/public-provenance-ledger.md`
 - Install guide: `docs/guides/install-guide.md`
-- Public API and 10-minute dependency path: `docs/guides/public-api.md`
+- 10-minute public path: `docs/guides/ten-minute-public-path.md`
+- Public API and dependency boundary: `docs/guides/public-api.md`
 - Claim boundary: `docs/evidence/readiness/stage-0-5-readiness.md`
 - Evidence map: `docs/evidence/benchmark-evidence-map.md`
 - MCP metadata draft: `server.json`

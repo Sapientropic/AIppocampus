@@ -177,6 +177,9 @@ class DocsHealthTests(unittest.TestCase):
         public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
             encoding="utf-8"
         )
+        ten_minute = (
+            REPO_ROOT / "docs" / "guides" / "ten-minute-public-path.md"
+        ).read_text(encoding="utf-8")
         first_card = (
             REPO_ROOT / "docs" / "guides" / "first-recall-decision-card.md"
         ).read_text(encoding="utf-8")
@@ -198,9 +201,10 @@ class DocsHealthTests(unittest.TestCase):
             first_card.index("aippocampus search"),
             first_card.index("aippocampus health"),
         )
+        self.assertIn("ten-minute-public-path.md", public_api)
         self.assertLess(
-            public_api.index("uvx aippocampus search"),
-            public_api.index("uvx aippocampus onboard --provider auto --status"),
+            ten_minute.index("uvx aippocampus search"),
+            ten_minute.index("uvx aippocampus onboard --provider auto --status"),
         )
         self.assertIn("aippocampus mcp list-tools --json", public_api)
         self.assertNotIn(
@@ -1268,7 +1272,7 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertIn("root README missing docs/start-here.md reader-path pointer", issues)
         self.assertIn("docs README missing first-recall reader path", issues)
-        self.assertIn("start-here missing 10-minute public API path", issues)
+        self.assertIn("start-here missing 10-minute public path", issues)
         self.assertIn("start-here missing first-recall install path", issues)
 
     def test_current_claims_guard_reports_stale_evidence_wording(self) -> None:

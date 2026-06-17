@@ -25,8 +25,8 @@ REQUIRED_READER_PATH_TERMS = {
         "aippocampus agent deepen --request 1 --last-recall --json": (
             "start-here missing executable deepen command"
         ),
-        "guides/public-api.md#ten-minute-public-path": (
-            "start-here missing 10-minute public API path"
+        "guides/ten-minute-public-path.md": (
+            "start-here missing 10-minute public path"
         ),
         "guides/install-guide.md#first-recall-path": (
             "start-here missing first-recall install path"
@@ -37,11 +37,50 @@ REQUIRED_READER_PATH_TERMS = {
         "research/README.md": "start-here missing research path",
     },
     "llms.txt": {
+        "docs/guides/ten-minute-public-path.md": "llms.txt missing 10-minute path doc",
         "uvx aippocampus agent recall": "llms.txt missing executable first-recall command",
         "uvx aippocampus mcp status --json": "llms.txt missing compact MCP readiness command",
         "uvx aippocampus mcp list-tools": "llms.txt missing full MCP schema fallback",
     },
 }
+
+CLAUDE_CODE_HOOK_FRONTDOORS = (
+    "README.md",
+    "llms.txt",
+    "docs/guides/coding-agent-memory.md",
+    "docs/guides/setup/claude-code-mcp.md",
+    "docs/guides/public-api.md",
+    "docs/guides/ecosystem-integration-matrix.md",
+    "docs/guides/install-guide.md",
+)
+
+CLAUDE_CODE_HOOK_DENIALS = (
+    "no aippocampus claude hooks",
+    "not aippocampus claude hook",
+    "does not have aippocampus claude hook",
+)
+
+
+def claude_code_hook_drift_issues(repo_root: Path) -> list[str]:
+    denial_refs: list[str] = []
+    install_refs: list[str] = []
+    for rel_path in CLAUDE_CODE_HOOK_FRONTDOORS:
+        path = repo_root / rel_path
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        lowered = text.casefold()
+        if any(phrase in lowered for phrase in CLAUDE_CODE_HOOK_DENIALS):
+            denial_refs.append(rel_path)
+        if "aippocampus hooks claude-code install --json" in text:
+            install_refs.append(rel_path)
+    if not denial_refs or not install_refs:
+        return []
+    return [
+        "Claude Code hook docs disagree: "
+        f"denial in {', '.join(denial_refs)} while install appears in "
+        f"{', '.join(install_refs)}"
+    ]
 
 
 def reader_path_issues(repo_root: Path) -> list[str]:
@@ -55,4 +94,5 @@ def reader_path_issues(repo_root: Path) -> list[str]:
         for term, issue in required_terms.items():
             if term not in text:
                 issues.append(issue)
+    issues.extend(claude_code_hook_drift_issues(repo_root))
     return issues
