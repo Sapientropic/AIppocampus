@@ -14,6 +14,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.cli import facade  # noqa: E402
 
 
 class AippocampusCliRecoveryCardTests(unittest.TestCase):
@@ -809,8 +810,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             ("plugin", "--json"): "aippocampus_plugin_chooser",
             ("hooks", "--json"): "aippocampus_hooks_chooser",
             ("sync", "--json"): "aippocampus_sync_chooser",
-            ("object-sync", "--json"): "aippocampus_sync_chooser",
+            ("object-sync", "--json"): "aippocampus_object_sync_chooser",
             ("storage", "--json"): "aippocampus_storage_chooser",
+            ("storage", "gc", "--json"): "aippocampus_storage_gc_recovery",
             ("doctor", "--json"): "aippocampus_doctor_chooser",
             ("smoke", "--json"): "aippocampus_smoke_chooser",
             ("logs", "--json"): "aippocampus_logs_chooser",
@@ -831,6 +833,8 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 for action in actions:
                     if isinstance(action, dict) and "command" in action:
                         self.assertIn("aippocampus ", action["command"])
+                        resolved = facade.resolve_command(action["command"].split()[1:])
+                        self.assertIsNotNone(resolved.script_name)
 
     def test_continuity_domain_json_does_not_put_placeholders_in_executable_commands(self) -> None:
         proc = self.run_cli("continuity-domain", "--json")

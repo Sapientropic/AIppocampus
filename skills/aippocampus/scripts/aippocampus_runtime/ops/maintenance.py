@@ -293,8 +293,37 @@ def _apply_with_consent_action() -> dict[str, Any]:
     }
 
 
+def _continue_without_maintenance_action(best: dict) -> dict[str, Any]:
+    return {
+        "id": "continue_without_maintenance",
+        "decision": "continue",
+        "mutates": False,
+        "mutation_risk": "none",
+        "reason": str(
+            best.get("reason")
+            or "No blocking maintenance action is currently recommended."
+        ),
+    }
+
+
 def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
+    if str(best.get("id") or "") == "continue":
+        if read_only:
+            actions.append(_continue_without_maintenance_action(best))
+            actions.append(_read_only_plan_action())
+        else:
+            actions.append(
+                {
+                    "id": "inspect_maintenance_status",
+                    "kind": "shell_command",
+                    "command": STATUS_SUMMARY_COMMAND,
+                    "mutates": False,
+                    "mutation_risk": "read_only",
+                    "reason": "inspect the post-apply maintenance state without writing",
+                }
+            )
+        return actions
     if read_only:
         actions.append(_read_only_plan_action())
         actions.append(_apply_with_consent_action())
@@ -333,6 +362,8 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
 def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, Any]:
     action_id = str(best.get("id") or "")
     command = best.get("command")
+    if read_only and action_id == "continue":
+        return _continue_without_maintenance_action(best)
     if action_id == "storage_gc_rebuildable_cache" and command:
         return {
             "id": "review_storage_gc_bounded_audit",

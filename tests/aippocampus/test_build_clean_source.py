@@ -297,6 +297,60 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(turns[0]["clean_end_ordinal"], 1)
         self.assertEqual(turns[0]["scope_labels"], ["technical_work", "open_question"])
 
+    def test_clean_source_filters_host_internal_wrappers_before_reopen_surface(self) -> None:
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T01:03:00Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": (
+                        "<codex_internal_context>hidden continuation policy</codex_internal_context>\n"
+                        "Visible user correction survives."
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T01:03:01Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "Visible assistant answer survives too.",
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T01:04:00Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": (
+                        "<subagent_notification>{\"path\":\"C:\\\\private\\\\workspace\"}"
+                        "</subagent_notification>"
+                    ),
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        messages = [
+            json.loads(line)
+            for line in Path(result["outputs"]["messages_jsonl"]).read_text(encoding="utf-8").splitlines()
+        ]
+        joined = "\n".join(item["text"] for item in messages)
+
+        self.assertIn("Visible user correction survives.", joined)
+        self.assertIn("Visible assistant answer survives too.", joined)
+        self.assertNotIn("codex_internal_context", joined)
+        self.assertNotIn("subagent_notification", joined)
+        self.assertNotIn("C:\\private\\workspace", joined)
+        filtered = [item for item in messages if item.get("host_internal_filtered")]
+        self.assertEqual(filtered[0]["text"], "Visible user correction survives.")
+
     def test_clean_source_adds_life_wide_scope_labels(self) -> None:
         self._append(
             {

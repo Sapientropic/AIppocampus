@@ -93,6 +93,10 @@ def _command_with_cwd_template(command: str) -> str:
     return re.sub(r'--cwd\s+(?:"[^"]+"|\S+)', '--cwd "{cwd}"', command, count=1)
 
 
+def _uses_current_directory_cwd(command: str) -> bool:
+    return bool(re.search(r'--cwd\s+(?:"\."|\.)($|\s)', command))
+
+
 _MAINTENANCE_ACTION_IDS = {
     "build_clean_source",
     "build_index",
@@ -119,7 +123,7 @@ def _compact_command_fields(command: Any, *, action_id: str = "") -> dict[str, A
             "requires": ["cwd"],
             "template_only": True,
         }
-    if " --cwd " in raw:
+    if " --cwd " in raw and not _uses_current_directory_cwd(raw):
         return {
             "command_template": _command_with_cwd_template(raw),
             "requires": ["cwd"],
