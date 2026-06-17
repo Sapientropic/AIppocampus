@@ -854,6 +854,38 @@ latest `no_memory` / `scent` / `candidate` / `source_backed_evidence` surface
 without exposing prompt text, raw cards, snippets, session ids, secrets, or
 local paths.
 
+## Sync Decision Card
+
+Sync is optional. Do not set up sync before the first useful local recall unless
+the user explicitly needs cross-device transfer, backup, or object storage.
+
+Start with the runtime chooser:
+
+```sh
+aippocampus sync --json
+```
+
+It returns an `aippocampus_sync_chooser` and leads with read-only status. Use
+the branch below that matches the user's actual need.
+
+| Need | First safe command | Next read-only plan | Apply/write command |
+| --- | --- | --- | --- |
+| No sync needed yet | `aippocampus sync --json` | None. Continue local recall. | None. |
+| Check local folder sync | `aippocampus sync status --json` | Add `--sync-dir <folder>` only when the folder is known. | None. |
+| Local plaintext folder sync | `aippocampus sync status --sync-dir <folder> --json` | `aippocampus sync push --sync-dir <folder> --plan --json` or `aippocampus sync pull --sync-dir <folder> --plan --json` | Remove `--plan` only after the user chooses push or pull. |
+| Encrypted local folder sync | `aippocampus sync status --sync-dir <folder> --require-encrypted --json` | `aippocampus sync push --sync-dir <folder> --encrypt --recipient <age-recipient> --plan --json` | Apply only with real age recipient or identity values. |
+| Object storage sync | `aippocampus object-sync --json` | `aippocampus object-sync push --plan --json` or `aippocampus object-sync pull --plan --json` | Remove `--plan` only after endpoint, prefix, and direction are confirmed. |
+| Stop and ask | `aippocampus sync --json` | Ask which device/source should win before push, pull, repair, or cleanup. | None until direction and privacy boundary are explicit. |
+
+Commands containing `<folder>`, `<age-recipient>`, `<age-identity>`, or
+`<target-registry>` are templates, not run-now commands. Use a real local path
+or credential chosen by the user/operator before applying.
+
+The words `status`, `push --plan`, `pull --plan`, and apply mean the same thing
+in runtime chooser JSON and in the command matrices below: status and plan are
+read-only; push, pull, repair, cleanup, and migration without `--plan` or
+`--dry-run` can write local registry, sync folder, or object-storage state.
+
 ## Local Sync
 
 The first sync backend is a local folder:
