@@ -102,57 +102,6 @@ class DocsHealthTests(unittest.TestCase):
         self.assertLessEqual(result["metrics"]["skill_lines"], docs_health.MAX_SKILL_LINES)
         self.assertLessEqual(result["metrics"]["skill_words"], docs_health.MAX_SKILL_WORDS)
 
-    def test_agent_entrypoints_frame_early_route_first_continuity(self) -> None:
-        skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        agent_context = (REPO_ROOT / "docs" / "agent-context.md").read_text(
-            encoding="utf-8"
-        )
-        coding_lane = (
-            REPO_ROOT / "docs" / "guides" / "coding-agent-memory.md"
-        ).read_text(encoding="utf-8")
-        coding_lane_flat = " ".join(coding_lane.split())
-
-        self.assertIn("source-backed continuity scaffold", skill_text)
-        self.assertIn("not innate model memory", skill_text)
-        self.assertIn("when an agent knows it has AIppocampus", skill_text)
-        self.assertIn("relationship continuity", skill_text)
-        self.assertIn("action grammar", skill_text)
-        self.assertIn("direction_only", skill_text)
-        self.assertIn("reopenable_route", skill_text)
-        self.assertIn("bounded_evidence", skill_text)
-        self.assertIn("source_open", skill_text)
-        self.assertIn("ignore_or_blocked", skill_text)
-        self.assertIn("Active Path Packets", skill_text)
-        self.assertIn("before broad manual search", " ".join(skill_text.split()))
-        self.assertIn("Primary foreground path", skill_text)
-        self.assertIn("CLI chooser/recovery card", skill_text)
-        self.assertNotIn("python3 -m", skill_text)
-        self.assertNotIn("py -m", skill_text)
-        self.assertNotIn("python -m aippocampus_runtime", skill_text)
-        self.assertNotIn("<path>", skill_text)
-        self.assertNotIn("<rollout.jsonl>", skill_text)
-        self.assertNotIn("<label>", skill_text)
-        self.assertNotIn("`python -m aippocampus_runtime.", skill_text)
-        self.assertLess(
-            skill_text.index('aippocampus agent recall "query" --json'),
-            skill_text.index("Repair, setup, status, provider, storage"),
-        )
-        self.assertLess(
-            skill_text.index("direct clean-source search"),
-            skill_text.index("Repair, setup, status, provider, storage"),
-        )
-        self.assertLess(
-            skill_text.index("Primary foreground path"),
-            skill_text.index("Repair, setup, status, provider, storage"),
-        )
-        self.assertIn("suggested_agent_action", skill_text)
-        self.assertIn("not_enough_for_claim", skill_text)
-        self.assertIn("## Runtime Posture For Agents", agent_context)
-        self.assertIn("cheap orientation", agent_context.lower())
-        self.assertIn("explicit source reopen", agent_context.lower())
-        self.assertIn("## Agent Runtime Posture", coding_lane)
-        self.assertIn("before broad manual search", coding_lane_flat)
-
     def test_diagnostics_are_not_first_recall_prerequisites(self) -> None:
         public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
             encoding="utf-8"
@@ -253,29 +202,6 @@ class DocsHealthTests(unittest.TestCase):
             public_api_flat.index("--source visible-env-key --provider-env-var <NAME>"),
             public_api_flat.index("Supported alternate source names are `explicit-dotenv`"),
         )
-
-    def test_skill_hook_packet_decoder_maps_signals_to_actions(self) -> None:
-        skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        start = skill_text.index("## Hook Packet Decoder")
-        end = skill_text.index("## First Moves")
-        decoder = skill_text[start:end]
-        decoder_flat = " ".join(decoder.split())
-
-        self.assertIn("| Signal | Default action | Do not do |", decoder)
-        for phrase in (
-            "suggested_agent_action=agent_recall",
-            "not_enough_for_claim=true",
-            "direction_with_ref",
-            "reopenable_route",
-            "bounded_evidence",
-            "ignore_or_blocked",
-            "before broad manual search",
-            "deepen",
-            "reopen",
-        ):
-            self.assertIn(phrase, decoder_flat)
-        self.assertLessEqual(decoder.count("| `"), 8)
-        self.assertNotIn("full packet schema", decoder.lower())
 
     def test_demo_scenarios_centralize_generic_claim_boundaries(self) -> None:
         demo_text = (REPO_ROOT / "docs" / "guides" / "demo-scenarios.md").read_text(

@@ -3,6 +3,24 @@
 This page routes readers to the right owner docs without making every path pass
 through architecture, benchmarks, planning notes, and research memos.
 
+## See And Add To Memory
+
+Goal: make memory visible and leave one small agent note without reading the
+operator references first.
+
+```sh
+aippocampus vault sync --json
+echo "What mattered in this thread, in one sentence." | aippocampus self-note append --current-thread --stdin --json
+```
+
+`vault sync` writes a local human-readable vault/dashboard under
+`AIPPOCAMPUS_VAULT` or `~/AIppocampus Memory`. `self-note append` writes a
+short current-thread margin note for future orientation; it is a route hint, not
+a user profile fact. Detailed contracts live in
+[`retrieval-and-storage.md#vault-and-dashboard`](../skills/aippocampus/references/retrieval-and-storage.md#vault-and-dashboard)
+and
+[`retrieval-and-storage.md#agent-self-notes`](../skills/aippocampus/references/retrieval-and-storage.md#agent-self-notes).
+
 ## First Recall
 
 Goal: install or probe AIppocampus and see one source-backed recall moment.

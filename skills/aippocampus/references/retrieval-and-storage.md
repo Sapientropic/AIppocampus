@@ -3,6 +3,26 @@
 This reference owns the memory surfaces and search contracts. Keep operational
 details here instead of expanding `SKILL.md`.
 
+## Start With A Useful Surface
+
+```bash
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+aippocampus vault sync --json
+```
+
+Recall/deepen is the ordinary source-backed loop. `vault sync` builds the
+human-readable memory vault and dashboard under `AIPPOCAMPUS_VAULT` or
+`~/AIppocampus Memory`; see [Vault And Dashboard](#vault-and-dashboard).
+Foreground agents can also leave a short current-thread margin note; see
+[Agent Self-Notes](#agent-self-notes).
+
+Source-backed boundary: route hints, summaries, maps, self-notes, and generated
+sidecars help choose where to look. Exact wording, sensitive facts, stale
+claims, disputed details, and high-risk decisions still come from reopened
+source. The canonical product boundary lives in
+`docs/architecture/recall/source-backed-product-discipline.md`.
+
 ## Clean Source
 
 `aippocampus_runtime/source/clean_source` creates the daily-use source layer under the
@@ -154,7 +174,7 @@ without falling back to mechanical phrase-list expansion. Single-thread
 clean-source search, registry deep search, and
 `aippocampus_runtime.navigation.project_timeline` merge that sidecar as navigation metadata while
 leaving `messages.jsonl` unchanged. Treat semantic sidecar labels as
-DeepSeek/subconscious hints, not source truth.
+DeepSeek/subconscious hints that still point back to clean source.
 
 For Stage 2 regression evidence, `smoke_semantic_scope_real_history.py` can run
 full selected life-wide candidate coverage in bounded DeepSeek batches, and
@@ -338,7 +358,7 @@ explicit CJK query-chunk comparison so regressions stay visible. These chunks
 are search/navigation material only: they do not make generated aliases source
 truth, and the fixture does not claim broad Chinese semantic search quality.
 
-Segmented merge weights are calibrated by the public-safe #375 fixture runner
+Segmented merge weights are calibrated by the public-safe segmented-merge fixture runner
 `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` and documented in
 `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`. Passing
 that fixture only means the default policy survives four deterministic
@@ -514,8 +534,8 @@ outrank real user turns or assistant final answers.
 
 ## Search-Decision Adapter
 
-`aippocampus_runtime.recall.search_decision_adapter` is a narrow local contract for #381-style
-external-search decisions. It does not call Google, browser search, Perplexity,
+`aippocampus_runtime.recall.search_decision_adapter` is a narrow local contract
+for search-decision external-search decisions. It does not call Google, browser search, Perplexity,
 or any remote authority ranker. It only accepts the current prompt plus
 source-backed candidate rows and returns:
 
@@ -590,7 +610,7 @@ such as `self_correction_signal`, `uncertainty_or_frontier_signal`,
 `tool_failure_texture`, but they must not serialize raw source text, raw
 commentary, commands, stdout/stderr, stack traces, local paths, or secrets.
 
-This lane is useful routing weather, not source truth. A consumer may use it to
+This lane is useful routing weather. A consumer may use it to
 choose which source or event to reopen, but exact claims still require
 following the row refs back to clean source, route notes, behavior events, or
 raw audit when clean source is insufficient. Public/export projections omit
@@ -717,7 +737,7 @@ and injection noise should be filtered before they become triggers.
 use staging edges; depth-2 expansion is restricted to verified or
 high-confidence edges and remains scent-only.
 
-Concept graph row status is graph participation metadata, not source truth.
+Concept graph row status is graph participation metadata, not factual evidence.
 `verified` rows rank ahead of `staging`, but exact claims still require source
 reopen. `parked` and `retired` rows remain in the rebuildable SQLite projection
 only as lifecycle diagnostics and are excluded from default expansion. Promotion
@@ -746,6 +766,12 @@ Publish-like shell assets can be supplied with `AIPPOCAMPUS_STYLE_SOURCE`,
 backward-compatible fallbacks. Generated content should stay inside `Threads/`,
 `_dashboards/`, and the named CSS snippet. Do not overwrite user-authored vault
 notes.
+
+Use the public facade for the ordinary path:
+
+```bash
+aippocampus vault sync --json
+```
 
 The dashboard may use vendored `assets/pixi-7.2.4.min.js` and
 `assets/d3-7.9.0.min.js`; keep these as local assets so recall does not depend

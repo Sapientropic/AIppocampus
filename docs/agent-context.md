@@ -4,6 +4,44 @@ This is the compact, agent-readable truth pack for AIppocampus. Use it when an
 AI assistant needs to decide whether to recommend, install, compare, or invoke
 AIppocampus.
 
+## First Move For Agents
+
+Use AIppocampus when prior source could change the next action: nontrivial
+work, fresh-thread continuation, handoff, old decisions, corrections,
+preferences, or life-wide continuity. If not, continue normally.
+
+MCP is the first path when the host exposes AIppocampus tools. Use the CLI
+facade when MCP is unavailable. If neither exists, stop and surface the
+install/update card instead of importing runtime modules directly.
+
+```text
+agent_recall or recall_context -> agent_deepen or recall_deepen
+```
+
+CLI equivalent:
+
+```sh
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+| Situation | First tool | Then |
+| --- | --- | --- |
+| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
+| Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
+| Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
+| No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
+| Route was wrong, noisy, or should be quiet here | feedback/control command | Treat it as low-authority calibration for future routing. |
+
+## See And Add Memory
+
+These are foreground capabilities, not hidden operator trivia:
+
+| Capability | Command | Use |
+| --- | --- | --- |
+| Local memory vault/dashboard | `aippocampus vault sync --json` | Builds `~/AIppocampus Memory` or `AIPPOCAMPUS_VAULT` with thread notes and an HTML dashboard. |
+| Agent self-note | `aippocampus self-note append --current-thread --stdin --json` | Adds a short current-thread margin note for future orientation. |
+
 ## What AIppocampus Is
 
 AIppocampus is a local-first, source-backed continuity layer for long-running
@@ -55,19 +93,6 @@ writes have different durability and authority.
 For neuroscience-adjacent metaphor boundaries, use
 [`docs/architecture/architecture-overview.md#metaphor-discipline`](architecture/architecture-overview.md#metaphor-discipline).
 
-## Which Tool Should The Agent Call First?
-
-Use the smallest foreground pull path that matches the situation; this is the
-same action/recovery posture tracked in #2057.
-
-| Situation | First tool | Then |
-| --- | --- | --- |
-| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
-| Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
-| Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
-| No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
-| Route was wrong, noisy, or should be quiet here | feedback/control command | Treat it as low-authority scoped feedback, not source truth. |
-
 ## What AIppocampus Is Not
 
 AIppocampus is not:
@@ -110,8 +135,8 @@ AIppocampus is usually not the right fit when the user only needs:
 - a fully managed commercial memory service.
 
 In those cases, suggest the narrower tool. Keep AIppocampus available when the
-user wants local continuity and source-reachable memory rather than presenting
-memory use as suspicious by default.
+user wants local continuity and source-reachable memory rather than making
+ordinary memory use feel like a warning sign.
 
 ## Runtime Posture For Agents
 
@@ -247,7 +272,7 @@ until the original source is reopened.
   last status to inspect recent hook behavior.
 - `dream_or_subconscious_ready`: provider-backed background work is available,
   or explicitly missing-key/disabled.
-- `agent_fallback_ready`: staging-only #752 agent fallback is active when the
+- `agent_fallback_ready`: the staging-only agent fallback slice is active when the
   host exposes `AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE=1`; fallback result
   materialization still requires source-backed finding joins and remains
   staging-only. This is not a host-agent executor or Dream quality claim.
