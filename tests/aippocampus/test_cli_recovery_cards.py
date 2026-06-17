@@ -182,6 +182,10 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         privacy_payload = json.loads(cards["privacy"].stdout)
         self.assertEqual(privacy_payload["kind"], "aippocampus_privacy_chooser")
         self.assertTrue(any(action["id"] == "open_controls" for action in privacy_payload["safe_next_actions"]))
+        privacy_actions = {action["id"]: action for action in privacy_payload["safe_next_actions"]}
+        self.assertEqual(privacy_actions["export_boundary"]["command"], "aippocampus export --json")
+        self.assertEqual(privacy_actions["provider_key_boundary"]["command"], "aippocampus provider-key --json")
+        self.assertNotIn("--help", json.dumps(privacy_payload, ensure_ascii=False))
 
         controls_payload = json.loads(cards["controls"].stdout)
         self.assertEqual(controls_payload["kind"], "aippocampus_controls_chooser")
@@ -815,7 +819,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertNotIn("<", command)
                 self.assertNotIn("old continuity cue", command)
                 if action.get("command_template"):
-                    self.assertEqual(action.get("requires"), "cue")
+                    self.assertEqual(action.get("requires"), ["cue"])
 
     def test_bare_onboard_json_is_status_first_and_read_only(self) -> None:
         proc = self.run_cli("onboard", "--json")

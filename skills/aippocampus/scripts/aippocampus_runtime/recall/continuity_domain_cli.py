@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -38,21 +39,45 @@ from aippocampus_runtime.recall.continuity_domains import (
 )
 
 
+def _ordinary_recall_path_action() -> dict[str, Any]:
+    return {
+        "id": "ordinary_recall_path",
+        "label": "Use ordinary recall for a continuity cue",
+        "requires": ["cue"],
+        "command_template": 'aippocampus agent recall "{cue}" --json',
+        "why": "Most foreground work should start from recall/deepen rather than domain backfill.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+    }
+
+
+def _preview_domain_candidates_action(*, broad: bool = False) -> dict[str, object]:
+    return foreground_shell_action(
+        action_id="preview_domain_candidates",
+        label="Preview candidate continuity domains",
+        command=(
+            "aippocampus continuity-domain preview --broad-scan --json"
+            if broad
+            else "aippocampus continuity-domain produce --preview --json"
+        ),
+        why="Preview is bounded and emits navigation-only candidate actions.",
+        mutation_risk="read_only",
+        claim_boundary="preview_not_source_truth",
+    )
+
+
 def _json_error(code: str, message: str) -> dict[str, Any]:
+    next_action = _preview_domain_candidates_action()
     return {
         "ok": False,
         "error": {
             "code": code,
             "message": message,
         },
-        "agent_next_action": (
-            "Use `aippocampus agent recall` for ordinary continuity, run "
-            "`aippocampus continuity-domain produce --preview --json`, or provide "
-            "--clean-source-dir when manually appending source-trailed events."
-        ),
-        "recovery_actions": [
-            "aippocampus agent recall <cue> --json",
-            "aippocampus continuity-domain produce --preview --json",
+        "agent_next_action": next_action,
+        "safe_next_actions": [
+            next_action,
+            _ordinary_recall_path_action(),
         ],
     }
 
@@ -63,14 +88,7 @@ def recovery_payload() -> MappingPayload:
         error_code="continuity_domain_command_required",
         message="Choose a read path, preview path, or explicit operator write path.",
         safe_next_actions=[
-            foreground_shell_action(
-                action_id="preview_domain_candidates",
-                label="Preview candidate continuity domains",
-                command="aippocampus continuity-domain preview --json",
-                why="Preview is bounded and emits navigation-only candidate actions.",
-                mutation_risk="read_only",
-                claim_boundary="preview_not_source_truth",
-            ),
+            _preview_domain_candidates_action(),
             foreground_shell_action(
                 action_id="read_latest_snapshot",
                 label="Read latest published domain snapshot",
@@ -79,15 +97,7 @@ def recovery_payload() -> MappingPayload:
                 mutation_risk="read_only",
                 claim_boundary="source_reopen_required_before_claims",
             ),
-            {
-                "id": "ordinary_recall_path",
-                "label": "Use ordinary recall for a continuity cue",
-                "requires": "cue",
-                "command_template": "aippocampus agent recall <cue> --json",
-                "why": "Most foreground work should start from recall/deepen rather than domain backfill.",
-                "mutation_risk": "read_only",
-                "claim_boundary": "no_claim_before_reopen",
-            },
+            _ordinary_recall_path_action(),
         ],
         source_boundary={
             "continuity_domains_are_routes_not_source_truth": True,
@@ -158,11 +168,16 @@ MappingPayload = dict[str, Any]
 GENERIC_FOREGROUND_CUE_TERMS = {
     "aippocampus",
     "aiippocampus",
+    "ai",
     "codex-hindsight-memory",
     "recall",
     "append",
+    "anchor",
+    "anchors",
+    "锚点",
     "maintenance",
     "runtime",
+    "runtime-contract",
     "continuity-domain",
     "continuity",
     "route",
@@ -170,11 +185,22 @@ GENERIC_FOREGROUND_CUE_TERMS = {
     "source-backed",
     "foreground",
     "action",
+    "candidate",
+    "candidates",
+    "preview",
+    "plugin",
+    "tool",
+    "issue",
+    "issues",
+    "用户",
+    "角度",
 }
 GENERIC_FOREGROUND_CUE_PHRASES = {
     "runtime-contract.md",
     "old continuity cue",
     "continuity domain candidate",
+    "aippocampus maintenance",
+    "aippocampus 锚点",
 }
 
 
@@ -338,6 +364,7 @@ def _domain_cards(snapshot: MappingPayload, *, limit: int = 8) -> list[MappingPa
 
 
 def _no_snapshot_payload() -> MappingPayload:
+    next_action = _preview_domain_candidates_action()
     return {
         "ok": True,
         "status": "empty",
@@ -347,14 +374,10 @@ def _no_snapshot_payload() -> MappingPayload:
             "source_reopen_required_before_claim": True,
             "local_paths_serialized": False,
         },
-        "agent_next_action": {
-            "id": "no_continuity_domain_snapshot",
-            "label": "No continuity-domain snapshot is published for this scope; use recall or preview producer candidates.",
-            "command": "aippocampus continuity-domain produce --preview --json",
-        },
-        "recovery_actions": [
-            "aippocampus agent recall <cue> --json",
-            "aippocampus continuity-domain produce --preview --json",
+        "agent_next_action": next_action,
+        "safe_next_actions": [
+            next_action,
+            _ordinary_recall_path_action(),
         ],
     }
 
@@ -448,13 +471,19 @@ def _foreground_cue_quality(cue: str) -> tuple[str, str]:
     text = compact_text(str(cue or ""), 80).strip()
     if not text:
         return "low_information", "empty"
-    low = text.casefold()
+    low = text.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>').casefold()
     if low in GENERIC_FOREGROUND_CUE_PHRASES:
         return "low_information", "generic_tool_word"
+    if low.startswith("-") or re.fullmatch(r"-{1,2}[\w][\w.-]*", low):
+        return "low_information", "cli_flag_or_option"
     if low.endswith((".md", ".py", ".json", ".jsonl", ".toml", ".yaml", ".yml")) and " " not in low:
         return "low_information", "file_name_only"
-    tokens = [token for token in low.replace("_", "-").split() if token]
-    if tokens and all(token.strip('"`.,;:!?') in GENERIC_FOREGROUND_CUE_TERMS for token in tokens):
+    tokens = [
+        token.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>')
+        for token in re.findall(r"[\w\u4e00-\u9fff.-]+", low.replace("_", "-"))
+        if token.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>')
+    ]
+    if tokens and all(token in GENERIC_FOREGROUND_CUE_TERMS for token in tokens):
         return "low_information", "generic_tool_word"
     if low in GENERIC_FOREGROUND_CUE_TERMS:
         return "low_information", "generic_tool_word"

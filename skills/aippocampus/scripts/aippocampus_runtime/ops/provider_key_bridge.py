@@ -841,8 +841,10 @@ def main(argv: list[str] | None = None) -> int:
             "  Plan first, apply only after choosing a private credential source,\n"
             "  and keep no-key source-backed recall/search usable.\n\n"
             "Normal examples:\n"
+            "  aippocampus onboard provider-key --plan --source visible-env-key --provider-env-var <NAME> --json\n"
+            "  aippocampus onboard provider-key --apply --source visible-env-key --provider-env-var <NAME> --json\n"
+            "Private dotenv fallback:\n"
             "  aippocampus onboard provider-key --plan --source explicit-dotenv --credential-dotenv <path> --json\n"
-            "  aippocampus onboard provider-key --apply --source explicit-dotenv --credential-dotenv <path> --json\n"
             "  aippocampus onboard provider-key --undo --json"
         ),
         epilog=(

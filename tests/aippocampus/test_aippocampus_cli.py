@@ -1364,17 +1364,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "agent_self_note_raw_payload_rejected")
         self.assertNotIn(str(root), raw)
 
-    def test_self_note_empty_and_search_empty_return_recovery_actions(self) -> None:
+    def test_self_note_search_empty_returns_recovery_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             notes_path = root / "agent-self-notes.jsonl"
-            empty_append = self.run_cli(
-                "self-note",
-                "append",
-                "--notes-path",
-                str(notes_path),
-                "--json",
-            )
             empty_search = self.run_cli(
                 "self-note",
                 "search",
@@ -1384,11 +1377,6 @@ class AippocampusCliTests(unittest.TestCase):
                 "--json",
             )
 
-        self.assertNotEqual(empty_append.returncode, 0)
-        append_payload = json.loads(empty_append.stdout)
-        self.assertEqual(append_payload["error"]["code"], "agent_self_note_empty")
-        self.assertIn("Add text", append_payload["agent_next_action"])
-        self.assertIn("recovery_actions", append_payload)
         self.assertEqual(empty_search.returncode, 0, empty_search.stderr)
         search_payload = json.loads(empty_search.stdout)
         self.assertEqual(search_payload["count"], 0)
@@ -1602,10 +1590,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(missing.returncode, 0, missing.stderr)
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["status"], "empty")
-        self.assertIn("agent recall", " ".join(missing_payload["recovery_actions"]))
+        self.assertIn("safe_next_actions", missing_payload)
+        self.assertNotIn("recovery_actions", missing_payload)
+        encoded_missing = json.dumps(missing_payload, ensure_ascii=False)
+        self.assertIn("aippocampus agent recall", encoded_missing)
+        self.assertNotIn("<cue>", encoded_missing)
         self.assertNotEqual(unresolved.returncode, 0)
         unresolved_payload = json.loads(unresolved.stdout)
-        self.assertIn("--clean-source-dir", unresolved_payload["agent_next_action"])
+        self.assertIn("--clean-source-dir", unresolved_payload["error"]["message"])
         self.assertFalse(unresolved_events.exists())
 
     def test_continuity_domain_read_path_help_is_action_card_not_bare_argparse(self) -> None:

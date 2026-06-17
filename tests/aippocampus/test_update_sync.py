@@ -1396,6 +1396,53 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertIn("git status --short", commands)
             self.assertIn("aippocampus update plan --json", commands)
 
+    def test_status_and_plan_agent_json_project_dirty_worktree_guard_for_core_repair(self) -> None:
+        for action in ("status", "plan"):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as tmp, provider_env():
+                root = Path(tmp)
+                repo = root / "repo"
+                codex_home = root / "codex-home"
+                write_minimal_repo(repo)
+                init_git_fixture(repo)
+                (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
+                    "# dirty source\n",
+                    encoding="utf-8",
+                )
+                stdout = StringIO()
+
+                with redirect_stdout(stdout):
+                    code = update_cli.main(
+                        [
+                            action,
+                            "--repo-root",
+                            str(repo),
+                            "--codex-home",
+                            str(codex_home),
+                            "--no-child-check",
+                            "--agent-json",
+                        ]
+                    )
+
+                payload = json.loads(stdout.getvalue())
+                self.assertEqual(code, 0, payload)
+                self.assertIn("skill", payload["summary"]["dirty_worktree_guards"])
+                card = next(
+                    item
+                    for item in payload["foreground_status_cards"]
+                    if item["id"] == "core_repair"
+                )
+                self.assertEqual(card["status"], "blocked_dirty_worktree")
+                self.assertTrue(card["dirty_worktree_detected"])
+                self.assertEqual(card["blocked_command"], "aippocampus update apply --surface skill")
+                self.assertIn("source_path", card["would_write"])
+                commands = {item["command"] for item in card["safe_next_actions"]}
+                self.assertIn("git status --short", commands)
+                self.assertIn("aippocampus update plan --json", commands)
+                self.assertNotIn(
+                    "aippocampus update apply --surface skill",
+                    {item.get("command") for item in card["safe_next_actions"]},
+                )
+
     def test_apply_allows_clean_git_source_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)

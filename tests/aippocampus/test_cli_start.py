@@ -48,6 +48,17 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertIn("command_template", payload["agent_next_action"])
         self.assertFalse(payload["state_summary"]["clean_source"]["path_serialized"])
 
+    def test_start_human_output_labels_templates_instead_of_printing_placeholder_as_next(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = self.write_clean_source(root)
+            proc = self.run_cli("start", "--cwd", str(root), "--clean-source-dir", str(clean))
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("requires: continuity_cue", proc.stdout)
+        self.assertIn('template: aippocampus agent recall "{continuity_cue}" --json', proc.stdout)
+        self.assertNotIn('next: aippocampus agent recall "{continuity_cue}" --json', proc.stdout)
+
     def test_start_json_routes_no_source_to_onboarding(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             proc = self.run_cli("start", "--json", "--cwd", tmp)

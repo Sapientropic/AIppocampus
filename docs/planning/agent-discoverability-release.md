@@ -46,6 +46,11 @@ Registry.
    uvx aippocampus mcp list-tools --json
    ```
 
+   Treat `mcp status` and `mcp list-tools` as smoke/wiring diagnostics in the
+   release notes. Product-facing MCP metadata should lead agents toward
+   continuity tool calls such as `agent_recall`, `agent_aippo`,
+   `agent_background`, and `agent_deepen`.
+
 5. Publish with the official MCP Registry publisher and record:
    - publisher version;
    - auth mode;
@@ -81,8 +86,8 @@ python tools/aippocampus/release/check_agent_discovery_release.py --json
 That probe also guards the agent-facing product posture: `llms.txt` must lead
 with recall/deepen before exact-search fallback, stale `codex --all`
 registration commands must stay out of the happy path, and package/MCP metadata
-must keep explicit setup, rollback, no-key fallback, and source-reopen
-boundaries visible.
+must keep continuity tools ahead of status/schema diagnostics while preserving
+explicit setup, rollback, no-key fallback, and source-reopen boundaries.
 
 Before the next PyPI/MCP publication it should report local checks as passing
 and public package/registry checks for the current target version as `pending`.

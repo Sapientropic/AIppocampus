@@ -266,6 +266,23 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertIn("facts, user profile claims, durable lessons", help_text)
         self.assertIn("source-backed learning", help_text)
 
+    def test_append_empty_json_returns_structured_recovery_actions(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = agent_self_note_cli.main(["append", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload["error"]["code"], "agent_self_note_empty")
+        self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertEqual(payload["agent_next_action"]["id"], "append_direction_only_note")
+        self.assertEqual(payload["agent_next_action"]["requires"], ["note_text"])
+        self.assertIn("command_template", payload["agent_next_action"])
+        self.assertIn("safe_next_actions", payload)
+        self.assertNotIn("recovery_actions", payload)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("<cue>", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -859,6 +859,12 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     core_ready = not core_blockers
     magic_ready = not magic_blockers
     capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
+    dirty_worktree_guards = _status_dirty_worktree_guards(
+        args,
+        update_actions.unique_names(
+            [*core_blockers, *magic_blockers, *operator_blockers, *actionable]
+        ),
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": f"aippocampus_update_{mode}",
@@ -899,6 +905,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
                 "plugin_cache_recommended_actions"
             )
             or [],
+            "dirty_worktree_guards": dirty_worktree_guards,
         },
         "surfaces": surfaces,
         "safety_notes": [
@@ -1215,6 +1222,32 @@ def _dirty_worktree_blocker(surface: str, args: argparse.Namespace) -> dict[str,
     if not overlaps:
         return None
     return _dirty_worktree_recovery(surface, write_paths, overlaps)
+
+
+def _status_dirty_worktree_guards(
+    args: argparse.Namespace,
+    surfaces: list[str],
+) -> dict[str, dict[str, Any]]:
+    guards: dict[str, dict[str, Any]] = {}
+    if getattr(args, "force_dirty_worktree", False):
+        return guards
+    for surface in surfaces:
+        blocker = _dirty_worktree_blocker(surface, args)
+        if blocker is None:
+            continue
+        guards[surface] = {
+            "status": "blocked_dirty_worktree",
+            "dirty_worktree_detected": True,
+            "dirty_paths": list(blocker.get("dirty_paths") or []),
+            "would_write": {
+                str(key): "path_redacted"
+                for key in (blocker.get("would_write") or {}).keys()
+            },
+            "safe_next_actions": list(blocker.get("safe_next_actions") or []),
+            "override": blocker.get("override"),
+            "safety": blocker.get("safety") or {},
+        }
+    return guards
 
 
 def apply_update(args: argparse.Namespace) -> dict[str, Any]:

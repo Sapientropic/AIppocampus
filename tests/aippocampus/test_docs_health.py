@@ -189,6 +189,11 @@ class DocsHealthTests(unittest.TestCase):
             llms.index("## First Recall Agent Probe"),
             llms.index("## Good Fit"),
         )
+        self.assertIn("agent_background", llms)
+        self.assertLess(
+            llms.index("use recall/deepen/background tools first"),
+            llms.index("uvx aippocampus mcp status --json"),
+        )
         self.assertLess(
             first_card.index("aippocampus search"),
             first_card.index("aippocampus health"),

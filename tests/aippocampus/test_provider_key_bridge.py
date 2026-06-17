@@ -151,6 +151,17 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertFalse(payload["privacy"]["secret_values_printed"])
         self.assertNotIn(fixture_value, encoded)
 
+    def test_help_leads_with_visible_env_key_before_private_dotenv_bridge(self) -> None:
+        with self.assertRaises(SystemExit) as raised, patch("sys.stdout", new=StringIO()) as stdout:
+            provider_key_bridge.main(["--help"])
+
+        self.assertEqual(raised.exception.code, 0)
+        help_text = stdout.getvalue()
+        visible_index = help_text.index("--source visible-env-key")
+        explicit_index = help_text.index("--source explicit-dotenv")
+        self.assertLess(visible_index, explicit_index)
+        self.assertIn("Private dotenv fallback", help_text)
+
     def test_bridge_apply_installs_redacted_codex_hook_wrapper_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

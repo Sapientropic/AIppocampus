@@ -13,6 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.source.agent_self_note_actions import (
+    append_error_payload as build_append_error_payload,
+)
+from aippocampus_runtime.source.agent_self_note_actions import (
+    format_action_for_human,
+)
 from aippocampus_runtime.source.agent_self_notes import (
     VALID_TRIGGERS,
     AgentSelfNoteRejected,
@@ -352,45 +358,11 @@ def _agent_self_note_round_trip_preview(
 
 
 def _append_error_payload(code: str, details: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    messages = {
-        "agent_self_note_empty": "self-note append needs a short note, --stdin input, or a source-backed cue.",
-        "agent_self_note_raw_payload_rejected": "self-note append refused raw tool/log payload text.",
-    }
-    next_actions = {
-        "agent_self_note_empty": (
-            'Add text, pipe a short note with --stdin, or run `aippocampus search "exact phrase"` '
-            "when you need source-backed evidence instead of a direction-only note."
-        ),
-        "agent_self_note_raw_payload_rejected": (
-            "Summarize the decision breadcrumb in your own words; do not store raw tool output "
-            "or source text as a self-note."
-        ),
-    }
-    error: dict[str, Any] = {
-        "code": code,
-        "message": messages.get(code, code),
-    }
-    payload = {
-        "kind": "aippocampus_agent_self_note_append",
-        "ok": False,
-        "error": error,
-        "agent_next_action": next_actions.get(
-            code,
-            "Use self-notes only for low-authority direction; reopen source for factual claims.",
-        ),
-        "recovery_actions": [
-            'aippocampus self-note append --current-thread "short direction-only note"',
-            'aippocampus search "exact phrase" --json',
-        ],
-        "privacy_boundary": _privacy_boundary(),
-    }
-    if details:
-        error["details"] = {
-            key: value
-            for key, value in details.items()
-            if isinstance(value, (str, int, float, bool))
-        }
-    return payload
+    return build_append_error_payload(
+        code,
+        privacy_boundary=_privacy_boundary(),
+        details=details,
+    )
 
 
 def _append_receipt_boundary(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -745,7 +717,11 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print("self-note append needs a short note.", file=sys.stderr)
-            print("Next: " + payload["agent_next_action"], file=sys.stderr)
+            formatted = format_action_for_human(payload.get("agent_next_action"))
+            if formatted:
+                print("Next: " + formatted[0], file=sys.stderr)
+                for line in formatted[1:]:
+                    print(line, file=sys.stderr)
         return 1
     cwd_path = Path(args.cwd).resolve()
     current_thread = (
