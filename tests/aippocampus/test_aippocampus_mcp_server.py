@@ -1717,6 +1717,12 @@ class AippocampusMcpServerTests(unittest.TestCase):
         )
         self.assertEqual(payload["requires"], ["sync_dir_or_object_store_url"])
         self.assertIn("agent_next_action", payload)
+        self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["sync_dir"])
+        self.assertTrue(payload["agent_next_action"]["template_only"])
+        self.assertTrue(
+            any(action["requires"] == ["object_store_url"] for action in payload["safe_next_actions"])
+        )
         self.assertNotIn("python -m aippocampus_runtime", encoded)
 
     def test_sync_status_can_report_http_object_store_backend(self) -> None:

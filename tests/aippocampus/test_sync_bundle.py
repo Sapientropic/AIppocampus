@@ -204,8 +204,10 @@ class SyncBundleTests(unittest.TestCase):
                 self.assertEqual(payload["issues"][0]["code"], "missing_manifest")
                 self.assertTrue(payload["issues"][0]["path_redacted"])
                 self.assertIn("safe_next_actions", payload)
-                self.assertEqual(payload["safe_next_actions"][0]["id"], "sync_status")
-                self.assertEqual(payload["safe_next_actions"][1]["id"], "repair_plan")
+                action_ids = [action["id"] for action in payload["safe_next_actions"]]
+                self.assertEqual(action_ids[0], "check_local_sync_status")
+                self.assertIn("preview_local_sync_repair", action_ids)
+                self.assertTrue(all(action["template_only"] for action in payload["safe_next_actions"]))
                 self.assertNotIn(str(missing_sync_dir), encoded)
 
     def test_push_excludes_generated_sqlite_pointer_from_default_sync(self) -> None:
