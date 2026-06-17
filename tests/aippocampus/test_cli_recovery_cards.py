@@ -906,8 +906,11 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertTrue(payload["ok"])
-        self.assertIn("primary_next_action", payload["data"])
-        self.assertIn("providers", payload["data"])
+        self.assertEqual(payload["kind"], "aippocampus_onboard_status_card")
+        self.assertTrue(payload["read_only"])
+        self.assertIn("primary_next_action", payload)
+        self.assertIn("provider_summary", payload)
+        self.assertNotIn("data", payload)
         self.assertNotIn("stats_after", json.dumps(payload, ensure_ascii=False))
         self.assertTrue(
             "command" in payload["primary_next_action"]

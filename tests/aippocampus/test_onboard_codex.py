@@ -314,31 +314,38 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
-        providers = {item["provider"]: item for item in data["data"]["providers"]}
-        self.assertEqual(data["data"]["detail_level"], "frontstage")
-        self.assertEqual(providers["codex"]["state"], "write_enabled")
+        providers = {item["provider"]: item for item in data["provider_summary"]}
+        self.assertEqual(data["kind"], "aippocampus_onboard_status_card")
+        self.assertEqual(data["status"], "registration_available_after_consent")
+        self.assertTrue(data["read_only"])
+        self.assertEqual(data["provider_scope"], "auto")
+        self.assertNotIn("data", data)
+        self.assertNotIn("state_legend", json.dumps(data, ensure_ascii=False))
+        self.assertNotIn("legacy_aliases", json.dumps(data, ensure_ascii=False))
+        self.assertNotIn("storage", data)
+        self.assertEqual(providers["codex"]["state"], "registration_available_after_consent")
         self.assertEqual(
             providers["codex"]["frontstage_state"],
             "registration_available_after_consent",
         )
-        self.assertFalse(providers["claude-code"]["current_cwd_match"])
+        self.assertEqual(providers["claude-code"]["detected"], True)
         self.assertEqual(
             providers["claude-code"]["frontstage_state"],
             "registration_available_after_consent",
         )
-        self.assertIn("scan_status", providers["claude-code"])
-        self.assertEqual(
-            providers["claude-code"]["next_action_code"],
-            "preview_current_project_registration",
-        )
-        self.assertIn("preview_command", providers["claude-code"])
-        self.assertIn("next_actions", data["data"])
-        self.assertIn("current project", providers["claude-code"]["agent_next_action"])
-        primary = data["data"]["primary_next_action"]
+        self.assertEqual(providers["generic-jsonl"]["state"], "blocked")
+        primary = data["primary_next_action"]
+        self.assertEqual(data["agent_next_action"], primary)
         self.assertEqual(primary["provider"], "codex")
         self.assertEqual(primary["code"], "preview_current_project_registration")
+        self.assertEqual(primary["mutation_risk"], "read_only")
         self.assertNotEqual(primary["provider"], "generic-jsonl")
         self.assertIn("onboard --provider codex --dry-run", primary["command"])
+        self.assertEqual(
+            data["operator_detail_command"],
+            "aippocampus onboard --provider auto --status --operator-json",
+        )
+        self.assertEqual(executable_command_violations(data), [])
         self.assertNotIn(str(self.root), proc.stdout)
 
     def test_onboard_status_json_redacts_storage_path_by_default_and_can_opt_in(self) -> None:
@@ -355,17 +362,27 @@ class OnboardCodexTests(unittest.TestCase):
             *base_args,
             env_extra={"AIPPOCAMPUS_HOME": str(private_home)},
         )
+        operator_redacted = self._run_onboard_facade(
+            *base_args,
+            "--operator-json",
+            env_extra={"AIPPOCAMPUS_HOME": str(private_home)},
+        )
         full = self._run_onboard_facade(
             *base_args,
+            "--operator-json",
             "--include-private-paths",
             env_extra={"AIPPOCAMPUS_HOME": str(private_home)},
         )
 
         self.assertEqual(redacted.returncode, 0, redacted.stdout + redacted.stderr)
+        self.assertEqual(operator_redacted.returncode, 0, operator_redacted.stdout + operator_redacted.stderr)
         self.assertEqual(full.returncode, 0, full.stdout + full.stderr)
         redacted_payload = json.loads(redacted.stdout)
+        operator_payload = json.loads(operator_redacted.stdout)
         full_payload = json.loads(full.stdout)
-        self.assertEqual(redacted_payload["data"]["storage"]["path"], "<local-path-redacted>")
+        self.assertEqual(redacted_payload["kind"], "aippocampus_onboard_status_card")
+        self.assertNotIn("storage", redacted_payload)
+        self.assertEqual(operator_payload["data"]["storage"]["path"], "<local-path-redacted>")
         self.assertNotIn(str(private_home), redacted.stdout)
         self.assertIn(str(private_home), full_payload["data"]["storage"]["path"])
 
@@ -375,6 +392,7 @@ class OnboardCodexTests(unittest.TestCase):
             "--status",
             "--format",
             "json",
+            "--operator-json",
             "--cwd",
             str(self.cwd),
             env_extra={
@@ -469,17 +487,13 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
-        providers = {item["provider"]: item for item in data["data"]["providers"]}
-        self.assertEqual(providers["codex"]["state"], "write_enabled")
+        providers = {item["provider"]: item for item in data["provider_summary"]}
+        self.assertEqual(providers["codex"]["state"], "registration_available_after_consent")
         self.assertEqual(providers["claude-code"]["state"], "blocked")
         self.assertFalse(providers["claude-code"]["detected"])
-        self.assertEqual(
-            providers["claude-code"]["next_action_code"],
-            "provider_not_detected",
-        )
         self.assertEqual(providers["generic-jsonl"]["state"], "blocked")
         self.assertFalse(providers["generic-jsonl"]["detected"])
-        self.assertIn("AIPPOCAMPUS_GENERIC_IMPORT_DIR", providers["generic-jsonl"]["blockers"][0])
+        self.assertNotIn("blockers", providers["generic-jsonl"])
 
     def test_onboard_status_can_render_human_readable_auto_output(self) -> None:
         proc = self._run_onboard_facade(
