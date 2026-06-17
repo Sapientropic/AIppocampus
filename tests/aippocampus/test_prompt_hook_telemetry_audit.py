@@ -172,6 +172,7 @@ class PromptHookTelemetryAuditTests(AmbientRecallHookCase):
             telemetry_path=telemetry_path,
             hook_budget_ms=4300,
             semantic_timeout=2.5,
+            telemetry_write_ms=12.0,
         )
 
         telemetry = json.loads(telemetry_path.read_text(encoding="utf-8"))
@@ -180,10 +181,21 @@ class PromptHookTelemetryAuditTests(AmbientRecallHookCase):
         self.assertEqual(telemetry["semantic_diagnostic_counts"]["semantic_timed_out_under_foreground_budget"], 1)
         self.assertEqual(telemetry["cache_status_counts"]["miss"], 1)
         self.assertIn("startup_import_io", telemetry["latency_ms"]["buckets"])
+        self.assertIn("telemetry_write", telemetry["latency_ms"]["buckets"])
         encoded = json.dumps(telemetry, ensure_ascii=False)
         self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
         self.assertNotIn("test-session", encoded)
+
+    def test_prompt_hook_final_diagnostics_budget_gate_keeps_host_margin(self) -> None:
+        with patch.object(hook.time, "perf_counter", return_value=3.0):
+            self.assertTrue(
+                hook._has_final_diagnostic_budget(started=0.0, max_elapsed_ms=3500)
+            )
+        with patch.object(hook.time, "perf_counter", return_value=3.06):
+            self.assertFalse(
+                hook._has_final_diagnostic_budget(started=0.0, max_elapsed_ms=3200)
+            )
 
     def test_prompt_hook_main_writes_skip_telemetry_by_default_without_log_skip(self) -> None:
         telemetry_path = self.root / "main-skip-telemetry.json"

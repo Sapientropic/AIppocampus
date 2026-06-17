@@ -30,12 +30,13 @@ PROVIDER_BRIDGE_MARKERS = (
     "aippocampus_provider_bridge_hook.py",
     "aippocampus_runtime.hooks.provider_bridge",
 )
-# Keep the internal Python budget below the host timeout. If a future installer
-# raises the host timeout, this value can be raised deliberately; do not remove
-# it, or slow semantic/API paths will be killed by Codex before they can
-# fail-open and leave a sanitized diagnostic.
-DEFAULT_HOOK_BUDGET_MS = 4300
-DEFAULT_SEMANTIC_TIMEOUT_SECONDS = 2.5
+# Keep the internal Python budget comfortably below Codex's 5s host timeout.
+# This margin covers Python startup, imports, telemetry/status writes, Windows
+# scheduling jitter, and fail-open cleanup. Do not raise it without checking
+# aggregate prompt-hook latency telemetry; old 4.3s budgets sat too close to the
+# host kill switch and produced intermittent foreground timeout noise.
+DEFAULT_HOOK_BUDGET_MS = 3500
+DEFAULT_SEMANTIC_TIMEOUT_SECONDS = 1.2
 
 
 def hooks_json_path(codex_home_path: Path | None = None) -> Path:
@@ -353,6 +354,7 @@ def status(
     include_last: bool = False,
     log_path: Path | None = None,
     status_path: Path | None = None,
+    telemetry_path: Path | None = None,
     include_private_paths: bool = False,
 ) -> dict[str, Any]:
     data = load_hooks(path)
@@ -406,6 +408,13 @@ def status(
             log_path=log_path,
             status_path=status_path,
         )
+        from aippocampus_runtime.hooks.skip_telemetry import prompt_hook_latency_risk
+
+        result["prompt_hook_latency_risk"] = prompt_hook_latency_risk(
+            telemetry_path=telemetry_path,
+            host_timeout_ms=DEFAULT_HOOK_TIMEOUT_SECONDS * 1000,
+            safe_internal_budget_ms=DEFAULT_HOOK_BUDGET_MS,
+        )
     result.update(
         prompt_status_contract(
             status=foreground_status,
@@ -414,6 +423,9 @@ def status(
             provider_key_bridge_installed=bool(bridge_commands),
             last_prompt_hook=result.get("last_prompt_hook")
             if isinstance(result.get("last_prompt_hook"), dict)
+            else None,
+            latency_risk=result.get("prompt_hook_latency_risk")
+            if isinstance(result.get("prompt_hook_latency_risk"), dict)
             else None,
         )
     )
@@ -483,6 +495,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--log-path", help="Prompt-hook debug JSONL path for --last status.")
     parser.add_argument("--status-path", help="Prompt-hook last-status JSON path for --last status.")
     parser.add_argument(
+        "--skip-telemetry-path",
+        help="Prompt-hook aggregate skip telemetry path for --last status diagnostics.",
+    )
+    parser.add_argument(
         "--include-private-paths",
         action="store_true",
         help="Local diagnostic: include full hook config path and hook commands in status output.",
@@ -519,6 +535,9 @@ def main(argv: list[str] | None = None) -> int:
             include_last=args.last,
             log_path=Path(args.log_path).resolve() if args.log_path else None,
             status_path=Path(args.status_path).resolve() if args.status_path else None,
+            telemetry_path=Path(args.skip_telemetry_path).resolve()
+            if args.skip_telemetry_path
+            else None,
             include_private_paths=args.include_private_paths or args.operator_json,
         )
 

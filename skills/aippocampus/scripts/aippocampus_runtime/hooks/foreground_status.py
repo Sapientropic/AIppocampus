@@ -185,6 +185,7 @@ def prompt_status_contract(
     command_count: int,
     provider_key_bridge_installed: bool,
     last_prompt_hook: Mapping[str, Any] | None = None,
+    latency_risk: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     last_summary = (
         last_prompt_hook.get("last_prompt_hook")
@@ -199,7 +200,20 @@ def prompt_status_contract(
             for key in ("source_backed_count", "candidate_count", "scent_count", "wayfinding_count")
         )
     last_repair = str((last_summary or {}).get("next_repair") or "")
-    if status == "installed" and useful_last_count:
+    latency_status = str((latency_risk or {}).get("status") or "")
+    latency_repair = str((latency_risk or {}).get("repair_action") or "")
+    if status == "installed" and latency_status == "near_host_timeout_risk":
+        primary = _write_action(
+            action_id="refresh_prompt_hook_safe_budget",
+            label="Refresh prompt hook safe budget",
+            command=latency_repair or "aippocampus hooks prompt install --json",
+            why=(
+                "Aggregate prompt-hook telemetry shows near-host-timeout runs; "
+                "reinstall with the safer foreground budget before treating the "
+                "hook as ready."
+            ),
+        )
+    elif status == "installed" and useful_last_count:
         surface = str((last_summary or {}).get("memory_surface") or "memory")
         primary = {
             "id": "review_last_prompt_hook_recall",
@@ -260,6 +274,10 @@ def prompt_status_contract(
         extra={
             "command_count": int(command_count),
             "provider_key_bridge_installed": bool(provider_key_bridge_installed),
+            "prompt_hook_latency_risk_status": latency_status,
+            "prompt_hook_near_timeout_event_count": int(
+                (latency_risk or {}).get("near_timeout_event_count") or 0
+            ),
             "last_prompt_hook_status": str(last_prompt_hook.get("status") or "")
             if isinstance(last_prompt_hook, Mapping)
             else "",

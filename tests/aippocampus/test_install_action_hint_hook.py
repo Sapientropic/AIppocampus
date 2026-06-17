@@ -77,7 +77,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(card["fail_open"])
         self.assertFalse(card["optional"])
         self.assertFalse(card["recall_blocking"])
-        self.assertEqual(card["setup_role"], "recommended_for_trusted_codex")
+        self.assertEqual(card["setup_role"], "cleanup_or_prepare_required")
         self.assertEqual(card["cache_status"], "with_missing_cache_file")
         self.assertEqual(card["cache_path_label"], DEFAULT_CACHE_LABEL)
         self.assertEqual(card["cache_scope"], "current_workspace")
@@ -210,6 +210,26 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(expired_status["expired_record_count"], 1)
         self.assertEqual(expired_status["malformed_cache_line_count"], 1)
         self.assertEqual(expired_status["cache_path"], "<redacted:cache-jsonl>")
+
+    def test_installed_empty_cache_warns_that_hot_hook_is_inactive(self) -> None:
+        empty = self.codex_home / "empty-action-hints.jsonl"
+        empty.write_text("", encoding="utf-8")
+        installer.install(self.hooks_json, cache_jsonl=empty, timeout=3)
+
+        result = installer.status(self.hooks_json)
+        card = result["frontstage_card"]
+
+        self.assertTrue(result["installed"])
+        self.assertEqual(result["cache_status"], "with_empty_cache")
+        self.assertEqual(result["warning_state"], "installed_cache_not_ready")
+        self.assertFalse(result["hot_path_active"])
+        self.assertFalse(card["hot_path_active"])
+        self.assertEqual(card["setup_role"], "cleanup_or_prepare_required")
+        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertIn(
+            "rollback_action_hint_hook",
+            [action["id"] for action in result["safe_next_actions"]],
+        )
 
     def test_unsupported_host_status_does_not_pretend_installation(self) -> None:
         result = installer.status(self.hooks_json, host="claude-code")

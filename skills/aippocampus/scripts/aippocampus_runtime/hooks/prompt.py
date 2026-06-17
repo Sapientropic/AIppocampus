@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.hooks.prompt_fallbacks import (
+    _has_final_diagnostic_budget,
     fallback_payload,
     load_dream_delivery_module,
     prompt_hook_audit_status,
@@ -19,16 +20,11 @@ from aippocampus_runtime.hooks.prompt_fallbacks import (
     write_skip_telemetry,
 )
 
-__all__ = [
-    "prompt_hook_audit_status",
-    "write_debug_log",
-    "write_prompt_hook_audit_status",
-    "write_skip_telemetry",
-]
+__all__ = ["prompt_hook_audit_status", "write_debug_log", "write_prompt_hook_audit_status", "write_skip_telemetry"]
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
-PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
-PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4300"))
+PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "1.2"))
+PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "3500"))
 _RUNTIME_EXPORTS = set(
     "DEFAULT_SEARCH_BUDGET PROMPT_HOOK_SEMANTIC_TIMEOUT SCENT_THRESHOLD association_boost ambient_debug_summary apply_dream_delivery_boundary assess_prompt context_for_hook "
     "hook_input_from_stdin hook_stdout_payload merge_association_candidates "
@@ -92,7 +88,6 @@ def _load_runtime() -> dict[str, Any]:
         "public_hook_debug_payload": public_hook_debug_payload,
     }
     return _RUNTIME_CACHE
-
 
 def __getattr__(name: str) -> Any:
     if name in _RUNTIME_EXPORTS:
@@ -205,28 +200,39 @@ def main(argv: list[str] | None = None) -> int:
             max_dream_hypotheses=1,
             reason=str(dream_delivery["reason"]),
         )
+        can_write_final_diagnostics = _has_final_diagnostic_budget(
+            started=main_start,
+            max_elapsed_ms=args.max_elapsed_ms,
+        )
         try:
             # Diagnostic telemetry must never block Codex prompt submission.
-            write_skip_telemetry(
-                result,
-                hook_input=hook_input,
-                telemetry_path=Path(args.skip_telemetry_path) if args.skip_telemetry_path else None,
-                enabled=False if args.no_skip_telemetry else None,
-                hook_budget_ms=args.max_elapsed_ms,
-                semantic_timeout=args.semantic_timeout,
-                runtime_load_ms=runtime_load_ms,
-                hook_total_ms=round((time.perf_counter() - main_start) * 1000, 2),
-            )
+            if can_write_final_diagnostics:
+                telemetry_start = time.perf_counter()
+                write_skip_telemetry(
+                    result,
+                    hook_input=hook_input,
+                    telemetry_path=Path(args.skip_telemetry_path) if args.skip_telemetry_path else None,
+                    enabled=False if args.no_skip_telemetry else None,
+                    hook_budget_ms=args.max_elapsed_ms,
+                    semantic_timeout=args.semantic_timeout,
+                    runtime_load_ms=runtime_load_ms,
+                    hook_total_ms=round((time.perf_counter() - main_start) * 1000, 2),
+                    telemetry_write_ms=round((time.perf_counter() - telemetry_start) * 1000, 2),
+                )
         except Exception:
             if args.strict:
                 raise
             pass
         if not args.no_audit_status:
             try:
-                write_prompt_hook_audit_status(
-                    result,
-                    status_path=Path(args.audit_status_path) if args.audit_status_path else None,
-                )
+                if _has_final_diagnostic_budget(
+                    started=main_start,
+                    max_elapsed_ms=args.max_elapsed_ms,
+                ):
+                    write_prompt_hook_audit_status(
+                        result,
+                        status_path=Path(args.audit_status_path) if args.audit_status_path else None,
+                    )
             except Exception:
                 if args.strict:
                     raise

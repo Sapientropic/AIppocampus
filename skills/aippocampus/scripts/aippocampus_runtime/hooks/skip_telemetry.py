@@ -13,6 +13,7 @@ from typing import Any
 from aippocampus_runtime import core as runtime_core
 
 PROMPT_SKIP_TELEMETRY_ENV = "AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY"
+HOST_TIMEOUT_RISK_BUCKET = "gte_4300"
 
 
 def _flag_enabled(value: str | None, *, default: bool = True) -> bool:
@@ -73,6 +74,10 @@ def _default_skip_telemetry_path() -> Path:
     return runtime_core.aippocampus_registry_dir() / "aippocampus_prompt_hook_skip_telemetry.json"
 
 
+def default_skip_telemetry_path() -> Path:
+    return _default_skip_telemetry_path()
+
+
 def _load_skip_telemetry(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -81,6 +86,95 @@ def _load_skip_telemetry(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _bucket_count(container: Any, *keys: str) -> int:
+    current = container
+    for key in keys:
+        if not isinstance(current, dict):
+            return 0
+        current = current.get(key)
+    try:
+        return max(0, int(current or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def prompt_hook_latency_risk(
+    *,
+    telemetry_path: Path | None = None,
+    host_timeout_ms: int = 5000,
+    safe_internal_budget_ms: int = 3500,
+) -> dict[str, Any]:
+    """Project aggregate prompt-hook timeout risk without prompt/source content."""
+
+    path = telemetry_path or _default_skip_telemetry_path()
+    telemetry = _load_skip_telemetry(path)
+    if not telemetry:
+        return {
+            "kind": "aippocampus_prompt_hook_latency_risk",
+            "status": "no_aggregate_telemetry",
+            "telemetry_found": False,
+            "near_timeout_event_count": 0,
+            "repair_action": "",
+            "privacy_boundary": "aggregate_only_no_prompt_source_or_local_path",
+        }
+    latency = telemetry.get("latency_ms") or {}
+    buckets = latency.get("buckets") if isinstance(latency, dict) else {}
+    hook_elapsed_near = _bucket_count(buckets, "hook_elapsed", HOST_TIMEOUT_RISK_BUCKET)
+    hook_total_near = _bucket_count(buckets, "hook_total", HOST_TIMEOUT_RISK_BUCKET)
+    runtime_load_near = _bucket_count(buckets, "runtime_load", HOST_TIMEOUT_RISK_BUCKET)
+    startup_import_near = _bucket_count(buckets, "startup_import_io", HOST_TIMEOUT_RISK_BUCKET)
+    near_timeout_event_count = max(
+        hook_elapsed_near,
+        hook_total_near,
+        runtime_load_near,
+        startup_import_near,
+    )
+    budget_counts = telemetry.get("hook_budget_ms_counts")
+    high_budget_count = 0
+    if isinstance(budget_counts, dict):
+        for raw_budget, raw_count in budget_counts.items():
+            try:
+                budget = int(float(str(raw_budget)))
+                count = int(raw_count or 0)
+            except (TypeError, ValueError):
+                continue
+            if budget >= 4300:
+                high_budget_count += max(0, count)
+    status = (
+        "near_host_timeout_risk"
+        if near_timeout_event_count > 0 or high_budget_count > 0
+        else "within_safe_margin"
+    )
+    return {
+        "kind": "aippocampus_prompt_hook_latency_risk",
+        "status": status,
+        "telemetry_found": True,
+        "total_events": int(telemetry.get("total_events") or 0),
+        "near_timeout_event_count": near_timeout_event_count,
+        "high_internal_budget_event_count": high_budget_count,
+        "host_timeout_ms": int(host_timeout_ms),
+        "safe_internal_budget_ms": int(safe_internal_budget_ms),
+        "latency_bucket_counts": {
+            "hook_elapsed_gte_4300": hook_elapsed_near,
+            "hook_total_gte_4300": hook_total_near,
+            "runtime_load_gte_4300": runtime_load_near,
+            "startup_import_io_gte_4300": startup_import_near,
+        },
+        "last": dict(latency.get("last") or {}) if isinstance(latency, dict) else {},
+        "repair_action": (
+            "aippocampus hooks prompt install --json"
+            if status == "near_host_timeout_risk"
+            else ""
+        ),
+        "diagnostic_action": "aippocampus hooks prompt status --last --json",
+        "privacy_boundary": "aggregate_only_no_prompt_source_or_local_path",
+        "cannot_claim": [
+            "raw_prompt_or_source_text",
+            "single_latest_run_proves_host_safety",
+        ],
+    }
 
 
 def _try_claim_telemetry_lock(path: Path) -> int | None:
@@ -128,6 +222,7 @@ def write_skip_telemetry(
     semantic_timeout: float | None = None,
     runtime_load_ms: float | None = None,
     hook_total_ms: float | None = None,
+    telemetry_write_ms: float | None = None,
 ) -> None:
     """Update local aggregate skip telemetry without logging prompt text."""
     del hook_input
@@ -153,6 +248,7 @@ def write_skip_telemetry(
             semantic_timeout=semantic_timeout,
             runtime_load_ms=runtime_load_ms,
             hook_total_ms=hook_total_ms,
+            telemetry_write_ms=telemetry_write_ms,
         )
     except OSError:
         return
@@ -168,6 +264,7 @@ def _write_skip_telemetry_locked(
     semantic_timeout: float | None,
     runtime_load_ms: float | None,
     hook_total_ms: float | None,
+    telemetry_write_ms: float | None,
 ) -> None:
     telemetry = _load_skip_telemetry(path)
     telemetry.setdefault("schema_version", 1)
@@ -217,6 +314,7 @@ def _write_skip_telemetry_locked(
         "hook_elapsed": result.get("elapsed_ms"),
         "hook_total": hook_total_ms,
         "runtime_load": runtime_load_ms,
+        "telemetry_write": telemetry_write_ms,
         "startup_import_io": max(0.0, float(hook_total_ms or 0.0) - float(result.get("elapsed_ms") or 0.0))
         if hook_total_ms is not None
         else 0.0,

@@ -579,13 +579,17 @@ like fresh source-backed evidence.
 
 Foreground `UserPromptSubmit` must remain below the host hook timeout. The
 installer keeps the Codex hook timeout at 5s and installs
-`--max-elapsed-ms 4300 --semantic-timeout 2.5` by default so the Python process
-can fail open before Codex hard-kills it. If the app reports
-`hook timed out after 5s`, first run `diagnose_hooks.py --events
-UserPromptSubmit --json` and check whether the installed command still carries
-those budget flags. A missing prompt-hook debug log is not proof that nothing
-happened: when the host kills the process at 5s, the hook may never reach its
-sanitized logging path.
+`--max-elapsed-ms 3500 --semantic-timeout 1.2` by default. The gap is
+intentional: Python startup, imports, stdout, telemetry/status writes, Windows
+scheduling, and host jitter need room after the recall work decides to
+fail-open. If the app reports `hook timed out after 5s`, first run
+`diagnose_hooks.py --events UserPromptSubmit --json`, then
+`aippocampus hooks prompt status --last --json`. The latter reads aggregate
+skip telemetry and should surface `near_host_timeout_risk` with a prompt-hook
+reinstall action when old 4.3s budgets or repeated near-timeout runs are still
+present. A missing prompt-hook debug log is not proof that nothing happened:
+when the host kills the process at 5s, the hook may never reach its sanitized
+logging path.
 
 Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
 Deterministic mode is CI-safe and now runs 13 synthetic trace cases behind

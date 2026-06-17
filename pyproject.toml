@@ -182,6 +182,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_prompt.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/lifecycle.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/skip_telemetry.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/provider_bridge.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/checkpoint.py",
