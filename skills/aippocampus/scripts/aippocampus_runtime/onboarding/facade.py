@@ -364,6 +364,84 @@ def public_provider_status_report(report: dict, *, include_private_paths: bool =
     return public
 
 
+def compact_provider_status_card(report: dict) -> dict:
+    """Return the default foreground setup chooser for auto onboarding.
+
+    Operator status owns provider inventories, storage fallbacks, and legacy
+    aliases. The ordinary auto-status JSON should answer only: what can be
+    previewed now, what provider states matter, and where to go for detail.
+    """
+
+    data = report.get("data") or {}
+    provider_scope = str(data.get("provider_scope") or "auto")
+    primary = dict(data.get("primary_next_action") or report.get("primary_next_action") or {})
+    provider_summary = []
+    for item in data.get("providers") or []:
+        state = _frontstage_state_label(item)
+        provider = {
+            "provider": item.get("provider"),
+            "state": state,
+            "frontstage_state": state,
+            "detected": bool(item.get("detected")),
+        }
+        if item.get("transcript_count_label") is not None:
+            provider["transcript_count_label"] = item.get("transcript_count_label")
+        if item.get("scan_status") == "partial_frontstage_sample":
+            provider["scan_status"] = "partial_frontstage_sample"
+        if item.get("requires"):
+            provider["requires"] = list(item.get("requires") or [])
+        provider_summary.append(provider)
+
+    primary_action = {
+        key: primary[key]
+        for key in (
+            "provider",
+            "code",
+            "decision",
+            "command",
+            "command_template",
+            "requires",
+            "broad_scan_boundary",
+        )
+        if primary.get(key) not in (None, "", [])
+    }
+    primary_action.setdefault("id", str(primary_action.get("code") or "preview_registration"))
+    primary_action["mutation_risk"] = "read_only"
+    primary_action["claim_boundary"] = "setup_status_not_source_evidence"
+    if primary_action.get("command_template"):
+        primary_action["template_only"] = True
+
+    status = "no_provider_available"
+    if primary.get("code") == "preview_current_project_registration":
+        status = "registration_available_after_consent"
+    elif primary.get("code") == "import_conversation_preview":
+        status = "explicit_file_import_requires_input"
+    elif primary.get("code") == "search_existing_registered_memory":
+        status = "existing_registry_search_available"
+
+    return {
+        "kind": "aippocampus_onboard_status_card",
+        "ok": bool(report.get("ok", True)),
+        "status": status,
+        "surface_class": "foreground_chooser_card",
+        "read_only": True,
+        "provider_scope": provider_scope,
+        "decision": primary.get("decision"),
+        "primary_next_action": primary_action,
+        "agent_next_action": primary_action,
+        "provider_summary": provider_summary,
+        "operator_detail_command": (
+            f"aippocampus onboard --provider {provider_scope} --status --operator-json"
+        ),
+        "write_boundary": {
+            "written": False,
+            "no_write_happened": True,
+            "explicit_write_required": True,
+        },
+        "output_boundary": "compact_setup_card_no_operator_inventory",
+    }
+
+
 def _frontstage_state_label(item: dict) -> str:
     return _frontstage_state_from_machine_state(
         str(item.get("frontstage_state") or item.get("state") or "")
@@ -491,7 +569,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             or known.format == "json"
         )
         if wants_json:
-            print(json.dumps(public_report, ensure_ascii=False, indent=2))
+            output = (
+                compact_provider_status_card(public_report)
+                if not detailed
+                and (public_report.get("data") or {}).get("provider_scope") == "auto"
+                else public_report
+            )
+            print(json.dumps(output, ensure_ascii=False, indent=2))
         else:
             print(render_status_text(public_report))
         return 0
