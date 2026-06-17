@@ -419,6 +419,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     payload["last_recall_cache_available"] = cache_written
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload["query"] = query
         payload = compact_agent_recall_payload(payload)
     else:
         payload = {"detail": "full", **payload}

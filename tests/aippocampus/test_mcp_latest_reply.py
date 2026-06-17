@@ -107,7 +107,10 @@ class McpLatestReplyTests(unittest.TestCase):
                         {
                             "timestamp": "2026-06-16T00:00:00Z",
                             "type": "event_msg",
-                            "payload": {"type": "user_message", "message": "hi"},
+                            "payload": {
+                                "type": "user_message",
+                                "message": "finish recovery command card",
+                            },
                         }
                     ),
                     json.dumps(
@@ -133,8 +136,11 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertTrue(payload["not_final_closeout"])
         self.assertNotIn(commentary_text, encoded)
         self.assertNotIn("preview", payload["message"])
-        self.assertEqual(payload["safe_next_actions"][0]["requires"], ["cue"])
-        self.assertIn("agent recall", payload["safe_next_actions"][0]["command_template"])
+        self.assertEqual(
+            payload["safe_next_actions"][0]["command"],
+            'aippocampus agent recall "finish recovery command card" --json',
+        )
+        self.assertNotIn("command_template", payload["safe_next_actions"][0])
         self.assertNotIn("latest closeout or current handoff", encoded)
 
     def test_latest_reply_mcp_no_rollout_returns_recovery_card(self) -> None:

@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity  # noqa: E402
 
 
@@ -22,6 +23,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                 "schema_version": "agent-continuity-path-v1",
                 "mode": "recall",
                 "status": "ok",
+                "query": "dashboard mobile continuity state",
                 "opt_in_required": False,
                 "last_recall_cache_available": True,
                 "foreground_action_card": {
@@ -69,7 +71,14 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         action = public["foreground_action"]
         self.assertEqual(action["action_id"], "refine_low_specificity_recall_cue")
         self.assertEqual(action["tool_name"], "agent_recall")
-        self.assertEqual(action["requires"], ["tighter_cue"])
+        self.assertEqual(action["arguments"]["query"], "dashboard mobile continuity state")
+        self.assertEqual(
+            action["cli_command"],
+            'aippocampus agent recall "dashboard mobile continuity state" --json',
+        )
+        self.assertNotIn("requires", action)
+        self.assertNotIn("cli_command_template", action)
+        self.assertEqual(action["tighter_cue_template"]["requires"], ["tighter_cue"])
         self.assertEqual(action["route_label_specificity_floor"], 0.0)
         self.assertEqual(action["topic_label_present_count"], 0)
         self.assertIn("tighter cue", action["why"])
@@ -148,6 +157,65 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotEqual(action["action_id"], "refine_low_specificity_recall_cue")
         self.assertNotIn("secondary_action", action)
         self.assertIn("topic_roadmap_closeout", public["routes"][0]["choice_reason"])
+
+    def test_recovery_actions_fill_known_recall_query_commands(self) -> None:
+        no_route = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "no_routes",
+                "memory_packets": [],
+                "foreground_action_card": {},
+            },
+            query="unlikely-no-match-token-xyz-12345",
+        )
+        weak_route = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "foreground_action_card": {
+                    "canonical_action": {"action_id": "continue_normally", "arguments": {}}
+                },
+                "memory_packets": [{"route_id": "route_weak", "route_kind": "direction_only"}],
+                "deepen_requests": [],
+            },
+            query="broad direction route",
+        )
+        self.assertEqual(no_route["foreground_action"]["cli_command"], 'aippocampus search "unlikely-no-match-token-xyz-12345" --json')
+        self.assertEqual(weak_route["foreground_action"]["cli_command"], 'aippocampus search "broad direction route" --json')
+        self.assertEqual(executable_command_violations(no_route), [])
+        self.assertEqual(executable_command_violations(weak_route), [])
+
+    def test_missing_cache_recovery_uses_known_query_not_same_cue_placeholder(self) -> None:
+        projected = agent_continuity.public_recall_projection(
+            {
+                "kind": agent_continuity.KIND,
+                "schema_version": agent_continuity.SCHEMA_VERSION,
+                "mode": "recall",
+                "status": "ok",
+                "last_recall_cache_available": False,
+                "foreground_action_card": {
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "cli_command": "aippocampus agent deepen --request 1 --last-recall --json",
+                    }
+                },
+                "memory_packets": [{"route_id": "route_missing_cache", "output_mode": "reopenable_route"}],
+            },
+            query="missing cache source cue",
+        )
+        encoded = json.dumps(projected, ensure_ascii=False)
+        self.assertNotIn("<same cue>", encoded)
+        self.assertEqual(
+            projected["foreground_action"]["cli_command"],
+            'aippocampus agent recall "missing cache source cue" --json --detail full',
+        )
+        self.assertEqual(executable_command_violations(projected), [])
 
 
 if __name__ == "__main__":

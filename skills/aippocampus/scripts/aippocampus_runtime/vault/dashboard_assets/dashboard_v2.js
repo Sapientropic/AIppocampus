@@ -62,7 +62,7 @@
   }
 
   const generatedBodyAllowedTags = new Set([
-    "a", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6",
+    "a", "blockquote", "br", "code", "dd", "div", "dl", "dt", "em", "h1", "h2", "h3", "h4", "h5", "h6",
     "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"
   ]);
   const generatedBodyGlobalAttrs = new Set([

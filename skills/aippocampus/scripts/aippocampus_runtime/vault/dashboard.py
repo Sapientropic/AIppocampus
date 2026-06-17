@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.vault.utils import DEFAULT_SITE_TITLE
 
 _DASHBOARD_ASSET_DIR = Path(__file__).with_name("dashboard_assets")
@@ -19,7 +20,10 @@ _BODY_NODE_ALLOWED_TAGS = {
     "blockquote",
     "br",
     "code",
+    "dd",
     "div",
+    "dl",
+    "dt",
     "em",
     "h1",
     "h2",
@@ -255,6 +259,56 @@ def dashboard_graph_data(anchors: list[dict]) -> dict:
     return {"nodes": nodes, "edges": edges, "root": "now"}
 
 
+def _first_action_command(action: Any) -> str:
+    if not isinstance(action, dict):
+        return ""
+    for key in ("command", "cli_command", "next_command"):
+        value = str(action.get(key) or "").strip()
+        if value:
+            return value
+    for key in ("before_exact_latest_claims", "when_idle", "primary"):
+        nested = _first_action_command(action.get(key))
+        if nested:
+            return nested
+    return ""
+
+
+def _health_bool(value: Any) -> str:
+    return "true" if bool(value) else "false"
+
+
+def _foreground_health_card_html(health: dict) -> str:
+    card = compact_health_payload(health)
+    raw_action = card.get("foreground_action")
+    action: dict[str, Any] = raw_action if isinstance(raw_action, dict) else {}
+    command = _first_action_command(action) or str(
+        card.get("operator_detail_command") or "aippocampus health --detail full --json"
+    )
+    action_id = str(action.get("id") or action.get("action_id") or "open_health_detail")
+    boundary = str(
+        action.get("claim_boundary")
+        or card.get("output_boundary")
+        or "health_status_is_a_decision_card_not_source_truth"
+    )
+    return "\n".join(
+        [
+            "<div class='foreground-action-card' data-card='memory-health-foreground'>",
+            "  <div class='foreground-action-kicker'>Foreground action</div>",
+            "  <h2 id='前台动作' data-heading='前台动作'>前台动作</h2>",
+            "  <dl class='foreground-health-fields'>",
+            f"    <div><dt>status</dt><dd>{html.escape(str(card.get('status') or 'unknown'))}</dd></div>",
+            f"    <div><dt>ordinary_first_recall_usable</dt><dd>{_health_bool(card.get('ordinary_first_recall_usable'))}</dd></div>",
+            f"    <div><dt>blocks_first_recall</dt><dd>{_health_bool(card.get('blocks_first_recall'))}</dd></div>",
+            f"    <div><dt>blocks_exact_latest_claims</dt><dd>{_health_bool(card.get('blocks_exact_latest_claims'))}</dd></div>",
+            "  </dl>",
+            f"  <p class='foreground-action-label'>{html.escape(action_id)}</p>",
+            f"  <p class='foreground-action-command'><code>{html.escape(command)}</code></p>",
+            f"  <p class='foreground-action-boundary'>{html.escape(boundary)}</p>",
+            "</div>",
+        ]
+    )
+
+
 def dashboard_pane_data_v2(
     health: dict,
     anchors: list[dict],
@@ -267,6 +321,7 @@ def dashboard_pane_data_v2(
     anchor_count = html.escape(str(health.get("anchors", {}).get("count", 0)))
     checkpoint_state_text = "需要巩固" if health.get("checkpoint", {}).get("due") else "已巩固"
     graphify_state = "需要刷新" if health.get("graphify", {}).get("stale") else "已同步"
+    foreground_health_card = _foreground_health_card_html(health)
 
     anchor_links = (
         "".join(
@@ -283,9 +338,10 @@ def dashboard_pane_data_v2(
     pages: dict[str, dict[str, Any]] = {
         "now": {
             "title": "现在",
-            "outline": ["从这里进入", "现在在追的线索", "建议的走法"],
+            "outline": ["前台动作", "从这里进入", "现在在追的线索", "建议的走法"],
             "body": "\n".join(
                 [
+                    foreground_health_card,
                     "<div class='callout' data-callout='noteinfo'>",
                     "  <div class='callout-title'><div class='callout-icon'>↗</div><div class='callout-title-inner'>Noteinfo</div></div>",
                     "  <div class='callout-content'>",
@@ -316,9 +372,10 @@ def dashboard_pane_data_v2(
         },
         "health": {
             "title": "记忆健康",
-            "outline": ["状态", "索引"],
+            "outline": ["前台动作", "状态", "索引"],
             "body": "\n".join(
                 [
+                    foreground_health_card,
                     "<h2 id='状态' data-heading='状态'>状态</h2>",
                     "<ul class='status-list'>",
                     f"<li>状态：{html.escape(status)}</li>",

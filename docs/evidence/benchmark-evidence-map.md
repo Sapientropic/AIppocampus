@@ -1429,6 +1429,13 @@ pasting raw JSON into multiple docs.
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_recall_navigation_promotion.py`
 - **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/recall-navigation-comparison-2026-06-03.md`, #1302, #1185, #1300, #1301
 
+### Dashboard viewport reachability smoke
+
+- **Entrypoint:** `tools/aippocampus/smoke/dashboard_mobile_viewports.py`
+- **Primary evidence owner:** #2169, #2170; captures the vault dashboard at
+  390x844, 760x844, and 1278x900 for foreground-card reachability, not memory
+  quality claims.
+
 ### Default-hook recall usefulness four-arm benchmark
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_default_hook_recall_usefulness.py` and `tests/aippocampus/test_benchmark_default_hook_recall_usefulness.py`

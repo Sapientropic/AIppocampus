@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import command_value_needs_input
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -77,6 +79,7 @@ def with_low_specificity_foreground_action(
     action: dict[str, Any],
     *,
     metrics: dict[str, Any],
+    cue: str | None = None,
 ) -> dict[str, Any]:
     secondary = dict(action)
     secondary["original_action_id"] = secondary.get("action_id")
@@ -89,12 +92,14 @@ def with_low_specificity_foreground_action(
     next_action = {
         "action_id": "refine_low_specificity_recall_cue",
         "tool_name": "agent_recall",
-        "arguments_template": {"query": "{tighter_cue}", "max": 3},
-        "requires": ["tighter_cue"],
-        "template_only": True,
-        "cli_command_template": 'aippocampus agent recall "{tighter_cue}" --json',
         "secondary_action": {
             key: value for key, value in secondary.items() if value not in (None, "", [])
+        },
+        "tighter_cue_template": {
+            "arguments_template": {"query": "{tighter_cue}", "max": 3},
+            "requires": ["tighter_cue"],
+            "template_only": True,
+            "cli_command_template": 'aippocampus agent recall "{tighter_cue}" --json',
         },
         "route_choice_posture": "labels_low_specificity",
         "route_label_specificity_floor": _metric_float(
@@ -109,4 +114,13 @@ def with_low_specificity_foreground_action(
         ),
         "claim_boundary": "no_claim_before_reopen",
     }
+    clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    if clean_cue and not command_value_needs_input(clean_cue):
+        next_action["arguments"] = {"query": clean_cue, "max": 3}
+        next_action["cli_command"] = (
+            f"aippocampus agent recall {json.dumps(clean_cue, ensure_ascii=False)} --json"
+        )
+        next_action["same_cue_fallback"] = "low_confidence_not_a_substitute_for_tighter_cue"
+    else:
+        next_action.update(next_action["tighter_cue_template"])
     return {key: value for key, value in next_action.items() if value not in (None, "", [])}

@@ -515,6 +515,27 @@ def route_deepen_action(request_index: int, *, low_confidence: bool = False) -> 
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Project agent_recall into one foreground action plus compact route receipts."""
 
+    recovery_cue = str(
+        redact_sensitive_values(
+            redact_private_paths(str(payload.get("query") or payload.get("intent") or payload.get("cue") or "").strip())
+        )
+        or ""
+    ).strip()
+    if command_value_needs_input(recovery_cue):
+        recovery_cue = ""
+    search_fields = (
+        {
+            "arguments": {"query": recovery_cue, "max": 5},
+            "cli_command": f"aippocampus search {json.dumps(recovery_cue, ensure_ascii=False)} --json",
+        }
+        if recovery_cue
+        else {
+            "arguments_template": {"query": "{exact_phrase}", "max": 5},
+            "requires": ["exact_phrase"],
+            "template_only": True,
+            "cli_command_template": 'aippocampus search "{exact_phrase}" --json',
+        }
+    )
     memory_packets = [
         packet for packet in payload.get("memory_packets") or [] if isinstance(packet, dict)
     ]
@@ -579,35 +600,22 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         foreground_action = {
             "action_id": "recover_recall_miss",
             "tool_name": "search_memory",
-            "arguments_template": {
-                "query": "{exact_phrase}",
-                "max": 5,
-            },
-            "requires": ["exact_phrase"],
-            "template_only": True,
-            "cli_command_template": 'aippocampus search "{exact_phrase}" --json',
             "why": "No route surfaced; try exact source-backed search or check onboarding/index freshness.",
             "claim_boundary": "no_route_claim",
-        }
+        } | search_fields
     elif foreground_action.get("action_id") == "continue_normally":
         weak_route_recovery_card = _weak_route_recovery_card()
         foreground_action = {
             "action_id": "recover_weak_route",
             "tool_name": "search_memory",
-            "arguments_template": {
-                "query": "{more_specific_cue_or_exact_phrase}",
-                "max": 5,
-            },
-            "requires": ["more_specific_cue_or_exact_phrase"],
-            "template_only": True,
-            "cli_command_template": 'aippocampus search "{exact_phrase}" --json',
             "why": "A route surfaced without a safe deepen action; refine or exact-search before relying on it.",
             "claim_boundary": "no_claim_before_reopen",
-        }
+        } | search_fields
     elif labels_low_specificity and foreground_action.get("tool_name") == "agent_deepen":
         foreground_action = recall_choices.with_low_specificity_foreground_action(
             foreground_action,
             metrics=metrics,
+            cue=recovery_cue,
         )
     result = {
         "detail": "compact",

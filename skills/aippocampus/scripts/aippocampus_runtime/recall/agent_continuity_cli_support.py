@@ -13,6 +13,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo_working_contract
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
+    command_value_needs_input,
     foreground_recovery_card,
     foreground_shell_action,
     foreground_template_action,
@@ -203,15 +204,26 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
     }
 
 
-def last_recall_cache_recovery_fields(mode: str) -> dict[str, Any]:
+def last_recall_cache_recovery_fields(mode: str, *, cue: str | None = None) -> dict[str, Any]:
     del mode
-    action = _recall_with_cue_action(
-        label="Rerun agent recall with full detail",
-        why="The last-recall cache was unavailable; rerun recall for a fresh route.",
-    ) | {
-        "id": "recall_with_cue_full_detail",
-        "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
-    }
+    clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    if clean_cue and not command_value_needs_input(clean_cue):
+        action = foreground_shell_action(
+            action_id="recall_with_cue_full_detail",
+            label="Rerun agent recall with full detail",
+            command=f"aippocampus agent recall {json.dumps(clean_cue, ensure_ascii=False)} --json --detail full",
+            why="The last-recall cache was unavailable; rerun recall for a fresh route.",
+            mutation_risk="read_only",
+            claim_boundary="no_claim_before_reopen",
+        )
+    else:
+        action = _recall_with_cue_action(
+            label="Rerun agent recall with full detail",
+            why="The last-recall cache was unavailable; rerun recall for a fresh route.",
+        ) | {
+            "id": "recall_with_cue_full_detail",
+            "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
+        }
     return {
         "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "foreground_action": action,
@@ -513,7 +525,7 @@ def missing_feedback_route_payload(
     )
 
 
-def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
+def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = None) -> dict[str, Any]:
     """Return compact recall JSON suitable for issue/discussion/log paste.
 
     Plain ``--json`` stays the local diagnostic surface with private reopen
@@ -523,6 +535,7 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     """
 
     source = dict(payload)
+    source["query"] = query if query is not None else source.get("query")
     source.update(handle_boundary_fields())
     projected = compact_agent_recall_payload(source)
     projected.update(handle_boundary_fields())
@@ -538,24 +551,42 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
         action_map.get("cli_command") or ""
     )
     if not cache_available and advertises_last_recall:
-        projected["foreground_action"] = {
+        recovery_cue = str(
+            redact_sensitive_values(redact_private_paths(str(source.get("query") or "").strip()))
+            or ""
+        )
+        if command_value_needs_input(recovery_cue):
+            recovery_cue = ""
+        repair_action: dict[str, Any] = {
             "action_id": "repair_last_recall_cache",
             "tool_name": "agent_recall",
-            "arguments": {"query": "<same cue>", "detail": "full"},
-            "cli_command": 'aippocampus agent recall "<same cue>" --json --detail full',
             "why": (
                 "Recall found route-shaped context, but the same-machine request cache was "
                 "not written, so request-index deepen is not available from compact output."
             ),
             "claim_boundary": "no_claim_before_reopen",
         }
+        if recovery_cue:
+            repair_action.update(
+                {
+                    "arguments": {"query": recovery_cue, "detail": "full"},
+                    "cli_command": f"aippocampus agent recall {json.dumps(recovery_cue, ensure_ascii=False)} --json --detail full",
+                }
+            )
+        else:
+            repair_action.update(
+                {
+                    "arguments_template": {"query": "{cue}", "detail": "full"},
+                    "requires": ["cue"],
+                    "template_only": True,
+                    "cli_command_template": 'aippocampus agent recall "{cue}" --json --detail full',
+                }
+            )
+        projected["foreground_action"] = repair_action
         projected["last_recall_cache_recovery_card"] = {
             "status": "cache_unavailable",
             "primary_action": "rerun_recall_or_use_full_local_diagnostics",
-            "safe_actions": [
-                'aippocampus agent recall "<same cue>" --json',
-                'aippocampus agent recall "<same cue>" --json --detail full',
-            ],
+            "safe_actions": [repair_action],
             "boundary": "full detail may expose local-private handles; keep it local",
         }
     return projected
