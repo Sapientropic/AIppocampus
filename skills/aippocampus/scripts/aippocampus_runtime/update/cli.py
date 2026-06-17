@@ -19,6 +19,7 @@ from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, in
 from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update import status_actions as update_actions
+from aippocampus_runtime.update import status_foreground
 from aippocampus_runtime.update.agent_callable import (
     command_availability,
     default_host_probe_report_path,
@@ -1521,8 +1522,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
-    wants_recovery_json = (
-        "--agent-json" in raw_argv or "--json" in raw_argv or "--operator-json" in raw_argv
+    wants_recovery_json = any(
+        flag in raw_argv for flag in ("--agent-json", "--json", "--operator-json")
     )
     filtered = [
         item for item in raw_argv if item not in {"--agent-json", "--json", "--operator-json"}
@@ -1538,11 +1539,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if filtered[0] in {"check", "dry-run"}:
         code = "update_status_alias" if filtered[0] == "check" else "update_plan_alias"
-        command = (
-            "aippocampus update status --json"
-            if filtered[0] == "check"
-            else "aippocampus update plan --json"
-        )
+        command = "aippocampus update status --json"
+        if filtered[0] != "check":
+            command = "aippocampus update plan --json"
         return _emit_update_recovery(
             _update_recovery_payload(
                 code=code,
@@ -1556,6 +1555,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.action == "apply":
             report = apply_update(args)
+        elif args.action == "status" and args.agent_json and not args.operator_json:
+            report = status_foreground.build_partial_status(args, mode=args.action, cli_helpers=globals())
         else:
             report = build_status(args, mode=args.action)
     except Exception as exc:

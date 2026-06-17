@@ -393,7 +393,9 @@ the documented baseline before running source-checkout verification.
 - Dependency ownership:
   [Dependency Contract](docs/guides/setup/dependency-contract.md).
 - MCP, plugin, sync, and object-storage details:
-  [docs/README.md](docs/README.md).
+  [docs/README.md](docs/README.md). For sync, start with the
+  [Sync Decision Card](docs/guides/install-guide.md#sync-decision-card)
+  before local-folder or object-storage command matrices.
 
 For repository contributors, the dev extra install path is:
 
@@ -418,7 +420,9 @@ AIppocampus is local-first.
   should be treated as private history.
 - External-model routes are optional and should use redaction safeguards.
 - Raw rollout sync should stay explicit and must be encrypted before use with
-  untrusted multi-device sync.
+  untrusted multi-device sync. Start with the read-only
+  [Sync Decision Card](docs/guides/install-guide.md#sync-decision-card) before
+  choosing push, pull, repair, or object storage.
 - Do not commit personal rollouts, `.aippocampus/` outputs, registry data, API
   keys, cookies, tokens, or private vault exports.
 

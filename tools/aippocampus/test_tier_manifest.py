@@ -62,6 +62,7 @@ PR_STEMS = frozenset(
         "test_semantic_candidate_context_bridge_effectiveness",
         "test_source_shape_projection",
         "test_successor_evidence",
+        "test_update_agent_status",
         "test_yi_macro_runtime_interfaces",
     }
 )
@@ -433,6 +434,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_thread_story_packet",
         "test_time_driven_maintenance",
         "test_topology_anchor_policy",
+        "test_update_agent_status",
         "test_update_foreground_actions",
         "test_update_sync",
         "test_vault_dashboard_assets",
@@ -742,6 +744,7 @@ TAG_OVERRIDES = {
     "test_simulate_prompt_hook": ("hook",),
     "test_stage_0_5_smoke": ("release", "slow"),
     "test_sync_bundle": ("sync", "filesystem"),
+    "test_update_agent_status": ("install", "packaging"),
     "test_update_foreground_actions": ("install", "hook", "packaging"),
     "test_update_sync": ("install", "filesystem", "hook", "packaging"),
     "test_wheel_contract_release": ("release", "packaging"),

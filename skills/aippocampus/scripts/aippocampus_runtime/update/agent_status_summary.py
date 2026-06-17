@@ -47,6 +47,9 @@ def compact_agent_status_report(
     schema_version: int,
 ) -> dict[str, Any]:
     summary = report.get("summary") or report.get("post_status") or {}
+    foreground_partial = bool(
+        summary.get("partial_readiness") or summary.get("plan_scope") == "foreground_partial"
+    )
     surfaces = report.get("surfaces") or {}
     if not surfaces:
         surfaces = {
@@ -58,6 +61,7 @@ def compact_agent_status_report(
     conformance = surfaces.get("host_conformance") or {}
     plugin = surfaces.get("plugin") or {}
     hooks = surfaces.get("hooks") or {}
+    llm = surfaces.get("llm") or {}
     action_hints = hooks.get("action_hints") if isinstance(hooks, dict) else {}
     if not isinstance(action_hints, dict):
         action_hints = {}
@@ -84,8 +88,41 @@ def compact_agent_status_report(
         action_hints.get("next_command")
         or action_hint_recommended_actions[0]["command"]
     )
+    deferred_components = []
+    for name, item in surfaces.items():
+        if not isinstance(item, dict) or not item.get("operator_detail_available"):
+            continue
+        deferred_components.append(
+            {
+                "id": str(item.get("deferred_component") or name),
+                "status": str(item.get("status") or "not_checked"),
+                "reason": compact_text(str(item.get("reason") or "slow check deferred"), 180),
+                "operator_detail_command": "aippocampus update status --operator-json",
+            }
+        )
+    if (
+        llm.get("visible_in_current_process") is True
+        and llm.get("visible_in_child_process") is None
+        and not any(item["id"] == "llm_child_process" for item in deferred_components)
+    ):
+        deferred_components.append(
+            {
+                "id": "llm_child_process",
+                "status": "not_checked",
+                "reason": "child-process provider-key inheritance not checked",
+                "operator_detail_command": "aippocampus update status --operator-json",
+            }
+        )
     actions: list[dict[str, Any]] = []
-    if not action_hints_ready:
+    if deferred_components:
+        actions.append(
+            _compact_update_action(
+                surface="operator_detail",
+                reason="full operator readiness sweep deferred",
+                command="aippocampus update status --operator-json",
+            )
+        )
+    if not action_hints_ready and not foreground_partial:
         actions.append(
             _compact_update_action(
                 surface="action_hints",
@@ -191,12 +228,23 @@ def compact_agent_status_report(
             "dirty_worktree_guards": summary.get("dirty_worktree_guards") or {},
             "plan_surface_filter": summary.get("plan_surface_filter") or [],
             "plan_scope": summary.get("plan_scope") or "all_surfaces",
+            "partial_readiness": bool(deferred_components),
+            "deferred_components": [item["id"] for item in deferred_components],
             "foreground_actions": [
                 str(card.get("id") or "")
                 for card in foreground_cards
                 if str(card.get("id") or "")
             ],
             "needs_action": needs_action,
+        },
+        "partial_readiness": {
+            "status": "partial" if deferred_components else "complete",
+            "deferred_components": deferred_components,
+            "operator_detail_command": "aippocampus update status --operator-json",
+            "claim_boundary": (
+                "partial foreground status can guide safe next action but is not "
+                "release-grade or exact latest readiness"
+            ),
         },
         "foreground_status_cards": foreground_cards,
         "action_hints": {

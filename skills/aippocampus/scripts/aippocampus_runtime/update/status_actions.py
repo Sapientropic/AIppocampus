@@ -259,7 +259,21 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
     action_hints = hooks.get("action_hints") if isinstance(hooks, dict) else {}
     if not isinstance(action_hints, dict):
         action_hints = {}
+    foreground_partial = bool(
+        summary.get("partial_readiness") or summary.get("plan_scope") == "foreground_partial"
+    )
     cards: list[dict[str, Any]] = []
+    if foreground_partial:
+        cards.append(
+            {
+                "id": "partial_readiness",
+                "status": "slow_checks_deferred",
+                "why": "Foreground status skipped operator freshness sweeps and should not be treated as release-grade readiness.",
+                "command": "aippocampus update status --operator-json",
+                "deferred_components": summary.get("deferred_components") or [],
+                "mutation_risk": "read_only",
+            }
+        )
     if bool(summary.get("agent_callable_host_ready")) and not bool(
         summary.get("agent_callable_ready")
     ):
@@ -333,7 +347,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
-    if not action_hints_ready:
+    if not action_hints_ready and not foreground_partial:
         installed = bool(action_hints.get("installed"))
         cards.append(
             {
@@ -352,7 +366,11 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "recommended_next_actions": action_hint_recommended_actions(),
             }
         )
-    if not bool(summary.get("core_ready")) and summary.get("core_blockers"):
+    if (
+        not foreground_partial
+        and not bool(summary.get("core_ready"))
+        and summary.get("core_blockers")
+    ):
         blocker = str((summary.get("core_blockers") or ["skill"])[0])
         dirty_guards = summary.get("dirty_worktree_guards") or {}
         dirty_guard = dirty_guards.get(blocker) if isinstance(dirty_guards, dict) else None
