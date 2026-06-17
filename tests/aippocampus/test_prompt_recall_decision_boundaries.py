@@ -720,7 +720,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         )
         self.assertIn("AIppocampus: prior context may matter.", context)
         self.assertIn(
-            "Next: call agent_deepen when a handle is present; otherwise call agent_recall first.",
+            "Next: call agent_deepen when a selected route is available; otherwise call agent_recall first.",
             context,
         )
         self.assertNotIn("Source-required recall route", context)

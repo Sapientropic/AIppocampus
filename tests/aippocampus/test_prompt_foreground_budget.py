@@ -287,7 +287,7 @@ class PromptForegroundBudgetTests(unittest.TestCase):
         self.assertLessEqual(len(context), 650)
         self.assertIn("AIppocampus: prior context may matter.", context)
         self.assertIn(
-            "Next: call agent_deepen when a handle is present; otherwise call agent_recall first.",
+            "Next: call agent_deepen when a selected route is available; otherwise call agent_recall first.",
             context,
         )
         self.assertIn("Small hippocampus smoke route", context)

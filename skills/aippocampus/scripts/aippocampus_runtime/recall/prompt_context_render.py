@@ -740,6 +740,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         lines.append(
             "Ambient recall private context (agent guidance; source use follows action grammar):"
         )
+        lines.append("Layers: Memory atmosphere; Working continuity brief; Source court.")
         layered_cards: dict[str, list[str]] = {
             "memory_atmosphere": [],
             "working_continuity_brief": [],
@@ -785,8 +786,13 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             evidence_line = ""
             if support == "evidence" and card.get("key_line"):
                 evidence_line = f" Evidence: {compact_text(str(card.get('key_line') or ''), 180)}"
+            action_path = (
+                f"{visibility}/{support}/{action}"
+                if trust == support
+                else f"{visibility}/{support}/{trust}/{action}"
+            )
             layered_cards[_ambient_brief_layer(action)].append(
-                f"- {provenance_note} {visibility}/{support}/{trust}/{action}: {theme}."
+                f"- {action_path} {provenance_note}: {theme}."
                 f"{source_note}{evidence_line} Use: {suggested_use}"
             )
         for layer in ("memory_atmosphere", "working_continuity_brief", "source_court"):

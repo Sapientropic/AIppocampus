@@ -82,8 +82,11 @@ class HookAgentAffordanceTests(unittest.TestCase):
 
         self.assertIsNotNone(text)
         self.assertEqual(packet["tool_visibility"], "unknown")
-        self.assertIn("If the tool is not visible", text or "")
-        self.assertIn("aippocampus agent recall", text or "")
+        self.assertIn("If AIppocampus tools are not visible", text or "")
+        self.assertIn("discover/load AIppocampus tools", text or "")
+        self.assertIn("then call agent_recall", text or "")
+        self.assertIn('aippocampus agent recall "<short cue>" --json', text or "")
+        self.assertIn("Tool discovery is not source evidence", text or "")
         self.assertIn("Use as route only", text or "")
 
     def test_format_omits_host_fallback_when_tool_visibility_is_visible(self) -> None:
@@ -98,7 +101,9 @@ class HookAgentAffordanceTests(unittest.TestCase):
         text = affordance.format_hook_agent_affordance(packet)
 
         self.assertEqual(packet["tool_visibility"], "visible")
-        self.assertNotIn("If the tool is not visible", text or "")
+        self.assertNotIn("If AIppocampus tools are not visible", text or "")
+        self.assertNotIn("discover/load AIppocampus tools", text or "")
+        self.assertNotIn("CLI fallback:", text or "")
 
     def test_format_distinguishes_cli_fallback_only_from_unknown_visibility(self) -> None:
         packet = affordance.build_hook_agent_affordance(
@@ -113,8 +118,30 @@ class HookAgentAffordanceTests(unittest.TestCase):
 
         self.assertEqual(packet["tool_visibility"], "cli_fallback_only")
         self.assertIn("CLI fallback:", text or "")
-        self.assertIn("aippocampus agent recall", text or "")
-        self.assertNotIn("refresh plugin tools", text or "")
+        self.assertIn('aippocampus agent recall "<short cue>" --json', text or "")
+        self.assertIn("Tool fallback is route-only", text or "")
+        self.assertNotIn("discover/load AIppocampus tools", text or "")
+
+    def test_deepen_fallback_starts_with_recall_when_no_route_is_selected(self) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [{"candidate_type": "memory_route"}],
+                "semantic_source_reopen_route": True,
+                "tool_visibility": "unknown",
+            }
+        )
+        text = affordance.format_hook_agent_affordance(packet)
+
+        self.assertEqual(packet["suggested_agent_action"], "agent_deepen")
+        self.assertIn("then call agent_deepen", text or "")
+        self.assertIn('aippocampus agent recall "<short cue>" --json', text or "")
+        self.assertIn(
+            "aippocampus agent deepen --request 1 --last-recall --json",
+            text or "",
+        )
+        self.assertNotIn("handle", text or "")
 
     def test_low_risk_aippo_posture_and_strong_claim_boundaries_are_separate(self) -> None:
         report = affordance.build_hook_agent_affordance_fixture_report()
