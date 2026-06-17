@@ -1,0 +1,4 @@
+interface:
+  display_name: "AIppocampus UX"
+  short_description: "Review agent-facing continuity UX"
+  default_prompt: "Use $aippocampus-ux to review an AIppocampus foreground surface, issue, or PR for clear next actions, fast agent flow, integration fit, and executable recovery."

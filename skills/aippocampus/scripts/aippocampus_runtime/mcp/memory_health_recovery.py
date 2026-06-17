@@ -18,11 +18,65 @@ from aippocampus_runtime import core
 
 def payload_for_health_exception(arguments: dict[str, Any]) -> dict[str, Any]:
     recall_capability = _recall_probe(arguments)
-    if recall_capability.get("clean_source_available") and recall_capability.get(
-        "recall_tool_available"
-    ):
+    if _recall_routes_available(recall_capability):
         return _degraded_recall_payload(recall_capability)
     return _unavailable_recovery_payload()
+
+
+def recall_first_health_payload(
+    arguments: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep foreground health from hiding a usable recall/deepen path.
+
+    Health artifacts can be stale or missing while the agent-native recall
+    facade can still return reopenable routes through registry/navigation
+    state. In that split state the primary agent action should remain recall;
+    setup or maintenance stays visible as a follow-up, not the first step.
+    """
+
+    if not _payload_blocks_first_recall(payload):
+        return payload
+    recall_capability = _recall_probe(arguments)
+    if not _recall_routes_available(recall_capability):
+        return payload
+
+    recall_action = _recall_action()
+    deepen_action = _deepen_action()
+    maintenance_action = payload.get("agent_next_action") or payload.get("foreground_action")
+    safe_next_actions = [recall_action, deepen_action]
+    if isinstance(maintenance_action, dict):
+        maintenance_copy = dict(maintenance_action)
+        maintenance_copy.setdefault("when", "Use after recall when maintenance is the actual task.")
+        safe_next_actions.append(maintenance_copy)
+
+    source_boundary = payload.get("source_boundary")
+    merged_source_boundary = dict(source_boundary) if isinstance(source_boundary, dict) else {}
+    updated = dict(payload)
+    updated.update(
+        {
+            "ok": False,
+            "status": "degraded",
+            "ordinary_first_recall_usable": True,
+            "blocks_first_recall": False,
+            "health_artifacts_missing": _health_artifacts_missing(payload),
+            "recall_capability": recall_capability,
+            "agent_next_action": recall_action,
+            "foreground_action": recall_action,
+            "safe_next_actions": safe_next_actions,
+            "source_boundary": {
+                **merged_source_boundary,
+                "health_card_is_not_memory_evidence": True,
+                "navigation_only": True,
+                "source_reopen_required_before_claim": True,
+                "local_paths_serialized": False,
+                "raw_source_text_serialized": False,
+            },
+        }
+    )
+    if isinstance(maintenance_action, dict):
+        updated["maintenance_next_action"] = maintenance_action
+    return updated
 
 
 def _cwd_arg(arguments: dict[str, Any]) -> Path:
@@ -64,14 +118,7 @@ def _template_tool_action(
 
 def _recall_probe(arguments: dict[str, Any]) -> dict[str, Any]:
     source_dir = _clean_source_dir_for(arguments)
-    if not (source_dir / "messages.jsonl").exists():
-        return {
-            "clean_source_available": False,
-            "recall_tool_available": True,
-            "route_probe_status": "clean_source_missing",
-            "route_count": 0,
-            "deepen_tool_available": False,
-        }
+    clean_source_available = (source_dir / "messages.jsonl").exists()
 
     cue = str(
         arguments.get("query")
@@ -81,7 +128,8 @@ def _recall_probe(arguments: dict[str, Any]) -> dict[str, Any]:
         or "source-backed continuity"
     ).strip()
     try:
-        recall_payload = _agent_continuity_module().recall(
+        agent = _agent_continuity_module()
+        recall_payload = agent.recall(
             cue,
             cwd=_cwd_arg(arguments),
             clean_source_dir=source_dir,
@@ -91,11 +139,12 @@ def _recall_probe(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     except Exception:
         return {
-            "clean_source_available": True,
+            "clean_source_available": clean_source_available,
             "recall_tool_available": False,
             "route_probe_status": "recall_probe_failed",
             "route_count": 0,
             "deepen_tool_available": False,
+            "source_reopen_success": False,
         }
 
     deepen_requests = [
@@ -105,12 +154,130 @@ def _recall_probe(arguments: dict[str, Any]) -> dict[str, Any]:
         item for item in recall_payload.get("memory_packets") or [] if isinstance(item, dict)
     ]
     route_count = max(len(deepen_requests), len(memory_packets))
+    source_reopen_success = _probe_deepen_success(
+        agent=agent,
+        deepen_requests=deepen_requests,
+        arguments=arguments,
+        source_dir=source_dir,
+    )
     return {
-        "clean_source_available": True,
+        "clean_source_available": clean_source_available,
         "recall_tool_available": True,
-        "route_probe_status": "routes_available" if route_count else "source_present_probe_no_routes",
+        "route_probe_status": _route_probe_status(
+            clean_source_available=clean_source_available,
+            route_count=route_count,
+        ),
         "route_count": route_count,
         "deepen_tool_available": bool(deepen_requests),
+        "source_reopen_success": source_reopen_success,
+    }
+
+
+def _probe_deepen_success(
+    *,
+    agent: Any,
+    deepen_requests: list[dict[str, Any]],
+    arguments: dict[str, Any],
+    source_dir: Path,
+) -> bool:
+    if not deepen_requests:
+        return False
+    handle = deepen_requests[0].get("handle") or deepen_requests[0].get("callable_handle")
+    if not handle:
+        return False
+    try:
+        payload = agent.deepen(
+            handle,
+            cwd=_cwd_arg(arguments),
+            clean_source_dir=source_dir,
+            registry_dir=_registry_dir_arg(arguments),
+            project=str(arguments.get("project") or "AIppocampus"),
+            max_matches=1,
+        )
+    except Exception:
+        return False
+    result = payload.get("result") if isinstance(payload, dict) else None
+    metrics = result.get("metrics") if isinstance(result, dict) else None
+    if isinstance(metrics, dict) and metrics.get("source_reopen_success") is True:
+        return True
+    return bool(
+        isinstance(result, dict)
+        and result.get("evidence_level") == "source_backed"
+        and payload.get("status") == "ok"
+    )
+
+
+def _route_probe_status(*, clean_source_available: bool, route_count: int) -> str:
+    if route_count:
+        return "routes_available"
+    if clean_source_available:
+        return "source_present_probe_no_routes"
+    return "clean_source_missing_probe_no_routes"
+
+
+def _recall_routes_available(recall_capability: dict[str, Any]) -> bool:
+    return bool(
+        recall_capability.get("recall_tool_available")
+        and recall_capability.get("deepen_tool_available")
+        and recall_capability.get("source_reopen_success")
+    )
+
+
+def _payload_blocks_first_recall(payload: dict[str, Any]) -> bool:
+    if payload.get("blocks_first_recall") is True:
+        return True
+    readiness = payload.get("product_readiness")
+    if isinstance(readiness, dict) and readiness.get("ordinary_first_recall_usable") is False:
+        return True
+    return payload.get("ok") is False and payload.get("ordinary_first_recall_usable") is False
+
+
+def _health_artifacts_missing(payload: dict[str, Any]) -> bool:
+    artifact_actions = {"build_clean_source", "build_index", "build_segments"}
+    action_ids = {
+        str(item.get("id") or "")
+        for item in payload.get("recommended_actions") or []
+        if isinstance(item, dict)
+    }
+    maintenance_summary = payload.get("maintenance_summary")
+    if isinstance(maintenance_summary, dict):
+        action_ids.update(
+            str(item)
+            for item in maintenance_summary.get("recommended_action_ids") or []
+            if str(item)
+        )
+    foreground = payload.get("foreground_action")
+    if isinstance(foreground, dict):
+        action_ids.add(str(foreground.get("id") or ""))
+    return bool(action_ids & artifact_actions)
+
+
+def _recall_action() -> dict[str, Any]:
+    return {
+        **_template_tool_action(
+            "agent_recall",
+            {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}", "max": 3},
+            ["task_or_memory_cue"],
+        ),
+        "id": "try_agent_recall_with_cue",
+        "label": "Try source-backed recall with the current task cue",
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "why": "Health artifacts are missing; use recall/deepen before setup recovery.",
+    }
+
+
+def _deepen_action() -> dict[str, Any]:
+    return {
+        **_template_tool_action(
+            "agent_deepen",
+            {"request_index": 1, "last_recall": True},
+            ["agent_recall_foreground_action"],
+        ),
+        "id": "deepen_selected_recall_route",
+        "label": "Deepen a selected recall route",
+        "mutation_risk": "read_only",
+        "claim_boundary": "source_reopen_required_before_claim",
     }
 
 
@@ -169,29 +336,8 @@ def _unavailable_recovery_payload() -> dict[str, Any]:
 
 
 def _degraded_recall_payload(recall_capability: dict[str, Any]) -> dict[str, Any]:
-    recall_action = {
-        **_template_tool_action(
-            "agent_recall",
-            {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}", "max": 3},
-            ["task_or_memory_cue"],
-        ),
-        "id": "try_agent_recall_with_cue",
-        "label": "Try source-backed recall with the current task cue",
-        "mutation_risk": "read_only",
-        "claim_boundary": "no_claim_before_reopen",
-        "why": "Health artifacts are missing; use recall/deepen before setup recovery.",
-    }
-    deepen_action = {
-        **_template_tool_action(
-            "agent_deepen",
-            {"request_index": 1, "last_recall": True},
-            ["agent_recall_foreground_action"],
-        ),
-        "id": "deepen_selected_recall_route",
-        "label": "Deepen a selected recall route",
-        "mutation_risk": "read_only",
-        "claim_boundary": "source_reopen_required_before_claim",
-    }
+    recall_action = _recall_action()
+    deepen_action = _deepen_action()
     return {
         "kind": "aippocampus_memory_health_recovery",
         "ok": False,

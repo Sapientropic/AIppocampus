@@ -136,6 +136,7 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertEqual(payload["recall_capability"]["route_probe_status"], "routes_available")
         self.assertGreaterEqual(payload["recall_capability"]["route_count"], 1)
         self.assertTrue(payload["recall_capability"]["deepen_tool_available"])
+        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
         self.assertEqual(payload["agent_next_action"]["id"], "try_agent_recall_with_cue")
         self.assertEqual(payload["agent_next_action"]["tool_name"], "agent_recall")
         self.assertEqual(payload["safe_next_actions"][0]["tool_name"], "agent_recall")
@@ -148,6 +149,117 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("AIppocampus 使用 clean source", encoded)
         self.assertNotIn("小海马体", encoded)
+
+    def test_memory_health_keeps_recall_primary_when_health_report_is_pessimistic(self) -> None:
+        pessimistic_health = {
+            "kind": "aippocampus_health_report",
+            "ok": False,
+            "status": "needs_maintenance",
+            "product_readiness": {
+                "ordinary_first_recall_usable": False,
+                "status": "needs_maintenance",
+                "blocking_action_count": 1,
+                "high_severity_action_count": 1,
+            },
+            "recommended_actions": [
+                {
+                    "id": "build_clean_source",
+                    "severity": "critical",
+                    "reason": "clean-source messages.jsonl is missing",
+                    "command_template": 'aippocampus maintenance --cwd "{cwd}"',
+                    "requires": ["cwd"],
+                    "template_only": True,
+                }
+            ],
+            "freshness": {"clean_source_message_delta": 22},
+        }
+
+        with mock.patch.object(
+            mcp.aippocampus_health,
+            "health_report",
+            return_value=pessimistic_health,
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5824,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd), "detail": "compact"},
+                    },
+                }
+            )
+
+        self.assertFalse(response["result"].get("isError", False))
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_health_card")
+        self.assertEqual(payload["status"], "degraded")
+        self.assertTrue(payload["health_artifacts_missing"])
+        self.assertTrue(payload["recall_capability"]["recall_tool_available"])
+        self.assertEqual(payload["recall_capability"]["route_probe_status"], "routes_available")
+        self.assertGreaterEqual(payload["recall_capability"]["route_count"], 1)
+        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
+        self.assertEqual(payload["agent_next_action"]["id"], "try_agent_recall_with_cue")
+        self.assertEqual(payload["agent_next_action"]["tool_name"], "agent_recall")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertFalse(payload["blocks_first_recall"])
+        self.assertIn("maintenance_next_action", payload)
+        self.assertEqual(payload["maintenance_next_action"]["id"], "build_clean_source")
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("AIppocampus 使用 clean source", encoded)
+        self.assertNotIn("小海马体", encoded)
+
+    def test_memory_health_keeps_onboarding_recovery_when_recall_cannot_reopen(self) -> None:
+        with (
+            mock.patch.object(
+                mcp.aippocampus_health,
+                "health_report",
+                side_effect=FileNotFoundError(f"no rollout found for cwd: {self.cwd}"),
+            ),
+            mock.patch.object(
+                mcp.memory_health_recovery,
+                "_recall_probe",
+                return_value={
+                    "clean_source_available": False,
+                    "recall_tool_available": True,
+                    "route_probe_status": "clean_source_missing_probe_no_routes",
+                    "route_count": 0,
+                    "deepen_tool_available": False,
+                    "source_reopen_success": False,
+                },
+            ),
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5825,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd)},
+                    },
+                }
+            )
+
+        self.assertFalse(response["result"].get("isError", False))
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_memory_health_recovery")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "unavailable")
+        self.assertEqual(payload["error"]["code"], "health_unavailable")
+        self.assertIn("agent_next_action", payload)
+        self.assertIn("safe_next_actions", payload)
+        self.assertEqual(payload["safe_next_actions"][0]["command"], payload["agent_next_action"]["command"])
+        self.assertIn("onboard --provider auto --status --json", payload["safe_next_actions"][0]["command"])
+        self.assertEqual(
+            payload["safe_next_actions"][2]["command_template"],
+            'aippocampus search "{exact_phrase}" --json',
+        )
+        self.assertEqual(executable_command_violations(payload), [])
+        self.assertNotIn(str(self.cwd), encoded)
 
 
 if __name__ == "__main__":

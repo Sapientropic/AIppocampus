@@ -816,6 +816,36 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public core schema doc missing metadata privacy boundary", issues)
         self.assertIn("public core schema doc missing runtime clean-source manifest contract", issues)
 
+    def test_agent_facing_ux_charter_is_discoverable(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.agent_facing_ux_charter_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_agent_facing_ux_charter_reports_missing_discovery_links(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            charter = repo / docs_health.AGENT_FACING_UX_CHARTER
+            charter.parent.mkdir(parents=True)
+            charter.write_text("# UX charter\n", encoding="utf-8")
+            for rel_path, _ in docs_health.AGENT_FACING_UX_DISCOVERY_DOCS:
+                path = repo / rel_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# Missing pointer\n", encoding="utf-8")
+
+            issues = docs_health.agent_facing_ux_charter_issues(repo)
+
+        self.assertIn(
+            "recall architecture index missing agent-facing UX charter pointer",
+            issues,
+        )
+        self.assertIn(
+            "foreground memory UX budget missing agent-facing UX charter pointer",
+            issues,
+        )
+
     def test_public_core_product_profile_boundary_is_guarded(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)

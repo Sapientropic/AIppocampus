@@ -442,6 +442,7 @@ roadmap lives at [docs/roadmap.md](docs/roadmap.md). The documentation map is
 ```text
 AIppocampus/
 |- skills/aippocampus/        # installable skill package
+|- skills/aippocampus-ux/     # agent-facing UX review skill
 |- plugins/aippocampus/       # Codex plugin source package
 |- docs/                      # origin essay, design notes, guides, evidence
 |- docs/guides/assets/        # public README and documentation artwork

@@ -36,3 +36,11 @@ skills:
       - THREAD_MEMORY_REGISTRY_DIR
       - AIIPPOCAMPUS_SUBCONSCIOUS_HOOK
     notes: "Source-backed conversation memory for AI agents, with clean-source indexes, life-wide scope labels and timeline groups, registry search, ambient recall hooks, local/object-storage sync, MCP access, plugin packaging, and optional DeepSeek-compatible semantic/subconscious jobs."
+  - name: aippocampus-ux
+    path: skills/aippocampus-ux
+    origin: local
+    public_status: included
+    license: Apache-2.0
+    optional_env: []
+    legacy_env: []
+    notes: "Agent-facing UX review skill for AIppocampus foreground surfaces, issue triage, action cards, recovery cards, and source-backed continuity product discipline."

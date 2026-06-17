@@ -2183,7 +2183,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
             payload["maintenance_summary"]["recommended_action_ids"],
         )
         self.assertIsInstance(payload["agent_next_action"], dict)
-        self.assertEqual(payload["agent_next_action"]["id"], "build_index")
+        self.assertEqual(payload["agent_next_action"]["id"], "try_agent_recall_with_cue")
+        self.assertEqual(payload["agent_next_action"]["tool_name"], "agent_recall")
+        self.assertFalse(payload["blocks_first_recall"])
+        self.assertEqual(payload["maintenance_next_action"]["id"], "build_index")
+        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
@@ -2194,7 +2198,6 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("host_state_confounds", payload)
 
     def test_memory_health_exception_returns_recovery_card_not_bare_tool_error(self) -> None:
-        (self.clean / "messages.jsonl").unlink()
         with mock.patch.object(
             mcp.aippocampus_health,
             "health_report",
@@ -2217,12 +2220,14 @@ class AippocampusMcpServerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["kind"], "aippocampus_memory_health_recovery")
         self.assertFalse(payload["ok"])
-        self.assertEqual(payload["error"]["code"], "health_unavailable")
+        self.assertEqual(payload["status"], "degraded")
+        self.assertEqual(payload["error"]["code"], "health_artifacts_missing_recall_available")
+        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
         self.assertIn("agent_next_action", payload)
         self.assertIn("safe_next_actions", payload)
-        self.assertEqual(payload["safe_next_actions"][0]["command"], payload["agent_next_action"]["command"])
-        self.assertIn("onboard --provider auto --status --json", payload["safe_next_actions"][0]["command"])
-        self.assertEqual(payload["safe_next_actions"][2]["command_template"], 'aippocampus search "{exact_phrase}" --json')
+        self.assertEqual(payload["agent_next_action"]["tool_name"], "agent_recall")
+        self.assertEqual(payload["safe_next_actions"][0]["tool_name"], "agent_recall")
+        self.assertEqual(payload["safe_next_actions"][1]["tool_name"], "agent_deepen")
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
 
