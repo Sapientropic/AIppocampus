@@ -454,7 +454,7 @@ class ActionHintCacheTests(unittest.TestCase):
         )
         self.assertEqual(result["cache_path_source"], "default_registry")
         self.assertEqual(result["cache_scope"], "current_workspace")
-        self.assertTrue(default_path.is_relative_to(registry))
+        self.assertTrue(default_path.resolve().is_relative_to(registry.resolve()))
         self.assertFalse((root / ".aippocampus" / "action-hints").exists())
         self.assertEqual(result["cache_status"], "with_cache_records")
         self.assertEqual(len(records), 1)

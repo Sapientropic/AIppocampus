@@ -810,15 +810,17 @@ class UpdateSyncTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
-        self.assertTrue(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "cli:--foreground-tools-visible")
         self.assertTrue(agent["current_foreground_key_tools_callable"])
+        self.assertTrue(agent["current_foreground_key_tools_asserted_by_caller"])
+        self.assertFalse(agent["current_foreground_key_tools_verified"])
         self.assertTrue(agent["foreground_probe_requested"])
-        self.assertEqual(agent["foreground_probe_state"], "verified_by_current_foreground_key_tool_calls")
+        self.assertEqual(agent["foreground_probe_state"], "asserted_by_caller_key_tool_calls_unverified")
         self.assertEqual(
             agent["current_thread_tool_discovery"],
-            "verified_by_current_foreground_key_tool_calls",
+            "asserted_by_caller_key_tool_calls_unverified",
         )
 
     def test_status_reports_current_foreground_runtime_mismatch_after_key_tool_failure(self) -> None:
@@ -941,7 +943,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["surfaces"]["host_conformance"]["dimensions"]["live_schema_fresh"])
         self.assertNotIn("E:\\private", encoded)
 
-    def test_status_reports_host_conformance_label_for_recall_deepen_host(self) -> None:
+    def test_status_keeps_asserted_key_tools_out_of_conformance_upgrade(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env({
             "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1",
             "AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE": "1",
@@ -985,11 +987,14 @@ class UpdateSyncTests(unittest.TestCase):
 
         conformance = payload["surfaces"]["host_conformance"]
         self.assertEqual(code, 0)
-        self.assertEqual(payload["summary"]["host_conformance_label"], "recall_deepen")
-        self.assertEqual(conformance["label"], "recall_deepen")
-        self.assertTrue(conformance["dimensions"]["recall_callable"])
-        self.assertTrue(conformance["dimensions"]["deepen_callable"])
-        self.assertTrue(conformance["dimensions"]["first_magic_moment_path"])
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertEqual(payload["summary"]["host_conformance_label"], "cli_only")
+        self.assertEqual(conformance["label"], "cli_only")
+        self.assertFalse(conformance["dimensions"]["recall_callable"])
+        self.assertFalse(conformance["dimensions"]["deepen_callable"])
+        self.assertFalse(conformance["dimensions"]["first_magic_moment_path"])
+        self.assertTrue(agent["current_foreground_key_tools_asserted_by_caller"])
+        self.assertFalse(agent["current_foreground_key_tools_verified"])
 
     def test_status_uses_default_host_probe_cache_from_plugin_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -1314,6 +1319,57 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("hooks   writes/merges Codex hook entries", output)
         self.assertIn("rollback with matching hooks", output)
         self.assertIn("--all-local is a broad bootstrap/repair shortcut", output)
+
+    def test_plan_surface_hooks_returns_narrow_foreground_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+
+            code, payload = run_update(
+                "plan",
+                "--surface",
+                "hooks",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["mode"], "plan")
+        self.assertEqual(payload["summary"]["plan_surface_filter"], ["hooks"])
+        self.assertEqual(payload["summary"]["plan_scope"], "selected_surfaces")
+        self.assertIn("hooks", payload["surfaces"])
+        self.assertEqual(payload["summary"]["needs_action"], ["hooks"])
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            compact_code = update_cli.main(
+                [
+                    "plan",
+                    "--surface",
+                    "hooks",
+                    "--repo-root",
+                    str(repo),
+                    "--codex-home",
+                    str(codex_home),
+                    "--no-child-check",
+                    "--agent-json",
+                ]
+            )
+        compact = json.loads(stdout.getvalue())
+        self.assertEqual(compact_code, 0, compact)
+        self.assertEqual(compact["summary"]["plan_surface_filter"], ["hooks"])
+        self.assertEqual(compact["summary"]["plan_scope"], "selected_surfaces")
+        self.assertTrue(
+            any(
+                card["id"] in {"action_hint_setup", "action_hint_cache"}
+                for card in compact["foreground_status_cards"]
+            )
+        )
 
     def test_skill_apply_updates_stale_copy_and_excludes_distribution_noise(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

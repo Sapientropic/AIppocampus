@@ -97,11 +97,12 @@ def agent_callable_foreground_action(item: dict[str, Any]) -> dict[str, str]:
         return {
             "command": (
                 "aippocampus update status --foreground-tools-visible "
-                "--foreground-key-tools-callable --agent-json"
+                "--agent-json"
             ),
             "manual_instruction": (
                 "First call agent_recall and agent_deepen in this foreground thread. "
-                "If either call fails, rerun status with --foreground-key-tool-failure "
+                "--foreground-key-tools-callable is only a caller assertion; if a key "
+                "tool fails, rerun status with --foreground-key-tool-failure "
                 "\"brief sanitized error\"."
             ),
         }

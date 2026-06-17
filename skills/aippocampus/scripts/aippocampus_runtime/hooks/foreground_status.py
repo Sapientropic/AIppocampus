@@ -184,8 +184,41 @@ def prompt_status_contract(
     installed: bool,
     command_count: int,
     provider_key_bridge_installed: bool,
+    last_prompt_hook: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if status == "installed":
+    last_summary = (
+        last_prompt_hook.get("last_prompt_hook")
+        if isinstance(last_prompt_hook, Mapping)
+        and isinstance(last_prompt_hook.get("last_prompt_hook"), Mapping)
+        else None
+    )
+    useful_last_count = 0
+    if isinstance(last_summary, Mapping):
+        useful_last_count = sum(
+            int(last_summary.get(key) or 0)
+            for key in ("source_backed_count", "candidate_count", "scent_count", "wayfinding_count")
+        )
+    last_repair = str((last_summary or {}).get("next_repair") or "")
+    if status == "installed" and useful_last_count:
+        surface = str((last_summary or {}).get("memory_surface") or "memory")
+        primary = {
+            "id": "review_last_prompt_hook_recall",
+            "label": "Review last prompt-hook recall",
+            "message": (
+                f"Last prompt hook surfaced {useful_last_count} {surface} signal(s); "
+                "use the included last_prompt_hook summary as navigation and reopen/deepen source before claims."
+            ),
+            "mutation_risk": "read_only",
+            "claim_boundary": "last_prompt_hook_summary_not_source_text",
+        }
+    elif status == "installed" and last_repair:
+        primary = _status_action(
+            action_id="repair_last_prompt_hook_result",
+            label="Repair last prompt-hook result",
+            command=last_repair,
+        )
+        primary["claim_boundary"] = "last_prompt_hook_repair_not_memory_evidence"
+    elif status == "installed":
         primary = _no_action_needed(
             label="Prompt hook ready",
             message="No foreground prompt-hook setup action is needed.",
@@ -227,6 +260,13 @@ def prompt_status_contract(
         extra={
             "command_count": int(command_count),
             "provider_key_bridge_installed": bool(provider_key_bridge_installed),
+            "last_prompt_hook_status": str(last_prompt_hook.get("status") or "")
+            if isinstance(last_prompt_hook, Mapping)
+            else "",
+            "last_prompt_hook_memory_surface": str((last_summary or {}).get("memory_surface") or "")
+            if isinstance(last_summary, Mapping)
+            else "",
+            "last_prompt_hook_useful_signal_count": useful_last_count,
         },
     )
     return contract_fields(card)
@@ -316,12 +356,34 @@ _ACTION_STEP_RISK = {
 def _action_hint_step_action(step: Mapping[str, Any], *, claim_boundary: str) -> dict[str, Any]:
     label = str(step.get("label") or "action")
     command = str(step.get("command") or "")
+    why_by_id = {
+        "refresh_action_hint_cache": (
+            "Refresh the prepared action-hint cache so the installed PreToolUse "
+            "hook has useful navigation records."
+        ),
+        "install_action_hint_hook": (
+            "Install the action-time hook so trusted Codex sessions can receive "
+            "prepared navigation hints without blocking ordinary recall."
+        ),
+        "rollback_action_hint_hook": (
+            "Remove action-time hook wiring if the local host setup needs to be "
+            "rolled back."
+        ),
+        "check_action_hint_status": (
+            "Recheck whether action-time hints are installed and have prepared "
+            "records available."
+        ),
+    }
+    action_id = _ACTION_STEP_IDS.get(label, f"action_hint_{label}")
     return dict(
         foreground_shell_action(
-            action_id=_ACTION_STEP_IDS.get(label, f"action_hint_{label}"),
+            action_id=action_id,
             label=label.replace("_", " ").title(),
             command=command,
-            why="Mapped from frontstage_card.next_steps for the shared hook action contract.",
+            why=why_by_id.get(
+                action_id,
+                "Use this hook action to keep action-time navigation hints aligned with the installed host setup.",
+            ),
             mutation_risk=_ACTION_STEP_RISK.get(label, "read_only"),
             claim_boundary=claim_boundary,
         )

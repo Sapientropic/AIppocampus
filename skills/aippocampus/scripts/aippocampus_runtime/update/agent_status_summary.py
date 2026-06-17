@@ -168,6 +168,8 @@ def compact_agent_status_report(
             "action_hints_installed": bool(action_hints.get("installed")),
             "action_hints_status": str(action_hints.get("cache_status") or "not_installed_optional"),
             "dirty_worktree_guards": summary.get("dirty_worktree_guards") or {},
+            "plan_surface_filter": summary.get("plan_surface_filter") or [],
+            "plan_scope": summary.get("plan_scope") or "all_surfaces",
             "foreground_actions": [
                 str(card.get("id") or "")
                 for card in foreground_cards
@@ -207,6 +209,11 @@ def compact_agent_status_report(
             ),
             "tools_visible": agent.get("tools_visible"),
             "key_tools_callable": agent.get("key_tools_callable"),
+            "key_tools_callable_source": agent.get("current_foreground_key_tools_source"),
+            "key_tools_callable_asserted_by_caller": bool(
+                agent.get("current_foreground_key_tools_asserted_by_caller")
+            ),
+            "key_tools_callable_verified": bool(agent.get("current_foreground_key_tools_verified")),
             "live_host_schema_stale": bool(agent.get("live_host_schema_stale")),
             "key_tool_failures": agent.get("key_tool_failures") or [],
             "current_thread_tool_discovery": agent.get("current_thread_tool_discovery"),

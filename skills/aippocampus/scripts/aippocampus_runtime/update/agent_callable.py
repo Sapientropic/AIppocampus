@@ -296,19 +296,27 @@ def status_agent_callable(
     key_tools_callable = host_probe_status.get("key_tools_callable")
     current_thread_key_tools_callable: bool | None = None
     current_thread_key_source: str | None = None
+    current_thread_key_tools_verified = False
+    current_thread_key_tools_asserted = False
     if foreground_failure:
         current_thread_key_tools_callable = False
         current_thread_key_source = "current_foreground_key_tool_failure"
     elif foreground_key_tools_callable_asserted:
         current_thread_key_tools_callable = True
         current_thread_key_source = "cli:--foreground-key-tools-callable"
+        current_thread_key_tools_asserted = True
     elif foreground_key_override_true:
         current_thread_key_tools_callable = True
         current_thread_key_source = "env:AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE"
+        current_thread_key_tools_asserted = True
     key_tool_failed = key_tools_callable is False or current_thread_key_tools_callable is False
+    # Caller-supplied flags can describe what the foreground agent observed, but
+    # they are not the observation itself. Keep full-continuity readiness gated
+    # on an explicit same-transport proof path so a stale MCP connection cannot
+    # be certified by an optimistic status command.
     ready = (
         foreground_tools_visible is True
-        and current_thread_key_tools_callable is True
+        and current_thread_key_tools_verified
         and not key_tool_failed
     )
     host_probe_tool_names = {
@@ -319,8 +327,10 @@ def status_agent_callable(
     foreground_probe_state = (
         "foreground_key_tool_call_failed"
         if current_thread_key_tools_callable is False
+        else "asserted_by_caller_key_tool_calls_unverified"
+        if current_thread_key_tools_asserted
         else "verified_by_current_foreground_key_tool_calls"
-        if current_thread_key_tools_callable is True
+        if current_thread_key_tools_verified
         else "tools_visible_but_key_tools_failed"
         if key_tool_failed
         else "tools_visible_key_tools_unverified"
@@ -407,6 +417,8 @@ def status_agent_callable(
         "host_probe_key_tools_callable": key_tools_callable,
         "current_foreground_key_tools_callable": current_thread_key_tools_callable,
         "current_foreground_key_tools_source": current_thread_key_source,
+        "current_foreground_key_tools_asserted_by_caller": current_thread_key_tools_asserted,
+        "current_foreground_key_tools_verified": current_thread_key_tools_verified,
         "current_foreground_key_tool_failure": (
             redact_private_paths(foreground_failure) if foreground_failure else None
         ),
