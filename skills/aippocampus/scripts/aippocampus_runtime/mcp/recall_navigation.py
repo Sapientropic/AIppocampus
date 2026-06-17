@@ -26,6 +26,7 @@ from aippocampus_runtime.mcp.source_ref_registry import (
     registry_source_fingerprint_invalidations,
     source_candidate_dirs_for_ref,
 )
+from aippocampus_runtime.privacy import redact_private_paths
 from aippocampus_runtime.recall.active_recall_lock import (
     default_active_recall_lock_path,
     reopen_lock_sources,
@@ -42,7 +43,6 @@ from aippocampus_runtime.recall.continuity_domains import (
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.search import entry_search_score
-from aippocampus_runtime.privacy import redact_private_paths
 from aippocampus_runtime.source.search import (
     iter_clean_messages,
     process_noise_reason,

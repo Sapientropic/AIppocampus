@@ -14,8 +14,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.coding import host_contract
+from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     capture_feedback,

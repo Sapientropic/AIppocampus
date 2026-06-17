@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from __future__ import annotations
 
 import json
@@ -15,7 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
-from aippocampus_runtime.recall import background_findings, agent_continuity, agent_continuity_cli_support, feedback_events  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, background_findings, feedback_events  # noqa: E402
 from aippocampus_runtime.registry import api as registry_api  # noqa: E402
 
 

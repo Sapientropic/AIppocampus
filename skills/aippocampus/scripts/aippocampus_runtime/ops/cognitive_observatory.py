@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from aippocampus_runtime.dream.sleep_cycle import public_sleep_cycle_summary
+from aippocampus_runtime.ops import observatory_boundary
 from aippocampus_runtime.ops.activation_authority_audit import (
     activation_surface_authority_audit,
 )
@@ -19,7 +20,6 @@ from aippocampus_runtime.ops.observatory_cognitive_load import (
 from aippocampus_runtime.ops.observatory_control_authority import (
     observatory_control_authority_audit,
 )
-from aippocampus_runtime.ops import observatory_boundary
 from aippocampus_runtime.ops.route_readiness import (
     ROUTE_READINESS_KIND,
     fixture_route_readiness_report,

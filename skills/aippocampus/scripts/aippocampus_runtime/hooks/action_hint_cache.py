@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.hooks.action_hint_cache_records import (
     BLOCKED_STATES,
@@ -23,7 +24,6 @@ from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     load_ledger_rows,
     summarize_effectiveness_ledger,
 )
-from aippocampus_runtime import core
 
 DEFAULT_ACTION_HINT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
 

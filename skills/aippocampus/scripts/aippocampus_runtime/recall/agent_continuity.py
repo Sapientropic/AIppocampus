@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_recovery_card,
     foreground_shell_action,
 )
-from aippocampus_runtime.aippo import working_contract as aippo
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
@@ -32,11 +32,11 @@ from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
-    background_findings,
     agent_packet_compaction,
     agent_semantic_diagnostics,
     architecture_navigation_affordance,
     attention_router_policy,
+    background_findings,
     feedback_events,
     foreground_action_card,
     macro_field_live,

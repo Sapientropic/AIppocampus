@@ -109,15 +109,6 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         for item in payload.get("recommended_actions") or []
         if (action := compact_action(item))
     ]
-    storage_action = next(
-        (
-            item
-            for item in all_recommended
-            if item.get("id") == "storage_gc_rebuildable_cache"
-            and str(item.get("severity") or "").casefold() in {"critical", "warning"}
-        ),
-        None,
-    )
     blocking = [
         item
         for item in all_recommended

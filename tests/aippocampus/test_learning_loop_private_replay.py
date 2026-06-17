@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import sys
-from io import StringIO
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,8 +21,10 @@ from aippocampus_runtime.learning_loop.private_export import (
 )
 from aippocampus_runtime.learning_loop.private_replay import (  # noqa: E402
     build_private_history_replay_report,
-    main as private_replay_main,
     private_replay_fixture_events,
+)
+from aippocampus_runtime.learning_loop.private_replay import (
+    main as private_replay_main,
 )
 
 

@@ -45,6 +45,23 @@ def field_path_count(value: object, prefix: str = "") -> int:
     return 0
 
 
+def assert_recall_template_action(
+    test: unittest.TestCase,
+    action: dict[str, object],
+    *,
+    action_id: str = "recall_with_cue",
+    full_detail: bool = False,
+) -> None:
+    test.assertEqual(action["id"], action_id)
+    test.assertEqual(action["requires"], ["cue"])
+    command_template = str(action["command_template"])
+    test.assertIn('aippocampus agent recall "{cue}" --json', command_template)
+    if full_detail:
+        test.assertIn("--detail full", command_template)
+    test.assertEqual(action["mutation_risk"], "read_only")
+    test.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+
+
 class AippocampusMcpServerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -435,8 +452,14 @@ class AippocampusMcpServerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["status"], "cannot_verify")
-        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
-        self.assertIn("agent recall", " ".join(payload["recovery_actions"]))
+        assert_recall_template_action(
+            self,
+            payload["foreground_action"],
+            action_id="recall_with_cue_full_detail",
+            full_detail=True,
+        )
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"], [payload["foreground_action"]])
         self.assertNotIn(str(missing_path), encoded)
 
     def test_agent_deepen_and_explain_missing_handle_lead_with_recall(self) -> None:
@@ -453,9 +476,13 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 payload = self.tool_payload(response)
 
                 self.assertTrue(response["result"]["isError"])
-                self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
-                self.assertIn("agent recall", payload["agent_next_action"])
-                self.assertIn(tool_name.replace("_", " "), payload["follow_up_action"]["cli_command"])
+                assert_recall_template_action(self, payload["foreground_action"])
+                self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+                self.assertIn(
+                    f"aippocampus agent {tool_name.removeprefix('agent_')} --request",
+                    payload["follow_up_action"]["command_template"],
+                )
+                self.assertEqual(payload["follow_up_action"]["requires"], ["last_recall_cache", "request_index"])
 
     def test_agent_recall_missing_query_returns_recovery_card(self) -> None:
         response = mcp.handle_request(
@@ -1506,9 +1533,13 @@ class AippocampusMcpServerTests(unittest.TestCase):
         agent_payload = self.tool_payload(agent_response)
         self.assertEqual(agent_payload["status"], "cannot_verify")
         self.assertEqual(agent_payload["result"]["error"]["code"], "missing_recall_handle")
-        self.assertEqual(agent_payload["foreground_action"]["tool_name"], "agent_recall")
-        self.assertIn("agent recall", agent_payload["agent_next_action"])
-        self.assertIn("agent deepen --request 1 --last-recall", agent_payload["follow_up_action"]["cli_command"])
+        assert_recall_template_action(self, agent_payload["foreground_action"])
+        self.assertEqual(agent_payload["agent_next_action"], agent_payload["foreground_action"])
+        self.assertIn(
+            "aippocampus agent deepen --request",
+            agent_payload["follow_up_action"]["command_template"],
+        )
+        self.assertEqual(agent_payload["follow_up_action"]["requires"], ["last_recall_cache", "request_index"])
 
         self.assertTrue(recall_response["result"]["isError"])
         recall_payload = self.tool_payload(recall_response)

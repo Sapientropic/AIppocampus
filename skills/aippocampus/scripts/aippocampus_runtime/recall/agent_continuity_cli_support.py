@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import hashlib
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.aippo import working_contract as aippo_working_contract
-from aippocampus_runtime.contracts import FOREGROUND_ACTION_CONTRACT_VERSION
-from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime import core
+from aippocampus_runtime.aippo import working_contract as aippo_working_contract
+from aippocampus_runtime.contracts import (
+    FOREGROUND_ACTION_CONTRACT_VERSION,
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values

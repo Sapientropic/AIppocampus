@@ -14,6 +14,12 @@ from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_mode
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled, warm_status_payload
 
+__all__ = [
+    "build_spend_doctor_report",
+    "compact_spend_doctor_card",
+    "render_text",
+]
+
 SCHEMA_VERSION = 1
 DEFAULT_DAYS = 7
 DEFAULT_WARN_EFFECTIVE_TOKENS = int(
