@@ -892,12 +892,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
+def _emit_result(result: dict[str, Any], *, json_output: bool, operator_json: bool = False) -> None:
+    if json_output and operator_json:
+        # Explicit local diagnostics lane; default JSON must be projected first.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
+        return
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
         return
     if result["kind"] == "aippocampus_plugin_install_recovery":
+        code = "plugin_install_failed"
+        error = result.get("error")
+        if isinstance(error, dict):
+            code = str(error.get("code") or code)
         print("plugin install needs attention")
+        print(f"reason: {code}")
         print("next: aippocampus plugin install --codex --verify --json")
         print("boundary: no private memory copied; local paths are hidden unless --operator-json is used.")
         return
@@ -967,6 +977,7 @@ def main(argv: list[str] | None = None) -> int:
             error,
             json_output=bool(getattr(args, "json_output", False))
             or bool(getattr(args, "operator_json", False)),
+            operator_json=bool(getattr(args, "operator_json", False)),
         )
         return 1
     _emit_result(
@@ -976,6 +987,7 @@ def main(argv: list[str] | None = None) -> int:
             or bool(getattr(args, "public_summary", False))
             or bool(getattr(args, "operator_json", False))
         ),
+        operator_json=bool(getattr(args, "operator_json", False)),
     )
     return 0 if result.get("ok") else 1
 
