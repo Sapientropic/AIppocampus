@@ -3,6 +3,24 @@
 This reference owns manual repair, health checks, storage safety, and audit
 routes.
 
+## Start With A Read-Only Card
+
+```bash
+aippocampus health --json
+aippocampus maintenance status --json
+aippocampus storage gc --dry-run --json
+```
+
+Use these first when source feels stale, a long thread needs preservation, or a
+storage cleanup needs a plan. The successful outcome is a compact next action:
+refresh, checkpoint, archive, or do nothing.
+
+Source-backed boundary: maintenance reports explain local artifact state and
+safe next steps. They do not turn generated caches into memory facts, and exact
+wording, sensitive facts, stale claims, disputed details, and high-risk
+decisions still come from reopened source. The canonical product boundary lives
+in `docs/architecture/recall/source-backed-product-discipline.md`.
+
 ## Health
 
 Use `aippocampus_runtime/health` at the start of a long follow-up, after
@@ -113,7 +131,7 @@ future entrypoint writes generated SQLite directly, it must reuse
 `aippocampus_runtime/artifacts/publish` rather than creating a parallel lock or retry
 scheme.
 
-Registry/control-plane writes have a narrower #590 contract. `register_thread`,
+Registry/control-plane writes have a narrower registry write contract. `register_thread`,
 `register-rollout`, and `register-source` still write JSON registry metadata,
 not a SQLite truth store. They use the same-directory `.threads-registry.lock`
 around the registry `load -> upsert -> save` window so concurrent local agents
@@ -122,7 +140,7 @@ through temporary files plus replace. Read-only MCP tools and registry searches
 do not take this writer lease; they either see the previous complete registry or
 the next complete registry. If the registry writer lease cannot be acquired,
 MCP reports `registry_writer_busy` as retryable writer contention. This remains
-separate from #111's generated SQLite writer coordination: generated indexes are
+separate from generated SQLite writer coordination: generated indexes are
 still rebuildable caches, and registry metadata remains the control-plane
 source for thread discovery.
 

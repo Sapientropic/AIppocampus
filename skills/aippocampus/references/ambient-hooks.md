@@ -4,6 +4,24 @@ This reference owns prompt-time recall, lifecycle upkeep, semantic gating, and
 the hook-safe subconscious scheduler. `SKILL.md` should only summarize these
 boundaries.
 
+## Start With The Hook Path
+
+```bash
+aippocampus hooks prompt status --last
+aippocampus hooks prompt install --json
+aippocampus agent recall "old decision or handoff cue" --json
+```
+
+The prompt hook keeps ordinary work quiet and surfaces a small route hint only
+when continuity may change the next action. Its happy path is: stay silent for
+unrelated prompts, produce a compact scent when old source may matter, and let
+the foreground agent recall/deepen before making claims.
+
+Source-backed boundary: hook packets are next-action hints. Exact wording,
+sensitive facts, stale claims, disputed details, and high-risk decisions still
+come from reopened source. The canonical product boundary lives in
+`docs/architecture/recall/source-backed-product-discipline.md`.
+
 ## Prompt Hook
 
 `aippocampus_runtime/hooks/prompt` is the Codex `UserPromptSubmit` handler.
@@ -112,6 +130,20 @@ manual search. `bounded_evidence` may change the answer within its declared
 scope, but it is still not `source_open` and must not be used for exact quotes
 unless raw source text has actually been reopened.
 
+### Hook Packet Decoder
+
+Hook packets are action hints, not facts. Decode the packet into the smallest
+safe next action:
+
+| Signal | Default action | Avoid |
+|---|---|---|
+| `suggested_agent_action=agent_recall`, `lead_kinds`, or `budget=recall_top_2` | Call recall/deepen or follow the provided route before broad manual search. | Treating the packet itself as evidence. |
+| `not_enough_for_claim=true` | Use it as route/context only until source is reopened. | Making factual, public, numeric, stale, sensitive, or high-risk claims. |
+| `direction_only` | Let it shape low-risk attention or the next search question. | Repeating it as a fact or overfitting the answer to it. |
+| `direction_with_ref` or `reopenable_route` | Follow refs, route handles, Active Path Packets, lock ids, or reopen plans; deepen/reopen when relevant. | Ignoring route handles and inventing a broad manual search first. |
+| `bounded_evidence` or `source_open` | Use only inside declared scope and redaction/currentness boundaries. | Widening scope, quoting exact wording, or resolving conflicts without reopening. |
+| `ignore_or_blocked` | Defer, ask lightly, or explain the boundary when it matters. | Letting blocked/private/stale/conflicted material shape answer content. |
+
 Foreground brief rendering uses three layers without creating a parallel
 memory contract:
 
@@ -159,8 +191,8 @@ brief relevance; they do not make old source-backed evidence false or delete it
 from the underlying source trail.
 
 `ambient_recall` also carries a `fresh_thread_packet` projected by
-`fresh_thread_scent.py`. This is the #282 contract that bridges the #281
-fresh-thread product goal with #277-style active recall locks. The packet fields are:
+`fresh_thread_scent.py`. This is the fresh-thread scent contract that bridges
+the fresh-thread product goal with active recall locks. The packet fields are:
 `support_level` (`silent_scent | soft_hypothesis | source_required |
 suppressed`), coarse `confidence`, `sensitivity`, `freshness`, `route_reason`,
 source-id-only `candidate_refs`, canonical `advisory_action`, compatibility
@@ -217,7 +249,7 @@ because it is personal. Safe personal continuity can stay private, become a
 gentle hypothesis, or use `source_reopen` depending on task context and source
 refs.
 
-`fresh_thread_action.py` owns the #284 agent-facing action policy for consuming
+`fresh_thread_action.py` owns the agent-facing action policy for consuming
 that packet. The hook prepares terrain; the foreground agent chooses one of
 `ignore`, `use_silently`, `ask_light_question`,
 `mention_soft_hypothesis`, `active_recall`, or `source_reopen` after considering
@@ -250,8 +282,8 @@ provenance in the action-policy output until their owner is documented.
 Action policy examples:
 
 - Positive: a safe medium-confidence design/workflow preference scent that
-  could change the next design decision should call `active_recall`; if a #277
-  lock is `ready`, use that lock id as a route handle.
+  could change the next design decision should call `active_recall`; if an
+  active recall lock is `ready`, use that lock id as a route handle.
 - Positive: a user-confirmed prior theme with a `pending` lock should call
   `active_recall` with `wait_or_probe_lock`, not present the pending lock as a
   fact.
@@ -270,17 +302,17 @@ Action policy examples:
   `ignore` and must not steer answer content, tone, or source reopening unless
   the route is safely redacted or reopened through an explicit source-safe path.
 
-#394 progressive MCP navigation can consume hook material without treating the
+Progressive MCP navigation can consume hook material without treating the
 hook card as the whole memory surface. Ambient cards or future action-time
 attention hints may carry a `navigation_seed` shaped like
 `{"kind":"recall_context_seed","handle":"...","suggested_tool":"recall_deepen","boundary":"navigation_only_not_fact"}`.
 The seed is a route handle only. It should be small, source-ref oriented, and
 safe to deepen through MCP `recall_deepen`; it must not carry raw prompt text,
-raw tool payloads, local filesystem paths, or final memory claims. #435-style
-attention hints can use the same handle shape when a prepared cache wants the
-foreground agent to reopen source before its next action.
+raw tool payloads, local filesystem paths, or final memory claims. Prepared
+action-time attention hints can use the same handle shape when a cache wants
+the foreground agent to reopen source before its next action.
 
-#277 active recall locks are navigation handles, not evidence. A ready lock can
+Active recall locks are navigation handles, not evidence. A ready lock can
 make `active_recall` cheaper; a pending lock can be probed or waited on by the
 agent; expired or failed locks should be ignored and restarted only if memory
 would change the answer, plan, or action. Any specific memory-backed claim still
@@ -299,7 +331,7 @@ The context payload must not serialize raw prompts, local paths, source
 snippets, or secret-shaped material; exact or factual claims still require
 clean-source reopen through the returned refs.
 
-`aippocampus_runtime.reflection.aar_v2` owns the #484 deterministic first slice
+`aippocampus_runtime.reflection.aar_v2` owns the deterministic first AAR slice
 for action-time AAR nudges. It can propose a source-backed advisory nudge when
 the next action is a specific memory/source claim from weak scent/candidate/dream
 context, and it suppresses that nudge when clean source is already visible. The
@@ -344,15 +376,15 @@ foreground hooks stay cheap and private. Use hybrid mode when the foreground
 creates a pending lock and detached warm recall may later enrich it; consumers
 must check the current version/freshness before reopening.
 
-`fresh_thread_activation.py` owns the #283 progressive activation overlay that
+`fresh_thread_activation.py` owns the progressive activation overlay that
 keeps a scent from haunting later turns. It produces a compact
 `fresh_thread_activation_state` snapshot for one `thread + workspace +
 topic_epoch + route` with states `pending`, `scent_emitted`,
 `soft_hypothesis`, `ignored`, `confirmed`, `rejected`, `source_backed`,
 `retired`, and `suppressed`. The snapshot stores thread/workspace/route
-fingerprints, counts, TTL, registry-freshness fingerprint, and optional #277
-lock state/id. It must not store raw prompts, raw source snippets, local paths,
-or durable preferences.
+fingerprints, counts, TTL, registry-freshness fingerprint, and optional
+active-recall lock state/id. It must not store raw prompts, raw source snippets,
+local paths, or durable preferences.
 
 The activation state feeds `fresh_thread_action.py` only through explicit
 context flags. `confirmed` may set `user_confirmed_memory_theme` so the agent
@@ -467,7 +499,7 @@ foreground hook work and not a replacement for source reopen.
 operator passes an explicit `--activation-dead-letter-manifest`; dry-run remains
 the default and writes require `--apply-activation-payload-compaction`.
 
-`aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
+`aippocampus_runtime.recall.fresh_thread_demo` is the public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
 activation state modules over synthetic upstream decision packets across
 `no_memory`, `hook_only`, and `active_recall` arms. The runner is intentionally
@@ -761,7 +793,7 @@ commands can spend longer when the user asks for source-backed memory. The
 implementation owner lives under `aippocampus_runtime.recall`; do not add new
 foreground-recall policy to the top-level package owners.
 
-`prompt_recall_threshold.py` owns the #359 context-aware scent-threshold
+`prompt_recall_threshold.py` owns the context-aware scent-threshold
 diagnostic. It is a routing policy, not a source or evidence policy. A same
 thread continuation with a stable topic epoch may lower the effective
 `scent` threshold a little, and exact semantic-result reuse may lower it even
@@ -773,7 +805,7 @@ prompts remain hard boundaries and must not receive threshold lowering. The
 private hook result and public-safe debug payload may expose `base_threshold`,
 `effective_threshold`, compact `adjustments` reason codes, and `risk_boundary`;
 they must not include raw prompt text or turn a route scent into evidence. This
-connects the #201 vague-recall pain and the #281/#856 fresh-thread goal without
+connects the vague-recall pain and the fresh-thread goal without
 dumping more memory into every prompt.
 
 The same policy may read the ambient signal accumulator and active-lock ROI
@@ -852,7 +884,7 @@ aliases remain routing hints only. `semantic_recall_gate.py --cache-report
 --json` and `semantic_cue_cache.semantic_cue_cache_report()` expose count-only
 diagnostics; they must not emit raw prompt text, cue text, source snippets, or
 local paths.
-`aippocampus_runtime.recall.living_cue_cache` owns the first #281 living cue
+`aippocampus_runtime.recall.living_cue_cache` owns the first living cue
 cache slice. Background or warm digestion can materialize source-backed cue
 entries with `cue`, `aliases`, `source_refs`, `confidence`, `sensitivity`,
 `freshness`, `status/currentness`, `decay`, and helpful/harmful counters. The
@@ -927,8 +959,8 @@ hard-skips. Local paths are replaced with `<redacted:local-path>` plus bounded
 `<path-anchor ...>` hints such as file class and extension. Stable path hashes
 are emitted only for paths confirmed under the current project root and are
 derived from the project-relative path; external machine-local paths do not get
-a stable hash. These anchors are navigation hints only, not source truth and not
-permission to emit raw absolute paths.
+a stable hash. These anchors help choose a route; reopen source before treating
+them as evidence, and never emit raw absolute paths.
 
 Do not write prompt text to hook debug logs. Optional logs may record decision,
 timing, candidate thread ids/titles, evidence line numbers, and query aliases.

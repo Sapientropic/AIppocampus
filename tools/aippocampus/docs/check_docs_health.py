@@ -26,6 +26,7 @@ from cognitive_maturity_guard import (
 from current_claims_guard import current_claims_snapshot_issues
 from discussion_atlas_guard import discussion_atlas_static_issues
 from evidence_index_guard import evidence_index_issues
+from installable_reference_guard import installable_reference_tracker_identity_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
     product_profile_contract_issues,
@@ -60,10 +61,14 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
         "SKILL.md missing continuity permission framing"
     ),
     "relationship continuity": "SKILL.md missing relationship-continuity posture",
+    "## First Moves": "SKILL.md missing first-moves section",
+    "Primary foreground loop": "SKILL.md missing primary recall/deepen loop",
+    "prior source could change the next action": "SKILL.md missing canonical recall trigger",
+    "Tool visibility fallback": "SKILL.md missing MCP/CLI fallback rule",
+    "MCP first when the tool is listed": "SKILL.md missing canonical MCP/CLI order",
+    'aippocampus agent recall "old decision or handoff cue" --json': "SKILL.md missing recall command",
+    "aippocampus agent deepen --request 1 --last-recall --json": "SKILL.md missing deepen command",
     "## Agent Stance": "SKILL.md missing agent stance section",
-    "Could old source, old corrections, unfinished work": (
-        "SKILL.md missing task-boundary continuity question"
-    ),
     "Do not search every turn.": (
         "SKILL.md missing proactive-vs-overactive anti-nag boundary"
     ),
@@ -71,24 +76,16 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
     "Source-backed evidence should be respected": (
         "SKILL.md missing bounded source-evidence respect"
     ),
-    "## Memory Packet Action Grammar": (
-        "SKILL.md missing packet action grammar section"
+    "Action grammar and hook packet decoding live in": (
+        "SKILL.md missing reference pointer for packet grammar"
     ),
-    "direction_only": "SKILL.md missing direction_only action grammar",
-    "reopenable_route": "SKILL.md missing reopenable_route action grammar",
-    "bounded_evidence": "SKILL.md missing bounded_evidence action grammar",
-    "source_open": "SKILL.md missing source_open action grammar",
-    "ignore_or_blocked": "SKILL.md missing ignore_or_blocked action grammar",
-    "## Hook Packet Decoder": "SKILL.md missing hook packet decoder",
-    "suggested_agent_action": "SKILL.md missing hook suggested action decoder",
-    "not_enough_for_claim": "SKILL.md missing not-enough-for-claim decoder",
     "Active Path Packets": "SKILL.md missing route-first Active Path Packet framing",
     "before broad manual search": "SKILL.md missing route-first search boundary",
     "progressive MCP tools": "SKILL.md missing progressive MCP recall preference",
 }
 
 REQUIRED_SKILL_PORTABLE_COMMAND_TERMS = {
-    "Primary foreground path": "SKILL.md missing primary foreground continuity path",
+    "Primary foreground loop": "SKILL.md missing primary foreground continuity path",
     "CLI chooser/recovery card": "SKILL.md missing CLI recovery-card pointer",
     "references/maintenance-and-operations.md": (
         "SKILL.md missing maintenance/operator reference pointer"
@@ -1305,6 +1302,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(host_hook_boundary_issues(repo_root))
     issues.extend(architecture_index_issues(repo_root))
     issues.extend(discussion_atlas_static_issues(repo_root))
+    issues.extend(installable_reference_tracker_identity_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():
@@ -1515,7 +1513,7 @@ def check_docs(root: Path) -> dict[str, Any]:
             issues.append(message)
     if re.search(r"`(?:python|python3|py)\s+-m\s+aippocampus_runtime\.", text):
         issues.append("SKILL.md should point to facade cards/references, not direct runtime module recipes")
-    recall_idx = text.find('aippocampus agent recall "query" --json')
+    recall_idx = text.find('aippocampus agent recall "old decision or handoff cue" --json')
     search_idx = text.find("direct clean-source search")
     health_idx = text.find("Check state before or after long work")
     onboard_idx = text.find("Check the local provider matrix without writing artifacts")

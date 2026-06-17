@@ -19,108 +19,33 @@ This file is the stable runtime entrypoint. Keep it slim. Do not append
 changelog-style notes here. Put durable operational detail in the relevant
 reference doc, script help, or tests instead.
 
-## Agent Stance
-
-If AIppocampus is installed, assume the user wants local, source-backed memory
-to help when it may matter. Do not treat every memory use as suspicious by
-default; treat unlabeled, unsourced, stale, conflicting, private, or high-risk
-context as suspicious.
-
-Before nontrivial work, fresh-thread work, handoff, correction-sensitive work,
-old-decision work, or life-wide continuity work, ask one question:
-
-Could old source, old corrections, unfinished work, route context, user
-preferences, or relationship context change what I should do next?
-
-- If no, continue normally without ceremony.
-- If yes, consume the smallest useful continuity packet or route first.
-- If a route already exists, follow it before broad manual search.
-- If a continuity domain pointer exists, treat it as a durable route back to
-  the source trail, not as a fact to repeat.
-- If exact wording, sensitive facts, conflicts, stale claims, or high-risk
-  action are involved, reopen source or use bounded evidence before claiming.
-
-More context is not automatically pollution. Unlabeled context is pollution.
-Unsourced context is navigation at best. Source-backed evidence should be
-respected as evidence within its declared scope, not flattened back into scent.
-
-Do not search every turn. Do not run heavy recall every turn. Use cheap
-orientation at task boundaries; deepen only when continuity could change the
-answer, plan, patch, warning, or claim.
-
-## Operating Model
-
-- Clean source is the daily memory surface: original visible user messages plus
-  assistant final answers, with raw envelopes, tool payloads, attachments, and
-  routine commentary removed. It is original wording, not summary memory.
-- Raw rollout is immutable audit source. Do not rewrite, truncate, or dedupe
-  live Codex Desktop JSONL unless the user explicitly asks for an archival
-  cleanup route.
-- Recall is conclusion-first by default. User turns and `final_answer` messages
-  outrank commentary; tool/debug provenance belongs to audit routes.
-- Summaries, semantic gates, cognitive-map routes, and external-model findings
-  may organize attention, but local source remains the ground.
-- External-model routes must redact credential-like material and never treat
-  model-generated associations as source-backed fact.
-
-## Memory Packet Action Grammar
-
-Packets should tell the foreground agent what kind of action they support. This
-`action grammar` is the #786 projection from packet trust state; it is not a
-second scoring layer and should not force rigid behavior.
-
-| Grammar | How To Use It |
-|---|---|
-| `direction_only` | Background, scent, or semantic wayfinding. It may shape attention, but it cannot support factual claims. |
-| `direction_with_ref` | Source-ref-backed candidate direction. It may shape route, depth, or question choice; reopen source before factual claims. |
-| `reopenable_route` | Use the packet's route refs, lock id, or reopen plan before broad manual search. Do not answer from the packet itself. |
-| `bounded_evidence` | Usable within the packet's declared scope. Reopen or deepen for exact quotes, wider context, conflicts, sensitive facts, or high-risk claims. |
-| `source_open` | Source is already open to the host; exact wording may be used only within scope and redaction boundaries. |
-| `ignore_or_blocked` | Privacy, stale, conflict, missing-source, or high-risk boundary. Do not let it shape answer content except to report/defer when that boundary matters. |
-
-## Hook Packet Decoder
-
-Hook packets are action hints, not facts. Decode the packet into the smallest
-safe next action:
-
-| Signal | Default action | Do not do |
-|---|---|---|
-| `suggested_agent_action=agent_recall`, `lead_kinds`, or `budget=recall_top_2` | Call recall/deepen or follow the provided route before broad manual search. | Treat the packet itself as evidence. |
-| `not_enough_for_claim=true` | Use it as route/context only until source is reopened. | Make factual, public, numeric, stale, sensitive, or high-risk claims. |
-| `direction_only` | Let it shape low-risk attention or the next search question. | Repeat it as a fact or overfit the answer to it. |
-| `direction_with_ref` or `reopenable_route` | Follow refs, route handles, Active Path Packets, lock ids, or reopen plans; deepen/reopen when relevant. | Ignore route handles and invent a broad manual search first. |
-| `bounded_evidence` or `source_open` | Use only inside declared scope and redaction/currentness boundaries. | Widen scope, quote exact wording, or resolve conflicts without reopening. |
-| `ignore_or_blocked` | Defer, ask lightly, or explain the boundary when it matters. | Let blocked/private/stale/conflicted material shape answer content. |
-
-When the packet is weak, proceed normally. Reopen or deepen for exact wording,
-public/numeric claims, stale/conflicted material, sensitive facts, or high-risk
-action.
-
-Presence and proof are different layers. A memory atmosphere can help the agent
-understand the moment; a working continuity brief can guide the next action;
-source-court behavior still owns exact quotes, disputed facts, sensitive
-claims, and abstention.
-
 ## First Moves
 
-Use the installed `aippocampus` CLI or the AIppocampus MCP tools. If those are
-missing, follow install/update cards or the narrow reference docs instead of
-dropping straight into runtime modules.
+Use AIppocampus when prior source could change the next action: nontrivial
+work, fresh-thread continuation, handoff, old decisions, corrections,
+preferences, or life-wide continuity. If not, continue normally.
 
-Primary foreground path:
+Primary foreground loop:
 
-1. Confirm the host can see AIppocampus. In Codex, use
-   `aippocampus plugin install --codex --verify` when the user is setting up or
-   refreshing the plugin.
-2. Pull continuity with `aippocampus agent recall "query" --json`, or with
-   `agent_recall` / `recall_context` when an MCP client exposes those tools.
-3. Deepen the selected route before claims with
-   `aippocampus agent deepen --request 1 --last-recall --json`, or
-   `agent_deepen` / `recall_deepen` in MCP.
+1. If the host exposes MCP tools, call `agent_recall` or `recall_context`.
+   Otherwise use the CLI:
+   `aippocampus agent recall "old decision or handoff cue" --json`.
+2. Deepen the selected route before claims with `agent_deepen` /
+   `recall_deepen`, or:
+   `aippocampus agent deepen --request 1 --last-recall --json`.
+3. If no route appears and the user remembers wording, use
+   `search_memory` or `aippocampus search "a distinctive old phrase" --json`.
+
+Tool visibility fallback: MCP first when the tool is listed; CLI facade when
+MCP is unavailable; if neither exists, stop and surface the install/update card
+instead of importing runtime modules directly.
+
+Confirm the host can see AIppocampus when the user is setting up or refreshing
+the plugin: `aippocampus plugin install --codex --verify`.
 
 Prefer ambient cards, Active Path Packets, active locks, route handles,
-continuity domain pointers, or progressive MCP tools before inventing broad
-manual searches. Use direct clean-source search only when the user gives exact
+continuity domain pointers, or progressive MCP tools before broad manual search.
+Use direct clean-source search only when the user gives exact
 wording, no route exists, or a route is blocked and a bounded manual search is
 still justified. Drop to raw/indexed rollout only for exact repair, tool
 provenance, byte accounting, missing evidence, or audit questions, and treat
@@ -128,9 +53,11 @@ that as an operator/audit path.
 
 Useful foreground follow-ups:
 
-- Reviewed Dream/subconscious findings for a current task cue:
-  `aippocampus agent background "task cue" --json`. Treat these as navigation
-  handles only; reopen source before factual, exact, or sensitive claims.
+- Route handle: follow it before broad manual search.
+- Use reviewed Dream/subconscious findings for a current task cue with
+  `aippocampus agent background "task cue" --json`. Treat findings as
+  navigation handles only; reopen source before factual, exact, or sensitive
+  claims.
 - Recover the latest assistant closeout with `aippocampus latest-reply`.
   Commentary-only output is a diagnostic card, not a final closeout.
 - If a foreground agent is about to write feedback, a self-note, an action-hint
@@ -158,10 +85,43 @@ secondary/operator actions, not ambient prompt behavior:
   `aippocampus mcp status`; use `aippocampus mcp list-tools --json` for the full
   schema catalog.
 
+## Agent Stance
+
+If AIppocampus is installed, assume the user wants local, source-backed memory
+to help when it may matter. Treat ordinary source-backed memory as useful within
+scope; slow down for unlabeled, unsourced, stale, conflicting, private, or
+high-risk context.
+
+More context is not automatically pollution. Unlabeled context is pollution.
+Unsourced context is navigation at best. Source-backed evidence should be
+respected as evidence within its declared scope, not flattened back into scent.
+
+Do not search every turn. Do not run heavy recall every turn. Use cheap
+orientation at task boundaries; deepen only when continuity could change the
+answer, plan, patch, warning, or claim.
+
+## Operating Model
+
+- Clean source is the daily memory surface: original visible user messages plus
+  assistant final answers, with raw envelopes, tool payloads, attachments, and
+  routine commentary removed. It is original wording, not summary memory.
+- Raw rollout is immutable audit source. Do not rewrite, truncate, or dedupe
+  live Codex Desktop JSONL unless the user explicitly asks for an archival
+  cleanup route.
+- Recall is conclusion-first by default. User turns and `final_answer` messages
+  outrank commentary; tool/debug provenance belongs to audit routes.
+- Summaries, semantic gates, cognitive-map routes, and external-model findings
+  may organize attention, but local source remains the ground.
+- External-model routes must redact credential-like material and never treat
+  model-generated associations as source-backed fact.
+- Action grammar and hook packet decoding live in
+  `references/ambient-hooks.md`; this bootstrap only names the ordinary loop.
+
 ## Workflow
 
-1. When old context might change the next action, use the smallest useful route,
-   packet, MCP recall step, or clean-source search before answering from memory.
+1. When prior source might change the next action, use the smallest useful
+   route, packet, MCP recall step, or clean-source search before answering from
+   memory.
 2. When a thread may outgrow the current context, keep anchors and clean source
    fresh; use hooks for routine refreshes and explicit commands for repair.
 3. When the user asks for "last reply", use

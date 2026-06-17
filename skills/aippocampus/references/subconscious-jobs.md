@@ -4,6 +4,22 @@ This document is the design note for AIppocampus's background cognition layer.
 It is intentionally separate from `SKILL.md`: the skill entrypoint stays short,
 while this file carries the evolving contract.
 
+## Start With A Reviewed Finding
+
+```bash
+aippocampus agent background "task cue" --json
+```
+
+That command surfaces already reviewed background findings for the current task
+cue. The successful user-facing outcome is simple: a later foreground agent sees
+better route options without waiting for a background job in the current turn.
+
+Source-backed boundary: subconscious jobs create candidate structure for later
+recall and review. They do not answer the user directly, and exact wording,
+sensitive facts, stale claims, disputed details, and high-risk decisions still
+come from reopened source. The canonical product boundary lives in
+`docs/architecture/recall/source-backed-product-discipline.md`.
+
 ## Mental Model
 
 The foreground assistant should stay responsive and evidence-aware. The
@@ -20,8 +36,9 @@ Use this split:
 - Staging layer: model-organized structure stays provisional until consumed,
   validated, or promoted by a stricter workflow.
 
-The core safety rule is simple: subconscious jobs may create candidate structure,
-but they must not rewrite source, delete source, or directly write formal memory.
+The core safety rule is simple: subconscious jobs create candidate structure
+beside source; source rewriting, source deletion, and formal-memory writes stay
+outside this background lane.
 
 ## Files
 
@@ -324,7 +341,7 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   `foreground_use` / `sensitive_use_gate` metadata: use quietly only when it
   changes the current answer or route, stay silent when source is already
   visible, expired, or high-annoyance, and reopen source before any strong
-  user-facing claim. Accepted rows also carry the #299 trust-horizon contract:
+  user-facing claim. Accepted rows also carry the working-memory trust-horizon contract:
   `validated_at`, `validated_by`, `source_fingerprint`, `review_after`,
   `expires_at`, `invalidation_triggers`, `visibility_tier`, and the nested
   `trust_horizon` capsule. Treat these as invalidation metadata, not proof;
@@ -342,7 +359,7 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   territory. Its no-write report treats pruning as activation eligibility only,
   requires source/current-checkout evidence for truth conflicts, and lets
   explicit user correction suppress otherwise plausible strategy surfaces
-  without making the correction itself an ungrounded fact. The #483 extension
+  without making the correction itself an ungrounded fact. The source-backed correction extension
   adds foreground-usefulness counters for false scent reduction, wrong-route
   drag reduction, duplicate-route collapse, recent helpful/harmful outcomes,
   and estimated verification tool calls saved; apply mode writes only an

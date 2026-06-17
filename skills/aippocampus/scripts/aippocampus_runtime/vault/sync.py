@@ -42,7 +42,10 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog="aippocampus vault sync",
+        description="Sync thread-memory artifacts into a local human-readable vault and dashboard.",
+    )
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--vault", default=str(DEFAULT_VAULT))
     parser.add_argument("--automation-name")

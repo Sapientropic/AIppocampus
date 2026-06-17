@@ -13,6 +13,7 @@ Use this page only as the folder map.
 | Reader | First stop |
 | --- | --- |
 | I just want to install and see one recall moment. | [`start-here.md#first-recall`](start-here.md#first-recall) |
+| I want to see my memory or leave a small agent note. | [`start-here.md#see-and-add-to-memory`](start-here.md#see-and-add-to-memory) |
 | I am evaluating AIppocampus for coding-agent work. | [`start-here.md#coding-agent-user`](start-here.md#coding-agent-user) |
 | I am changing runtime, search, hooks, or sync. | [`start-here.md#maintainer`](start-here.md#maintainer) |
 | I am lost in the newer architecture concepts. | [`architecture/source-shape-runtime-spine.md`](architecture/source-shape-runtime-spine.md) |

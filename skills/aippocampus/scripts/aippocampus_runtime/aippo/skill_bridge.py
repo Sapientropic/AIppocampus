@@ -272,28 +272,40 @@ def _activation_packet(seed: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(clause, Mapping)
         and (clause.get("activation") or {}).get("packet_candidate")
     ]
-    guidance = [_text(clause.get("guidance"), 150) for clause in clauses[:4]]
-    packet = {
-        "kind": "aippocampus_skill_seed_activation_packet",
-        "schema_version": SCHEMA_VERSION,
-        "seed_id": seed.get("seed_id"),
-        "skill_id": seed.get("skill_id"),
-        "output_mode": "working_contract_seed",
-        "display_hint": f"Skill seed: {seed.get('skill_id')}",
-        "use_guidance": guidance,
-        "active_clause_count": len(guidance),
-        "suppressed_clause_count": seed.get("metrics", {}).get("skill_clause_suppressed_count", 0),
-        "claim_permission": "declared_skill_guidance_not_observed_usefulness",
-        "next_action": "try_seed_when_relevant" if guidance else "stay_silent",
-        "deepen_route_id": f"deepen:skill-seed:{seed.get('skill_id')}",
-    }
-    if _json_bytes(packet) <= FOREGROUND_PACKET_BYTE_BUDGET:
+
+    def build_packet(guidance: list[str], *, include_suppressed: bool) -> dict[str, Any]:
+        packet = {
+            "kind": "aippocampus_skill_seed_activation_packet",
+            "schema_version": SCHEMA_VERSION,
+            "seed_id": seed.get("seed_id"),
+            "skill_id": seed.get("skill_id"),
+            "output_mode": "working_contract_seed",
+            "display_hint": f"Skill seed: {seed.get('skill_id')}",
+            "use_guidance": guidance,
+            "active_clause_count": len(guidance),
+            "claim_permission": "declared_skill_guidance_not_observed_usefulness",
+            "next_action": "try_seed_when_relevant" if guidance else "stay_silent",
+            "deepen_route_id": f"deepen:skill-seed:{seed.get('skill_id')}",
+        }
+        if include_suppressed:
+            packet["suppressed_clause_count"] = seed.get("metrics", {}).get(
+                "skill_clause_suppressed_count", 0
+            )
         return packet
-    compact = dict(packet)
-    compact["use_guidance"] = guidance[:2]
-    compact["active_clause_count"] = len(compact["use_guidance"])
-    compact.pop("suppressed_clause_count", None)
-    return compact
+
+    # Skill entry docs are allowed to evolve, but the AIppo foreground seed must
+    # remain a tiny action hint. Prefer keeping more clauses with shorter text;
+    # only drop clauses when compression alone cannot stay inside the packet
+    # budget.
+    clause_counts = range(min(4, len(clauses)), 0, -1)
+    for count in clause_counts:
+        for limit in (150, 130, 110, 90, 70):
+            guidance = [_text(clause.get("guidance"), limit) for clause in clauses[:count]]
+            for include_suppressed in (True, False):
+                packet = build_packet(guidance, include_suppressed=include_suppressed)
+                if _json_bytes(packet) <= FOREGROUND_PACKET_BYTE_BUDGET:
+                    return packet
+    return build_packet([], include_suppressed=False)
 
 
 def _deepen_surface(seed: Mapping[str, Any], markdown: str) -> dict[str, Any]:

@@ -832,6 +832,7 @@ COMMANDS = {
         "agent_self_note_cli.py",
         "aippocampus_runtime.source.agent_self_note_cli",
     ),
+    "vault": CommandSpec("vault_sync.py", "aippocampus_runtime.vault.sync"),
     "latest-reply": CommandSpec(
         "latest_reply.py",
         "aippocampus_runtime.source.latest_reply",
@@ -1030,6 +1031,12 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             module_name_for_script("provider_doctor.py"),
             ["config", *rest],
         )
+    if command == "vault":
+        if not rest:
+            rest = ["--help"]
+        elif rest[0] == "sync":
+            rest = rest[1:] or ["--help"]
+        return invocation_from_spec(command, COMMANDS[command], rest)
     if command in COMMANDS:
         if command == "agent" and not rest:
             return invocation_from_spec(command, COMMANDS[command], ["--help"])
@@ -1531,6 +1538,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  pause / forget      Safe personal-control cards, no destructive defaults", file=target)
     print("  latest-reply        Latest final assistant closeout, not commentary", file=target)
     print("  self-note append    Add a voluntary foreground-agent margin note", file=target)
+    print("  vault sync          Build a local human-readable vault/dashboard", file=target)
     print("  continuity-domain   Explicitly produce/append source-trailed domains", file=target)
     print("  questions status    Read source-backed question tracking status", file=target)
     print("  work-guard          Agent issue-work active-pull orientation packet", file=target)
