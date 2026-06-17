@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -67,6 +68,31 @@ class AippocampusStartCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["decision"], "register_source_before_continuity")
         self.assertEqual(payload["agent_next_action"]["command"], "aippocampus onboard --provider auto --status --json")
+
+    def test_bare_aippocampus_in_new_workspace_shows_start_card_not_help_wall(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ)
+            existing_pythonpath = env.get("PYTHONPATH")
+            env["PYTHONPATH"] = (
+                str(SCRIPTS)
+                if not existing_pythonpath
+                else str(SCRIPTS) + os.pathsep + existing_pythonpath
+            )
+            proc = subprocess.run(
+                [sys.executable, "-m", "aippocampus_runtime.cli.facade"],
+                cwd=tmp,
+                env=env,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("AIppocampus start", proc.stdout)
+        self.assertIn("next: aippocampus onboard --provider auto --status --json", proc.stdout)
+        self.assertNotIn("Commands:", proc.stdout)
 
     def test_start_json_routes_trusted_codex_setup_before_recall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -1120,8 +1120,9 @@ def main(argv: list[str] | None = None) -> int:
             "MCP foreground/server entry.\n\n"
             "Action card:\n"
             "  mcp status              Compact readiness card for foreground agents.\n"
-            "  mcp list-tools          Compact readiness card; no schema wall by default.\n"
+            "  mcp list-tools          Full MCP schema catalog for host wiring.\n"
             "  mcp list-tools --json   Full MCP schema catalog for host wiring.\n"
+            "  mcp list-tools --compact  Compact readiness card; no schema wall.\n"
             "  mcp --names             Tool names only.\n\n"
             "Bare `aippocampus mcp` remains the stdio server when launched by an MCP host."
         ),
@@ -1153,10 +1154,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(tool_names_summary(), ensure_ascii=False, indent=2))
         return 0
     if args.list_tools or args.command in {"list-tools", "status"}:
-        compact_default = (args.list_tools or args.command == "list-tools") and not (
-            args.json or args.names
-        )
-        if args.summary_json or args.command == "status" or compact_default:
+        if args.summary_json or args.command == "status":
             print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
             return 0
         if args.names:

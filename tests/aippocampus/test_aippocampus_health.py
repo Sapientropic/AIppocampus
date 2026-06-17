@@ -107,6 +107,74 @@ class AippocampusHealthTests(unittest.TestCase):
             "prepare_graphify_corpus",
         )
 
+    def test_exit_code_stays_zero_for_ready_with_optional_maintenance(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "product_readiness": {
+                        "status": "ready_with_optional_maintenance",
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": True,
+                        "maintenance_required_before_recall": False,
+                    },
+                    "recommended_actions": [
+                        {
+                            "id": "checkpoint",
+                            "severity": "suggestion",
+                            "reason": "checkpoint can wait until idle",
+                            "facade_command": "aippocampus maintenance --cwd C:/private/work",
+                        }
+                    ],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json", "--exit-code"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ordinary_first_recall_usable"])
+
+    def test_exit_code_is_nonzero_when_first_recall_is_blocked(self) -> None:
+        with (
+            mock.patch(
+                "aippocampus_runtime.health.build_health_report",
+                return_value={
+                    "ok": False,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "product_readiness": {
+                        "status": "needs_maintenance",
+                        "ready": False,
+                        "ordinary_first_recall_usable": False,
+                        "maintenance_recommended": True,
+                        "maintenance_required_before_recall": True,
+                    },
+                    "recommended_actions": [
+                        {
+                            "id": "refresh_clean_source",
+                            "severity": "critical",
+                            "reason": "clean source missing",
+                            "facade_command": "aippocampus maintenance --cwd C:/private/work",
+                        }
+                    ],
+                    "privacy": {},
+                },
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json", "--exit-code"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 2)
+        self.assertFalse(payload["ordinary_first_recall_usable"])
+
     def test_agent_json_health_uses_no_action_only_when_clean_ready(self) -> None:
         with (
             mock.patch(

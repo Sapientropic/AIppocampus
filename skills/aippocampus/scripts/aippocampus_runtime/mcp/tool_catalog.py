@@ -37,7 +37,7 @@ def tool_schema(
 TOOLS: list[dict[str, Any]] = [
     tool_schema(
         "agent_recall",
-        "Find source-backed continuity routes for the current task; deepen before making claims.",
+        "Find source-backed continuity routes for the current task. When: prefer over recall_context for semantic, attention-router, macro-aware, or agent-native follow-up recall; use search_memory for exact wording. After: call agent_deepen on the selected route before claims.",
         {
             "query": {"type": "string"},
             "intent": {"type": "string"},
@@ -53,14 +53,14 @@ TOOLS: list[dict[str, Any]] = [
             "run_semantic_gate": {"type": "boolean"},
             "semantic_gate_mode": {"type": "string", "enum": ["off", "auto", "on"]},
             "semantic_timeout": {"type": "integer", "minimum": 1, "maximum": 60},
-            "detail": {"type": "string", "enum": ["compact", "full", "diagnostic", "debug"]},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
         required_any=["query", "intent"],
     ),
     tool_schema(
         "agent_aippo",
-        "Get low-risk working guidance for a task before editing or broad search.",
+        "Get low-risk working guidance for a task before editing or broad search. When: use for quick orientation when you do not yet need route receipts. After: run agent_recall or search_memory if the guidance says prior source matters.",
         {
             "task": {"type": "string"},
             "include_private_paths": {"type": "boolean"},
@@ -68,7 +68,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "agent_background",
-        "Surface reviewed background findings for a task cue; does not start background jobs or make findings source truth.",
+        "Surface reviewed background findings for a task cue; does not start background jobs or make findings source truth. When: use for previously reviewed async findings, not live recall. After: reopen source with agent_recall and agent_deepen before claims.",
         {
             "cue": {"type": "string"},
             "query": {"type": "string"},
@@ -77,14 +77,14 @@ TOOLS: list[dict[str, Any]] = [
             "working_memory_path": {"type": "string"},
             "project": {"type": "string"},
             "limit": {"type": "integer", "minimum": 1, "maximum": 12},
-            "detail": {"type": "string", "enum": ["compact", "detail", "full", "operator"]},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
         required_any=["cue", "query", "task"],
     ),
     tool_schema(
         "agent_deepen",
-        "Open the selected recall route from agent_recall before quoting or relying on it.",
+        "Open the selected recall route from agent_recall before quoting or relying on it. When: use after agent_recall request_index or last-recall handles; use recall_deepen for recall_context handles. After: use returned source scope for bounded claims.",
         {
             "handle": {"type": ["string", "object"]},
             "request_index": {"type": "integer", "minimum": 1, "maximum": 25},
@@ -103,7 +103,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "agent_explain",
-        "Explain why a recall or AIppo route surfaced, without treating it as source evidence.",
+        "Explain why a recall or AIppo route surfaced, without treating it as source evidence. When: use after agent_recall or agent_aippo selection; use recall_diagnostic for no-route, silence, or degradation. After: call agent_deepen if you will rely on the route.",
         {
             "handle": {"type": ["string", "object"]},
             "request_index": {"type": "integer", "minimum": 1, "maximum": 25},
@@ -118,7 +118,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "search_memory",
-        "Search clean source for source-backed receipts; reopen/deepen before exact claims.",
+        "Search clean source for source-backed receipts. When: use exact or distinctive wording; use agent_recall or recall_context for fuzzy continuity. After: reopen with get_turn_context or deepen a route before exact claims.",
         {
             "query": {"type": "string"},
             "cwd": {"type": "string"},
@@ -133,7 +133,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "recall_context",
-        "Get a compact route card for a fuzzy continuity cue, then deepen the useful route.",
+        "Get a compact route card for a fuzzy continuity cue. When: prefer over agent_recall for a lightweight route list without semantic or macro diagnostics; use search_memory for exact phrases. After: call recall_deepen on the useful route.",
         {
             "intent": {"type": "string"},
             "query": {"type": "string"},
@@ -142,14 +142,14 @@ TOOLS: list[dict[str, Any]] = [
             "clean_source_dir": {"type": "string"},
             "registry_dir": {"type": "string"},
             "continuity_domains_snapshot": {"type": "string"},
-            "detail": {"type": "string", "enum": ["compact", "full", "diagnostic", "debug"]},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
         required_any=["intent", "query"],
     ),
     tool_schema(
         "recall_deepen",
-        "Reopen clean source for a route from recall_context or an ambient navigation card.",
+        "Reopen clean source for a route from recall_context or an ambient navigation card. When: use for recall_context handles; use agent_deepen for agent_recall last-recall or request_index routes. After: read the returned source window before claiming.",
         {
             "handle": {"type": ["string", "object"]},
             "cwd": {"type": "string"},
@@ -164,7 +164,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "recall_diagnostic",
-        "Explain why recall surfaced, stayed silent, degraded, or needs source reopen.",
+        "Explain why recall surfaced, stayed silent, degraded, or needs source reopen. When: use for recall_context or route/no-route diagnostics instead of agent_explain, which explains a selected agent route. After: run the suggested recall, deepen, or repair action.",
         {
             "cue": {"type": "string"},
             "intent": {"type": "string"},
@@ -188,7 +188,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "latest_reply",
-        "Find the latest assistant closeout for continuing work; prefer clean source when supplied.",
+        "Find the latest assistant closeout for continuing work; prefer clean source when supplied. When: use to resume thread closeout context, not arbitrary memory search. After: run agent_recall or source reopen on any claim-bearing cue.",
         {
             "cwd": {"type": "string"},
             "rollout": {"type": "string"},
@@ -199,7 +199,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "get_turn_context",
-        "Open one clean-source turn by turn_id, message_id, or turn_index from a route.",
+        "Open one clean-source turn by turn_id, message_id, or turn_index from a route. When: use after search_memory, recall_deepen, or a route gives a selector. After: quote only within the returned source scope.",
         {
             "cwd": {"type": "string"},
             "turn_id": {"type": "string"},
@@ -212,7 +212,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "list_threads",
-        "List registered local memory threads as route handles, not source evidence.",
+        "List registered local memory threads as route handles, not source evidence. When: use for inventory or debugging before recall, not for answering from memory. After: pass a useful cue to recall_context or agent_recall.",
         {
             "registry_dir": {"type": "string"},
             "max": {"type": "integer", "minimum": 1, "maximum": 100},
@@ -223,7 +223,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "register_thread",
-        "Register the current thread after explicit consent so future agents can find it.",
+        "Register the current thread after explicit consent so future agents can find it. When: use only for an approved local registry write, not read-only recall. After: run memory_health or agent_recall to verify discoverability.",
         {
             "cwd": {"type": "string"},
             "registry_dir": {"type": "string"},
@@ -231,14 +231,14 @@ TOOLS: list[dict[str, Any]] = [
             "provider": {"type": "string", "enum": list(PROVIDER_CHOICES)},
             "confirm_write": {"type": "boolean"},
             "write": {"type": "boolean"},
-            "detail": {"type": "string", "enum": ["compact", "full", "diagnostic", "debug"]},
+            "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
         ["cwd", "provider", "confirm_write"],
     ),
     tool_schema(
         "sync_status",
-        "Check local sync readiness without pushing, pulling, or exposing private paths.",
+        "Check local sync readiness without pushing, pulling, or exposing private paths. When: use before sync push, pull, repair, or object-store setup. After: choose an explicit sync command only if the user wants writes.",
         {
             "cwd": {"type": "string"},
             "sync_dir": {"type": "string"},
@@ -250,7 +250,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "memory_health",
-        "Check whether recall is usable now and get one stable next action.",
+        "Check whether recall is usable now and get one stable next action. When: use when source or index readiness is uncertain, not as a recall substitute. After: follow foreground_action or run agent_recall when ready.",
         {
             "cwd": {"type": "string"},
             "detail": {"type": "string", "enum": ["compact", "full"]},
@@ -259,7 +259,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "list_telepathy_handoffs",
-        "List opt-in Telepathy handoff cards without writing coordination state.",
+        "List opt-in Telepathy handoff cards without writing coordination state. When: use when the user asks for saved handoff or coordination cards. After: call deepen_telepathy_handoff for the selected card.",
         {
             "cwd": {"type": "string"},
             "store_path": {"type": "string"},
@@ -271,7 +271,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "deepen_telepathy_handoff",
-        "Return one Telepathy handoff card with sanitized source selectors for reopen.",
+        "Return one Telepathy handoff card with sanitized source selectors for reopen. When: use after list_telepathy_handoffs. After: reopen cited source via get_turn_context or agent_recall before claims.",
         {
             "card_id": {"type": "string"},
             "cwd": {"type": "string"},

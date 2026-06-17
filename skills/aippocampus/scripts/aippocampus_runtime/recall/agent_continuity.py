@@ -867,6 +867,7 @@ def recall(
             status="cannot_verify",
             memory_packets=[],
             deepen_requests=[],
+            query=str(query or ""),
         )
         return _public_payload(
             {
@@ -968,6 +969,7 @@ def recall(
         status="ok" if memory_packets else "no_routes",
         memory_packets=memory_packets,
         deepen_requests=deepen_requests,
+        query=str(query or ""),
     )
     navigation_signals = architecture_navigation_affordance.navigation_signals_for_recall(
         query=str(query or ""),

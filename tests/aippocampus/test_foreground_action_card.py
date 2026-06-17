@@ -81,13 +81,19 @@ class ForegroundActionCardTests(unittest.TestCase):
         self.assertTrue(report["audit_available"])
         self.assertFalse(foreground_action_card.AUDIT_ONLY_KEYS & set(card))
 
-    def test_no_route_card_says_continue_normally(self) -> None:
+    def test_no_route_card_offers_recoverable_search(self) -> None:
         report = self._recall_with_routes([])
         card = report["foreground_action_card"]
 
         self.assertEqual(report["status"], "no_routes")
-        self.assertEqual(card["decision"], "continue_normally")
-        self.assertEqual(card["next_action"], "continue_normally")
+        self.assertEqual(card["decision"], "recover_no_route")
+        self.assertEqual(card["next_action"], "search_memory")
+        self.assertEqual(card["canonical_action"]["tool_name"], "search_memory")
+        self.assertEqual(
+            card["canonical_action"]["cli_command"],
+            'aippocampus search "foreground action card" --json',
+        )
+        self.assertEqual(card["safe_next_actions"][0], card["canonical_action"])
         self.assertEqual(card["claim_boundary"], "no_route_claim")
         self.assertNotIn("metrics", card)
 

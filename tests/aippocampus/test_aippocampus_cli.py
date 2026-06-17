@@ -2001,9 +2001,9 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
-        self.assertIn("agent_recall", payload["key_tools_present"])
-        self.assertNotIn("inputSchema", stdout.getvalue())
+        self.assertIn("tools", payload)
+        self.assertTrue(any(tool["name"] == "agent_recall" for tool in payload["tools"]))
+        self.assertIn("inputSchema", stdout.getvalue())
 
     def test_package_facade_exposes_captureable_python_api(self) -> None:
         from aippocampus_runtime.cli import facade
@@ -2019,8 +2019,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.invocation.command, "mcp")
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
-        self.assertIn("agent_recall", payload["key_tools_present"])
+        self.assertIn("tools", payload)
+        self.assertTrue(any(tool["name"] == "agent_recall" for tool in payload["tools"]))
+        self.assertNotIn("missing_key_tools", payload)
         self.assertEqual(result.stderr, "")
         self.assertEqual(ambient_stdout.getvalue(), "")
         self.assertEqual(ambient_stderr.getvalue(), "")
@@ -2101,15 +2102,20 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("unknown command", dream.stderr)
         self.assertNotIn("unknown command", subconscious.stderr)
 
-    def test_mcp_list_tools_default_is_compact_and_json_is_full_schema(self) -> None:
+    def test_mcp_list_tools_default_is_schema_and_status_is_compact_readiness(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
+        status = self.run_cli("mcp", "status")
         full = self.run_cli("mcp", "list-tools", "--json")
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        compact = json.loads(proc.stdout)
-        self.assertEqual(compact["kind"], "aippocampus_mcp_tool_readiness")
-        self.assertIn("agent_recall", compact["key_tools_present"])
-        self.assertNotIn("inputSchema", proc.stdout)
+        default_tools = json.loads(proc.stdout)["tools"]
+        self.assertTrue(any(tool["name"] == "agent_recall" for tool in default_tools))
+        self.assertIn("inputSchema", proc.stdout)
+        self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
+        readiness = json.loads(status.stdout)
+        self.assertEqual(readiness["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertIn("agent_recall", readiness["key_tools_present"])
+        self.assertNotIn("inputSchema", status.stdout)
         self.assertEqual(full.returncode, 0, full.stdout + full.stderr)
         tools = json.loads(full.stdout)["tools"]
         self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
@@ -2128,9 +2134,8 @@ class AippocampusCliTests(unittest.TestCase):
         with patch("sys.stdout", new=StringIO()) as stdout:
             code = mcp_server.main(["list-tools"])
         self.assertEqual(code, 0)
-        compact = json.loads(stdout.getvalue())
-        self.assertEqual(compact["kind"], "aippocampus_mcp_tool_readiness")
-        self.assertIn("agent_recall", compact["key_tools_present"])
+        default_tools = json.loads(stdout.getvalue())["tools"]
+        self.assertTrue(any(tool["name"] == "agent_recall" for tool in default_tools))
 
         with patch("sys.stdout", new=StringIO()) as full_stdout:
             code = mcp_server.main(["list-tools", "--json"])

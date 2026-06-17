@@ -160,6 +160,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/cli/errors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/start.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/contracts.py",
     "skills/aippocampus/scripts/aippocampus_runtime/config/registry.py",
     "skills/aippocampus/scripts/aippocampus_runtime/controls.py",
     "skills/aippocampus/scripts/aippocampus_runtime/health.py",

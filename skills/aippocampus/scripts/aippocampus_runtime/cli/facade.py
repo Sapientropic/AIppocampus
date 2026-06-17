@@ -1101,7 +1101,13 @@ def run_invocation(invocation: CommandInvocation) -> int:
 
 def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     args = list(argv)
-    if not args or args[0] in {"-h", "--help"}:
+    if not args:
+        invocation = resolve_command(["start"])
+        if invocation is not None:
+            return invocation, run_invocation(invocation)
+        print_help()
+        return None, 0
+    if args[0] in {"-h", "--help"}:
         print_help()
         return None, 0
     if args[0] == "version" and any(arg in {"-h", "--help"} for arg in args[1:]):
@@ -1538,7 +1544,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  doctor config       Report registered env config without values", file=target)
     print("  doctor spend        Report local model spend/yield diagnostics", file=target)
     print("  mcp status          Compact MCP tool readiness", file=target)
-    print("  mcp list-tools      Compact readiness by default; --json lists full schemas", file=target)
+    print("  mcp list-tools      List full MCP schemas; use mcp status for compact readiness", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  observatory         Read-only route-readiness observatory report", file=target)
     print("  episode-arcs        Aggregate Episode/Arc private-history readout", file=target)
