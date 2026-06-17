@@ -235,14 +235,20 @@ def missing_handle_payload(
         },
         "next_safe_action_id": "recall_with_cue",
     }
+    # Missing selector is a foreground input-recovery case. Malformed or stale
+    # handles stay `cannot_verify` in the caller paths because those are source
+    # authority failures, not chooser prompts.
     return _public_payload(
         {
             "kind": kind,
             "schema_version": schema_version,
             "mode": mode,
             "surface": "recall",
-            "status": "cannot_verify",
+            "status": "needs_input",
+            "surface_class": "foreground_recovery_card",
+            "error": body["error"],
             "ok": False,
+            "cli_exit_recommended": "nonzero",
             "result" if mode == "deepen" else "explanation": body,
             **handle_recovery_fields(mode),
             "policy_boundary": policy_boundary(),

@@ -7,7 +7,90 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     foreground_chooser_card,
     foreground_shell_action,
+    foreground_template_action,
 )
+
+
+def import_recovery_payload() -> dict[str, Any]:
+    actions = [
+        foreground_template_action(
+            action_id="preview_conversation_import",
+            label="Preview a generic conversation transcript",
+            command_template=(
+                "aippocampus import conversation --format generic-jsonl "
+                "--input {input_path} --dry-run --json"
+            ),
+            requires=["input_path"],
+            why="Validate the transcript before any registry write.",
+            mutation_risk="read_only_preview",
+            claim_boundary="import_preview_not_source_truth",
+        ),
+        foreground_template_action(
+            action_id="import_private_bundle",
+            label="Import a private AIppocampus bundle",
+            command_template="aippocampus import {bundle_zip} --dest {destination_folder}",
+            requires=["bundle_zip", "destination_folder"],
+            why="Use only for an explicit local AIppocampus bundle transfer.",
+            mutation_risk="explicit_local_import_write",
+            claim_boundary="operator_transfer_not_memory_claim",
+        ),
+        foreground_template_action(
+            action_id="write_conversation_import_after_preview",
+            label="Register the transcript after preview",
+            command_template="aippocampus import conversation --format generic-jsonl --input {input_path}",
+            requires=["input_path"],
+            why="Write is explicit and should follow a reviewed dry-run preview.",
+            mutation_risk="explicit_registry_write",
+            claim_boundary="operator_import_not_source_claim",
+        ),
+    ]
+    return {
+        "kind": "aippocampus_import_recovery",
+        "ok": False,
+        "status": "needs_input",
+        "surface_class": "foreground_chooser_card",
+        "foreground_action_contract": "foreground-action-v1",
+        "error": {
+            "code": "import_choice_required",
+            "message": "Choose a private AIppocampus bundle import or a preview-first conversation import.",
+        },
+        "choices": {
+            "bundle_import": {
+                "label": "private AIppocampus bundle import",
+                "command_template": "aippocampus import {bundle_zip} --dest {destination_folder}",
+                "requires": ["bundle_zip", "destination_folder"],
+                "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
+            },
+            "conversation_import": {
+                "label": "generic conversation transcript import",
+                "preview_command_template": (
+                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
+                ),
+                "write_command_template": (
+                    "aippocampus import conversation --format generic-jsonl --input {input_path}"
+                ),
+                "requires": ["input_path"],
+                "boundary": "preview first; the input transcript stays local operator material",
+            },
+        },
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
+        "safety": {
+            "no_write_happened": True,
+            "preview_before_write": True,
+            "explicit_input_required": True,
+        },
+        "write_boundary": {
+            "written": False,
+            "no_write_happened": True,
+        },
+        "privacy_boundary": {
+            "raw_local_paths_emitted": False,
+            "local_path_redaction_required": True,
+            "private_transcript_material_loaded": False,
+        },
+    }
 
 
 def storage_chooser_payload() -> dict[str, Any]:

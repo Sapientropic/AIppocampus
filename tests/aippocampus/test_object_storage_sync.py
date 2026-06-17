@@ -272,6 +272,13 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(payload["object_config_source"], "explicit_object_store_url")
         self.assertEqual(payload["object_prefix_source"], "explicit_object_prefix")
         self.assertFalse(payload["privacy_boundary"]["endpoint_included"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+        self.assertEqual(payload["agent_next_action"]["id"], "preview_object_sync_push")
+        self.assertEqual(
+            payload["agent_next_action"]["command"],
+            "aippocampus object-sync push --plan --json",
+        )
         self.assertNotIn(self.endpoint, encoded)
         self.assertNotIn(self.prefix, encoded)
 
@@ -319,6 +326,10 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(
             missing_payload["issues"][0]["path"], "<object-path-redacted>"
         )
+        self.assertEqual(
+            missing_payload["safe_next_actions"][0]["command"],
+            "aippocampus object-sync push --plan --json",
+        )
         self.assertNotIn(self.endpoint, missing_encoded)
         self.assertNotIn(self.prefix, missing_encoded)
 
@@ -344,7 +355,8 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertIn("config source: explicit_object_store_url", human_output)
         self.assertIn("prefix source: explicit_object_prefix", human_output)
         self.assertIn("<object-path-redacted>", human_output)
-        self.assertIn("Use object-sync push/pull/repair with --plan first", human_output)
+        self.assertIn("next: aippocampus object-sync push --plan --json", human_output)
+        self.assertIn("preview push/pull/repair with --plan first", human_output)
         self.assertIn("--operator-json only for local endpoint diagnostics", human_output)
         self.assertNotIn(self.endpoint, human_output)
         self.assertNotIn(self.prefix, human_output)

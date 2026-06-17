@@ -123,7 +123,10 @@ def _public_candidate(
         ),
     }
     if not summary_only:
+        result["actionability"] = item.get("actionability")
+        result["plan_only_reason"] = item.get("plan_only_reason")
         result["rebuild_command"] = item.get("rebuild_command")
+        result["rebuild_note"] = item.get("rebuild_note")
         result["expected_rebuild_cost"] = item.get("expected_rebuild_cost")
     return {key: value for key, value in result.items() if value not in (None, "", [])}
 

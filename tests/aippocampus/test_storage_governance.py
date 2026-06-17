@@ -432,12 +432,25 @@ class StorageGovernanceTests(unittest.TestCase):
         payload = json.dumps(plan, ensure_ascii=False)
 
         self.assertFalse(plan["privacy"]["loads_existing_retention_report"])
+        self.assertEqual(plan["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(plan["surface_class"], "foreground_storage_gc_plan")
         self.assertGreater(plan["metrics"]["reclaimable_rebuildable_bytes"], 0)
         self.assertGreaterEqual(plan["metrics"]["eviction_candidate_count"], 1)
         self.assertIn("Path-level retention candidates are unavailable", plan["warnings"][0])
         self.assertNotIn("private phrase", payload)
         self._assert_no_workspace_absolute_paths(plan)
         self.assertEqual(plan["candidates"][0]["source_report"]["kind"], "storage_capacity_report")
+        self.assertEqual(plan["candidates"][0]["actionability"], "plan_only_aggregate")
+        self.assertIn("path-level retention candidates", plan["candidates"][0]["plan_only_reason"])
+        self.assertIn("rebuild_note", plan["candidates"][0])
+        self.assertNotIn("rebuild_command", plan["candidates"][0])
+        self.assertEqual(
+            plan["agent_next_action"]["command"],
+            "aippocampus storage gc --dry-run --json --full --cwd .",
+        )
+        self.assertTrue(
+            all(" --apply " not in action["command"] for action in plan["safe_next_actions"])
+        )
 
     def test_capacity_fallback_cli_redacts_session_like_ids_by_default(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:
@@ -464,6 +477,9 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertGreaterEqual(payload["candidate_count_total"], 1)
         self.assertTrue(payload["candidates"][0]["candidate_handle"].startswith("candidate_"))
+        self.assertEqual(payload["candidates"][0]["actionability"], "plan_only_aggregate")
+        self.assertIn("rebuild_note", payload["candidates"][0])
+        self.assertNotIn("rebuild_command", payload["candidates"][0])
         self.assertNotIn("capacity:session-one", encoded)
         self.assertNotIn("session-one", encoded)
         self.assertNotIn("session:one", encoded)

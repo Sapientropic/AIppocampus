@@ -1784,7 +1784,7 @@ def main(argv: list[str] | None = None) -> int:
             _json_out(payload)
         else:
             print(render_deepen_human(payload))
-        return 2 if payload.get("status") == "cannot_verify" else 0
+        return 2 if payload.get("status") == "cannot_verify" or payload.get("ok") is False else 0
     if args.command == "explain":
         handle = args.handle
         explain_cached_context: dict[str, Any] = {}
@@ -1826,7 +1826,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("AIppocampus agent explain: ok")
                 print("next_safe_action: " + str(data.get("next_safe_action") or "reopen_source"))
-        return 2 if payload.get("status") == "cannot_verify" else 0
+        return 2 if payload.get("status") == "cannot_verify" or payload.get("ok") is False else 0
     if args.command == "feedback":
         if not args.route_id:
             payload = missing_feedback_route_payload(

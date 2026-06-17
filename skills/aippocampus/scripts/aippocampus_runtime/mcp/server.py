@@ -14,6 +14,15 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
 from aippocampus_runtime.mcp import memory_health_recovery
+from aippocampus_runtime.mcp.foreground_recovery import (
+    missing_input_recovery_card,
+)
+from aippocampus_runtime.mcp.foreground_recovery import (
+    register_thread_recovery as _register_thread_recovery,
+)
+from aippocampus_runtime.mcp.foreground_recovery import (
+    template_tool_action as _template_tool_action,
+)
 from aippocampus_runtime.mcp.mutation_boundary import UNSUPPORTED_MUTATION_TOOLS
 from aippocampus_runtime.mcp.provider_key_bridge import (
     maybe_apply_provider_key_bridge_for_semantic_diagnostic,
@@ -161,57 +170,6 @@ def tool_error(
     if arguments is not None:
         payload = public_payload(arguments, payload)
     return text_result(payload, is_error=True)
-
-
-def missing_input_recovery_card(
-    *,
-    code: str,
-    message: str,
-    tool_name: str,
-    arguments: dict[str, Any],
-    required_any: list[str],
-    safe_next_actions: list[dict[str, Any]],
-    staged_followup: list[dict[str, Any]] | None = None,
-    legacy_details: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    details: dict[str, Any] = {
-        "required_any": required_any,
-        "agent_next_action": (
-            f"Call {safe_next_actions[0]['tool_name']} with the suggested arguments."
-            if safe_next_actions
-            else None
-        ),
-        "arguments_template": safe_next_actions[0].get("arguments_template") if safe_next_actions else {},
-    }
-    if legacy_details:
-        details.update(legacy_details)
-    payload: dict[str, Any] = {
-        "ok": False,
-        "status": "needs_input",
-        "surface_class": "foreground_recovery_card",
-        "error": {
-            "code": code,
-            "message": message,
-            "tool_name": tool_name,
-            "required_any": required_any,
-            "details": details,
-        },
-        "agent_next_action": safe_next_actions[0] if safe_next_actions else None,
-        "safe_next_actions": safe_next_actions,
-        "source_boundary": {
-            "claim_authority": "none_until_source_reopened",
-            "navigation_only": True,
-            "source_reopen_required_before_claim": True,
-        },
-        "related_issue": "https://github.com/Sapientropic/AIppocampus/issues/2057",
-    }
-    if staged_followup:
-        payload["staged_followup"] = staged_followup
-    return text_result(public_payload(arguments, payload), is_error=True)
-
-
-def _template_tool_action(tool_name: str, arguments_template: dict[str, Any], requires: list[str]) -> dict[str, Any]:
-    return {"tool_name": tool_name, "arguments_template": arguments_template, "requires": requires, "template_only": True}
 
 
 def clean_source_unavailable(
@@ -811,20 +769,14 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
     if not arguments.get("confirm_write") and not arguments.get("write"):
-        return tool_error(
-            "explicit_write_required",
+        return _register_thread_recovery(
+            arguments,
             "register_thread writes to the local AIppocampus registry and requires cwd, provider, and confirm_write=true.",
-            arguments=arguments,
-            required=["cwd", "provider", "confirm_write"],
-            write_effect="register_current_thread",
         )
     if not str(arguments.get("cwd") or "").strip() or not str(arguments.get("provider") or "").strip():
-        return tool_error(
-            "explicit_write_required",
+        return _register_thread_recovery(
+            arguments,
             "register_thread requires explicit cwd and provider before writing the local registry.",
-            arguments=arguments,
-            required=["cwd", "provider", "confirm_write"],
-            write_effect="register_current_thread",
         )
     registry_dir = (
         Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
