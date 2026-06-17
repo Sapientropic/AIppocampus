@@ -36,6 +36,11 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
         self.assertGreater(payload["case_count"], 0)
         self.assertIn("supports", payload)
         self.assertTrue(benchmark_report_contract_lint(payload)["ok"])
+        self.assertGreaterEqual(len(payload["gap_next_actions"]), 4)
+        self.assertEqual(
+            {action["track"] for action in payload["gap_next_actions"]},
+            {"s4_offline_proxy_alignment", "s5_representation_space_health"},
+        )
         self.assertFalse(payload["config"]["uses_live_llm_judge"])
         self.assertFalse(payload["config"]["requires_provider_keys"])
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_query_text_emitted"])
@@ -103,6 +108,14 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
         self.assertIn("add_representation_health_runner", s5_actions)
         self.assertIn("required_artifact", s5_actions["provide_local_embedding_index"])
         self.assertIn("owner_path", s5_actions["add_representation_health_runner"])
+        self.assertEqual(
+            {
+                action["id"]
+                for action in payload["gap_next_actions"]
+                if action["track"] == "s5_representation_space_health"
+            },
+            set(s5_actions),
+        )
         self.assertIn("human_level_semantic_understanding", payload["cannot_claim"])
         self.assertIn("track_a_b_product_quality_replacement", payload["cannot_claim"])
         self.assertIn("live_llm_judge_quality", payload["cannot_claim"])
