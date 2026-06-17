@@ -583,6 +583,8 @@ class LearningLoopTests(unittest.TestCase):
         self.assertFalse(first["model_output_is_evidence"])
         self.assertEqual(stage["metrics"]["raw_private_text_leak_count"], 0)
         self.assertEqual(stage["stage"], "action_time_capable")
+        self.assertGreaterEqual(len(stage["action_time"]["guidance"]), 1)
+        self.assertIn("guidance_id", stage["action_time"]["guidance"][0])
         self.assertEqual(stage["metrics"]["repeat_semantic_failure_prevented_or_redirected_count"], 0)
         self.assertEqual(stage["metrics"]["outcome_unobserved_count"], stage["metrics"]["action_time_guidance_count"])
         self.assertGreaterEqual(stage["metrics"]["unproven_count"], 1)

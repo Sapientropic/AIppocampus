@@ -166,6 +166,7 @@ def _recovery_payload(mode: str) -> dict[str, Any]:
             "id": "deepen_selected_route",
             "label": "Deepen selected route after recall",
             "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            "depends_on": "last_recall_cache",
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
             "why": "Use after recall has written a same-machine route request cache.",

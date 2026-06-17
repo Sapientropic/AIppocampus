@@ -37,6 +37,39 @@ REQUIRED_USEFULNESS_NEGATIVE_CONTROLS = (
     "manual_search_fallback",
 )
 
+FAMILY_MEASUREMENT_RUNNERS: dict[str, dict[str, str]] = {
+    "agent_continuity_loop": {
+        "runner": "benchmarks/aippocampus/benchmark_agent_continuity_loop.py",
+        "owner_issue": "#1969",
+        "output_artifact": (
+            "docs/evidence/benchmarks/reports/agent_continuity_loop_public_cohort.json"
+        ),
+    },
+    "map_rot_lifecycle_debt": {
+        "runner": "benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py",
+        "owner_issue": "#1948",
+        "output_artifact": (
+            "docs/evidence/benchmarks/reports/map_rot_lifecycle_debt_public_cohort.json"
+        ),
+    },
+}
+
+QUALITY_BLOCKER_ACTIONS: dict[str, str] = {
+    "candidate_not_yet_measured": "run_or_build_declared_public_cohort_measurement",
+    "usefulness_gate_unmeasured": "measure_usefulness_blockers_at_zero_threshold",
+    "attention_cost_gate_unmeasured": "measure_foreground_attention_cost_budget",
+    "maturity_level_below_public_quality": "promote_only_after_public_quality_maturity_report",
+    "holdout_not_run": "run_declared_holdout_without_tuning_on_holdout",
+}
+
+USEFULNESS_BLOCKER_ACTIONS: dict[str, str] = {
+    "generic_hints": "add_measurement_rows_for_vague_foreground_packets",
+    "route_label_collisions": "add_measurement_rows_for_indistinct_reopenable_routes",
+    "wrong_route_drag": "add_measurement_rows_for_stale_or_cross_scope_route_drag",
+    "unnecessary_reopen": "add_measurement_rows_for_no_help_or_stay_silent_cases",
+    "manual_search_fallback": "add_measurement_rows_for_missing_source_backed_routes",
+}
+
 
 def _common_usefulness_blockers() -> list[dict[str, Any]]:
     descriptions = {
@@ -234,6 +267,62 @@ def _promoted_family_entry(
     }
 
 
+def _next_measurement_action(family: Mapping[str, Any]) -> dict[str, Any]:
+    family_id = str(family.get("family_id") or "")
+    runner = FAMILY_MEASUREMENT_RUNNERS.get(family_id, {})
+    candidate = family.get("public_cohort_candidate")
+    candidate = candidate if isinstance(candidate, Mapping) else {}
+    quality_blockers = [str(item) for item in candidate.get("quality_gate_blockers") or []]
+    usefulness_blockers = [
+        str(item.get("control_id") or "")
+        for item in family.get("usefulness_promotion_blockers") or []
+        if isinstance(item, Mapping)
+    ]
+    blocker_actions = {
+        blocker: QUALITY_BLOCKER_ACTIONS.get(
+            blocker,
+            "review_unmapped_quality_gate_blocker_before_promotion",
+        )
+        for blocker in quality_blockers
+    }
+    blocker_actions.update(
+        {
+            blocker: USEFULNESS_BLOCKER_ACTIONS.get(
+                blocker,
+                "review_unmapped_usefulness_blocker_before_promotion",
+            )
+            for blocker in usefulness_blockers
+            if blocker
+        }
+    )
+    if runner:
+        runner_path = runner["runner"]
+        return {
+            "family_id": family_id,
+            "runner_status": "existing_runner",
+            "owner_issue": runner["owner_issue"],
+            "command": f"python {runner_path} --json",
+            "output_artifact": runner["output_artifact"],
+            "blockers": quality_blockers,
+            "usefulness_blockers": usefulness_blockers,
+            "blocker_actions": blocker_actions,
+            "promotes_family": False,
+            "measurement_scope": "selected_candidate_family_not_public_quality_yet",
+        }
+    return {
+        "family_id": family_id,
+        "runner_status": "runner_missing",
+        "owner_issue": "#1195",
+        "command": "gh issue view 1195 --comments",
+        "output_artifact": "",
+        "blockers": quality_blockers,
+        "usefulness_blockers": usefulness_blockers,
+        "blocker_actions": blocker_actions,
+        "promotes_family": False,
+        "measurement_scope": "runner_scaffold_required_before_public_quality_claim",
+    }
+
+
 def build_family_promotion_candidate_report() -> dict[str, Any]:
     """Build the #1195 public-safe candidate-family decision report."""
 
@@ -349,6 +438,9 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
         "selected_family_count": len(selected),
         "promoted_families": promoted,
         "selected_families": selected,
+        "next_measurement_actions": [
+            _next_measurement_action(family) for family in selected
+        ],
         "deferred_families": deferred,
         "gate_separation": {
             "contract_gate_ok": "current deterministic contract still passes",

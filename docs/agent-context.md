@@ -184,15 +184,15 @@ readiness, not as consent to ingest every detected provider and not as a
 Codex-only scoped-provider proof.
 
 Register local history only after user confirmation, and choose an explicit
-provider path:
+provider path. Generic JSONL import needs a user-selected local export file;
+keep that filename in the command you run rather than copying a placeholder
+from this agent context:
 
 ```sh
 uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
@@ -258,7 +258,16 @@ clean-source search is broken.
 
 ## MCP Usage
 
-List local MCP tools:
+For foreground MCP use, make one continuity pull before reading the whole tool
+catalog:
+
+```text
+agent_recall or recall_context -> agent_deepen or recall_deepen
+```
+
+If the route is missing or stale, use `memory_health` as the recovery card.
+Only inspect the local MCP catalog when a host/plugin integration or operator
+debugging task needs schema visibility:
 
 ```sh
 uvx aippocampus mcp status

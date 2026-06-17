@@ -485,6 +485,19 @@ class ActionHintCacheTests(unittest.TestCase):
             result["empty_cache_recovery"]["reason"],
             "semantic_guidance_present_but_not_materialized",
         )
+        self.assertFalse(result["action_hints_ready"])
+        self.assertFalse(result["wrote_empty_cache"])
+        self.assertFalse(result["empty_cache_recovery"]["action_hints_ready"])
+        self.assertFalse(result["empty_cache_recovery"]["wrote_empty_cache"])
+        self.assertTrue(
+            result["empty_cache_recovery"][
+                "semantic_guidance_present_but_not_materialized"
+            ]
+        )
+        self.assertEqual(
+            result["empty_cache_recovery"]["bridge_status"],
+            "blocked_pending_semantic_guidance_review",
+        )
         self.assertGreater(
             result["empty_cache_recovery"]["semantic_guidance"][
                 "semantic_action_time_guidance_count"
@@ -494,6 +507,31 @@ class ActionHintCacheTests(unittest.TestCase):
         encoded = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("<events.jsonl>", encoded)
         self.assertNotIn(str(root), encoded)
+
+    def test_empty_refresh_cache_write_marks_empty_cache_as_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache_path = root / "action-hints.jsonl"
+            result = cache.refresh_action_hint_cache(
+                cwd=root,
+                cache_jsonl=cache_path,
+                write=True,
+                include_default_learning=True,
+                include_default_effectiveness_ledger=True,
+                now_unix=1000,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["wrote"])
+        self.assertEqual(result["cache_status"], "with_empty_cache")
+        self.assertFalse(result["action_hints_ready"])
+        self.assertTrue(result["wrote_empty_cache"])
+        self.assertFalse(result["empty_cache_recovery"]["action_hints_ready"])
+        self.assertTrue(result["empty_cache_recovery"]["wrote_empty_cache"])
+        self.assertEqual(
+            result["foreground_action"]["id"],
+            "review_semantic_guidance_before_cache",
+        )
 
 
 if __name__ == "__main__":

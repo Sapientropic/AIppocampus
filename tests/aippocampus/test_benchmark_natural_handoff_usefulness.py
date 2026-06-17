@@ -39,6 +39,25 @@ class NaturalHandoffUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertIn("useful_now", report)
         self.assertNotIn("recommended_owner_status", report["promotion_readout"])
 
+    def test_regression_blockers_emit_foreground_next_actions(self) -> None:
+        report = benchmark.build_report()
+        actions = {
+            action["blocker_id"]: action
+            for action in report["blocker_next_actions"]
+        }
+
+        self.assertIn("safe_route_demoted_to_scent", actions)
+        self.assertIn("fresh_agent_broad_search_before_recall", actions)
+        self.assertIn("wrong_route_drag", actions)
+        self.assertIn("copy_pasteable_deepen_target_missing", actions)
+        self.assertEqual(
+            actions["copy_pasteable_deepen_target_missing"]["owner_issue"],
+            "#1988",
+        )
+        self.assertTrue(actions["wrong_route_drag"]["owner_module_path"])
+        self.assertTrue(actions["fresh_agent_broad_search_before_recall"]["command"])
+        self.assertFalse(actions["safe_route_demoted_to_scent"]["live_product_claim"])
+
     def test_winning_cases_pass_usefulness_and_attention_cost_gates(self) -> None:
         report = benchmark.build_report()
         wins = [row for row in report["cases"] if row["observed_outcome"] == "win"]

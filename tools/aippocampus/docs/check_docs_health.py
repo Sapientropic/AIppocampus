@@ -88,7 +88,7 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
 }
 
 REQUIRED_SKILL_PORTABLE_COMMAND_TERMS = {
-    "Foreground continuity surfaces": "SKILL.md missing foreground continuity surface section",
+    "Primary foreground path": "SKILL.md missing primary foreground continuity path",
     "CLI chooser/recovery card": "SKILL.md missing CLI recovery-card pointer",
     "references/maintenance-and-operations.md": (
         "SKILL.md missing maintenance/operator reference pointer"
@@ -331,7 +331,7 @@ REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
     "`aippocampus_runtime.public` is deferred": (
         "public API doc missing deferred public facade decision"
     ),
-    "`aippocampus import conversation --format generic-jsonl --input <path>`": (
+    "`aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl`": (
         "public API doc missing provider-neutral conversation import command"
     ),
     "Internal registry modules may be used by trusted operators": (
@@ -1515,8 +1515,8 @@ def check_docs(root: Path) -> dict[str, Any]:
             issues.append(message)
     if re.search(r"`(?:python|python3|py)\s+-m\s+aippocampus_runtime\.", text):
         issues.append("SKILL.md should point to facade cards/references, not direct runtime module recipes")
-    recall_idx = text.find("First recall for a vague handoff or old decision")
-    search_idx = text.find("Search clean source")
+    recall_idx = text.find('aippocampus agent recall "query" --json')
+    search_idx = text.find("direct clean-source search")
     health_idx = text.find("Check state before or after long work")
     onboard_idx = text.find("Check the local provider matrix without writing artifacts")
     user_command_indices = [idx for idx in (recall_idx, search_idx) if idx >= 0]

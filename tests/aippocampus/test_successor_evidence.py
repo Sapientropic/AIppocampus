@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from aippocampus_runtime.ops import successor_evidence
@@ -32,6 +34,41 @@ class SuccessorEvidenceTests(unittest.TestCase):
             self.assertFalse(row["default_or_live_claim_allowed"])
             self.assertFalse(row["metrics"]["default_adoption_allowed"])
             self.assertEqual(row["metrics"]["raw_private_text_leak_count"], 0)
+
+    def test_cli_report_separates_manifest_closeout_from_issue_actions(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(repo_root / "benchmarks" / "aippocampus" / "benchmark_successor_evidence_sweep.py"),
+                "--json",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        report = json.loads(completed.stdout)
+
+        self.assertEqual(report["coverage"]["live_issue_scope"], "manifest_only")
+        self.assertFalse(report["coverage"]["github_state_checked"])
+        first = report["issues"][0]
+        self.assertTrue(first["manifest_closeout_allowed"])
+        self.assertFalse(first["live_state_checked"])
+        self.assertFalse(first["issue_closeout_action_allowed"])
+        self.assertEqual(first["next_action"], "verify_live_issue_before_closeout")
+        self.assertEqual(
+            first["command"],
+            f"gh issue view {first['issue']} --json state,body,comments",
+        )
+        self.assertEqual(
+            report["issue_actions"][0]["next_action"],
+            "verify_live_issue_before_closeout",
+        )
+        self.assertTrue(
+            report["closeout_action_boundary"][
+                "manifest_closeout_allowed_is_not_live_issue_closeout"
+            ]
+        )
 
     def test_fixture_state_catches_new_open_successor_missing_from_sweep(self) -> None:
         issue_state = {

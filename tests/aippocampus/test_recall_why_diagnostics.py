@@ -290,6 +290,21 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
                 self.assertIn(f'aippocampus {command} "{{cue}}" --json', result.stdout)
                 self.assertIn("source evidence", result.stdout)
 
+    def test_bare_why_json_recovery_marks_deepen_as_dependent(self) -> None:
+        for command in ("why-recall", "why-not-recall"):
+            with self.subTest(command=command):
+                result = facade.run_command([command, "--json"], capture_output=True)
+
+                self.assertFalse(result.ok)
+                self.assertEqual(result.exit_code, 2)
+                payload = json.loads(result.stdout)
+                deepen = next(
+                    action
+                    for action in payload["safe_next_actions"]
+                    if action["id"] == "deepen_selected_route"
+                )
+                self.assertEqual(deepen["depends_on"], "last_recall_cache")
+
     def test_cli_projection_uses_tighten_cue_for_low_specificity_surface(self) -> None:
         from aippocampus_runtime.recall import why_cli
 

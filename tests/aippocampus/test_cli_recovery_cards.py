@@ -665,7 +665,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 if item.get("command_template")
             ]
             self.assertIn("aippocampus import --json", commands)
-            self.assertTrue(any("<path>" in item for item in templates))
+            self.assertTrue(any("{input_path}" in item for item in templates))
             self.assertTrue(all("<path>" not in item for item in commands))
 
     def test_import_conversation_help_is_preview_first(self) -> None:
@@ -676,7 +676,10 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Start with --dry-run --json", proc.stdout)
         self.assertIn("no registry write happens", proc.stdout)
         self.assertIn("Safe first step:", proc.stdout)
-        self.assertIn("--format generic-jsonl --input <path> --dry-run --json", proc.stdout)
+        self.assertIn(
+            "--format generic-jsonl --input ./conversation.jsonl --dry-run --json",
+            proc.stdout,
+        )
         self.assertIn("The input file stays local operator material", proc.stdout)
         self.assertIn("local paths are redacted by default", proc.stdout)
 
@@ -714,7 +717,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertEqual(payload["error"]["code"], "transcript_import_intent_detected")
                 self.assertTrue(payload["safety"]["no_write_happened"])
                 self.assertIn(
-                    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json",
+                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json",
                     payload["error"]["next_command"],
                 )
                 self.assertIn("private", payload["privacy_boundary"]["operator_input"])

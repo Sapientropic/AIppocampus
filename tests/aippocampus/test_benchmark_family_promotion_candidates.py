@@ -74,6 +74,25 @@ class BenchmarkFamilyPromotionCandidateTests(unittest.TestCase):
                     candidate["quality_gate_blockers"],
                 )
 
+    def test_selected_unmeasured_families_emit_measurement_actions(self) -> None:
+        report = promotion.build_family_promotion_candidate_report()
+        actions = {
+            action["family_id"]: action
+            for action in report["next_measurement_actions"]
+        }
+
+        self.assertEqual(set(actions), {"agent_continuity_loop", "map_rot_lifecycle_debt"})
+        agent_action = actions["agent_continuity_loop"]
+        self.assertEqual(agent_action["runner_status"], "existing_runner")
+        self.assertIn("benchmark_agent_continuity_loop.py", agent_action["command"])
+        self.assertIn("candidate_not_yet_measured", agent_action["blockers"])
+        self.assertIn("holdout_not_run", agent_action["blocker_actions"])
+        self.assertTrue(agent_action["output_artifact"].startswith("docs/evidence/benchmarks/reports/"))
+        self.assertNotIn(
+            "attention_navigation_quality",
+            [action["family_id"] for action in report["next_measurement_actions"]],
+        )
+
     def test_usefulness_negative_controls_are_required_before_promotion(self) -> None:
         report = promotion.build_family_promotion_candidate_report()
         required = set(promotion.REQUIRED_USEFULNESS_NEGATIVE_CONTROLS)

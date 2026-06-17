@@ -582,6 +582,7 @@ def build_semantic_learning_stage_report(
         },
         "action_time": {
             "guidance_count": surfaced["guidance_count"],
+            "guidance": surfaced["guidance"],
             "suppression_counts": surfaced["suppression_counts"],
         },
         "outcome_report": outcome_report,

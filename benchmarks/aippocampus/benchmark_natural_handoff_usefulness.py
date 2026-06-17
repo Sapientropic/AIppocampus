@@ -24,6 +24,51 @@ from aippocampus_runtime.recall.continuity_usefulness import continuity_usefulne
 SCHEMA_VERSION = 1
 KIND = "aippocampus_natural_handoff_usefulness_validation"
 
+BLOCKER_NEXT_ACTIONS: dict[str, dict[str, Any]] = {
+    "copy_pasteable_deepen_target_missing": {
+        "next_action": "inspect_compact_recall_deepen_target_contract",
+        "owner_issue": "#1988",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+        "command": "python -m unittest tests.aippocampus.test_recall_why_diagnostics",
+    },
+    "safe_route_demoted_to_scent": {
+        "next_action": "inspect_route_authority_action_grammar_projection",
+        "owner_issue": "#2034",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+        "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+    },
+    "fresh_agent_broad_search_before_recall": {
+        "next_action": "inspect_work_guard_first_use_recall_affordance",
+        "owner_issue": "#2034",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/hooks/",
+        "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+    },
+    "wrong_route_drag": {
+        "next_action": "inspect_stale_currentness_filtering",
+        "owner_issue": "#1972",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+        "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+    },
+    "main_agent_extra_work": {
+        "next_action": "inspect_foreground_work_shift_from_main_to_recall_surface",
+        "owner_issue": "#2034",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+        "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+    },
+    "time_to_first_useful_packet_over_ceiling": {
+        "next_action": "inspect_first_useful_packet_latency_budget",
+        "owner_issue": "#2034",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/hooks/",
+        "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+    },
+    "useful_packet_rate_below_floor": {
+        "next_action": "inspect_useful_packet_selection_thresholds",
+        "owner_issue": "#2034",
+        "owner_module_path": "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+        "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+    },
+}
+
 
 @dataclass(frozen=True)
 class HandoffCase:
@@ -192,6 +237,30 @@ def _success_rate(rows: Iterable[Mapping[str, Any]], role: str) -> float:
     return _rate(wins, len(selected))
 
 
+def _blocker_next_actions(blocker_counts: Mapping[str, int]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for blocker_id, count in sorted(blocker_counts.items()):
+        template = BLOCKER_NEXT_ACTIONS.get(
+            blocker_id,
+            {
+                "next_action": "inspect_unmapped_natural_handoff_regression_blocker",
+                "owner_issue": "#2034",
+                "owner_module_path": "benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py",
+                "command": "python benchmarks/aippocampus/benchmark_natural_handoff_usefulness.py --json",
+            },
+        )
+        actions.append(
+            {
+                "blocker_id": blocker_id,
+                "observed_count": int(count),
+                "live_product_claim": False,
+                "measurement_scope": "bounded_public_synthetic_fixture",
+                **template,
+            }
+        )
+    return actions
+
+
 def build_report() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for case in _synthetic_cases():
@@ -297,6 +366,7 @@ def build_report() -> dict[str, Any]:
             "regression cases show where foreground output loses useful actionability",
         ],
         "agent_action": "use_as_issue_review_input_not_owner_status",
+        "blocker_next_actions": _blocker_next_actions(blocker_counts),
         "can_support_after_action": [
             "human-reviewed issue closeout note for bounded synthetic behavior"
         ],

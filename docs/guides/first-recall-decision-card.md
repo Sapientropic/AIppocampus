@@ -75,10 +75,11 @@ aippocampus agent deepen --request 1 --last-recall --json
 
    ```sh
    aippocampus onboard --provider claude-code --dry-run --json
-   aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
+   aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
    ```
 
-   Register selected local history only after explicit consent.
+   Replace `./conversation.jsonl` with the user-selected export. Register
+   selected local history only after explicit consent.
 
 ## What Counts As Success
 

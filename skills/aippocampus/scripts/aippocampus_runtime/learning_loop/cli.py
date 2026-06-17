@@ -14,6 +14,10 @@ from typing import Any
 from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
 from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
+from aippocampus_runtime.learning_loop.foreground_lifecycle import (
+    preview_cache_bridge_action,
+    semantic_guidance_lifecycle,
+)
 from aippocampus_runtime.learning_loop.private_export import (
     LearningReplayInputError,
     export_private_replay_events,
@@ -218,6 +222,10 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
     semantic_report = build_semantic_learning_dogfood_fixture_report()
     semantic_metrics = dict(semantic_report.get("metrics") or {})
     semantic_stage = dict((semantic_report.get("stage_report") or {}).get("metrics") or {})
+    semantic_lifecycle = semantic_guidance_lifecycle(
+        semantic_report,
+        prepared_count=prepared_count,
+    )
     return _public_payload(
         {
             "kind": KIND,
@@ -264,6 +272,7 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                     )
                 ),
             },
+            "semantic_guidance_lifecycle": semantic_lifecycle,
             "agent_next_action": (
                 foreground_shell_action(
                     action_id="refresh_action_hint_cache",
@@ -303,18 +312,15 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
         )
         materialization_status = "prepared_guidance_ready"
     elif semantic_count:
-        next_action = foreground_shell_action(
-            action_id="review_semantic_guidance_before_cache",
-            label="Review semantic guidance candidates",
-            command="aippocampus learning guidance --json",
-            why="Semantic action-time guidance exists, but source-backed materialization still needs review.",
-            mutation_risk="read_only",
-            claim_boundary="learning_guidance_not_source_truth",
-        )
+        next_action = preview_cache_bridge_action()
         materialization_status = "semantic_guidance_requires_review_before_cache"
     else:
         next_action = _learning_discovery_action()
         materialization_status = "needs_learning_input"
+    lifecycle = dict(payload.get("semantic_guidance_lifecycle") or {})
+    safe_next_actions = [preview_cache_bridge_action(), *_learning_setup_actions()]
+    if not semantic_count:
+        safe_next_actions = _learning_setup_actions()
     return _public_payload(
         {
             **payload,
@@ -325,7 +331,9 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
                 "guidance_count": semantic_count,
                 "materialization_status": materialization_status,
                 "cache_materialization_command": "aippocampus hooks action refresh-cache --json",
+                "lifecycle": lifecycle,
             },
+            "safe_next_actions": safe_next_actions,
         }
     )
 

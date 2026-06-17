@@ -181,7 +181,7 @@ def import_conversation_usage_payload(missing: list[str]) -> dict:
                 "kind": "shell_command_template",
                 "command_template": (
                     "aippocampus import conversation --format generic-jsonl "
-                    "--input <path> --dry-run --json"
+                    "--input {input_path} --dry-run --json"
                 ),
                 "requires": ["input_path"],
                 "mutation_risk": "read_only_preview",
@@ -550,7 +550,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         epilog=(
             "Safe first step:\n"
-            "  aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json\n\n"
+            "  aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json\n\n"
             "Boundary:\n"
             "  The input file stays local operator material. AIppocampus stores a "
             "source-backed clean-source import only after the explicit non-dry-run "
