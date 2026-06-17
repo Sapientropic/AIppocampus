@@ -575,15 +575,25 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
     broad_scan = bool(getattr(args, "broad_scan", False))
     max_threads = args.max_threads
     max_candidates = args.max_candidates
-    if args.preview:
-        if not broad_scan and max_threads is None:
-            max_threads = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET
-            preview_scan_policy = {
-                "mode": "foreground_bounded_default",
-                "max_threads": max_threads,
-                "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
-            }
-        elif broad_scan:
+    # Plain `produce --json` is often reached from foreground agents. Keep that
+    # path bounded and preview-shaped unless the operator explicitly asks for a
+    # broad/custom backfill scan. Do not treat `--include-local-detail` as broad
+    # permission; it can expose local detail, but it should still inherit the
+    # safe thread budget unless paired with --broad-scan, --append, or
+    # --max-threads.
+    foreground_bounded_default = not args.append and not broad_scan and max_threads is None
+    preview_equivalent = bool(
+        args.preview or (foreground_bounded_default and not args.include_local_detail)
+    )
+    if foreground_bounded_default:
+        max_threads = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET
+        preview_scan_policy = {
+            "mode": "foreground_bounded_default",
+            "max_threads": max_threads,
+            "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
+        }
+    elif args.preview:
+        if broad_scan:
             preview_scan_policy = {
                 "mode": "explicit_broad_scan",
                 "max_threads": max_threads,
@@ -593,8 +603,8 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
                 "mode": "explicit_bounded",
                 "max_threads": max_threads,
             }
-        if max_candidates is None:
-            max_candidates = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET
+    if preview_equivalent and max_candidates is None:
+        max_candidates = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET
     elif max_candidates is None:
         max_candidates = 24
     proposal = propose_continuity_domain_events_from_registry(
@@ -610,7 +620,7 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
         ),
     )
     events = list(proposal.get("candidate_events") or [])
-    if args.preview:
+    if preview_equivalent:
         payload = _producer_agent_preview(proposal)
     elif args.include_local_detail:
         payload = proposal

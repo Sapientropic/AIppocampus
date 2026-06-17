@@ -728,7 +728,8 @@ def _budget_guardrails(
 
 def _warm_queue_health(root: Path, *, now: datetime) -> dict[str, Any]:
     status = warm_status_payload(job_dir=root / "ambient_warm_jobs", now=now)
-    activity = status.get("job_activity") if isinstance(status.get("job_activity"), Mapping) else {}
+    raw_activity = status.get("job_activity")
+    activity = raw_activity if isinstance(raw_activity, Mapping) else {}
     return runtime_core.sanitize_external_model_payload(
         {
             "status": status.get("status"),

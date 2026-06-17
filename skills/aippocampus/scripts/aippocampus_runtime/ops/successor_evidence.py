@@ -1763,14 +1763,15 @@ def build_successor_evidence_sweep_report(
             )
             metrics["bounded_validation_deferred_path"] = bounded_deferred_path
         decisions[decision] += 1
-        row = {
+        closeout_allowed = bool(not live_blocked or (hard_blocker_path and hard_blocker_path.get("ok")))
+        row: dict[str, Any] = {
             "issue": number,
             "track": track,
             "title": title,
             "parent": spec.get("parent"),
             "evidence_shape": "public_replay_or_public_safe_aggregate",
             "decision": decision,
-            "closeout_allowed": bool(not live_blocked or hard_blocker_path.get("ok")),
+            "closeout_allowed": closeout_allowed,
             "default_or_live_claim_allowed": False,
             "metrics": metrics,
             "source_artifacts": [
@@ -1786,7 +1787,7 @@ def build_successor_evidence_sweep_report(
             row["bounded_validation_deferred_path"] = bounded_deferred_path
         rows.append(row)
 
-    by_issue = {int(row["issue"]): row for row in rows}
+    by_issue: dict[int, dict[str, Any]] = {int(row["issue"]): row for row in rows}
     nested_metric_coverage: dict[str, Any] = {}
     nested_missing: list[int] = []
     for child in nested_child_numbers:
@@ -1827,9 +1828,11 @@ def build_successor_evidence_sweep_report(
         }
     )
     for issue_number in (1918, 1958):
-        row = by_issue.get(issue_number)
-        if row:
-            metrics = row["metrics"]
+        update_row = by_issue.get(issue_number)
+        if update_row:
+            raw_metrics = update_row.get("metrics")
+            metrics = raw_metrics if isinstance(raw_metrics, dict) else {}
+            update_row["metrics"] = metrics
             for key in (
                 "live_issue_scope",
                 "native_parent_graph_checked",

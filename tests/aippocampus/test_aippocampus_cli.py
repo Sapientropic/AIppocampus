@@ -1950,6 +1950,27 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("unknown command: nope", unknown_result.stderr)
         self.assertIn("Commands:", unknown_result.stderr)
 
+    def test_background_routes_are_discoverable_without_raw_unknown_command(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        agent = facade.run_command(["agent", "--json"], capture_output=True)
+        dream = facade.run_command(["dream", "--json"], capture_output=True)
+        subconscious = facade.run_command(["subconscious", "--json"], capture_output=True)
+
+        self.assertEqual(agent.exit_code, 0)
+        agent_payload = json.loads(agent.stdout)
+        self.assertIn(
+            "background",
+            {choice["id"] for choice in agent_payload["choices"]},
+        )
+        self.assertEqual(dream.exit_code, 2)
+        dream_payload = json.loads(dream.stdout)
+        self.assertEqual(dream_payload["agent_next_action"]["command"], 'aippocampus agent background "task cue" --json')
+        self.assertEqual(subconscious.exit_code, 2)
+        self.assertEqual(subconscious.stderr, "")
+        self.assertNotIn("unknown command", dream.stderr)
+        self.assertNotIn("unknown command", subconscious.stderr)
+
     def test_mcp_list_tools_default_is_compact_and_json_is_full_schema(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
         full = self.run_cli("mcp", "list-tools", "--json")

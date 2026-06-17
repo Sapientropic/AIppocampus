@@ -135,9 +135,15 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(summary["unknown_env_var_count"], 1)
         self.assertEqual(summary["configured_count"], 2)
         self.assertEqual(summary["configured_sensitive_count"], 1)
-        self.assertEqual(summary["full_audit_command"], "aippocampus doctor config --json")
+        self.assertEqual(summary["detail"], "compact")
+        self.assertEqual(summary["surface"], "foreground_decision_card")
+        self.assertEqual(summary["foreground_action"]["action_id"], "review_unknown_config_env")
+        self.assertEqual(summary["agent_next_action"]["id"], "review_unknown_aippocampus_env")
+        self.assertEqual(summary["safe_next_actions"][0]["command"], "aippocampus doctor config --detail full --json")
+        self.assertEqual(summary["full_audit_command"], "aippocampus doctor config --detail full --json")
         self.assertTrue(summary["audit_json_available"])
         self.assertTrue(summary["recommended_actions"])
+        self.assertNotIn("cannot_claim", summary)
         self.assertFalse(summary["privacy"]["values_printed"])
         self.assertNotIn("C:/Users/example/private/aippocampus", rendered)
         self.assertNotIn("super-secret-value", rendered)
@@ -151,7 +157,7 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
                 self.assertTrue(knob.surface)
                 self.assertTrue(knob.default)
 
-    def test_doctor_config_cli_is_no_write_and_value_redacted(self) -> None:
+    def test_doctor_config_default_json_is_compact_decision_card(self) -> None:
         from aippocampus_runtime.cli import facade
 
         with (
@@ -169,11 +175,50 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         rendered = stdout.getvalue()
-        report = json.loads(rendered)
-        self.assertEqual(report["data"]["kind"], "aippocampus_config_registry_report")
-        self.assertTrue(report["data"]["no_write"])
+        payload = json.loads(rendered)
+        self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["surface"], "foreground_decision_card")
+        self.assertEqual(payload["foreground_action"]["action_id"], "no_action_needed")
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        self.assertIn("safe_next_actions", payload)
+        self.assertNotIn("data", payload)
+        self.assertNotIn("knobs", payload)
+        self.assertNotIn("cannot_claim", payload)
+        self.assertFalse(payload["privacy"]["values_printed"])
         self.assertNotIn("C:/private/local/home", rendered)
         self.assertNotIn("private-token", rendered)
+
+    def test_doctor_config_full_operator_json_keeps_inventory_and_boundaries(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        for args in (
+            ["doctor", "config", "--detail", "full", "--json"],
+            ["doctor", "config", "--operator-json"],
+        ):
+            with self.subTest(args=args):
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "AIPPOCAMPUS_HOME": "C:/private/local/home",
+                            "AIPPOCAMPUS_OBJECT_STORE_TOKEN": "private-token",
+                        },
+                        clear=True,
+                    ),
+                    patch("sys.stdout", new=StringIO()) as stdout,
+                ):
+                    code = facade.main(args)
+
+                self.assertEqual(code, 0)
+                rendered = stdout.getvalue()
+                report = json.loads(rendered)
+                self.assertEqual(report["data"]["kind"], "aippocampus_config_registry_report")
+                self.assertTrue(report["data"]["no_write"])
+                self.assertIn("knobs", report["data"])
+                self.assertIn("cannot_claim", report)
+                self.assertNotIn("C:/private/local/home", rendered)
+                self.assertNotIn("private-token", rendered)
 
     def test_doctor_config_compact_json_aliases_are_foreground_bounded(self) -> None:
         from aippocampus_runtime.cli import facade
@@ -199,6 +244,8 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
                 self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
                 self.assertGreater(payload["registered_knob_count"], 0)
                 self.assertEqual(payload["configured_count"], 2)
+                self.assertEqual(payload["foreground_action"]["action_id"], "no_action_needed")
+                self.assertIn("safe_next_actions", payload)
                 self.assertNotIn("knobs", payload)
                 self.assertNotIn("C:/private/local/home", rendered)
                 self.assertNotIn("private-token", rendered)

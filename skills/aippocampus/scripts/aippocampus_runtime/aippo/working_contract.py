@@ -38,6 +38,13 @@ CANDIDATE_INPUTS = [
 ]
 TRUTH_SOURCES = ["clean_source", "current_claims", "merged_test", "accepted_issue"]
 NAVIGATION_SOURCES = ["cognitive_map", "concept_graph", "repo_familiarity", "pathlet", "episode_arc"]
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 CANDIDATE_ONLY_SOURCES = ["agent_self_note", "dream_subconscious"]
 DIRECT_JOURNEY_GUIDANCE = {
     "fresh_thread_recall": {
@@ -375,7 +382,7 @@ def activation_packet_from_working_contract(
     compact["available_active_clause_count"] = len(trimmed_ids)
     compact["active_not_foreground_available_count"] = max(
         0,
-        int(compact.get("contract_active_clause_count") or 0) - len(trimmed_ids),
+        _safe_int(compact.get("contract_active_clause_count")) - len(trimmed_ids),
     )
     use_guidance = compact.get("use_guidance")
     compact["use_guidance"] = use_guidance[:1] if isinstance(use_guidance, list) else []

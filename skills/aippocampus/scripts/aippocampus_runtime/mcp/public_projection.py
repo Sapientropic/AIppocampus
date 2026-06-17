@@ -422,7 +422,8 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     memory_packets = [
         packet for packet in payload.get("memory_packets") or [] if isinstance(packet, dict)
     ]
-    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    raw_metrics = payload.get("metrics")
+    metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
     labels_low_specificity = recall_choices.low_specificity_route_choices(
         metrics, len(memory_packets)
     )
@@ -518,10 +519,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "route_count": len(memory_packets),
         "metrics": _without_empty(
             {
-                "requested_max_routes": (payload.get("metrics") or {}).get("requested_max_routes"),
-                "effective_max_routes": (payload.get("metrics") or {}).get("effective_max_routes"),
-                "memory_packet_count": (payload.get("metrics") or {}).get("memory_packet_count"),
-                "deepen_request_count": (payload.get("metrics") or {}).get("deepen_request_count"),
+                "requested_max_routes": metrics.get("requested_max_routes"),
+                "effective_max_routes": metrics.get("effective_max_routes"),
+                "memory_packet_count": metrics.get("memory_packet_count"),
+                "deepen_request_count": metrics.get("deepen_request_count"),
                 "route_label_specificity_floor": metrics.get("route_label_specificity_floor"),
                 "topic_label_present_count": metrics.get("topic_label_present_count"),
             }

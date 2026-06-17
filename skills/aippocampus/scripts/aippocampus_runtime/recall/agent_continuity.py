@@ -28,6 +28,7 @@ from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
+    background_findings,
     agent_packet_compaction,
     agent_semantic_diagnostics,
     architecture_navigation_affordance,
@@ -1349,11 +1350,15 @@ def _route_limit_arg(value: str) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
-        description="Opt-in agent recall, AIppo activation, deepen, explain, and feedback.",
+        description=(
+            "Opt-in agent recall, AIppo activation, reviewed background findings, "
+            "deepen, explain, and feedback."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "First useful loop:\n"
             '  aippocampus agent recall "old cue" --json\n'
+            '  aippocampus agent background "task cue" --json\n'
             "  aippocampus agent deepen --request 1 --last-recall --json\n"
             "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n\n"
             "Default recall JSON is compact and foreground-safe. Use --detail full only for "
@@ -1439,6 +1444,25 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit the full activation envelope for local diagnostics.",
     )
+
+    background_parser = sub.add_parser(
+        "background",
+        usage='aippocampus agent background "task cue" --json [options]',
+        description=(
+            "Reviewed background findings card:\n"
+            "  Surfaces already reviewed/source-linked Dream or subconscious working-memory rows.\n"
+            "  Findings are navigation only; reopen source before factual, exact, or sensitive claims.\n"
+            "  This command does not start background jobs or expose raw registry paths."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    background_parser.add_argument("cue", nargs="*")
+    background_parser.add_argument("--task", dest="task_flag")
+    background_parser.add_argument("--registry-dir")
+    background_parser.add_argument("--working-memory")
+    background_parser.add_argument("--project", default="AIppocampus")
+    background_parser.add_argument("--max", type=_route_limit_arg, default=4)
+    background_parser.add_argument("--json", action="store_true")
 
     macro_parser = sub.add_parser(
         "macro",
@@ -1634,6 +1658,25 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(render_aippo_human(payload))
         return 0
+    if args.command == "background":
+        cue = args.task_flag or " ".join(args.cue)
+        payload = background_findings.background_findings_card(
+            cue,
+            registry_dir=args.registry_dir,
+            working_memory_path=args.working_memory,
+            project=args.project,
+            limit=args.max,
+        )
+        if args.json:
+            _json_out(payload)
+        else:
+            print("AIppocampus agent background: " + str(payload.get("status") or "unknown"))
+            print("findings: " + str(payload.get("finding_count") or 0))
+            action = payload.get("agent_next_action")
+            if isinstance(action, Mapping):
+                print("next: " + str(action.get("command") or action.get("command_template") or action.get("id")))
+            print("boundary: background findings are navigation only until source is reopened.")
+        return 2 if payload.get("status") == "needs_input" else 0
     if args.command == "macro":
         macro_cue = " ".join(args.cue).strip()
         if macro_cue and not args.init_template and not args.explain_schema:

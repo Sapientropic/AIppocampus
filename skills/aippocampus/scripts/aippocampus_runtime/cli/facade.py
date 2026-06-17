@@ -19,6 +19,7 @@ from aippocampus_runtime.contracts import (
     foreground_chooser_card,
     foreground_shell_action,
 )
+from aippocampus_runtime.recall import background_findings
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 PLUGIN_MANIFEST_RELATIVE = Path("plugins") / "aippocampus" / ".codex-plugin" / "plugin.json"
@@ -561,6 +562,17 @@ def agent_chooser_payload() -> dict[str, Any]:
                 why="Use AIppo for task-contract orientation; guidance is not source truth.",
                 mutation_risk="read_only",
                 claim_boundary="working_guidance_not_source_truth",
+            ),
+            _template_action(
+                action_id="background",
+                label="Review background findings",
+                command_template='aippocampus agent background "<task cue>" --json',
+                requires="task cue",
+                why=(
+                    "Use for reviewed Dream/subconscious findings relevant to this task; "
+                    "they are navigation only until source is reopened."
+                ),
+                claim_boundary="background_navigation_not_source_truth",
             ),
             _template_action(
                 action_id="deepen",
@@ -1183,6 +1195,16 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
             if invocation is not None:
                 return invocation, run_invocation(invocation)
         return None, 0
+    if args[0] in {"dream", "subconscious"} and set(args[1:]) <= {"--json"}:
+        payload = background_findings.background_recovery_card(args[0])
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("AIppocampus background findings")
+            print("decision: use the foreground agent background route")
+            print('next: aippocampus agent background "task cue" --json')
+            print("boundary: Dream/subconscious findings are navigation only until source is reopened.")
+        return None, 2
     if args[0] == "warm" and set(args[1:]) <= {"--json"}:
         payload = warm_chooser_payload()
         if "--json" in args[1:]:

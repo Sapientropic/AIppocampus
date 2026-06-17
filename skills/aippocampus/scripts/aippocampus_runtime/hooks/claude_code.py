@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import foreground_shell_action
+
 HOST = "claude-code"
 CONFIG_SURFACE = "claude_settings_json"
 HANDLER_MODULE = "aippocampus_runtime.hooks.claude_code"
@@ -233,6 +235,116 @@ def event_report(event: str, *, installed: set[str], observed: set[str]) -> dict
     return report
 
 
+def unsupported_event_summary(events: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    unsupported = {
+        event: row
+        for event, row in events.items()
+        if row.get("status") == "unsupported_event"
+    }
+    blockers = {
+        event: str(row.get("blocker") or "unsupported_event")
+        for event, row in unsupported.items()
+    }
+    return {
+        "count": len(unsupported),
+        "events": list(unsupported),
+        "blockers": blockers,
+        "action": "do_not_install_or_claim_unsupported_events_yet",
+    }
+
+
+def foreground_action_card(
+    *,
+    settings_status: str,
+    events: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    installable = [
+        event
+        for event in SUPPORTED_HANDLER_EVENTS
+        if events.get(event, {}).get("status") == "installable"
+    ]
+    installed_or_firing = [
+        event
+        for event in SUPPORTED_HANDLER_EVENTS
+        if events.get(event, {}).get("status") in {"installed", "firing"}
+    ]
+    if settings_status == "not_installed" and installable:
+        primary = foreground_shell_action(
+            action_id="preview_claude_code_supported_hooks",
+            label="Preview supported Claude Code hooks",
+            command="aippocampus hooks claude-code dry-run --json",
+            why=(
+                "UserPromptSubmit and Stop have shipped handlers; dry-run shows the exact "
+                "Claude settings entries without mutating configuration."
+            ),
+            mutation_risk="read_only",
+            claim_boundary="host_setup_not_memory_evidence",
+        )
+    elif installed_or_firing:
+        primary = foreground_shell_action(
+            action_id="run_claude_code_hook_smoke",
+            label="Run synthetic Claude Code hook smoke",
+            command="aippocampus hooks claude-code smoke --json",
+            why="Use synthetic smoke to check the handler contract without logging real prompts.",
+            mutation_risk="read_only",
+            claim_boundary="host_setup_not_memory_evidence",
+        )
+    else:
+        primary = foreground_shell_action(
+            action_id="use_claude_code_onboarding_instead",
+            label="Check Claude Code local history onboarding",
+            command="aippocampus onboard --provider claude-code --status --json",
+            why="Use provider onboarding/MCP when host hooks are not the right path.",
+            mutation_risk="read_only",
+            claim_boundary="setup_status_not_memory_evidence",
+        )
+    safe_actions = [
+        dict(primary),
+        foreground_shell_action(
+            action_id="check_claude_code_local_history",
+            label="Check Claude Code local history",
+            command="aippocampus onboard --provider claude-code --status --json",
+            why="Local transcript onboarding is the fallback continuity route when hooks are not desired.",
+            mutation_risk="read_only",
+            claim_boundary="setup_status_not_memory_evidence",
+        ),
+        foreground_shell_action(
+            action_id="check_mcp_status",
+            label="Check MCP readiness",
+            command="aippocampus mcp status",
+            why="Use when Claude Code should reach AIppocampus through MCP rather than hooks.",
+            mutation_risk="read_only",
+            claim_boundary="host_status_not_memory_evidence",
+        ),
+    ]
+    if installed_or_firing:
+        safe_actions.append(
+            foreground_shell_action(
+                action_id="review_manual_rollback",
+                label="Review manual Claude settings rollback",
+                command="aippocampus hooks claude-code dry-run --json",
+                why="The helper does not mutate Claude settings; compare dry-run handlers before manual removal.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            )
+        )
+    return {
+        "surface": "claude_code_hooks_status",
+        "status": settings_status,
+        "supported_installable_events": installable,
+        "supported_installed_or_firing_events": installed_or_firing,
+        "unsupported_events": unsupported_event_summary(events),
+        "primary": dict(primary),
+        "safe_next_actions": safe_actions,
+        "claim_boundary": {
+            "hook_status_is_host_setup_evidence": True,
+            "memory_claims_require_source_reopen": True,
+            "unsupported_events_are_not_supported": True,
+            "no_configuration_mutation_happened": True,
+        },
+    }
+
+
 def status_report(
     *,
     settings_path: Path | None = None,
@@ -250,6 +362,7 @@ def status_report(
     settings_status = "installed" if installed_any else "not_installed"
     if any(item["status"] == "firing" for item in events.values()):
         settings_status = "firing"
+    foreground_action = foreground_action_card(settings_status=settings_status, events=events)
     return {
         "ok": True,
         "host": HOST,
@@ -267,6 +380,9 @@ def status_report(
             "contract_only_events": list(CONTRACT_ONLY_EVENTS),
         },
         "events": events,
+        "foreground_action": foreground_action,
+        "agent_next_action": foreground_action["primary"],
+        "safe_next_actions": foreground_action["safe_next_actions"],
         "status_vocabulary": list(STATUS_VOCABULARY),
         "cannot_claim": [
             "real_host_hook_firing_without_event_log",

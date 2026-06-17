@@ -378,6 +378,7 @@ def build_provider_key_bridge_plan(
     hook_script = bridge_hook_script_path(codex_home_resolved)
     hooks_path = _target_hooks_path(codex_home_resolved, hooks_json)
     issues: list[dict[str, str]] = []
+    recommended_actions: list[dict[str, Any]]
     if target not in SUPPORTED_TARGETS:
         issues.append(_issue("unsupported_target", "provider-key bridge currently supports codex-hooks only"))
     if normalized_source not in SUPPORTED_SOURCES:

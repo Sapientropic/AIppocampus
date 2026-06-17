@@ -475,7 +475,8 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     projected["last_recall_cache_available"] = cache_available
     action = projected.get("foreground_action")
     action_map = action if isinstance(action, Mapping) else {}
-    action_args = action_map.get("arguments") if isinstance(action_map.get("arguments"), Mapping) else {}
+    raw_action_args = action_map.get("arguments")
+    action_args = raw_action_args if isinstance(raw_action_args, Mapping) else {}
     advertises_last_recall = bool(action_args.get("last_recall")) or "--last-recall" in str(
         action_map.get("cli_command") or ""
     )

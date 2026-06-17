@@ -15,7 +15,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, feedback_events  # noqa: E402
+from aippocampus_runtime.recall import background_findings, agent_continuity, agent_continuity_cli_support, feedback_events  # noqa: E402
 from aippocampus_runtime.registry import api as registry_api  # noqa: E402
 
 
@@ -262,6 +262,54 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("attention_router_navigation", public)
         self.assertNotIn("aippo-nav:", encoded)
         self.assertLess(len(encoded.encode("utf-8")), 4096)
+
+    def test_agent_background_projects_reviewed_dream_finding_as_navigation_handle(self) -> None:
+        working_memory = self.cwd / "working_memory.jsonl"
+        working_memory.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "candidate_key": "wm_dream_continuity",
+                    "title": "Continuity route bridge",
+                    "summary": "Use only as a route hint.",
+                    "trigger_terms": ["continuity source refs"],
+                    "source_finding_ids": ["dreamfinding_continuity"],
+                    "source_refs": [{"thread_key": "session:a", "message_id": "msg-a", "line": 10}],
+                    "confidence": 0.7,
+                    "project_label": "AIppocampus",
+                    "review_state": "agent_adjudicated",
+                    "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+                    "sensitive_use_gate": {"state": "allowed"},
+                    "foreground_use": {"strong_claim_requires_source_reopen": True},
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        payload = background_findings.background_findings_card(
+            "AIppocampus continuity source refs",
+            working_memory_path=working_memory,
+        )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["finding_count"], 1)
+        finding = payload["findings"][0]
+        self.assertEqual(finding["finding_id"], "wm_dream_continuity")
+        self.assertEqual(finding["surface"], "dream_working_memory")
+        self.assertEqual(finding["boundary"]["action_grammar"], "reopenable_route")
+        self.assertFalse(finding["boundary"]["source_backed_claim_allowed"])
+        self.assertTrue(finding["source"]["source_reopen_required_before_claims"])
+        self.assertFalse(finding["source"]["raw_source_refs_emitted"])
+        self.assertEqual(payload["agent_next_action"]["command"], 'aippocampus agent recall "AIppocampus continuity source refs" --json')
+        self.assertNotIn("session:a", encoded)
+        self.assertNotIn("msg-a", encoded)
+        self.assertNotIn(str(working_memory), encoded)
 
     def test_public_recall_no_routes_returns_recovery_card_without_deepen_placeholder(self) -> None:
         report = agent_continuity.recall(

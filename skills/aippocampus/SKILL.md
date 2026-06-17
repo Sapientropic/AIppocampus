@@ -126,6 +126,9 @@ Foreground continuity surfaces:
   `aippocampus agent recall "query" --json`. This default is a bounded
   foreground projection. Use `--detail full` only for local diagnostics that may
   show private handles.
+- Reviewed Dream/subconscious findings for a current task cue:
+  `aippocampus agent background "task cue" --json`. Treat these as navigation
+  handles only; reopen source before factual, exact, or sensitive claims.
 - Search clean source: `aippocampus search "query" --cwd "$PWD"`.
 - Recover the latest assistant closeout:
   `aippocampus latest-reply --cwd "$PWD"`. Commentary-only output is a
