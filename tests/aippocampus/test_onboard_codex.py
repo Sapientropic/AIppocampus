@@ -22,10 +22,10 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.onboarding import codex as onboard  # noqa: E402
 from aippocampus_runtime.onboarding import facade as onboard_facade  # noqa: E402
 from aippocampus_runtime.onboarding import frontier as onboard_frontier  # noqa: E402
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
 

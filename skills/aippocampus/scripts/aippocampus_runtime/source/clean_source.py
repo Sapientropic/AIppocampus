@@ -31,6 +31,8 @@ from aippocampus_runtime.source.redaction_profiles import write_clean_source_red
 from aippocampus_runtime.source.scope_labels import (
     SCOPE_LABEL_ORDER,
     infer_scope_labels,
+)
+from aippocampus_runtime.source.scope_labels import (
     merge_scope_labels as _merge_scope_labels,
 )
 from aippocampus_runtime.source.source_texture import materialize_source_texture_sidecar

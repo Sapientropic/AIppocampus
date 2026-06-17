@@ -15,14 +15,14 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
-from aippocampus_runtime.contracts import (
-    foreground_chooser_card,
-    foreground_shell_action,
-)
 from aippocampus_runtime.cli.recovery_cards import (
     object_sync_chooser_payload,
     storage_chooser_payload,
     storage_gc_recovery_payload,
+)
+from aippocampus_runtime.contracts import (
+    foreground_chooser_card,
+    foreground_shell_action,
 )
 from aippocampus_runtime.recall import background_findings
 

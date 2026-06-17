@@ -11,8 +11,10 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.aippo import skill_bridge, skill_observed_use  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity_cli_support  # noqa: E402
-from aippocampus_runtime.recall import feedback_events  # noqa: E402
+from aippocampus_runtime.recall import (
+    agent_continuity_cli_support,  # noqa: E402
+    feedback_events,  # noqa: E402
+)
 
 
 class AIppoSkillBridgeTests(unittest.TestCase):

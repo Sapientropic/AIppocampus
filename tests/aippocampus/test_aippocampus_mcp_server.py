@@ -1990,7 +1990,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
             list_payload["empty_state"]["state"],
             "no_matching_telepathy_handoffs",
         )
-        self.assertIn("normal recall/search", list_payload["empty_state"]["agent_next_action"])
+        empty_action = list_payload["empty_state"]["agent_next_action"]
+        self.assertEqual(empty_action["id"], "continue_with_normal_recall")
+        self.assertEqual(empty_action["command_template"], 'aippocampus agent recall "{cue}" --json')
+        self.assertIn("recall/search", empty_action["why"])
         self.assertTrue(missing_response["result"].get("isError", False))
         self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
         self.assertIn("telepathy list --status all", missing_payload["agent_next_action"])

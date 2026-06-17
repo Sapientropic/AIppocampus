@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 PUBLIC_RUNTIME_ENVELOPE_FIELDS = (
     "ok",
