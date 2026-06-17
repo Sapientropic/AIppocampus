@@ -78,17 +78,35 @@ def with_low_specificity_foreground_action(
     *,
     metrics: dict[str, Any],
 ) -> dict[str, Any]:
-    next_action = dict(action)
-    next_action["original_action_id"] = next_action.get("action_id")
-    next_action["action_id"] = "deepen_top_route_blindly"
-    next_action["route_choice_posture"] = "labels_low_specificity"
-    next_action["route_label_specificity_floor"] = _metric_float(
-        metrics, "route_label_specificity_floor"
+    secondary = dict(action)
+    secondary["original_action_id"] = secondary.get("action_id")
+    secondary["action_id"] = "deepen_top_route_low_confidence"
+    secondary["route_choice_posture"] = "labels_low_specificity"
+    secondary["why"] = (
+        "Source reopen is still read-only, but compact labels are not enough to "
+        "make this the default route choice."
     )
-    next_action["topic_label_present_count"] = _metric_int(metrics, "topic_label_present_count")
-    next_action["why"] = (
-        "Route labels are not meaningfully distinguishable in compact output; "
-        "deepen the top-ranked route blindly or rerun recall with a tighter cue."
-    )
-    next_action["claim_boundary"] = "no_claim_before_reopen"
+    next_action = {
+        "action_id": "refine_low_specificity_recall_cue",
+        "tool_name": "agent_recall",
+        "arguments_template": {"query": "{tighter_cue}", "max": 3},
+        "requires": ["tighter_cue"],
+        "template_only": True,
+        "cli_command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+        "secondary_action": {
+            key: value for key, value in secondary.items() if value not in (None, "", [])
+        },
+        "route_choice_posture": "labels_low_specificity",
+        "route_label_specificity_floor": _metric_float(
+            metrics,
+            "route_label_specificity_floor",
+        ),
+        "topic_label_present_count": _metric_int(metrics, "topic_label_present_count"),
+        "why": (
+            "Route labels are not meaningfully distinguishable in compact output; "
+            "use a tighter cue before choosing a route. Blind deepen remains a secondary "
+            "low-confidence navigation option only."
+        ),
+        "claim_boundary": "no_claim_before_reopen",
+    }
     return {key: value for key, value in next_action.items() if value not in (None, "", [])}

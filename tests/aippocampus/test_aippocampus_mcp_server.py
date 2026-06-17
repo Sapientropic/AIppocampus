@@ -197,6 +197,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("handle", agent_deepen_schema.get("required") or [])
         self.assertIn("request_index", agent_deepen_schema["properties"])
         self.assertIn("last_recall", agent_deepen_schema["properties"])
+        self.assertIn("detail", agent_deepen_schema["properties"])
+        agent_explain_schema = by_name["agent_explain"]["inputSchema"]
+        self.assertNotIn("handle", agent_explain_schema.get("required") or [])
+        for prop in ("request_index", "last_recall", "detail"):
+            self.assertIn(prop, agent_explain_schema["properties"])
         self.assertIn("Find source-backed continuity routes", by_name["agent_recall"]["description"])
         self.assertIn("Get low-risk working guidance", by_name["agent_aippo"]["description"])
         self.assertIn("Open the selected recall route", by_name["agent_deepen"]["description"])
@@ -227,6 +232,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         )
         self.assertIn("handle", by_name["agent_deepen"]["inputSchema"]["required_any"])
         self.assertIn("request_index", by_name["agent_deepen"]["inputSchema"]["required_any"])
+        self.assertIn("handle", by_name["agent_explain"]["inputSchema"]["required_any"])
+        self.assertIn("request_index", by_name["agent_explain"]["inputSchema"]["required_any"])
 
     def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
         last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
@@ -309,7 +316,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(deepen_response["result"].get("isError", False), deepen_payload)
         self.assertEqual(deepen_payload["mode"], "deepen")
         self.assertEqual(deepen_payload["status"], "ok")
-        self.assertIn("AIppocampus 使用 clean source", deepen_encoded)
+        self.assertEqual(deepen_payload["detail"], "compact")
+        self.assertEqual(deepen_payload["source_window_summary"]["message_count"], 2)
+        self.assertNotIn("result", deepen_payload)
+        self.assertNotIn("AIppocampus 使用 clean source", deepen_encoded)
         self.assertNotIn(str(self.cwd), deepen_encoded)
 
         full_response = mcp.handle_request(
