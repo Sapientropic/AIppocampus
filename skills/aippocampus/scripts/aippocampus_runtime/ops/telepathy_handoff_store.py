@@ -748,6 +748,18 @@ def _render_diagnose_text(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_action_text(action: Any) -> str:
+    if isinstance(action, Mapping):
+        return str(
+            action.get("command")
+            or action.get("command_template")
+            or action.get("label")
+            or action.get("id")
+            or "choose_next_action"
+        )
+    return str(action)
+
+
 def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
@@ -758,19 +770,13 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
     status = "ok" if payload.get("ok") else "blocked"
     print(f"{payload.get('kind', 'telepathy_handoff')}: {status}")
     if not payload.get("ok") and payload.get("agent_next_action"):
-        print(f"next: {payload.get('agent_next_action')}")
+        print(f"next: {_render_action_text(payload.get('agent_next_action'))}")
     if "count" in payload:
         print(f"count: {payload['count']}")
     empty_state = payload.get("empty_state")
     if isinstance(empty_state, Mapping):
         action = empty_state.get("agent_next_action")
-        if isinstance(action, Mapping):
-            print(
-                "next: "
-                + str(action.get("command") or action.get("command_template") or action.get("label"))
-            )
-        else:
-            print(f"next: {action}")
+        print(f"next: {_render_action_text(action)}")
         actions = empty_state.get("safe_next_actions")
         if isinstance(actions, list):
             create_action = next(

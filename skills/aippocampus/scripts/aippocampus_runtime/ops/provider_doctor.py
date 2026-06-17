@@ -109,7 +109,21 @@ def _recommended_actions(
     child_visible: bool | None,
 ) -> list[dict[str, str]]:
     if current_visible and child_visible is not False:
-        return []
+        return [
+            {
+                "id": "verify_installed_hook_process_visibility",
+                "message": (
+                    "Provider key visibility is proven only for this launcher and a child "
+                    "process; run `aippocampus hooks prompt status --last --json` from "
+                    "the host environment, then rerun provider doctor after any Codex/hook "
+                    "host restart."
+                ),
+                "command": "aippocampus hooks prompt status --last --json",
+                "follow_up_command": "aippocampus doctor provider --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "launcher_scope_not_running_hook_process",
+            }
+        ]
     env_name = _public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     if not current_visible:
         return [

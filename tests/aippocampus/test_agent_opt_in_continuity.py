@@ -978,7 +978,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
         encoded = json.dumps(payload, ensure_ascii=False)
 
-        self.assertEqual(payload["next_safe_action"], "recall_with_cue_full_detail")
+        self.assertEqual(payload["next_safe_action"]["id"], "recall_with_cue_full_detail")
+        self.assertEqual(payload["next_safe_action_id"], "recall_with_cue_full_detail")
         self.assertEqual(payload["agent_next_action"]["id"], "recall_with_cue_full_detail")
         self.assertNotIn("follow_up_action", payload)
         self.assertNotIn("--last-recall", encoded)

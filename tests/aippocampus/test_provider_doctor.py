@@ -119,6 +119,18 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertTrue(report["hook_relevance"]["semantic_gate_enabled_for_route"])
         self.assertEqual(report["cognitive_worker"]["status"], "external_model_active")
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
+        self.assertEqual(
+            report["recommended_actions"][0]["id"],
+            "verify_installed_hook_process_visibility",
+        )
+        self.assertEqual(
+            report["recommended_actions"][0]["command"],
+            "aippocampus hooks prompt status --last --json",
+        )
+        self.assertEqual(
+            report["recommended_actions"][0]["claim_boundary"],
+            "launcher_scope_not_running_hook_process",
+        )
         self.assertNotIn(fixture_value, encoded)
 
     def test_provider_doctor_human_output_names_hook_process_caveat(self) -> None:

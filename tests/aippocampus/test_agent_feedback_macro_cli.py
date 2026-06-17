@@ -197,7 +197,12 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             self.assertEqual(payload["agent_next_action"]["claim_boundary"], "no_claim_before_reopen")
             self.assertIsInstance(payload["foreground_action"], dict)
             self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-            self.assertEqual(payload["next_safe_action"], "recall_with_cue_then_request_index")
+            self.assertEqual(payload["next_safe_action"], payload["agent_next_action"])
+            self.assertEqual(payload["next_safe_action_id"], "recall_with_cue")
+            result_key = "result" if mode == "deepen" else "explanation"
+            if payload[result_key]["error"]["code"] == "missing_recall_handle":
+                self.assertEqual(payload[result_key]["next_safe_action_id"], "recall_with_cue")
+                self.assertNotIn("next_safe_action", payload[result_key])
             self.assertNotIn("recovery_actions", payload)
             self.assertNotIn('agent recall "old decision or handoff cue"', encoded)
             follow_up = payload["safe_next_actions"][1]

@@ -288,9 +288,24 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            bare_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "telepathy",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(json_proc.returncode, 0, json_proc.stdout + json_proc.stderr)
             self.assertEqual(text_proc.returncode, 0, text_proc.stdout + text_proc.stderr)
+            self.assertEqual(bare_proc.returncode, 2, bare_proc.stdout + bare_proc.stderr)
             payload = json.loads(json_proc.stdout)
             self.assertEqual(payload["count"], 0)
             self.assertEqual(
@@ -311,6 +326,8 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
             self.assertIn("next:", text_proc.stdout)
             self.assertIn("telepathy create --preset handoff", text_proc.stdout)
             self.assertNotIn("{'", text_proc.stdout)
+            self.assertIn("next: aippocampus telepathy list --json", bare_proc.stdout)
+            self.assertNotIn("{'", bare_proc.stdout)
 
     def test_cli_create_preset_human_needed_hides_internal_enums_from_first_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

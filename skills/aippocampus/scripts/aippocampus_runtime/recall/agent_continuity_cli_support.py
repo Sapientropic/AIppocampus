@@ -197,7 +197,8 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
         "foreground_action": actions[0],
         "follow_up_action": actions[1],
         "agent_next_action": actions[0],
-        "next_safe_action": "recall_with_cue_then_request_index",
+        "next_safe_action": actions[0],
+        "next_safe_action_id": "recall_with_cue",
         "safe_next_actions": actions,
     }
 
@@ -215,7 +216,8 @@ def last_recall_cache_recovery_fields(mode: str) -> dict[str, Any]:
         "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "foreground_action": action,
         "agent_next_action": action,
-        "next_safe_action": "recall_with_cue_full_detail",
+        "next_safe_action": action,
+        "next_safe_action_id": "recall_with_cue_full_detail",
         "safe_next_actions": [action],
     }
 
@@ -231,7 +233,7 @@ def missing_handle_payload(
             "code": "missing_recall_handle",
             "message": f"agent {mode} requires a local handle or --request N --last-recall",
         },
-        "next_safe_action": "recall_with_cue_then_request_index",
+        "next_safe_action_id": "recall_with_cue",
     }
     return _public_payload(
         {
