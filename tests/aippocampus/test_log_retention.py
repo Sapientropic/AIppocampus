@@ -52,6 +52,11 @@ class LogRetentionTests(unittest.TestCase):
             self.assertTrue(report["oversized"])
             self.assertEqual(report["items"][0]["artifact_name"], log.name)
             self.assertEqual(report["remediation_command"], "aippocampus logs rotate --dry-run")
+            self.assertEqual(report["agent_next_action"]["id"], "plan_log_rotation")
+            self.assertEqual(
+                report["agent_next_action"]["command"],
+                "aippocampus logs rotate --dry-run --json",
+            )
             self.assertIn("subconscious_scheduler_hook.log", rendered)
             self.assertNotIn("private prompt text", rendered)
             self.assertNotIn("source snippet", rendered)
@@ -85,6 +90,8 @@ class LogRetentionTests(unittest.TestCase):
             self.assertTrue(plan["read_only"])
             self.assertEqual(plan["would_rotate_count"], 1)
             self.assertEqual(plan["apply_command"], "aippocampus logs rotate --apply")
+            self.assertEqual(plan["agent_next_action"]["id"], "apply_log_rotation")
+            self.assertEqual(plan["agent_next_action"]["command"], "aippocampus logs rotate --apply")
 
     def test_healthy_logs_do_not_suggest_cleanup_or_apply(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,8 +107,15 @@ class LogRetentionTests(unittest.TestCase):
             self.assertEqual(status["oversized_count"], 0)
             self.assertEqual(status["status"], "healthy")
             self.assertNotIn("remediation_command", status)
+            self.assertEqual(status["agent_next_action"]["id"], "no_cleanup_needed")
+            self.assertEqual(status["agent_next_action"]["mutation_risk"], "read_only")
+            self.assertEqual(
+                status["agent_next_action"]["command"],
+                "aippocampus logs status --json",
+            )
             self.assertEqual(plan["would_rotate_count"], 0)
-            self.assertEqual(plan["agent_next_action"], "no_cleanup_needed")
+            self.assertEqual(plan["agent_next_action"]["id"], "no_cleanup_needed")
+            self.assertEqual(plan["agent_next_action"]["mutation_risk"], "read_only")
             self.assertNotIn("apply_command", plan)
 
     def test_rotate_json_defaults_to_plan_and_requires_explicit_apply(self) -> None:

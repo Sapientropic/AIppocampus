@@ -326,6 +326,14 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("jobs", question_payload["summary"])
         self.assertNotIn("registry", question_payload["summary"])
         self.assertFalse(question_payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertIsInstance(question_payload["agent_next_action"], dict)
+        self.assertIn("safe_next_actions", question_payload)
+        if question_payload["summary"].get("open_question_count"):
+            self.assertEqual(question_payload["agent_next_action"]["id"], "list_open_question_routes")
+            self.assertEqual(
+                question_payload["agent_next_action"]["command"],
+                "aippocampus questions list --max 8 --json",
+            )
 
         self.assertEqual(navigate.returncode, 0, navigate.stderr)
         navigation_payload = json.loads(navigate.stdout)

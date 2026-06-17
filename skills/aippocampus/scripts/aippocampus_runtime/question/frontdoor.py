@@ -42,6 +42,35 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
     summary = aggregate_question_health_stats(payload)
     summary.pop("jobs", None)
     summary.pop("registry", None)
+    open_count = _safe_int(summary.get("open_question_count"))
+    if open_count:
+        agent_next_action: dict[str, Any] = {
+            "id": "list_open_question_routes",
+            "label": "List open question routes",
+            "command": f"aippocampus questions list --max {int(args.max or 8)} --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "question_rows_are_navigation_only_reopen_source_before_claims",
+            "why": "Status found open source-backed questions; list rows to get reopenable routes.",
+        }
+    else:
+        agent_next_action = {
+            "id": "continue_with_ordinary_recall",
+            "label": "Continue with ordinary recall",
+            "command": "aippocampus agent recall --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "question_status_no_open_routes_not_memory_evidence",
+            "why": "No open question rows were found; use ordinary source-backed recall when needed.",
+        }
+    safe_next_actions = [
+        agent_next_action,
+        {
+            "id": "inspect_question_status",
+            "label": "Inspect question status",
+            "command": "aippocampus questions status --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "question_lifecycle_stats_are_navigation_only",
+        },
+    ]
     return {
         "kind": "aippocampus_question_tracking_status",
         "ok": True,
@@ -59,10 +88,8 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
             "local_paths_serialized": False,
             "raw_private_text_serialized": False,
         },
-        "agent_next_action": (
-            "Use questions as source-backed navigation only; reopen source before "
-            "treating a question lifecycle state as evidence."
-        ),
+        "agent_next_action": agent_next_action,
+        "safe_next_actions": safe_next_actions,
     }
 
 
@@ -238,7 +265,11 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
                     print(f"  next: {row.get('agent_next_action')}")
     print("boundary: navigation only; reopen source before claims")
     if payload.get("agent_next_action"):
-        print(f"next: {payload.get('agent_next_action')}")
+        action = payload.get("agent_next_action")
+        if isinstance(action, Mapping):
+            print(f"next: {action.get('command') or action.get('label')}")
+        else:
+            print(f"next: {action}")
 
 
 def build_parser() -> argparse.ArgumentParser:
