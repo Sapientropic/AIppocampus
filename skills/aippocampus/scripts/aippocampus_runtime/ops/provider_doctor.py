@@ -24,6 +24,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
 from aippocampus_runtime.model.routing import ModelRoute, resolve_model_route
 from aippocampus_runtime.ops.provider_credentials import (
@@ -144,6 +148,129 @@ def _recommended_actions(
             ),
         }
     ]
+
+
+def _normalized_recommended_action(action: dict[str, Any]) -> dict[str, Any]:
+    command = str(action.get("command") or "").strip()
+    normalized: dict[str, Any] = {
+        "id": _public_token(action.get("id"), fallback="provider_doctor_action"),
+        "kind": "shell_command" if command else "guidance",
+        "message": str(action.get("message") or "").strip(),
+        "has_command": bool(command),
+    }
+    if command:
+        normalized["command"] = command
+        normalized["mutation_risk"] = str(action.get("mutation_risk") or "read_only")
+        normalized["claim_boundary"] = str(
+            action.get("claim_boundary") or "provider_visibility_not_memory_evidence"
+        )
+    if action.get("follow_up_command"):
+        normalized["follow_up_command"] = str(action["follow_up_command"])
+    return {key: value for key, value in normalized.items() if value not in (None, "", [])}
+
+
+def _provider_doctor_primary_action(
+    report: dict[str, Any],
+    normalized_actions: list[dict[str, Any]],
+) -> dict[str, object]:
+    command_action = next((action for action in normalized_actions if action.get("command")), None)
+    if command_action:
+        return foreground_shell_action(
+            action_id=str(command_action.get("id") or "inspect_provider_doctor"),
+            command=str(command_action["command"]),
+            label="Check hook/provider visibility",
+            why=str(command_action.get("message") or "Verify provider readiness in the host environment."),
+            mutation_risk=str(command_action.get("mutation_risk") or "read_only"),
+            claim_boundary=str(
+                command_action.get("claim_boundary") or "provider_visibility_not_memory_evidence"
+            ),
+        )
+    status = str(report.get("status") or "")
+    if status == "missing_provider_env_var":
+        return foreground_shell_action(
+            action_id="set_provider_env_in_hook_environment",
+            command="aippocampus onboard provider-key --plan --json",
+            label="Plan provider-key bridge setup",
+            why="The provider key is not visible to this process; plan the hook environment bridge before applying any write.",
+            mutation_risk="read_only_plan",
+            claim_boundary="provider_key_setup_not_memory_evidence",
+        )
+    if status == "route_config_error":
+        return foreground_shell_action(
+            action_id="inspect_model_route_config",
+            command="aippocampus doctor config --detail full --json",
+            label="Inspect route configuration",
+            why="The configured model route is incomplete; inspect registered config without printing values.",
+            mutation_risk="read_only",
+            claim_boundary="config_presence_not_provider_connectivity",
+        )
+    return foreground_shell_action(
+        action_id="inspect_provider_doctor_detail",
+        command="aippocampus doctor provider --detail full --json",
+        label="Inspect provider detail",
+        why="Provider readiness needs operator detail before changing the hook environment.",
+        mutation_risk="read_only",
+        claim_boundary="provider_visibility_not_memory_evidence",
+    )
+
+
+def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
+    """Project provider doctor into the compact foreground decision-card shape."""
+
+    route = _as_dict(report.get("route"))
+    normalized_actions = [
+        _normalized_recommended_action(action)
+        for action in report.get("recommended_actions") or []
+        if isinstance(action, dict)
+    ]
+    primary = _provider_doctor_primary_action(report, normalized_actions)
+    detail_action = foreground_shell_action(
+        action_id="inspect_provider_doctor_detail",
+        command="aippocampus doctor provider --detail full --json",
+        label="Open full provider doctor report",
+        why="Use full detail only for local operator diagnosis; it includes route/env presence objects.",
+        mutation_risk="read_only",
+        claim_boundary="operator_detail_not_memory_evidence",
+    )
+    safe_actions = [primary]
+    if primary.get("id") != detail_action["id"]:
+        safe_actions.append(detail_action)
+    action_fields = canonical_foreground_action_fields(primary, safe_next_actions=safe_actions)
+    card: dict[str, Any] = {
+        "schema_version": report.get("schema_version") or SCHEMA_VERSION,
+        "kind": "aippocampus_provider_doctor_card",
+        "detail": "compact",
+        "surface": "foreground_decision_card",
+        "ok": bool(report.get("ok")),
+        "status": report.get("status"),
+        **action_fields,
+        "route_summary": {
+            "requested_route": route.get("requested_route"),
+            "provider": route.get("provider"),
+            "model": route.get("model"),
+            "provider_env_var": route.get("provider_env_var"),
+            "base_url_configured": route.get("base_url_configured"),
+        },
+        "recommended_actions": normalized_actions,
+        "full_audit_command": "aippocampus doctor provider --detail full --json",
+        "audit_json_available": True,
+        "privacy": {
+            "values_printed": False,
+            "local_paths_included": False,
+            "base_url_value_printed": False,
+            "operator_env_objects_omitted": True,
+        },
+        "cannot_claim": [
+            "running_hook_process_visibility",
+            "provider_credential_validity_without_explicit_probe",
+            "source_backed_memory_claim",
+        ],
+    }
+    return {
+        key: value
+        for key, value in card.items()
+        if value not in (None, "", [], {})
+    }
 
 
 def build_provider_doctor_report(
@@ -385,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     provider_parser = subparsers.add_parser(
         "provider",
-        usage="aippocampus doctor provider [--json] [advanced diagnostics]",
+        usage="aippocampus doctor provider [--json] [--detail compact|full] [--operator-json] [advanced diagnostics]",
         help="Check whether the selected model route key is visible to this process.",
         description=(
             "Provider doctor answers: can optional LLM-backed semantic/background "
@@ -393,6 +520,7 @@ def main(argv: list[str] | None = None) -> int:
             "Normal examples:\n"
             "  aippocampus doctor provider\n"
             "  aippocampus doctor provider --json\n"
+            "  aippocampus doctor provider --detail full --json\n"
             "  aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json"
         ),
         epilog=(
@@ -412,6 +540,24 @@ def main(argv: list[str] | None = None) -> int:
     provider_parser.add_argument("--include-local-paths", action="store_true")
     provider_parser.add_argument("--validate-credentials", action="store_true")
     provider_parser.add_argument("--json", action="store_true", dest="json_output")
+    provider_parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits a compact foreground decision card.",
+    )
+    provider_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit the full local provider/env diagnostic JSON; implies JSON output.",
+    )
+    provider_parser.add_argument(
+        "--compact-json",
+        "--summary",
+        action="store_true",
+        dest="summary_json",
+        help="Legacy alias for the compact foreground decision card.",
+    )
     spend_parser = subparsers.add_parser(
         "spend",
         usage="aippocampus doctor spend [--json] [threshold options]",
@@ -538,7 +684,22 @@ def main(argv: list[str] | None = None) -> int:
         include_local_paths=args.include_local_paths,
         validate_credentials=args.validate_credentials,
     )
-    if args.json_output:
+    full_detail_json = bool(
+        args.operator_json
+        or args.detail == "full"
+        or args.discover_credential_sources
+        or args.validate_credentials
+        or args.include_local_paths
+    )
+    if args.summary_json or (args.json_output and not full_detail_json):
+        emit_public_text(
+            json.dumps(
+                compact_provider_doctor_card(report),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    elif args.json_output or args.operator_json:
         emit_public_text(public_json_text(report))
     else:
         emit_public_text(render_text(report), end="")

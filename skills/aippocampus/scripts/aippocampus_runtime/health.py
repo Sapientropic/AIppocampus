@@ -1113,7 +1113,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Alias for --operator-json on the thread health surface; implies JSON output.",
     )
     parser.add_argument(
-        "--exit-code", action="store_true", help="Exit 2 when maintenance is recommended."
+        "--exit-code",
+        action="store_true",
+        help="Exit 2 only when ordinary first recall is blocked; advisory maintenance stays exit 0.",
     )
     return parser
 
@@ -1180,8 +1182,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         render_health_text(public_result)
 
-    if args.exit_code and result["recommended_actions"]:
-        return 2
+    if args.exit_code:
+        readiness = result.get("product_readiness") if isinstance(result, dict) else {}
+        if isinstance(readiness, dict) and "ordinary_first_recall_usable" in readiness:
+            return 0 if readiness.get("ordinary_first_recall_usable") else 2
+        if not result.get("ok"):
+            return 2
     return 0
 
 

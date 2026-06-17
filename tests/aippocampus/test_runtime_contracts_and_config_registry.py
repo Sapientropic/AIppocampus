@@ -26,6 +26,8 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     PUBLIC_RUNTIME_STATUSES,
     PUBLIC_RUNTIME_SURFACE_CLASSES,
     RUNTIME_FAILURE_FAMILIES,
+    canonical_foreground_action_fields,
+    foreground_action_contract_violations,
     public_envelope,
 )
 
@@ -69,6 +71,55 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
 
         self.assertFalse(envelope["ok"])
         self.assertEqual(envelope["status"], "error")
+
+    def test_canonical_foreground_action_fields_keep_compat_aliases_identical(self) -> None:
+        primary = {
+            "id": "inspect_detail",
+            "command": "aippocampus doctor provider --detail full --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_detail_not_memory_evidence",
+        }
+        secondary = {
+            "id": "check_hook_visibility",
+            "command": "aippocampus hooks prompt status --last --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "launcher_scope_not_running_hook_process",
+        }
+
+        fields = canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=[primary, secondary],
+        )
+
+        self.assertEqual(fields["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(fields["foreground_action"], primary)
+        self.assertEqual(fields["agent_next_action"], primary)
+        self.assertEqual(fields["safe_next_actions"][0], primary)
+        self.assertEqual(foreground_action_contract_violations(fields), [])
+
+    def test_foreground_action_contract_lint_rejects_competing_aliases(self) -> None:
+        payload = {
+            "foreground_action": {"id": "primary", "command": "aippocampus health --json"},
+            "agent_next_action": {"id": "other", "command": "aippocampus doctor provider --json"},
+            "safe_next_actions": [{"id": "third", "command": "aippocampus mcp status"}],
+        }
+
+        violations = foreground_action_contract_violations(payload)
+
+        self.assertIn(
+            {
+                "field": "agent_next_action",
+                "reason": "alias_must_match_foreground_action",
+            },
+            violations,
+        )
+        self.assertIn(
+            {
+                "field": "safe_next_actions.0",
+                "reason": "primary_safe_action_must_match_foreground_action",
+            },
+            violations,
+        )
 
     def test_runtime_aippocampus_env_names_are_registered(self) -> None:
         runtime_names = aippocampus_env_names_from(

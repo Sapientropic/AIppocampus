@@ -234,9 +234,67 @@ class ProviderDoctorTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        self.assertEqual(payload["kind"], "aippocampus_provider_doctor")
+        self.assertEqual(payload["kind"], "aippocampus_provider_doctor_card")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["surface"], "foreground_decision_card")
         self.assertTrue(payload["ok"])
+        self.assertEqual(payload["foreground_action"]["command"], "aippocampus hooks prompt status --last --json")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["full_audit_command"], "aippocampus doctor provider --detail full --json")
+        self.assertNotIn("provider_env", payload)
+        self.assertNotIn("legacy_aliases", payload)
+        self.assertNotIn("credential_validation", payload)
         self.assertNotIn(fixture_value, proc.stdout)
+
+    def test_cli_doctor_provider_full_detail_keeps_operator_report(self) -> None:
+        fixture_value = fake_provider_doctor_value("CLI_FULL")
+        env = dict(os.environ)
+        for name in PROVIDER_ENV_NAMES:
+            env.pop(name, None)
+        env["DEEPSEEK_API_KEY"] = fixture_value
+        for args in (
+            ["doctor", "provider", "--detail", "full", "--json"],
+            ["doctor", "provider", "--operator-json"],
+        ):
+            with self.subTest(args=args):
+                proc = subprocess.run(
+                    [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
+                    cwd=SCRIPTS,
+                    env=env,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                payload = json.loads(proc.stdout)
+                self.assertEqual(payload["kind"], "aippocampus_provider_doctor")
+                self.assertIn("provider_env", payload)
+                self.assertIn("legacy_aliases", payload)
+                self.assertNotIn(fixture_value, proc.stdout)
+
+    def test_compact_provider_doctor_card_normalizes_guidance_actions(self) -> None:
+        with provider_env():
+            report = provider_doctor.build_provider_doctor_report(
+                model_route="default",
+                check_child_process=False,
+            )
+
+        card = provider_doctor.compact_provider_doctor_card(report)
+
+        self.assertEqual(card["kind"], "aippocampus_provider_doctor_card")
+        self.assertEqual(card["status"], "missing_provider_env_var")
+        self.assertEqual(card["foreground_action"]["id"], "set_provider_env_in_hook_environment")
+        self.assertEqual(card["foreground_action"]["command"], "aippocampus onboard provider-key --plan --json")
+        self.assertEqual(card["agent_next_action"], card["foreground_action"])
+        self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
+        self.assertEqual(card["recommended_actions"][0]["kind"], "guidance")
+        self.assertFalse(card["recommended_actions"][0]["has_command"])
+        self.assertNotIn("provider_env", card)
+        self.assertNotIn("legacy_aliases", card)
 
     def test_explicit_dotenv_discovery_reports_candidate_without_secret_or_path_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

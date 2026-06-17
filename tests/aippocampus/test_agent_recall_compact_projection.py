@@ -10,7 +10,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity, foreground_action_card  # noqa: E402
 
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
@@ -188,6 +188,23 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(weak_route["foreground_action"]["cli_command"], 'aippocampus search "broad direction route" --json')
         self.assertEqual(executable_command_violations(no_route), [])
         self.assertEqual(executable_command_violations(weak_route), [])
+
+    def test_full_recall_action_card_no_routes_has_executable_recovery_action(self) -> None:
+        card = foreground_action_card.build_recall_foreground_action_card(
+            status="no_routes",
+            memory_packets=[],
+            deepen_requests=[],
+            query="unlikely-no-match-token-xyz-12345",
+        )
+
+        self.assertEqual(card["decision"], "recover_no_route")
+        self.assertEqual(card["canonical_action"]["tool_name"], "search_memory")
+        self.assertEqual(
+            card["canonical_action"]["cli_command"],
+            'aippocampus search "unlikely-no-match-token-xyz-12345" --json',
+        )
+        self.assertEqual(card["safe_next_actions"][0], card["canonical_action"])
+        self.assertEqual(executable_command_violations(card), [])
 
     def test_missing_cache_recovery_uses_known_query_not_same_cue_placeholder(self) -> None:
         projected = agent_continuity.public_recall_projection(

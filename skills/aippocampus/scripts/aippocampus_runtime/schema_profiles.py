@@ -38,6 +38,7 @@ FOREGROUND_ACTION_CARD_OPTIONAL_FIELDS = (
     "route_label",
     "route_family",
     "canonical_action",
+    "safe_next_actions",
     "callable_handle",
     "callable_handle_redacted",
     "public_safe_action",

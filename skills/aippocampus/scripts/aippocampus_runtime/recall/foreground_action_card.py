@@ -70,6 +70,8 @@ def _route_label(packet: Mapping[str, Any]) -> str:
 
 
 def _why_for_decision(decision: str, packet: Mapping[str, Any]) -> str:
+    if decision == "recover_no_route":
+        return "No compact source-backed route surfaced; try exact source search or check source registration."
     if decision == "continue_normally":
         return "No compact source-backed route surfaced."
     if decision == "ignore_or_blocked":
@@ -88,6 +90,8 @@ def _why_for_decision(decision: str, packet: Mapping[str, Any]) -> str:
 def _decision_for(status: Any, packet: Mapping[str, Any], request: Mapping[str, Any]) -> str:
     if str(status or "") in {"cannot_verify", "blocked", "privacy_blocked"}:
         return "ignore_or_blocked"
+    if str(status or "") == "no_routes" and not packet:
+        return "recover_no_route"
     if not packet:
         return "continue_normally"
     if packet.get("claim_permission") == "blocked" or packet.get("output_mode") == "ignore_or_blocked":
@@ -101,12 +105,48 @@ def _decision_for(status: Any, packet: Mapping[str, Any], request: Mapping[str, 
 
 
 def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str, Any]) -> str:
+    if decision == "recover_no_route":
+        return "search_memory"
     if decision in {"use_route_first", "deepen_before_claim"}:
         return "deepen" if request else str(packet.get("next_action") or "reopen_source")
     return "continue_normally"
 
 
-def _canonical_action(decision: str, request: Mapping[str, Any]) -> dict[str, Any]:
+def _search_recovery_action(query: Any) -> dict[str, Any]:
+    cue = _safe_text(query, limit=160)
+    base = {
+        "action_id": "recover_recall_miss",
+        "tool_name": "search_memory",
+        "why": "Search clean source for exact wording before broadening the recall attempt.",
+        "claim_boundary": "no_route_claim",
+    }
+    if cue:
+        return base | {
+            "arguments": {"query": cue, "max": 5},
+            "cli_command": f"aippocampus search {json.dumps(cue, ensure_ascii=False)} --json",
+        }
+    return base | {
+        "arguments_template": {"query": "{exact_phrase}", "max": 5},
+        "requires": ["exact_phrase"],
+        "template_only": True,
+        "cli_command_template": 'aippocampus search "{exact_phrase}" --json',
+    }
+
+
+def _onboarding_status_action() -> dict[str, Any]:
+    return {
+        "action_id": "check_onboarding_status",
+        "tool_name": "shell",
+        "arguments": {"command": "aippocampus onboard --provider auto --status --json"},
+        "cli_command": "aippocampus onboard --provider auto --status --json",
+        "why": "Use if recall/search miss suggests clean source is missing or unregistered.",
+        "claim_boundary": "setup_status_not_memory_evidence",
+    }
+
+
+def _canonical_action(decision: str, request: Mapping[str, Any], query: Any) -> dict[str, Any]:
+    if decision == "recover_no_route":
+        return _search_recovery_action(query)
     if decision not in {"use_route_first", "deepen_before_claim"} or not request:
         return {
             "action_id": "continue_normally",
@@ -137,6 +177,7 @@ def build_recall_foreground_action_card(
     status: Any,
     memory_packets: Any,
     deepen_requests: Any,
+    query: Any = None,
 ) -> dict[str, Any]:
     """Build the tiny default card for agent recall / MCP foreground use."""
 
@@ -148,9 +189,15 @@ def build_recall_foreground_action_card(
         "decision": decision,
         "why": _why_for_decision(decision, packet),
         "next_action": _next_action(decision, request, packet),
-        "claim_boundary": CLAIM_BOUNDARY if decision != "continue_normally" else "no_route_claim",
-        "canonical_action": _canonical_action(decision, request),
+        "claim_boundary": (
+            "no_route_claim"
+            if decision in {"continue_normally", "recover_no_route"}
+            else CLAIM_BOUNDARY
+        ),
+        "canonical_action": _canonical_action(decision, request, query),
     }
+    if decision == "recover_no_route":
+        card["safe_next_actions"] = [card["canonical_action"], _onboarding_status_action()]
     if packet:
         card["route_label"] = _route_label(packet)
         card["route_family"] = _safe_text(

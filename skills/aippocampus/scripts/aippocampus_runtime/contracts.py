@@ -274,6 +274,79 @@ def foreground_shell_action(
     return payload
 
 
+def canonical_foreground_action_fields(
+    foreground_action: Mapping[str, object],
+    *,
+    safe_next_actions: Sequence[Mapping[str, object]] | None = None,
+    include_compat_alias: bool = True,
+) -> dict[str, object]:
+    """Return the shared foreground action field set for compact cards.
+
+    `foreground_action` is the authoritative field. The legacy
+    `agent_next_action` alias remains only as a byte-for-byte compatibility
+    mirror so host agents do not have to guess precedence while older clients
+    migrate. Keep `safe_next_actions[0]` equal to the foreground action; put
+    alternates after it.
+    """
+
+    primary = dict(foreground_action)
+    alternates = [dict(action) for action in (safe_next_actions or []) if action]
+    if not alternates or alternates[0] != primary:
+        alternates = [primary, *[action for action in alternates if action != primary]]
+    payload: dict[str, object] = {
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+        "foreground_action": primary,
+        "safe_next_actions": alternates,
+    }
+    if include_compat_alias:
+        payload["agent_next_action"] = primary
+    return payload
+
+
+def foreground_action_contract_violations(payload: Mapping[str, object]) -> list[dict[str, str]]:
+    """Lint compact-card action aliases against the foreground-action contract."""
+
+    violations: list[dict[str, str]] = []
+    foreground = payload.get("foreground_action")
+    agent_next = payload.get("agent_next_action")
+    safe_actions = payload.get("safe_next_actions")
+    if foreground is None:
+        if agent_next is not None:
+            violations.append(
+                {
+                    "field": "foreground_action",
+                    "reason": "missing_canonical_foreground_action",
+                }
+            )
+        return violations
+    if not isinstance(foreground, Mapping):
+        violations.append(
+            {
+                "field": "foreground_action",
+                "reason": "canonical_foreground_action_must_be_object",
+            }
+        )
+        return violations
+    foreground_dict = dict(foreground)
+    if isinstance(agent_next, Mapping) and dict(agent_next) != foreground_dict:
+        violations.append(
+            {
+                "field": "agent_next_action",
+                "reason": "alias_must_match_foreground_action",
+            }
+        )
+    if isinstance(safe_actions, Sequence) and not isinstance(safe_actions, str):
+        first = next((item for item in safe_actions if isinstance(item, Mapping)), None)
+        if isinstance(first, Mapping) and dict(first) != foreground_dict:
+            violations.append(
+                {
+                    "field": "safe_next_actions.0",
+                    "reason": "primary_safe_action_must_match_foreground_action",
+                }
+            )
+    return violations
+
+
 def foreground_recovery_card(
     *,
     kind: str,

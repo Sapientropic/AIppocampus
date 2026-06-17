@@ -15,8 +15,9 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import (
     codex_home,
     default_thread_retention_dir,
@@ -434,15 +435,19 @@ def build_plan(
     foreground_actions = gc_actions.storage_gc_foreground_actions(
         retention_report_available=retention_report is not None,
     )
-    safe_next_actions = foreground_actions["safe_next_actions"]
-    next_steps = foreground_actions["next_steps"]
+    safe_next_actions = cast(list[dict[str, Any]], foreground_actions["safe_next_actions"])
+    next_steps = cast(list[str], foreground_actions["next_steps"])
+    action_fields = canonical_foreground_action_fields(
+        safe_next_actions[0],
+        safe_next_actions=safe_next_actions,
+    )
 
     return {
         "schema_version": SCHEMA_VERSION,
         "ok": True,
         "status": "dry_run_ready",
         "surface_class": "foreground_storage_gc_plan",
-        "foreground_action_contract": "foreground-action-v1",
+        **action_fields,
         "created_at": now_utc(),
         "mode": "dry_run",
         "requested_class": class_filter,
@@ -497,9 +502,6 @@ def build_plan(
             if item
         ],
         "next_steps": next_steps,
-        "agent_next_action": safe_next_actions[0],
-        "foreground_action": safe_next_actions[0],
-        "safe_next_actions": safe_next_actions,
     }
 
 

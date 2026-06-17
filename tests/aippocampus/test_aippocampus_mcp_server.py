@@ -24,6 +24,7 @@ for _path in (
 from aippocampus_runtime import core  # noqa: E402
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
+from aippocampus_runtime.mcp import tool_readiness  # noqa: E402
 from aippocampus_runtime.ops import provider_key_bridge, telepathy_handoff_store  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
@@ -234,6 +235,71 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertIn("request_index", by_name["agent_deepen"]["inputSchema"]["required_any"])
         self.assertIn("handle", by_name["agent_explain"]["inputSchema"]["required_any"])
         self.assertIn("request_index", by_name["agent_explain"]["inputSchema"]["required_any"])
+
+    def test_mcp_tool_descriptions_disambiguate_when_and_after(self) -> None:
+        listed = mcp.handle_request({"jsonrpc": "2.0", "id": 202, "method": "tools/list"})
+        tools = listed["result"]["tools"]
+        by_name = {tool["name"]: tool for tool in tools}
+
+        for tool in tools:
+            with self.subTest(tool=tool["name"]):
+                description = tool["description"]
+                self.assertIn("When:", description)
+                self.assertIn("After:", description)
+
+        self.assertIn("recall_context", by_name["agent_recall"]["description"])
+        self.assertIn("agent_recall", by_name["recall_context"]["description"])
+        self.assertIn("recall_deepen", by_name["agent_deepen"]["description"])
+        self.assertIn("agent_deepen", by_name["recall_deepen"]["description"])
+        self.assertIn("recall_diagnostic", by_name["agent_explain"]["description"])
+        self.assertIn("agent_explain", by_name["recall_diagnostic"]["description"])
+        self.assertIn("exact", by_name["search_memory"]["description"].casefold())
+
+    def test_mcp_tool_catalog_has_one_detail_vocabulary_and_no_near_duplicate_descriptions(self) -> None:
+        listed = mcp.handle_request({"jsonrpc": "2.0", "id": 203, "method": "tools/list"})
+        tools = listed["result"]["tools"]
+        detail_enums = {
+            tuple(tool["inputSchema"]["properties"]["detail"]["enum"])
+            for tool in tools
+            if "detail" in tool["inputSchema"]["properties"]
+        }
+
+        self.assertEqual(detail_enums, {("compact", "full")})
+        normalized: dict[str, set[str]] = {}
+        for tool in tools:
+            words = {
+                word.strip(".,;:()[]`").casefold()
+                for word in tool["description"].split()
+                if len(word.strip(".,;:()[]`")) > 3
+            }
+            normalized[tool["name"]] = words
+        for left_name, left_words in normalized.items():
+            for right_name, right_words in normalized.items():
+                if left_name >= right_name:
+                    continue
+                overlap = len(left_words & right_words)
+                union = len(left_words | right_words) or 1
+                self.assertLess(
+                    overlap / union,
+                    0.78,
+                    f"{left_name} and {right_name} descriptions are too similar",
+                )
+
+    def test_mcp_status_missing_key_tools_includes_executable_repair_action(self) -> None:
+        with mock.patch.object(
+            tool_readiness,
+            "TOOLS",
+            [{"name": "search_memory", "description": "When: exact. After: reopen.", "inputSchema": {}}],
+        ):
+            payload = tool_readiness.tool_readiness_summary()
+
+        self.assertFalse(payload["ok"])
+        self.assertIn("agent_recall", payload["missing_key_tools"])
+        self.assertEqual(payload["foreground_action"]["id"], "repair_mcp_tool_catalog")
+        self.assertIn("aippocampus plugin install --codex --verify", payload["foreground_action"]["command"])
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(executable_command_violations(payload), [])
 
     def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
         last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
