@@ -10,6 +10,7 @@ OpenAI-compatible endpoint behaves like DeepSeek.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,7 +21,8 @@ PRO_ROUTES = {"pro", "slow_adjudication", "suppressed_label_recovery", "agentic_
 DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
 DEFAULT_PRO_MODEL = "deepseek-v4-pro"
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEFAULT_DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
+DEFAULT_DEEPSEEK_API_KEY_ENV = "AIPPOCAMPUS_DEEPSEEK_API_KEY"
+LEGACY_DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEFAULT_DEEPSEEK_THINKING = "enabled"
 DEFAULT_DEEPSEEK_REASONING_EFFORT = "high"
 DEEPSEEK_PREFIX_CACHE_CONTRACT = "deepseek_prefix_v1"
@@ -222,6 +224,38 @@ def pro_model() -> str:
     )
 
 
+def deepseek_api_key_env(env: Mapping[str, str] | None = None) -> str:
+    """Return the public env-var name to use for DeepSeek credentials.
+
+    The canonical AIppocampus-prefixed name must be the default so diagnostics
+    and hook setup do not teach users to keep provider-specific globals around.
+    We keep the legacy DeepSeek name as a presence-only migration fallback for
+    existing installs; do not switch this to value checks, because provider
+    readiness surfaces intentionally avoid reading key material unless a model
+    call is explicitly being made.
+    """
+
+    current_env = env if env is not None else os.environ
+    if DEFAULT_DEEPSEEK_API_KEY_ENV in current_env:
+        return DEFAULT_DEEPSEEK_API_KEY_ENV
+    if LEGACY_DEEPSEEK_API_KEY_ENV in current_env:
+        return LEGACY_DEEPSEEK_API_KEY_ENV
+    return DEFAULT_DEEPSEEK_API_KEY_ENV
+
+
+def is_default_deepseek_api_key_env(value: str | None) -> bool:
+    """Return true when an api-key-env argument means "use the DeepSeek default".
+
+    Older call sites baked `DEEPSEEK_API_KEY` in their argparse defaults before
+    the public `AIPPOCAMPUS_*` prefix existed. Treat both spellings as the
+    route default so model-route configuration can still supply its own key env
+    and so legacy callers do not accidentally override custom routes.
+    """
+
+    raw = str(value or "").strip()
+    return raw in {"", DEFAULT_DEEPSEEK_API_KEY_ENV, LEGACY_DEEPSEEK_API_KEY_ENV}
+
+
 def deepseek_capabilities(tier: str) -> ModelCapabilities:
     return ModelCapabilities(
         api_compatibility="openai_chat_completions",
@@ -286,7 +320,7 @@ def deepseek_route(route: str, tier: str, model: str) -> ModelRoute:
         model=model,
         provider="deepseek",
         base_url=deepseek_base_url(),
-        api_key_env=DEFAULT_DEEPSEEK_API_KEY_ENV,
+        api_key_env=deepseek_api_key_env(),
         capabilities=deepseek_capabilities(tier),
     )
 
@@ -461,7 +495,7 @@ def resolve_model_route(
             EXPLICIT_OPENAI_COMPAT_ROUTE,
             model=explicit_model_name,
             base_url=custom_base_url or deepseek_base_url(),
-            api_key_env=custom_api_key_env or DEFAULT_DEEPSEEK_API_KEY_ENV,
+            api_key_env=custom_api_key_env or deepseek_api_key_env(),
         )
     if explicit_model:
         return deepseek_route(normalized, "custom", explicit_model)

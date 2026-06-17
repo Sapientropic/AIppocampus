@@ -30,6 +30,7 @@ from aippocampus_runtime.model.client import (
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
+    is_default_deepseek_api_key_env,
     resolve_model_route,
     resolve_route_reasoning_effort,
     resolve_route_thinking,
@@ -1163,7 +1164,7 @@ def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str,
     explicit_base_url = base_url if base_url and not route_name else None
     explicit_api_key_env = (
         api_key_env_arg
-        if api_key_env_arg != DEFAULT_DEEPSEEK_API_KEY_ENV and not route_name
+        if not is_default_deepseek_api_key_env(api_key_env_arg) and not route_name
         else None
     )
     route = resolve_model_route(
@@ -1174,7 +1175,11 @@ def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str,
     )
     resolved_model = route.model if not model else model
     resolved_base_url = route.base_url if not base_url else base_url
-    resolved_api_key_env = route.api_key_env if api_key_env_arg == DEFAULT_DEEPSEEK_API_KEY_ENV else api_key_env_arg
+    resolved_api_key_env = (
+        route.api_key_env
+        if is_default_deepseek_api_key_env(api_key_env_arg)
+        else api_key_env_arg
+    )
     key_value = os.environ.get(resolved_api_key_env)
     if not key_value:
         raise RuntimeError(

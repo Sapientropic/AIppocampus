@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.model.routing import deepseek_api_key_env
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.subconscious.jobs import (
     DEFAULT_BASE_URL,
@@ -199,13 +200,14 @@ def frontier_boundary_result(
             "project_scope": project,
             "project_scope_reason": project_scope_reason,
         }
-    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    api_key_env = deepseek_api_key_env(os.environ)
+    api_key = os.environ.get(api_key_env)
     if not api_key:
         status = "skipped_missing_api_key" if mode == "auto" else "blocked_missing_api_key"
         return {
             "status": status,
             "question_extraction_available": True,
-            "api_key_env": "DEEPSEEK_API_KEY",
+            "api_key_env": api_key_env,
             "project_scope": project,
             "project_scope_reason": project_scope_reason,
         }

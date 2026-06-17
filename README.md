@@ -437,9 +437,10 @@ Common non-secret configuration:
 - `AIPPOCAMPUS_SEMANTIC_GATE`
 
 Optional provider secrets are separate. Basic source search, MCP/plugin setup,
-and local hooks do not require them. Set `DEEPSEEK_API_KEY` or an
+and local hooks do not require them. Set `AIPPOCAMPUS_DEEPSEEK_API_KEY` or an
 `AIPPOCAMPUS_OPENAI_COMPAT_*` route only when you explicitly want semantic or
-background model work; values must never be committed or printed.
+background model work; `DEEPSEEK_API_KEY` remains a legacy fallback for existing
+installs. Values must never be committed or printed.
 
 ## Roadmap
 

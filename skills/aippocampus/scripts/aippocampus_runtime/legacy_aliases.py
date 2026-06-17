@@ -72,6 +72,12 @@ LEGACY_ENV_ALIASES: tuple[LegacyEnvAlias, ...] = (
         "migration_only",
     ),
     LegacyEnvAlias(
+        "DEEPSEEK_API_KEY",
+        "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+        "model_routing",
+        "migration_only",
+    ),
+    LegacyEnvAlias(
         "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
         "AIPPOCAMPUS_SUBCONSCIOUS_HOOK",
         "subconscious_scheduler",

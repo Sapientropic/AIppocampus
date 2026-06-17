@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV, resolve_model_route
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    is_default_deepseek_api_key_env,
+    resolve_model_route,
+)
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.subconscious.job_circuits import job_names
@@ -102,13 +106,13 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
         explicit_api_key_env=(
             arg_api_key_env
-            if arg_api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            if not is_default_deepseek_api_key_env(arg_api_key_env) and not model_route
             else None
         ),
     )
     api_key_env = (
         route.api_key_env
-        if arg_api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        if is_default_deepseek_api_key_env(arg_api_key_env)
         else arg_api_key_env
     )
     registry_path = (

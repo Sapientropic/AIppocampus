@@ -18,6 +18,7 @@ sys.path.insert(0, str(SCRIPTS))
 from aippocampus_runtime.ops import provider_doctor  # noqa: E402
 
 PROVIDER_ENV_NAMES = [
+    "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     "DEEPSEEK_API_KEY",
     "PROVIDER_DOCTOR_TEST_VALUE",
     "LOCAL_PROVIDER_ROUTE_VALUE",
@@ -71,7 +72,7 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["status"], "missing_provider_env_var")
         self.assertEqual(report["route"]["provider"], "deepseek")
-        self.assertEqual(report["provider_env"]["env_var"], "DEEPSEEK_API_KEY")
+        self.assertEqual(report["provider_env"]["env_var"], "AIPPOCAMPUS_DEEPSEEK_API_KEY")
         self.assertFalse(report["provider_env"]["visible_in_current_process"])
         self.assertFalse(report["provider_env"]["visible_in_child_process"])
         self.assertEqual(
@@ -98,7 +99,11 @@ class ProviderDoctorTests(unittest.TestCase):
         alias_diagnostics = json.dumps(report["legacy_aliases"], ensure_ascii=False)
         aliases = {entry["alias"] for entry in report["legacy_aliases"]["active"]}
 
-        self.assertEqual(aliases, {"AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "DEEPSEEK_MODEL"})
+        self.assertEqual(
+            aliases,
+            {"AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"},
+        )
+        self.assertEqual(report["provider_env"]["env_var"], "DEEPSEEK_API_KEY")
         self.assertFalse(report["legacy_aliases"]["value_printed"])
         self.assertFalse(report["legacy_aliases"]["local_paths_included"])
         self.assertFalse(report["privacy"]["legacy_alias_values_printed"])
@@ -108,7 +113,7 @@ class ProviderDoctorTests(unittest.TestCase):
 
     def test_visible_default_key_reports_ready_without_leaking_value(self) -> None:
         fixture_value = fake_provider_doctor_value("VISIBLE")
-        with provider_env({"DEEPSEEK_API_KEY": fixture_value}):
+        with provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": fixture_value}):
             report = provider_doctor.build_provider_doctor_report(model_route="default")
         encoded = json.dumps(report, ensure_ascii=False)
 
@@ -133,9 +138,28 @@ class ProviderDoctorTests(unittest.TestCase):
         )
         self.assertNotIn(fixture_value, encoded)
 
+    def test_canonical_provider_key_shadows_legacy_key_without_reading_values(self) -> None:
+        canonical = fake_provider_doctor_value("CANONICAL")
+        legacy = fake_provider_doctor_value("LEGACY_SHADOWED")
+        with provider_env(
+            {
+                "AIPPOCAMPUS_DEEPSEEK_API_KEY": canonical,
+                "DEEPSEEK_API_KEY": legacy,
+            }
+        ):
+            report = provider_doctor.build_provider_doctor_report(model_route="default")
+        shadowed = {entry["alias"] for entry in report["legacy_aliases"]["shadowed"]}
+        encoded = json.dumps(report, ensure_ascii=False)
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["provider_env"]["env_var"], "AIPPOCAMPUS_DEEPSEEK_API_KEY")
+        self.assertIn("DEEPSEEK_API_KEY", shadowed)
+        self.assertNotIn(canonical, encoded)
+        self.assertNotIn(legacy, encoded)
+
     def test_provider_doctor_human_output_names_hook_process_caveat(self) -> None:
         fixture_value = fake_provider_doctor_value("HUMAN")
-        with provider_env({"DEEPSEEK_API_KEY": fixture_value}):
+        with provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": fixture_value}):
             report = provider_doctor.build_provider_doctor_report(model_route="default")
         text = provider_doctor.render_text(report)
 
@@ -161,7 +185,7 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertNotIn("secret", encoded.casefold())
 
     def test_provider_visibility_is_presence_only_and_does_not_read_empty_values(self) -> None:
-        with provider_env({"DEEPSEEK_API_KEY": ""}):
+        with provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": ""}):
             report = provider_doctor.build_provider_doctor_report(
                 model_route="default",
                 check_child_process=False,
@@ -175,7 +199,7 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["privacy"]["env_var_value_checked"])
 
     def test_validate_credentials_without_explicit_discovery_is_honest_not_run(self) -> None:
-        with provider_env({"DEEPSEEK_API_KEY": fake_provider_doctor_value("PRESENCE_ONLY")}):
+        with provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": fake_provider_doctor_value("PRESENCE_ONLY")}):
             report = provider_doctor.build_provider_doctor_report(
                 model_route="default",
                 check_child_process=False,
@@ -213,7 +237,7 @@ class ProviderDoctorTests(unittest.TestCase):
         env = dict(os.environ)
         for name in PROVIDER_ENV_NAMES:
             env.pop(name, None)
-        env["DEEPSEEK_API_KEY"] = fixture_value
+        env["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = fixture_value
         proc = subprocess.run(
             [
                 sys.executable,
@@ -252,7 +276,7 @@ class ProviderDoctorTests(unittest.TestCase):
         env = dict(os.environ)
         for name in PROVIDER_ENV_NAMES:
             env.pop(name, None)
-        env["DEEPSEEK_API_KEY"] = fixture_value
+        env["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = fixture_value
         for args in (
             ["doctor", "provider", "--detail", "full", "--json"],
             ["doctor", "provider", "--operator-json"],

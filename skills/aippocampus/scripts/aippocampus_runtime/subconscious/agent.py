@@ -25,8 +25,11 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.model.routing import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
     DEFAULT_DEEPSEEK_REASONING_EFFORT,
     DEFAULT_DEEPSEEK_THINKING,
+    deepseek_api_key_env,
+    is_default_deepseek_api_key_env,
 )
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.registry.api import registry_paths
@@ -119,7 +122,11 @@ def agent_run_config_from_args(args: Any) -> AgentRunConfig:
         min_tool_steps=args.min_tool_steps,
         model=args.model,
         base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
+        api_key=os.environ.get(
+            deepseek_api_key_env(os.environ)
+            if is_default_deepseek_api_key_env(args.api_key_env)
+            else args.api_key_env
+        ),
         max_tokens=args.max_tokens,
         timeout=args.timeout,
         temperature=args.temperature,
@@ -345,7 +352,10 @@ def run_agent(
             "prompt_preview": compact_text(initial_payload, 2400),
         }
     if not api_key:
-        raise RuntimeError("missing DeepSeek API key; set DEEPSEEK_API_KEY or pass --api-key-env")
+        raise RuntimeError(
+            "missing DeepSeek API key; set AIPPOCAMPUS_DEEPSEEK_API_KEY "
+            "(legacy DEEPSEEK_API_KEY is still a fallback) or pass --api-key-env"
+        )
 
     messages = [
         {"role": "system", "content": AGENT_SYSTEM_PROMPT},
@@ -516,7 +526,7 @@ def main() -> int:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--timeout", type=int, default=90)
     parser.add_argument("--dry-run", action="store_true")

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from aippocampus_runtime.model.routing import deepseek_api_key_env
 from aippocampus_runtime.recall.semantic_recall_gate import (
     semantic_gate_enabled,
     semantic_gate_mode,
@@ -515,8 +516,9 @@ def _warm_ambient_lane(*, root: Path, now: datetime) -> dict[str, Any]:
 
 def _semantic_gate_lane(*, root: Path, now: datetime) -> dict[str, Any]:
     mode = semantic_gate_mode()
-    provider_visible = bool(os.environ.get("DEEPSEEK_API_KEY"))
-    enabled = semantic_gate_enabled(api_key_env="DEEPSEEK_API_KEY")
+    api_key_env = deepseek_api_key_env(os.environ)
+    provider_visible = api_key_env in os.environ
+    enabled = semantic_gate_enabled(api_key_env=api_key_env)
     telemetry_path = root / "aippocampus_prompt_hook_skip_telemetry.json"
     telemetry = load_json_fail_open(telemetry_path)
     last_artifact_at = _latest_json_file_timestamp(telemetry_path, ("updated_at",))

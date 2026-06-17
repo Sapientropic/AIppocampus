@@ -14,6 +14,12 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    deepseek_api_key_env,
+    is_default_deepseek_api_key_env,
+)
+
 COGNITIVE_WORKER_MODE_ENV = "AIPPOCAMPUS_COGNITIVE_WORKER_MODE"
 AGENT_FALLBACK_AVAILABLE_ENV = "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE"
 
@@ -54,7 +60,7 @@ def _env_bool(env: Mapping[str, str], name: str) -> bool:
 
 def resolve_cognitive_worker_mode(
     *,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
     mode: str | None = None,
     provider_key_visible: bool | None = None,
     agent_fallback_available: bool | None = None,
@@ -64,7 +70,16 @@ def resolve_cognitive_worker_mode(
 
     env_map: Mapping[str, str] = env if env is not None else os.environ
     requested = _mode_token(mode if mode is not None else env_map.get(COGNITIVE_WORKER_MODE_ENV, "auto"))
-    key_visible = _env_has_name(env_map, api_key_env) if provider_key_visible is None else bool(provider_key_visible)
+    resolved_api_key_env = (
+        deepseek_api_key_env(env_map)
+        if is_default_deepseek_api_key_env(api_key_env)
+        else api_key_env
+    )
+    key_visible = (
+        _env_has_name(env_map, resolved_api_key_env)
+        if provider_key_visible is None
+        else bool(provider_key_visible)
+    )
     fallback_available = (
         _env_bool(env_map, AGENT_FALLBACK_AVAILABLE_ENV)
         if agent_fallback_available is None

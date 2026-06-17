@@ -45,8 +45,10 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertEqual(report["kind"], "aippocampus_provider_key_bridge")
         self.assertEqual(report["action"], "plan")
         self.assertFalse(report["applied"])
-        self.assertEqual(report["candidate"]["status"], "candidate_present")
-        self.assertEqual(report["candidate"]["secret_shape"], f"len:{len(fixture_value)}")
+        self.assertEqual(report["candidate"]["status"], "explicit_source_configured")
+        self.assertEqual(report["candidate"]["secret_shape"], "not_read_during_plan")
+        self.assertTrue(report["candidate"]["source_path_exists"])
+        self.assertFalse(report["candidate"]["value_checked"])
         self.assertFalse(report["candidate"]["value_printed"])
         self.assertFalse(report["candidate"]["path_included"])
         self.assertIn("bridge_manifest", {item["kind"] for item in report["writes"]})
@@ -68,7 +70,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertIn(
-            "credential_candidate_missing",
+            "credential_source_missing",
             {item["code"] for item in report["issues"]},
         )
         self.assertIn("recommended_actions", report)
