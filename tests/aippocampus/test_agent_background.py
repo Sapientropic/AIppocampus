@@ -55,11 +55,16 @@ class AgentBackgroundTests(unittest.TestCase):
                 working_memory_path=working_memory,
             )
 
-        finding = payload["findings"][0]
+        finding = payload["best_finding"]
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["detail"], "compact")
+        self.assertNotIn("findings", payload)
+        self.assertNotIn("operator_detail", payload)
+        self.assertNotIn("reader_diagnostic", payload)
+        self.assertNotIn("mark_background_finding_helpful", encoded)
+        self.assertNotIn("materialize_action_hint_from_finding", encoded)
         self.assertEqual(finding["shape_label"], "action_hint_candidate")
         self.assertEqual(finding["finding_title"], "Action hint candidate")
-        self.assertNotEqual(finding["title"], "Background finding")
-        self.assertFalse(finding["low_information_label"])
         self.assertIn("Action-time learning", finding["match_reason"])
         self.assertNotEqual(finding["matched_terms"], ["action"])
         self.assertIn("action-time learning", finding["matched_terms"])
@@ -72,6 +77,7 @@ class AgentBackgroundTests(unittest.TestCase):
             payload = background_findings.background_findings_card(
                 "repeated coding mistakes and action-time learning",
                 working_memory_path=working_memory,
+                detail="full",
             )
 
         finding = payload["findings"][0]
@@ -99,12 +105,31 @@ class AgentBackgroundTests(unittest.TestCase):
             "explicit_local_cache_write",
         )
 
+    def test_agent_background_detail_keeps_reopen_actions_without_feedback_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_background_working_memory(working_memory)
+
+            payload = background_findings.background_findings_card(
+                "repeated coding mistakes and action-time learning",
+                working_memory_path=working_memory,
+                detail="detail",
+            )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        actions = payload["findings"][0]["next_actions"]
+        self.assertEqual(payload["detail"], "detail")
+        self.assertEqual([action["id"] for action in actions], ["reopen_background_finding_source_route"])
+        self.assertNotIn("mark_background_finding_helpful", encoded)
+        self.assertNotIn("materialize_action_hint_from_finding", encoded)
+
     def test_mcp_exposes_agent_background_tool_schema(self) -> None:
         listed = mcp.handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         by_name = {tool["name"]: tool for tool in listed["result"]["tools"]}
 
         self.assertIn("agent_background", by_name)
         self.assertIn("reviewed background findings", by_name["agent_background"]["description"])
+        self.assertIn("detail", by_name["agent_background"]["inputSchema"]["properties"])
         self.assertEqual(
             by_name["agent_background"]["inputSchema"]["required_any"],
             ["cue", "query", "task"],
@@ -136,8 +161,40 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_background_findings_card")
         self.assertEqual(payload["surface"], "agent_background")
         self.assertEqual(payload["finding_count"], 1)
-        self.assertEqual(payload["findings"][0]["shape_label"], "action_hint_candidate")
-        self.assertIn("Action-time learning", payload["findings"][0]["match_reason"])
+        self.assertEqual(payload["best_finding"]["shape_label"], "action_hint_candidate")
+        self.assertIn("Action-time learning", payload["best_finding"]["match_reason"])
+        self.assertNotIn("findings", payload)
+        self.assertNotIn("reader_diagnostic", payload)
+        self.assertNotIn(str(working_memory), encoded)
+
+    def test_agent_background_mcp_full_detail_keeps_operator_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_background_working_memory(working_memory)
+
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 207,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "agent_background",
+                        "arguments": {
+                            "cue": "repeated coding mistakes and action-time learning",
+                            "working_memory_path": str(working_memory),
+                            "detail": "full",
+                        },
+                    },
+                }
+            )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["detail"], "full")
+        self.assertIn("findings", payload)
+        self.assertIn("reader_diagnostic", payload)
+        self.assertIn("operator_detail", payload)
+        self.assertIn("mark_background_finding_helpful", encoded)
         self.assertNotIn(str(working_memory), encoded)
 
 

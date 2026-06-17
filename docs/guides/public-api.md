@@ -377,10 +377,11 @@ For these commands:
   aliases for this default. Use `--detail full` only for explicit local
   diagnostics where private handles are acceptable.
 - `aippocampus agent background "task cue" --json` is the foreground route for
-  reviewed Dream/subconscious working-memory findings. It may return finding
-  ids, matched terms, source-ref counts, and next actions to recall, deepen,
-  mark helpful/wrong, or preview action-hint materialization, but these findings
-  are navigation only and never source truth until source is reopened.
+  reviewed Dream/subconscious working-memory findings. Default JSON is a compact
+  action card with a best-finding summary and one primary source-reopen action.
+  Use `--detail full` or `--operator-json` for full finding lists, reader
+  diagnostics, feedback actions, or action-hint materialization previews. These
+  findings are navigation only and never source truth until source is reopened.
 - `observatory --json` emits a public-safe, no-write Cognitive Observatory
   readout; `observatory --html --output <path>` renders the same sanitized
   readout as a static, no-script operator view. The first stable slice

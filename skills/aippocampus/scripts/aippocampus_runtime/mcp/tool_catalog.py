@@ -77,6 +77,7 @@ TOOLS: list[dict[str, Any]] = [
             "working_memory_path": {"type": "string"},
             "project": {"type": "string"},
             "limit": {"type": "integer", "minimum": 1, "maximum": 12},
+            "detail": {"type": "string", "enum": ["compact", "detail", "full", "operator"]},
             "include_private_paths": {"type": "boolean"},
         },
         required_any=["cue", "query", "task"],

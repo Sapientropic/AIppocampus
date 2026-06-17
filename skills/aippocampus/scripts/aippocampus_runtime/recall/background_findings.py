@@ -21,6 +21,7 @@ from aippocampus_runtime.recall import background_finding_actions, background_fi
 from aippocampus_runtime.subconscious import candidate_router
 
 DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
+BACKGROUND_FINDING_DETAIL_LEVELS = {"compact", "detail", "full", "operator"}
 
 
 def _public_payload(payload: Any) -> Any:
@@ -97,6 +98,44 @@ def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[st
     }
 
 
+def _normalize_detail(value: str | None) -> str:
+    detail = str(value or "compact").strip().casefold()
+    return detail if detail in BACKGROUND_FINDING_DETAIL_LEVELS else "compact"
+
+
+def _read_only_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        dict(action)
+        for action in finding.get("next_actions") or []
+        if isinstance(action, Mapping) and action.get("mutation_risk") == "read_only"
+    ]
+
+
+def _finding_summary(finding: Mapping[str, Any]) -> dict[str, Any]:
+    pairs = {
+        "index": finding.get("index"),
+        "finding_id": finding.get("finding_id"),
+        "surface": finding.get("surface"),
+        "finding_type": finding.get("finding_type"),
+        "shape_label": finding.get("shape_label"),
+        "finding_title": finding.get("finding_title"),
+        "match_reason": finding.get("match_reason"),
+        "matched_terms": finding.get("matched_terms"),
+        "why_it_may_matter_now": finding.get("why_it_may_matter_now"),
+        "confidence": finding.get("confidence"),
+        "review_state": finding.get("review_state"),
+        "boundary": finding.get("boundary"),
+        "source_summary": finding.get("source"),
+    }
+    return {key: value for key, value in pairs.items() if value not in (None, "", [])}
+
+
+def _detail_finding(finding: Mapping[str, Any]) -> dict[str, Any]:
+    projected = dict(finding)
+    projected["next_actions"] = _read_only_actions(finding)
+    return projected
+
+
 def background_findings_card(
     cue: str,
     *,
@@ -104,6 +143,7 @@ def background_findings_card(
     working_memory_path: str | Path | None = None,
     project: str | None = "AIppocampus",
     limit: int = DEFAULT_BACKGROUND_FINDINGS_LIMIT,
+    detail: str = "compact",
 ) -> dict[str, Any]:
     task = str(cue or "").strip()
     if not task:
@@ -157,25 +197,21 @@ def background_findings_card(
             claim_boundary="no_claim_before_reopen",
         )
     )
+    detail_level = _normalize_detail(detail)
+    finding_summaries = [_finding_summary(finding) for finding in findings[:3]]
     payload = {
         "kind": "aippocampus_background_findings_card",
+        "detail": detail_level,
         "ok": True,
         "status": "ok" if findings else "no_relevant_background_findings",
         "mode": "background",
         "surface": "agent_background",
         "cue_used": task,
         "finding_count": len(findings),
-        "findings": findings,
+        "best_finding": finding_summaries[0] if finding_summaries else None,
+        "finding_summaries": finding_summaries,
         "agent_next_action": primary_action,
         "safe_next_actions": [dict(primary_action)],
-        "reader_diagnostic": {
-            "status": diagnostic.get("status"),
-            "row_count": diagnostic.get("row_count"),
-            "invalid_line_count": diagnostic.get("invalid_line_count"),
-            "writer_in_progress": diagnostic.get("writer_in_progress"),
-            "diagnostics": diagnostic.get("diagnostics") or [],
-            "path_emitted": False,
-        },
         "boundary": {
             "background_findings_are_source_truth": False,
             "dream_findings_are_fact": False,
@@ -184,14 +220,37 @@ def background_findings_card(
             "raw_private_text_emitted": False,
             "raw_local_paths_emitted": False,
         },
-        "operator_detail": {
+        "operator_detail_command": (
+            "aippocampus agent background "
+            f"{background_finding_actions.shell_quote(task)} --json --detail full"
+        ),
+        "output_boundary": "compact_foreground_no_reader_or_operator_diagnostics",
+    }
+    if detail_level == "detail":
+        payload["findings"] = [_detail_finding(finding) for finding in findings]
+        payload["output_boundary"] = "detail_no_feedback_write_actions"
+    if detail_level in {"full", "operator"}:
+        payload["findings"] = findings
+        payload["reader_diagnostic"] = {
+            "status": diagnostic.get("status"),
+            "row_count": diagnostic.get("row_count"),
+            "invalid_line_count": diagnostic.get("invalid_line_count"),
+            "writer_in_progress": diagnostic.get("writer_in_progress"),
+            "diagnostics": diagnostic.get("diagnostics") or [],
+            "path_emitted": False,
+        }
+        payload["operator_detail"] = {
             "working_memory_path_label": "registry/working_memory.jsonl",
             "full_review_sources": [
                 "skills/aippocampus/references/subconscious-jobs.md",
                 "docs/research/dream-task-design.md",
             ],
-        },
-    }
+        }
+        payload["output_boundary"] = (
+            "local_operator_diagnostic_redacted"
+            if detail_level == "operator"
+            else "local_full_diagnostic_redacted"
+        )
     return _public_payload(payload)
 
 

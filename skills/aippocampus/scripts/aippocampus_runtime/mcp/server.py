@@ -444,6 +444,7 @@ def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:
         working_memory_path=arguments.get("working_memory_path"),
         project=str(arguments.get("project") or "AIppocampus"),
         limit=int_range(arguments.get("limit"), default=4, minimum=1, maximum=12),
+        detail=str(arguments.get("detail") or "compact"),
     )
     is_error = payload.get("ok") is False or payload.get("status") == "needs_input"
     return text_result(public_payload(arguments, payload), is_error=is_error)
