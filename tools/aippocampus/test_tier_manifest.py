@@ -85,6 +85,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_agent_discovery_release_check",
         "test_agent_feedback_macro_cli",
         "test_agent_background",
+        "test_agent_deepen_compact_projection",
         "test_agent_native_recall_facade",
         "test_agent_opt_in_continuity",
         "test_agent_recall_compact_projection",

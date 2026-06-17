@@ -21,6 +21,8 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.macro import state as macro_state
+from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
+from aippocampus_runtime.mcp.agent_explain_projection import project_agent_explain_cli_payload
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
     navigation_error_payload,
@@ -1540,6 +1542,10 @@ def _parser() -> argparse.ArgumentParser:
     deepen_parser.add_argument("--macro-state-jsonl")
     deepen_parser.add_argument("--project", default="AIppocampus")
     deepen_parser.add_argument("--max", type=_route_limit_arg, default=MAX_ROUTES)
+    deepen_parser.add_argument(
+        "--detail", choices=["compact", "full"], default="compact",
+        help="Use full only for local diagnostics that include source-window messages.",
+    )
     deepen_parser.add_argument("--json", action="store_true")
 
     explain_parser = sub.add_parser(
@@ -1560,6 +1566,7 @@ def _parser() -> argparse.ArgumentParser:
     explain_parser.add_argument("--last-recall-path")
     explain_parser.add_argument("--macro-state-jsonl")
     explain_parser.add_argument("--project", default="AIppocampus")
+    explain_parser.add_argument("--detail", choices=["compact", "full"], default="compact")
     explain_parser.add_argument("--json", action="store_true")
 
     feedback_parser = sub.add_parser(
@@ -1781,6 +1788,16 @@ def main(argv: list[str] | None = None) -> int:
             max_matches=args.max,
         )
         if args.json:
+            request_index = int(args.request or 1) if args.last_recall or args.request is not None else None
+            if args.detail == "full":
+                payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
+            else:
+                payload = compact_agent_deepen_payload(
+                    payload,
+                    request_index=request_index,
+                    last_recall=request_index is not None,
+                    surface="agent_cli_source_court_compact",
+                )
             _json_out(payload)
         else:
             print(render_deepen_human(payload))
@@ -1797,7 +1814,7 @@ def main(argv: list[str] | None = None) -> int:
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 payload = last_recall_unavailable_payload(mode="explain", exc=exc, schema_version=SCHEMA_VERSION, kind=KIND)
                 if args.json:
-                    _json_out(payload)
+                    _json_out(project_agent_explain_cli_payload(payload, args, surface="agent_cli_route_explain_compact"))
                 else:
                     print("AIppocampus agent explain: cannot verify last recall cache")
                     print("Reason: " + str(exc))
@@ -1809,7 +1826,7 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project or explain_cached_context.get("project") or "AIppocampus",
         )
         if args.json:
-            _json_out(payload)
+            _json_out(project_agent_explain_cli_payload(payload, args, surface="agent_cli_route_explain_compact"))
         else:
             status = str(payload.get("status") or "unknown")
             explanation = payload.get("explanation")

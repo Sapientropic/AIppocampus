@@ -67,17 +67,87 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(public["route_count"], 3)
         action = public["foreground_action"]
-        self.assertEqual(action["action_id"], "deepen_top_route_blindly")
+        self.assertEqual(action["action_id"], "refine_low_specificity_recall_cue")
+        self.assertEqual(action["tool_name"], "agent_recall")
+        self.assertEqual(action["requires"], ["tighter_cue"])
         self.assertEqual(action["route_label_specificity_floor"], 0.0)
         self.assertEqual(action["topic_label_present_count"], 0)
         self.assertIn("tighter cue", action["why"])
+        self.assertEqual(action["secondary_action"]["original_action_id"], "agent_deepen_selected_route")
+        self.assertEqual(action["secondary_action"]["action_id"], "deepen_top_route_low_confidence")
+        self.assertEqual(action["secondary_action"]["tool_name"], "agent_deepen")
         for route in public["routes"]:
             self.assertIn("choice_reason", route)
             self.assertIn("thread_candidate", route["choice_reason"])
             self.assertIn("labels_low_specificity", route["choice_reason"])
+            action = route["action"]
+            self.assertEqual(action["id"], "deepen_this_route")
+            self.assertEqual(action["tool_name"], "agent_deepen")
+            self.assertEqual(action["route_choice_posture"], "labels_low_specificity")
+            self.assertEqual(action["confidence"], "low_confidence_navigation")
+            self.assertEqual(action["arguments"]["request_index"], route["route_index"])
+            self.assertTrue(action["arguments"]["last_recall"])
+            self.assertIn(
+                f"--request {route['route_index']} --last-recall --json",
+                action["cli_command"],
+            )
+            self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn('"handle":', encoded)
+        self.assertNotIn('"callable_handle":', encoded)
+        self.assertNotIn('"copy_paste_command":', encoded)
         self.assertNotIn("source_handles", encoded)
+        self.assertNotIn("source_refs", encoded)
         self.assertNotIn("C:\\", encoded)
+
+    def test_distinguishable_route_labels_keep_deepen_primary(self) -> None:
+        public = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_roadmap",
+                        "route_topic": "roadmap closeout",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                    {
+                        "route_id": "route_hooks",
+                        "route_topic": "hook install boundary",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                ],
+                "metrics": {
+                    "memory_packet_count": 2,
+                    "deepen_request_count": 2,
+                    "route_label_specificity_floor": 0.42,
+                    "topic_label_present_count": 2,
+                },
+            }
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertNotEqual(action["action_id"], "refine_low_specificity_recall_cue")
+        self.assertNotIn("secondary_action", action)
+        self.assertIn("topic_roadmap_closeout", public["routes"][0]["choice_reason"])
 
 
 if __name__ == "__main__":

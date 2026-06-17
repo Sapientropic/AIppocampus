@@ -495,6 +495,23 @@ def _weak_route_recovery_card() -> dict[str, Any]:
     }
 
 
+def route_deepen_action(request_index: int, *, low_confidence: bool = False) -> dict[str, Any]:
+    action = {
+        "id": "deepen_this_route",
+        "tool_name": "agent_deepen",
+        "arguments": {"request_index": request_index, "last_recall": True},
+        "cli_command": (
+            f"aippocampus agent deepen --request {request_index} --last-recall --json"
+        ),
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+    }
+    if low_confidence:
+        action["route_choice_posture"] = "labels_low_specificity"
+        action["confidence"] = "low_confidence_navigation"
+    return action
+
+
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Project agent_recall into one foreground action plus compact route receipts."""
 
@@ -506,6 +523,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     labels_low_specificity = recall_choices.low_specificity_route_choices(
         metrics, len(memory_packets)
     )
+    cache_available = bool(payload.get("last_recall_cache_available"))
     route_receipts: list[dict[str, Any]] = []
     for index, packet in enumerate(memory_packets[:3], start=1):
         route_receipts.append(
@@ -533,6 +551,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                     else None,
                     "claim_permission": packet.get("claim_permission"),
                     "next_action_boundary": "reopen_required_before_claim",
+                    "action": route_deepen_action(index, low_confidence=labels_low_specificity)
+                    if cache_available
+                    and str(packet.get("output_mode") or "") == "reopenable_route"
+                    else None,
                 }
             )
         )

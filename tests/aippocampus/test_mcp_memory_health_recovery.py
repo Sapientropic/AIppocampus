@@ -108,8 +108,10 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         deepen_payload = self.tool_payload(deepen_response)
         self.assertFalse(deepen_response["result"].get("isError", False), deepen_payload)
         self.assertEqual(deepen_payload["status"], "ok")
-        self.assertEqual(deepen_payload["result"]["evidence_level"], "source_backed")
-        self.assertTrue(deepen_payload["result"]["metrics"]["source_reopen_success"])
+        self.assertEqual(deepen_payload["detail"], "compact")
+        self.assertEqual(deepen_payload["evidence_level"], "source_backed")
+        self.assertTrue(deepen_payload["source_window_summary"]["has_exact_source"])
+        self.assertNotIn("result", deepen_payload)
 
         with mock.patch.object(
             mcp.aippocampus_health,

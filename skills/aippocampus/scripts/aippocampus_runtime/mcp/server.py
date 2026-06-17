@@ -14,6 +14,8 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
 from aippocampus_runtime.mcp import memory_health_recovery
+from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
+from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
 from aippocampus_runtime.mcp.foreground_recovery import (
     missing_input_recovery_card,
 )
@@ -450,8 +452,10 @@ def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:
 def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
     handle = arguments.get("handle")
     cached_context: dict[str, Any] = {}
+    request_index_arg: int | None = None
     if handle is None and (arguments.get("last_recall") or "request_index" in arguments):
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
+        request_index_arg = request_index
         try:
             handle, cached_context = handle_from_last_recall_cache(
                 request_index=request_index,
@@ -485,25 +489,70 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             default=agent.MAX_ROUTES,
         ),
     )
+    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload = compact_agent_deepen_payload(
+            payload,
+            request_index=request_index_arg,
+            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
+            surface="mcp_agent_deepen_compact",
+        )
+    else:
+        payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
     is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
     return text_result(public_payload(arguments, payload), is_error=is_error)
 
 
 def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
-    if "handle" not in arguments:
+    handle = arguments.get("handle")
+    cached_context: dict[str, Any] = {}
+    request_index_arg: int | None = None
+    if handle is None and (arguments.get("last_recall") or "request_index" in arguments):
+        request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
+        request_index_arg = request_index
+        try:
+            handle, cached_context = handle_from_last_recall_cache(
+                request_index=request_index,
+                path=arguments.get("last_recall_path"),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            payload = last_recall_unavailable_payload(
+                mode="explain",
+                exc=exc,
+                schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
+                kind="aippocampus_agent_continuity_path",
+            )
+            payload = compact_agent_explain_payload(
+                payload,
+                request_index=request_index_arg,
+                last_recall=True,
+                surface="mcp_agent_explain_compact",
+            )
+            return text_result(public_payload(arguments, payload), is_error=True)
+    if handle is None:
         payload = missing_handle_payload(
             mode="explain",
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
         )
+        payload = compact_agent_explain_payload(payload, surface="mcp_agent_explain_compact")
         return text_result(public_payload(arguments, payload), is_error=True)
     agent = agent_continuity_module()
     payload = agent.explain(
-        arguments.get("handle"),
-        macro_state_path=arguments.get("macro_state_jsonl"),
-        project=str(arguments.get("project") or "AIppocampus"),
+        handle,
+        macro_state_path=arguments.get("macro_state_jsonl") or cached_context.get("macro_state_jsonl"),
+        project=str(arguments.get("project") or cached_context.get("project") or "AIppocampus"),
     )
-    return text_result(public_payload(arguments, payload))
+    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
+        payload = compact_agent_explain_payload(
+            payload,
+            request_index=request_index_arg,
+            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
+            surface="mcp_agent_explain_compact",
+        )
+    else:
+        payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
+    is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
+    return text_result(public_payload(arguments, payload), is_error=is_error)
 
 
 def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
