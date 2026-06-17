@@ -256,14 +256,39 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         )
     if not bool(summary.get("core_ready")) and summary.get("core_blockers"):
         blocker = str((summary.get("core_blockers") or ["skill"])[0])
-        cards.append(
-            {
-                "id": "core_repair",
-                "status": f"{blocker}_not_ready",
-                "why": "Fix the first core surface before chasing optional plugin or hook polish.",
-                "command": f"aippocampus update apply --surface {blocker}",
-            }
-        )
+        dirty_guards = summary.get("dirty_worktree_guards") or {}
+        dirty_guard = dirty_guards.get(blocker) if isinstance(dirty_guards, dict) else None
+        if isinstance(dirty_guard, dict):
+            safe_next_actions = list(dirty_guard.get("safe_next_actions") or [])
+            cards.append(
+                {
+                    "id": "core_repair",
+                    "status": "blocked_dirty_worktree",
+                    "why": (
+                        "The first core repair would write across a dirty git worktree; inspect or plan before applying."
+                    ),
+                    "command": (
+                        str(safe_next_actions[0].get("command"))
+                        if safe_next_actions and isinstance(safe_next_actions[0], dict)
+                        else "git status --short"
+                    ),
+                    "blocked_command": f"aippocampus update apply --surface {blocker}",
+                    "dirty_worktree_detected": True,
+                    "dirty_paths": list(dirty_guard.get("dirty_paths") or []),
+                    "would_write": dirty_guard.get("would_write") or {},
+                    "safe_next_actions": safe_next_actions,
+                    "override": dirty_guard.get("override"),
+                }
+            )
+        else:
+            cards.append(
+                {
+                    "id": "core_repair",
+                    "status": f"{blocker}_not_ready",
+                    "why": "Fix the first core surface before chasing optional plugin or hook polish.",
+                    "command": f"aippocampus update apply --surface {blocker}",
+                }
+            )
     return cards[:4]
 
 

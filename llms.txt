@@ -50,7 +50,8 @@ This is a provider-matrix readiness probe. It may list Codex, Claude Code, and
 generic JSONL providers, but it does not register all detected providers.
 
 For no-clone/package verification, keep the smoke path separate from the local
-continuity path:
+continuity path. This is package smoke/fallback, not the first local continuity
+action:
 
 ```sh
 uvx aippocampus --help
@@ -58,8 +59,9 @@ uvx aippocampus search "a distinctive old phrase" --json
 ```
 
 Use one of these commands only after the user agrees to register selected local
-history. Do not paste placeholder paths as runnable commands; use a real file
-chosen by the user/operator:
+history. Do not use exact search as the default first move when local source is
+already registered. Do not paste placeholder paths as runnable commands; use a
+real file chosen by the user/operator:
 
 ```sh
 uvx aippocampus onboard --provider codex --status --json
@@ -104,17 +106,19 @@ memory use as suspicious by default.
 ## MCP
 
 AIppocampus provides a local stdio MCP server through the packaged CLI. The
-point of the interface is continuity: use recall/deepen tools first, and schema
-or catalog commands only when wiring an MCP host.
+point of the interface is continuity: use recall/deepen/background tools first,
+and status/schema/catalog commands only when diagnosing or wiring an MCP host.
 
 ```sh
 uvx aippocampus mcp status --json
 ```
 
-The continuity tools are `agent_recall`, `agent_aippo`, `agent_deepen`,
-`agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, and
-`latest_reply`. Use the full schema catalog only when an MCP host or
-integration task needs it:
+The continuity tools are `agent_recall`, `agent_aippo`, `agent_background`,
+`agent_deepen`, `agent_explain`, `search_memory`, `recall_context`,
+`recall_deepen`, and `latest_reply`. In an already connected MCP host, the first
+tool call should usually be one of `agent_recall`, `agent_aippo`,
+`agent_background`, or `agent_deepen`; use the full schema catalog only when an
+MCP host or integration task needs it:
 
 ```sh
 uvx aippocampus mcp list-tools --json

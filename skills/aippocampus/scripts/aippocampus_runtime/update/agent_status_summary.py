@@ -167,6 +167,7 @@ def compact_agent_status_report(
             "action_hints_ready": action_hints_ready,
             "action_hints_installed": bool(action_hints.get("installed")),
             "action_hints_status": str(action_hints.get("cache_status") or "not_installed_optional"),
+            "dirty_worktree_guards": summary.get("dirty_worktree_guards") or {},
             "foreground_actions": [
                 str(card.get("id") or "")
                 for card in foreground_cards

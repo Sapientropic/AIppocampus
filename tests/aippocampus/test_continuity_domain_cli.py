@@ -9,6 +9,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime.recall import continuity_domain_cli  # noqa: E402
 
 
 class ContinuityDomainCliTests(unittest.TestCase):
@@ -155,6 +158,74 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertEqual(append_payload["metrics"]["considered_thread_count"], 12)
         self.assertFalse(append_payload["metrics"]["scan_partial"])
         self.assertGreater(append_payload["write_report"]["appended_event_count"], 0)
+
+    def test_empty_snapshot_json_uses_structured_safe_next_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = self.run_cli("continuity-domain", "--cwd", tmp, "list", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "empty")
+        self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertIn("safe_next_actions", payload)
+        self.assertNotIn("recovery_actions", payload)
+        recall = next(action for action in payload["safe_next_actions"] if action["id"] == "ordinary_recall_path")
+        self.assertEqual(recall["requires"], ["cue"])
+        self.assertIn("{cue}", recall["command_template"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("<cue>", encoded)
+
+    def test_agent_preview_does_not_promote_low_information_cues_to_recall_commands(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {},
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "runtime-noise",
+                    "title": "AIppocampus 锚点",
+                    "domain_type": "maintenance",
+                    "scale": "thread",
+                    "activation_cues": ["锚点", "--append", "runtime-contract.md"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                }
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["agent_next_action"]["id"], "needs_broader_scan_or_cue")
+        candidates = preview["candidate_previews"]
+        self.assertEqual(candidates[0]["foreground_candidate_quality"], "low_information")
+        self.assertEqual(candidates[0]["foreground_actions"], [])
+
+    def test_agent_preview_skips_low_information_cues_before_using_specific_route_cue(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {},
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "provider-route",
+                    "title": "AIppocampus maintenance",
+                    "domain_type": "recurring_question",
+                    "scale": "thread",
+                    "activation_cues": ["锚点", "--append", "provider orchestration route"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                }
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "actionable")
+        command = preview["agent_next_action"]["command"]
+        self.assertIn("provider orchestration route", command)
+        self.assertNotIn("锚点", command)
+        self.assertNotIn("--append", command)
 
 
 if __name__ == "__main__":

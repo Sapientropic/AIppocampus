@@ -182,14 +182,19 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
 
 def render_text(card: dict[str, Any]) -> str:
     action = card["agent_next_action"]
-    command = action.get("command") or action.get("command_template")
     lines = [
         "AIppocampus start",
         f"decision: {card['decision']}",
-        f"next: {command}",
-        f"why: {action.get('why')}",
-        "boundary: start is a chooser; reopen/deepen source before claims.",
     ]
+    if action.get("command_template"):
+        requires = action.get("requires") or []
+        if requires:
+            lines.append("requires: " + ", ".join(str(item) for item in requires))
+        lines.append(f"template: {action.get('command_template')}")
+    else:
+        lines.append(f"next: {action.get('command')}")
+    lines.append(f"why: {action.get('why')}")
+    lines.append("boundary: start is a chooser; reopen/deepen source before claims.")
     return "\n".join(lines) + "\n"
 
 

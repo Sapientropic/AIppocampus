@@ -651,9 +651,9 @@ def print_privacy_card(*, file: TextIO | None = None) -> None:
     print("  aippocampus do-not-use-here --json", file=target)
     print("", file=target)
     print("Portability and credentials:", file=target)
-    print("  aippocampus export --help", file=target)
+    print("  aippocampus export --json", file=target)
     print("  aippocampus import --help", file=target)
-    print("  aippocampus provider-key --help", file=target)
+    print("  aippocampus provider-key --json", file=target)
     print("Boundary: provider keys are optional; AIppocampus should still have a no-key source-backed path.", file=target)
 
 
@@ -681,7 +681,7 @@ def privacy_chooser_payload() -> dict[str, Any]:
             foreground_shell_action(
                 action_id="export_boundary",
                 label="Inspect export choices",
-                command="aippocampus export --help",
+                command="aippocampus export --json",
                 why="Use before moving local bundles or deciding public/private export scope.",
                 mutation_risk="read_only",
                 claim_boundary="operator_diagnostic_not_source_evidence",
@@ -689,7 +689,7 @@ def privacy_chooser_payload() -> dict[str, Any]:
             foreground_shell_action(
                 action_id="provider_key_boundary",
                 label="Inspect provider-key boundary",
-                command="aippocampus provider-key --help",
+                command="aippocampus provider-key --json",
                 why="Provider keys are optional and should not be printed by default.",
                 mutation_risk="read_only",
                 claim_boundary="provider_config_not_memory_evidence",
