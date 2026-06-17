@@ -670,6 +670,16 @@ def run_semantic_robustness_benchmark(
         and int(s1["metrics"].get("false_evidence_escalation_count") or 0) == 0
         and int(s3["metrics"].get("source_evidence_over_escalation_count") or 0) == 0
     )
+    s4 = s4_offline_proxy_alignment(include_proxy_alignment=include_proxy_alignment)
+    s5 = s5_representation_space_health()
+    gap_next_actions = [
+        {"track": track, **dict(action)}
+        for track, report in (
+            ("s4_offline_proxy_alignment", s4),
+            ("s5_representation_space_health", s5),
+        )
+        for action in report.get("next_actions", [])
+    ]
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_semantic_robustness_benchmark",
@@ -707,11 +717,10 @@ def run_semantic_robustness_benchmark(
             "s1_gate_robustness": s1,
             "s2_retrieval_invariance": s2,
             "s3_hard_negative_suppression": s3,
-            "s4_offline_proxy_alignment": s4_offline_proxy_alignment(
-                include_proxy_alignment=include_proxy_alignment,
-            ),
-            "s5_representation_space_health": s5_representation_space_health(),
+            "s4_offline_proxy_alignment": s4,
+            "s5_representation_space_health": s5,
         },
+        "gap_next_actions": gap_next_actions,
         "privacy_boundary": {
             "raw_prompt_or_query_text_emitted": bool(include_private_text),
             "snippets_emitted": bool(include_private_text),
