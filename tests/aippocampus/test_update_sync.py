@@ -98,6 +98,26 @@ def write_minimal_repo(repo: Path) -> None:
     (skill / "scripts" / "runtime.py").write_text("print('ok')\n", encoding="utf-8")
 
 
+def init_git_fixture(repo: Path, *, message: str = "fixture") -> None:
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "aippocampus-test@example.invalid"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "AIppocampus Test"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True, text=True)
+
+
 def write_plugin_package(
     root: Path,
     *,
@@ -1346,15 +1366,7 @@ class UpdateSyncTests(unittest.TestCase):
             target = codex_home / "skills" / "aippocampus"
             target.mkdir(parents=True)
             (target / "SKILL.md").write_text("old target stays\n", encoding="utf-8")
-            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
-            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
-            subprocess.run(
-                ["git", "commit", "-m", "fixture"],
-                cwd=repo,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            init_git_fixture(repo)
             (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
                 "# dirty source\n",
                 encoding="utf-8",
@@ -1389,15 +1401,7 @@ class UpdateSyncTests(unittest.TestCase):
             repo = root / "repo"
             codex_home = root / "codex-home"
             write_minimal_repo(repo)
-            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
-            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
-            subprocess.run(
-                ["git", "commit", "-m", "fixture"],
-                cwd=repo,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            init_git_fixture(repo)
 
             code, payload = run_update(
                 "apply",
@@ -1423,15 +1427,7 @@ class UpdateSyncTests(unittest.TestCase):
             target = target_repo / "skills" / "aippocampus"
             target.mkdir(parents=True)
             (target / "SKILL.md").write_text("tracked target\n", encoding="utf-8")
-            subprocess.run(["git", "init"], cwd=target_repo, check=True, capture_output=True, text=True)
-            subprocess.run(["git", "add", "."], cwd=target_repo, check=True, capture_output=True, text=True)
-            subprocess.run(
-                ["git", "commit", "-m", "target fixture"],
-                cwd=target_repo,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            init_git_fixture(target_repo, message="target fixture")
             (target / "SKILL.md").write_text("dirty target\n", encoding="utf-8")
 
             code, payload = run_update(
@@ -1460,15 +1456,7 @@ class UpdateSyncTests(unittest.TestCase):
             repo = root / "repo"
             codex_home = root / "codex-home"
             write_minimal_repo(repo)
-            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
-            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
-            subprocess.run(
-                ["git", "commit", "-m", "fixture"],
-                cwd=repo,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            init_git_fixture(repo)
             (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
                 "# dirty source but reviewed\n",
                 encoding="utf-8",
