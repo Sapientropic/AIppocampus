@@ -22,6 +22,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime import core  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.ops import provider_key_bridge, telepathy_handoff_store  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
@@ -351,6 +352,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(aippo_payload["mode"], "aippo")
         self.assertEqual(aippo_payload["surface"], "agent_aippo_guidance_card")
         self.assertEqual(aippo_payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertEqual(aippo_payload["agent_next_action"], aippo_payload["foreground_action"])
+        self.assertEqual(aippo_payload["safe_next_actions"][0], aippo_payload["foreground_action"])
         self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
         self.assertNotIn("cannot_claim", aippo_payload)
         self.assertIn("source_backed_facts", aippo_payload["claim_boundary"]["must_reopen_for"])
@@ -364,6 +367,36 @@ class AippocampusMcpServerTests(unittest.TestCase):
             "source_reopen_required_before_claim",
         )
         self.assertNotIn("activation_packet", aippo_payload)
+
+        aippo_no_task_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 204,
+                "method": "tools/call",
+                "params": {"name": "agent_aippo", "arguments": {}},
+            }
+        )
+        aippo_no_task_payload = self.tool_payload(aippo_no_task_response)
+        encoded_no_task = json.dumps(aippo_no_task_payload, ensure_ascii=False, sort_keys=True)
+
+        self.assertFalse(
+            aippo_no_task_response["result"].get("isError", False),
+            aippo_no_task_payload,
+        )
+        self.assertEqual(aippo_no_task_payload["surface"], "agent_aippo_guidance_card")
+        self.assertEqual(
+            aippo_no_task_payload["agent_next_action"]["action_id"],
+            "provide_task_cue",
+        )
+        self.assertEqual(aippo_no_task_payload["agent_next_action"]["requires"], ["task_cue"])
+        self.assertEqual(
+            aippo_no_task_payload["safe_next_actions"][0],
+            aippo_no_task_payload["agent_next_action"],
+        )
+        self.assertNotIn("operator_json_command", aippo_no_task_payload)
+        self.assertIn("operator_json_command_template", aippo_no_task_payload)
+        self.assertNotIn("task cue", encoded_no_task)
+        self.assertEqual(executable_command_violations(aippo_no_task_payload), [])
 
     def test_agent_recall_rejects_explicit_invalid_max_values(self) -> None:
         valid = mcp.handle_request(
@@ -500,8 +533,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "agent_recall_cue_required")
         self.assertEqual(payload["agent_next_action"]["id"], "recall_vague_cue")
-        self.assertIn("aippocampus agent recall", payload["agent_next_action"]["command"])
-        self.assertNotIn("<", encoded)
+        self.assertIn("aippocampus agent recall", payload["agent_next_action"]["command_template"])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
+        self.assertNotIn("old decision or handoff cue", encoded)
+        self.assertNotIn("distinctive exact phrase", encoded)
+        self.assertEqual(executable_command_violations(payload), [])
 
     def test_recall_diagnostic_applies_provider_bridge_before_live_semantic_gate(self) -> None:
         env_var = "MCP_PROVIDER_BRIDGE_TEST_KEY"
@@ -1509,7 +1545,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "missing_turn_selector")
         self.assertIn("turn_id", payload["error"]["details"]["required_any"])
         self.assertIn("agent_recall", payload["error"]["details"]["agent_next_action"])
-        self.assertIn("example_arguments", payload["error"]["details"])
+        self.assertIn("arguments_template", payload["error"]["details"])
+        self.assertEqual(executable_command_violations(payload), [])
 
     def test_deepen_tools_return_recovery_cards_for_missing_selectors(self) -> None:
         agent_response = mcp.handle_request(
@@ -1547,8 +1584,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(recall_payload["error"]["code"], "missing_recall_handle")
         self.assertIn("agent_next_action", details)
         self.assertIn("recall_context", details["agent_next_action"])
-        self.assertIn("example_arguments", details)
-        self.assertIn("example_followup_arguments", details)
+        self.assertIn("arguments_template", details)
+        self.assertIn("followup_arguments_template", details)
+        self.assertEqual(executable_command_violations(recall_payload), [])
 
     def test_get_turn_context_reports_missing_message_id(self) -> None:
         response = mcp.handle_request(
@@ -1663,7 +1701,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["status"], "available_requires_sync_dir")
-        self.assertEqual(payload["command"], "aippocampus sync status --sync-dir <folder> --json")
+        self.assertEqual(
+            payload["command_template"],
+            "aippocampus sync status --sync-dir {sync_dir} --json",
+        )
+        self.assertEqual(payload["requires"], ["sync_dir_or_object_store_url"])
         self.assertIn("agent_next_action", payload)
         self.assertNotIn("python -m aippocampus_runtime", encoded)
 
@@ -1948,7 +1990,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
             list_payload["empty_state"]["state"],
             "no_matching_telepathy_handoffs",
         )
-        self.assertIn("normal recall/search", list_payload["empty_state"]["agent_next_action"])
+        empty_action = list_payload["empty_state"]["agent_next_action"]
+        self.assertEqual(empty_action["id"], "continue_with_normal_recall")
+        self.assertEqual(empty_action["command_template"], 'aippocampus agent recall "{cue}" --json')
+        self.assertIn("recall/search", empty_action["why"])
         self.assertTrue(missing_response["result"].get("isError", False))
         self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
         self.assertIn("telepathy list --status all", missing_payload["agent_next_action"])
@@ -2139,6 +2184,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         )
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["agent_next_action"]["id"], "build_index")
+        self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
         self.assertNotIn("checks", payload)
@@ -2172,7 +2218,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "health_unavailable")
         self.assertIn("agent_next_action", payload)
-        self.assertIn("onboard --provider auto --status", payload["recovery_actions"][0])
+        self.assertIn("safe_next_actions", payload)
+        self.assertEqual(payload["safe_next_actions"][0]["command"], payload["agent_next_action"]["command"])
+        self.assertIn("onboard --provider auto --status --json", payload["safe_next_actions"][0]["command"])
+        self.assertEqual(payload["safe_next_actions"][2]["command_template"], 'aippocampus search "{exact_phrase}" --json')
+        self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_agent_recall_import_failure_returns_foreground_runtime_recovery_card(self) -> None:

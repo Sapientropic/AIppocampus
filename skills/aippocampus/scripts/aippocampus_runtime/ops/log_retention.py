@@ -31,6 +31,39 @@ KNOWN_LOG_RELATIVE_PATHS = (
 LOG_DIR_SUFFIXES = {".log", ".jsonl"}
 
 
+def _log_status_action(*, why: str) -> dict[str, str]:
+    return {
+        "id": "no_cleanup_needed",
+        "label": "No log cleanup needed",
+        "command": "aippocampus logs status --json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "log_status_emits_artifact_names_and_sizes_not_log_contents",
+        "why": why,
+    }
+
+
+def _log_rotation_action(*, count: int) -> dict[str, str]:
+    return {
+        "id": "plan_log_rotation",
+        "label": "Review log rotation plan",
+        "command": "aippocampus logs rotate --dry-run --json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "rotation_plan_lists_artifacts_without_log_contents",
+        "why": f"{count} log artifact(s) exceed the retention threshold; review the no-write plan before applying.",
+    }
+
+
+def _log_apply_action(*, count: int) -> dict[str, str]:
+    return {
+        "id": "apply_log_rotation",
+        "label": "Apply log rotation",
+        "command": "aippocampus logs rotate --apply",
+        "mutation_risk": "writes_local_log_backups",
+        "claim_boundary": "apply_only_rotates_known_local_log_artifacts",
+        "why": f"{count} log artifact(s) would rotate; apply only after the dry-run plan matches the intended target.",
+    }
+
+
 def _positive_int(value: Any, default: int, *, minimum: int = 1) -> int:
     try:
         parsed = int(value)
@@ -124,7 +157,7 @@ def log_health_report(
     ]
     items.sort(key=lambda item: (not item["oversized"], -int(item["size_bytes"]), item["artifact_rel"]))
     oversized_count = sum(1 for item in items if item["oversized"])
-    report = {
+    report: dict[str, Any] = {
         "available": True,
         "status": "needs_cleanup" if oversized_count else "healthy",
         "max_bytes": resolved_max,
@@ -141,8 +174,11 @@ def log_health_report(
     }
     if oversized_count:
         report["remediation_command"] = "aippocampus logs rotate --dry-run"
+        report["agent_next_action"] = _log_rotation_action(count=oversized_count)
     else:
-        report["agent_next_action"] = "no_cleanup_needed"
+        report["agent_next_action"] = _log_status_action(
+            why="Logs are within the retention budget; no cleanup command is needed."
+        )
     return report
 
 
@@ -384,14 +420,13 @@ def rotation_plan(
         "items": [item for item in health["items"] if item["oversized"]],
         "privacy_boundary": health["privacy_boundary"]
         | {"writes_performed": False, "local_paths_emitted": False},
-        "agent_next_action": "no_cleanup_needed",
+        "agent_next_action": _log_status_action(
+            why="No known log artifact exceeds the retention threshold; do not run cleanup."
+        ),
     }
     if would_rotate_count:
         plan["apply_command"] = "aippocampus logs rotate --apply"
-        plan["agent_next_action"] = (
-            "If these log artifacts are the intended cleanup target, apply once with "
-            "`aippocampus logs rotate --apply`; status remains read-only."
-        )
+        plan["agent_next_action"] = _log_apply_action(count=would_rotate_count)
     return plan
 
 

@@ -28,6 +28,8 @@ The first opt-in callable path lives in
 ```text
 aippocampus agent recall "<cue>" --json
 aippocampus agent recall "<cue>" --attention-router-mode auto --json
+aippocampus agent orient "<task>" --json
+aippocampus agent orient --eval --json
 aippocampus agent aippo --task "<work>" --json
 aippocampus agent deepen --request 1 --last-recall --json
 aippocampus agent explain --request 1 --last-recall --json
@@ -87,6 +89,34 @@ available in the same JSON for audit/debug, but they are not the foreground
 field profile. Public projections redact
 `foreground_action_card.callable_handle` the same way they redact
 `deepen_requests[].handle`.
+
+## Task Orientation Packet
+
+`aippocampus agent orient "<task>" --json` is the fresh-thread orientation
+surface for issue-scale work. It does not introduce a new understanding-state
+truth store. It derives a compact read model from the issue-work guard, AIppo
+working-contract guidance, external source anchor roles, and Active Path
+Packets.
+
+Use it before broad manual search when a task likely depends on old design
+context, current issue comments, benchmark boundaries, source-side work, or
+learning-loop constraints. Its foreground action points back to
+`aippocampus agent recall "{task}" --json`; `deepen` still owns exact, public,
+stale, sensitive, or issue-closeout claims.
+
+The deterministic check is:
+
+```text
+aippocampus agent orient --eval --json
+```
+
+That fixture compares route-only recall, static summary context, Task
+Orientation Packet, and Task Orientation Packet plus mature constraints. It can
+show reduced blind search inside the public test scenario while checking
+source-truth overclaim rate, but it is not a live recall-quality claim. Private
+replay remains opt-in and aggregate-only. The recall-layer product discipline
+audit lives in
+[`source-backed-product-discipline.md`](source-backed-product-discipline.md).
 
 ## Default Agent Pull Gesture
 
@@ -331,6 +361,10 @@ is not a default cost for every imported skill.
 path. It keeps the seed as a lower-authority candidate, then compiles only
 source-backed observed-use rows into an `aippo_working_contract` package. The
 skill declaration and the observed-use feedback are both required source legs.
+Explicit trace-backed or replay-backed foreground feedback rows with a
+source/replay reference can now feed that path directly; ordinary low-authority
+feedback remains routing calibration only. Synthetic observed-use rows remain a
+contract smoke fixture and do not satisfy product-usefulness claims.
 A command list, self-report-only correction, or unsupported over-broad clause
 stays candidate-only or challenged, even if it came from a valid `SKILL.md`.
 The resulting foreground activation packet carries only compact working

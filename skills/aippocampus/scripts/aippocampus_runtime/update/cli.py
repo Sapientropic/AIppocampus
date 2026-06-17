@@ -856,6 +856,8 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         for name in OPERATOR_SURFACES
         if surface_summary_blocker(name, surfaces.get(name) or {})
     ]
+    plan_surface_filter = update_actions.plan_surface_filter(mode, getattr(args, "surface", []))
+    actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers = update_actions.filter_plan_surface_groups(plan_surface_filter, actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers)
     core_ready = not core_blockers
     magic_ready = not magic_blockers
     capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
@@ -906,6 +908,8 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             )
             or [],
             "dirty_worktree_guards": dirty_worktree_guards,
+            "plan_surface_filter": plan_surface_filter,
+            "plan_scope": "selected_surfaces" if plan_surface_filter else "all_surfaces",
         },
         "surfaces": surfaces,
         "safety_notes": [
@@ -1369,7 +1373,8 @@ def render_text(report: dict[str, Any]) -> str:
         lines.append("- First-run readiness:")
         for item in summary.get("capability_ladder") or []:
             lines.append(f"  {item.get('id')}: {item.get('status')}")
-    for name in ("skill", "hooks", "llm", "cli", "mcp", "plugin", "agent_callable"):
+    render_mode = str(mode or "status")
+    for name in update_actions.render_surface_names(render_mode, summary):
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")
         if name == "llm" and not item.get("ready"):
@@ -1468,6 +1473,8 @@ def build_parser() -> argparse.ArgumentParser:
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         _add_common_options(child)
+        if action == "plan":
+            child.add_argument("--surface", action="append", choices=APPLY_SURFACES, help="Preview only the named local surface. Repeat for multiple surfaces.")
     apply_parser = subparsers.add_parser(
         "apply",
         usage="aippocampus update apply [--surface SURFACE] [--all-local] [--agent-json|--json]",

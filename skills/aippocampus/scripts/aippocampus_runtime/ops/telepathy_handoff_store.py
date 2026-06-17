@@ -16,6 +16,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     foreground_recovery_card,
     foreground_shell_action,
+    foreground_template_action,
 )
 from aippocampus_runtime.ops import coordination_topology
 from aippocampus_runtime.ops import telepathy_coordination_packet as packets
@@ -448,18 +449,20 @@ def missing_command_payload() -> dict[str, Any]:
                 mutation_risk="read_only",
                 claim_boundary="navigation_only_not_fact",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="create_handoff_after_explicit_request",
                 label="Create a handoff card after explicit request",
-                command='aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex --json',
+                command_template='aippocampus telepathy create --preset handoff --scope "{scope}" --owner codex --json',
+                requires=["scope"],
                 why="Only create when a human/upstream agent wants local coordination state.",
                 mutation_risk="explicit_local_write",
                 claim_boundary="navigation_only_not_fact",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="deepen_existing_handoff",
                 label="Read one handoff card",
-                command="aippocampus telepathy deepen <card_id> --json",
+                command_template="aippocampus telepathy deepen {card_id} --json",
+                requires=["card_id"],
                 why="Use an existing card id from list before treating it as a route.",
                 mutation_risk="read_only",
                 claim_boundary="source_reopen_required_before_claims",
@@ -494,17 +497,40 @@ def list_handoffs_payload(
     limited = cards[: max(1, min(int(limit or 20), 100))]
     empty_state: dict[str, Any] | None = None
     if not cards:
+        safe_next_actions = [
+            foreground_template_action(
+                action_id="continue_with_normal_recall",
+                label="Continue with normal recall",
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires=["cue"],
+                why="No active handoff is waiting; continue source-backed recall/search unless coordination was explicitly requested.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+            foreground_template_action(
+                action_id="create_explicit_handoff",
+                label="Create explicit handoff",
+                command_template='aippocampus telepathy create --preset handoff --scope "{scope}" --owner codex --json',
+                requires=["scope"],
+                why="Only create local coordination state when a human or upstream agent explicitly asks for a handoff.",
+                mutation_risk="explicit_local_write",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_template_action(
+                action_id="create_human_needed_handoff",
+                label="Create human-needed handoff",
+                command_template='aippocampus telepathy create --preset human-needed --scope "{scope}" --owner codex --json',
+                requires=["scope"],
+                why="Use when local coordination needs a human decision before another agent continues.",
+                mutation_risk="explicit_local_write",
+                claim_boundary="navigation_only_not_fact",
+            ),
+        ]
         empty_state = {
             "state": "no_matching_telepathy_handoffs",
             "meaning": "No active opt-in handoff card is waiting for this filter.",
-            "agent_next_action": (
-                "Continue with normal recall/search, or create a handoff only when a "
-                "human or upstream agent explicitly wants local coordination."
-            ),
-            "create_examples": [
-                'aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex',
-                'aippocampus telepathy create --preset human-needed --scope "release decision" --owner codex',
-            ],
+            "agent_next_action": safe_next_actions[0],
+            "safe_next_actions": safe_next_actions,
             "privacy_boundary": "Telepathy cards are navigation-only and not source-backed truth.",
         }
     return {
@@ -737,10 +763,26 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
         print(f"count: {payload['count']}")
     empty_state = payload.get("empty_state")
     if isinstance(empty_state, Mapping):
-        print(f"next: {empty_state.get('agent_next_action')}")
-        examples = empty_state.get("create_examples")
-        if isinstance(examples, list) and examples:
-            print(f"example: {examples[0]}")
+        action = empty_state.get("agent_next_action")
+        if isinstance(action, Mapping):
+            print(
+                "next: "
+                + str(action.get("command") or action.get("command_template") or action.get("label"))
+            )
+        else:
+            print(f"next: {action}")
+        actions = empty_state.get("safe_next_actions")
+        if isinstance(actions, list):
+            create_action = next(
+                (
+                    item
+                    for item in actions
+                    if isinstance(item, Mapping) and item.get("id") == "create_explicit_handoff"
+                ),
+                None,
+            )
+            if isinstance(create_action, Mapping):
+                print(f"example: {create_action.get('command_template')}")
     if "card" in payload and isinstance(payload["card"], Mapping):
         card = payload["card"]
         print(f"card_id: {card.get('card_id')}")

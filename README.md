@@ -158,8 +158,8 @@ uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 
 # Generic visible-message export.
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
+uvx aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input {input_path}
 
 uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
@@ -262,8 +262,8 @@ uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run --json
 uvx aippocampus onboard --provider claude-code --json
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
+uvx aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input {input_path}
 ```
 
 For human-facing demos, omit `--format json` so onboarding and search show the

@@ -87,11 +87,14 @@ Dream/subconscious findings exposed through `aippocampus agent background`, are
 ordinary continuity navigation when local setup/provider consent allows it; they
 still require source reopen before factual claims.
 
-Enable prompt/lifecycle hooks only after that first receipt works and the user
-trusts this machine for ambient continuity:
+For trusted Codex machines, review action-time hints as part of setup rather
+than treating them as a later extra. This is still explicit opt-in: status is
+read-only, install writes hook wiring only after the operator chooses it, and
+ordinary recall/search remain usable without it.
 
 ```sh
-aippocampus update apply --surface hooks
+aippocampus hooks action status --json
+aippocampus hooks action install --json
 ```
 
 Then ask once whether to enable LLM-backed semantic/background routes. If yes,
@@ -173,8 +176,10 @@ testing an unreleased main-branch snapshot.
 
 Manual onboarding and search prove that local source can be found. Prompt and
 lifecycle hooks are the Codex trusted setup that keeps AIppocampus from feeling
-like a manual grep tool in the next Codex conversation. Claude Code currently
-uses local-history onboarding plus MCP/project-skill setup instead; see
+like a manual grep tool in the next Codex conversation. Claude Code uses
+local-history onboarding, MCP/project-skill setup, and optional explicit
+`aippocampus hooks claude-code install --json` for scoped `UserPromptSubmit` /
+`Stop` handlers; see
 [`ecosystem-integration-matrix.md`](ecosystem-integration-matrix.md) and
 [`claude-code-mcp.md`](setup/claude-code-mcp.md).
 

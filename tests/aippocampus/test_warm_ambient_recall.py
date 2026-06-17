@@ -548,6 +548,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["action_code"], "wait_or_run_worker_when_ready")
         self.assertTrue(payload["ordinary_recall_usable"])
         self.assertEqual(payload["next_command"], "aippocampus warm status --json")
+        self.assertEqual(payload["agent_next_action"]["id"], "check_warm_status")
 
     def test_warm_status_accepts_cwd_as_machine_wide_noop(self) -> None:
         job_dir = self.root / "warm-jobs"
@@ -589,7 +590,40 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["status"], "blocked")
         self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
         self.assertTrue(payload["ordinary_recall_usable"])
-        self.assertIn("ordinary source search still works", payload["next_command"])
+        self.assertEqual(payload["next_command"], "aippocampus warm status --json")
+        self.assertEqual(payload["agent_next_action"]["id"], "inspect_blocked_warm_queue")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("inspect_provider_status", action_ids)
+        self.assertIn("plan_warm_repair", action_ids)
+        self.assertIn("snooze_optional_warm_ambient", action_ids)
+        self.assertIn("retire_stale_warm_queue_after_review", action_ids)
+        self.assertIn("continue_with_ordinary_recall", action_ids)
+        snooze_action = next(
+            action
+            for action in payload["safe_next_actions"]
+            if action["id"] == "snooze_optional_warm_ambient"
+        )
+        self.assertNotIn("command", snooze_action)
+        self.assertEqual(snooze_action["env"], {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"})
+        self.assertTrue(snooze_action["template_only"])
+        retire_action = next(
+            action
+            for action in payload["safe_next_actions"]
+            if action["id"] == "retire_stale_warm_queue_after_review"
+        )
+        self.assertNotIn("command", retire_action)
+        self.assertIn("manual_instruction", retire_action)
+        recall_action = next(
+            action
+            for action in payload["safe_next_actions"]
+            if action["id"] == "continue_with_ordinary_recall"
+        )
+        self.assertNotIn("command", recall_action)
+        self.assertEqual(recall_action["command_template"], 'aippocampus agent recall "{cue}" --json')
+        self.assertEqual(recall_action["requires"], ["cue"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("set the provider key or leave warm ambient off", encoded)
 
     def test_scheduler_env_opt_out_still_disables_default_warming(self) -> None:
         with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"}):

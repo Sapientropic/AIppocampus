@@ -70,6 +70,19 @@ class IssueWorkGuardTests(unittest.TestCase):
         self.assertNotIn("attention_router", packet["existing_owner_ref_ids"])
         self.assertIn("foreground_card_contract", packet["lead_kinds"])
 
+    def test_task_orientation_issue_prefers_card_contract_owners(self) -> None:
+        packet = build_issue_active_pull_packet(
+            title="Build Task Orientation Packets for understanding state",
+            body="External source anchors and learning-loop constraints should guide fresh-thread issue starts.",
+        )
+
+        self.assertTrue(packet["should_pull"])
+        self.assertEqual(packet["owner_refs_confidence"], "high")
+        self.assertIn("foreground_cli_facade", packet["existing_owner_ref_ids"])
+        self.assertIn("foreground_output_projection", packet["existing_owner_ref_ids"])
+        self.assertIn("agent_continuity_cards", packet["existing_owner_ref_ids"])
+        self.assertIn("foreground_card_contract", packet["lead_kinds"])
+
     def test_trivial_issue_stays_silent(self) -> None:
         packet = build_issue_active_pull_packet(
             title="Fix typo in README",

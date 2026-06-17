@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.update import cli as update_cli  # noqa: E402
 from aippocampus_runtime.update import plugin_installer  # noqa: E402
 
@@ -717,7 +718,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
         self.assertIn("--foreground-tools-visible", agent["next_command"])
-        self.assertIn("--foreground-key-tools-callable", agent["next_command"])
+        self.assertNotIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
@@ -773,7 +774,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["foreground_tools_visibility_source"], "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
         self.assertTrue(agent["foreground_probe_requested"])
         self.assertEqual(agent["foreground_probe_state"], "tools_visible_key_tools_unverified")
-        self.assertIn("--foreground-key-tools-callable", agent["next_command"])
+        self.assertNotIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertEqual(len(agent["host_probe_agent_native_tools"]), 5)
 
     def test_status_requires_current_thread_key_tool_calls_with_cli_assertion(self) -> None:
@@ -810,15 +811,22 @@ class UpdateSyncTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
-        self.assertTrue(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
+        self.assertFalse(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(payload["summary"]["host_conformance_label"], "cli_only")
+        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "cli:--foreground-tools-visible")
         self.assertTrue(agent["current_foreground_key_tools_callable"])
+        self.assertTrue(agent["current_foreground_key_tools_asserted_by_caller"])
+        self.assertFalse(agent["current_foreground_key_tools_verified"])
         self.assertTrue(agent["foreground_probe_requested"])
-        self.assertEqual(agent["foreground_probe_state"], "verified_by_current_foreground_key_tool_calls")
+        self.assertEqual(agent["foreground_probe_state"], "asserted_by_caller_key_tool_calls_unverified")
         self.assertEqual(
             agent["current_thread_tool_discovery"],
-            "verified_by_current_foreground_key_tool_calls",
+            "asserted_by_caller_key_tool_calls_unverified",
+        )
+        self.assertNotEqual(
+            payload["surfaces"]["host_conformance"]["label"],
+            "full_continuity_path",
         )
 
     def test_status_reports_current_foreground_runtime_mismatch_after_key_tool_failure(self) -> None:
@@ -941,7 +949,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["surfaces"]["host_conformance"]["dimensions"]["live_schema_fresh"])
         self.assertNotIn("E:\\private", encoded)
 
-    def test_status_reports_host_conformance_label_for_recall_deepen_host(self) -> None:
+    def test_status_keeps_asserted_key_tools_out_of_conformance_upgrade(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env({
             "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1",
             "AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE": "1",
@@ -985,11 +993,14 @@ class UpdateSyncTests(unittest.TestCase):
 
         conformance = payload["surfaces"]["host_conformance"]
         self.assertEqual(code, 0)
-        self.assertEqual(payload["summary"]["host_conformance_label"], "recall_deepen")
-        self.assertEqual(conformance["label"], "recall_deepen")
-        self.assertTrue(conformance["dimensions"]["recall_callable"])
-        self.assertTrue(conformance["dimensions"]["deepen_callable"])
-        self.assertTrue(conformance["dimensions"]["first_magic_moment_path"])
+        agent = payload["surfaces"]["agent_callable"]
+        self.assertEqual(payload["summary"]["host_conformance_label"], "cli_only")
+        self.assertEqual(conformance["label"], "cli_only")
+        self.assertFalse(conformance["dimensions"]["recall_callable"])
+        self.assertFalse(conformance["dimensions"]["deepen_callable"])
+        self.assertFalse(conformance["dimensions"]["first_magic_moment_path"])
+        self.assertTrue(agent["current_foreground_key_tools_asserted_by_caller"])
+        self.assertFalse(agent["current_foreground_key_tools_verified"])
 
     def test_status_uses_default_host_probe_cache_from_plugin_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -2098,6 +2109,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("multiple_candidates", action["reason"])
         self.assertIn("2 candidates", action["reason"])
         self.assertIn("plugin install --codex --verify --compact-json", action["command"])
+        self.assertEqual(executable_command_violations(action), [])
 
     def test_all_local_refreshes_matching_version_among_multiple_cache_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -2328,7 +2340,9 @@ class UpdateSyncTests(unittest.TestCase):
             item for item in payload["next_actions"] if item["surface"] == "agent_callable"
         )
         self.assertIn("Reload Codex Desktop", action["manual_instruction"])
-        self.assertIn("--foreground-key-tools-callable --agent-json", action["command"])
+        self.assertIn("--foreground-tools-visible --agent-json", action["command"])
+        self.assertNotIn("--foreground-key-tools-callable", action["command"])
+        self.assertIn("caller assertion", action["manual_instruction"])
 
 
 if __name__ == "__main__":

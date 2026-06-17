@@ -363,7 +363,11 @@ def _status_main(argv: Sequence[str]) -> int:
         )
         print(f"worker: {activity.get('worker_evidence')}")
         print(f"next: {payload.get('action_code')}")
-        print(f"action: {payload.get('next_command')}")
+        action = payload.get("agent_next_action") if isinstance(payload, dict) else None
+        if isinstance(action, dict):
+            print(f"action: {action.get('command')}")
+        else:
+            print(f"action: {payload.get('next_command')}")
         print("boundary: optional background warming; first recall and search do not wait for it")
     if args.strict_exit_code and not payload.get("ok"):
         return 2

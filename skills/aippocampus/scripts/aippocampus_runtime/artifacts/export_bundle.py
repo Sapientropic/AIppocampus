@@ -496,7 +496,8 @@ def _chooser_payload(*, reason: str, public_hint: bool = False) -> dict[str, Any
         "reason": reason,
     }
     if public_hint:
-        error["next_command"] = PUBLIC_EXPORT_COMMAND
+        error["next_command_template"] = PUBLIC_EXPORT_COMMAND
+        error["requires"] = ["output_path"]
     return {
         "ok": False,
         "kind": "aippocampus_export_chooser",
@@ -522,7 +523,8 @@ def _chooser_payload(*, reason: str, public_hint: bool = False) -> dict[str, Any
                 "claim_boundary": "public_metadata_no_raw_source_text",
             },
         ],
-        "recommended_public_command": PUBLIC_EXPORT_COMMAND,
+        "recommended_public_command_template": PUBLIC_EXPORT_COMMAND,
+        "recommended_public_requires": ["output_path"],
         "safety": {
             "no_write_happened": True,
             "requires_explicit_output": True,
@@ -532,20 +534,32 @@ def _chooser_payload(*, reason: str, public_hint: bool = False) -> dict[str, Any
     }
 
 
-def _export_recovery_actions(*, provided: str | None = None) -> list[dict[str, str]]:
+def _export_recovery_actions(*, provided: str | None = None) -> list[dict[str, object]]:
     public_profile = "public-metadata" if provided == "public" else "public-metadata"
     return [
         {
             "id": "public_metadata_export",
-            "command": f"aippocampus export --redaction-profile {public_profile} --no-raw --output <bundle.zip> --json",
+            "command_template": (
+                f"aippocampus export --redaction-profile {public_profile} "
+                "--no-raw --output {output_path} --json"
+            ),
+            "requires": ["output_path"],
+            "template_only": True,
         },
         {
             "id": "public_export",
-            "command": "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip> --json",
+            "command_template": (
+                "aippocampus export --redaction-profile public-export "
+                "--no-raw --output {output_path} --json"
+            ),
+            "requires": ["output_path"],
+            "template_only": True,
         },
         {
             "id": "private_local_transfer",
-            "command": PRIVATE_EXPORT_COMMAND + " --json",
+            "command_template": PRIVATE_EXPORT_COMMAND + " --json",
+            "requires": ["output_path"],
+            "template_only": True,
         },
     ]
 
@@ -570,14 +584,15 @@ def _invalid_redaction_profile_payload(provided: str) -> dict[str, Any]:
     }
 
 
-def _recovery_payload(*, code: str, message: str, next_command: str) -> dict[str, Any]:
+def _recovery_payload(*, code: str, message: str, next_command_template: str) -> dict[str, Any]:
     return {
         "ok": False,
         "kind": "aippocampus_export_recovery",
         "error": {
             "code": code,
             "message": message,
-            "next_command": next_command,
+            "next_command_template": next_command_template,
+            "requires": ["output_path"],
         },
         "safe_next_actions": _export_recovery_actions(),
         "write_performed": False,
@@ -619,7 +634,10 @@ def main(argv: list[str] | None = None) -> int:
         payload = _recovery_payload(
             code=code,
             message=message,
-            next_command="aippocampus export --no-raw --redaction-profile <profile> --output <bundle.zip>",
+            next_command_template=(
+                "aippocampus export --no-raw --redaction-profile {profile} "
+                "--output {output_path}"
+            ),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 2
@@ -630,9 +648,9 @@ def main(argv: list[str] | None = None) -> int:
                 "Export could not complete because a local bundle/index file was locked or unavailable. "
                 "No traceback is shown; rerun after closing the writer or choose a fresh --work-dir."
             ),
-            next_command=(
-                "aippocampus export --redaction-profile raw-private --output <bundle.zip> "
-                "--work-dir <fresh-folder>"
+            next_command_template=(
+                "aippocampus export --redaction-profile raw-private --output {output_path} "
+                "--work-dir {fresh_work_dir}"
             ),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))

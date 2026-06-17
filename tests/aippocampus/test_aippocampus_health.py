@@ -256,7 +256,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
         self.assertEqual(
             payload["agent_next_action"]["before_exact_latest_claims"]["command"],
-            "aippocampus maintenance",
+            "aippocampus maintenance plan --summary-json",
         )
         self.assertTrue(payload["agent_next_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
@@ -327,7 +327,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["blocks_exact_latest_claims"])
         self.assertEqual(
             payload["foreground_action"]["before_exact_latest_claims"]["command"],
-            "aippocampus maintenance",
+            "aippocampus maintenance plan --summary-json",
         )
         self.assertEqual(
             payload["foreground_action"]["when_idle"]["command"],

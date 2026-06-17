@@ -326,6 +326,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             result["last_prompt_hook"]["last_prompt_hook"]["memory_surface"],
             "candidate",
         )
+        self.assertEqual(result["agent_next_action"]["id"], "review_last_prompt_hook_recall")
+        self.assertEqual(result["foreground_action"]["last_prompt_hook_memory_surface"], "candidate")
+        self.assertGreater(result["foreground_action"]["last_prompt_hook_useful_signal_count"], 0)
         encoded = json.dumps(result["last_prompt_hook"], ensure_ascii=False)
         self.assertNotIn("private cached theme", encoded)
         self.assertNotIn("private candidate", encoded)
@@ -416,6 +419,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             hook_input={"session_id": "private-session", "turn_id": "private-turn"},
             log_path=log_path,
         )
+        installer.install(self.hooks_json, timeout=5)
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -438,6 +442,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             payload["last_prompt_hook"]["last_prompt_hook"]["memory_surface"],
             "candidate",
         )
+        self.assertEqual(payload["agent_next_action"]["id"], "review_last_prompt_hook_recall")
+        self.assertEqual(payload["foreground_action"]["last_prompt_hook_memory_surface"], "candidate")
+        self.assertGreater(payload["foreground_action"]["last_prompt_hook_useful_signal_count"], 0)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["path"], "hooks.json")
         self.assertTrue(payload["path_redacted"])

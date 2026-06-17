@@ -599,6 +599,7 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
             payload["foreground_action"]["command"],
             "aippocampus observatory --summary-json",
         )
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
         self.assertIn("control_state_changes", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)

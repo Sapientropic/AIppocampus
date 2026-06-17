@@ -15,6 +15,11 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
+from aippocampus_runtime.cli.recovery_cards import (
+    object_sync_chooser_payload,
+    storage_chooser_payload,
+    storage_gc_recovery_payload,
+)
 from aippocampus_runtime.contracts import (
     foreground_chooser_card,
     foreground_shell_action,
@@ -118,34 +123,10 @@ def print_storage_recovery_card(*, file: TextIO | None = None) -> None:
     print("AIppocampus storage", file=target)
     print("decision: choose an explicit storage action", file=target)
     print("why: bare storage should not dump a long cleanup candidate list.", file=target)
-    print("next: aippocampus storage gc --dry-run --json", file=target)
-    print("apply: aippocampus storage gc --apply --i-understand-this-deletes-data", file=target)
+    print("next: aippocampus storage gc --dry-run --summary-json --cwd .", file=target)
+    print("audit: aippocampus storage gc --dry-run --json --top 1 --cwd .", file=target)
+    print("apply: aippocampus storage gc --apply --class rebuildable --summary-json --cwd .", file=target)
     print("boundary: cleanup is explicit operator work; dry-run before apply.", file=target)
-
-
-def storage_chooser_payload() -> dict[str, Any]:
-    return foreground_chooser_card(
-        kind="aippocampus_storage_chooser",
-        decision="choose an explicit storage action",
-        choices=[
-            foreground_shell_action(
-                action_id="inspect_storage_gc_candidates",
-                label="Preview rebuildable-cache cleanup",
-                command="aippocampus storage gc --dry-run --json --top 1 --cwd .",
-                why="Parent storage commands should lead to a bounded audit before any delete path.",
-                mutation_risk="read_only",
-                claim_boundary="operator_diagnostic_not_source_evidence",
-            ),
-            foreground_shell_action(
-                action_id="inspect_storage_status",
-                label="Inspect storage status",
-                command="aippocampus storage status --json --cwd .",
-                why="Use status when deciding whether storage pressure is real for this workspace.",
-                mutation_risk="read_only",
-                claim_boundary="operator_diagnostic_not_source_evidence",
-            ),
-        ],
-    )
 
 
 def print_import_recovery_card(*, file: TextIO | None = None) -> None:
@@ -174,17 +155,19 @@ def import_recovery_payload() -> dict[str, Any]:
         "choices": {
             "bundle_import": {
                 "label": "private AIppocampus bundle import",
-                "command": "aippocampus import <bundle.zip> --dest <folder>",
+                "command_template": "aippocampus import {bundle_zip} --dest {destination_folder}",
+                "requires": ["bundle_zip", "destination_folder"],
                 "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
             },
             "conversation_import": {
                 "label": "generic conversation transcript import",
-                "preview_command": (
-                    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json"
+                "preview_command_template": (
+                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
                 ),
-                "write_command": (
-                    "aippocampus import conversation --format generic-jsonl --input <path>"
+                "write_command_template": (
+                    "aippocampus import conversation --format generic-jsonl --input {input_path}"
                 ),
+                "requires": ["input_path"],
                 "boundary": "preview first; the input transcript stays local operator material",
             },
         },
@@ -358,18 +341,20 @@ def smoke_chooser_payload() -> dict[str, Any]:
         status="needs_subcommand",
         decision="choose a bounded smoke runner",
         choices=[
-            foreground_shell_action(
+            _template_action(
                 action_id="recall_funnel",
                 label="Run progressive recall funnel smoke",
-                command='aippocampus smoke recall-funnel "old decision or handoff cue" --json',
+                command_template='aippocampus smoke recall-funnel "{cue}" --json',
+                requires="cue",
                 why="Use for a bounded diagnostic of recall_context -> deepen flow.",
                 mutation_risk="read_only",
                 claim_boundary="smoke_diagnostic_not_source_evidence",
             ),
-            foreground_shell_action(
+            _template_action(
                 action_id="ordinary_agent_recall",
                 label="Use ordinary continuity path",
-                command='aippocampus agent recall "old decision or handoff cue" --json',
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires="cue",
                 why="Use for normal foreground continuity work instead of a smoke diagnostic.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",
@@ -1253,7 +1238,7 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
         else:
             print_hooks_help()
         return None, 0
-    if args[0] in {"sync", "object-sync"} and set(args[1:]) <= {"--json"}:
+    if args[0] == "sync" and set(args[1:]) <= {"--json"}:
         payload = sync_chooser_payload()
         if "--json" in args[1:]:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1264,12 +1249,29 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
             print("object-store: aippocampus object-sync status --json")
             print("boundary: sync writes are explicit operator actions.")
         return None, 0
+    if args[0] == "object-sync" and set(args[1:]) <= {"--json"}:
+        payload = object_sync_chooser_payload()
+        if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("AIppocampus object sync")
+            print("decision: check object-store status before push, pull, or repair")
+            print("next: aippocampus object-sync status --json")
+            print("boundary: object-sync writes are explicit operator actions.")
+        return None, 0
     if len(args) >= 3 and args[:2] == ["plugin", "install"] and "--status" in args[2:]:
         print_plugin_status_help()
         return None, 0
     if args[0] == "storage" and set(args[1:]) <= {"--json"}:
         payload = storage_chooser_payload()
         if "--json" in args[1:]:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_storage_recovery_card()
+        return None, 0
+    if args[:2] == ["storage", "gc"] and set(args[2:]) <= {"--json"}:
+        payload = storage_gc_recovery_payload()
+        if "--json" in args[2:]:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print_storage_recovery_card()

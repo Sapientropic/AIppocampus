@@ -412,6 +412,9 @@ def status(
             installed=installed,
             command_count=len(commands),
             provider_key_bridge_installed=bool(bridge_commands),
+            last_prompt_hook=result.get("last_prompt_hook")
+            if isinstance(result.get("last_prompt_hook"), dict)
+            else None,
         )
     )
     return result

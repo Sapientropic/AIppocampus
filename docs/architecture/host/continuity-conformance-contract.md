@@ -18,7 +18,7 @@ Use the strongest label whose requirements are all true.
 | `recall_only` | The host can call a foreground recall path. | AIppocampus is discoverable and `agent_recall` or equivalent is callable. |
 | `recall_deepen` | The host can recall and reopen/deepen selected routes. | Recall plus deepen/source-reopen callability, with redacted foreground output. |
 | `ambient_recall_deepen` | The host can provide ambient hints plus recall/deepen. | Recall/deepen plus explicit hook or hint lane installed. |
-| `full_continuity_path` | The host supports the first-magic-moment path. | Ambient lane, recall, deepen, current-thread visibility, and fresh live schema. |
+| `full_continuity_path` | The host supports the first-magic-moment path. | Ambient lane, observed current-foreground recall/deepen callability, current-thread visibility, and fresh live schema. |
 
 ## Required Dimensions
 
@@ -46,12 +46,18 @@ Every host status or support row should answer these dimensions:
 same compact projection. Treat `tools_visible=true` and
 `key_tools_callable=false` as a stale or mixed live-host state: reload the
 host/plugin/MCP process before asking the user to debug recall quality.
+`--foreground-key-tools-callable` and
+`AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE` are caller assertions only; they may
+help describe what an agent says it saw, but they must not promote a status to
+`full_continuity_path` without an observed current-transport proof path.
 
 ## Contract Boundaries
 
 - A label is a host affordance claim, not a memory-quality score.
 - A listed MCP tool is not enough; key recall tools must also be callable when
   the host probe checks them.
+- A caller assertion that foreground key tools are callable is not itself a
+  current MCP transport proof.
 - Source-backed factual claims still require source reopen within scope.
 - Host-specific docs should point here for the shared label contract, then state
   their own setup and evidence.

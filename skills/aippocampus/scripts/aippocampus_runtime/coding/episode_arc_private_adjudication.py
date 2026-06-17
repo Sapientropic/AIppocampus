@@ -256,9 +256,10 @@ def _top_arc_cards(arcs: Sequence[Mapping[str, Any]], *, limit: int = DEFAULT_TO
                 "source_ref_count": len(_as_list(arc.get("source_refs"))),
                 "sequence_gap_count": len(_as_list(arc.get("sequence_gaps"))),
                 "source_reopen_action": {
-                    "kind": "reopen_episode_arc_sources",
-                    "command": "aippocampus episode-arcs --json --top 5",
-                    "requires": "operator_source_reopen_from_local_report",
+                    "kind": "inspect_episode_arc_sources",
+                    "command_template": "aippocampus episode-arcs --json --arc-handle {arc_handle}",
+                    "requires": ["arc_handle"],
+                    "template_only": True,
                     "claim_boundary": "sequence_hint_not_source_truth",
                     "authority_after_running": "actionable_arc_handle_only_until_source_reopen",
                 },
@@ -543,6 +544,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--summary-json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--top", type=int, default=DEFAULT_TOP_ARCS)
+    parser.add_argument("--arc-handle", help="Filter top_arcs to one public arc handle.")
     args = parser.parse_args(argv)
 
     registry_path = _resolve_registry_path(args.registry)
@@ -551,6 +553,10 @@ def main(argv: list[str] | None = None) -> int:
         max_threads=args.max_threads,
         max_line_gap=args.max_line_gap,
     )
+    if args.arc_handle:
+        report["top_arcs"] = [
+            arc for arc in report.get("top_arcs") or [] if arc.get("arc_handle") == args.arc_handle
+        ]
     if args.top >= 0:
         report["top_arcs"] = list(report.get("top_arcs") or [])[: args.top]
     output = json.dumps(report, ensure_ascii=False, indent=2)

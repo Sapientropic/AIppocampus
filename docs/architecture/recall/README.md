@@ -15,4 +15,5 @@ memory routes. Source authority still belongs to the source layer.
 | [memory-evidence-drawer.md](memory-evidence-drawer.md) | Foreground recall explanation packet and source-reopen affordance boundary. |
 | [question-tracking-subconscious.md](question-tracking-subconscious.md) | Question extraction, tracking, and theme-emergence design. |
 | [source-backed-attention-router.md](source-backed-attention-router.md) | Hard-mask, route-packet, output-level, and claim-permission boundaries. |
+| [source-backed-product-discipline.md](source-backed-product-discipline.md) | Recall-layer audit for source-backed foreground product discipline and Task Orientation Packets. |
 | [source-backed-familiarity-map.md](source-backed-familiarity-map.md) | Familiarity-map direction and source-backed boundary. |

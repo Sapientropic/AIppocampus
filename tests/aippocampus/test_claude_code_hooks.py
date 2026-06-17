@@ -53,12 +53,67 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         )
         self.assertIn("PostToolUse", status["foreground_action"]["unsupported_events"]["events"])
         self.assertTrue(status["foreground_action"]["claim_boundary"]["no_configuration_mutation_happened"])
-        self.assertIn("no_configuration_mutating_installer", status["cannot_claim"])
+        self.assertNotIn("no_configuration_mutating_installer", status["cannot_claim"])
         self.assertFalse(dry_run["would_write"])
         self.assertIn("handler_command", dry_run)
         self.assertIn("command_resolvable", dry_run["handler_command"])
         self.assertFalse(dry_run["handler_command"]["resolved_executable_path_emitted"])
-        self.assertEqual(dry_run["rollback"], "remove the displayed handlers from the selected Claude settings file")
+        self.assertEqual(dry_run["rollback_command"], "aippocampus hooks claude-code uninstall --json")
+        self.assertEqual(dry_run["install_command"], "aippocampus hooks claude-code install --json")
+        self.assertNotIn(str(settings), encoded)
+
+    def test_install_is_idempotent_and_uninstall_preserves_unrelated_settings(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Path(tmp) / "settings.json"
+            settings.write_text(
+                json.dumps(
+                    {
+                        "permissions": {"allow": ["Bash(git status:*)"]},
+                        "hooks": {
+                            "UserPromptSubmit": [
+                                {
+                                    "matcher": "",
+                                    "hooks": [
+                                        {
+                                            "type": "command",
+                                            "command": "echo existing",
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            first = claude_code.install_hooks(settings_path=settings)
+            second = claude_code.install_hooks(settings_path=settings)
+            status = claude_code.status_report(settings_path=settings)
+            removed = claude_code.uninstall_hooks(settings_path=settings)
+            final = json.loads(settings.read_text(encoding="utf-8"))
+
+        encoded = json.dumps(
+            {"first": first, "second": second, "status": status, "removed": removed},
+            ensure_ascii=False,
+        )
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(first["wrote"])
+        self.assertTrue(first["changed"])
+        self.assertFalse(second["changed"])
+        self.assertEqual(status["settings"]["status"], "installed")
+        self.assertEqual(status["events"]["UserPromptSubmit"]["status"], "installed")
+        self.assertEqual(status["events"]["Stop"]["status"], "installed")
+        self.assertTrue(removed["ok"], removed)
+        self.assertTrue(removed["changed"])
+        self.assertEqual(final["permissions"], {"allow": ["Bash(git status:*)"]})
+        self.assertEqual(
+            final["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"],
+            "echo existing",
+        )
+        self.assertNotIn("Stop", final["hooks"])
         self.assertNotIn(str(settings), encoded)
 
     def test_status_card_switches_to_smoke_when_supported_hooks_are_installed(self) -> None:
@@ -92,11 +147,42 @@ class ClaudeCodeHooksTests(unittest.TestCase):
             status["agent_next_action"]["command"],
             "aippocampus hooks claude-code smoke --json",
         )
+        action_commands = {action["command"] for action in status["safe_next_actions"] if action.get("command")}
+        self.assertIn("aippocampus hooks claude-code uninstall --json", action_commands)
         self.assertIn(
             "UserPromptSubmit",
             status["foreground_action"]["supported_installed_or_firing_events"],
         )
         encoded = json.dumps(status, ensure_ascii=False)
+        self.assertNotIn(str(settings), encoded)
+
+    def test_malformed_settings_status_is_blocked_without_path_leak_or_crash(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Path(tmp) / "settings.json"
+            settings.write_text("{not json", encoding="utf-8")
+
+            status = claude_code.status_report(settings_path=settings)
+            install = claude_code.install_hooks(settings_path=settings)
+            uninstall = claude_code.uninstall_hooks(settings_path=settings)
+
+        encoded = json.dumps(
+            {"status": status, "install": install, "uninstall": uninstall},
+            ensure_ascii=False,
+        )
+        self.assertEqual(status["settings"]["status"], "blocked")
+        self.assertEqual(status["settings"]["blocker"], "settings_json_unreadable")
+        self.assertEqual(status["events"]["UserPromptSubmit"]["status"], "blocked")
+        self.assertEqual(status["events"]["Stop"]["blocker"], "settings_json_unreadable")
+        self.assertEqual(
+            status["agent_next_action"]["id"],
+            "repair_claude_code_settings_json",
+        )
+        self.assertFalse(install["ok"])
+        self.assertFalse(uninstall["ok"])
+        self.assertEqual(install["error"]["code"], "claude_settings_json_invalid")
+        self.assertEqual(uninstall["error"]["code"], "claude_settings_json_invalid")
         self.assertNotIn(str(settings), encoded)
 
     def test_dry_run_uses_module_fallback_when_console_script_is_not_on_path(self) -> None:

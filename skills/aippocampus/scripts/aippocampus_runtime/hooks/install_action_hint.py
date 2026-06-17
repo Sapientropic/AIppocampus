@@ -239,14 +239,20 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
     installed = bool(status_result.get("installed"))
     ready = installed and cache_status == "with_fresh_records"
     if not installed:
-        first_command = "aippocampus hooks action refresh-cache --write --json"
+        first_command = "aippocampus learning guidance --json"
     elif not ready:
         first_command = "aippocampus hooks action refresh-cache --write --json"
     else:
         first_command = "aippocampus hooks action status --json"
     next_steps = [{"label": "check", "command": "aippocampus hooks action status --json"}]
     if not installed:
-        next_steps.append({"label": "prepare_cache", "command": first_command})
+        next_steps.append({"label": "review_guidance", "command": first_command})
+        next_steps.append(
+            {
+                "label": "prepare_cache",
+                "command": "aippocampus hooks action refresh-cache --write --json",
+            }
+        )
         next_steps.append({"label": "install", "command": "aippocampus hooks action install --json"})
     elif not ready:
         next_steps.append({"label": "refresh_cache", "command": first_command})

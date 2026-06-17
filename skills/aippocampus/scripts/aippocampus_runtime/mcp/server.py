@@ -179,7 +179,7 @@ def missing_input_recovery_card(
             if safe_next_actions
             else None
         ),
-        "example_arguments": safe_next_actions[0].get("arguments") if safe_next_actions else {},
+        "arguments_template": safe_next_actions[0].get("arguments_template") if safe_next_actions else {},
     }
     if legacy_details:
         details.update(legacy_details)
@@ -206,6 +206,10 @@ def missing_input_recovery_card(
     if staged_followup:
         payload["staged_followup"] = staged_followup
     return text_result(public_payload(arguments, payload), is_error=True)
+
+
+def _template_tool_action(tool_name: str, arguments_template: dict[str, Any], requires: list[str]) -> dict[str, Any]:
+    return {"tool_name": tool_name, "arguments_template": arguments_template, "requires": requires, "template_only": True}
 
 
 def clean_source_unavailable(
@@ -244,14 +248,12 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
             required_any=["query"],
             safe_next_actions=[
-                {
-                    "tool_name": "search_memory",
-                    "arguments": {"query": "<specific cue or phrase>", "max": 10},
-                },
-                {
-                    "tool_name": "recall_context",
-                    "arguments": {"intent": "<task or memory cue>"},
-                },
+                _template_tool_action(
+                    "search_memory",
+                    {"query": "{specific_cue_or_phrase}", "max": 10},
+                    ["query"],
+                ),
+                _template_tool_action("recall_context", {"intent": "{task_or_memory_cue}"}, ["intent"]),
             ],
         )
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
@@ -302,18 +304,21 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
             required_any=["intent", "query"],
             safe_next_actions=[
-                {
-                    "tool_name": "recall_context",
-                    "arguments": {"intent": "continue the issue-work context", "cwd": "<project cwd>"},
-                },
-                {
-                    "tool_name": "agent_recall",
-                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
-                },
-                {
-                    "tool_name": "search_memory",
-                    "arguments": {"query": "<exact phrase or cue>", "max": 10},
-                },
+                _template_tool_action(
+                    "recall_context",
+                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["intent_or_query"],
+                ),
+                _template_tool_action(
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
+                ),
+                _template_tool_action(
+                    "search_memory",
+                    {"query": "{exact_phrase_or_cue}", "max": 10},
+                    ["query"],
+                ),
             ],
         )
     source_dir = clean_source_dir_for(arguments)
@@ -347,24 +352,28 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
             required_any=["handle"],
             safe_next_actions=[
-                {
-                    "tool_name": "recall_context",
-                    "arguments": {"intent": "continue the issue-work context", "cwd": "<project cwd>"},
-                },
-                {
-                    "tool_name": "agent_recall",
-                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
-                },
+                _template_tool_action(
+                    "recall_context",
+                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["intent_or_query"],
+                ),
+                _template_tool_action(
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
+                ),
             ],
             staged_followup=[
-                {
-                    "tool_name": "recall_context",
-                    "arguments": {"intent": "continue the issue-work context", "cwd": "<project cwd>"},
-                },
-                {
-                    "tool_name": "recall_deepen",
-                    "arguments": {"handle": "<handle from recall_context.routes[]>", "cwd": "<project cwd>"},
-                },
+                _template_tool_action(
+                    "recall_context",
+                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["intent_or_query"],
+                ),
+                _template_tool_action(
+                    "recall_deepen",
+                    {"handle": "{handle_from_recall_context_routes}", "cwd": "{project_cwd}"},
+                    ["handle"],
+                ),
             ],
             legacy_details={
                 "required": ["handle"],
@@ -372,13 +381,13 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                     "Call recall_context with intent/query, then pass a selected route handle "
                     "to recall_deepen."
                 ),
-                "example_arguments": {
+                "arguments_template": {
                     "intent": "continue the issue-work context",
-                    "cwd": "<project cwd>",
+                    "cwd": "{project_cwd}",
                 },
-                "example_followup_arguments": {
-                    "handle": "<handle from recall_context.routes[]>",
-                    "cwd": "<project cwd>",
+                "followup_arguments_template": {
+                    "handle": "{handle_from_recall_context_routes}",
+                    "cwd": "{project_cwd}",
                 },
             },
         )
@@ -547,14 +556,12 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
             required_any=["cue", "intent", "query"],
             safe_next_actions=[
-                {
-                    "tool_name": "recall_diagnostic",
-                    "arguments": {"cue": "<memory cue or route question>", "mode": "why-recall"},
-                },
-                {
-                    "tool_name": "agent_recall",
-                    "arguments": {"query": "<memory cue or route question>"},
-                },
+                _template_tool_action(
+                    "recall_diagnostic",
+                    {"cue": "{memory_cue_or_route_question}", "mode": "why-recall"},
+                    ["cue"],
+                ),
+                _template_tool_action("agent_recall", {"query": "{memory_cue_or_route_question}"}, ["query"]),
             ],
         )
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
@@ -648,24 +655,28 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
             required_any=["turn_id", "message_id", "turn_index"],
             safe_next_actions=[
-                {
-                    "tool_name": "agent_recall",
-                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
-                },
-                {
-                    "tool_name": "recall_context",
-                    "arguments": {"intent": "<task or memory cue>", "cwd": "<project cwd>"},
-                },
+                _template_tool_action(
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
+                ),
+                _template_tool_action(
+                    "recall_context",
+                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["intent_or_query"],
+                ),
             ],
             staged_followup=[
-                {
-                    "tool_name": "agent_recall",
-                    "arguments": {"query": "<task or memory cue>", "cwd": "<project cwd>"},
-                },
-                {
-                    "tool_name": "get_turn_context",
-                    "arguments": {"message_id": "<message_id from selected route>"},
-                },
+                _template_tool_action(
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
+                ),
+                _template_tool_action(
+                    "get_turn_context",
+                    {"message_id": "{message_id_from_selected_route}"},
+                    ["message_id"],
+                ),
             ],
         )
 
@@ -890,13 +901,37 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
             "agent_next_action": {
                 "id": "recover_or_continue_without_memory",
                 "label": "Check provider/onboarding status, register/sync a thread if this is setup, or continue without memory.",
-                "command": "aippocampus onboard --provider auto --status",
+                "command": "aippocampus onboard --provider auto --status --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "setup_status_not_memory_evidence",
             },
-            "recovery_actions": [
-                "aippocampus onboard --provider auto --status",
-                "aippocampus mcp list-tools --compact",
-                "aippocampus search <exact phrase> --json",
-                "continue without memory when no local source exists",
+            "safe_next_actions": [
+                {
+                    "id": "check_onboarding_status",
+                    "command": "aippocampus onboard --provider auto --status --json",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "setup_status_not_memory_evidence",
+                },
+                {
+                    "id": "list_mcp_tools",
+                    "command": "aippocampus mcp list-tools --compact",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "tool_discovery_not_memory_evidence",
+                },
+                {
+                    "id": "search_exact_phrase",
+                    "command_template": 'aippocampus search "{exact_phrase}" --json',
+                    "requires": ["exact_phrase"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "source_reopen_required_before_quoting",
+                },
+                {
+                    "id": "continue_without_memory",
+                    "manual_instruction": "Continue without memory when no local source exists.",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_local_source_available",
+                },
             ],
             "source_boundary": {
                 "no_rollout_found_is_not_a_recall_quality_claim": True,
@@ -937,10 +972,11 @@ def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
                     "tool_name": "list_telepathy_handoffs",
                     "arguments": {"status": "active", "max": 20},
                 },
-                {
-                    "tool_name": "deepen_telepathy_handoff",
-                    "arguments": {"card_id": "<card_id from list_telepathy_handoffs.cards[]>"},
-                },
+                _template_tool_action(
+                    "deepen_telepathy_handoff",
+                    {"card_id": "{card_id_from_list_telepathy_handoffs_cards}"},
+                    ["card_id"],
+                ),
             ],
         )
     payload = telepathy_handoff_store.deepen_handoff_payload(

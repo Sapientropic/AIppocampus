@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 from aippocampus_runtime.contracts import (
     foreground_recovery_card,
-    foreground_shell_action,
+    foreground_template_action,
 )
 
 SCHEMA_VERSION = "issue-work-active-pull-v0"
@@ -42,7 +42,8 @@ FOREGROUND_CARD_RE = re.compile(
     r"\b(foreground card|compact card|json card|recovery card|agent-native|"
     r"safe_next_actions|claim_boundary|cannot_claim|doctor spend|health --json|"
     r"maintenance|import conversation|recall-funnel|work-guard|cli facade|"
-    r"public facade|task-first)\b",
+    r"public facade|task-first|task orientation|orientation packet|"
+    r"understanding state|external source anchor)\b",
     re.I,
 )
 TRIVIAL_RE = re.compile(r"\b(typo|spelling|formatting|link fix|rename only)\b", re.I)
@@ -437,26 +438,29 @@ def _missing_input_payload() -> dict[str, Any]:
         error_code="work_guard_issue_or_title_required",
         message="Provide a GitHub issue number/URL or an explicit --title before using work-guard.",
         safe_next_actions=[
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="inspect_issue_context",
                 label="Fetch and classify a GitHub issue",
-                command="aippocampus work-guard <issue-number> --json",
+                command_template="aippocampus work-guard {issue_number_or_url} --json",
+                requires=["issue_number_or_url"],
                 why="Use this when issue comments and source-route context may change the implementation path.",
                 mutation_risk="read_only",
                 claim_boundary="navigation_only_not_fact",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="classify_title_body",
                 label="Classify provided title/body",
-                command='aippocampus work-guard --title "issue title" --body "issue body" --json',
+                command_template='aippocampus work-guard --title "{issue_title}" --body "{issue_body}" --json',
+                requires=["issue_title", "issue_body"],
                 why="Use this if GitHub is unavailable but the issue text is already in context.",
                 mutation_risk="read_only",
                 claim_boundary="navigation_only_not_fact",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="run_recall_for_issue",
                 label="Pull continuity before memory-design work",
-                command='aippocampus agent recall "issue title and key terms" --json',
+                command_template='aippocampus agent recall "{issue_cue}" --json',
+                requires=["issue_cue"],
                 why="Memory-design, benchmark, AIppo, and learning-loop work should pull existing route owners first.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",
@@ -478,7 +482,8 @@ def _render_missing_input_text(payload: dict[str, Any]) -> str:
         "meaning: classify issue work before benchmark, architecture, AIppo, or learning-loop changes.",
     ]
     for action in actions[:3]:
-        lines.append(f"- {action.get('label') or action.get('id')}: {action.get('command')}")
+        command = action.get("command") or action.get("command_template")
+        lines.append(f"- {action.get('label') or action.get('id')}: {command}")
     lines.append("boundary: this is route guidance, not source evidence.")
     return "\n".join(lines)
 

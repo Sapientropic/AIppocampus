@@ -464,14 +464,16 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["maintenance_status"], "ok")
         self.assertEqual(payload["mode"], "summary")
         self.assertTrue(payload["read_only"])
-        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
+        self.assertEqual(payload["agent_next_action"]["id"], "continue_without_maintenance")
         self.assertFalse(payload["agent_next_action"]["mutates"])
         apply_actions = [
             item for item in payload["safe_next_actions"] if item["id"] == "apply_after_user_consent"
         ]
-        self.assertEqual(len(apply_actions), 1)
-        self.assertTrue(apply_actions[0]["requires_user_consent"])
-        self.assertTrue(apply_actions[0]["requires_clean_or_intentionally_dirty_worktree"])
+        self.assertEqual(apply_actions, [])
+        self.assertIn(
+            "review_maintenance_plan",
+            [item["id"] for item in payload["safe_next_actions"]],
+        )
         self.assertTrue(payload["command_ok"])
         self.assertTrue(payload["maintenance_ok"])
         self.assertNotIn("health_final", payload)

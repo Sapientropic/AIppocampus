@@ -594,8 +594,8 @@ class StorageGovernanceTests(unittest.TestCase):
         )
 
         public_action = public["recommended_actions"][0]
-        self.assertEqual(public_action["command"], "aippocampus maintenance")
-        self.assertEqual(public_action["facade_command"], "aippocampus maintenance")
+        self.assertEqual(public_action["command"], "aippocampus maintenance plan --summary-json")
+        self.assertEqual(public_action["facade_command"], "aippocampus maintenance plan --summary-json")
         self.assertNotIn(str(self.root), json.dumps(public, ensure_ascii=False))
         self.assertNotIn("<local-path-redacted>", public_action["command"])
 

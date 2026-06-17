@@ -297,9 +297,20 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
                 payload["empty_state"]["state"],
                 "no_matching_telepathy_handoffs",
             )
-            self.assertIn("normal recall/search", payload["empty_state"]["agent_next_action"])
+            self.assertEqual(
+                payload["empty_state"]["agent_next_action"]["id"],
+                "continue_with_normal_recall",
+            )
+            action_ids = [
+                action["id"]
+                for action in payload["empty_state"]["safe_next_actions"]
+            ]
+            self.assertIn("continue_with_normal_recall", action_ids)
+            self.assertIn("create_explicit_handoff", action_ids)
+            self.assertNotIn("create_examples", payload["empty_state"])
             self.assertIn("next:", text_proc.stdout)
             self.assertIn("telepathy create --preset handoff", text_proc.stdout)
+            self.assertNotIn("{'", text_proc.stdout)
 
     def test_cli_create_preset_human_needed_hides_internal_enums_from_first_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

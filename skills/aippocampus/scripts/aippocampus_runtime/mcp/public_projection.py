@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any, cast
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import command_value_needs_input, foreground_template_action
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -87,19 +89,88 @@ def compact_thread(
     return {key: value for key, value in pairs.items() if value not in (None, "", [])}
 
 
+def _command_with_cwd_template(command: str) -> str:
+    return re.sub(r'--cwd\s+(?:"[^"]+"|\S+)', '--cwd "{cwd}"', command, count=1)
+
+
+def _uses_current_directory_cwd(command: str) -> bool:
+    return bool(re.search(r'--cwd\s+(?:"\."|\.)($|\s)', command))
+
+
+_MAINTENANCE_ACTION_IDS = {
+    "build_clean_source",
+    "build_index",
+    "build_segments",
+    "checkpoint",
+    "prepare_graphify_corpus",
+}
+
+
+def _looks_like_python_script_path_command(command: str) -> bool:
+    return bool(
+        re.match(r'(?i)^\s*(?:python(?:\.exe)?|python3(?:\.\d+)?(?:\.exe)?|py(?:\.exe)?)\s+', command)
+        and re.search(r'(?i)(?:[A-Za-z]:\\|/|\\\\).+\.py\b', command)
+    )
+
+
+def _compact_command_fields(command: Any, *, action_id: str = "") -> dict[str, Any]:
+    raw = str(command or "").strip()
+    if not raw:
+        return {}
+    if action_id in _MAINTENANCE_ACTION_IDS and _looks_like_python_script_path_command(raw):
+        return {
+            "command_template": 'aippocampus maintenance --cwd "{cwd}"',
+            "requires": ["cwd"],
+            "template_only": True,
+        }
+    if " --cwd " in raw and not _uses_current_directory_cwd(raw):
+        return {
+            "command_template": _command_with_cwd_template(raw),
+            "requires": ["cwd"],
+            "template_only": True,
+        }
+    if command_value_needs_input(raw):
+        return {
+            "command_template": raw,
+            "requires": ["operator_input"],
+            "template_only": True,
+        }
+    return {"command": raw}
+
+
 def compact_action(item: Any) -> dict[str, Any]:
     if isinstance(item, dict):
+        action_id = str(item.get("id") or item.get("name") or item.get("action") or "")
+        command_fields = _compact_command_fields(
+            item.get("facade_command") or item.get("command"),
+            action_id=action_id,
+        )
         pairs = {
-            "id": item.get("id") or item.get("name") or item.get("action"),
+            "id": action_id,
             "severity": item.get("severity") or item.get("level"),
             "reason": core.compact_text(str(item.get("reason") or item.get("message") or ""), 220),
-            "command": item.get("facade_command") or item.get("command"),
+            **command_fields,
             "scope": item.get("scope"),
             "retryable": item.get("retryable"),
         }
         return {key: value for key, value in pairs.items() if value not in (None, "", [])}
     text = core.compact_text(str(item or ""), 220)
     return {"id": "recommended_action", "reason": text} if text else {}
+
+
+def _action_command_projection(action: dict[str, Any]) -> dict[str, Any]:
+    if action.get("command"):
+        return {"kind": "shell_command", "command": action["command"]}
+    if action.get("command_template"):
+        result = {
+            "kind": "shell_command_template",
+            "command_template": action["command_template"],
+            "template_only": True,
+        }
+        if action.get("requires"):
+            result["requires"] = action["requires"]
+        return result
+    return {"kind": "manual_action"}
 
 
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -130,7 +201,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             item
             for item in all_recommended
             if item.get("id") in {"build_clean_source", "build_index", "build_segments"}
-            and item.get("command")
+            and (item.get("command") or item.get("command_template"))
         ),
         None,
     )
@@ -138,7 +209,8 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         (
             item
             for item in all_recommended
-            if item.get("id") == "storage_gc_rebuildable_cache" and item.get("command")
+            if item.get("id") == "storage_gc_rebuildable_cache"
+            and (item.get("command") or item.get("command_template"))
         ),
         None,
     )
@@ -242,15 +314,13 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         if (
             freshness_degraded and exact_latest_action
         ):
-            agent_next_action["before_exact_latest_claims"] = {
-                "kind": "shell_command",
-                "command": exact_latest_action["command"],
+            agent_next_action["before_exact_latest_claims"] = _action_command_projection(
+                exact_latest_action
+            ) | {
                 "reason": "refresh source/index artifacts before exact latest current-thread claims",
             }
         if storage_cleanup_action:
-            agent_next_action["when_idle"] = {
-                "kind": "shell_command",
-                "command": storage_cleanup_action["command"],
+            agent_next_action["when_idle"] = _action_command_projection(storage_cleanup_action) | {
                 "reason": "bounded storage cleanup audit; non-blocking for ordinary recall",
             }
     else:
@@ -378,8 +448,26 @@ def _recall_miss_recovery_card(status: Any) -> dict[str, Any]:
         "primary_action": "refine_cue_or_run_exact_search",
         "recovery_actions": [
             'refine the cue with a project, object, person, or time clue',
-            'aippocampus search "distinctive exact phrase" --json',
+            "run exact search after providing exact_phrase",
             "aippocampus onboard --provider auto --status --json",
+        ],
+        "safe_next_actions": [
+            foreground_template_action(
+                action_id="search_exact_phrase",
+                label="Search exact clean-source wording",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires=["exact_phrase"],
+                why="Search only after the caller supplies real remembered wording.",
+                mutation_risk="read_only",
+                claim_boundary="search_result_requires_source_boundary",
+            ),
+            {
+                "id": "check_onboarding_status",
+                "label": "Check source registration",
+                "command": "aippocampus onboard --provider auto --status --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "setup_status_not_memory_evidence",
+            },
         ],
         "do_not": [
             "do not claim from scent or route silence",
@@ -469,11 +557,13 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         foreground_action = {
             "action_id": "recover_recall_miss",
             "tool_name": "search_memory",
-            "arguments": {
-                "query": "distinctive exact phrase",
+            "arguments_template": {
+                "query": "{exact_phrase}",
                 "max": 5,
             },
-            "cli_command": 'aippocampus search "distinctive exact phrase" --json',
+            "requires": ["exact_phrase"],
+            "template_only": True,
+            "cli_command_template": 'aippocampus search "{exact_phrase}" --json',
             "why": "No route surfaced; try exact source-backed search or check onboarding/index freshness.",
             "claim_boundary": "no_route_claim",
         }
@@ -482,11 +572,13 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         foreground_action = {
             "action_id": "recover_weak_route",
             "tool_name": "search_memory",
-            "arguments": {
-                "query": "more specific cue or exact phrase",
+            "arguments_template": {
+                "query": "{more_specific_cue_or_exact_phrase}",
                 "max": 5,
             },
-            "cli_command": 'aippocampus search "distinctive exact phrase" --json',
+            "requires": ["more_specific_cue_or_exact_phrase"],
+            "template_only": True,
+            "cli_command_template": 'aippocampus search "{exact_phrase}" --json',
             "why": "A route surfaced without a safe deepen action; refine or exact-search before relying on it.",
             "claim_boundary": "no_claim_before_reopen",
         }

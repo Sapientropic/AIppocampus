@@ -416,7 +416,12 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertEqual(summary["tool_count"], 8)
             self.assertGreaterEqual(summary["nonfatal_host_warning_count"], 1)
             self.assertFalse(summary["aippocampus_action_required"])
-            self.assertEqual(summary["next_action"], "reload host app if tools are not visible")
+            self.assertIn("review trusted Codex action hints", summary["next_action"])
+            trusted_commands = {
+                action["command"] for action in summary["trusted_codex_next_actions"]
+            }
+            self.assertIn("aippocampus hooks action status --json", trusted_commands)
+            self.assertIn("aippocampus hooks action install --json", trusted_commands)
             self.assertIn("agent_recall", summary["host_probe"]["key_tools_present"])
             self.assertIn("agent_background", summary["host_probe"]["key_tools_present"])
             self.assertEqual(summary["rollback_command"], "aippocampus plugin uninstall --codex")
@@ -504,7 +509,7 @@ class PluginInstallerTests(unittest.TestCase):
         self.assertNotIn("PermissionError", encoded)
         self.assertNotIn(raw_path, encoded)
 
-    def test_install_permission_failure_human_is_path_safe_and_operator_json_keeps_detail(self) -> None:
+    def test_install_permission_failure_human_and_operator_json_stay_path_safe(self) -> None:
         raw_path = "X:" + "\\synthetic-private\\dist\\aippocampus-plugin\\.codex-plugin\\plugin.json"
         with (
             mock.patch.object(
@@ -535,12 +540,16 @@ class PluginInstallerTests(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)
-        self.assertEqual(payload["kind"], "aippocampus_plugin_install_operator_failure")
-        self.assertIn("PermissionError", payload["operator_error"]["exception_type"])
-        self.assertIn("synthetic-private", payload["operator_error"]["message"])
-        self.assertIn("plugin.json", payload["operator_error"]["message"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_plugin_install_recovery")
+        self.assertEqual(payload["error"]["code"], "plugin_package_write_denied")
+        self.assertTrue(payload["privacy_boundary"]["operator_json_requested"])
+        self.assertFalse(payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertTrue(payload["operator_diagnostics"]["raw_stdout_disabled"])
+        self.assertNotIn("PermissionError", encoded)
+        self.assertNotIn(raw_path, encoded)
 
-    def test_operator_json_preserves_full_install_report_for_deep_debug(self) -> None:
+    def test_operator_json_marks_boundary_without_raw_install_report(self) -> None:
         probe = plugin_installer.attach_host_probe_warning_summary(
             successful_probe_with_noisy_stderr()
         )
@@ -567,10 +576,13 @@ class PluginInstallerTests(unittest.TestCase):
             code = plugin_installer.main(["install", "--codex", "--verify", "--operator-json"])
 
         payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(code, 0)
-        self.assertEqual(payload["kind"], "aippocampus_plugin_install")
-        self.assertIn("stderr_tail", payload["host_probe"])
-        self.assertIn("marketplace_add", payload)
+        self.assertEqual(payload["kind"], "aippocampus_plugin_install_public_summary")
+        self.assertTrue(payload["privacy_boundary"]["operator_json_requested"])
+        self.assertTrue(payload["operator_diagnostics"]["raw_stdout_disabled"])
+        self.assertNotIn("stderr_tail", encoded)
+        self.assertNotIn("marketplace_add", encoded)
 
     def test_host_probe_warning_summary_does_not_downgrade_failed_probe_noise(self) -> None:
         summary = host_probe_warnings.summarize_host_probe_warnings(
@@ -820,4 +832,12 @@ class PluginInstallerTests(unittest.TestCase):
         self.assertNotIn(str(codex_home), encoded)
         self.assertEqual(operator.returncode, 0, operator.stderr)
         operator_payload = json.loads(operator.stdout)
-        self.assertEqual(operator_payload["codex_home"], str(codex_home))
+        operator_encoded = json.dumps(operator_payload, ensure_ascii=False)
+        self.assertEqual(
+            operator_payload["kind"],
+            "aippocampus_plugin_uninstall_preview_public_summary",
+        )
+        self.assertTrue(operator_payload["privacy_boundary"]["operator_json_requested"])
+        self.assertFalse(operator_payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertTrue(operator_payload["operator_diagnostics"]["raw_stdout_disabled"])
+        self.assertNotIn(str(codex_home), operator_encoded)

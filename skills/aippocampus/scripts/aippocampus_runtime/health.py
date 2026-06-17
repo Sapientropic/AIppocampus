@@ -366,14 +366,23 @@ def _rewrite_redacted_action_commands(payload: dict[str, Any]) -> None:
             continue
         command = str(item.get("command") or "")
         facade_command = str(item.get("facade_command") or "")
-        if LOCAL_PATH_REDACTION not in command and LOCAL_PATH_REDACTION not in facade_command:
-            continue
-        if "aippocampus maintenance" in facade_command or "aippocampus_runtime" in command:
+        needs_current_dir_facade = (
+            facade_command.strip() == "aippocampus maintenance"
+            or "aippocampus maintenance --cwd" in facade_command
+            or (
+                "aippocampus_runtime" in command
+                and (
+                    LOCAL_PATH_REDACTION in command
+                    or LOCAL_PATH_REDACTION in facade_command
+                )
+            )
+        )
+        if needs_current_dir_facade:
             # The full report keeps the exact cwd for operator diagnostics. Once
             # paths are redacted, that same command becomes uncopyable; default
             # foreground health should give a runnable current-directory action.
-            item["command"] = "aippocampus maintenance"
-            item["facade_command"] = "aippocampus maintenance"
+            item["command"] = "aippocampus maintenance plan --summary-json"
+            item["facade_command"] = "aippocampus maintenance plan --summary-json"
 
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:

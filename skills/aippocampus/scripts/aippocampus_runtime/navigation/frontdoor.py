@@ -65,17 +65,19 @@ def navigation_payload(*, cue: str | None = None, operator_detail: bool = False)
         foreground_next_actions = [
             {
                 "id": "provide_navigation_cue",
-                "kind": "shell_command",
-                "command": 'aippocampus navigate "old decision or handoff cue" --json',
-                "requires": "cue",
+                "kind": "shell_command_template",
+                "command_template": 'aippocampus navigate "{cue}" --json',
+                "requires": ["cue"],
+                "template_only": True,
                 "mutation_risk": "read_only",
                 "claim_boundary": "no_claim_before_reopen",
             },
             {
                 "id": "use_recall_directly",
-                "kind": "shell_command",
-                "command": 'aippocampus agent recall "old decision or handoff cue" --json',
-                "requires": "cue",
+                "kind": "shell_command_template",
+                "command_template": 'aippocampus agent recall "{cue}" --json',
+                "requires": ["cue"],
+                "template_only": True,
                 "mutation_risk": "read_only",
                 "claim_boundary": "no_claim_before_reopen",
             },
@@ -100,7 +102,11 @@ def navigation_payload(*, cue: str | None = None, operator_detail: bool = False)
 
 def render_text(payload: dict[str, Any]) -> str:
     actions = payload.get("foreground_next_actions") or []
-    next_command = actions[0].get("command") if actions and isinstance(actions[0], dict) else ""
+    next_command = (
+        actions[0].get("command") or actions[0].get("command_template")
+        if actions and isinstance(actions[0], dict)
+        else ""
+    )
     lines = [
         "AIppocampus navigation sidecars",
         f"status: {payload.get('status')}",

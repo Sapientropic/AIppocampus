@@ -68,19 +68,23 @@ tool-call smoke:
 python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20
 ```
 
-Do not install hooks, mutate Claude Code settings, or ingest private host
-history from this skill unless the user explicitly approves that exact action.
+Do not install/uninstall hooks, mutate Claude Code settings, or ingest private
+host history from this skill unless the user explicitly approves that exact
+action.
 
-AIppocampus provides Claude Code hook status/dry-run/smoke commands for the
-scoped `UserPromptSubmit` and `Stop` contract:
+AIppocampus provides Claude Code hook status/dry-run/install/uninstall/smoke
+commands for the scoped `UserPromptSubmit` and `Stop` contract:
 
 ```sh
 aippocampus hooks claude-code status --json
 aippocampus hooks claude-code dry-run --json
+aippocampus hooks claude-code install --json
+aippocampus hooks claude-code uninstall --json
 aippocampus hooks claude-code smoke --json
 ```
 
-These commands do not mutate Claude Code settings. `aippocampus hooks prompt`
-and `aippocampus hooks lifecycle` remain Codex-only installer/status tools, so
-using `--provider claude-code` for onboarding does not install Claude Code host
-hooks.
+`status`, `dry-run`, and `smoke` do not mutate Claude Code settings. `install`
+and `uninstall` mutate only AIppocampus-owned Claude Code handler entries after
+explicit operator command. `aippocampus hooks prompt` and `aippocampus hooks
+lifecycle` remain Codex-only installer/status tools, so using
+`--provider claude-code` for onboarding does not install Claude Code host hooks.
