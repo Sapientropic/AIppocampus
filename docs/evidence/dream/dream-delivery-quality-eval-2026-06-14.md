@@ -1,8 +1,8 @@
 # Dream Delivery Quality Eval - 2026-06-14
 
-This public-safe eval closes #1438 through a replayable synthetic delivery
-quality fixture. It is a substitute for non-shareable private history, not a
-claim that live/default Dream delivery is ready.
+This public-safe eval supported the #1438 closeout through a replayable
+synthetic delivery-quality fixture. It is a substitute for non-shareable
+private history, not a claim that live/default Dream delivery is ready.
 
 ## Command
 
@@ -50,6 +50,23 @@ source-truth overclaim controls.
 | Source-truth overclaims | 0 |
 | Source reopen required | 6 |
 | Provider calls | 0 |
+
+## Review Next Actions
+
+The committed JSON report includes `review_next_actions` so the positive
+bounded metrics do not end as an inert `Cannot Claim` note:
+
+- `open_dream_delivery_successor` records `successor_missing` for the closed
+  historical #1438 owner path and gives the exact `gh issue create` review
+  command.
+- `rerun_public_dream_delivery_report` keeps the owner path on
+  `benchmarks/aippocampus/benchmark_dream_delivery_quality.py` and refreshes
+  the public synthetic report before any human closeout note.
+
+For foreground product use, reviewed Dream/subconscious findings surface
+through #2095's `aippocampus agent background "task cue" --json` route. This
+eval remains review input and does not by itself promote Dream material to
+source truth or default foreground adoption.
 
 ## Can Claim
 
