@@ -8,6 +8,48 @@ are command and product-shape examples, not a separate evidence ledger. The
 profile boundary lives in
 [public-core-boundary.md](public-core-boundary.md#product-profile-boundary).
 
+## First Useful Recall Demo
+
+Start with the public example bundle and show the continuity loop before the
+operator catalog. The point is not that AIppocampus has innate memory; the point
+is that a later agent can find a source route, reopen the source, and carry the
+bounded context forward.
+
+1. Verify an exact public receipt:
+
+   ```sh
+   aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+   ```
+
+   Expected result: matches point back to visible clean-source text. This is the
+   fallback/proof lane, not the ordinary continuity flow.
+
+2. Ask for a vague continuity route:
+
+   ```sh
+   aippocampus agent recall "AIppocampus continuity without innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+   ```
+
+   Expected result: compact JSON returns route rows plus a foreground action to
+   deepen a selected route. Route rows are navigation, not source evidence yet.
+
+3. Reopen the selected source:
+
+   ```sh
+   aippocampus agent deepen --request 1 --last-recall --json
+   ```
+
+   Expected result: the response reports source-backed evidence for the selected
+   route and keeps claim boundaries tied to the opened source window.
+
+Use exact search when proving a known phrase exists. Use recall/deepen when the
+user gives a vague cue and needs source-backed continuity.
+
+## Maintainer And Operator Scenario Catalog
+
+The scenarios below are useful for maintainers, release checks, and capability
+demonstrations. They are not the first public path for a new user.
+
 ## Scenario 1: Exact Quote Recall
 
 Use the public example bundle:

@@ -52,6 +52,9 @@ For the longer version, use the
 the [10-minute public path](guides/public-api.md#ten-minute-public-path), or the
 [first recall install path](guides/install-guide.md#first-recall-path) with the
 [first recall decision card](guides/first-recall-decision-card.md).
+For a public-safe walkthrough that shows the first useful recall moment before
+operator scenarios, use
+[Demo Scenarios](guides/demo-scenarios.md#first-useful-recall-demo).
 
 Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) for why the
 first source-backed moment should feel worth the setup. Use
