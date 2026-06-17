@@ -2194,6 +2194,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("host_state_confounds", payload)
 
     def test_memory_health_exception_returns_recovery_card_not_bare_tool_error(self) -> None:
+        (self.clean / "messages.jsonl").unlink()
         with mock.patch.object(
             mcp.aippocampus_health,
             "health_report",
