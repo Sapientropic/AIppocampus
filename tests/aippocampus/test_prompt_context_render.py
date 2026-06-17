@@ -83,7 +83,7 @@ class PromptContextRenderTests(unittest.TestCase):
         self.assertIn("source_required_route_available", affordance["reason_codes"])
         self.assertIn("AIppocampus: prior context may matter.", context)
         self.assertIn(
-            "Next: call agent_deepen when a handle is present; otherwise call agent_recall first.",
+            "Next: call agent_deepen when a selected route is available; otherwise call agent_recall first.",
             context,
         )
         self.assertNotIn("suggested_agent_action=agent_deepen", context)

@@ -15,6 +15,14 @@ _AGENT_TOOL_BY_ACTION = {
     "agent_recall": "aippocampus agent recall",
     "agent_deepen": "aippocampus agent deepen",
 }
+_AGENT_CLI_FALLBACK_BY_ACTION = {
+    "agent_aippo": 'aippocampus agent aippo --task "<current task>" --json',
+    "agent_recall": 'aippocampus agent recall "<short cue>" --json',
+    "agent_deepen": (
+        'aippocampus agent recall "<short cue>" --json; '
+        "aippocampus agent deepen --request 1 --last-recall --json"
+    ),
+}
 _STRONG_CLAIM_INTENTS = {
     "exact_claim",
     "public_claim",
@@ -253,6 +261,24 @@ def _tool_visibility(result: Mapping[str, Any]) -> str:
     return "unknown"
 
 
+def _agent_discovery_step(action: str) -> str:
+    if action == "agent_deepen":
+        return (
+            "discover/load AIppocampus tools, then call agent_deepen; "
+            "run agent_recall first if no selected route"
+        )
+    if action == "agent_aippo":
+        return "discover/load AIppocampus tools, then call agent_aippo"
+    return "discover/load AIppocampus tools, then call agent_recall"
+
+
+def _cli_fallback(action: str) -> str:
+    return _AGENT_CLI_FALLBACK_BY_ACTION.get(
+        action,
+        _AGENT_CLI_FALLBACK_BY_ACTION["agent_recall"],
+    )
+
+
 def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any]) -> list[str]:
     codes: list[str] = []
     surface_intent = _as_dict(result.get("agent_surface_intent"))
@@ -328,7 +354,10 @@ def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     if action == "agent_aippo":
         next_line = "Next: call agent_aippo for the task contract before broad search."
     elif action == "agent_deepen":
-        next_line = "Next: call agent_deepen when a handle is present; otherwise call agent_recall first."
+        next_line = (
+            "Next: call agent_deepen when a selected route is available; "
+            "otherwise call agent_recall first."
+        )
     elif "architecture_navigation" in lead_kinds:
         next_line = "Next: call agent_recall; use agent_explain or deepen before claims."
     else:
@@ -337,13 +366,14 @@ def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     visibility = str(affordance.get("tool_visibility") or "unknown")
     if visibility == "cli_fallback_only":
         fallback_line = (
-            " CLI fallback: "
-            f"{_AGENT_TOOL_BY_ACTION.get(action, 'aippocampus agent recall')}."
+            f" CLI fallback: {_cli_fallback(action)}. "
+            "Tool fallback is route-only, not source evidence."
         )
     elif visibility != "visible":
         fallback_line = (
-            " If the tool is not visible, refresh plugin tools or use the CLI: "
-            f"{_AGENT_TOOL_BY_ACTION.get(action, 'aippocampus agent recall')}."
+            " If AIppocampus tools are not visible, "
+            f"{_agent_discovery_step(action)}; CLI fallback: {_cli_fallback(action)}. "
+            "Tool discovery is not source evidence."
         )
     return (
         "AIppocampus: prior context may matter.\n"
