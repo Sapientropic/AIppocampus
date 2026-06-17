@@ -216,7 +216,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
                 max_routes=1,
             )
 
-        human = agent_continuity._render_recall_human(report)
+        human = agent_continuity.render_recall_human(report)
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
 
         self.assertIn(long_handle, encoded)
@@ -297,11 +297,20 @@ class AgentOptInContinuityTests(unittest.TestCase):
             "AIppocampus continuity source refs",
             working_memory_path=working_memory,
         )
+        full_payload = background_findings.background_findings_card(
+            "AIppocampus continuity source refs",
+            working_memory_path=working_memory,
+            detail="full",
+        )
 
-        encoded = json.dumps(payload, ensure_ascii=False)
+        encoded = json.dumps([payload, full_payload], ensure_ascii=False)
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["finding_count"], 1)
-        finding = payload["findings"][0]
+        self.assertNotIn("findings", payload)
+        self.assertEqual(payload["best_finding"]["finding_id"], "wm_dream_continuity")
+        self.assertEqual(payload["best_finding"]["surface"], "dream_working_memory")
+        self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+        finding = full_payload["findings"][0]
         self.assertEqual(finding["finding_id"], "wm_dream_continuity")
         self.assertEqual(finding["surface"], "dream_working_memory")
         self.assertEqual(finding["boundary"]["action_grammar"], "reopenable_route")
@@ -655,7 +664,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
             routed_report["navigation_signals"]["next_safe_action"],
             "deepen_selected_route",
         )
-        human = agent_continuity._render_recall_human(routed_report)
+        human = agent_continuity.render_recall_human(routed_report)
         self.assertIn("why: attention_router:top_route_changed", human)
         self.assertIn("Navigation:", human)
         self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)

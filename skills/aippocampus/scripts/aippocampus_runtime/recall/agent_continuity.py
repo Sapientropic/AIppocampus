@@ -1363,10 +1363,6 @@ def build_macro_orientation_packet_fixture_report() -> dict[str, Any]:
 def _json_out(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
-
-_render_recall_human = render_recall_human
-
-
 def _route_limit_arg(value: str) -> int:
     try:
         return normalize_route_limit(value, default=MAX_ROUTES)
@@ -1473,15 +1469,13 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit the full activation envelope for local diagnostics.",
     )
-
     background_parser = sub.add_parser(
         "background",
         usage='aippocampus agent background "task cue" --json [options]',
         description=(
             "Reviewed background findings card:\n"
             "  Surfaces already reviewed/source-linked Dream or subconscious working-memory rows.\n"
-            "  Findings are navigation only; reopen source before factual, exact, or sensitive claims.\n"
-            "  This command does not start background jobs or expose raw registry paths."
+            "  Findings are navigation only; reopen source before claims; no jobs or raw paths."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1491,8 +1485,9 @@ def _parser() -> argparse.ArgumentParser:
     background_parser.add_argument("--working-memory")
     background_parser.add_argument("--project", default="AIppocampus")
     background_parser.add_argument("--max", type=_route_limit_arg, default=4)
+    background_parser.add_argument("--detail", choices=["compact", "detail", "full", "operator"], default="compact")
+    background_parser.add_argument("--operator-json", action="store_true")
     background_parser.add_argument("--json", action="store_true")
-
     macro_parser = sub.add_parser(
         "macro",
         description=(
@@ -1715,12 +1710,12 @@ def main(argv: list[str] | None = None) -> int:
             working_memory_path=args.working_memory,
             project=args.project,
             limit=args.max,
+            detail="operator" if args.operator_json else args.detail,
         )
         if args.json:
             _json_out(payload)
         else:
-            print("AIppocampus agent background: " + str(payload.get("status") or "unknown"))
-            print("findings: " + str(payload.get("finding_count") or 0))
+            print("AIppocampus agent background: " + str(payload.get("status") or "unknown") + "\nfindings: " + str(payload.get("finding_count") or 0))
             action = payload.get("agent_next_action")
             if isinstance(action, Mapping):
                 print("next: " + str(action.get("command") or action.get("command_template") or action.get("id")))
